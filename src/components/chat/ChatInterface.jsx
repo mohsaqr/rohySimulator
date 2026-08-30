@@ -50,16 +50,64 @@ export function visibleAgentTabs(agents) {
     return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient');
 }
 
+// Per-case memory of which chat tab was open (see the effects in the
+// component). sessionStorage keeps it to this browser tab's lifetime.
+const ACTIVE_TAB_KEY = (caseId) => `rohy_chat_active_tab_${caseId ?? 'nocase'}`;
+function readActiveTab(caseId) {
+    try { return sessionStorage.getItem(ACTIVE_TAB_KEY(caseId)) || 'patient'; }
+    catch { return 'patient'; }
+}
+
+// Honorifics that must not be mistaken for a first name. "Dr. James Chen"
+// split on the first space yields "Dr." — which is how the Page button came
+// to read "Call Dr." (2026-08-30 UI review, #35a).
+const HONORIFIC = /^(dr|doctor|prof|professor|mr|mrs|ms|miss|sr|sra|herr|frau|dott|dott\.ssa)\.?$/i;
+
+/**
+ * The short, speakable form of an agent's name for buttons and labels.
+ * "Dr. James Chen" → "Dr. Chen"; "Sarah Miller" → "Sarah"; "Nurse" → "Nurse".
+ * Exported for the regression lock.
+ */
+export function agentShortName(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (!HONORIFIC.test(parts[0])) return parts[0];
+    // Honorific-led: keep the honorific and attach the family name, because
+    // "Dr. Chen" is what a colleague would actually say.
+    return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Status for an agent's tab badge.
+ *
+ * The raw `status` column tracks only the PAGING lifecycle (absent → paged →
+ * present), so a nurse who is simply in the room by configuration and an
+ * on-call consultant both sit at 'absent' and badged "Away" while the status
+ * bar two rows below said "Available" / "On-Call" (2026-08-30 UI review, #17).
+ * Derive through the same availability model the status bar uses; fall back to
+ * the raw status when the row carries no `availability_type` at all (older
+ * server builds omitted it from the session-agents payload).
+ * Exported for the regression lock.
+ */
+export function agentBadgeStatus(agent, elapsedMinutes = 0) {
+    if (!agent) return 'absent';
+    if (!agent.availability_type) return agent.status || 'absent';
+    const derived = AgentService.getAgentDisplayStatus(agent, elapsedMinutes);
+    return derived?.status || agent.status || 'absent';
+}
+
 // Build a participant {avatar_id, avatar_camera, gender, name, id} from the
 // chat's current "who's talking" state — patient (from caseData) or one of
 // the agents (from the agents list). Pushed into VoiceContext for PatientVisual.
-function deriveActiveParticipant(activeTab, activeCase, agents) {
+export function deriveActiveParticipant(activeTab, activeCase, agents) {
     if (activeTab === 'patient') {
         const c = activeCase?.config || {};
         return {
             avatar_id: c.avatar_id || null,
             avatar_camera: c.avatar_camera || null,
             gender: c.demographics?.gender || null,
+            // The case author stated this; it is safe to show under the face.
+            genderSource: 'declared',
             name: c.patient_name || null,
             age: c.demographics?.age || null,
             id: activeCase?.id ? `case:${activeCase.id}` : null
@@ -71,13 +119,21 @@ function deriveActiveParticipant(activeTab, activeCase, agents) {
     // Agents lack a stored gender today — use cfg.gender if set, otherwise
     // fall back to a name/role heuristic so the platform-default fallback in
     // resolveAvatarId still routes male vs female correctly when avatar_url is blank.
+    // The guess drives AVATAR ROUTING only: `genderSource` marks it so
+    // PatientVisual never captions a nurse "male" on the strength of a regex
+    // (2026-08-30 UI review, #35b).
     const guessedFemale = /female|relative/i.test(`${agent.name} ${agent.role_title || ''}`);
+    // The session-agents payload has carried `agent_template_id` far longer
+    // than it has carried `id`; without the fallback the participant id was
+    // the literal string "agent:undefined" for every agent (#35c).
+    const agentKey = agent.id ?? agent.agent_template_id ?? agent.agent_type;
     return {
         avatar_id: agent.avatar_url || null,
         avatar_camera: cfg.avatar_camera || null,
         gender: cfg.gender || (guessedFemale ? 'female' : 'male'),
+        genderSource: cfg.gender ? 'declared' : 'guessed',
         name: agent.name,
-        id: `agent:${agent.id}`
+        id: agentKey == null ? null : `agent:${agentKey}`
     };
 }
 
@@ -109,6 +165,28 @@ function ttsErrorToast(toast, err, t) {
         toast.error(t('cloud_tts_missing_api_key'));
     } else {
         toast.error(t('voice_playback_failed', { msg }));
+    }
+}
+
+// LLM failure → patient-bubble text. llmService has no `t()`, so it tags the
+// failures it recognises with a machine `code` (LLMError) and the wording is
+// chosen here, in the viewer's language. A failure with no code carries
+// server-supplied text, which is shown as-is rather than replaced by a vaguer
+// generic line. Keys are literal so i18next-parser sees them.
+function llmErrorText(err, t) {
+    switch (err?.code) {
+        case 'rate_limited':
+            return err.meta?.resetsAt
+                ? t('llm_error_rate_limited_until', { resetsAt: err.meta.resetsAt })
+                : t('llm_error_rate_limited');
+        case 'service_unavailable':
+            return t('llm_error_service_unavailable');
+        case 'cannot_connect':
+            return t('llm_error_cannot_connect');
+        case 'timeout':
+            return t('llm_error_timeout', { seconds: err.meta?.seconds ?? 0 });
+        default:
+            return err?.message || t('llm_error_unknown');
     }
 }
 
@@ -283,8 +361,32 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const voiceSettingsPromiseRef = useRef(null);
 
     // Multi-agent state
-    const [activeTab, setActiveTab] = useState('patient'); // 'patient' or agent_type
+    const [activeTab, setActiveTab] = useState(() => readActiveTab(activeCase?.id)); // 'patient' or agent_type
     const [agents, setAgents] = useState([]);
+    // True once the session's agent list has actually come back, so "no agent
+    // matches the remembered tab" can be told apart from "the list hasn't
+    // arrived yet".
+    const [agentsLoaded, setAgentsLoaded] = useState(false);
+
+    // Remember the open tab per case. ChatInterface UNMOUNTS on every room
+    // switch (App.jsx renders one room at a time), so plain component state
+    // dropped the learner back onto the patient tab every time they stepped
+    // into the lab and came back — mid-conversation with the nurse
+    // (2026-08-30 UI review, #35d). sessionStorage, not localStorage: this is
+    // a UI position for this browser tab, not a preference worth outliving it.
+    useEffect(() => {
+        setActiveTab(readActiveTab(activeCase?.id));
+    }, [activeCase?.id]);
+    useEffect(() => {
+        try { sessionStorage.setItem(ACTIVE_TAB_KEY(activeCase?.id), activeTab); }
+        catch { /* private mode / quota — the tab just won't be remembered */ }
+    }, [activeTab, activeCase?.id]);
+    // A remembered tab whose agent this case doesn't have (case edited, agent
+    // removed) must not strand the learner on an empty tab.
+    useEffect(() => {
+        if (activeTab === 'patient' || !agentsLoaded) return;
+        if (!visibleAgentTabs(agents).some(a => a.agent_type === activeTab)) setActiveTab('patient');
+    }, [agents, agentsLoaded, activeTab]);
     // Resolved patient template (per-case attached → platform default).
     // Holds the merged-config object the server returns, or null if no patient
     // template has been attached/seeded — in which case the chat falls through
@@ -421,6 +523,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!sessionId || !activeCase) {
             setPatientTemplate(null);
             setAgents([]);
+            setAgentsLoaded(false);
             setAgentStates({});
             return;
         }
@@ -429,6 +532,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             try {
                 const agentList = await AgentService.getSessionAgents(sessionId);
                 setAgents(agentList);
+                setAgentsLoaded(true);
 
                 // Initialize agent states
                 const states = {};
@@ -1243,49 +1347,60 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         let acc = '';            // raw accumulator (for chat bubble + bubble-final)
         let speechBuffer = '';   // sentence detector buffer (TTS only)
 
-        const responseText = await LLMService.streamMessage(
-            sessionId,
-            [...messages, userMsg],
-            richSystemPrompt,
-            voiceMode ? 'voice' : undefined,
-            {
-                agentTemplateId: patientTemplate?.templateId || null,
-                // Server appends the output-language directive for this code
-                // (systemPromptAssembly) — never inject it into the prompt here.
-                caseLanguage,
-                // Observed learner affect: structured signal read from the
-                // consent-gated live store at send time; the server renders
-                // and appends the actual note (same contract as caseLanguage).
-                studentAffect: buildAffectSignal(getAffectSnapshot(), affectSettingsRef.current),
-                onDelta: (delta) => {
-                    acc += delta;
-                    const display = sanitizeResponseText(acc);
-                    setMessages(prev => {
-                        const copy = [...prev];
-                        copy[assistantIdx] = { role: 'assistant', content: display };
-                        return copy;
-                    });
+        // streamMessage REJECTS on failure (LLMError) — it never resolves with
+        // an "Error: …" string any more. Catch here and keep the same visible
+        // outcome the sentinel used to produce: the failure text in the bubble,
+        // in red, with TTS suppressed.
+        let responseText = '';
+        let streamError = null;
+        try {
+            responseText = await LLMService.streamMessage(
+                sessionId,
+                [...messages, userMsg],
+                richSystemPrompt,
+                voiceMode ? 'voice' : undefined,
+                {
+                    agentTemplateId: patientTemplate?.templateId || null,
+                    // Server appends the output-language directive for this code
+                    // (systemPromptAssembly) — never inject it into the prompt here.
+                    caseLanguage,
+                    // Observed learner affect: structured signal read from the
+                    // consent-gated live store at send time; the server renders
+                    // and appends the actual note (same contract as caseLanguage).
+                    studentAffect: buildAffectSignal(getAffectSnapshot(), affectSettingsRef.current),
+                    onDelta: (delta) => {
+                        acc += delta;
+                        const display = sanitizeResponseText(acc);
+                        setMessages(prev => {
+                            const copy = [...prev];
+                            copy[assistantIdx] = { role: 'assistant', content: display };
+                            return copy;
+                        });
 
-                    if (!speech || voiceErrored) return;
-                    speechBuffer += delta;
-                    const { sentences, remainder } = extractCompleteSentences(speechBuffer);
-                    speechBuffer = remainder;
-                    for (const s of sentences) {
-                        const spoken = sanitizeResponseText(s).trim();
-                        if (spoken) speech.enqueue(spoken);
+                        if (!speech || voiceErrored) return;
+                        speechBuffer += delta;
+                        const { sentences, remainder } = extractCompleteSentences(speechBuffer);
+                        speechBuffer = remainder;
+                        for (const s of sentences) {
+                            const spoken = sanitizeResponseText(s).trim();
+                            if (spoken) speech.enqueue(spoken);
+                        }
                     }
                 }
-            }
-        );
+            );
+        } catch (err) {
+            console.error('[ChatInterface] patient LLM call failed', err);
+            streamError = err;
+        }
 
         // Make the bubble actually reflect what came back. Three paths:
         //   - Error: show the error text in red so the user sees it
         //   - Empty: tell the user nothing was returned (catches silent hangs)
         //   - Success but onDelta never fired (server returned JSON not SSE):
         //     overwrite the bubble with responseText so it's not stuck blank
-        const isError = typeof responseText === 'string' && responseText.startsWith('Error:');
+        const isError = streamError != null;
         const finalDisplay = isError
-            ? responseText
+            ? t('llm_error_bubble', { message: llmErrorText(streamError, t) })
             : (acc ? sanitizeResponseText(acc) : (responseText ? sanitizeResponseText(responseText) : t('no_response_from_llm')));
         setMessages(prev => {
             const copy = [...prev];
@@ -1295,8 +1410,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             return copy;
         });
 
-        EventLogger.messageReceived(responseText, COMPONENTS.CHAT_INTERFACE);
-        obtained('history', text, responseText);
+        const loggedText = isError ? finalDisplay : responseText;
+        EventLogger.messageReceived(loggedText, COMPONENTS.CHAT_INTERFACE);
+        obtained('history', text, loggedText);
         setLoading(false);
 
         if (speech) {
@@ -1685,7 +1801,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     above — visibleAgentTabs() drops agent_type==='patient'
                     so the seeded "Default Patient" isn't a duplicate tab. */}
                 {visibleAgentTabs(agents).map(agent => {
-                    const status = withLiveState(agent).status || 'absent';
+                    const status = agentBadgeStatus(withLiveState(agent), getElapsedMinutes());
                     return renderTab(
                         agent.agent_type,
                         agent.name,
@@ -1775,7 +1891,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                         onClick={() => handlePageAgent(currentAgent.agent_type)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-md text-xs font-bold shadow-sm"
                                     >
-                                        <Phone className="w-3.5 h-3.5" /> {t('call_agent', { name: currentAgent.name.split(' ')[0] })}
+                                        <Phone className="w-3.5 h-3.5" /> {t('call_agent', { name: agentShortName(currentAgent.name) })}
                                     </button>
                                 )}
                                 {agentStatus.status === 'present' && (
@@ -1862,7 +1978,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                     onClick={() => handlePageAgent(currentAgent.agent_type)}
                                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-bold shadow-md"
                                 >
-                                    <Phone className="w-4 h-4" /> {t('call_agent', { name: currentAgent.name.split(' ')[0] })}
+                                    <Phone className="w-4 h-4" /> {t('call_agent', { name: agentShortName(currentAgent.name) })}
                                 </button>
                             </div>
                         ) : (
@@ -1898,7 +2014,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                     )}
                                 </div>
                                 <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">
-                                    {activeTab === 'patient' ? t('patient_label') : currentAgent?.name?.split(' ')[0]}
+                                    {activeTab === 'patient' ? t('patient_label') : agentShortName(currentAgent?.name)}
                                 </span>
                             </div>
                         )}
@@ -1950,7 +2066,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 }`} />
                             </div>
                             <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">
-                                {activeTab === 'patient' ? t('patient_label') : currentAgent?.name?.split(' ')[0]}
+                                {activeTab === 'patient' ? t('patient_label') : agentShortName(currentAgent?.name)}
                             </span>
                         </div>
                         <div className="bg-neutral-800 px-4 py-2.5 rounded-2xl rounded-bl-none border border-neutral-700 text-neutral-400 text-sm flex items-center gap-2">

@@ -71,7 +71,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     // Voice mode is the default + only mode for streaming TTS playback. The
     // text composer is a fallback affordance, not a separate mode — sending
     // from text still triggers voice playback if the discussant has a voice.
-    const { messages, busy, speaking, visemes, sendMessage, startConversation } = useDiscussionEngine({
+    const { messages, busy, speaking, visemes, error, sendMessage, startConversation } = useDiscussionEngine({
         sessionId, activeCase, discussant, voiceMode: true,
         voiceSettings,
     });
@@ -198,6 +198,16 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                     </button>
                 </div>
             </header>
+
+            {/* A failed discussant turn used to vanish (and be persisted as
+                tutor speech); the engine now rejects and exposes it — say so
+                honestly instead of leaving a silent gap in the conversation. */}
+            {error && (
+                <div role="alert" className="mx-6 mt-3 px-4 py-2 rounded-lg bg-red-900/40 border border-red-700 text-red-200 text-sm">
+                    {t('tutor_reply_failed')}
+                    {error.message ? <span className="opacity-75"> — {error.message}</span> : null}
+                </div>
+            )}
 
             {/* Body — two-column: patient (left) + discussant (right). Notes in drawer. */}
             <div className="flex-1 min-h-0 grid grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-6 p-6">

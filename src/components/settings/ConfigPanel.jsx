@@ -3311,18 +3311,32 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 response_time_max: editingAgent.response_time_max,
                             };
                             if (editingAgent.agent_type === 'discussant') {
-                                const cfg = {};
-                                const ctx = editingAgent._cfg_context_filter ?? editingAgent.context_filter;
-                                const unlock = editingAgent._cfg_unlock_trigger ?? editingAgent.unlock_trigger;
-                                const showRecord = editingAgent._cfg_show_encounter_record ?? editingAgent.show_encounter_record;
-                                if (ctx) cfg.context_filter = ctx;
-                                if (unlock) cfg.unlock_trigger = unlock;
-                                // Written only when ON: an absent key and an
-                                // explicit false mean the same thing to
-                                // discussionService (`=== true`), so storing
-                                // false would just be noise in the blob.
-                                if (showRecord === true) cfg.show_encounter_record = true;
-                                updates.config_override = Object.keys(cfg).length ? cfg : null;
+                                // config_override is a FULL REPLACE server-side,
+                                // so the save must start from the config that is
+                                // there — `editingAgent.config`, the merged
+                                // {...template_config, ...config_override} the
+                                // three controls above render. Rebuilding the blob
+                                // from those controls alone dropped every key this
+                                // panel does not edit: v2.9.98's
+                                // show_encounter_record vanished on the next save
+                                // of ANY field (2026-08-30 UI review, #12). The
+                                // API never sends the raw override, so the merged
+                                // object is the most faithful base available.
+                                const base = (editingAgent.config && typeof editingAgent.config === 'object')
+                                    ? editingAgent.config
+                                    : {};
+                                updates.config_override = {
+                                    ...base,
+                                    context_filter: editingAgent._cfg_context_filter
+                                        ?? base.context_filter ?? editingAgent.context_filter ?? 'full',
+                                    unlock_trigger: editingAgent._cfg_unlock_trigger
+                                        ?? base.unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended',
+                                    // Written explicitly, true or false: with a
+                                    // spread base, omitting the key on OFF would
+                                    // leave a previously stored `true` standing.
+                                    show_encounter_record: (editingAgent._cfg_show_encounter_record
+                                        ?? base.show_encounter_record ?? false) === true,
+                                };
                             }
                             handleUpdateAgent(updates);
                         }}

@@ -9,10 +9,11 @@
 //
 // CONTRACT NOTES (locked from actual source behaviour, not idealised):
 //
-//   * The service does NOT throw on HTTP !ok — it returns the literal
-//     string `Error: <detail>`. Same for fetch rejections (network err):
-//     the catch block returns `Error: ${err.message}`. Tests therefore
-//     assert on the returned string, not on rejection.
+//   * The service THROWS `LLMError` on HTTP !ok, on a fetch rejection,
+//     and on the stream idle timeout — it never resolves with an
+//     error-shaped string. (Until 2026-08-30 it returned the literal
+//     `Error: <detail>`; the debrief discussant never checked for that
+//     prefix and spoke + persisted the sentinel as a tutor turn.)
 //   * Caller-initiated abort (via the AbortSignal passed in `signal`)
 //     resolves to '' (empty string), NOT a throw / rejection. The
 //     watchdog-initiated abort returns a different "did not respond
@@ -34,7 +35,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LLMService } from './llmService.js';
+import { LLMError, LLMService } from './llmService.js';
 
 // ----- helpers -----------------------------------------------------------
 
@@ -409,10 +410,12 @@ describe('LLMService.streamMessage', () => {
     });
 
     // --- 4. Error response (HTTP !ok) -----------------------------------
-    it('returns "Error: <detail>" string when server returns 500 (does not throw)', async () => {
-        // CONTRACT: HTTP !ok is converted into a returned error string.
-        // The service intentionally does not throw because callers
-        // render the string straight into the chat bubble.
+    // Regression lock: a non-ok /proxy/llm response REJECTS with an LLMError
+    // carrying the status. It used to resolve with the string "Error: …",
+    // which the debrief discussant then spoke and persisted as a real tutor
+    // turn (2026-08-30 UI review, #6). A sentinel a caller can forget to
+    // check is not error handling.
+    it('rejects with LLMError (status 500) when the server returns 500', async () => {
         fetchMock.mockImplementation((url) => {
             if (!String(url).includes('/proxy/llm')) {
                 return Promise.resolve(new Response('{}', { status: 200 }));
@@ -423,16 +426,24 @@ describe('LLMService.streamMessage', () => {
             ));
         });
 
-        const result = await LLMService.streamMessage(
+        const err = await LLMService.streamMessage(
             SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
             { onDelta: () => {} }
+        ).then(
+            (value) => { throw new Error(`expected a rejection, resolved with ${JSON.stringify(value)}`); },
+            (e) => e
         );
-        expect(result).toBe('Error: upstream exploded');
+        expect(err).toBeInstanceOf(LLMError);
+        expect(err.status).toBe(500);
+        expect(err.message).toBe('upstream exploded');
+        // And no "Error:"-shaped string anywhere in the message — the caller
+        // must not be able to fall back to sniffing a prefix.
+        expect(err.message.startsWith('Error:')).toBe(false);
     });
 
-    it('uses raw response text as detail when 500 body is not JSON', async () => {
-        // CONTRACT: non-JSON error bodies fall through unchanged into
-        // the returned "Error: ..." string.
+    it('uses raw response text as the rejection detail when the 500 body is not JSON', async () => {
+        // CONTRACT: non-JSON error bodies reach the caller unchanged, on
+        // the thrown LLMError rather than in a returned string.
         fetchMock.mockImplementation((url) => {
             if (!String(url).includes('/proxy/llm')) {
                 return Promise.resolve(new Response('{}', { status: 200 }));
@@ -440,17 +451,16 @@ describe('LLMService.streamMessage', () => {
             return Promise.resolve(new Response('plain text death', { status: 500 }));
         });
 
-        const result = await LLMService.streamMessage(
+        await expect(LLMService.streamMessage(
             SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
             { onDelta: () => {} }
-        );
-        expect(result).toBe('Error: plain text death');
+        )).rejects.toMatchObject({ name: 'LLMError', status: 500, message: 'plain text death' });
     });
 
     // --- 5. Network error (fetch rejection) -----------------------------
-    it('returns "Error: <message>" when fetch itself rejects', async () => {
-        // CONTRACT: the outer try/catch maps non-AbortError throws into
-        // a returned error string. No rejection bubbles to the caller.
+    // Regression lock: a transport failure rejects too — same contract as a
+    // non-ok response, so no caller needs two failure shapes.
+    it('rejects with LLMError when fetch itself rejects', async () => {
         fetchMock.mockImplementation((url) => {
             if (!String(url).includes('/proxy/llm')) {
                 return Promise.resolve(new Response('{}', { status: 200 }));
@@ -458,13 +468,12 @@ describe('LLMService.streamMessage', () => {
             return Promise.reject(new TypeError('network down'));
         });
 
-        const result = await LLMService.streamMessage(
-            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
-            { onDelta: () => {} }
-        );
         // apiFetch wraps transport failures with a "Network error:" prefix so
         // they're distinguishable from server-returned errors at a glance.
-        expect(result).toBe('Error: Network error: network down');
+        await expect(LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
+            { onDelta: () => {} }
+        )).rejects.toMatchObject({ name: 'LLMError', message: 'Network error: network down' });
     });
 
     // --- 6. Empty stream -----------------------------------------------
@@ -714,5 +723,49 @@ describe('LLMService.streamMessage', () => {
             ([u]) => String(u).includes('/interactions')
         );
         expect(interactionCalls).toHaveLength(0);
+    });
+    // --- Machine codes for translatable bubbles ---------------------------
+    // Regression lock: a service module has no t(), so the failures it
+    // recognises must be tagged with a machine `code` (+ any values the
+    // message interpolates) for the component to render in the viewer's
+    // language. Before 2026-08-30 the English prose WAS the contract and the
+    // patient bubble read English in all six locales (UI review #24d).
+    it('tags a transport failure with code cannot_connect', async () => {
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.reject(new TypeError('Failed to fetch'));
+        });
+
+        const err = await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null, { onDelta: () => {} }
+        ).then(
+            (value) => { throw new Error(`expected a rejection, resolved with ${JSON.stringify(value)}`); },
+            (e) => e
+        );
+        expect(err).toBeInstanceOf(LLMError);
+        expect(err.code).toBe('cannot_connect');
+    });
+
+    it('leaves server-supplied failures uncoded so their text is shown verbatim', async () => {
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(new Response(
+                JSON.stringify({ error: 'upstream exploded' }),
+                { status: 500, headers: { 'Content-Type': 'application/json' } }
+            ));
+        });
+
+        const err = await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null, { onDelta: () => {} }
+        ).then(
+            (value) => { throw new Error(`expected a rejection, resolved with ${JSON.stringify(value)}`); },
+            (e) => e
+        );
+        expect(err.code).toBeNull();
+        expect(err.message).toBe('upstream exploded');
     });
 });

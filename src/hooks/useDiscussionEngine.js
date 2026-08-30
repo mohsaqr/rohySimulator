@@ -56,6 +56,9 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     const { caseLanguage } = useLanguage();
     const [messages, setMessages] = useState([]);
     const [busy, setBusy] = useState(false);
+    // Last failed turn, exposed so the debrief surface can show that the
+    // tutor did NOT answer. Cleared at the start of every send.
+    const [error, setError] = useState(null);
     const [speaking, setSpeaking] = useState(false);
     const [visemes, setVisemes] = useState({ viseme_sil: 1 });
     // `hydrated` gates the save effect so the empty initial render doesn't
@@ -87,7 +90,10 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
 
     useEffect(() => {
         if (!sessionId || !hydrated) return;
-        try { localStorage.setItem(STORAGE_KEY(sessionId), JSON.stringify(messages)); } catch { /* quota */ }
+        // Failed turns are NOT transcript. Persisting them replayed
+        // "Error: 500 …" as tutor speech on every restore of the debrief.
+        const durable = messages.filter(m => !m.error);
+        try { localStorage.setItem(STORAGE_KEY(sessionId), JSON.stringify(durable)); } catch { /* quota */ }
     }, [messages, sessionId, hydrated]);
 
     useEffect(() => () => {
@@ -130,6 +136,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         // streaming. Index-based addressing is unsafe under React 19 concurrent
         // rendering — the messages array can mutate between render passes.
         const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        setError(null);
         const userMsg = { role: 'user', content: trimmed };
         const placeholder = { role: 'assistant', content: '', _pendingId: pendingId };
         setMessages(prev => silentUser ? [...prev, placeholder] : [...prev, userMsg, placeholder]);
@@ -239,6 +246,12 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             // left `speaking` stuck true forever and the mic suppressed, so
             // the learner could never reply.
             speech?.flush?.();
+            // Reached ONLY on a resolved stream. LLMService rejects on any
+            // failure (LLMError) — it used to RESOLVE with the string
+            // "Error: <detail>", which sailed straight through this success
+            // path and was written into `agent_conversations` as a genuine
+            // tutor turn: invisible to the learner, replayed on restore, and
+            // counted by the analytics (2026-08-30 UI review, #6).
             logTurn(sessionId, 'assistant', finalText);
             EventLogger.debriefMessageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN);
         } catch (err) {
@@ -248,6 +261,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             setSpeaking(false);
             setVisemes({ viseme_sil: 1 });
             if (err.name !== 'AbortError') {
+                console.error('[useDiscussionEngine] discussant turn failed:', err);
+                // Surface it, and persist NOTHING: no logTurn, no
+                // debriefMessageReceived, no localStorage transcript entry
+                // (the save effect drops `error` messages).
+                setError({ message: err.message, status: err.status ?? null });
                 setMessages(prev => prev.map(m =>
                     m._pendingId === pendingId
                         ? { role: 'assistant', content: `Error: ${err.message}`, error: true }
@@ -274,5 +292,5 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         return sendMessage('[System: open the case debrief now.]', { silentUser: true, openingDirective });
     }, [sendMessage]);
 
-    return { messages, busy, speaking, visemes, sendMessage, startConversation };
+    return { messages, busy, speaking, visemes, error, sendMessage, startConversation };
 }

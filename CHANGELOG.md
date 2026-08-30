@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.116] — 2026-08-30
+
+### Fixed
+
+- Chat remembers the active agent tab; agent vs transport failures are
+  distinguished in the banner.
+- A failed tutor reply in the discussion room is surfaced as an alert
+  instead of silently dropped.
+- Config panel shows the effective discussant override.
+
 ## [2.9.115] — 2026-08-30
 
 ### Fixed

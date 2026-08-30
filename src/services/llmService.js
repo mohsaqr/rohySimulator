@@ -6,6 +6,41 @@
 
 import { ApiError, apiFetch, apiPost, apiPut } from './apiClient.js';
 
+/**
+ * A failed LLM call. THROWN, never returned.
+ *
+ * This module used to signal failure by RETURNING the string
+ * `Error: <detail>` and leaving every caller to sniff it with
+ * `startsWith('Error:')`. The patient chat did that check; the debrief
+ * discussant did not — so an upstream 500 was rendered as ordinary tutor
+ * speech and written into `agent_conversations` as a real turn, where it
+ * replayed on restore and polluted the analytics (2026-08-30 UI review, #6).
+ * A sentinel a caller may forget to check is not error handling. Failure is
+ * a rejection now, so forgetting to handle it is loud instead of silent.
+ *
+ * `status` is the HTTP status when the failure came from the proxy;
+ * null for transport failures and the stream idle timeout.
+ *
+ * `code` is a MACHINE code for the failures this module itself recognises
+ * ('rate_limited' | 'service_unavailable' | 'cannot_connect' | 'timeout').
+ * A service module has no `t()` — the code is what lets the component that
+ * renders the bubble show the message in the viewer's language instead of
+ * this file's English (2026-08-30 UI review, #24d). `message` stays English
+ * for logs; a failure with no `code` carries server-supplied text and is
+ * shown verbatim. `meta` carries the values those messages interpolate.
+ */
+export class LLMError extends Error {
+    constructor(message, { status = null, detail = null, cause = null, code = null, meta = null } = {}) {
+        super(message);
+        this.name = 'LLMError';
+        this.status = status;
+        this.detail = detail ?? message;
+        this.code = code;
+        this.meta = meta ?? {};
+        if (cause) this.cause = cause;
+    }
+}
+
 export const LLMService = {
 
     /**
@@ -40,6 +75,9 @@ export const LLMService = {
     /**
      * Send Message to LLM via authenticated server proxy
      * Server handles LLM configuration and rate limiting
+     *
+     * Throws {@link LLMError} on any failure (same contract as
+     * streamMessage) — there is no error-shaped return value.
      */
     async sendMessage(sessionId, messages, systemPrompt, sessionMode, { caseLanguage = null } = {}) {
         const lastMsg = messages[messages.length - 1];
@@ -69,16 +107,19 @@ export const LLMService = {
                 if (err.status === 429) {
                     console.warn('[LLMService] Rate limit exceeded:', err.body);
                     const resetsAt = err.body?.resetsAt;
-                    return `Rate limit exceeded: ${err.message}. ${resetsAt ? `Resets at ${resetsAt}.` : ''}`;
+                    throw new LLMError(
+                        `Rate limit exceeded: ${err.message}.${resetsAt ? ` Resets at ${resetsAt}.` : ''}`,
+                        { status: 429, cause: err, code: 'rate_limited', meta: { resetsAt: resetsAt || null } }
+                    );
                 }
                 if (err.status === 503) {
-                    return `AI service unavailable: ${err.message || 'unknown'}`;
+                    throw new LLMError(`AI service unavailable: ${err.message || 'unknown'}`, { status: 503, cause: err, code: 'service_unavailable' });
                 }
                 console.error(`[LLMService] ${err.status} from /proxy/llm:`, err.message);
-                return `Error: ${err.message}`;
+                throw new LLMError(err.message, { status: err.status, cause: err });
             }
             console.error('LLM Error', err);
-            return 'Error: Could not connect to AI patient. Please check with your administrator.';
+            throw new LLMError('Could not connect to AI patient. Please check with your administrator.', { cause: err, code: 'cannot_connect' });
         }
     },
 
@@ -87,6 +128,14 @@ export const LLMService = {
      * SSE deltas, and invokes onDelta(text) for each token chunk. Returns the
      * accumulated full text on completion. Falls back to non-streaming if the
      * server doesn't return text/event-stream.
+     *
+     * FAILURE CONTRACT: rejects with {@link LLMError} on a non-ok response, a
+     * transport failure, or the stream idle timeout. It NEVER resolves with an
+     * error-shaped string — a caller that renders the resolved value is
+     * therefore guaranteed to be rendering model output, and a caller that
+     * persists it is guaranteed to be persisting a real turn.
+     * Caller-initiated abort (the `signal` option) still resolves with '' —
+     * that is a cancellation, not a failure.
      */
     async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null, studentAffect = null } = {}) {
         const lastMsg = messages[messages.length - 1];
@@ -168,7 +217,7 @@ export const LLMService = {
                 let detail = errText;
                 try { detail = JSON.parse(errText).error || errText; } catch { /* not json */ }
                 console.error(`[LLMService] HTTP ${response.status}:`, detail);
-                return `Error: ${detail}`;
+                throw new LLMError(detail, { status: response.status, detail });
             }
             const ctype = response.headers.get('Content-Type') || '';
             if (!ctype.includes('text/event-stream')) {
@@ -227,14 +276,30 @@ export const LLMService = {
             return acc;
         } catch (err) {
             disarmWatchdog();
+            // The non-ok branch above throws from inside this try — pass it
+            // through untouched so its status survives to the caller.
+            if (err instanceof LLMError) throw err;
             if (err.name === 'AbortError') {
                 if (watchdog.signal.aborted) {
-                    return `Error: LLM did not respond within ${STREAM_IDLE_TIMEOUT_MS / 1000}s. Check the server console for the actual upstream error (look for "[LLM Proxy]" lines).`;
+                    throw new LLMError(
+                        `LLM did not respond within ${STREAM_IDLE_TIMEOUT_MS / 1000}s. Check the server console for the actual upstream error (look for "[LLM Proxy]" lines).`,
+                        { cause: err, code: 'timeout', meta: { seconds: STREAM_IDLE_TIMEOUT_MS / 1000 } }
+                    );
                 }
+                // Caller cancelled (left the room, sent again) — not a failure.
                 return '';
             }
             console.error('[LLMService] streamMessage error', err);
-            return `Error: ${err.message}`;
+            // apiFetch turns "the request never left the browser" into an
+            // ApiError with code 'NETWORK' (status 0). Same user-visible
+            // situation as the non-stream transport failure above, so it
+            // carries the same translatable code.
+            const transport = err?.code === 'NETWORK' || err instanceof TypeError;
+            throw new LLMError(err.message, {
+                status: err.status ?? null,
+                cause: err,
+                code: transport ? 'cannot_connect' : null,
+            });
         }
     },
 

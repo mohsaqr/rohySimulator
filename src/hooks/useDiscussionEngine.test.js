@@ -95,6 +95,7 @@ import { useDiscussionEngine } from './useDiscussionEngine';
 import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
 import { resolveVoice } from '../utils/voiceResolver';
+import EventLogger from '../services/eventLogger';
 
 // --- Fixtures ----------------------------------------------------------
 
@@ -156,12 +157,13 @@ describe('useDiscussionEngine — initial state', () => {
         const { result } = renderHook(() => useDiscussionEngine(makeProps()));
 
         // CONTRACT: the hook exposes { messages, busy, speaking, visemes,
-        // sendMessage, startConversation }. There is NO `error`, `isRunning`,
+        // error, sendMessage, startConversation }. There is NO `isRunning`
         // or `currentSpeaker` on the public API — `busy` and `speaking`
-        // together cover the running-state semantics. If a future refactor
-        // adds those names, update this assertion.
+        // together cover the running-state semantics. `error` was added
+        // 2026-08-30 so a failed tutor turn has somewhere to be seen
+        // instead of being written into the transcript as speech.
         expect(Object.keys(result.current).sort()).toEqual(
-            ['busy', 'messages', 'sendMessage', 'speaking', 'startConversation', 'visemes'].sort()
+            ['busy', 'error', 'messages', 'sendMessage', 'speaking', 'startConversation', 'visemes'].sort()
         );
         expect(typeof result.current.sendMessage).toBe('function');
         expect(typeof result.current.startConversation).toBe('function');
@@ -651,5 +653,76 @@ describe('useDiscussionEngine — guards & resume', () => {
         expect(stored).toHaveLength(2);
         expect(stored[0]).toEqual({ role: 'user', content: 'hello' });
         expect(stored[1].role).toBe('assistant');
+    });
+});
+
+// --- Failed-turn contract (2026-08-30 UI review, #6) --------------------
+
+describe('useDiscussionEngine — a failed turn is not tutor speech', () => {
+    /** Every logTurn() POST body, decoded. */
+    const loggedTurns = () =>
+        globalThis.fetch.mock.calls
+            .filter(([url]) => String(url).includes('/agents/discussant/conversation'))
+            .map(([, init]) => JSON.parse(init?.body || '{}'));
+
+    // Regression lock: a rejected LLM stream is NEVER written to
+    // agent_conversations. Before the fix llmService RESOLVED with the string
+    // "Error: <detail>", so this path ran the SUCCESS branch and persisted the
+    // failure as a genuine tutor turn — replayed on restore, counted by the
+    // analytics, and invisible to the learner as an error.
+    it('does not persist a turn when the LLM call rejects', async () => {
+        const err = new Error('upstream exploded');
+        err.name = 'LLMError';
+        err.status = 500;
+        LLMService.streamMessage.mockImplementation(async () => { throw err; });
+
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('what did I miss?'); });
+
+        const assistantTurns = loggedTurns().filter(t => t.role === 'assistant');
+        expect(assistantTurns).toEqual([]);
+        // The learner's own turn is still logged — only the tutor's non-answer
+        // is withheld.
+        expect(loggedTurns().filter(t => t.role === 'user')).toHaveLength(1);
+        expect(EventLogger.debriefMessageReceived).not.toHaveBeenCalled();
+    });
+
+    // Regression lock: the failure is visible — an `error` on the hook plus a
+    // bubble flagged error:true, so the debrief surface can render "the tutor
+    // did not answer" instead of silently showing nothing.
+    it('exposes the failure as an error state the UI can render', async () => {
+        const err = new Error('upstream exploded');
+        err.name = 'LLMError';
+        err.status = 503;
+        LLMService.streamMessage.mockImplementation(async () => { throw err; });
+
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('hi'); });
+
+        expect(result.current.error).toMatchObject({ message: 'upstream exploded', status: 503 });
+        expect(result.current.messages.at(-1)).toMatchObject({ role: 'assistant', error: true });
+        expect(result.current.busy).toBe(false);
+    });
+
+    // Regression lock: a failed turn stays out of the persisted transcript, so
+    // reopening the debrief does not replay "Error: …" as something the tutor
+    // said. A later successful turn clears the error state.
+    it('keeps failed turns out of the localStorage transcript and clears on retry', async () => {
+        LLMService.streamMessage.mockImplementationOnce(async () => { throw new Error('nope'); });
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('first'); });
+
+        const afterFailure = JSON.parse(
+            window.localStorage.getItem('rohy_discussion_history_session-1') || '[]'
+        );
+        expect(afterFailure.some(m => m.error)).toBe(false);
+        expect(afterFailure.some(m => String(m.content).startsWith('Error:'))).toBe(false);
+
+        LLMService.streamMessage.mockImplementationOnce(async (_s, _m, _sp, _mo, { onDelta }) => {
+            onDelta('recovered.');
+            return 'recovered.';
+        });
+        await act(async () => { await result.current.sendMessage('second'); });
+        expect(result.current.error).toBeNull();
     });
 });
