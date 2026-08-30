@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { CheckCircle, ChevronRight, Clock, Eye, Inbox } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
+import { timeMs } from '../../../server/shared/time.js';
 
 // Right-rail worklist used by InvestigationsScreen. Splits orders into
 // Pending / Ready / Viewed cards so historical results stay reachable.
@@ -155,17 +156,13 @@ function ViewedRow({ order, selected, onSelect }) {
     );
 }
 
-// SQLite emits "YYYY-MM-DD HH:MM:SS" with NO timezone marker — it is UTC,
-// but `new Date()` parses that space-separated form as LOCAL time. That
-// skew is exactly Bug 4: in a UTC-offset timezone the local parse lands
-// in the past, so a still-pending order printed the literal "Ready". Any
-// client-side math on these strings must normalise to UTC first.
-function parseSqliteUtc(ts) {
-    if (!ts) return NaN;
-    // Already has tz info (ISO 'Z' or ±HH:MM) → trust it.
-    if (/[zZ]|[+-]\d\d:?\d\d$/.test(ts)) return new Date(ts).getTime();
-    return new Date(`${String(ts).replace(' ', 'T')}Z`).getTime();
-}
+// Timestamp parsing lives in server/shared/time.js (RPS-1 §17). This module
+// used to carry its own copy, written for Bug 4: sqlite's legacy
+// "YYYY-MM-DD HH:MM:SS" has no timezone marker but IS UTC, and `new Date()`
+// reads it as LOCAL — so in a UTC-offset zone a still-pending order printed
+// the literal "Ready". The shared helper handles that shape and the ISO-Z one
+// migration 0050 introduced, which is why it replaced the local copy.
+const parseSqliteUtc = (ts) => timeMs(ts) ?? NaN;
 
 // Pending rows are filtered to !is_ready (server truth). The label must
 // therefore NEVER say "Ready" — it derives from the server-computed

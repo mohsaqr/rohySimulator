@@ -158,7 +158,62 @@ const TIME_COLUMN = {
     scenario_events: 'triggered_at',
     plugin_jobs: 'created_at',
     plugin_assets: 'created_at',
+    // Domain tables whose instants reach a screen. Added in v2.9.104: the map
+    // held only the LOG tables, so nothing checked the worklist or the MAR, and
+    // three INSERTs quietly leaned on `DEFAULT CURRENT_TIMESTAMP` — which
+    // writes the legacy shape, and which sqlite cannot be made to change
+    // without rebuilding the table.
+    investigation_orders: 'ordered_at',
+    treatment_orders: 'ordered_at',
 };
+
+// (table, column) pairs an UPDATE may set. The INSERT scanner above cannot see
+// these at all: `UPDATE users SET last_login = CURRENT_TIMESTAMP` names no
+// column list, so it was structurally invisible to the v2.9.93 contract and
+// survived it — which is how Last Active stayed wrong by the viewer's UTC
+// offset for a further eleven releases.
+//
+// Curated on purpose rather than banning CURRENT_TIMESTAMP outright: ~40
+// `updated_at` / `deleted_at` writes remain, and nothing renders or sorts
+// them. A blanket rule would be noise, and noisy rules get disabled.
+const UPDATED_TIME_COLUMNS = [
+    ['users', 'last_login'],
+    ['users', 'locked_until'],
+    ['investigation_orders', 'viewed_at'],
+    ['treatment_orders', 'administered_at'],
+    ['treatment_orders', 'discontinued_at'],
+];
+
+/** Every legacy-stamped `UPDATE <table> SET … <col> = CURRENT_TIMESTAMP`. */
+function legacyUpdateStamps() {
+    const files = execSync(
+        `grep -rl --include='*.js' -E "UPDATE[[:space:]]" ${path.join(REPO_ROOT, 'server')} || true`,
+        { encoding: 'utf8' }
+    ).split('\n').filter(Boolean);
+
+    const found = [];
+    for (const file of files) {
+        const src = readFileSync(file, 'utf8');
+        for (const [table, column] of UPDATED_TIME_COLUMNS) {
+            // Bounded by ; and ` so a match cannot run past the end of one
+            // statement into the next.
+            const re = new RegExp(
+                `UPDATE\\s+${table}\\s+SET[^;\`]{0,400}?\\b${column}\\s*=\\s*(CURRENT_TIMESTAMP|datetime\\s*\\(\\s*'now')`,
+                'gi'
+            );
+            let m;
+            while ((m = re.exec(src)) !== null) {
+                found.push({
+                    file: path.relative(REPO_ROOT, file),
+                    line: src.slice(0, m.index).split('\n').length,
+                    table,
+                    column,
+                });
+            }
+        }
+    }
+    return found;
+}
 
 /** Every `INSERT INTO <table> ( … )` column list found in server source. */
 function insertColumnLists() {
@@ -281,5 +336,60 @@ describe('migration 0050 leaves nothing in the legacy shape', () => {
         } finally {
             await cleanup();
         }
+    });
+});
+
+
+describe('UPDATE paths stamp explicitly too', () => {
+    // Regression lock. The v2.9.93 contract scanned INSERT column lists, so an
+    // UPDATE was invisible to it by construction — and `UPDATE users SET
+    // last_login = CURRENT_TIMESTAMP` sat one line from a passing test suite
+    // while the Users tab showed every learner as active hours ago.
+    it('no rendered time column is set to a legacy stamp by an UPDATE', () => {
+        const offenders = legacyUpdateStamps();
+        expect(
+            offenders.map((o) => `${o.file}:${o.line} ${o.table}.${o.column}`),
+            'use ${SQL_NOW} / sqlNowPlus() — CURRENT_TIMESTAMP writes the legacy shape'
+        ).toEqual([]);
+    });
+
+    it('the UPDATE scanner can actually see the statements it checks', () => {
+        // Same self-check the INSERT scanner carries: a regex that matches
+        // nothing passes forever and proves nothing. Feed it a known-bad
+        // string and require a hit.
+        const probe = "UPDATE users SET failed_login_attempts = 0, last_login = CURRENT_TIMESTAMP WHERE id = ?";
+        const re = new RegExp(
+            `UPDATE\\s+users\\s+SET[^;\`]{0,400}?\\blast_login\\s*=\\s*(CURRENT_TIMESTAMP|datetime\\s*\\(\\s*'now')`,
+            'i'
+        );
+        expect(re.test(probe)).toBe(true);
+    });
+
+    it('leaves soft-delete and updated_at columns alone', () => {
+        // Those are not in UPDATED_TIME_COLUMNS and must stay out: nothing
+        // renders them, and a rule that fires on them would be turned off.
+        const names = UPDATED_TIME_COLUMNS.map(([, c]) => c);
+        expect(names).not.toContain('deleted_at');
+        expect(names).not.toContain('updated_at');
+    });
+});
+
+describe('the client reads both shapes while deployments catch up', () => {
+    // A row can arrive from any deployment that has not yet run 0051, so every
+    // renderer must still accept the legacy shape. `Date.parse` does not: it
+    // reads "YYYY-MM-DD HH:MM:SS" as LOCAL although sqlite means UTC.
+    it('timeMs reads the legacy shape as UTC, Date.parse does not', () => {
+        const legacy = '2026-08-30 07:00:00';
+        expect(timeMs(legacy)).toBe(Date.parse('2026-08-30T07:00:00.000Z'));
+        // The bug, stated as a test: these differ by the runner's UTC offset.
+        const offsetMs = new Date().getTimezoneOffset() * 60_000;
+        expect(Date.parse(legacy)).toBe(timeMs(legacy) + offsetMs);
+    });
+
+    it('appending Z to an already-ISO value produces an invalid date', () => {
+        // What OrdersDrawer did until v2.9.104, and why migration 0050 broke
+        // the worklist countdown for every order that predated it.
+        expect(Number.isNaN(new Date('2026-08-30T07:00:00.000Z' + 'Z').getTime())).toBe(true);
+        expect(timeMs('2026-08-30T07:00:00.000Z')).toBe(Date.parse('2026-08-30T07:00:00.000Z'));
     });
 });

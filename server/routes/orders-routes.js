@@ -19,7 +19,7 @@ import { VISIBILITY_SQL as TREATMENT_VISIBILITY_SQL } from './treatments-library
 
 
 import { logger } from '../logger.js';
-import { SQL_NOW } from '../shared/time.js';
+import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import {
     auditSuccess,
     logAudit,
@@ -90,8 +90,8 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     // COALESCE is load-bearing: turnaround_minutes may be NULL (= "follow the
     // case default"), and `'+' || NULL || ' minutes'` makes datetime() return
     // NULL — an order that never becomes ready and can never be re-ordered.
-    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, available_at, tenant_id)
-                 VALUES (?, ?, datetime('now', '+' || COALESCE((SELECT turnaround_minutes FROM case_investigations WHERE id = ? AND tenant_id = ?), ${DEFAULT_TURNAROUND_MINUTES}) || ' minutes'), ?)`;
+    const sql = `INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at, tenant_id)
+                 VALUES (?, ?, ${SQL_NOW}, ${sqlNowPlus(`'+' || COALESCE((SELECT turnaround_minutes FROM case_investigations WHERE id = ? AND tenant_id = ?), ${DEFAULT_TURNAROUND_MINUTES}) || ' minutes'`)}, ?)`;
 
     const stmt = dbAdapter.prepare(sql);
     let inserted = 0;
@@ -238,8 +238,12 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         }
 
         const now = new Date();
-        const orderedAt = new Date(order.ordered_at);
-        const availableAt = new Date(order.available_at);
+        // timeMs, not `new Date(...)`: rows written before migration 0050 and
+        // rows written after it are both in flight, and V8 reads the legacy
+        // space-separated shape as LOCAL time. A naive parse here skewed
+        // wait_minutes by the server's UTC offset.
+        const orderedAt = timeMs(order.ordered_at);
+        const availableAt = timeMs(order.available_at);
 
         // Calculate timing metrics (first-view path only — order.viewed_at is null here)
         const waitTimeMs = availableAt - orderedAt;
@@ -247,7 +251,7 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         const totalTimeMs = now - orderedAt;
 
         // Update viewed_at (guard with IS NULL so a parallel retry can't double-stamp)
-        const updateSql = `UPDATE investigation_orders SET viewed_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND viewed_at IS NULL`;
+        const updateSql = `UPDATE investigation_orders SET viewed_at = ${SQL_NOW} WHERE id = ? AND tenant_id = ? AND viewed_at IS NULL`;
 
         dbAdapter.run(updateSql, [orderId, tenantId(req)], function(updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });
@@ -1062,7 +1066,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                 // tenant session's results in the void (Bug 6).
                 const insertSql = `
                     INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at, tenant_id)
-                    VALUES (?, ?, datetime('now'), datetime('now', '+' || ? || ' minutes'), ?)
+                    VALUES (?, ?, ${SQL_NOW}, ${sqlNowPlus("'+' || ? || ' minutes'")}, ?)
                 `;
                 const existsSql = `SELECT id FROM investigation_orders WHERE session_id = ? AND investigation_id = ? LIMIT 1`;
 
@@ -1775,8 +1779,8 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
 
                     // Now create the order
                     const orderSql = `
-                        INSERT INTO investigation_orders (session_id, investigation_id, available_at, tenant_id)
-                        VALUES (?, ?, datetime('now', '+' || ? || ' minutes'), ?)
+                        INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at, tenant_id)
+                        VALUES (?, ?, ${SQL_NOW}, ${sqlNowPlus("'+' || ? || ' minutes'")}, ?)
                     `;
 
                     dbAdapter.run(orderSql, [sessionId, investigationId, turnaround, tenantId(req)], function(orderErr) {
@@ -2042,8 +2046,8 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
                 session_id, tenant_id, treatment_type, medication_id, treatment_item,
                 dose, dose_value, dose_unit, route, frequency,
                 rate, rate_value, rate_unit, duration_minutes,
-                urgency, is_high_alert, notes, feedback, points_awarded
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                urgency, is_high_alert, notes, feedback, points_awarded, ordered_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
         `;
 
         // tenant_id was omitted here while the reader (GET

@@ -1,3 +1,5 @@
+import { timeMs } from '../../../../server/shared/time.js';
+
 // Small presentational helpers shared across the Users workspace.
 
 export function initials(name, username) {
@@ -42,8 +44,15 @@ export function statusBadgeClass(status) {
 
 export function relativeTime(iso) {
     if (!iso) return '—';
-    const then = Date.parse(iso);
-    if (Number.isNaN(then)) return '—';
+    // timeMs, not Date.parse: `users.last_login` was written with
+    // CURRENT_TIMESTAMP, and V8 reads that space-separated shape as LOCAL time
+    // although sqlite stores it as UTC. Last Active was therefore stale by
+    // exactly the viewer's UTC offset — the "3 hours behind" in the v2.9.82
+    // report. The writer is fixed and the rows migrated, but this must still
+    // read both shapes: a row can arrive from any deployment that has not yet
+    // run 0051.
+    const then = timeMs(iso);
+    if (then == null) return '—';
     const secs = Math.max(0, (Date.now() - then) / 1000);
     if (secs < 60) return 'just now';
     const mins = Math.floor(secs / 60);
@@ -59,7 +68,7 @@ export function relativeTime(iso) {
 
 export function formatDate(iso) {
     if (!iso) return '—';
-    const t = Date.parse(iso);
-    if (Number.isNaN(t)) return '—';
+    const t = timeMs(iso);
+    if (t == null) return '—';
     return new Date(t).toLocaleDateString();
 }

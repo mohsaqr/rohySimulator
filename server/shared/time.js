@@ -62,6 +62,27 @@ export const SQLITE_TS_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 export const SQL_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 
 /**
+ * Now, shifted by a sqlite modifier, as the contract.
+ *
+ * `datetime('now', '+30 minutes')` returns the legacy space-separated shape, so
+ * every deadline written that way (an investigation's `available_at`, say)
+ * re-introduced the second format into a column migration 0050 had already
+ * normalised — leaving one column holding both shapes at once, which is worse
+ * than uniformly legacy: `ORDER BY` mis-sorts it and any client that patches a
+ * `Z` onto the end produces `...ZZ` and an Invalid Date.
+ *
+ * The modifier is a SQL fragment, not a value. Callers build it from a bound
+ * `?` or a constant (`'+' || ? || ' minutes'`); it must never carry user input
+ * spliced in as text.
+ *
+ * @param {string} modifier  a sqlite date modifier expression — NEVER user input
+ * @returns {string}
+ */
+export function sqlNowPlus(modifier) {
+    return `strftime('%Y-%m-%dT%H:%M:%fZ','now', ${modifier})`;
+}
+
+/**
  * A SQL expression normalising an existing column to the contract.
  *
  * Reads any shape sqlite's date functions accept and returns the canonical

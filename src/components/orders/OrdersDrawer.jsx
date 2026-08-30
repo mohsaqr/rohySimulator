@@ -5,6 +5,7 @@ import {
     Eye, FileText, Scan, Activity, Syringe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { timeMs } from '../../../server/shared/time.js';
 import PatientRecordViewer from '../PatientRecordViewer';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
@@ -334,9 +335,13 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
         // Fallback to client-side calculation
-        const now = new Date();
-        const available = new Date(order.available_at + 'Z'); // Append Z to treat as UTC
-        const diff = available - now;
+        // `available_at + 'Z'` was correct only while every row was legacy.
+        // Migration 0050 normalised the column to ISO-Z, which made the same
+        // line produce '...ZZ' and an Invalid Date for every pre-existing
+        // order. timeMs reads either shape.
+        const available = timeMs(order.available_at);
+        if (available == null) return '';
+        const diff = available - Date.now();
         if (diff <= 0) return t('ready');
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);

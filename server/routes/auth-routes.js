@@ -32,7 +32,7 @@ const LOCKOUT_MINUTES = 15;
 
 
 import { logger } from '../logger.js';
-import { SQL_NOW } from '../shared/time.js';
+import { SQL_NOW, sqlNowPlus } from '../shared/time.js';
 import {
     emailDomainAllowed,
     enrollUserInCohort,
@@ -510,7 +510,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 if (newAttempts >= MAX_FAILED_LOGINS) {
                     dbAdapter.run(
                         `UPDATE users SET failed_login_attempts = ?,
-                            locked_until = datetime('now', '+' || ? || ' minutes')
+                            locked_until = ${sqlNowPlus("'+' || ? || ' minutes'")}
                          WHERE id = ?`,
                         [newAttempts, LOCKOUT_MINUTES, user.id]
                     );
@@ -545,7 +545,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
 
             // Reset both failed_login_attempts and locked_until on success.
             dbAdapter.run(
-                `UPDATE users SET last_login = CURRENT_TIMESTAMP,
+                `UPDATE users SET last_login = ${SQL_NOW},
                     failed_login_attempts = 0, locked_until = NULL
                  WHERE id = ?`,
                 [user.id]

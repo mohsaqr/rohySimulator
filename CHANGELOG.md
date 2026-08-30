@@ -9,6 +9,50 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.104] — 2026-08-30
+
+### Fixed
+
+- **"Last Active" in the Users tab was stale by the viewer's UTC offset.**
+  `users.last_login` was written with `CURRENT_TIMESTAMP`, whose
+  `YYYY-MM-DD HH:MM:SS` shape carries no zone marker although sqlite means UTC,
+  and `usersUi.js` read it with `Date.parse`, which treats that shape as LOCAL.
+  Reported from the field as "3 hours behind"; reproduced here at UTC+3 to the
+  second. Migration 0050 never touched this column.
+
+- **The order tables held both timestamp shapes at once — caused by 0050.**
+  That migration normalised `investigation_orders` and `treatment_orders` rows
+  but did not fix their writers, so every order since went back in as legacy.
+  Worse than uniformly legacy: `ORDER BY available_at` is a string sort, so
+  `' '` (0x20) puts every legacy row before every ISO row whatever the instants
+  were; and `OrdersDrawer`'s `available_at + 'Z'` — correct while all rows were
+  legacy — produced `...ZZ` and an **Invalid Date** for exactly the rows 0050
+  had converted, breaking the worklist countdown on pre-existing orders.
+
+  Ten writers fixed, including three INSERTs silently leaning on
+  `DEFAULT CURRENT_TIMESTAMP` (a column default sqlite cannot alter without
+  rebuilding the table, so the fix is to name the column). New `sqlNowPlus()`
+  covers the deadline form. Three readers now use the shared `timeMs`, which
+  accepts either shape — they must keep doing so while deployments catch up.
+
+- **Migration 0051** normalises `users.{last_login,locked_until}`,
+  `investigation_orders.{ordered_at,available_at,viewed_at}` and
+  `treatment_orders.{ordered_at,administered_at,completed_at,discontinued_at}`.
+  Same double guard as 0050, verified on a seeded database: `SUM(julianday)`
+  byte-identical before and after, idempotent on re-run, and an unparseable row
+  left exactly as it is rather than nulled.
+
+### Changed
+
+- **The time-contract test now scans `UPDATE`s.** It checked `INSERT INTO
+  <table> ( … )` column lists, and an UPDATE names no column list — so
+  `UPDATE users SET last_login = CURRENT_TIMESTAMP` was invisible to it *by
+  construction*, not merely missed. Green suite, live bug, one line apart, for
+  eleven releases. The new scanner is a curated (table, column) list rather
+  than a blanket `CURRENT_TIMESTAMP` ban: ~40 `updated_at` / `deleted_at`
+  writes remain and nothing renders them, and a rule that fires on those is
+  noise that ends up disabled.
+
 ## [2.9.103] — 2026-08-30
 
 ### Fixed
