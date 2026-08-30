@@ -1,4 +1,4 @@
-// Locale catalogue integrity (I18N_PLAN.md §6 CI checks).
+// Locale catalogue integrity (docs/design/i18n-plan.md §6 CI checks).
 //
 // Locks in the contract every language must satisfy:
 //   1. Same namespaces as English (en is canonical).

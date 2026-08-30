@@ -1,5 +1,5 @@
 {
-  "_comment": "Pinned clinical glossary for the locale translation pass (I18N_PLAN.md §7). The translator (script or human) must use EXACTLY these renderings for these terms — machine translation of clinical vocabulary is the top mistranslation risk. Extend per language as native reviewers flag terms; never silently change an agreed rendering.",
+  "_comment": "Pinned clinical glossary for the locale translation pass (docs/design/i18n-plan.md §7). The translator (script or human) must use EXACTLY these renderings for these terms — machine translation of clinical vocabulary is the top mistranslation risk. Extend per language as native reviewers flag terms; never silently change an agreed rendering.",
   "_comment_abbreviations": "The short forms below (BP/ECG/IV Push/BID/TID/Peak) were added after the 2026-07-08 adversarial clinical-translation review. They exist because MT either left English abbreviations untouched or over-localized them into initialisms that collide with international standards (e.g. German LLQ→'LUQ'). RULE: never localize the anatomical quadrant abbreviations LLQ/LUQ/RLQ/RUQ — they are international standard and must stay identical across all locales.",
   "it": {
     "chest pain": "dolore toracico",

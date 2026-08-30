@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Locale translation pass (I18N_PLAN.md §7).
+// Locale translation pass (docs/design/i18n-plan.md §7).
 //
 // Diffs src/locales/en/*.json against each target locale and translates ONLY
 // missing or en-changed keys through the app's own /api/proxy/llm, with the

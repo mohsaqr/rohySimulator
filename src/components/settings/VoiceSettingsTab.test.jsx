@@ -64,7 +64,7 @@ function voiceCalls() {
     );
 }
 
-// Voice 2.0 settings payload (VOICE2_PLAN.md §5.2/§6.4): provider status
+// Voice 2.0 settings payload (docs/design/voice-2.0-plan.md §5.2/§6.4): provider status
 // cards + per-language defaults + enable toggles. No tts_provider — the
 // engine setting is retired.
 const PROVIDERS_STATUS = [

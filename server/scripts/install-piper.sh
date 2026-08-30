@@ -105,7 +105,7 @@ install_voice en_GB-cori-high.onnx           en_GB cori         high
 install_voice en_GB-alan-medium.onnx         en_GB alan         medium
 install_voice en_GB-alba-medium.onnx         en_GB alba         medium
 
-# I18N voices (I18N_PLAN.md §5/Phase E) — Italian, Finnish, Swedish, and
+# I18N voices (docs/design/i18n-plan.md §5/Phase E) — Italian, Finnish, Swedish, and
 # German, matching the app's shipped UI languages. Every distinct published
 # speaker per language, each pinned to its HIGHEST available quality tier (no
 # redundant lower-quality duplicates of the same speaker). The voice resolver

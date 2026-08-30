@@ -1,4 +1,4 @@
-// Voice 2.0 (VOICE2_PLAN.md §5.1): pure, id-based voice identity helpers,
+// Voice 2.0 (docs/design/voice-2.0-plan.md §5.1): pure, id-based voice identity helpers,
 // shared by server and client. Lives under server/shared/ (not src/) for the
 // same reason as languages.js — the Docker runtime stage copies server/
 // wholesale but NOT src/. Client code imports this via the re-exports in
@@ -18,7 +18,7 @@ export const TTS_PROVIDERS = ['kokoro', 'google', 'openai', 'piper'];
 
 // Paid engines bill per character on submission; local engines are free.
 // Used for picker badges and for the runtime paid-failure fallback
-// (VOICE2_PLAN.md §5.3 step 4 — only paid failures trigger a retry).
+// (docs/design/voice-2.0-plan.md §5.3 step 4 — only paid failures trigger a retry).
 export const PAID_TTS_PROVIDERS = ['google', 'openai'];
 
 export function isPaidProvider(provider) {

@@ -1,4 +1,4 @@
-// Voice 2.0 v1.4 routing matrix (VOICE2_PLAN.md — sovereignty semantics).
+// Voice 2.0 v1.4 routing matrix (docs/design/voice-2.0-plan.md — sovereignty semantics).
 //
 // CONTRACT REWRITE (2026-07, twice): first from the single-active-provider
 // rule to Voice 2.0 (the voice owns its engine), then to v1.4 sovereignty

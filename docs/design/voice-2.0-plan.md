@@ -27,7 +27,7 @@ See CHANGES.md (2026-07-10 entries) for the file-by-file record. Original
 proposal text below, kept as design rationale — read it with the v1.4
 amendments above in mind.
 
-Supersedes `audio_improve.md` (Plan v3) as the primary design. Carries v3's
+Supersedes `docs/design/audio-improvements.md` (Plan v3) as the primary design. Carries v3's
 truth clause and instrumentation forward; replaces v3's core routing rule
 AND (v1.1) v3's settings model.
 - **Codex adversarial audit (2026-07-09):** nominal "reject", all findings
@@ -71,7 +71,7 @@ fixes; v1.3 — unshipped-app simplification)
 
 ## 1. The pivot — what changes vs. Plan v3
 
-Plan v3 (`audio_improve.md`) kept the May-2026 rule — one platform-wide
+Plan v3 (`docs/design/audio-improvements.md`) kept the May-2026 rule — one platform-wide
 engine, everything else invalid — and softened its failure mode with four
 per-provider default voices. Voice 2.0 rejects the premise:
 
@@ -400,7 +400,7 @@ Consumers (six + checklist grep): `ChatInterface.jsx`,
 
 ### 6.3 Chat + wire truth — inherited from v3, one addition
 
-Unchanged from `audio_improve.md`: one-time substitution info toast keyed
+Unchanged from `docs/design/audio-improvements.md`: one-time substitution info toast keyed
 by `(requested, played, provider)` triple; honest error copy (P2);
 `voiceService.ttsFetch()` wire-model extension reading both substitution
 headers on streaming and WAV paths; DiagnosticBar requested→played

@@ -1,4 +1,4 @@
-// Voice 2.0 (VOICE2_PLAN.md §5) — the ONE authoritative module for
+// Voice 2.0 (docs/design/voice-2.0-plan.md §5) — the ONE authoritative module for
 // per-provider voice catalogues, engine derivation, provider usability,
 // and language-matched fallback resolution. Every consumer (/api/tts
 // routing, /tts/voices listing, the settings PUT validation, the boot
@@ -36,7 +36,7 @@ export const PIPER_BIN = process.env.PIPER_BIN || path.join(PIPER_DIR, 'venv', '
 
 // Settings keys owned by this feature. One default voice per registry
 // LANGUAGE (the fallback must speak the case's language or not speak at
-// all — VOICE2_PLAN.md §5.5) and one enable toggle per provider (§5.2).
+// all — docs/design/voice-2.0-plan.md §5.5) and one enable toggle per provider (§5.2).
 export const DEFAULT_VOICE_KEY_PREFIX = 'tts_default_voice_';
 export const PROVIDER_ENABLED_KEY_PREFIX = 'tts_provider_enabled_';
 
@@ -140,7 +140,7 @@ export async function providerHasVoice(provider, voiceId) {
 }
 
 /**
- * THE router (VOICE2_PLAN.md §5.1): derive a voice's engine by exact
+ * THE router (docs/design/voice-2.0-plan.md §5.1): derive a voice's engine by exact
  * catalogue membership. Tolerant of per-catalogue check errors — a
  * provider whose catalogue can't be checked is unusable anyway, so
  * derivation falls through and the caller goes to the fallback tier.
@@ -169,7 +169,7 @@ export async function deriveVoiceProvider(voiceId) {
 }
 
 // ---------------------------------------------------------------------------
-// Capability + policy (VOICE2_PLAN.md §5.2)
+// Capability + policy (docs/design/voice-2.0-plan.md §5.2)
 // ---------------------------------------------------------------------------
 
 /**
@@ -222,7 +222,7 @@ async function providerEnabled(provider, getSetting) {
     const raw = await getSetting(providerEnabledKey(provider));
     // Default enabled: capability already gates cloud engines (no key ⇒
     // unusable); the toggle exists for the deliberate "keyed for LLM work
-    // but voice must stay free" case (VOICE2_PLAN.md §5.2).
+    // but voice must stay free" case (docs/design/voice-2.0-plan.md §5.2).
     return raw !== '0' && raw !== 'false';
 }
 
@@ -330,7 +330,7 @@ export async function listVoicesForProvider(provider) {
 }
 
 // ---------------------------------------------------------------------------
-// NOTE (VOICE2_PLAN.md v1.4 — sovereign case voices): the server-side
+// NOTE (docs/design/voice-2.0-plan.md v1.4 — sovereign case voices): the server-side
 // language-matched fallback resolver that used to live here was removed.
 // A configured voice is LITERAL — /api/tts plays it or fails honestly.
 // The per-language `tts_default_voice_<lang>` keys remain, but they are a

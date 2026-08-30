@@ -163,7 +163,7 @@ export default function CaseAvatarVoicePicker({ caseData, setCaseData, patientTe
         });
     };
 
-    // Sovereignty (VOICE2_PLAN.md v1.4): picking a voice FREEZES the case's
+    // Sovereignty (docs/design/voice-2.0-plan.md v1.4): picking a voice FREEZES the case's
     // sound. If the author hasn't pinned rate/pitch yet, the CURRENT
     // platform values are written into the case at pick time — later
     // platform slider changes can never alter how an authored case sounds.

@@ -1,4 +1,4 @@
-// Locale-aware formatters (I18N_PLAN.md §8): dates, times, and numbers
+// Locale-aware formatters (docs/design/i18n-plan.md §8): dates, times, and numbers
 // rendered via Intl keyed off the ACTIVE UI LANGUAGE — Finnish/Swedish use
 // 7.7.2026 and decimal commas; ad-hoc `toLocaleString()` (browser locale,
 // not app language) and `toFixed()+concat` are banned in student-facing

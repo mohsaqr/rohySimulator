@@ -615,7 +615,7 @@ export default function DiagnosticBar() {
 
                     {/* I18N: loud wrong-language-voice warning. Validation only —
                         playback is never silently redirected to another voice
-                        (one-tier case_voice design, I18N_PLAN.md §5). */}
+                        (one-tier case_voice design, docs/design/i18n-plan.md §5). */}
                     {langMismatch && (
                         <div className="mt-3 px-3 py-2 rounded border border-amber-800 bg-amber-900/30 text-amber-300 text-xs">
                             <span className="font-bold uppercase tracking-wider">Voice language mismatch:</span>{' '}

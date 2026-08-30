@@ -1,4 +1,4 @@
-// Voice 2.0 catalogue-disjointness contract (VOICE2_PLAN.md §5.1 / §7.4).
+// Voice 2.0 catalogue-disjointness contract (docs/design/voice-2.0-plan.md §5.1 / §7.4).
 //
 // THE invariant the whole router stands on: engine derivation routes a
 // voice by exact catalogue membership, which is deterministic ONLY while

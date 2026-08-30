@@ -8,7 +8,7 @@ import { sttOptions, LANGUAGES } from '../../i18n/languages.js';
 import { TTS_PROVIDERS, isPaidProvider, voiceMatchesLanguage, guessVoiceProvider } from '../../utils/voiceResolver.js';
 import TestVoiceButton from './TestVoiceButton.jsx';
 
-// Voice 2.0 (VOICE2_PLAN.md §6.4) — THERE IS NO ENGINE DROPDOWN. Each
+// Voice 2.0 (docs/design/voice-2.0-plan.md §6.4) — THERE IS NO ENGINE DROPDOWN. Each
 // configured voice plays on its own engine (derived from the voice id), so
 // this tab manages exactly three platform-wide things:
 //   1. Configured voice providers — a status CARD per engine (installed /
@@ -24,7 +24,7 @@ import TestVoiceButton from './TestVoiceButton.jsx';
 // Per-character voices still belong in the case editor (patient) and the
 // persona editor (agents) — this tab never picks a speaker's voice.
 
-// STT locale options come from the language registry (I18N_PLAN.md §2):
+// STT locale options come from the language registry (docs/design/i18n-plan.md §2):
 // every full app language's STT locale plus the curated extra dialects.
 // Adding a language never touches this file again.
 const STT_LANGUAGES = sttOptions();

@@ -1,5 +1,5 @@
 // Regression tests for PUT /api/users/preferences MERGE semantics
-// (I18N_PLAN.md §3, fixed 2026-07-08).
+// (docs/design/i18n-plan.md §3, fixed 2026-07-08).
 //
 // Until then the PUT was a full-replace upsert: the profile panel saving
 // only { default_llm_settings } silently reset `language` and `theme` back

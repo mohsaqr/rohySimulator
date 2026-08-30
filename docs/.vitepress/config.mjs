@@ -36,6 +36,17 @@ export default defineConfig({
     'DOCUMENTATION-AUDIT.md',
     'DOCUMENTATION-QA.md',
     'audits/**',
+    // Historical design records moved here out of the repo root (v2.9.107).
+    // They are read on GitHub, none is in the nav, and they contain prose like
+    // `<lang>` and `<provider>` that VitePress compiles as Vue and rejects
+    // ("Element is missing end tag"). Escaping ~34 of those would rewrite the
+    // record to satisfy a build these files are not part of. Named one by one
+    // rather than as `design/**`, because plugin-standard.md lives in the same
+    // folder and IS linked from integrator/vendored-packages.md.
+    'design/i18n-plan.md',
+    'design/voice-2.0-plan.md',
+    'design/voice-defaults-plan.md',
+    'design/audio-improvements.md',
   ],
   // Dead-link enforcement ON (Stage 7). All sections are authored and the
   // link graph was swept clean in Stage 6; a broken intra-doc link now

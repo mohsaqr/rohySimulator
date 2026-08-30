@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-language LLM smoke test (I18N_PLAN.md §4.4, Phase A).
+// Per-language LLM smoke test (docs/design/i18n-plan.md §4.4, Phase A).
 //
 // For every non-English language in the registry, sends probes through the
 // real /api/proxy/llm route (auth, budget, prompt assembly — the full path
@@ -8,7 +8,7 @@
 //   1. First turn  — an ENGLISH question; the directive alone must flip the
 //      reply language (the case prompt is English, as authored cases are).
 //   2. Drift turn  — a follow-up after an English assistant turn, the
-//      documented drift risk (I18N_PLAN.md §10).
+//      documented drift risk (docs/design/i18n-plan.md §10).
 //
 // Usage:
 //   node scripts/llm-language-smoke.mjs

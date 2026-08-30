@@ -1,4 +1,4 @@
-// Functional language-switch test (I18N_PLAN.md success criterion 1):
+// Functional language-switch test (docs/design/i18n-plan.md success criterion 1):
 // switching the app language must actually re-render components in the
 // target language — this exercises the real chain (setAppLanguage → lazy
 // locale chunk import → i18next.changeLanguage → useTranslation re-render),

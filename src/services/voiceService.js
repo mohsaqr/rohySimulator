@@ -377,7 +377,7 @@ async function speakOneSentence(session, text) {
     // Session language — the server's fallback-language tiebreak for voices
     // whose spoken language can't be derived from the id (openai
     // multilingual voices). Guarantees a de case never falls back to an
-    // English default (VOICE2_PLAN.md §5.3).
+    // English default (docs/design/voice-2.0-plan.md §5.3).
     if (session.language) body.language = session.language;
 
     let res;

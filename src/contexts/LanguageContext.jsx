@@ -1,4 +1,4 @@
-// Language preference context (I18N_PLAN.md §3).
+// Language preference context (docs/design/i18n-plan.md §3).
 //
 // Two fields, deliberately distinct:
 //   uiLanguage   — interface chrome. Per-user, persisted in

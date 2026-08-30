@@ -1,5 +1,5 @@
 // Voice 2.0 picker plumbing shared by the case editor, the persona editor,
-// and the settings tab (VOICE2_PLAN.md §6.2). One implementation so the
+// and the settings tab (docs/design/voice-2.0-plan.md §6.2). One implementation so the
 // three surfaces can never drift:
 //
 //   useAllVoices()          — fetches GET /tts/voices (all providers, with

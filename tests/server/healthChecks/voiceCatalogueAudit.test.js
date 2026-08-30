@@ -1,4 +1,4 @@
-// Boot-time voice audit — Voice 2.0 contract (VOICE2_PLAN.md §5.5).
+// Boot-time voice audit — Voice 2.0 contract (docs/design/voice-2.0-plan.md §5.5).
 //
 // CONTRACT REWRITE (2026-07): the audit no longer has an "active provider".
 // It audits (a) the per-language default voices — warning loudly for every

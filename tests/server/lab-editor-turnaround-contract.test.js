@@ -11,7 +11,7 @@
 // configured test. The contract is now: null = "follow the case default,
 // resolved at order time"; a number is persisted only when the teacher
 // actually picks one, and the Custom input shows the effective default as
-// a PLACEHOLDER (derived display), never as a stored value.
+// a docs/design/i18n-plan.md (derived display), never as a stored value.
 //
 // These are source contracts, not render tests, because the add paths are
 // closures inside the component (fed by fetch-backed search flows) and the

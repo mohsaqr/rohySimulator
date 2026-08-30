@@ -1659,7 +1659,7 @@ router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (re
 // All fields are nullable except voice_mode_enabled (defaults false).
 // No frontend defaults — admin must populate before voice mode is usable.
 
-// Voice 2.0 (VOICE2_PLAN.md §5.4): there is no `tts_provider` engine
+// Voice 2.0 (docs/design/voice-2.0-plan.md §5.4): there is no `tts_provider` engine
 // setting, no per-provider `voice_<p>_<gender>` slot keys, and no
 // `default_voice_<p>_<gender>` persona-default keys — the voice endpoints
 // own exactly ONE defaults family: `tts_default_voice_<lang>` (one per
@@ -1715,7 +1715,7 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
             openai_tts_api_key_via_env: !raw.openai_tts_api_key && !!process.env.OPENAI_API_KEY
         };
         // Voice 2.0: per-language default voices (the fallback safety net,
-        // VOICE2_PLAN.md §5.5) + per-provider enable toggles + live provider
+        // docs/design/voice-2.0-plan.md §5.5) + per-provider enable toggles + live provider
         // status so the client never re-probes capability itself.
         for (const lang of Object.keys(LANGUAGES)) {
             out[defaultVoiceKey(lang)] = (await getPlatformSetting(defaultVoiceKey(lang))) || null;
@@ -1769,7 +1769,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             }
             setIfPresent('voice_mode_enabled', body.voice_mode_enabled ? 'true' : 'false');
         }
-        // Per-language default voices (VOICE2_PLAN.md §5.5). Validation is
+        // Per-language default voices (docs/design/voice-2.0-plan.md §5.5). Validation is
         // the same catalogue authority /api/tts routes with — a typo'd
         // default cannot be saved. Tolerant on check ERRORS: "not found
         // anywhere" rejects, "couldn't check" saves with a warning (an
@@ -1801,7 +1801,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             }
             setIfPresent(k, v);
         }
-        // Per-provider enable toggles (VOICE2_PLAN.md §5.2 — the cost
+        // Per-provider enable toggles (docs/design/voice-2.0-plan.md §5.2 — the cost
         // policy switch; capability is probed, never stored).
         for (const p of TTS_PROVIDERS) {
             const k = providerEnabledKey(p);
@@ -1959,7 +1959,7 @@ router.put('/platform-settings/affect', authenticateToken, requireAdmin, async (
 // `default_voice_<provider>_<gender>` family (a no-op since the 2026-05
 // resolver collapse) is retired by migration 0034; the live defaults are
 // the per-LANGUAGE `tts_default_voice_<lang>` keys on
-// /platform-settings/voice (VOICE2_PLAN.md §5.5).
+// /platform-settings/voice (docs/design/voice-2.0-plan.md §5.5).
 const PERSONA_GENDERS = VOICE_GENDERS;
 const PERSONA_FLAT_FIELDS = ['avatar', 'rate', 'pitch'];
 const PERSONA_FLAT_KEYS = PERSONA_GENDERS

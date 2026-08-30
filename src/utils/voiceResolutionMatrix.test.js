@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveVoice } from './voiceResolver.js';
 
 // Voice 2.0 v1.4 resolution matrix (CONTRACT REWRITE 2026-07 —
-// VOICE2_PLAN.md, sovereignty semantics). Per provider, this locks:
+// docs/design/voice-2.0-plan.md, sovereignty semantics). Per provider, this locks:
 //   1. A voice plays on its own DERIVED engine whenever that engine is
 //      usable — tier 'override'.
 //   2. A stored voice.tts_provider field stays dead (the saga leak guard:

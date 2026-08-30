@@ -344,7 +344,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // Load voice settings + avatar manifest + platform default avatars in
     // parallel. The voice-settings PROMISE is kept in a ref so a voice-mode
     // send fired before the fetch resolves can await it instead of taking
-    // the mute path (first-render race — VOICE2_PLAN.md §6.1; already
+    // the mute path (first-render race — docs/design/voice-2.0-plan.md §6.1; already
     // resolved after first load, so the await is free in the steady state).
     useEffect(() => {
         let cancelled = false;
@@ -1204,7 +1204,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 // session sounds broken but produced zero user-visible
                 // signal — only the DiagnosticBar warned). Warn ONCE per
                 // (voice, language) pair; never substitute a voice —
-                // fallback chains stay dead by design (I18N_PLAN.md §5).
+                // fallback chains stay dead by design (docs/design/i18n-plan.md §5).
                 const mismatchKey = `${r.file}|${caseLanguage}`;
                 if (voiceMatchesLanguage(r.file, r.provider, caseLanguage) === false
                     && voiceLangWarnedRef.current !== mismatchKey) {

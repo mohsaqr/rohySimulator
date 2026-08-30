@@ -338,7 +338,7 @@ async function initializeAndStart() {
         bootLog.error('plugin server slot boot failed', { error: err.message, fatal: false });
     }
 
-    // Voice 2.0 seeding (VOICE2_PLAN.md §5.5). There is no platform engine
+    // Voice 2.0 seeding (docs/design/voice-2.0-plan.md §5.5). There is no platform engine
     // setting anymore — each voice plays on its own (derived) engine. What
     // gets seeded is the never-mute safety net: one default voice per
     // registry LANGUAGE, seeded only where a free local engine can actually

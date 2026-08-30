@@ -1,5 +1,5 @@
 // Inherit / override audit — Voice 2.0 v1.4 sovereignty contract
-// (CONTRACT REWRITE 2026-07, VOICE2_PLAN.md). The audited invariants:
+// (CONTRACT REWRITE 2026-07, docs/design/voice-2.0-plan.md). The audited invariants:
 //
 //   - case_voice wins over the template voice when both are set;
 //   - a CONFIGURED voice (case or template) is LITERAL: unplayable means

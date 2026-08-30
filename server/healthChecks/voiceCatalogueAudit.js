@@ -142,7 +142,7 @@ export async function auditPersonaAndCaseVoices(dbAdapter, log) {
         if (!problem) continue;
 
         // What will actually happen at play time (truth clause in the log):
-        // a CONFIGURED voice is literal (VOICE2_PLAN.md v1.4 — the case
+        // a CONFIGURED voice is literal (docs/design/voice-2.0-plan.md v1.4 — the case
         // sound reigns supreme), so a stale row fails loudly, always. The
         // per-language defaults only serve rows with NO voice configured.
         const guess = derived || guessVoiceProvider(cv);

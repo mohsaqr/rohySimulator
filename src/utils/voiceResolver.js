@@ -1,5 +1,5 @@
 // Single source of truth for CLIENT-side voice resolution (Voice 2.0 —
-// VOICE2_PLAN.md; v1.4 sovereignty semantics).
+// docs/design/voice-2.0-plan.md; v1.4 sovereignty semantics).
 //
 // 2026-05-12 — resolution collapsed to ONE tier (case_voice or mute) after
 //              hidden fallback tiers spent three weeks lying to admins.

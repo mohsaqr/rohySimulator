@@ -1,5 +1,5 @@
 // Tests for src/utils/voiceResolver.js — the Voice 2.0 contract, v1.4
-// sovereignty semantics (VOICE2_PLAN.md).
+// sovereignty semantics (docs/design/voice-2.0-plan.md).
 //
 // CONTRACT REWRITE (2026-07, twice): the 2026-05 one-tier contract died
 // with Voice 2.0; v1.4 then made configured voices SOVEREIGN (owner: "the

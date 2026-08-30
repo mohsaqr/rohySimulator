@@ -1,4 +1,4 @@
-// i18next-parser config (I18N_PLAN.md §6 tooling).
+// i18next-parser config (docs/design/i18n-plan.md §6 tooling).
 //
 // Scans JSX/JS for t() calls and keeps src/locales/en/*.json in sync —
 // extraction is CI-verifiable (npm run i18n:check fails if a t() call has

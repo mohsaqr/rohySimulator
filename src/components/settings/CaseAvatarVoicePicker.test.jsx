@@ -1,7 +1,7 @@
 // Tests for CaseAvatarVoicePicker.jsx — the per-case voice/avatar override
 // picker shown inside the case wizard.
 //
-// CONTRACT (Voice 2.0, 2026-07 — VOICE2_PLAN.md §6.2; supersedes the
+// CONTRACT (Voice 2.0, 2026-07 — docs/design/voice-2.0-plan.md §6.2; supersedes the
 // 2026-05 platform-provider contract):
 //   1. NO PROVIDER PICKER, NO PLATFORM PROVIDER. The picker offers voices
 //      from EVERY usable engine in one select (grouped engine → language,

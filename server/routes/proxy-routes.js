@@ -947,7 +947,7 @@ router.get('/tts/usage', authenticateToken, async (req, res) => {
 
 const TTS_TEXT_LIMIT = 2000;
 
-// GET /api/tts/voices - voice catalogues (Voice 2.0, VOICE2_PLAN.md §5.6).
+// GET /api/tts/voices - voice catalogues (Voice 2.0, docs/design/voice-2.0-plan.md §5.6).
 // Default response covers ALL providers so pickers can offer every usable
 // engine's voices (grouped, with usability + reason for disabled groups).
 // ?provider=<p> keeps the single-provider shape for per-provider needs
@@ -1028,7 +1028,7 @@ const TTS_COST_PER_M_CHARS = {
     google: 16     // Neural2 / WaveNet — Chirp HD is $30 but we don't model it separately
 };
 
-// Voice 2.0 (VOICE2_PLAN.md §5.3): validation of a (provider, voice) pair
+// Voice 2.0 (docs/design/voice-2.0-plan.md §5.3): validation of a (provider, voice) pair
 // delegates to the single catalogue authority in services/ttsProviders.js.
 // Routing itself derives the provider FROM the voice (deriveVoiceProvider);
 // this check exists for the preview route's explicit provider override.
@@ -1103,7 +1103,7 @@ async function pipePcmStream(res, asyncIter) {
 }
 
 // POST /api/tts - synthesize speech (returns audio/wav OR x-rohy-pcm-stream).
-// Voice 2.0 + sovereignty (VOICE2_PLAN.md v1.4): THE VOICE OWNS ITS ENGINE,
+// Voice 2.0 + sovereignty (docs/design/voice-2.0-plan.md v1.4): THE VOICE OWNS ITS ENGINE,
 // AND A CONFIGURED VOICE IS LITERAL. The provider is derived from the
 // requested voice id by exact catalogue membership — there is no platform
 // engine setting, and body/query provider fields are ignored on this route.
@@ -1243,7 +1243,7 @@ async function handleTtsSynthesis(req, res, { isPreview }) {
     } catch (err) {
         // A runtime engine failure (quota, network, 5xx) is an honest error
         // — the configured voice is literal, so there is no retry onto a
-        // stand-in (owner directive, VOICE2_PLAN.md v1.4). The first-chunk
+        // stand-in (owner directive, docs/design/voice-2.0-plan.md v1.4). The first-chunk
         // pre-flight keeps the response uncommitted until the engine
         // actually delivers, so the client gets a real JSON error instead
         // of a dead stream.
@@ -1277,7 +1277,7 @@ function sendSynthesisError(req, res, provider, err) {
     return res.status(status).json({ error: msg, code: err.code || null });
 }
 
-// First-chunk pre-flight (VOICE2_PLAN.md §5.3): pull the first upstream
+// First-chunk pre-flight (docs/design/voice-2.0-plan.md §5.3): pull the first upstream
 // chunk BEFORE the caller flushes response headers, so an engine that
 // fails at request time throws while the response is still uncommitted —
 // handleTtsSynthesis can then substitute the default voice or send an

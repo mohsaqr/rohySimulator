@@ -38,4 +38,4 @@ review is the release gate per language — reviewers work from XLIFF files
 i18n:xliff:import`; see [Translation review (XLIFF)](/integrator/i18n-review)).
 Adding a whole new language is a data change — one entry in
 `server/shared/languages.js` plus a `src/locales/<code>/` folder; see
-`I18N_PLAN.md`.
+`docs/design/i18n-plan.md`.

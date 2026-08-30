@@ -1,4 +1,4 @@
-// Single source of truth for every language rohySimulator knows (I18N_PLAN.md §2).
+// Single source of truth for every language rohySimulator knows (docs/design/i18n-plan.md §2).
 //
 // Lives under server/ (not src/) because the Docker runtime stage copies
 // server/ wholesale but NOT src/ — server code importing from src/ would

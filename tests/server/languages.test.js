@@ -1,5 +1,5 @@
 // Tests for server/shared/languages.js — the single source of truth for
-// every language the app knows (I18N_PLAN.md §2). The invariants here are
+// every language the app knows (docs/design/i18n-plan.md §2). The invariants here are
 // the architecture: adding a language is a data change to this registry,
 // and every consumer (prompt assembly, STT lists, settings UI) derives
 // from it. If these break, the "no code change per language" acceptance

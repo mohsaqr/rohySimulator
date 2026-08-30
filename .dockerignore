@@ -74,6 +74,17 @@ AGENT-NOTE-*.md
 ultraReview
 .claude
 .claude-claudef
+# Root scratch (gitignored, but a local `docker build` sees the working
+# directory rather than a clean clone — keep it out of the build context).
+reports
+todo
+docx
+site
+.local-backups
+rohy-airgap-source-*.tar.gz*
+*.png
+case-author-harness.html
+pathology-harness.html
 
 # Container-build-only files that we DON'T want to copy into the image
 # beyond the Dockerfile itself (the Dockerfile is read separately)

@@ -9,6 +9,41 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.107] — 2026-08-30
+
+### Changed
+
+- **The repository root is readable again.** It carried four superseded planning
+  documents, two setup scripts still branded with the pre-rename product name, an
+  agent note that should never have been committed, and roughly twenty untracked
+  scratch files — notes, screenshots, `.docx` exports, air-gap tarballs and a
+  built docs site. The root is the first thing a contributor reads.
+
+  Planning docs moved to `docs/design/` (`i18n-plan.md`, `voice-2.0-plan.md`,
+  `voice-defaults-plan.md`, `audio-improvements.md`) and the demo case to
+  `docs/examples/`. **42 files** referencing them were updated — they are cited
+  from source comments, migrations, scripts and tests, not only from docs.
+
+  `SETUP_ENV.sh` / `.bat` removed: unreferenced, and still printing "VipSim
+  Authentication Setup" from before the rename. `server/.env.example` plus
+  `docs/INSTALL.md` have covered this for a long time.
+
+  Everything else is now ignored rather than deleted — the scratch files stay on
+  disk, they just no longer appear in `git status`. `.dockerignore` gained the
+  same entries, since a local `docker build` sees the working directory and not a
+  clean clone.
+
+  One reference was deliberately left stale: `0034_voice2_provider_follows_voice.sql`
+  still names `VOICE2_PLAN.md` in a comment. Applied migrations are checksum-
+  tracked and editing one throws at boot — rewriting that comment broke the whole
+  suite until it was reverted. A stale name inside an immutable file beats a boot
+  failure.
+
+  `Lab_database.json` and `heart.txt` deliberately stay at the root: the runtime
+  reads them from there, and a repo-root runtime file has to survive both the
+  `.dockerignore` and the explicit `COPY` in the runtime stage. Moving them is
+  the exact shape of a bug this project has already shipped twice.
+
 ## [2.9.106] — 2026-08-30
 
 ### Changed

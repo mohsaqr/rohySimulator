@@ -3,7 +3,7 @@
 // legacy-row permutations are testable (the spawned-server path applies
 // migrations before a test can insert legacy rows).
 //
-// Contract (VOICE2_PLAN.md §5.5):
+// Contract (docs/design/voice-2.0-plan.md §5.5):
 //   - exactly ONE legacy default_voice_kokoro_* value (or both equal)
 //     → carried into tts_default_voice_en;
 //   - both set and DIFFERENT → no carry-over (boot seeding fills af_bella;

@@ -3,7 +3,7 @@
 // src/data/examRegions.js and the BodyMap polygon labels in
 // src/utils/defaultRegions.js.
 //
-// Why maps instead of t(`region_${id}`): the i18n convention (I18N_PLAN.md)
+// Why maps instead of t(`region_${id}`): the i18n convention (docs/design/i18n-plan.md)
 // bans computed keys — every key must exist literally so extraction and
 // grep stay reliable. Every key referenced here is present in
 // src/locales/en/examination.json (namespace: 'examination'), and every

@@ -15,7 +15,7 @@
 //      than the per-turn affect note, less stable than the case, so it sits
 //      between them. Only agent types on that module's allowlist get it.
 //   5. The RESPONSE CONTRACT trails everything (recency keeps it dominant
-//      over long English case prompts — the drift risk in I18N_PLAN.md §10):
+//      over long English case prompts — the drift risk in docs/design/i18n-plan.md §10):
 //      the registry's full language directive (case language is immutable,
 //      English included) plus the always-on plain-speech rules — replies are
 //      spoken dialogue rendered verbatim in chat bubbles and fed to TTS, so

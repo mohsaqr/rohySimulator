@@ -1,6 +1,6 @@
 # Audio Improvement — Per-Provider Default Voices (Plan v3)
 
-> **SUPERSEDED (2026-07-09): see `VOICE2_PLAN.md`.** The owner reversed the
+> **SUPERSEDED (2026-07-09): see `docs/design/voice-2.0-plan.md`.** The owner reversed the
 > §4 rejection of provider-follows-voice ("I want voice 2.0"): a voice now
 > plays on its own engine whenever that engine is usable; the platform
 > `tts_provider` is demoted to a default, not a router. This document
@@ -10,7 +10,7 @@
 > rule (single active provider, everything else invalid) is retired.
 
 **Status:** PROPOSAL v3 — revised after TWO adversarial audits.
-- v1 audit (`VOICE_DEFAULTS_PLAN.md`, Codex session
+- v1 audit (`docs/design/voice-defaults-plan.md`, Codex session
   `019f485e-addf-7ce1-8d06-12e5975a61f9`): "reject as written, directionally
   right" — five required amendments, all incorporated and marked **[v2]**.
 - v2 audit (Codex session `019f486c-d9f2-7a33-998d-4a04937239a7`): nominal

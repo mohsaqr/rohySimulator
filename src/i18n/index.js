@@ -1,4 +1,4 @@
-// i18next bootstrap (I18N_PLAN.md §6).
+// i18next bootstrap (docs/design/i18n-plan.md §6).
 //
 // Loading strategy:
 //   - English is EAGER (bundled): it is the global fallback, so a missing

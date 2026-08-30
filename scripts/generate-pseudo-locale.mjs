@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pseudo-locale generator (I18N_PLAN.md §6): builds src/locales/en-XA/ from
+// Pseudo-locale generator (docs/design/i18n-plan.md §6): builds src/locales/en-XA/ from
 // src/locales/en/ with accented characters and ~40% length padding.
 //
 // Running the app with ?pseudo=1 then renders en-XA everywhere a real
