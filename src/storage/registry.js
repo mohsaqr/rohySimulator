@@ -80,11 +80,8 @@ export const STORAGE_REGISTRY = Object.freeze({
         purpose: 'In-progress case-edit stash so navigating away preserves wizard state.',
         lifetime: 'session',
     },
-    rohy_lab_settings: {
-        owner: 'src/components/orders/OrdersDrawer.jsx (presumed)',
-        purpose: 'User preference: lab turnaround / instant-results toggle.',
-        lifetime: 'forever',
-    },
+    // rohy_lab_settings was removed 2026-08-30 with OrdersDrawer's
+    // unreachable labs tab (UI review #20) — no source reference remains.
     rohy_monitor_settings: {
         owner: 'src/components/monitor/PatientMonitor.jsx (presumed)',
         purpose: 'User preference: monitor thresholds / display toggles.',
@@ -167,6 +164,16 @@ export const STORAGE_REGISTRY = Object.freeze({
         owner: 'src/notifications/persistence.js',
         purpose: 'Per-user set of acknowledged notification keys (suppressed until resolve()).',
         lifetime: 'derived',
+    },
+    // sessionStorage, not localStorage: which chat tab the learner had open,
+    // so stepping into the lab and back does not drop them from the nurse
+    // onto the patient (ChatInterface unmounts on every room switch). Dies
+    // with the browser tab; nothing to clean up on logout.
+    rohy_chat_active_tab: {
+        keyBuilder: (caseId) => `rohy_chat_active_tab_${caseId}`,
+        owner: 'src/components/chat/ChatInterface.jsx',
+        purpose: 'Selected chat tab (patient | agent_type) per case.',
+        lifetime: 'session',
     },
 });
 

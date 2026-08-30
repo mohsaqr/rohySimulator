@@ -23,14 +23,20 @@ const ClustersTab = ({
   const { t } = useTranslation(["admin"]);
   const colorMap = useMemo(() => createColorMap(labels, palette), [labels, palette]);
   const [result, setResult] = useState(null);
+  // A failed clustering run used to set `result` back to null, which is also
+  // the "still computing" state — so any throw left the spinner turning
+  // forever. The failure gets its own state and is reported honestly.
+  const [error, setError] = useState(null);
   const computeIdRef = useRef(0);
   useEffect(() => {
     if (!sequences?.length) {
       setResult(null);
+      setError(null);
       return;
     }
     const id = ++computeIdRef.current;
     setResult(null);
+    setError(null);
     const timer = setTimeout(() => {
       if (id !== computeIdRef.current) return;
       try {
@@ -71,12 +77,23 @@ const ClustersTab = ({
           return { clusterNum, size, pct: size / totalSeqs * 100, avgLen, sortedFreqs, clusterSeqs, clusterModel, instrength };
         });
         if (id === computeIdRef.current) setResult({ clusters, details });
-      } catch {
-        if (id === computeIdRef.current) setResult(null);
+      } catch (err) {
+        if (id === computeIdRef.current) {
+          setResult(null);
+          setError(err?.message || String(err));
+        }
       }
     }, 50);
     return () => clearTimeout(timer);
   }, [sequences, labels, k, clusterPruneThreshold, dissimilarity, clusterMethod]);
+  if (error) {
+    return <div className="py-16">
+        <div className="mx-auto max-w-lg rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300">
+          <div className="font-semibold">{t("clusters_error")}</div>
+          <div className="mt-1 text-xs opacity-80">{error}</div>
+        </div>
+      </div>;
+  }
   if (!result) {
     return <div className="py-16"><Loading text={t("computing_clusters")} /></div>;
   }

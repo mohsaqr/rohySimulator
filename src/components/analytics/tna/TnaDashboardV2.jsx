@@ -517,6 +517,22 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // that the activity source has no server sequence fetch).
     const activityLoading = wantsActivityEvents && learningEvents === null && !eventsError;
 
+    // The four tabs whose whole body is gated on `transformedData`. When the
+    // filters match nothing that gate rendered literally nothing — a blank
+    // page with no explanation. They share one empty state instead.
+    const isSequenceTab = activeTab === 'network' || activeTab === 'clusters'
+        || activeTab === 'patterns' || activeTab === 'process';
+    // Rows the active source needs are still in flight: the records sources
+    // wait on the Oyon window fetch, the activity source on the learning-event
+    // fetch. Only once they have landed does "nothing to show" mean "the
+    // filters matched nothing" rather than "not loaded yet".
+    const sequenceRowsPending = isRecordsSource
+        ? (loading || emotionRecords === null)
+        : activityLoading;
+    const noSequencesForFilters = isSequenceTab
+        && !sequenceRowsPending
+        && !transformedData?.sequences?.length;
+
     // --- Build TNA model ---
     const analysis = useMemo(() => {
         if (!transformedData?.sequences?.length) return null;
@@ -862,10 +878,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                 {!isSignalTab && (isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
                     <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading activity events…'} />
                 )}
-                {isRecordsSource && isAnalyticsRelated && !loading && emotionRecords && !transformedData && (
+                {noSequencesForFilters && (
                     <div className="mb-3 p-3 rounded bg-white border border-gray-200 text-sm text-gray-600">
-                        No sequences to analyze — no session has 2 or more usable states
-                        for the current filters and source.
+                        No events match the current filters — no session has 2 or more usable
+                        states for the current source and mapping. Widen the date range or
+                        clear a filter.
                     </div>
                 )}
 

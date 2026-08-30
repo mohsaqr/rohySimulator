@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.115] — 2026-08-30
+
+### Fixed
+
+- TNA dashboard shows explicit empty states; the clusters spinner
+  terminates when there is nothing to cluster.
+- Patient-record context is memoised; storage registry dropped a dead key.
+
 ## [2.9.114] — 2026-08-30
 
 ### Fixed

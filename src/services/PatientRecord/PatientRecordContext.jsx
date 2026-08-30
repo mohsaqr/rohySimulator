@@ -69,10 +69,25 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
     initRecord();
   }, [sessionId, caseId, patientInfo]);
 
+  // Every verb wrapper below re-sets `record` to a fresh object so consumers
+  // re-render. That identity change must NOT re-run the sync effect: the
+  // effect both syncs on entry and syncs from its cleanup, so keying it on
+  // `record` made every single recorded action fire two network syncs (253
+  // in one measured session). The effect keys on whether a record EXISTS;
+  // performSync always reads recordRef.current, so it still sends the latest
+  // state. `dirtyRef` tracks whether anything changed since the last
+  // successful sync, so the unmount flush only fires when it has something
+  // to flush.
+  const hasRecord = record !== null;
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (record) dirtyRef.current = true;
+  }, [record]);
+
   // Setup sync interval
   useEffect(() => {
     // Don't sync if no record or no valid sessionId
-    if (!record || !sessionId) {
+    if (!hasRecord || !sessionId) {
       setSyncError(null); // Clear any previous error
       return;
     }
@@ -89,15 +104,22 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
         const pendingEvents = recordRef.current?.getPendingSync() || [];
 
         if (pendingEvents.length > 0 || recordRef.current) {
+          // Cleared BEFORE the await so anything recorded while the request
+          // is in flight marks the record dirty again instead of being
+          // swallowed by this sync's completion.
+          dirtyRef.current = false;
           const result = await syncPatientRecord(recordRef.current);
           // Only clear pending if sync was successful
           if (result && result.success !== false) {
             recordRef.current?.clearPendingSync();
             setLastSyncTime(new Date());
             setSyncError(null);
+          } else {
+            dirtyRef.current = true;
           }
         }
       } catch (error) {
+        dirtyRef.current = true;
         console.error('PatientRecord sync error:', error);
         setSyncError(error.message);
       }
@@ -113,10 +135,15 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
       }
-      // Final sync on unmount
-      performSync();
+      // Final flush on unmount — but only when something is unsynced.
+      // Unconditionally syncing here is what paired every teardown with a
+      // duplicate write; a teardown right after a scheduled sync has nothing
+      // left to send.
+      if (dirtyRef.current) {
+        performSync();
+      }
     };
-  }, [record, sessionId]);
+  }, [hasRecord, sessionId]);
 
   // Force sync (can be called manually)
   const forceSync = useCallback(async () => {
