@@ -114,3 +114,42 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
         expect(screen.queryByText('oyon_dashboard')).not.toBeInTheDocument();
     });
 });
+
+// --- Keyboard dismissal (2026-08-30 UI review, #16) ---------------------
+
+describe('TopBarControls — keyboard dismissal', () => {
+    // Regression lock: Escape closes the menu. Without it the only exit was a
+    // mouse click on the full-screen z-9998 backdrop, so a keyboard user who
+    // opened the menu could neither dismiss it nor reach the page beneath it.
+    it('closes the menu on Escape and returns focus to the trigger', () => {
+        setup();
+        const trigger = screen.getByRole('button', { name: 'settings_menu_aria' });
+        fireEvent.click(trigger);
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+
+        expect(screen.queryByRole('menu')).toBeNull();
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        expect(document.activeElement).toBe(trigger);
+    });
+
+    it('ignores other keys while the menu is open', () => {
+        setup();
+        openMenu();
+        fireEvent.keyDown(document, { key: 'a' });
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+    });
+
+    // Regression lock: the backdrop closes on mousedown as well as click — a
+    // drag that starts on the backdrop never produces a click, and the
+    // backdrop sits above everything, so it would swallow the input.
+    it('closes on a backdrop mousedown', () => {
+        setup();
+        openMenu();
+        const backdrop = document.querySelector('.fixed.inset-0');
+        expect(backdrop).not.toBeNull();
+        fireEvent.mouseDown(backdrop);
+        expect(screen.queryByRole('menu')).toBeNull();
+    });
+});

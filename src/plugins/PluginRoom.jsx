@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registry } from './registry.js';
 import { createPluginContext } from './context.js';
+import ErrorBoundary from '../components/common/ErrorBoundary.jsx';
 
 /**
  * RPS-1 — the generic host mount point.
@@ -90,7 +91,24 @@ export function PluginRoom({
     if (state === null) return null;   // store still resolving
 
     const Component = plugin.component;
-    return <Component {...chrome} {...plugin.props(ctx, persist)} />;
+    // The boundary is the host's half of RPS-1 peaceful exclusion: a plugin
+    // that throws during render (e.g. a viewer rejecting a malformed slide)
+    // loses its own room, not the whole SPA.
+    return (
+        <ErrorBoundary
+            scope={`plugin:${pluginId}`}
+            onError={(error) => {
+                ctx?.eventLogger?.log?.('ERROR_OCCURRED', 'plugin_render', {
+                    objectId: pluginId,
+                    result: error?.message ?? 'render error',
+                    severity: 'IMPORTANT',
+                    category: 'ERROR',
+                });
+            }}
+        >
+            <Component {...chrome} {...plugin.props(ctx, persist)} />
+        </ErrorBoundary>
+    );
 }
 
 export default PluginRoom;

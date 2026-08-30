@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.112] — 2026-08-30
+
+### Added
+
+- **An error boundary around the app and each plugin room** — a render
+  crash shows a localized retryable fallback instead of a white screen,
+  and a plugin crash is contained to its room.
+
+### Fixed
+
+- Room-change events are stamped synchronously, so analytics ordering
+  survives a crashing room.
+
 ## [2.9.111] — 2026-08-30
 
 ### Fixed

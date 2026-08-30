@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye } from 'lucide-react';
@@ -60,6 +60,27 @@ export default function TopBarControls({
 
    const closeAll = useCallback(() => setShowMenu(false), []);
 
+   // Escape closes the menu and hands focus back to the trigger.
+   //
+   // Without this the only way out was a mouse click on the backdrop — and
+   // that backdrop is a full-screen z-9998 layer, so a keyboard user who
+   // opened the menu could neither dismiss it nor reach anything underneath
+   // it (2026-08-30 UI review, #16: it stopped three automation agents dead,
+   // which is exactly what it does to anyone driving the app from the
+   // keyboard). WAI-ARIA menu-button pattern: Escape dismisses, focus
+   // returns to the button that opened it.
+   useEffect(() => {
+      if (!showMenu) return undefined;
+      const onKeyDown = (e) => {
+         if (e.key !== 'Escape') return;
+         e.stopPropagation();
+         setShowMenu(false);
+         menuBtnRef.current?.focus();
+      };
+      document.addEventListener('keydown', onKeyDown);
+      return () => document.removeEventListener('keydown', onKeyDown);
+   }, [showMenu]);
+
    const toggleMenu = () => {
       setShowMenu((v) => {
          if (!v && menuBtnRef.current) setMenuPos(anchorTo(menuBtnRef.current));
@@ -77,7 +98,10 @@ export default function TopBarControls({
    const panel = (pos, id, children) =>
       createPortal(
          <>
-            <div className="fixed inset-0 z-[9998]" onClick={closeAll} />
+            {/* Click-away. mousedown as well as click: a mousedown that
+                starts on the backdrop and ends elsewhere never fires a
+                click, which left the backdrop swallowing input. */}
+            <div className="fixed inset-0 z-[9998]" onMouseDown={closeAll} onClick={closeAll} />
             <div
                id={id}
                role="menu"

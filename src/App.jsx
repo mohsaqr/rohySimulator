@@ -14,6 +14,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { useCaseLanguageSync } from './hooks/useCaseLanguageSync';
 import TopBarControls from './components/common/TopBarControls';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
 // loading only when a user opens the lessons room.
 const LessonsRoomContainer = lazy(() => import('./components/lessons/LessonsRoomContainer'));
@@ -169,6 +170,14 @@ function MainApp() {
    // room state is meaningless to analytics), and only when the room
    // actually changed. Without the prev-ref the initial mount would emit
    // a spurious NAVIGATED:chat with fromRoom=null before any case loaded.
+   //
+   // This effect is now only a BACKSTOP. navigateToRoom() — the single
+   // entry point for learner-driven transitions — stamps the room
+   // synchronously and advances prevRoomRef itself, because child mount
+   // effects run before this one and would otherwise log their arrival
+   // events against the room the learner just left. What is left for the
+   // effect are the few setCurrentRoom() paths that bypass the navigator
+   // (the disabled-plugin fallback, the saved-view restore).
    const prevRoomRef = useRef(currentRoom);
    useEffect(() => {
       if (sessionId != null && prevRoomRef.current !== currentRoom) {
@@ -542,6 +551,18 @@ function MainApp() {
    // hooks in one place.
    const navigateToRoom = (target) => {
       if (target === currentRoom) return;
+      // Stamp the room BEFORE React re-renders. React runs child mount
+      // effects before the parent's, so an effect-based stamp let the new
+      // room's components log their first events while EventLogger.room
+      // still held the room the learner just left — every arrival event was
+      // attributed to the previous room. Doing it here also covers
+      // lab ↔ radiology, where the panel component is shared and never
+      // remounts. prevRoomRef is advanced in the same breath so the
+      // backstop effect below sees no change and does not double-log.
+      if (sessionId != null) {
+         EventLogger.roomChanged(target);
+      }
+      prevRoomRef.current = target;
       setCurrentRoom(target);
    };
 
@@ -1317,7 +1338,13 @@ export default function App() {
                    TTS mismatch warnings) can key off caseLanguage. */}
                <LanguageProvider>
                   <VoiceProvider>
-                     <AuthenticatedApp />
+                     {/* App-wide containment: a render throw anywhere below
+                         shows a recoverable panel instead of a white screen.
+                         PluginRoom carries its own narrower boundary so a
+                         plugin crash costs only its room. */}
+                     <ErrorBoundary scope="app">
+                        <AuthenticatedApp />
+                     </ErrorBoundary>
                      {/* Surfaces. They render fixed-position UI / side effects, so they
                          can sit at the root regardless of which page is active. */}
                      <ToastSurface />
