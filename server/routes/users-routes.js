@@ -32,6 +32,12 @@ import {
     tenantId,
     validatePassword
 } from './_helpers.js';
+// `created_at` is NAMED on every INSERT INTO users below rather than left to
+// the column's `DEFAULT CURRENT_TIMESTAMP`. That default writes sqlite's
+// legacy "YYYY-MM-DD HH:MM:SS" shape — UTC, but with nothing saying so — and
+// `new Date()` on it parses as LOCAL time, which is the same trap that made a
+// 15 s session read as 3 h (RPS-1 §17, migrations 0050-0052).
+import { SQL_NOW } from '../shared/time.js';
 
 const radiologyLog = logger('radiology');
 const routesAuthLog = logger('routes-auth-users-tenants');
@@ -79,7 +85,7 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
         const password_hash = await bcrypt.hash(password, 10);
 
         // Insert user
-        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
         dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, tenantId(req)], function (err) {
             if (err) {
                 if (err.message.includes('UNIQUE')) {
@@ -170,7 +176,7 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
 
             // Insert user
             await new Promise((resolve, reject) => {
-                const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+                const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
                 dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, tenantId(req)], function (err) {
                     if (err) {
                         if (err.message.includes('UNIQUE')) {
@@ -297,7 +303,7 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
                 const password_hash = await bcrypt.hash(password, 10);
                 const newId = await new Promise((resolve, reject) => {
                     dbAdapter.run(
-                        `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                         [username, name || null, email, password_hash, finalRole, tid],
                         function (err) {
                             if (err) return reject(err.message?.includes('UNIQUE') ? new Error('Username or email already exists') : err);

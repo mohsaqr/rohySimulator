@@ -113,9 +113,36 @@ async function resolveTenantUser(identifier, req) {
     );
 }
 
+// The one definition of "how many students are enrolled here".
+//
+// `member_count` is what the course CARDS render, and it used to be a raw
+// COUNT(*) over live cohort_members — every row, any role. Every other surface
+// of the same screen (the detail header, the roster, every report) counts
+// liveStudents(): member_role='student' AND the user's platform role is
+// 'student'. So a course with one student and one co-teacher showed "2
+// enrolled" on the card and "1 student" everywhere the educator clicked, on
+// one screen, at the same moment.
+//
+// This predicate is liveStudents()' WHERE clause, character for character, so
+// the card cannot drift from the roster again. Kept as a shared constant
+// rather than a second hand-written copy for exactly that reason — see
+// LIVE_STUDENT_PREDICATE's use in liveStudents() below.
+const LIVE_STUDENT_PREDICATE = `m.deleted_at IS NULL
+            AND m.member_role = 'student'
+            AND u.role = 'student'`;
+
+/**
+ * Live enrolled-student count for one cohort — the number every surface shows.
+ *
+ * @param {number} cohortId
+ * @returns {Promise<number>}
+ */
 async function memberCount(cohortId) {
     const row = await dbAdapter.get(
-        `SELECT COUNT(*) AS count FROM cohort_members WHERE cohort_id = ? AND deleted_at IS NULL`,
+        `SELECT COUNT(*) AS count
+           FROM cohort_members m
+           JOIN users u ON u.id = m.user_id
+          WHERE m.cohort_id = ? AND ${LIVE_STUDENT_PREDICATE}`,
         [cohortId]
     );
     return row ? Number(row.count || 0) : 0;
@@ -219,7 +246,10 @@ router.post('/cohorts', authenticateToken, requireEducator, async (req, res, nex
             resourceId: cohort.id,
             resourceName: cohort.name,
         });
-        res.status(201).json({ cohort: { ...cohort, member_count: coteachers.length } });
+        // A brand-new course has co-teachers, never students — and
+        // member_count means enrolled STUDENTS on every surface, so it is 0
+        // here rather than the co-teacher tally it used to report.
+        res.status(201).json({ cohort: { ...cohort, member_count: await memberCount(cohortId) } });
     } catch (err) {
         next(err);
     }
@@ -247,7 +277,8 @@ router.get('/cohorts', authenticateToken, requireEducator, async (req, res, next
         const rows = await dbAdapter.all(
             `SELECT c.*,
                     (SELECT COUNT(*) FROM cohort_members m
-                      WHERE m.cohort_id = c.id AND m.deleted_at IS NULL) AS member_count
+                       JOIN users u ON u.id = m.user_id
+                      WHERE m.cohort_id = c.id AND ${LIVE_STUDENT_PREDICATE}) AS member_count
                FROM cohorts c
               WHERE ${where}
               ORDER BY c.created_at DESC, c.id DESC`,
@@ -314,7 +345,7 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
             [cohort.id]
         );
         res.json({
-            cohort: { ...cohort, member_count: allMembers.length },
+            cohort: { ...cohort, member_count: await memberCount(cohort.id) },
             // `members` retained for backward compatibility (all live
             // members, both roles) — existing callers/tests unchanged.
             members: allMembers,
@@ -1094,9 +1125,7 @@ async function liveStudents(cohortId) {
            FROM cohort_members m
            JOIN users u ON u.id = m.user_id
           WHERE m.cohort_id = ?
-            AND m.deleted_at IS NULL
-            AND m.member_role = 'student'
-            AND u.role = 'student'
+            AND ${LIVE_STUDENT_PREDICATE}
           ORDER BY u.username ASC`,
         [cohortId]
     );

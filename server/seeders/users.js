@@ -17,6 +17,10 @@
 import bcrypt from 'bcrypt';
 import { logger } from '../logger.js';
 import { validatePassword } from '../routes/_helpers.js';
+// The seeded users are the first rows in the table; they get the same UTC ISO
+// created_at every other writer now stamps, so the column never holds two
+// shapes at once (RPS-1 §17, migrations 0050-0052).
+import { SQL_NOW } from '../shared/time.js';
 
 const seederLog = logger('seeder');
 
@@ -137,7 +141,7 @@ export async function seedUsers(db) {
                     await new Promise((res, rej) => {
                         db.run(
                             `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status, created_at)
-                             VALUES (?, ?, ?, ?, ?, 1, 'active', CURRENT_TIMESTAMP)`,
+                             VALUES (?, ?, ?, ?, ?, 1, 'active', ${SQL_NOW})`,
                             [user.username, user.name, user.email, password_hash, user.role],
                             function(err) {
                                 if (err) {

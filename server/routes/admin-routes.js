@@ -1007,14 +1007,19 @@ router.post('/admin/seed/all', authenticateToken, requireAdmin, async (req, res)
 
 // GET /api/user/profile - Get current user's profile
 
+// `labelKey` marks a field as still carrying its BUILT-IN label: the client
+// renders the matching `profile` catalogue entry so the form speaks the
+// viewer's language, with `label` as the English fallback. An admin override
+// is stored verbatim and carries no labelKey, so a customised label is always
+// shown exactly as the admin wrote it (it is not ours to translate).
 const DEFAULT_USER_FIELD_CONFIG = {
-    name: { label: 'Full Name', required: true, enabled: true },
-    institution: { label: 'Institution', required: false, enabled: true },
-    address: { label: 'Address', required: false, enabled: true },
-    phone: { label: 'Phone Number', required: false, enabled: true },
-    alternative_email: { label: 'Alternative Email', required: false, enabled: true },
-    education: { label: 'Education', required: false, enabled: true },
-    grade: { label: 'Grade/Year', required: false, enabled: true }
+    name: { label: 'Full Name', labelKey: 'field_label_name', required: true, enabled: true },
+    institution: { label: 'Institution', labelKey: 'field_label_institution', required: false, enabled: true },
+    address: { label: 'Address', labelKey: 'field_label_address', required: false, enabled: true },
+    phone: { label: 'Phone Number', labelKey: 'field_label_phone', required: false, enabled: true },
+    alternative_email: { label: 'Alternative Email', labelKey: 'field_label_alternative_email', required: false, enabled: true },
+    education: { label: 'Education', labelKey: 'field_label_education', required: false, enabled: true },
+    grade: { label: 'Grade/Year', labelKey: 'field_label_grade', required: false, enabled: true }
 };
 
 // GET /api/platform-settings/user-fields - Get user field configuration
@@ -1538,8 +1543,32 @@ router.post('/platform-settings/llm/models/detect', authenticateToken, requireAd
             .filter((id) => typeof id === 'string' && id.trim() !== '');
         res.json({ models, supported: true });
     } catch (err) {
-        (req.log || routesLlmLog).error('llm models detect failed', { error: err.message });
-        res.status(500).json({ error: err.message });
+        // An upstream that refuses the connection, resolves nowhere or times
+        // out is NOT a rohy fault, and 500 said it was: the admin LLM tab
+        // auto-fires this on open, so every visit with a stopped LM Studio
+        // painted a red 500 in the console and an error line in the server
+        // log for a condition the admin is on that tab to discover. 502 with
+        // a machine-readable code is the honest answer — the gateway reached
+        // for something and it was not there. 500 stays for a genuine
+        // internal fault (a bug in this handler, a JSON parse of our own
+        // state), which is what the fetch-shaped check below separates out.
+        const upstreamUnreachable = err instanceof TypeError
+            || err?.name === 'AbortError'
+            || err?.name === 'FetchError'
+            || typeof err?.cause?.code === 'string';
+        const log = (req.log || routesLlmLog);
+        if (upstreamUnreachable) {
+            log.warn('llm models detect upstream unreachable', {
+                error: err.message,
+                cause: err?.cause?.code || null,
+            });
+            return res.status(502).json({
+                error: `Could not reach the model server: ${err.message}`,
+                code: 'upstream_unreachable',
+            });
+        }
+        log.error('llm models detect failed', { error: err.message });
+        res.status(500).json({ error: err.message, code: 'detect_failed' });
     }
 });
 

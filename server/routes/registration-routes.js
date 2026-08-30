@@ -18,6 +18,9 @@ import {
 } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { allocateInviteToken, findInviteByToken, inviteRejection } from '../lib/invites.js';
+// One time shape everywhere (RPS-1 §17): a user row created here gets an
+// explicit UTC ISO created_at instead of sqlite's naive DEFAULT CURRENT_TIMESTAMP.
+import { SQL_NOW } from '../shared/time.js';
 import {
     auditSuccess,
     dbAll,
@@ -298,8 +301,9 @@ router.post('/registration-requests/:id/approve', authenticateToken, requireAdmi
         let userId;
         try {
             const result = await dbRun(
-                `INSERT INTO users (username, name, email, password_hash, role, tenant_id)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
+                // created_at is named, not defaulted — see the SQL_NOW import.
+                `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [request.username, request.name, request.email, request.password_hash, role, request.tenant_id]
             );
             userId = result.lastID;

@@ -6,7 +6,9 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
     authenticateToken,
+    hasRoleAtLeast,
     requireEducator,
+    ROLE_RANKS,
 } from '../middleware/auth.js';
 
 
@@ -43,12 +45,78 @@ try {
 
 const router = express.Router();
 
+// --- Who may see what in the agent template library -------------------------
+//
+// `GET /agents/templates` is the only READ on this table below educator rank —
+// every mutating sibling is requireEducator. It used to answer `SELECT *` to
+// any signed-in user, so a student could read the whole educator-authored
+// library: the consultant's coaching script, the debrief tutor's answer
+// guidance, every template's LLM routing. Keys were redacted; the pedagogy was
+// not.
+//
+// It cannot simply become requireEducator, because two learner runtimes
+// resolve their conversation partner through it when a case has no per-case
+// agent attached (case_agents is never seeded, so that is the DEFAULT path):
+//
+//   * ChatInterface.jsx — falls back to a platform-default `patient` template
+//     for the persona prose and `config.voice` (which is how a patient gets a
+//     gender-matched voice at all).
+//   * discussionService.js — falls back to a platform-default `discussant`
+//     for the debrief tutor, its `config.unlock_trigger` and
+//     `config.show_encounter_record`.
+//
+// The client assembles the system prompt and posts it to /proxy/llm, so those
+// two prompts must reach the learner's browser; withholding them would mute
+// the persona and the debrief. Everything else must not. So a learner sees
+// ONLY the agent types their own runtime resolves, and only the columns it
+// reads — no LLM routing, no memory access, no authorship, no timestamps, and
+// no template of any other type (nurse, consultant, relative, …), whose
+// prompts a learner has no runtime reason to hold.
+const LEARNER_VISIBLE_AGENT_TYPES = Object.freeze(['patient', 'discussant']);
+const LEARNER_TEMPLATE_FIELDS = Object.freeze([
+    'id', 'agent_type', 'name', 'role_title', 'avatar_url',
+    'system_prompt', 'context_filter', 'communication_style',
+]);
+
+const isEducatorOrAbove = (user) => hasRoleAtLeast(user, ROLE_RANKS.educator);
+
+/**
+ * One agent_templates row, projected for the caller's role.
+ *
+ * Educator and above get the row as before. Below that, the whitelist above
+ * is applied — an ALLOW list, so a column added to the table later is private
+ * by default rather than leaking on its first migration.
+ *
+ * @param {object} row       raw agent_templates row
+ * @param {object} user      req.user
+ * @returns {object}         the projected template
+ */
+function projectAgentTemplate(row, user) {
+    const config = JSON.parse(row.config || '{}');
+    if (isEducatorOrAbove(user)) {
+        return { ...redactRow(row), config, is_default: row.is_default === 1 };
+    }
+    const out = { is_default: row.is_default === 1, config };
+    for (const field of LEARNER_TEMPLATE_FIELDS) out[field] = row[field] ?? null;
+    return out;
+}
+
 router.get('/agents/templates', authenticateToken, async (req, res) => {
     try {
+        const learnerOnly = !isEducatorOrAbove(req.user);
+        const typeFilter = learnerOnly
+            ? ` AND agent_type IN (${LEARNER_VISIBLE_AGENT_TYPES.map(() => '?').join(', ')})`
+            : '';
+        const params = learnerOnly
+            ? [tenantId(req), ...LEARNER_VISIBLE_AGENT_TYPES]
+            : [tenantId(req)];
+
         const templates = await new Promise((resolve, reject) => {
             dbAdapter.all(
-                `SELECT * FROM agent_templates WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, agent_type ASC, name ASC`,
-                [tenantId(req)],
+                `SELECT * FROM agent_templates
+                  WHERE tenant_id = ? AND deleted_at IS NULL${typeFilter}
+                  ORDER BY is_default DESC, agent_type ASC, name ASC`,
+                params,
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
@@ -56,13 +124,7 @@ router.get('/agents/templates', authenticateToken, async (req, res) => {
             );
         });
 
-        const parsed = templates.map(t => ({
-            ...redactRow(t),
-            config: JSON.parse(t.config || '{}'),
-            is_default: t.is_default === 1
-        }));
-
-        res.json({ templates: parsed });
+        res.json({ templates: templates.map(t => projectAgentTemplate(t, req.user)) });
     } catch (err) {
         (req.log || routesAdminLog).error('agent templates list failed', { error: err.message });
         res.status(500).json({ error: err.message });
@@ -85,15 +147,19 @@ router.get('/agents/templates/:id', authenticateToken, async (req, res) => {
             );
         });
 
-        if (!template) {
+        // Same rule as the list route: a learner may read only the types
+        // their own runtime resolves, and 404 — not 403 — for anything else,
+        // so the endpoint never confirms which templates an educator has
+        // authored.
+        const invisibleToCaller = template
+            && !isEducatorOrAbove(req.user)
+            && !LEARNER_VISIBLE_AGENT_TYPES.includes(template.agent_type);
+
+        if (!template || invisibleToCaller) {
             return res.status(404).json({ error: 'Agent template not found' });
         }
 
-        res.json({
-            ...redactRow(template),
-            config: JSON.parse(template.config || '{}'),
-            is_default: template.is_default === 1
-        });
+        res.json(projectAgentTemplate(template, req.user));
     } catch (err) {
         (req.log || routesAdminLog).error('agent template get failed', { error: err.message });
         res.status(500).json({ error: err.message });

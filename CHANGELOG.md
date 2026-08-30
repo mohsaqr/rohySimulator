@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.113] — 2026-08-30
+
+### Fixed
+
+- **Identity timestamps are UTC ISO** (migration 0052; automatic on boot,
+  with the standard pre-migration backup).
+- Students receive an allow-listed projection of agent templates — never
+  educator prompt internals.
+- Cohort member counts include only live student memberships.
+- The model dropdown detects upstream catalogue additions.
+
 ## [2.9.112] — 2026-08-30
 
 ### Added

@@ -10,8 +10,8 @@ model.
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
 | `POST` | `/api/auth/login` | `(none)` | `server/routes/auth-routes.js:437` |
-| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:727` |
-| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:710` |
+| `POST` | `/api/auth/logout` | `authenticateToken` | `server/routes/auth-routes.js:733` |
+| `GET` | `/api/auth/profile` | `authenticateToken` | `server/routes/auth-routes.js:716` |
 | `POST` | `/api/auth/refresh` | `authenticateToken` | `server/routes/auth-routes.js:644` |
 | `POST` | `/api/auth/register` | `(none)` | `server/routes/auth-routes.js:163` |
 | `GET` | `/api/auth/registration-policy` | `(none)` | `server/routes/auth-routes.js:137` |
