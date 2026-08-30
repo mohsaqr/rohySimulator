@@ -47,6 +47,22 @@ import { apiAsAdmin, listCases } from './fixtures/seed.js';
 import { loginAs } from './fixtures/auth.js';
 import { request as pwRequest } from '@playwright/test';
 
+// STALENESS FIX 2026-08-30 — "we are past the auth gate" marker.
+//
+// These tests used `getByText('admin')` on the assumption that the header
+// rendered `{user?.username}` next to an "Admin" role badge. That chrome no
+// longer exists: the top bar was merged into ONE TopBarControls gear menu
+// (src/components/common/TopBarControls.jsx) which renders no username and no
+// role badge, so the locator resolved to zero elements. It went unnoticed
+// because the previous e2e run drove a blank page (build pinned --base=/rohy/
+// while the e2e server serves at /).
+//
+// The gear trigger's aria-label (app.json → 'settings_menu_aria') is mounted
+// by MainApp for every authenticated role, so it is the equivalent — and
+// role-agnostic — signal that the SPA hydrated past AuthGate.
+const APP_MENU_TRIGGER = /settings and profile menu/i;
+
+
 // Build an APIRequestContext with the student bearer token attached. Mirrors
 // apiAsAdmin() but for the lower-privileged role. We need a *separate* context
 // from adminPage because the student must hit the API as themselves to
@@ -244,9 +260,35 @@ test.describe('alarms + notifications (Phase 5)', () => {
         await adminPage.goto('/');
         // Wait until the SPA is mounted past the auth gate so the
         // NotificationProvider has ticked at least once.
-        await expect(adminPage.getByText('admin', { exact: false }).first()).toBeVisible({
+        await expect(adminPage.getByRole('button', { name: APP_MENU_TRIGGER }).first()).toBeVisible({
             timeout: 10_000,
         });
+
+        // FLAKE FIX 2026-08-30 — settle the session BEFORE seeding, so the
+        // reload below is a session RESTORE and not a fresh session start.
+        //
+        // The contract this test means to exercise is "a learner mid-case
+        // refreshes and their snooze survives", which App.jsx:201 implements
+        // by gating clearTransient() on `sessionValidated` and `prev ===
+        // sessionId`. But on a context with no parked session, App auto-starts
+        // the landing case, and THAT is a real session change: Stage-3
+        // clearTransient('session-change') then fires by design and writes an
+        // empty map over the seeded snooze (acks/snoozes are session-scoped —
+        // case A's `alarm:hr_high` must not silence a brand-new alarm in case
+        // B). So the test was racing the landing-case start: it passed only
+        // when it read localStorage first. Observed failing once in a full
+        // suite run (5/5 green in isolation, where the race resolves the other
+        // way) with `persisted` === {} — the exact signature of
+        // saveSnoozedSync(empty).
+        //
+        // Waiting for `rohy_active_session` to be parked makes the reload the
+        // restore path the test is actually about. No assertion is relaxed.
+        await adminPage.waitForFunction(() => {
+            try {
+                const raw = window.localStorage.getItem('rohy_active_session');
+                return !!(raw && JSON.parse(raw)?.sessionId);
+            } catch { return false; }
+        }, null, { timeout: 15_000 });
 
         await adminPage.evaluate(({ k, v }) => {
             window.localStorage.setItem(k, JSON.stringify(v));
@@ -255,7 +297,7 @@ test.describe('alarms + notifications (Phase 5)', () => {
         // Reload — the provider's loadSnoozedSync(userId) should pick the
         // entry up on next mount and keep it (until > now).
         await adminPage.reload();
-        await expect(adminPage.getByText('admin', { exact: false }).first()).toBeVisible({
+        await expect(adminPage.getByRole('button', { name: APP_MENU_TRIGGER }).first()).toBeVisible({
             timeout: 10_000,
         });
 
@@ -274,7 +316,7 @@ test.describe('alarms + notifications (Phase 5)', () => {
             window.localStorage.setItem(k, JSON.stringify(v));
         }, { k: storageKey, v: { [expiredKey]: Date.now() - 60_000 } });
         await adminPage.reload();
-        await expect(adminPage.getByText('admin', { exact: false }).first()).toBeVisible({
+        await expect(adminPage.getByRole('button', { name: APP_MENU_TRIGGER }).first()).toBeVisible({
             timeout: 10_000,
         });
         // The provider re-saves on first mount, dropping anything where
@@ -342,7 +384,7 @@ test.describe('alarms + notifications (Phase 5)', () => {
     // the BannerSurface accessibility contract end to end.
     test('BannerSurface renders no role="alert" wrapper when no banners are active', async ({ adminPage }) => {
         await adminPage.goto('/');
-        await expect(adminPage.getByText('admin', { exact: false }).first()).toBeVisible({
+        await expect(adminPage.getByRole('button', { name: APP_MENU_TRIGGER }).first()).toBeVisible({
             timeout: 10_000,
         });
 

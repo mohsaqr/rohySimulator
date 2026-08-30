@@ -33,16 +33,15 @@ test.describe('canary', () => {
         // populate `user`, and skip the LoginPage entirely.
         await adminPage.goto('/');
 
-        // The header dropdown renders `{user?.username}` once the
-        // AuthProvider resolves. Looking for "admin" is a stable, content-
-        // anchored signal that we landed past the login gate without
-        // depending on icon class names.
-        //
-        // Use a regex bounded by `Admin` (the role badge) to avoid the
-        // selector matching incidental DOM text on the login screen.
-        await expect(adminPage.getByText('admin', { exact: false }).first()).toBeVisible({
-            timeout: 10_000,
-        });
+        // STALENESS FIX 2026-08-30: this used to look for the header's
+        // `{user?.username}` label plus an "Admin" role badge. Both are gone —
+        // the top bar was merged into ONE TopBarControls gear menu, which
+        // renders neither. The gear trigger's aria-label (app.json →
+        // 'settings_menu_aria') is mounted by MainApp for every authenticated
+        // role, so it is the current "we landed past the login gate" signal.
+        await expect(
+            adminPage.getByRole('button', { name: /settings and profile menu/i }).first()
+        ).toBeVisible({ timeout: 10_000 });
 
         // Sanity: token is still in localStorage (i.e. the SPA didn't
         // log us back out due to a verifyToken() failure).

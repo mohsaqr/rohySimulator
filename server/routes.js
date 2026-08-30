@@ -84,7 +84,13 @@ const generalLimiter = rateLimit({
     // by IP — a lab behind one NAT would exhaust the whole building's budget on
     // one student reading a slide. plugins-routes.js carries its own per-user
     // limiter instead.
-    skip: (req) => req.path.startsWith('/tts')
+    //
+    // ROHY_DISABLE_GENERAL_RATE_LIMIT mirrors ROHY_DISABLE_AUTH_RATE_LIMIT
+    // (auth-routes.js): the e2e suite mounts the full SPA dozens of times
+    // from one runner IP (~40-50 requests per mount) and legitimately peaks
+    // past 600/min. Set only by test harnesses — NEVER in production.
+    skip: (req) => process.env.ROHY_DISABLE_GENERAL_RATE_LIMIT === '1'
+        || req.path.startsWith('/tts')
         || req.path.startsWith('/proxy/llm')
         || req.path.startsWith('/plugins/')
 });

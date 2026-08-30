@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.124] — 2026-08-30
+
+### Fixed
+
+- **`POST /api/sessions` dedup responses carry the full create shape**
+  (id, case_id, user_id, student_name, tenant_id) plus the reuse note.
+- e2e suite green end-to-end (91/0/14, three consecutive runs); new
+  `ROHY_DISABLE_GENERAL_RATE_LIMIT` escape for test harnesses — never
+  production.
+
 ## [2.9.123] — 2026-08-30
 
 ### Changed

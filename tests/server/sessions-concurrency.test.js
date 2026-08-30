@@ -89,6 +89,34 @@ describe('POST /api/sessions — concurrency', () => {
         if (server) await server.close();
     });
 
+    // Regression lock (2026-08-30 review #46): the 30 s dedup branch used to
+    // return only {id, message} while the create branch returned the full
+    // {id, case_id, user_id, student_name, tenant_id} — one endpoint, two
+    // success shapes, chosen non-deterministically by whether the same user
+    // started the same case within the window. Both branches must now return
+    // the same shape (the reuse adds its message on top).
+    it('the dedup branch returns the same body shape as the create branch', async () => {
+        const post = () => fetch(`${server.baseUrl}/api/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ case_id: caseId }),
+        }).then(async (r) => ({ status: r.status, body: await r.json() }));
+
+        const first = await post();
+        expect(first.status).toBe(200);
+        const second = await post();   // inside the 30 s window → dedup branch
+        expect(second.status).toBe(200);
+        expect(second.body.message).toMatch(/reused/i);
+        expect(second.body.id).toBe(first.body.id);
+
+        for (const res of [first, second]) {
+            expect(res.body.case_id).toBe(caseId);
+            expect(res.body.user_id).toBe(userId);
+            expect(res.body.student_name).toBeTypeOf('string');
+            expect(res.body.tenant_id).toBe(1);
+        }
+    });
+
     it('20 concurrent POST /sessions all succeed; dedup collapses to a small set; DB row count matches', async () => {
         const N = 20;
         const promises = Array.from({ length: N }, () =>

@@ -110,6 +110,12 @@ export default defineConfig({
             // the cap and cascade-429. Same switch CI's audit server uses;
             // never set in production.
             ROHY_DISABLE_AUTH_RATE_LIMIT: '1',
+            // The general 600 req/min/IP limiter has the same problem at
+            // suite scale: one SPA mount is ~40-50 API calls, and the full
+            // suite peaks past the cap from a single runner IP (measured
+            // 771/min), 429-ing unrelated specs. Same contract: test
+            // harness only, never production.
+            ROHY_DISABLE_GENERAL_RATE_LIMIT: '1',
             // Keep the operator's piper/llm config out of e2e — tests that
             // need TTS or LLM will mock at the network layer.
             PIPER_DISABLED: '1',

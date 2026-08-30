@@ -51,6 +51,21 @@ async function _getAdminCtx(baseURL) {
     }
     return _adminCtx;
 }
+// Regression lock (finding #43, 2026-08-30): `_getAdminCtx` MEMOISES one
+// APIRequestContext, but every test called `api.dispose()` in its `finally`
+// and nothing reset `_adminCtx`. So the first test that ran disposed the
+// shared context and every later test got the closed one back, failing in
+// ~1 ms with "apiRequestContext._wrapApiCall: Target page, context or browser
+// has been closed" — which reads exactly like a webServer/boot problem and is
+// nothing of the sort. Release must always clear the memo so the next getter
+// mints a fresh context (loginAs reuses globalSetup's cached token, so this
+// costs no extra /api/auth/login and still respects the rate limiter).
+async function _releaseAdminCtx() {
+    if (!_adminCtx) return;
+    const ctx = _adminCtx;
+    _adminCtx = null;
+    await ctx.dispose();
+}
 async function _authedGoto(page, baseURL, path = '/') {
     if (!_adminToken) await _getAdminCtx(baseURL);
     await page.context().addInitScript((t) => {
@@ -87,18 +102,24 @@ test.describe('admin flows', () => {
         api = await _getAdminCtx(baseURL);
     });
 
-    test.afterAll(async () => {
+    test.afterAll(async ({ baseURL }) => {
         // Best-effort cleanup. Failures here don't fail the suite. Cases
         // are soft-deleted; custom (non-default) templates are hard-
         // deleted by the route.
-        if (api) {
+        //
+        // Re-acquire rather than reusing the `api` captured in beforeAll:
+        // tests release the shared context in their own `finally`, so the
+        // module-level handle is stale by the time cleanup runs.
+        api = await _getAdminCtx(baseURL);
+        try {
             for (const id of createdCaseIds) {
                 try { await api.delete(`/api/cases/${id}`); } catch { /* ignore */ }
             }
             for (const id of createdTemplateIds) {
                 try { await api.delete(`/api/agents/templates/${id}`); } catch { /* ignore */ }
             }
-            await api.dispose();
+        } finally {
+            await _releaseAdminCtx();
             api = null;
         }
     });
@@ -271,7 +292,7 @@ test.describe('admin flows', () => {
                 data: { role_title: originalRoleTitle },
             });
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -311,7 +332,7 @@ test.describe('admin flows', () => {
             expect(resetBody.template).toBeTruthy();
             expect(resetBody.template.system_prompt).not.toContain('MUTATED FOR E2E');
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -343,7 +364,7 @@ test.describe('admin flows', () => {
             // agent_type is preserved from the source.
             expect(freshJson.agent_type).toBe(source.agent_type);
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -381,7 +402,7 @@ test.describe('admin flows', () => {
             const errBody = await delStandard.json();
             expect(errBody.error).toMatch(/default template/i);
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -450,7 +471,7 @@ test.describe('admin flows', () => {
             expect(fJson.logs.length).toBeGreaterThan(0);
             expect(fJson.logs.every((l) => l.action === 'duplicate_agent_template')).toBe(true);
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -507,7 +528,7 @@ test.describe('admin flows', () => {
 
             // Row is already deleted; no need to push to createdCaseIds.
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 
@@ -523,7 +544,7 @@ test.describe('admin flows', () => {
                 try { await api.delete(`/api/agents/templates/${id}`); } catch { /* ignore */ }
             }
         } finally {
-            await api.dispose();
+            await _releaseAdminCtx();
         }
     });
 });

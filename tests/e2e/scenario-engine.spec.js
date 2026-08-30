@@ -609,6 +609,19 @@ test.describe('scenario engine', () => {
         // Settle long enough for one full timeline run.
         await page.waitForTimeout(8_000);
 
+        // FLAKE FIX 2026-08-30: this was a single read taken after a hardcoded
+        // 8 s sleep and it failed the full-suite run at HR=108 (floor 110)
+        // while passing in isolation — the engine was still ramping toward
+        // 120, because under a loaded run the vitals loop is slower (and the
+        // e2e run trips the 600-req/min general limiter, so some polls 429).
+        // Poll for convergence instead of assuming a fixed settle time. The
+        // "not scenario B" guard is asserted BEFORE and AFTER the poll so a
+        // run that is racing past 110 on its way to B's 200 still fails.
+        expect(await readHR(page), 'session bound to scenario A should NOT pick up scenario B (HR=200)')
+            .toBeLessThan(150);
+        await expect
+            .poll(() => readHR(page), { timeout: 20_000, intervals: [500, 1000] })
+            .toBeGreaterThanOrEqual(110);
         const hr = await readHR(page);
         expect(hr, 'session bound to scenario A should NOT pick up scenario B (HR=200)').toBeLessThan(150);
         expect(hr, 'session bound to scenario A should converge near 120').toBeGreaterThanOrEqual(110);

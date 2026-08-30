@@ -120,6 +120,11 @@ for (const vp of VIEWPORTS) {
         test('login page fits', async ({ page }) => {
             await page.goto('/');
             await page.waitForLoadState('networkidle');
+            // Regression lock: an overflow-only assertion passes on a BLANK
+            // page (an empty document never overflows) — which is exactly how
+            // this test stayed green while the whole suite was serving an
+            // unbuilt tree. Demand the login form before measuring layout.
+            await expect(page.locator('input[type="password"]')).toBeVisible();
             await page.screenshot({ path: path.join(SHOTS, `${vp.name}-login.png`), fullPage: false });
             await expectNoHorizontalOverflow(page, `${vp.name} login`);
         });

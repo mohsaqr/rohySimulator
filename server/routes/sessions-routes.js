@@ -15,7 +15,7 @@ import {
 import { logger } from '../logger.js';
 import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
-import { SQL_NOW } from '../shared/time.js';
+import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import {
     canReadAcrossUsers,
     caseAccessEnforcedFor,
@@ -169,7 +169,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             `SELECT id FROM sessions
              WHERE user_id = ? AND case_id = ? AND tenant_id = ?
                AND end_time IS NULL
-               AND start_time > datetime('now', '-30 seconds')
+               AND start_time > ${sqlNowPlus("'-30 seconds'")}
              ORDER BY id DESC LIMIT 1`,
             [user_id, case_id, tenantId(req)],
             (err, row) => resolve(err ? null : row)
@@ -177,10 +177,29 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     });
     if (recent) {
         (req.log || routesCasesLog).info('reusing recent active session', { id: recent.id, user_id, case_id });
-        return res.json({ id: recent.id, message: 'Reused recent active session' });
+        // Same body shape as the create branch below, plus the reuse note.
+        // Returning only {id, message} here gave the endpoint two different
+        // success shapes for one operation — case_id/user_id/student_name/
+        // tenant_id silently became undefined for any caller who started a
+        // session on the same case within the 30 s dedup window.
+        return res.json({
+            id: recent.id,
+            case_id,
+            user_id,
+            student_name: student_name || req.user.username,
+            tenant_id: tenantId(req),
+            message: 'Reused recent active session'
+        });
     }
 
-    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot, tenant_id) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    // start_time / updated_at are NAMED rather than left to the column
+    // default. `DEFAULT CURRENT_TIMESTAMP` writes sqlite's legacy
+    // "YYYY-MM-DD HH:MM:SS" shape — UTC, but silent about it — and
+    // `new Date()` on that shape parses as LOCAL time, which is how a 15 s
+    // session came to be stored as 3h00m15s on a UTC+3 host (the duration
+    // arithmetic in PUT /sessions/:id/end). RPS-1 §17: one shape everywhere.
+    const sql = `INSERT INTO sessions (case_id, user_id, student_name, llm_settings, monitor_settings, case_snapshot, tenant_id, start_time, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ${SQL_NOW}, ${SQL_NOW})`;
 
     dbAdapter.run(sql, [
         case_id,
@@ -298,9 +317,17 @@ router.put('/sessions/:id/end', authenticateToken, (req, res) => {
             });
         }
 
+        // timeMs(), not `new Date()`. A row written before the fix above (or
+        // restored from an older backup) still holds sqlite's legacy
+        // "YYYY-MM-DD HH:MM:SS" shape, which V8 reads as LOCAL time — so the
+        // subtraction picked up the host's UTC offset and a 15 s session was
+        // persisted as 3h00m15s on UTC+3. timeMs() pins the legacy shape to
+        // UTC, which is what it always meant.
         const endTime = new Date();
-        const startTime = new Date(session.start_time);
-        const duration = Math.floor((endTime - startTime) / 1000);
+        const startMs = timeMs(session.start_time);
+        // An unparseable start_time is a defect to see, not one to launder
+        // into a plausible-looking number: report 0 rather than NaN.
+        const duration = startMs == null ? 0 : Math.max(0, Math.floor((endTime.getTime() - startMs) / 1000));
 
         // Also flip status to 'completed' so queries filtering on the
         // CHECK-constrained status field actually return ended sessions
