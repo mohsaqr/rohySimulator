@@ -10,6 +10,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
+import { categoryClass } from './treatmentTheme';
 
 // Backend order statuses -> static i18n keys (never t(variable) — every
 // enum value gets an explicit key; unknown values fall back to the raw
@@ -415,7 +416,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                     className={`w-full py-2 rounded font-bold text-white flex items-center justify-center gap-2 ${
                         is_contraindicated
                             ? 'bg-red-600 hover:bg-red-500'
-                            : `bg-${getCategoryColor(activeCategory)}-600 hover:bg-${getCategoryColor(activeCategory)}-500`
+                            : categoryClass(getCategoryColor(activeCategory), 'action')
                     } disabled:opacity-50`}
                 >
                     {orderingInProgress ? (
@@ -515,7 +516,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         }}
                         className={`flex-1 px-3 py-2 rounded text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
                             activeCategory === cat.id
-                                ? `bg-${cat.color}-600 text-white`
+                                ? categoryClass(cat.color, 'tab')
                                 : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                         }`}
                     >
@@ -557,7 +558,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                     onClick={() => setSelectedTreatment(isSelected ? null : treatment)}
                                     className={`w-full text-left p-3 rounded border transition-all ${
                                         isSelected
-                                            ? `bg-${color}-900/30 border-${color}-600`
+                                            ? categoryClass(color, 'row')
                                             : 'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800'
                                     }`}
                                 >

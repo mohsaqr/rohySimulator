@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { statusChipClass } from '../treatments/treatmentTheme';
 import {
     Pill, Droplets, Wind, HeartPulse,
     Search, X, Save, AlertTriangle,
@@ -192,7 +193,7 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                             return (
                                 <div
                                     key={`${ct.treatment_type}:${ct.treatment_name}`}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 bg-${color}-900/30 border border-${color}-600/50 text-${color}-300`}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 ${statusChipClass(color)}`}
                                 >
                                     {ct.is_expected && <Check className="w-3 h-3" />}
                                     {ct.is_contraindicated && <AlertTriangle className="w-3 h-3" />}

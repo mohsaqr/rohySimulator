@@ -9,6 +9,30 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.103] — 2026-08-30
+
+### Fixed
+
+- **Selected medications were unreadable in the Treatments room.** The row built
+  its class name by interpolation — `` `bg-${color}-900/30` `` — and Tailwind's
+  JIT only emits classes it can see written out in the source. The class was
+  never generated, so the selected row had **no background at all** and its
+  `text-white` label sat on whatever was behind it. It affected only the
+  Medications tab because only that tab colours rows by category, exactly as
+  reported.
+
+  Nothing can catch this: the markup is valid, devtools shows the class, and
+  there is no error. The repo already warned about the trap twice, in
+  `RoomNavigator.jsx` and `AuscultationPanel.jsx` — `TreatmentPanel` predated
+  both notes and violated it in three places, with a fourth in
+  `CaseTreatmentConfig`.
+
+  All four now read from `treatmentTheme.js`, where every class string is
+  literal and complete. An unknown colour falls back to a plain visible style
+  rather than to `''`, which would reproduce the bug for any category the
+  palette has not met. A source scan fails the build if an interpolated colour
+  utility returns. Reported against v2.9.82.
+
 ## [2.9.102] — 2026-08-30
 
 ### Fixed
