@@ -45,7 +45,18 @@ export function createHostSeriesLoader({ pluginId, fetchImpl = fetch }) {
         }
 
         const index = await indexResponse.json();
-        const names = Array.isArray(index?.instances) ? index.instances : [];
+        // TWO INDEX SHAPES, and the loader must read both.
+        //
+        // v1 lists bare filenames. v2 lists objects — `{name, instanceNumber,
+        // position, orientation}` — because the lazy path builds an ordered,
+        // measurable stack from the index alone and needs the geometry. The
+        // package's own `fromIndex()` already accepts either; this loader did
+        // not, so every study served by a v2 archive failed with "contains an
+        // invalid instance name: [object Object]" and the reader was shown a
+        // study that could not be opened. Measured against the real content
+        // origin, not inferred.
+        const names = (Array.isArray(index?.instances) ? index.instances : [])
+            .map((entry) => (entry && typeof entry === 'object' ? entry.name : entry));
         if (names.length === 0) throw new Error(`The series index for ${ref} lists no instances.`);
         if (names.length > MAX_INSTANCES) {
             throw new Error(`The series at ${ref} lists ${names.length} instances, beyond the ${MAX_INSTANCES} this viewer will load.`);
@@ -57,6 +68,54 @@ export function createHostSeriesLoader({ pluginId, fetchImpl = fetch }) {
         if (bad !== undefined) throw new Error(`The series index for ${ref} contains an invalid instance name: ${String(bad)}`);
 
         return fetchAll(names.map((name) => `${base}${encodeURIComponent(name)}`), { signal, fetchImpl });
+    };
+}
+
+/**
+ * The LAZY half of the same contract: the index alone, then one instance at a
+ * time.
+ *
+ * `useStudy` takes `loadSeriesIndex(ref)` + `loadInstance(ref, name)` and, when
+ * both are present, builds the ordered stack from metadata and fetches pixels
+ * as the reader reaches them. That is what the case editor's StudyInspector
+ * needs — an author glancing at three candidate studies must not pull 263 MB
+ * per glance, which is exactly what the bulk loader would do.
+ *
+ * Built from the same base as `loadSeries` so a series reference is resolved to
+ * an address in exactly one place; two spellings of that resolution is how the
+ * '…/peindex.json' bug happened the first time.
+ *
+ * @param {{pluginId: string, fetchImpl?: function}} options
+ * @returns {{loadSeriesIndex: function, loadInstance: function}}
+ */
+export function createHostLazyLoaders({ pluginId, fetchImpl = fetch }) {
+    const baseOf = (ref) => `${resolveRemoteRef(stripTrailingSlash(ref), pluginId)}/`;
+
+    return {
+        async loadSeriesIndex(ref, { signal } = {}) {
+            const response = await fetchImpl(`${baseOf(ref)}index.json`, { signal, credentials: 'same-origin' });
+            if (!response.ok) {
+                throw new Error(
+                    response.status === 503
+                        ? 'No imaging origin is configured for this deployment (ROHY_PLUGIN_ORIGINS).'
+                        : `The imaging archive returned ${response.status} for ${ref}`,
+                );
+            }
+            return response.json();
+        },
+
+        async loadInstance(ref, name, { signal } = {}) {
+            // The same guard the bulk path applies to every name in an index:
+            // a name is a filename, never a path. The proxy would refuse a
+            // traversal anyway, but a broken archive should be reported as one
+            // rather than as a wall of 403s.
+            if (typeof name !== 'string' || name.includes('/') || name.includes('\\') || name.startsWith('.')) {
+                throw new Error(`Invalid instance name for ${ref}: ${String(name)}`);
+            }
+            const response = await fetchImpl(`${baseOf(ref)}${encodeURIComponent(name)}`, { signal, credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`Instance ${name} returned ${response.status}`);
+            return new Uint8Array(await response.arrayBuffer());
+        },
     };
 }
 

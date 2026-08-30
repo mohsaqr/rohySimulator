@@ -149,6 +149,8 @@
   "radoyon_family_label": "Tutkimusryhmä",
   "radoyon_finding_many": "löydöstä",
   "radoyon_finding_one": "löydös",
+  "radoyon_host_catalogue_failed": "The radiology catalogue could not be loaded, so no studies are listed. Reload the page or contact an administrator.",
+  "radoyon_host_loading_catalogue": "Loading the imaging catalogue…",
   "radoyon_image_controls": "Kuva",
   "radoyon_image_many": "kuvaa",
   "radoyon_image_one": "kuva",

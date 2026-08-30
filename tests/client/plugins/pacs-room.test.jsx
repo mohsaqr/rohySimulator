@@ -298,6 +298,50 @@ describe('PACS room — the end-to-end thin slice', () => {
         expect(screen.getByText('PACS')).toBeInTheDocument();
     });
 
+    // Regression lock: "renders" is not "reachable". The first version of this
+    // gate asserted only that the nav was in the document, which a nav rendered
+    // INSIDE the plugin's own scroll/clip pane also satisfies — and that is
+    // precisely how a room strands a learner: the tabs exist, at y = 2000, in a
+    // box with `overflow: hidden`. jsdom has no layout, so the assertion is on
+    // the structure that produces the layout: the nav is a direct child of the
+    // room shell, it is a sibling of the content pane rather than inside it,
+    // and it is marked un-shrinkable so a tall study cannot squeeze it to zero.
+    it('the room navigator sits outside the plugin pane and cannot be shrunk away', () => {
+        const props = descriptor.props(ctx, persist);
+        const Room = descriptor.component;
+        const { container } = render(
+            <Room
+                {...props}
+                caseTitle="Case of the day"
+                topBarControls={<div data-testid="host-top-bar" />}
+                roomNav={<nav data-testid="host-room-nav" />}
+            />,
+        );
+
+        const shell = container.firstChild;
+        expect(shell.className).toContain('flex-col');
+
+        const navSlot = screen.getByTestId('host-room-nav').parentElement;
+        expect(navSlot.parentElement).toBe(shell);
+        expect(navSlot.className).toContain('shrink-0');
+
+        // The pane that holds the vendored workstation is a DIFFERENT child of
+        // the shell, and it clips rather than grows: content that outgrows it
+        // scrolls inside the package's own panes instead of pushing the nav out
+        // of the viewport.
+        const pane = [...shell.children].find((child) => child.className.includes('flex-1'));
+        expect(pane).toBeTruthy();
+        expect(pane).not.toBe(navSlot);
+        expect(pane.contains(navSlot)).toBe(false);
+        expect(pane.className).toContain('min-h-0');
+        expect(pane.className).toContain('overflow-hidden');
+
+        // The header is chrome too — it carries the top-bar controls — so it is
+        // held to the same rule.
+        const header = shell.querySelector('header');
+        expect(header.className).toContain('shrink-0');
+    });
+
     // Regression lock: a `remote:` BASELINE (no archive entry, no
     // substitutions) resolved to zero series, so the study rendered as an
     // unclickable "Pending" with no message and no network attempt. The host

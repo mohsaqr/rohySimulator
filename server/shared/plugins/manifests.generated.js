@@ -129,6 +129,17 @@ export const PLUGIN_MANIFESTS = [
             "persist",
             "remote"
         ],
+        "catalog": {
+            "collection": "entries",
+            "learnerKeys": [
+                "id",
+                "studyId",
+                "series"
+            ],
+            "refFields": [
+                "ref"
+            ]
+        },
         "document": {
             "learnerOmit": [
                 "rubric"

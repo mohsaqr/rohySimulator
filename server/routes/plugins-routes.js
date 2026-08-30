@@ -129,6 +129,31 @@ export function pathIsDeclared(path, prefixes) {
 const CATALOG_MAX_BYTES = 4 * 1024 * 1024;
 
 /**
+ * The catalog shape a plugin declares (`manifest.catalog`), with pathology's
+ * original shape as the default.
+ *
+ * The route used to know one plugin's vocabulary by heart — a `{assets: […]}`
+ * collection whose references live in `url` fields — which is fine while there
+ * is one plugin and wrong the moment there are two. Radoyon's archive is
+ * `{entries: […]}` with references in `ref`, and it was rejected as malformed
+ * by a guard that was only ever describing pathology. The defaults keep the
+ * pathology manifest working unchanged.
+ *
+ * @param {object} manifest
+ * @returns {{collection: string, refFields: string[], learnerKeys: string[]|null}}
+ */
+function catalogShape(manifest) {
+    const declared = manifest.catalog ?? {};
+    return {
+        collection: declared.collection ?? 'assets',
+        refFields: declared.refFields ?? ['url'],
+        // Absent means a learner gets nothing at all, which is the safe
+        // reading of a plugin that has not thought about it.
+        learnerKeys: Array.isArray(declared.learnerKeys) ? declared.learnerKeys : null,
+    };
+}
+
+/**
  * The bundle half of a plugin's library, from its content origin.
  *
  * Returns a result rather than writing a response, because the caller now has
@@ -136,9 +161,10 @@ const CATALOG_MAX_BYTES = 4 * 1024 * 1024;
  *
  * @param {string} origin
  * @param {string} pluginId
+ * @param {{collection: string, refFields: string[]}} shape
  * @returns {Promise<{ok: true, catalog: object}|{ok: false, error: string, code: string}>}
  */
-async function fetchBundleCatalog(origin, pluginId) {
+async function fetchBundleCatalog(origin, pluginId, shape) {
     let upstream;
     try {
         upstream = await fetch(`${origin}/catalog.json`, {
@@ -168,16 +194,46 @@ async function fetchBundleCatalog(origin, pluginId) {
     try { catalog = JSON.parse(text); } catch {
         return { ok: false, status: 502, error: 'plugin catalog is not JSON', code: 'plugin_catalog_invalid' };
     }
-    if (!catalog || typeof catalog !== 'object' || catalog.version !== 1 || !Array.isArray(catalog.assets)) {
+    if (!catalog || typeof catalog !== 'object' || catalog.version !== 1
+        || !Array.isArray(catalog[shape.collection])) {
         return { ok: false, status: 502, error: 'plugin catalog has an unexpected shape', code: 'plugin_catalog_invalid' };
     }
-    // Every URL must be a reference INTO this plugin's declared paths. A
-    // catalog that points elsewhere is the origin operator's mistake, and an
-    // author who added such a slide would get a case the guard then rejects.
-    if (JSON.stringify(catalog).match(/"url":\s*"(?!remote:)[^"]*"/)) {
-        return { ok: false, status: 502, error: 'plugin catalog carries a URL that is not a remote: reference', code: 'plugin_catalog_invalid' };
+    // Every reference must point INTO this plugin's declared paths. A catalog
+    // that points elsewhere is the origin operator's mistake, and an author who
+    // added such an entry would get a case the guard then rejects.
+    //
+    // Built from the manifest's field names rather than hardcoding 'url', and
+    // escaped-quote-aware ((?:[^"\\]|\\.)*) because a JSON string may contain
+    // an escaped quote and a naive [^"]* would stop early and pass a value it
+    // never actually read.
+    const refPattern = new RegExp(
+        `"(?:${shape.refFields.join('|')})":\\s*"(?!remote:)(?:[^"\\\\]|\\\\.)*"`,
+    );
+    if (refPattern.test(JSON.stringify(catalog))) {
+        return { ok: false, status: 502, error: 'plugin catalog carries a reference that is not a remote: reference', code: 'plugin_catalog_invalid' };
     }
     return { ok: true, catalog };
+}
+
+/**
+ * One catalog item, reduced to the keys a plugin says a learner may read.
+ *
+ * An allowlist, applied at the top level of each item only: a plugin declares
+ * the fields it is willing to expose, and anything a future package version
+ * adds is absent until someone decides otherwise. The alternative — stripping
+ * named fields — fails open every time upstream adds one, which for this
+ * particular catalog means shipping the pathology library's labels to the
+ * person being assessed on finding them.
+ *
+ * @param {object} item
+ * @param {string[]} keys
+ * @returns {object}
+ */
+function learnerItem(item, keys) {
+    if (!item || typeof item !== 'object') return {};
+    return Object.fromEntries(
+        keys.filter((key) => item[key] !== undefined).map((key) => [key, item[key]]),
+    );
 }
 
 /** The READY managed slides for this tenant. */
@@ -230,7 +286,18 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     if (!manifest || !manifest.remote || !manifest.authoring) {
         return res.status(404).json({ error: 'no such plugin catalog', code: 'plugin_catalog_unknown' });
     }
-    if (!roleAllows(req.user?.role, manifest.authoring.minRole)) {
+    const shape = catalogShape(manifest);
+    // Two audiences, and the difference is what a case can be spoiled by.
+    //
+    // An AUTHOR gets the catalog as it stands. A LEARNER gets it only if the
+    // plugin declared what they may see, and then only those fields — because
+    // a case entry may name an archive id that only the host can resolve into
+    // something a viewer can open, while the same catalog also names the
+    // pathology library the case is built from. Serving the whole thing would
+    // hand over the answer; serving nothing would leave the study unopenable.
+    const mayAuthor = roleAllows(req.user?.role, manifest.authoring.minRole);
+    const mayRead = shape.learnerKeys !== null && roleAllows(req.user?.role, manifest.minRole);
+    if (!mayAuthor && !mayRead) {
         return res.status(403).json({ error: 'insufficient role for this plugin\'s catalog', code: 'plugin_forbidden' });
     }
 
@@ -244,15 +311,21 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     // catalog. So the bundle is fetched when an origin exists, its absence is
     // recorded rather than returned, and 503 is reserved for having genuinely
     // nothing to show.
-    const managed = await managedAssets(pluginId, tenantId(req));
+    //
+    // The managed half is asset-shaped by construction (managedCatalogEntries
+    // below builds pathology's rows), so it is only queried for a plugin whose
+    // catalog IS that collection. A plugin with another shape has no managed
+    // half — an imported slide is not an entry in an imaging archive — and
+    // merging one in would put a foreign row into its library.
+    const managed = shape.collection === 'assets' ? await managedAssets(pluginId, tenantId(req)) : [];
     const origin = pluginOrigins().get(pluginId);
-    let catalog = { schemaVersion: '1.0.0', version: 1, assets: [] };
+    let catalog = { schemaVersion: '1.0.0', version: 1, [shape.collection]: [] };
     let bundleUnavailable = origin
         ? null
         : { status: 503, error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`, code: 'plugin_remote_not_configured' };
 
     if (origin) {
-        const bundle = await fetchBundleCatalog(origin, pluginId);
+        const bundle = await fetchBundleCatalog(origin, pluginId, shape);
         if (bundle.ok) catalog = bundle.catalog;
         else bundleUnavailable = bundle;
     }
@@ -265,7 +338,10 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
             .json({ error: bundleUnavailable.error, code: bundleUnavailable.code });
     }
 
-    catalog.assets = [...managedCatalogEntries(managed), ...(catalog.assets ?? [])];
+    const items = [...managedCatalogEntries(managed), ...(catalog[shape.collection] ?? [])];
+    catalog[shape.collection] = mayAuthor
+        ? items
+        : items.map((item) => learnerItem(item, shape.learnerKeys));
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({
         plugin: pluginId,

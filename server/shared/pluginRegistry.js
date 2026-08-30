@@ -234,6 +234,40 @@ export function validateManifest(manifest) {
         });
     }
 
+    // The editor's library (§7a.1). Optional — absent means pathology's
+    // original shape, so the plugin that predates this declaration is
+    // unaffected. Validated strictly because every field here fails OPEN in a
+    // different, quiet way: a mistyped `collection` makes every catalog look
+    // malformed (502), a missing `refFields` disables the remote-only check
+    // that keeps host addresses out of portable cases, and a typo'd
+    // `learnerKeys` would hand a learner the whole author-facing library.
+    if (manifest.catalog !== undefined) {
+        const catalog = manifest.catalog;
+        const id = manifest.id;
+        if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
+            throw new Error(`Plugin '${id}' declares 'catalog' that is not an object`);
+        }
+        if (!remote) {
+            throw new Error(`Plugin '${id}' declares a 'catalog' but no 'remote' block — the catalog is relayed from the content origin, and without one there is nowhere to relay it from`);
+        }
+        const unknown = Object.keys(catalog).find((key) => !['collection', 'refFields', 'learnerKeys'].includes(key));
+        if (unknown) {
+            throw new Error(`Plugin '${id}' catalog declares unknown field '${unknown}' — only collection, refFields and learnerKeys are defined`);
+        }
+        const isKey = (k) => typeof k === 'string' && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k);
+        if (catalog.collection !== undefined && !isKey(catalog.collection)) {
+            throw new Error(`Plugin '${id}' catalog.collection must be a plain property name, e.g. 'entries'`);
+        }
+        if (catalog.refFields !== undefined
+            && !(Array.isArray(catalog.refFields) && catalog.refFields.length > 0 && catalog.refFields.every(isKey))) {
+            throw new Error(`Plugin '${id}' catalog.refFields must be a non-empty array of plain property names`);
+        }
+        if (catalog.learnerKeys !== undefined
+            && !(Array.isArray(catalog.learnerKeys) && catalog.learnerKeys.length > 0 && catalog.learnerKeys.every(isKey))) {
+            throw new Error(`Plugin '${id}' catalog.learnerKeys must be a non-empty array of plain property names — it is an allowlist of what a learner may read, so an empty or malformed one must fail loudly rather than default to everything`);
+        }
+    }
+
     // The document cap (§11a.1). Optional — absent means the default. Checked
     // because a typo here fails OPEN: a manifest saying `maxbytes` or '128kb'
     // would silently keep the default and the author would meet a rejection

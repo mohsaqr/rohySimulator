@@ -13173,6 +13173,20 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.radoyon_host_catalogue_failed": {
+    "src": "eacddf1aab9e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.radoyon_host_loading_catalogue": {
+    "src": "750d076167b3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.radoyon_image_controls": {
     "src": "1aa4cb0bcca7",
     "state": "machine",

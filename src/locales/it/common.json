@@ -149,6 +149,8 @@
   "radoyon_family_label": "Famiglia di studio",
   "radoyon_finding_many": "reperti",
   "radoyon_finding_one": "reperto",
+  "radoyon_host_catalogue_failed": "The radiology catalogue could not be loaded, so no studies are listed. Reload the page or contact an administrator.",
+  "radoyon_host_loading_catalogue": "Loading the imaging catalogue…",
   "radoyon_image_controls": "Immagine",
   "radoyon_image_many": "immagini",
   "radoyon_image_one": "immagine",

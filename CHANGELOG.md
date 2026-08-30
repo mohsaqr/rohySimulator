@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.126] — 2026-08-30
+
+### Fixed
+
+- **Radiology imaging works end to end.** The case editor lists rohy's
+  full 74-study catalogue, relays the content origin's archive of real
+  radiographs (with thumbnails), and the learner PACS room resolves and
+  renders the authored study. Without a configured origin the editor
+  says so instead of showing an empty catalogue. The series loader now
+  accepts the origin's v2 indexes.
+
 ## [2.9.125] — 2026-08-30
 
 ### Fixed

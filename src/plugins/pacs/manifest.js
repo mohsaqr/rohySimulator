@@ -93,6 +93,41 @@ export const manifest = {
         ],
     },
 
+    // The library the EDITOR offers (RPS-1 §7a.1), relayed by the host from
+    // `<origin>/catalog.json` through GET /api/plugins/pacs/catalog.
+    //
+    // The route was written for pathology and knew pathology's shape by heart:
+    // a `{assets: […]}` collection whose references live in `url` fields. That
+    // is one plugin's vocabulary standing in for the standard's, and Radoyon is
+    // the plugin that proves it — an imaging archive is `{entries: […]}` whose
+    // references live in `ref` fields, and the route rejected it as malformed.
+    // So the shape now travels in the manifest, where a plugin's vocabulary
+    // belongs, and the host relays whatever a plugin declares.
+    catalog: {
+        // Radoyon's archive.js reads `{version, name, entries: [...]}`.
+        collection: 'entries',
+        // Every one of these must be a `remote:` reference or the relay refuses
+        // the catalog: an origin that hands out absolute URLs would put a host
+        // address into cases that are meant to be portable, and would route
+        // around ROHY_PLUGIN_ORIGINS entirely.
+        refFields: ['ref'],
+        // What a LEARNER may be told about the archive.
+        //
+        // The full catalogue is an author's document — it names the pathology
+        // library ("Saddle embolus", "RUL nodule"), and a learner who could
+        // read it would be handed the diagnosis of every case built from it.
+        // But a learner's room does need SOMETHING: a case entry says
+        // `baseline: {kind: 'archive', ref: 'normal/ct_chest'}` and only the
+        // host can turn that id into the series a viewer opens.
+        //
+        // So the host serves roles below `authoring.minRole` a projection
+        // restricted to these keys — identity and series, nothing a case could
+        // be spoiled by. It is an allowlist, not a denylist, because a field
+        // added upstream must default to NOT being shown to the person being
+        // assessed.
+        learnerKeys: ['id', 'studyId', 'series'],
+    },
+
     // The authoring slot. 'educator' is stated rather than inherited: an author
     // chooses which pathology a learner is assessed on finding, and the room's
     // 'student' would be the single most consequential default to get wrong.

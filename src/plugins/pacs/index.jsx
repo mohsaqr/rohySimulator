@@ -1,9 +1,9 @@
 import { manifest } from './manifest.js';
-import { PacsRoom } from './PacsRoom.jsx';
-import { resolveRemoteRefs, unresolveRemoteRefs } from '../context.js';
-import { CaseEditor } from '../../components/pacs/CaseEditor.jsx';
+import { PacsRoomHost } from './PacsRoomHost.jsx';
+import { PacsCaseEditor } from './PacsCaseEditor.jsx';
+import { resolveRemoteRef, resolveRemoteRefs, unresolveRemoteRefs } from '../context.js';
 import {
-    documentIsServable, documentIssues, documentSummary, learnerDocument,
+    SOURCE_KIND, documentIsServable, documentIssues, documentSummary, learnerDocument,
     readDocument, resolveEntry,
 } from '../../components/pacs/caseDocument.js';
 import { entryById, readArchive } from '../../components/pacs/archive.js';
@@ -25,7 +25,7 @@ import { entryById, readArchive } from '../../components/pacs/archive.js';
 export default {
     manifest,
 
-    component: PacsRoom,
+    component: PacsRoomHost,
 
     // --- the gate (RPS-1 R20) ----------------------------------------------
     //
@@ -69,6 +69,17 @@ export default {
         // defence in depth, not the only defence.
         ...worklistProps(ctx),
 
+        // The room's half of the archive problem. `worklistProps` above can
+        // only resolve what `ctx.archive` holds, and the context is built
+        // synchronously — so the descriptor also hands over the RULE, and
+        // PacsRoomHost re-runs it once the archive has been fetched. Passing a
+        // resolver rather than the resolved list keeps the swap in exactly one
+        // place; a second copy in the wrapper is how the room and the editor
+        // start disagreeing about what a learner sees.
+        resolveWorklist: (archive) => worklistProps({ ...ctx, archive }).worklist,
+        // Only a case that actually names an archive entry pays for the fetch.
+        needsArchive: documentNeedsArchive(ctx.data),
+
         eventLogger: ctx.eventLogger,
         // Upstream takes `t` as a prop rather than calling useTranslation()
         // itself, which would make the package unable to render outside a host
@@ -88,7 +99,14 @@ export default {
     // `CaseEditor` is uncontrolled-with-seed: PluginAuthor re-renders and
     // recomputes authorProps on every change, so a controlled mount would need
     // a document stable across renders and there is nowhere stable to keep one.
-    authorComponent: CaseEditor,
+    //
+    // Mounted through the adapter's own shell (PacsCaseEditor) rather than
+    // directly, because two of the things the editor needs cannot come from a
+    // synchronous props adapter: the ARCHIVE and the STUDY CATALOGUE are
+    // fetched, and the host's Done/Discard controls have no slot in a package
+    // that renders no top bar. Both are host concerns, so both live in the
+    // adapter — the vendored file is still untouched.
+    authorComponent: PacsCaseEditor,
 
     authorProps: (ctx, draft) => ({
         // Resolved on the way IN, un-resolved on the way OUT. The editor shows
@@ -98,16 +116,18 @@ export default {
         initialCase: draft.value ? readDocument(draft.value) : undefined,
         onChange: (next) => draft.save(unresolveRemoteRefs(next, ctx.pluginId)),
 
-        // The archive of normals, relayed by the host from the configured
-        // origin. Absent origin means an empty catalogue and an author who can
-        // still type a `remote:` reference by hand — degraded, not broken.
-        archive: ctx.archive ?? { entries: [] },
+        // The archive of normals and rohy's radiology catalogue are fetched by
+        // PacsCaseEditor — see hostArchive.js and hostStudyCatalogue.js. They
+        // are deliberately NOT read off `ctx` here: nothing ever put them
+        // there, which is precisely how both silently defaulted to empty and
+        // left the editor showing 0 studies against a 74-study catalogue.
 
-        // rohy's own radiology catalogue, so an authored study can be LINKED to
-        // the study a learner orders in the Radiology room. This is the join
-        // that makes ordering a CT produce images rather than only a report.
-        studyCatalogue: ctx.studyCatalogue ?? [],
+        // The editor is handed the RAW stored document, so it needs the
+        // resolution rule itself — its preview and its picker load addresses
+        // directly and know nothing about `remote:`.
+        resolveRef: (uri) => resolveRemoteRef(uri, ctx.pluginId),
 
+        eventLogger: ctx.eventLogger,
         t: ctx.t,
     }),
 };
@@ -120,12 +140,12 @@ export default {
  * `archive:` id into series — the package deliberately does not know where the
  * archive lives.
  */
-function worklistProps(ctx) {
+export function worklistProps(ctx) {
     const doc = learnerDocument(ctx.data);
     const archive = readArchive(ctx.archive ?? { entries: [] });
 
     const worklist = doc.worklist.map((entry) => {
-        const baseline = entry.baseline.kind === 'archive'
+        const baseline = entry.baseline.kind === SOURCE_KIND.ARCHIVE
             ? entryById(archive, entry.baseline.ref)
             : null;
         // A `remote:` baseline has no catalogue entry to expand — the series
@@ -134,7 +154,7 @@ function worklistProps(ctx) {
         // Without this synthesis the entry resolved to zero series and the
         // room showed it as an unclickable "Pending" with no explanation and
         // no network attempt.
-        const remoteBaselineSeries = entry.baseline.kind === 'remote' && entry.baseline.ref
+        const remoteBaselineSeries = entry.baseline.kind === SOURCE_KIND.REMOTE && entry.baseline.ref
             ? [{
                 key: 'baseline',
                 description: entry.description || entry.studyId,
@@ -163,4 +183,26 @@ function worklistProps(ctx) {
     });
 
     return { worklist };
+}
+
+/**
+ * Does this case need the host to fetch the archive before its worklist means
+ * anything?
+ *
+ * True exactly when some entry's baseline is an archive id — the one thing the
+ * document can say that the host alone can resolve. A case built entirely from
+ * `remote:` references resolves fully from the document, and asking for a
+ * catalogue it will not read would put an extra request in front of every
+ * learner opening the room.
+ *
+ * Total by construction, like every other judgement in this file: it runs on a
+ * stored document that may be anything.
+ *
+ * @param {*} doc the stored case document
+ * @returns {boolean}
+ */
+export function documentNeedsArchive(doc) {
+    return readDocument(doc).worklist.some(
+        (entry) => entry.baseline.kind === SOURCE_KIND.ARCHIVE && Boolean(entry.baseline.ref),
+    );
 }
