@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.111] — 2026-08-30
+
+### Fixed
+
+- Pale `-50` tint compatibility selectors no longer substring-match `-500`
+  classes (24 selectors moved to whole-token `[class~=…]` matching).
+
 ## [2.9.110] — 2026-08-30
 
 ### Fixed
