@@ -31,13 +31,23 @@ describe('articlesForRole', () => {
     expect(articlesForRole('bogus')).toEqual(articlesForRole('student'));
   });
 
-  it('groups articles by their group label', () => {
+  it('groups articles by their group catalogue key', () => {
     const groups = articlesForRole('admin');
-    expect(groups.map((g) => g.group)).toEqual([
-      'Using the simulator',
-      'Teaching',
-      'Administration',
+    expect(groups.map((g) => g.groupKey)).toEqual([
+      'group_using',
+      'group_teaching',
+      'group_administration',
     ]);
+  });
+
+  // Regression lock: help chrome must stay translatable — the manifest carries
+  // catalogue keys, never English prose (findings #24b, 2026-08-30).
+  it('carries catalogue keys, not prose, for every article', () => {
+    for (const a of HELP_ARTICLES) {
+      expect(a.title, `${a.id} still has a hardcoded title`).toBeUndefined();
+      expect(a.titleKey).toMatch(/^article_[a-z_]+$/);
+      expect(a.groupKey).toMatch(/^group_[a-z_]+$/);
+    }
   });
 });
 

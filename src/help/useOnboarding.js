@@ -11,18 +11,24 @@ export const TOUR_VERSION = 1;
 
 // M1 ships trainee + educator tours. Other roles fall back to the trainee
 // tour (everyone is at least a learner of the simulator).
+//
+// Steps carry CATALOGUE KEYS, not prose: the tour is rendered in the viewer's
+// language by OnboardingTour, which resolves them against the `help`
+// namespace. Keys are literal strings here (an explicit key map — the pattern
+// i18next-parser.config.js documents for enum-style lookups) so the copy stays
+// in src/locales/*/help.json and never drifts back into the module.
 export const TOUR_STEPS = Object.freeze({
   student: [
-    { title: 'Welcome to Rohy', body: 'You will run a virtual patient case. Nothing here is real or medical advice.' },
-    { title: 'Five rooms', body: 'Use the bottom navigator to move between Patient, Examination, Laboratory, Radiology and the Debrief.' },
-    { title: 'Start by talking', body: 'Send your first message to the patient to begin the session. Your work is logged for the debrief.' },
-    { title: 'Need help?', body: 'Open Settings → Help & Support any time for guides, what is new, and a support bundle.' },
+    { titleKey: 'tour_student_welcome_title', bodyKey: 'tour_student_welcome_body' },
+    { titleKey: 'tour_student_rooms_title', bodyKey: 'tour_student_rooms_body' },
+    { titleKey: 'tour_student_start_title', bodyKey: 'tour_student_start_body' },
+    { titleKey: 'tour_student_help_title', bodyKey: 'tour_student_help_body' },
   ],
   educator: [
-    { title: 'Welcome, Teacher', body: 'Build a class, author cases, and read how your students performed.' },
-    { title: 'Classes', body: 'Create a class and share its join code. The per-tenant Base Class already holds pre-existing activity.' },
-    { title: 'Authoring & reporting', body: 'Use the case wizard to build scenarios; the reporting views show roster, completion, analytics and exports.' },
-    { title: 'Need help?', body: 'Settings → Help & Support has the full educator guide and release notes.' },
+    { titleKey: 'tour_educator_welcome_title', bodyKey: 'tour_educator_welcome_body' },
+    { titleKey: 'tour_educator_classes_title', bodyKey: 'tour_educator_classes_body' },
+    { titleKey: 'tour_educator_authoring_title', bodyKey: 'tour_educator_authoring_body' },
+    { titleKey: 'tour_educator_help_title', bodyKey: 'tour_educator_help_body' },
   ],
 });
 

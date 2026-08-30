@@ -11,19 +11,23 @@
 // SEVERITY.SUCCESS) per the CLAUDE.md constraint.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HelpCircle, X, ExternalLink, Copy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useNotifications, SOURCES, SEVERITY } from '../notifications';
 import { apiGet } from '../services/apiClient.js';
 import { articlesForRole, docsUrl } from './helpContent.js';
 
+// Tab labels are catalogue keys (`help` namespace) resolved at render time —
+// an explicit key map, the pattern i18next-parser.config.js documents.
 const TABS = [
-  { id: 'help', label: 'Help' },
-  { id: 'whatsnew', label: "What's new" },
-  { id: 'support', label: 'Support' },
+  { id: 'help', labelKey: 'tab_help' },
+  { id: 'whatsnew', labelKey: 'tab_whatsnew' },
+  { id: 'support', labelKey: 'tab_support' },
 ];
 
 export default function HelpCenter({ open, onClose }) {
+  const { t } = useTranslation('help');
   const { user } = useAuth();
   const { notify } = useNotifications();
   const [tab, setTab] = useState('help');
@@ -46,7 +50,7 @@ export default function HelpCenter({ open, onClose }) {
         // render an empty list so the panel still shows its "What's new" frame.
         .catch(() => {
           setReleases([]);
-          setError('Release notes are unavailable right now.');
+          setError(t('error_release_notes_unavailable'));
         });
     }
     if (tab === 'support' && diag === null) {
@@ -55,9 +59,9 @@ export default function HelpCenter({ open, onClose }) {
           setDiag(d);
           setError(null);
         })
-        .catch(() => setError('Could not load the support bundle right now.'));
+        .catch(() => setError(t('error_support_bundle_unavailable')));
     }
-  }, [open, tab, releases, diag]);
+  }, [open, tab, releases, diag, t]);
 
   // Clearing transient error on tab change happens in the click handler so
   // it never runs synchronously inside the data effect.
@@ -83,47 +87,47 @@ export default function HelpCenter({ open, onClose }) {
       notify({
         source: SOURCES.USER,
         severity: SEVERITY.SUCCESS,
-        title: 'Support bundle copied',
-        message: 'Paste it into your support request.',
+        title: t('copied_title'),
+        message: t('copied_message'),
       });
     } catch {
-      setError('Clipboard unavailable — select the text and copy manually.');
+      setError(t('error_clipboard_unavailable'));
     }
-  }, [diag, notify]);
+  }, [diag, notify, t]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label="Help and support">
+    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={t('drawer_aria_label')}>
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <aside className="relative w-[min(28rem,100vw)] h-full bg-neutral-900 border-l border-neutral-700 shadow-2xl flex flex-col">
         <header className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
           <div className="flex items-center gap-2 text-neutral-100">
             <HelpCircle className="w-5 h-5 text-blue-400" />
-            <span className="font-semibold">Help &amp; Support</span>
+            <span className="font-semibold">{t('drawer_title')}</span>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close help" className="text-neutral-400 hover:text-neutral-200">
+          <button type="button" onClick={onClose} aria-label={t('close')} className="text-neutral-400 hover:text-neutral-200">
             <X className="w-5 h-5" />
           </button>
         </header>
 
         <nav className="flex border-b border-neutral-800" role="tablist">
-          {TABS.map((t) => (
+          {TABS.map((tab_) => (
             <button
-              key={t.id}
+              key={tab_.id}
               type="button"
               role="tab"
-              id={`help-tab-${t.id}`}
-              aria-selected={tab === t.id}
+              id={`help-tab-${tab_.id}`}
+              aria-selected={tab === tab_.id}
               aria-controls="help-tabpanel"
-              onClick={() => selectTab(t.id)}
+              onClick={() => selectTab(tab_.id)}
               className={`flex-1 px-4 py-2 text-sm ${
-                tab === t.id
+                tab === tab_.id
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              {t.label}
+              {t(tab_.labelKey)}
             </button>
           ))}
         </nav>
@@ -142,9 +146,9 @@ export default function HelpCenter({ open, onClose }) {
 
           {tab === 'help' &&
             groups.map((g) => (
-              <section key={g.group} className="mb-6">
+              <section key={g.groupKey} className="mb-6">
                 <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
-                  {g.group}
+                  {t(g.groupKey)}
                 </h3>
                 <ul className="space-y-1">
                   {g.articles.map((a) => (
@@ -156,7 +160,7 @@ export default function HelpCenter({ open, onClose }) {
                         className="flex items-center gap-2 text-neutral-200 hover:text-blue-400"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-neutral-500" />
-                        {a.title}
+                        {t(a.titleKey)}
                       </a>
                     </li>
                   ))}
@@ -166,9 +170,9 @@ export default function HelpCenter({ open, onClose }) {
 
           {tab === 'whatsnew' && (
             <div>
-              {releases === null && !error && <p className="text-neutral-400">Loading…</p>}
+              {releases === null && !error && <p className="text-neutral-400">{t('loading')}</p>}
               {Array.isArray(releases) && releases.length === 0 && !error && (
-                <p className="text-neutral-400">No release notes yet.</p>
+                <p className="text-neutral-400">{t('no_release_notes')}</p>
               )}
               {(releases || []).map((r) => (
                 <section key={r.version} className="mb-6">
@@ -194,10 +198,7 @@ export default function HelpCenter({ open, onClose }) {
 
           {tab === 'support' && (
             <div>
-              <p className="text-neutral-400 mb-3">
-                This bundle contains no personal data — only version, runtime
-                and boolean health flags. Attach it to a support request.
-              </p>
+              <p className="text-neutral-400 mb-3">{t('support_intro')}</p>
               {diag && (
                 <>
                   <button
@@ -205,14 +206,14 @@ export default function HelpCenter({ open, onClose }) {
                     onClick={copyDiagnostics}
                     className="mb-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                   >
-                    <Copy className="w-4 h-4" /> Copy bundle
+                    <Copy className="w-4 h-4" /> {t('copy_bundle')}
                   </button>
                   <pre className="bg-black/50 border border-neutral-800 rounded-lg p-3 overflow-x-auto text-xs text-neutral-300">
                     {JSON.stringify(diag, null, 2)}
                   </pre>
                 </>
               )}
-              {diag === null && !error && <p className="text-neutral-400">Loading…</p>}
+              {diag === null && !error && <p className="text-neutral-400">{t('loading')}</p>}
             </div>
           )}
         </div>

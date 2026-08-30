@@ -49,7 +49,9 @@ describe('onboarding storage helpers', () => {
 
 describe('tourStepsForRole', () => {
   it('returns role-specific steps and falls back to student', () => {
-    expect(tourStepsForRole('educator')[0].title).toMatch(/Teacher/i);
+    expect(tourStepsForRole('educator')[0].titleKey).toBe(
+      'tour_educator_welcome_title',
+    );
     expect(tourStepsForRole('student').length).toBeGreaterThan(0);
     expect(tourStepsForRole('admin')).toEqual(tourStepsForRole('student'));
   });

@@ -5,6 +5,11 @@
 // -PLAN §2.3). The Help Center filters this list by the viewer's role so a
 // student never sees admin/operator articles.
 //
+// Titles and group headings are CATALOGUE KEYS (`help` namespace), not prose:
+// the drawer chrome is translated even though the linked docs pages are
+// English-only for now. Keys are literal strings here — the explicit key map
+// pattern i18next-parser.config.js documents for enum-style lookups.
+//
 // Role gating uses the same rank ladder as the server
 // (guest<student<reviewer<educator<admin). `minRank` is the lowest rank
 // that should see the article.
@@ -31,41 +36,41 @@ export function docsUrl(path) {
 
 export const HELP_ARTICLES = Object.freeze([
   // Trainee (everyone rank >= student)
-  { id: 'getting-started', title: 'Getting started', group: 'Using the simulator', minRank: 1, path: 'trainee/getting-started' },
-  { id: 'rooms', title: 'The five rooms', group: 'Using the simulator', minRank: 1, path: 'trainee/rooms' },
-  { id: 'history', title: 'Taking a history', group: 'Using the simulator', minRank: 1, path: 'trainee/history' },
-  { id: 'examination', title: 'Physical examination', group: 'Using the simulator', minRank: 1, path: 'trainee/examination' },
-  { id: 'investigations', title: 'Ordering labs & imaging', group: 'Using the simulator', minRank: 1, path: 'trainee/investigations' },
-  { id: 'treatments', title: 'Treatments & medications', group: 'Using the simulator', minRank: 1, path: 'trainee/treatments' },
-  { id: 'vitals', title: 'Vitals & alarms', group: 'Using the simulator', minRank: 1, path: 'trainee/vitals' },
-  { id: 'voice', title: 'Voice mode', group: 'Using the simulator', minRank: 1, path: 'trainee/voice' },
-  { id: 'debrief', title: 'Debrief', group: 'Using the simulator', minRank: 1, path: 'trainee/debrief' },
-  { id: 'trainee-faq', title: 'FAQ & troubleshooting', group: 'Using the simulator', minRank: 1, path: 'trainee/faq' },
+  { id: 'getting-started', titleKey: 'article_getting_started', groupKey: 'group_using', minRank: 1, path: 'trainee/getting-started' },
+  { id: 'rooms', titleKey: 'article_rooms', groupKey: 'group_using', minRank: 1, path: 'trainee/rooms' },
+  { id: 'history', titleKey: 'article_history', groupKey: 'group_using', minRank: 1, path: 'trainee/history' },
+  { id: 'examination', titleKey: 'article_examination', groupKey: 'group_using', minRank: 1, path: 'trainee/examination' },
+  { id: 'investigations', titleKey: 'article_investigations', groupKey: 'group_using', minRank: 1, path: 'trainee/investigations' },
+  { id: 'treatments', titleKey: 'article_treatments', groupKey: 'group_using', minRank: 1, path: 'trainee/treatments' },
+  { id: 'vitals', titleKey: 'article_vitals', groupKey: 'group_using', minRank: 1, path: 'trainee/vitals' },
+  { id: 'voice', titleKey: 'article_voice', groupKey: 'group_using', minRank: 1, path: 'trainee/voice' },
+  { id: 'debrief', titleKey: 'article_debrief', groupKey: 'group_using', minRank: 1, path: 'trainee/debrief' },
+  { id: 'trainee-faq', titleKey: 'article_trainee_faq', groupKey: 'group_using', minRank: 1, path: 'trainee/faq' },
   // Educator (rank >= educator)
-  { id: 'cohorts', title: 'Classes & join codes', group: 'Teaching', minRank: 3, path: 'educator/cohorts' },
-  { id: 'case-wizard', title: 'Authoring a case', group: 'Teaching', minRank: 3, path: 'educator/case-wizard' },
-  { id: 'reporting', title: 'Reporting & analytics', group: 'Teaching', minRank: 3, path: 'educator/reporting' },
-  { id: 'classroom-policy', title: 'Classroom policy', group: 'Teaching', minRank: 3, path: 'educator/classroom-policy' },
-  { id: 'educator-faq', title: 'Educator FAQ', group: 'Teaching', minRank: 3, path: 'educator/faq' },
+  { id: 'cohorts', titleKey: 'article_cohorts', groupKey: 'group_teaching', minRank: 3, path: 'educator/cohorts' },
+  { id: 'case-wizard', titleKey: 'article_case_wizard', groupKey: 'group_teaching', minRank: 3, path: 'educator/case-wizard' },
+  { id: 'reporting', titleKey: 'article_reporting', groupKey: 'group_teaching', minRank: 3, path: 'educator/reporting' },
+  { id: 'classroom-policy', titleKey: 'article_classroom_policy', groupKey: 'group_teaching', minRank: 3, path: 'educator/classroom-policy' },
+  { id: 'educator-faq', titleKey: 'article_educator_faq', groupKey: 'group_teaching', minRank: 3, path: 'educator/faq' },
   // Admin (rank >= admin)
-  { id: 'first-week', title: 'First-week checklist', group: 'Administration', minRank: 4, path: 'admin/first-week' },
-  { id: 'users-roles', title: 'Users & roles', group: 'Administration', minRank: 4, path: 'admin/users-roles' },
-  { id: 'platform-settings', title: 'Platform settings', group: 'Administration', minRank: 4, path: 'admin/platform-settings' },
+  { id: 'first-week', titleKey: 'article_first_week', groupKey: 'group_administration', minRank: 4, path: 'admin/first-week' },
+  { id: 'users-roles', titleKey: 'article_users_roles', groupKey: 'group_administration', minRank: 4, path: 'admin/users-roles' },
+  { id: 'platform-settings', titleKey: 'article_platform_settings', groupKey: 'group_administration', minRank: 4, path: 'admin/platform-settings' },
 ]);
 
 /**
  * Articles visible to a given role, grouped for display.
  * @param {string} role one of the rank ladder keys (defaults to student)
- * @returns {{group:string, articles:Array}[]}
+ * @returns {{groupKey:string, articles:Array}[]}  groupKey is a `help` catalogue key
  */
 export function articlesForRole(role) {
   const rank = HELP_ROLE_RANKS[role] ?? HELP_ROLE_RANKS.student;
   const visible = HELP_ARTICLES.filter((a) => rank >= a.minRank);
   const groups = [];
   for (const a of visible) {
-    let g = groups.find((x) => x.group === a.group);
+    let g = groups.find((x) => x.groupKey === a.groupKey);
     if (!g) {
-      g = { group: a.group, articles: [] };
+      g = { groupKey: a.groupKey, articles: [] };
       groups.push(g);
     }
     g.articles.push(a);
