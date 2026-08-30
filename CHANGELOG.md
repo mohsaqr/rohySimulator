@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.105] — 2026-08-30
+
+### Changed
+
+- **README: every count removed, and a screenshot tour added.** The counts had
+  already drifted — it claimed *24 versioned migrations* against 51 on disk,
+  *225 lab tests* in one place and *215* in two others, *65 tables* in one and
+  *40+* in another. A number in a README is a promise to update it on every
+  release, and that promise is never kept; each one is now replaced by the thing
+  it stood in for. The two survivors are constraints, not inventories: the 1–5
+  minute turnaround band, which is an actual clamp, and "3D".
+
+  A new **A tour of the interface** section embeds thirteen screenshots in the
+  order a learner meets them, with commentary on what each screen shows about the
+  design rather than a caption of what is visible.
+
 ## [2.9.104] — 2026-08-30
 
 ### Fixed

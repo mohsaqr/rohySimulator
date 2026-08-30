@@ -5,9 +5,20 @@
 ![Stack](https://img.shields.io/badge/stack-React%2019%20%7C%20Node%20%7C%20SQLite-blue)
 ![Tests](https://img.shields.io/badge/tests-vitest%20%2B%20playwright-success)
 
-A comprehensive medical simulation platform for clinical education. Trainees converse with an AI-driven virtual patient — by text **or by voice with an animated 3D avatar** — interpret a live multi-parameter monitor with physiologically accurate ECG, order labs and imaging from a 225-test database with gender-specific normal ranges and 32 lab panels, perform structured physical examinations on a clickable anatomical body map across 67 named regions, administer 33 default treatments (18 medications + IV fluids + oxygen delivery + positioning) that produce time-decaying changes to vitals, navigate between five peer rooms (Patient · Examination · Laboratory · Radiology · Consultant) with badge dots signalling ready labs, ready imaging, and a present consultant, page on-call agents with a 1–3 minute server-anchored Call flow that survives refreshes and room hops, debrief afterwards with an AI discussant via a dedicated end-of-case "End & Debrief" button, and have every action — stamped with the active room — analysed in a Transition Network Analysis dashboard.
+A medical simulation platform for clinical education. Trainees converse with an
+AI-driven virtual patient — by text **or by voice with an animated 3D avatar** —
+interpret a live multi-parameter monitor with a physiologically generated ECG,
+order labs and imaging from catalogues with gender-specific reference ranges,
+perform structured physical examinations on a clickable anatomical body map,
+read DICOM studies and whole-slide pathology in purpose-built viewers,
+administer treatments that produce time-decaying changes to vitals, move between
+peer rooms with badge dots signalling ready results and a present consultant,
+page on-call agents with a server-anchored Call flow that survives refreshes and
+room hops, debrief afterwards with an AI discussant, and have every action —
+stamped with the active room — analysed in a Transition Network Analysis
+dashboard.
 
-Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI, Google) are optional. Multi-tenant ready, role-hierarchy aware (5 ranks), audit-logged, soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON observability.
+Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI, Google) are optional. Multi-tenant ready, role-hierarchy aware, audit-logged, soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON observability.
 
 ---
 
@@ -77,58 +88,204 @@ docker compose up -d         # apply
 
 ---
 
+---
+
+## A tour of the interface
+
+Thirteen screens, in roughly the order a learner meets them. Everything below is
+the running application, not a mockup.
+
+### The patient room
+
+![The patient room — avatar, chat, and the live monitor](docs/images/screens/patient-room.jpg)
+
+The default surface: the patient on the left, the monitor on the right, and the
+conversation between them. The ECG is generated, not looped — a sum-of-Gaussians
+waveform producing a morphologically correct PQRST at whatever rate the case is
+currently running, so a rhythm change is visible rather than announced. The red
+banner is the notification centre's *clinical-critical* surface, with **Snooze**
+and **Acknowledge** rather than a dismiss: an alarm a learner ignores is data,
+and silently discarding it would lose that. Note the session clock at top right —
+wall-clock-anchored, so a browser refresh does not rewind the case.
+
+### Physical examination
+
+![Structured physical examination on an anatomical body map](docs/images/screens/physical-exam.jpg)
+
+The body map is an SVG silhouette with invisible polygon hit regions over named
+anatomical areas, anterior and posterior, gender-specific. Choosing a region then
+a technique — inspection, palpation, percussion, auscultation — returns the
+finding the case author wrote for that pair, or the normal text if they wrote
+none. Auscultation adds a point picker (aortic, pulmonic, Erb's, tricuspid,
+mitral, lung fields) with audio per site. The **Examination Log** at the bottom
+is the learner's own record of what they have actually done, which is exactly
+what the debriefing tutor is given.
+
+### Laboratory
+
+![Laboratory investigations — catalogue, report, and worklist](docs/images/screens/laboratory.jpg)
+
+Three columns: the searchable catalogue on the left, the rendered report in the
+middle, the worklist on the right. Ordered tests do not appear instantly — each
+carries a turnaround, and the worklist moves them from **pending** to **ready**
+to **viewed** on its own. The report is laid out as a real lab report, with
+reference ranges and flags the learner can toggle off. The catalogue stays
+complete on purpose: narrowing it to the tests an author configured would tell
+the learner which ones matter, which is the answer key by omission.
+
+### Radiology, and a real reading room
+
+![Radiology worklist with pending studies](docs/images/screens/radiology-worklist.jpg)
+
+The imaging equivalent, with the same pending/ready/viewed lifecycle. The banner
+states the contract plainly — reports land automatically, no refresh needed —
+because the most common misreading of a simulated wait is that something has
+broken.
+
+![DICOM reading room — MRI chest, dual viewport with window/level controls](docs/images/screens/radiology-pacs.jpg)
+
+Behind that catalogue sits a genuine DICOM viewer: multi-series studies, a
+thumbnail rail, side-by-side viewports, and window/level controls that behave
+like a workstation's rather than an image editor's. Width and level are the real
+radiographic parameters; the transfer function offers sigmoid as well as linear,
+because clipping the apices to see the mediastinum is a habit worth teaching.
+Edge enhancement is explicitly marked *display only — measurements are
+unaffected*, which is the kind of boundary a teaching tool has to be loud about.
+
+### Pathology
+
+![Whole-slide pathology viewer with measurement and annotation](docs/images/screens/pathology-slide.jpg)
+
+Whole-slide imaging with a magnification ladder, a scale bar in microns, and
+annotation tools that measure — the ellipse here reports 32,024 µm². Brightness,
+contrast, gamma and saturation carry the same warning as the DICOM viewer: they
+change what you see, never what you measure, and the measurements come from
+scanner metadata. Both viewers are plugins rather than core screens, which is why
+a room can be added without touching the navigator.
+
+### ECG workstation
+
+![Twelve-lead ECG workstation with calipers and lead map](docs/images/screens/ecg-workstation.jpg)
+
+A twelve-lead workstation with calibrated paper, selectable gain and sweep speed,
+diagnostic and monitor filters, and working calipers — click two points and the
+interval is measured and kept in a list. The lead map on the right shows which
+wall each lead is looking at. This is deliberately a reading *instrument* rather
+than a picture of an ECG.
+
+### Debrief
+
+![Case debrief with the AI discussant](docs/images/screens/debrief.jpg)
+
+Ending a case unlocks a separate room with its own persona, voice, avatar and
+model. The discussant is not the patient with a different prompt. Since v2.9.97
+it is also given the learner's actual encounter record — every examination,
+order and treatment in elapsed time — so it can ask about *reasoning* instead of
+asking the learner to recall what they did, and so an omission is visible to it
+as an omission rather than as missing information.
+
+### Analytics
+
+![Transition network analysis — clusters, networks, and state distributions](docs/images/screens/tna-clusters.jpg)
+
+Every action is logged as a verb stamped with its room, which makes a session a
+sequence and a cohort a set of sequences. This is the clustering view: learners
+grouped by how their sessions unfold, each with its transition network and its
+state distribution over time. The contrast is the point — cluster 1 here is a
+single session of 3,262 events dominated by *monitoring*, while cluster 3 holds
+most of the cohort with far shorter, more varied sequences. The silhouette score
+is shown so the grouping can be judged rather than trusted.
+
+### Oyon — local emotion and attention capture
+
+![Live affect signals — emotion, rPPG heart rate, head pose, posture](docs/images/screens/oyon-signals.jpg)
+
+Optional, off by default, and entirely in-browser: the webcam frame never leaves
+the tab. Eight-emotion classification, gaze, head pose and action units, body
+posture, and an rPPG heart-rate estimate from facial colour change. The panel is
+candid about its own limits — heart rate is integrated over twelve seconds
+because it is a frequency and cannot be resolved from a single frame, breathing
+is flagged *low signal quality*, and posture reports what fraction of the upper
+body is actually visible.
+
+![Affect analytics — co-occurrence, heat strip, and the arousal-valence plane](docs/images/screens/affect-analytics.jpg)
+
+Aggregated afterwards rather than shown live to the learner: which emotions
+co-occur, how they are distributed across the session, and where the session sits
+on the arousal–valence plane. Counts are given alongside percentages so a 2.0%
+slice is visibly twenty samples and not a trend.
+
+![Gaze distribution by screen zone and by room](docs/images/screens/gaze-analytics.jpg)
+
+Gaze reduced to per-screen-ninth shares, then broken down by room. Stored as
+windowed aggregates, never as a raw point stream — the per-room breakdown answers
+"where did attention go in the lab versus in the debrief" without retaining
+anything that could reconstruct a scanpath.
+
+### Administration
+
+![Case management — multi-language cases grouped by course](docs/images/screens/admin-cases.jpg)
+
+Cases are authored through a wizard and managed here. Language is a property of
+the *case*, not the course, so one course can hold English, German, Spanish and
+Italian cases side by side — the flag and the case code (`EN-0001`, `DE-0008`)
+carry it. A case's language is fixed once set: the patient's voice, the clinical
+content and the LLM's output directive all derive from it, and changing it later
+would silently orphan all three. The `live` badge counts sessions currently
+running against a case.
+
 ## Feature Catalogue
 
 ### Conversation & Multi-Agent System
 
-- **5 multi-provider LLM backends** — Anthropic Claude, OpenAI, Google Gemini, LM Studio (local), Ollama (local). Per-platform API keys, runtime model switching, server-side streaming via `/api/proxy/llm`, 5-tier resolver precedence (platform → case → agent → session → user), per-user and platform-wide token usage tracking with admin-editable pricing tables.
-- **5 default agent personas, fully editable** — Patient, Nurse (Sarah Mitchell), Consultant (Dr. James Chen), Family Member, Discussant. Each with its own persona prompt, dos/don'ts list, voice slot, avatar, communication style, memory access matrix, and LLM override.
+- **Multi-provider LLM backends** — Anthropic Claude, OpenAI, Google Gemini, LM Studio (local), Ollama (local). Per-platform API keys, runtime model switching, server-side streaming via `/api/proxy/llm`, resolver precedence (platform → case → agent → session → user), per-user and platform-wide token usage tracking with admin-editable pricing tables.
+- **Default agent personas, fully editable** — Patient, Nurse (Sarah Mitchell), Consultant (Dr. James Chen), Family Member, Discussant. Each with its own persona prompt, dos/don'ts list, voice slot, avatar, communication style, memory access matrix, and LLM override.
 - **Per-case agent rosters** — Assign any agents to a case with arrival/departure scripting, override their name and prompt per-case via `case_agents.config_override`, and route between them via the chat UI's tab system.
 - **Page / Call flow with server-anchored ETA** — Paging an agent (Consultant, Nurse, etc.) computes a 1–3 minute arrival time server-side and stamps it on `agent_session_state.arrives_at` (migration 0024). The client drives the countdown from the row, so a browser refresh, room hop, or chat remount picks up exactly where it left off — the old in-memory `setTimeout` could drop the timer. Auto-arrival is convergent: any read of `/sessions/:id/agents` flips overdue paged agents to `present` in a single bounded UPDATE.
 - **Discussant debrief flow** — Trainees end a case via a dedicated **End & Debrief** button that unlocks a separate `DiscussionScreen` with its own voice, avatar, LLM, and persona. The discussant's opening turn is sent as a `silent: true` LLM call so the meta-prompt never appears in the learner-utterance audit trail. Per-case attached discussants override the platform default; the resolver guarantees the patient's case voice does not leak into the discussant's playback (regression-locked at unit + component + e2e since 2026-05-06). Captures performance feedback and stores it in session notes.
 - **Team communications log** — Cross-agent message history per session, queryable for analytics. Tenant-scoped reads + writes since the May-2026 audit hardening.
 - **Stage-direction stripping** — `*nods*`-style annotations are removed from both the rendered transcript and the TTS request body (locked end-to-end with regression tests).
 
-### Voice Mode (4 TTS providers, 28 avatars, viseme-driven lipsync)
+### Voice Mode (cloud + local TTS, 3D avatars, viseme-driven lipsync)
 
 | Provider | Type | Voices | Notes |
 |---|---|---|---|
-| **Google Cloud TTS** | Cloud | 19+ (Chirp 3 HD, Chirp HD, Neural2, en-US + en-GB + multilingual) | Semitone pitch control, headphone-class EQ profile, streaming PCM |
-| **OpenAI TTS** | Cloud | 6 (Alloy, Echo, Fable, Onyx, Nova, Shimmer) | tts-1 / tts-1-hd, native streaming PCM at 24 kHz |
+| **Google Cloud TTS** | Cloud | Chirp 3 HD, Chirp HD, Neural2 across en-US, en-GB and the multilingual set | Semitone pitch control, headphone-class EQ profile, streaming PCM |
+| **OpenAI TTS** | Cloud | Alloy, Echo, Fable, Onyx, Nova, Shimmer | tts-1 / tts-1-hd, native streaming PCM at 24 kHz |
 | **Kokoro** | **Local, in-process** | All bundled Kokoro voices | Runs via `kokoro-js` (ONNX), one-time ~330 MB download, warmed at boot |
 | **Piper** | **Local subprocess** | Any installed `.onnx` voice | Auto-discovered from `server/data/piper/voices/` |
 
-- **3D talking avatars** — **28 pre-bundled GLB heads** (RocketBox + RPM + procedural fallbacks). Viseme-driven lipsync via [`wawa-lipsync`](https://www.npmjs.com/package/wawa-lipsync) wired through Three.js / React-Three-Fiber. **17 morph targets in canonical Oculus order** for cross-platform compatibility.
+- **3D talking avatars** — **Pre-bundled GLB heads** (RocketBox + RPM + procedural fallbacks). Viseme-driven lipsync via [`wawa-lipsync`](https://www.npmjs.com/package/wawa-lipsync) wired through Three.js / React-Three-Fiber. **Morph targets in canonical Oculus order** for cross-platform compatibility.
 - **Per-case + per-agent voice overrides** — Each case can pin a `case_voice` and `tts_pitch` (in semitones) and `tts_rate` independently of the platform default. Each agent template can override the same. The discussant's voice is resolved from a separate path so per-case patient overrides do not leak (locked at unit, component, and e2e test layers — incident date 2026-05-06).
 - **Browser STT** — Web Speech API for input. Continuous mode with auto-pause on assistant speech.
 - **Sentence-level streaming** — Streaming LLM replies are split at sentence boundaries and pre-fetched as TTS one sentence ahead, giving sub-second time-to-first-audio on local engines.
 - **Diagnostic Bar** — Live runtime panel showing the literal `/api/tts` request body (voice, provider, pitch, rate, text), wire history (last 12 requests), and one-click audition replay so a contributor can A/B-compare what was actually sent vs. the platform's gender-slot voice.
 
-### Patient Monitor (physiologic ECG + 7 vital channels)
+### Patient Monitor (physiologic ECG + vital channels)
 
-- **7 vital signs**: HR, SpO₂, NIBP (sys/dia), RR, Temp, EtCO₂ — each with admin-editable display range, alarm thresholds (low/high), audio pattern (urgent/beep/chime/silent), and per-case override.
-- **Physiologic ECG generator** — **Sum-of-Gaussians waveform** producing morphologically correct PQRST-T at any heart rate. **5 base rhythms** (Normal Sinus Rhythm, Atrial Fibrillation, Ventricular Tachycardia, Ventricular Fibrillation, Asystole) plus **9 ECG modifiers** (STEMI ST elevation, NSTEMI ST depression, Angina, Hyperkalemia wide QRS, Hypokalemia T-wave inversion, Pericarditis diffuse ST elevation, LBBB, PVC ectopics, signal noise level).
+- **Vital signs** — HR, SpO₂, NIBP (sys/dia), RR, Temp, EtCO₂ — each with admin-editable display range, alarm thresholds (low/high), audio pattern (urgent/beep/chime/silent), and per-case override.
+- **Physiologic ECG generator** — **Sum-of-Gaussians waveform** producing morphologically correct PQRST-T at any heart rate. **Base rhythms** (Normal Sinus Rhythm, Atrial Fibrillation, Ventricular Tachycardia, Ventricular Fibrillation, Asystole) plus **ECG modifiers** (STEMI ST elevation, NSTEMI ST depression, Angina, Hyperkalemia wide QRS, Hypokalemia T-wave inversion, Pericarditis diffuse ST elevation, LBBB, PVC ectopics, signal noise level).
 - **SpO₂ plethysmograph waveform** — pulsatile waveform synced to HR, optional toggle.
-- **Treatment effects engine** — **33 default interventions seeded** with onset, peak, and duration kinetics, split across 4 categories:
-  - **18 medications**: Epinephrine, Atropine, Adenosine, Amiodarone, Metoprolol, Esmolol, Norepinephrine, Dopamine, Vasopressin, Labetalol, Hydralazine, Nitroglycerin, Morphine, Fentanyl, Midazolam, Propofol, Furosemide, Albuterol
-  - **5 IV fluids**: Normal Saline 500ml & 1000ml boluses, Lactated Ringers 500ml bolus, D5W 500ml, Albumin 5% 250ml
-  - **5 oxygen delivery modes**: Nasal Cannula 2 / 4 / 6 L/min, Simple Face Mask 8 L/min, Non-Rebreather Mask 15 L/min
-  - **5 nursing positioning maneuvers**: Trendelenburg, Fowler 45°, High Fowler 90°, Supine, Left Lateral
+- **Treatment effects engine** — **Default interventions seeded** with onset, peak, and duration kinetics, split across four categories:
+  - **Medications**: Epinephrine, Atropine, Adenosine, Amiodarone, Metoprolol, Esmolol, Norepinephrine, Dopamine, Vasopressin, Labetalol, Hydralazine, Nitroglycerin, Morphine, Fentanyl, Midazolam, Propofol, Furosemide, Albuterol
+  - **IV fluids**: Normal Saline 500ml & 1000ml boluses, Lactated Ringers 500ml bolus, D5W 500ml, Albumin 5% 250ml
+  - **Oxygen delivery modes**: Nasal Cannula 2 / 4 / 6 L/min, Simple Face Mask 8 L/min, Non-Rebreather Mask 15 L/min
+  - **Nursing positioning maneuvers**: Trendelenburg, Fowler 45°, High Fowler 90°, Supine, Left Lateral
 
   Active treatments produce **time-decaying changes to vitals** — a fluid bolus raises BP then washes out, an oxygen mask lifts SpO₂, a positioning change adjusts hemodynamics — visible in the `ActiveEffectsIndicator` overlay. Admins can author additional medications + custom effect curves via `POST /api/master/medications` (with bulk import at `POST /api/master/medications/bulk`); each medication can have multiple dose forms tracked in `medication_doses`. The `medications` master catalog table records `medication_code`, `generic_name`, `brand_names[]`, `drug_class`, `route`, `typical_dose`, `frequency`, `indications[]`, `contraindications[]`, `side_effects[]`, `is_controlled`, `is_high_alert`.
 - **Scenario timeline engine** — Time-keyframed vital-sign trajectories with linear interpolation between frames. **Stage-5 override guard**: any vital, rhythm, or condition the trainee manually pins is preserved across subsequent engine ticks (pre-fix only `rhythm` was guarded). Auto-stop fires ~2s past the last frame.
 - **Snapshot binding** — Sessions freeze `cases.config` + `cases.scenario` into `sessions.case_snapshot` at session start so admin edits during a running session do not bleed into the simulator (Stage-1 audit fix, regression-locked at unit + e2e).
 - **Vitals persistence** — Deadband-thresholded posts to `/sessions/:id/vitals`. On reload the monitor restores the latest persisted state instead of reverting to baseline.
 
-### Investigations (225 lab tests + 74 radiology studies + 67 exam regions)
+### Investigations (labs, imaging, structured physical exam)
 
-- **Laboratory** — **225 lab test entries across 33 groups** (196 unique tests in `Lab_database.json` plus 10 cardiac-crisis tests merged in from `heart.txt` at runtime via `server/services/labDatabase.js`). Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (44 entries split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
-- **32 lab panel templates** — Acute MI Panel, Heart Failure, Unstable Angina, **Diabetic Ketoacidosis (DKA)**, Hyperosmolar Hyperglycemic State, Sepsis, Stroke Workup, Pulmonary Embolism, Acute Pancreatitis, Liver Failure, Renal Failure, … Each panel pins specific tests with `value_multiplier` or `custom_value` overrides for case-specific abnormal results.
-- **Radiology** — **74 pre-loaded studies** spanning X-Ray, CT, MRI, Ultrasound, Cardiac (12-lead ECG, echocardiogram), Nuclear Medicine, Fluoroscopy, Mammography. Normal-report database for each study; per-case admin editor for abnormal reports; image / video upload + display for case-attached findings.
+- **Laboratory** — **A lab catalogue assembled at runtime** — `Lab_database.json` plus the cardiac-crisis set merged in from `heart.txt` by `server/services/labDatabase.js`. Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
+- **Lab panel templates** — Acute MI Panel, Heart Failure, Unstable Angina, **Diabetic Ketoacidosis (DKA)**, Hyperosmolar Hyperglycemic State, Sepsis, Stroke Workup, Pulmonary Embolism, Acute Pancreatitis, Liver Failure, Renal Failure, … Each panel pins specific tests with `value_multiplier` or `custom_value` overrides for case-specific abnormal results.
+- **Radiology** — **A pre-loaded study catalogue** spanning X-Ray, CT, MRI, Ultrasound, Cardiac (12-lead ECG, echocardiogram), Nuclear Medicine, Fluoroscopy, Mammography. Normal-report database for each study; per-case admin editor for abnormal reports; image / video upload + display for case-attached findings.
 - **Investigations screen — pill-stack viewer** — When a lab or radiology order is ready, clicking the worklist row both adds it to the persistent pill stack (newest on top, dismissible via the per-pill X) *and* expands the full report in the right pane (single-click flow since `ab266a4`; the previous two-step "click row → pill, click pill → expand" was retired). Re-opening a previously viewed report from the stack flips the same pane back to the full report; closing returns to the welcome card + pill row. Orders that were already `viewed_at` on first poll auto-populate the stack so refreshing mid-session doesn't lose your scratch-pad.
 - **1–5 minute turnaround band** — `case_investigations.turnaround_minutes` is clamped to the 1–5 minute simulation band (migration 0023 normalised legacy 30 / 60 / 240 / 2880 minute waits seeded before the clamp). Case authors who want longer waits adjust through the case wizard; the band keeps a single session tractable inside a teaching slot.
 - **Physical Examination** — Two parallel surfaces:
-  - **BodyMap**: anatomically accurate SVG silhouette with **invisible polygon hit regions** keyed to **67 named exam regions** (head/face/neck, chest, abdomen, back, extremities, perineum) across anterior + posterior + lateral views, gender-specific.
+  - **BodyMap**: anatomically accurate SVG silhouette with **invisible polygon hit regions** keyed to **named exam regions** (head/face/neck, chest, abdomen, back, extremities, perineum) across anterior + posterior + lateral views, gender-specific.
   - **ManikinPanel**: structured grid of region × exam-type (auscultation, palpation, percussion, inspection, special tests). Cranial nerves, motor, sensory, reflexes, coordination as discrete examinable items.
   - **Multi-region auscultation** — chest, abdomen, posterior, neck — with audio-clip playback per region.
   - **Idempotent recording** — `POST /sessions/:id/exam-findings` is keyed on `(session_id, body_region, exam_type)` so retries don't duplicate findings (Stage-6 audit fix).
@@ -139,7 +296,7 @@ docker compose up -d         # apply
 
 Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native `alert()`) with **one central NotificationCenter** that every producer reports to.
 
-- **6 surfaces**: Toast (hover-pause + click-anywhere-to-dismiss), Banner (clinical-critical with Ack/Snooze, `role="alert"` aria-live), Audio (urgent/beep/chime/silent patterns, configurable frequency), Backend log (bounded queue with `sendBeacon` on unload), Console, History (per-user pane in Notification Settings).
+- **Surfaces** — Toast (hover-pause + click-anywhere-to-dismiss), Banner (clinical-critical with Ack/Snooze, `role="alert"` aria-live), Audio (urgent/beep/chime/silent patterns, configurable frequency), Backend log (bounded queue with `sendBeacon` on unload), Console, History (per-user pane in Notification Settings).
 - **Routing matrix** — Per-(severity × source) routing. Trainees and clinicians get their own DND, snooze duration, severity threshold, source mute, surface mute.
 - **Mute hierarchy** — `acked → snoozed → DND → minSeverity → source/surface mutes`. Critical clinical alarms bypass DND but still respect ack and snooze.
 - **Cross-case ack clearing** — `clearTransient(reason)` is called on every `sessionId` change so case A's acked alarms don't silence brand-new alarms in case B.
@@ -156,10 +313,10 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 
 - **Full-page Agent Persona Editor** — Identity, avatar with live 3D preview + framing sliders, voice (engine + voice ID + rate + pitch in semitones with preview), persona prompt, editable Dos / Don'ts lists with reorder, behaviour, LLM (with test button), memory access matrix, conditional discussant section. Reset-to-defaults restores shipped values from a JS source-of-truth array.
 - **Case Wizard (12-step flow)** — Persona, demographics, vitals, scenario, alarms, agents, treatments, labs, radiology, physical exam, clinical records, and patient record documents.
-- **Scenario Repository** — **16 pre-seeded clinical scenarios**: Septic Shock, STEMI Progression, Hypertensive Crisis, Progressive Respiratory Failure, Post-Resuscitation Recovery, Anaphylactic Shock, Diabetic Ketoacidosis, Acute Ischemic Stroke (CVA), Pulmonary Embolism, Upper GI Bleed, COPD Exacerbation, Severe Hypoglycemia, Complete Heart Block, AFib with RVR, Opioid Overdose, Acute Decompensated Heart Failure. Reusable templates with import / export.
-- **12 pre-built acute clinical cases** — split between two seeders:
-  - **6 auto-seeded on first boot** (`server/seeders/cases.js`): Acute Chest Pain (STEMI), Septic Shock (Pneumonia), Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke (Left MCA), Maria Mercedes (Acute STEMI)
-  - **6 additional via `node server/scripts/seed-acute-cases.cjs`**: Massive Pulmonary Embolism (post-op DVT, hemodynamic instability), Acute Left MCA Stroke (tPA window), Diabetic Ketoacidosis – Severe (insulin pump failure), Opioid Overdose – Fentanyl, Complete Heart Block – Symptomatic, Flash Pulmonary Edema (decompensated heart failure)
+- **Scenario Repository** — **Pre-seeded clinical scenarios** — Septic Shock, STEMI Progression, Hypertensive Crisis, Progressive Respiratory Failure, Post-Resuscitation Recovery, Anaphylactic Shock, Diabetic Ketoacidosis, Acute Ischemic Stroke (CVA), Pulmonary Embolism, Upper GI Bleed, COPD Exacerbation, Severe Hypoglycemia, Complete Heart Block, AFib with RVR, Opioid Overdose, Acute Decompensated Heart Failure. Reusable templates with import / export.
+- **Pre-built acute clinical cases** — split between two seeders:
+  - **Auto-seeded on first boot** (`server/seeders/cases.js`): Acute Chest Pain (STEMI), Septic Shock (Pneumonia), Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke (Left MCA), Maria Mercedes (Acute STEMI)
+  - **Additional, via `node server/scripts/seed-acute-cases.cjs`**: Massive Pulmonary Embolism (post-op DVT, hemodynamic instability), Acute Left MCA Stroke (tPA window), Diabetic Ketoacidosis – Severe (insulin pump failure), Opioid Overdose – Fentanyl, Complete Heart Block – Symptomatic, Flash Pulmonary Edema (decompensated heart failure)
 
   Each case ships with full vitals, scenario timelines, lab results, radiology reports, exam findings, agent rosters, family member personas, medication lists, allergies, social history, and PMH — evidence-based emergencies designed for state-of-the-art simulation.
 - **Versioning** — Cases keep edit history in `case_versions`; admins can restore previous versions. Soft-deleted with `deleted_at` (Stage E7 retention).
@@ -172,12 +329,12 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
   - Levenshtein-distance + Ward's D2 hierarchical clustering of trainee behaviour
   - InStrength centrality, frequency, distribution, and sequence index plots
   - Per-cluster sub-views with light/dark theme toggle
-- **xAPI-style event log** — Every navigation, examination, order, treatment, message, monitoring action, alarm response, and form interaction captured with **130+ verb categories**. Server-side merging into 10 clinical labels for analysis. Pre-mount events buffer (1000 cap) and replay on first center-bound `log()` after mount.
+- **xAPI-style event log** — Every navigation, examination, order, treatment, message, monitoring action, alarm response, and form interaction captured with **a controlled verb vocabulary**. Server-side merging into clinical labels for analysis. Pre-mount events buffer and replay on first center-bound `log()` after mount.
 - **Exports** — Login logs, chat logs, settings logs, complete-session bundles, questionnaire responses, audit logs (CSV / JSON).
 - **Emotion logging** — Stage-triggered emotion + intensity questionnaire surfacing during scenario state transitions.
 - **Post-case questionnaires** — Clinical Reasoning Assessment + User Experience tracker, exportable per-cohort.
 
-### Enterprise (9 audit stages: E1-E9 shipped)
+### Enterprise (audit stages E1–E9 shipped)
 
 | Stage | Subject | Highlights |
 |---|---|---|
@@ -186,7 +343,7 @@ Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native 
 | **E3** | RBAC role hierarchy | `guest(0) < student(1) < reviewer(2) < educator(3) < admin(4)` with central `requireRole()` enforcement, role_rank generated column |
 | **E4** | Audit log coverage | Sensitive mutations log `oldValue` / `newValue` / metadata via `auditSuccess()`; secrets redacted before persistence |
 | **E5** | Data classification + redaction | Centralized `redaction.js` policy (secrets, PII scope-controlled, internal); `apiKey` etc. redacted before any response leaves the server |
-| **E6** | Multi-tenant readiness | `tenants` table, tenant-scoped queries on 40+ tables, `requireSameTenant()` middleware, mass-assignment-resistant inserts |
+| **E6** | Multi-tenant readiness | `tenants` table, tenant-scoped queries on tables, `requireSameTenant()` middleware, mass-assignment-resistant inserts |
 | **E7** | Soft-delete + retention | `deleted_at` on user-authored tables, retention sweep cron (`scripts/retention-sweep.js`), GDPR-aligned purge endpoint with dry-run |
 | **E8** | Connection pooling + portability | Promise-based `dbAdapter.js` shim; SQL fragment helpers (`now()`, `upsert()`); Postgres readiness inventory |
 | **E9** | Observability hooks | NDJSON request logging with request-id propagation, slow-query threshold, error tracker; configurable via `ROHY_LOG_LEVEL`, `ROHY_SLOW_QUERY_MS`, `ROHY_LOG_SKIP_PATHS` |
@@ -223,7 +380,7 @@ The standalone library is also published independently — see [`OyonR/README.md
 ### Auth & Multi-User
 
 - **JWT auth** with 4-hour default TTL, bcrypt password hashing.
-- **5 roles**: guest, student, reviewer, educator, admin (rank-comparison via `requireRole()`).
+- **Roles** — guest, student, reviewer, educator, admin (rank-comparison via `requireRole()`).
 - **Self-registration** — first user becomes admin if zero users exist; subsequent registrations default to `student`.
 - **Force-logout**, **batch user creation**, **password change**, **profile preferences** with admin-controlled required-fields matrix.
 - **Rate-limited** — 10 login attempts / 15 min / IP, 5 registrations / hour / IP; general API rate at 600 req/min/IP.
@@ -237,7 +394,7 @@ The standalone library is also published independently — see [`OyonR/README.md
 rohySimulator/
 ├── server/                            # Node 22+ / Express 5
 │   ├── server.js                      # Bootstrap, CORS, voice-key migration, Kokoro warmup
-│   ├── db.js                          # SQLite schema (65 tables) + default seeders
+│   ├── db.js                          # SQLite schema + default seeders
 │   ├── routes.js                      # 210 API endpoints
 │   ├── dbAdapter.js                   # Promise wrappers, SQL fragment helpers (Stage E8)
 │   ├── migrationRunner.js             # Versioned migration framework (Stage E2)
@@ -248,13 +405,13 @@ rohySimulator/
 │   │   ├── requestId.js               # X-Request-Id propagation
 │   │   ├── requestLogger.js           # NDJSON access log
 │   │   └── errorHandler.js            # Last-mile error tracker
-│   ├── seeders/                       # Default users, 6 acute cases, 5 agent personas
+│   ├── seeders/                       # Default users, acute cases, agent personas
 │   └── services/                      # Lab DB, googleTts, openaiTts, kokoroTts, voiceFallbacks, wav
 ├── migrations/                        # 24 versioned SQL migrations + MANIFEST.md (additive-by-default, destructive opt-in via --allow-destructive)
 ├── OyonR/                             # Local-browser emotion capture (MediaPipe + ONNX-Web)
 │   ├── src/                           # Camera, face tracker, classifier, aggregator,
 │   │                                  # validator, transports, settings, model configs
-│   ├── tests/                         # 12 tests incl. contract.test.js (pre-merge guard)
+│   ├── tests/                         # incl. contract.test.js (pre-merge guard)
 │   ├── standalone/                    # Self-contained demo + logs dashboard
 │   ├── examples/rohy-backend/         # Reference Express route adapter
 │   └── scripts/download-models.sh     # jsDelivr vendor population (atomic, idempotent)
@@ -283,7 +440,7 @@ rohySimulator/
 │   ├── services/                      # AgentService, voiceService, eventLogger,
 │   │                                  # PatientRecord, llmService, AuthService, discussionService
 │   ├── contexts/                      # Auth, Toast, Voice, PatientRecord
-│   └── data/                          # 215 lab tests, 32 lab panels, 16 scenario templates,
+│   └── data/                          # Lab tests, lab panels, scenario templates,
 │                                      # investigation templates, exam regions, scenario timelines
 ├── public/avatars/heads/              # 28 GLB avatars + manifest.json
 │                                      # (the standalone embeddable voice+avatar kit now
@@ -303,11 +460,11 @@ rohySimulator/
 │   └── utils/                         # seedDb, startTestServer, mockTtsServer, renderWithProviders
 ├── bench/                             # 3 vitest benches: TTS latency, LLM throughput, concurrent sessions
 ├── docs/                              # Operator lifecycle: INSTALL, DEPLOY, UPDATING, UPDATE-STRATEGY
-├── Lab_database.json                  # 215 lab tests with gender-specific ranges
-└── server/data/radiology_database.json  # 74 radiology studies
+├── Lab_database.json                  # Lab catalogue with gender-specific ranges
+└── server/data/radiology_database.json  # Radiology study catalogue
 ```
 
-### Database (65+ tables, 24 versioned migrations)
+### Database (SQLite, versioned migrations)
 
 Core: `users`, `cases`, `sessions`, `interactions`, `event_log`, `case_versions`, `system_audit_log`.
 
@@ -362,7 +519,7 @@ The repo ships a comprehensive test pyramid (vitest + playwright):
 | **OyonR contract** | `OyonR/tests/contract.test.js` | `cd OyonR && npm test` | Composes aggregator → validator with 8-emotion synthetic samples per shipped model. Negative control reproduces the May-2026 7-of-8 sum bug. |
 | Benchmarks | `bench/**/*.bench.js` | `npm run bench` | Vitest bench mode |
 
-Plus **18 enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-stage and one per feature area) that exercise the HTTP boundary and self-clean. **`scripts/tech-test.sh`** verifies a live deploy end-to-end (27 checks); see "Deploy verification & live monitoring" above.
+Plus **enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-stage and one per feature area) that exercise the HTTP boundary and self-clean. **`scripts/tech-test.sh`** verifies a live deploy end-to-end; see "Deploy verification & live monitoring" above.
 
 ---
 
@@ -413,7 +570,7 @@ Development tips:
 - Vite dev server proxies `/api` → `http://localhost:3000`.
 - Reset DB: stop the server, delete `server/database.sqlite`, restart — migrations + seeders re-run automatically.
 - Adding a TTS provider: implement an async-iterator service under `server/services/` mirroring `kokoroTts.js`, register it in the `/api/tts` route, and add a UI tab under `src/components/settings/VoiceSettingsTab.jsx`.
-- Adding an avatar: drop a viseme-rigged GLB in `public/avatars/heads/`, append to `manifest.json`. The `scripts/rocketbox-convert/` pipeline handles RocketBox source models with the canonical 17 morph targets in Oculus order.
+- Adding an avatar: drop a viseme-rigged GLB in `public/avatars/heads/`, append to `manifest.json`. The `scripts/rocketbox-convert/` pipeline handles RocketBox source models with the canonical the canonical morph targets in Oculus order.
 - Adding a lab test: append to `Lab_database.json` (test_name, group, category, min_value, max_value, unit, normal_samples) — the seeder picks it up on next boot.
 - Adding a scenario template: append to `src/data/scenarioTemplates.js` with timeline keyframes; it appears in the Scenario Repository.
 - Adding an audit endpoint: write `scripts/audit-<area>.sh` mirroring the pattern in `scripts/audit-observability.sh` (start isolated server, drive HTTP, assert).
