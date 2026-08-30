@@ -109,7 +109,7 @@ export async function createPackageFileMap({
 function parseChecksumFile(text) {
     if (typeof text !== 'string') return null;
     const rows = text.trim().split('\n').filter(Boolean).map((line) => {
-        const match = line.match(/^([a-f0-9]{64})  (.+)$/);
+        const match = line.match(/^([a-f0-9]{64}) {2}(.+)$/);
         return match ? { sha256: match[1], path: match[2] } : null;
     });
     return rows.some((row) => row === null) ? null : rows;
@@ -145,7 +145,6 @@ export async function verifyPackageFileMap(files, { subtle } = {}) {
         }
     }));
     if (validatePackageIndexStructure(index).length === 0) {
-        const declared = new Map(index.files.map((row) => [row.path, row]));
         await Promise.all(index.files.map(async (row) => {
             if (!(row.path in files)) {
                 issues.push({ severity: 'error', source: 'package', code: 'missing_declared_file', path: row.path, message: `Declared file ${row.path} is missing.` });

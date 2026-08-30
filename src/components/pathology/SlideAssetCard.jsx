@@ -53,6 +53,7 @@ export function SlideAssetCard({
                         alt={`Preview of ${asset.label || asset.id}`}
                         loading="lazy"
                         crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
                         onError={() => setPreviewFailed(true)}
                         className="h-full w-full object-contain"
                     />

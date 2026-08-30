@@ -186,11 +186,6 @@ export function CaseStudio({
     const addSlideAnywhere = (specimenId = null) => {
         setAssetTarget({ specimenId: typeof specimenId === 'string' ? specimenId : null, blockId: null, slideId: null });
     };
-    const addGrossAnywhere = (specimenId = null) => {
-        pendingGrossSpecimen.current = typeof specimenId === 'string' ? specimenId : null;
-        photoInputRef.current?.click();
-    };
-
     /** Files chosen anywhere in the case: read them, THEN grow the lineage. */
     const addPhotographsAnywhere = async (fileList) => {
         const files = Array.from(fileList ?? []);
@@ -287,7 +282,7 @@ export function CaseStudio({
                         <Overview
                     resolveRef={resolveRef}
                             document={document} onSelect={select}
-                            onAddSlide={addSlideAnywhere} onAddGross={addGrossAnywhere}
+                            onAddSlide={addSlideAnywhere}
                             onApply={(transition) => attempt(transition)}
                             onNotice={(message) => setAction({ state: 'notice', message })}
                             onPatchSpecimen={(id, patch) => attempt((current) => updateStudioEntity(current, 'specimen', id, patch))}
@@ -475,7 +470,7 @@ function Outline({ manifest, selection, onSelect, onAddSpecimen, onAddActivity, 
  * case: neither one asks the author to invent a specimen part and a paraffin
  * block first. The lineage is still created — it is just created for them.
  */
-function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, onApply, onNotice, onPatchSpecimen, onDelete, pendingDelete, resolveRef = null }) {
+function Overview({ document, onSelect, onAddSlide, onAddSpecimen, onApply, onNotice, onPatchSpecimen, onDelete, pendingDelete, resolveRef = null }) {
     const { manifest } = document;
     const plates = manifest.specimens.flatMap((specimen) => studioGrossImages(document, specimen.id)
         .map((image) => ({ ...image, specimen })));
@@ -554,7 +549,7 @@ function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, o
                                             onClick={() => onSelect('specimen', plate.specimen.id, 'gross')}
                                             className="overflow-hidden rounded-xl bg-slate-900/60 text-left ring-1 ring-slate-800 hover:ring-fuchsia-500/40"
                                         >
-                                            <img src={plate.uri} alt="" className="h-36 w-full bg-slate-950 object-cover" />
+                                            <img src={plate.uri} referrerPolicy="no-referrer" alt="" className="h-36 w-full bg-slate-950 object-cover" />
                                             <span className="block truncate px-3 py-2 text-xs font-semibold text-slate-200">{specimenDisplayName(plate.specimen)}</span>
                                         </button>
                                     ))}
@@ -572,25 +567,6 @@ function Overview({ document, onSelect, onAddSlide, onAddGross, onAddSpecimen, o
                 </p>
             )}
         </div>
-    );
-}
-
-function EvidenceTile({ icon: Icon, accent, title, count, detail, actionLabel, onAction }) {
-    const tint = { sky: 'text-sky-300', amber: 'text-amber-300' }[accent] ?? 'text-slate-300';
-    return (
-        <section className="flex flex-wrap items-center gap-4 rounded-2xl bg-slate-900/55 p-5 ring-1 ring-slate-800">
-            <Icon className={`h-8 w-8 shrink-0 ${tint}`} aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold text-slate-100">{title}</h2>
-                <p className="text-sm text-slate-300">{count}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{detail}</p>
-            </div>
-            {/* Called with no arguments on purpose: React would otherwise pass
-                the click event as the handler's first parameter. */}
-            <button type="button" className={`${PRIMARY} min-h-12 px-5 text-sm`} onClick={() => onAction()}>
-                <Plus className="h-5 w-5" aria-hidden="true" />{actionLabel}
-            </button>
-        </section>
     );
 }
 
@@ -745,9 +721,39 @@ function SpecimenWorkspace({ document, specimen, section, onPatch, onApply, onNo
  * be fetched is one the learner would not see either.
  */
 async function pinOf(uri) {
-    const response = await fetch(uri, { cache: 'no-store' });
+    const maxBytes = 32 * 1024 * 1024;
+    const response = await fetch(uri, {
+        cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer',
+    });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText || 'request failed'}`);
-    return `sha256:${await sha256Bytes(await response.arrayBuffer())}`;
+    const declared = Number(response.headers.get('Content-Length'));
+    if (Number.isFinite(declared) && declared > maxBytes) {
+        throw new RangeError(`Photograph exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB pinning limit.`);
+    }
+    const chunks = [];
+    let total = 0;
+    if (response.body?.getReader) {
+        const reader = response.body.getReader();
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maxBytes) {
+                await reader.cancel();
+                throw new RangeError(`Photograph exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB pinning limit.`);
+            }
+            chunks.push(value);
+        }
+    } else {
+        const value = new Uint8Array(await response.arrayBuffer());
+        total = value.byteLength;
+        if (total > maxBytes) throw new RangeError(`Photograph exceeds the ${Math.round(maxBytes / 1024 / 1024)} MB pinning limit.`);
+        chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    chunks.forEach((chunk) => { bytes.set(chunk, offset); offset += chunk.byteLength; });
+    return `sha256:${await sha256Bytes(bytes)}`;
 }
 
 /** Embed and pin one picked file. Pinning may fail; the picture still counts. */
@@ -789,7 +795,7 @@ function GrossPlateImage({ uri, resolveRef, alt }) {
             </div>
         );
     }
-    return <img src={src} alt={alt} className="h-40 w-full bg-slate-900 object-cover" />;
+    return <img src={src} referrerPolicy="no-referrer" alt={alt} className="h-40 w-full bg-slate-900 object-cover" />;
 }
 
 function GrossCard({ document, specimen, onApply, onNotice, onPatch, highlighted, autoOpen = false, resolveRef = null }) {
@@ -1245,7 +1251,7 @@ function Slide({ document, slide, activityId, onActivityId, onPatch, onChooseAss
                     {protectedActivity && !criteria && <button type="button" className={PRIMARY} onClick={() => onApply((current) => ensureSlideCriteria(current, activityId, slide.id))}><Plus className="h-4 w-4" aria-hidden="true" />Add scoring for this slide</button>}
                     {criteria && (
                         <Criteria
-                            document={document} activityId={activityId} slide={slide}
+                            activityId={activityId} slide={slide}
                             criteria={criteria} onApply={onApply}
                             onRemove={() => onApply((current) => removeSlideCriteria(current, activityId, slide.id))}
                         />
@@ -1256,7 +1262,7 @@ function Slide({ document, slide, activityId, onActivityId, onPatch, onChooseAss
     );
 }
 
-function Criteria({ document, activityId, slide, criteria, onApply, onRemove }) {
+function Criteria({ activityId, slide, criteria, onApply, onRemove }) {
     const patch = (next) => onApply((current) => updateSlideCriteria(current, activityId, slide.id, next));
     return (
         <div className="space-y-4">

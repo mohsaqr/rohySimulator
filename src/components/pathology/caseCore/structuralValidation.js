@@ -11,7 +11,6 @@ import { isStableId } from './ids.js';
 
 const objectLike = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
-const positive = (value) => finite(value) && value > 0;
 const integer = (value) => Number.isInteger(value);
 
 function issue(path, code, message) {
@@ -315,4 +314,3 @@ export function validateCaseStructure(manifest, rubric = null) {
         ...(rubric === null ? [] : validateRubricStructure(rubric).map((entry) => ({ ...entry, path: `rubric${entry.path.slice(1)}` }))),
     ];
 }
-

@@ -1,8 +1,8 @@
 {
   "package": "pathoyon",
   "version": "0.1.0",
-  "commit": "a2c9b140359985dd37de743a718811c25f07fcea",
-  "vendoredAt": "2026-08-29",
+  "commit": "befc00c4e6bb456d3aa769c06ae3938b34d60cc1",
+  "vendoredAt": "2026-08-30",
   "from": "server",
   "files": 4,
   "sha256": "fffa6104ab0986209acb3692714ed0a9809cac0008cb10aaf75e2c891c7f3e7f",

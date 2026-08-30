@@ -13,9 +13,13 @@ const thumbnailCache = new Map();
 
 export function slideThumbnail(dziUrl) {
     if (!thumbnailCache.has(dziUrl)) {
-        const pending = fetch(dziUrl)
+        const pending = fetch(dziUrl, { credentials: 'omit', referrerPolicy: 'no-referrer' })
             .then((response) => {
                 if (!response.ok) throw new Error(`${response.status} ${response.statusText || 'request failed'}`);
+                const type = response.headers.get('Content-Type')?.toLowerCase() ?? '';
+                if (type.includes('text/html')) {
+                    throw new Error('The slide URL returned the application shell instead of a DZI descriptor. Configure the production slide base or /slides route.');
+                }
                 return response.text();
             })
             .then((xml) => dziThumbnailUrl(dziUrl, parseDziDescriptor(xml)))
@@ -35,28 +39,28 @@ export function slideThumbnail(dziUrl) {
  */
 export function SlidePreview({ dziUrl, imageUrl = null, alt, className = 'h-32' }) {
     const [url, setUrl] = useState(imageUrl);
-    const [failed, setFailed] = useState(false);
+    const [failed, setFailed] = useState('');
 
     useEffect(() => {
-        if (imageUrl) { setUrl(imageUrl); setFailed(false); return undefined; }
-        if (!dziUrl) { setUrl(null); setFailed(true); return undefined; }
+        if (imageUrl) { setUrl(imageUrl); setFailed(''); return undefined; }
+        if (!dziUrl) { setUrl(null); setFailed('No DZI preview is configured.'); return undefined; }
         let live = true;
         setUrl(null);
-        setFailed(false);
+        setFailed('');
         slideThumbnail(dziUrl).then(
             (found) => { if (live) setUrl(found); },
-            () => { if (live) setFailed(true); },
+            (error) => { if (live) setFailed(error?.message ?? 'Preview request failed.'); },
         );
         return () => { live = false; };
     }, [dziUrl, imageUrl]);
 
     if (failed) {
         return (
-            <div className={`flex ${className} w-full items-center justify-center gap-2 bg-slate-950 text-[11px] text-slate-600`}>
+            <div title={failed} className={`flex ${className} w-full items-center justify-center gap-2 bg-slate-950 text-[11px] text-slate-600`}>
                 <ImageOff className="h-5 w-5" aria-hidden="true" />No preview
             </div>
         );
     }
     if (!url) return <div className={`${className} w-full animate-pulse bg-slate-800/60`} aria-hidden="true" />;
-    return <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`${className} w-full bg-slate-950 object-cover`} />;
+    return <img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed('Preview image failed to load.')} className={`${className} w-full bg-slate-950 object-cover`} />;
 }

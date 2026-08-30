@@ -132,7 +132,7 @@ export function caseDocumentIsServable(stored) {
  */
 export function caseDocumentIssues(stored, { forPublication = true } = {}) {
     if (stored === null || stored === undefined) return [];
-    let document = null;
+    let document;
     try {
         document = toStudioDocument(stored);
     } catch (error) {

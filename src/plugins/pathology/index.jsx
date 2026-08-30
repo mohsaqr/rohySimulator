@@ -10,6 +10,29 @@ import {
     learnerCase,
     readCaseDocument,
 } from '../../components/pathology/hostDocument.js';
+import { hasOpticalProfile } from '../../components/pathology/slideGeometry.js';
+
+/**
+ * Host-side tightening of the package's servability gate.
+ *
+ * `caseDocumentIsServable()` admits a slide on `dzi` alone, but the viewer's
+ * `opticalProfile()` THROWS on a slide with no optical description (by design:
+ * honest magnification) — so a legacy-shaped, dzi-only document passed the
+ * gate and then crashed the room at render time. Until the fix lands upstream
+ * and is re-vendored, the host asks the stricter question here: material is a
+ * slide the viewer can actually render (dzi + complete optics) or a gross
+ * photograph. Total by construction, like the gate it wraps.
+ */
+function hasRenderableMaterial(stored) {
+    const viewer = learnerCase(stored);
+    if (!viewer) return false;
+    const renderableSlide = (viewer.slides ?? []).some(
+        (slide) => typeof slide?.dzi === 'string' && slide.dzi !== '' && hasOpticalProfile(slide),
+    );
+    const photograph = (viewer.specimens ?? []).some((specimen) => (specimen?.images ?? [])
+        .some((image) => typeof image?.src === 'string' && image.src !== ''));
+    return renderableSlide || photograph;
+}
 
 /**
  * Pathology, expressed as an RPS-1 plugin.
@@ -45,7 +68,7 @@ export default {
     //
     // Total by construction: it cannot throw on a malformed document, so one
     // bad row cannot take the navigator down for every other case.
-    available: (ctx) => caseDocumentIsServable(ctx.data),
+    available: (ctx) => caseDocumentIsServable(ctx.data) && hasRenderableMaterial(ctx.data),
 
     // --- the document contract (RPS-1 §11a.2) ------------------------------
     //

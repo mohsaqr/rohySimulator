@@ -162,7 +162,7 @@ export function SpecimenTray({ specimens, logger }) {
                                 p.id === plate?.id ? 'ring-fuchsia-500/60' : 'ring-slate-800 hover:ring-slate-600'
                             }`}
                         >
-                            <img src={p.src} alt={p.caption} className="h-16 w-24 object-cover" />
+                            <img src={p.src} referrerPolicy="no-referrer" alt={p.caption} className="h-16 w-24 object-cover" />
                             <span className="block max-w-[6rem] truncate px-1.5 py-1 text-[10px] text-slate-400">{p.caption}</span>
                         </button>
                     ))}

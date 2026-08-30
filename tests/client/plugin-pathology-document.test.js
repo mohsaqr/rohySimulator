@@ -101,6 +101,16 @@ describe('R20 — available() judges the document, not the key', () => {
         expect(descriptor.available({ data: withPhotographOnly() })).toBe(true);
     });
 
+    // Regression lock: caseDocumentIsServable admitted a slide on `dzi` alone,
+    // but the viewer's opticalProfile() THROWS on missing optics — so a
+    // legacy-shaped case (dzi with no nativeObjective/nativeMpp/downsample)
+    // passed the gate and then white-screened the app at render time. A slide
+    // is servable only when the viewer can actually render it.
+    it('declines a dzi-only slide with no optical profile (the viewer would throw on it)', () => {
+        const legacy = { id: 'c1', slides: [{ id: 's1', label: 'A1', stain: 'H&E', dzi: '/a.dzi' }] };
+        expect(descriptor.available({ data: legacy })).toBe(false);
+    });
+
     it('is unavailable rather than explosive on a malformed document', () => {
         // §9: a gate that throws is treated as unavailable, but a gate that
         // cannot throw is better — this one runs for every case in the list.
