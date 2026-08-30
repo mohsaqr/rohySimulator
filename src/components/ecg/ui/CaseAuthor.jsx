@@ -35,15 +35,11 @@ const fields_from_document = (stored) => {
     respiratory_rate: manifest.patient?.vitals?.respiratory_rate ?? '',
     oxygen_saturation_percent: manifest.patient?.vitals?.oxygen_saturation_percent ?? '',
     seed: recording?.render_spec?.seed ?? 12031987,
-    review_status: manifest.provenance?.clinical_review?.status ?? 'pending',
-    reviewed_by: manifest.provenance?.clinical_review?.reviewed_by ?? '',
-    reviewed_at: manifest.provenance?.clinical_review?.reviewed_at ?? '',
-    review_notes: manifest.provenance?.clinical_review?.notes ?? '',
   };
 };
 
 /** Curated one-recording ECG case authoring surface. */
-export function CaseAuthor({ initial_document = null, on_change = null, top_bar_controls = null }) {
+export function CaseAuthor({ initial_document = null, on_change = null, top_bar_controls = null, hide_clinical_frame = false }) {
   const [fields, set_fields] = useState(() => fields_from_document(initial_document));
   const [document, set_document] = useState(() => read_case_document(initial_document) ?? starter_document());
   const [preview, set_preview] = useState(false);
@@ -74,12 +70,6 @@ export function CaseAuthor({ initial_document = null, on_change = null, top_bar_
             respiratory_rate: Number(next_fields.respiratory_rate),
             oxygen_saturation_percent: Number(next_fields.oxygen_saturation_percent),
           },
-        },
-        review: {
-          status: next_fields.review_status,
-          reviewed_by: next_fields.reviewed_by || null,
-          reviewed_at: next_fields.reviewed_at || null,
-          notes: next_fields.review_notes,
         },
       });
       set_document(next);
@@ -114,7 +104,7 @@ export function CaseAuthor({ initial_document = null, on_change = null, top_bar_
         <div>
           <p className="ecg-eyebrow">Educator studio</p>
           <h1>Author a 12-lead ECG case</h1>
-          <p>Choose a curated signal pattern, add clinical context, then record independent review.</p>
+          <p>Choose a curated signal pattern and shape what the learner is asked to do.</p>
         </div>
         <div className="ecg-author-actions">
           {top_bar_controls}
@@ -148,6 +138,11 @@ export function CaseAuthor({ initial_document = null, on_change = null, top_bar_
           </div>
           <label>Deterministic seed<input type="number" value={fields.seed} onChange={change('seed')} /></label>
 
+          {/* Hidden when the studio is embedded in a host whose CASE already
+              owns the patient — demographics, vitals and history belong to the
+              case there, not to one investigation. Standalone keeps it: with
+              no case around it, this is all the context a tracing has. */}
+          {!hide_clinical_frame && (<>
           <div className="ecg-author-section">
             <div className="ecg-section-number">03</div>
             <div><h2>Clinical frame</h2><p>Findings are interpreted in context; the trace is never the whole case.</p></div>
@@ -161,18 +156,8 @@ export function CaseAuthor({ initial_document = null, on_change = null, top_bar_
           </div>
           <label>Presentation<textarea rows="3" value={fields.presentation} onChange={change('presentation')} /></label>
           <label>Relevant history<textarea rows="3" value={fields.history} onChange={change('history')} /></label>
+          </>)}
           <label>Learner prompt<textarea rows="3" value={fields.prompt} onChange={change('prompt')} /></label>
-
-          <div className="ecg-author-section">
-            <div className="ecg-section-number">04</div>
-            <div><h2>Clinical review</h2><p>Automated invariants establish consistency, not medical correctness.</p></div>
-          </div>
-          <div className="ecg-form-grid ecg-form-grid-three">
-            <label>Status<select value={fields.review_status} onChange={change('review_status')}><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Needs revision</option></select></label>
-            <label>Reviewed by<input value={fields.reviewed_by} onChange={change('reviewed_by')} /></label>
-            <label>Reviewed at<input type="date" value={fields.reviewed_at?.slice(0, 10)} onChange={change('reviewed_at')} /></label>
-          </div>
-          <label>Review notes<textarea rows="3" value={fields.review_notes} onChange={change('review_notes')} /></label>
         </section>
 
         <aside className="ecg-author-summary">

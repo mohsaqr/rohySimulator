@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.129] — 2026-08-30
+
+### Fixed
+
+- **The ECG studio no longer demands a clinical-review sign-off** to
+  publish, and no longer duplicates the case's patient details (age,
+  vitals, history) inside the plugin — the case owns the patient.
+
 ## [2.9.128] — 2026-08-30
 
 ### Fixed

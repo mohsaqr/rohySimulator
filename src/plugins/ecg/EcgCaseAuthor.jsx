@@ -20,6 +20,10 @@ export function EcgCaseAuthor({ topBarControls = null, caseTitle = null, ...prop
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <CaseAuthor
                     {...props}
+                    // The rohy CASE owns the patient — demographics, vitals and
+                    // history are authored on the case itself, so the studio's
+                    // standalone clinical frame would duplicate them here.
+                    hide_clinical_frame
                     top_bar_controls={(
                         <>
                             {caseTitle && (

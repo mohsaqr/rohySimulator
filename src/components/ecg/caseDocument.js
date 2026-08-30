@@ -357,19 +357,12 @@ export function case_document_issues(stored, { for_publication = true } = {}) {
     level: 'error', code: 'no_recording', path: '$.manifest.recordings',
     message: 'This case has no valid ECG recording for a learner to inspect.',
   }];
-  const rubric_issues = !for_publication ? [] : [
-    ...(!rubric
-      ? [{ level: 'error', code: 'missing_rubric', path: '$.rubric', message: 'Add a protected rubric before publication.' }]
-      : []),
-    ...(manifest.provenance?.clinical_review?.status !== 'approved'
-      ? [{ level: 'error', code: 'clinical_review', path: '$.manifest.provenance.clinical_review', message: 'Clinical review must be approved before publication.' }]
-      : []),
-    ...(manifest.provenance?.clinical_review?.status === 'approved'
-        && !String(manifest.provenance?.clinical_review?.reviewed_by ?? '').trim()
-      ? [{ level: 'error', code: 'clinical_reviewer', path: '$.manifest.provenance.clinical_review.reviewed_by', message: 'Name the clinical reviewer who approved this pattern.' }]
-      : []),
-  ];
-  return [...issues, ...recording_issues, ...material_issue, ...rubric_issues];
+  // No publication sign-off gate. This is a teaching simulator: a host case
+  // carries the clinical governance, and no other room gates publication on
+  // an approval field. `rubric` and `provenance.clinical_review` remain
+  // stored metadata for hosts that want to record a review — they are never
+  // required. (`for_publication` is kept in the signature for callers.)
+  return [...issues, ...recording_issues, ...material_issue];
 }
 
 /** Compact host-card summary. */
