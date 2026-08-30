@@ -345,7 +345,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 
         // Insert user
         const defaultTenantId = invite?.tenant_id || 1;
-        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
         dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], async function (err) {
             if (err) {
                 if (invite) await releaseInviteUse(invite.id);
@@ -660,14 +660,20 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
         const ipAddress = req.ip || req.socket?.remoteAddress;
         const userAgent = req.headers['user-agent'];
 
+        // If the new session row cannot be recorded, the new JWT would be
+        // dead on arrival (every request re-checks active_sessions) — and
+        // proceeding to the revoke below would kill the CURRENT token too,
+        // returning 200 while logging the user out. Fail the refresh
+        // instead; the client keeps its still-valid token and retries.
         try {
             await recordActiveSession(newToken, fresh, { ipAddress, userAgent });
         } catch (e) {
-            (req.log || authLog).warn('refresh active session record failed', {
+            (req.log || authLog).error('refresh active session record failed', {
                 user_id: fresh.id,
                 tenant_id: fresh.tenant_id || 1,
                 error: e.message
             });
+            return res.status(500).json({ error: 'Token refresh failed' });
         }
 
         // Revoke the old token AFTER inserting the new row so there's no

@@ -303,29 +303,17 @@ export const requireAuth = (req, res, next) => {
     next();
 };
 
-// One knob for how long a login lasts.
+// One knob for how long a login lasts — now defined in ./authTtl.js and
+// re-exported here, so `import { authTtlSeconds } from './middleware/auth.js'`
+// keeps working for every existing caller.
 //
-// Three lifetimes MUST agree or logins die at the shortest one: the JWT
-// `exp` claim, the rohy_auth cookie's maxAge, and the active_sessions
-// row's expires_at. They used to be hardcoded separately (all at 4h);
-// authTtlSeconds() is now the single source all three derive from.
-//
-// JWT_EXPIRY accepts '45s', '90m', '12h', '7d', or a bare number of
-// seconds. The default is 7 days: a session survives overnight and
-// weekend gaps instead of collapsing after 4 idle hours. That is safe
-// to hold this long because tokens are server-revocable — every request
-// re-checks active_sessions, so logout / admin force-logout / password
-// change invalidates a still-cryptographically-valid JWT immediately.
-// Deployments wanting a tighter window set JWT_EXPIRY (e.g. '4h').
-const DEFAULT_TTL_SECONDS = 7 * 86400; // '7d'
-const TTL_UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
-
-export function authTtlSeconds() {
-    const raw = String(process.env.JWT_EXPIRY || '7d').trim();
-    const match = raw.match(/^(\d+)\s*([smhd]?)$/i);
-    if (!match) return DEFAULT_TTL_SECONDS;
-    return Number(match[1]) * TTL_UNIT_SECONDS[(match[2] || 's').toLowerCase()];
-}
+// It moved because middleware/csrf.js needs the same number (the rohy_csrf
+// cookie is the public half of the same credential as rohy_auth and must
+// expire with it) and cannot import this module: auth.js pulls in dbAdapter →
+// db.js, which opens and migrates the sqlite file at import time. See
+// ./authTtl.js for the full contract.
+import { authTtlSeconds } from './authTtl.js';
+export { authTtlSeconds };
 
 // Helper function to generate JWT token. TTL comes from authTtlSeconds()
 // so it always matches the cookie and the active_sessions row.
@@ -337,5 +325,12 @@ export const generateToken = (user) => {
         role: user.role,
         tenant_id: user.tenant_id || 1
     };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: authTtlSeconds() });
+    // jti makes every token unique even for the same user in the same
+    // second — without it, a refresh issued within 1s of login signs a
+    // byte-identical JWT, whose hash then collides with the live row in
+    // active_sessions and the rotation revokes the token it just reissued.
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: authTtlSeconds(),
+        jwtid: crypto.randomUUID()
+    });
 };

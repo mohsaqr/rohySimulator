@@ -28,6 +28,7 @@
  */
 
 import crypto from 'crypto';
+import { authTtlSeconds } from './authTtl.js';
 
 export const CSRF_COOKIE_NAME = 'rohy_csrf';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -40,7 +41,27 @@ export function generateCsrfToken() {
     return crypto.randomBytes(32).toString('base64url');
 }
 
-export function csrfCookieOptions(maxAgeSeconds = 4 * 60 * 60) {
+/**
+ * Cookie options for the `rohy_csrf` half of the double-submit pair.
+ *
+ * The TTL is DERIVED from authTtlSeconds(), never hardcoded. It used to be a
+ * flat 4 h while the auth cookie ran for 7 days: after four idle hours the
+ * public half expired and the HttpOnly half did not, so the browser kept
+ * sending a valid session with no CSRF cookie to copy — every background POST
+ * came back 403 ("CSRF token missing") until something re-minted the pair.
+ * The two halves are one credential and must expire together; that is the same
+ * rule authTtlSeconds() already enforces across the JWT exp, the rohy_auth
+ * cookie and the active_sessions row.
+ *
+ * The TTL comes from ./authTtl.js, not from ./auth.js: auth.js imports
+ * csrfRequired/verifyCsrf from HERE, and it also pulls in dbAdapter → db.js,
+ * which opens and migrates the sqlite database at module-load time. Sharing
+ * the dependency-free parser instead keeps this module importable on its own.
+ *
+ * @param {number} [maxAgeSeconds]  override, e.g. 0 to clear the cookie
+ * @returns {{httpOnly: boolean, secure: boolean, sameSite: string, path: string, maxAge: number}}
+ */
+export function csrfCookieOptions(maxAgeSeconds = authTtlSeconds()) {
     return {
         // CRUCIAL: this cookie is NOT HttpOnly — client JS reads it to
         // populate the X-CSRF-Token header. The auth cookie next to it

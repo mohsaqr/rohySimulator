@@ -138,6 +138,54 @@ describe('POST /api/auth/refresh', () => {
         expect(verifyBody.user.id).toBe(userId);
     });
 
+    // Regression lock: same-second token refresh silently destroyed the session.
+    // generateToken signed a deterministic payload with 1-second iat granularity,
+    // so two rotations inside one second produced byte-identical JWTs; the
+    // active_sessions token_hash UNIQUE violation was swallowed and the code then
+    // revoked its own hash — refresh returned 200 while logging the user out.
+    // Fixed by adding a jti and failing the refresh when the row can't be
+    // recorded. This chain of rapid rotations fails against the un-fixed code.
+    it('survives a chain of same-second rotations without self-revoking', async () => {
+        const db = await openDb(server.dbPath);
+        const crypto = await import('crypto');
+        const userRow = await dbGet(db, 'SELECT * FROM users WHERE id = ?', [userId]);
+
+        let token = jwt.sign(
+            { id: userId, username: userRow.username, email: userRow.email, role: 'admin', tenant_id: 1 },
+            TEST_JWT_SECRET,
+            { expiresIn: '1h', jwtid: 'same-second-chain' },
+        );
+        const startHash = crypto.createHash('sha256').update(token).digest('hex');
+        await dbRun(
+            db,
+            `INSERT INTO active_sessions (user_id, token_hash, expires_at, tenant_id, is_active)
+             VALUES (?, ?, datetime('now', '+1 hour'), 1, 1)`,
+            [userId, startHash],
+        );
+        await dbClose(db);
+
+        // Three back-to-back rotations land in the same wall-clock second in
+        // practice; each must return 200 with a token distinct from its input.
+        for (let i = 0; i < 3; i++) {
+            const res = await fetch(`${server.baseUrl}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.token).toBeTypeOf('string');
+            expect(body.token).not.toBe(token);
+            token = body.token;
+        }
+
+        // The final token in the chain still authenticates — the session was
+        // never revoked out from under the user.
+        const verify = await fetch(`${server.baseUrl}/api/auth/verify`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        expect(verify.status).toBe(200);
+    });
+
     it('rejects when no Authorization is provided', async () => {
         const res = await fetch(`${server.baseUrl}/api/auth/refresh`, { method: 'POST' });
         expect(res.status).toBe(401);

@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.109] — 2026-08-30
+
+### Fixed
+
+- **A token refresh can no longer log you out.** Every JWT now carries a
+  unique `jti`, and a refresh that cannot record its server-side session
+  fails with 500 instead of silently revoking the caller's own token.
+- The CSRF cookie TTL is derived from the same `authTtlSeconds` as the
+  auth cookie (new `server/middleware/authTtl.js`).
+
 ## [2.9.108] — 2026-08-30
 
 ### Changed
