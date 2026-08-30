@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.127] — 2026-08-30
+
+### Fixed
+
+- A ~180 requests/minute `GET /api/patient-record` retry loop — the
+  record-init effect no longer re-arms on every render.
+
 ## [2.9.126] — 2026-08-30
 
 ### Fixed

@@ -942,6 +942,10 @@ function MainApp() {
    // provider the hook returns no-op stubs and findings silently vanish —
    // hoisting the provider keeps exam state captured regardless of which
    // top-level surface is showing.
+   // A fresh literal each render is fine here: PatientRecordContext keeps
+   // patientInfo in a ref and keys its init effect on sessionId/caseId only,
+   // so a new-but-equal object cannot re-run init (the ~180 req/min
+   // GET /api/patient-record 404 loop this once caused).
    const patientInfo = activeCase ? {
       name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
       age: activeCase.config?.demographics?.age || null,

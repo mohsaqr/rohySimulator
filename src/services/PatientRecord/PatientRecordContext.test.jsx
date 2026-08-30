@@ -99,3 +99,48 @@ describe('PatientRecordProvider sync', () => {
         await waitFor(() => expect(syncMock).toHaveBeenCalledTimes(2));
     });
 });
+
+describe('PatientRecordProvider init', () => {
+    // Regression lock: App builds `patientInfo` from the active case; before
+    // the fix a fresh-but-equal object each parent render re-ran the init
+    // effect, and each run was a GET /api/patient-record/:id that 404s until
+    // the first sync — a measured ~180 requests/minute loop in a live session.
+    it('a re-render with an equal-but-new patientInfo object does not reload the record', async () => {
+        const { rerender } = render(
+            <PatientRecordProvider sessionId="s-1" caseId="c-1" patientInfo={{ ...PATIENT }}>
+                <Recorder />
+            </PatientRecordProvider>,
+        );
+        await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(1));
+
+        rerender(
+            <PatientRecordProvider sessionId="s-1" caseId="c-1" patientInfo={{ ...PATIENT }}>
+                <Recorder />
+            </PatientRecordProvider>,
+        );
+        rerender(
+            <PatientRecordProvider sessionId="s-1" caseId="c-1" patientInfo={{ ...PATIENT }}>
+                <Recorder />
+            </PatientRecordProvider>,
+        );
+        // Give any wrongly re-armed effect a tick to fire before asserting.
+        await act(() => Promise.resolve());
+        expect(loadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('a new sessionId does reload', async () => {
+        const { rerender } = render(
+            <PatientRecordProvider sessionId="s-1" caseId="c-1" patientInfo={PATIENT}>
+                <Recorder />
+            </PatientRecordProvider>,
+        );
+        await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(1));
+        rerender(
+            <PatientRecordProvider sessionId="s-2" caseId="c-1" patientInfo={PATIENT}>
+                <Recorder />
+            </PatientRecordProvider>,
+        );
+        await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2));
+        expect(loadMock).toHaveBeenLastCalledWith('s-2');
+    });
+});

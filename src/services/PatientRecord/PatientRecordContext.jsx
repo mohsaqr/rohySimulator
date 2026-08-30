@@ -25,6 +25,14 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
   const syncIntervalRef = useRef(null);
   const recordRef = useRef(null);
 
+  // `patientInfo` is only read when CREATING a record, so it lives in a ref
+  // rather than in the init effect's deps: a parent that rebuilds the object
+  // every render (equal in value, new in identity) must not re-run init —
+  // each re-run is a GET /api/patient-record/:id, and before the first sync
+  // that 404s at render frequency (a measured ~180 requests/minute loop).
+  const patientInfoRef = useRef(patientInfo);
+  useEffect(() => { patientInfoRef.current = patientInfo; }, [patientInfo]);
+
   // Initialize or load existing record
   useEffect(() => {
     const initRecord = async () => {
@@ -51,14 +59,14 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
           setRecord(patientRecord);
         } else {
           // Create new record
-          const patientRecord = new PatientRecord(sessionId, caseId, patientInfo);
+          const patientRecord = new PatientRecord(sessionId, caseId, patientInfoRef.current);
           recordRef.current = patientRecord;
           setRecord(patientRecord);
         }
       } catch (error) {
         console.error('Error initializing PatientRecord:', error);
         // Create new record on error
-        const patientRecord = new PatientRecord(sessionId, caseId, patientInfo);
+        const patientRecord = new PatientRecord(sessionId, caseId, patientInfoRef.current);
         recordRef.current = patientRecord;
         setRecord(patientRecord);
       }
@@ -67,7 +75,7 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
     };
 
     initRecord();
-  }, [sessionId, caseId, patientInfo]);
+  }, [sessionId, caseId]);
 
   // Every verb wrapper below re-sets `record` to a fresh object so consumers
   // re-render. That identity change must NOT re-run the sync effect: the
