@@ -200,6 +200,34 @@ const FACTORY_DEFAULTS = {
    }
 };
 
+// A persisted vitals row that matches FACTORY_DEFAULTS on EVERY channel is
+// a phantom, not a measurement (UI test review 2.9.108 #8): before the
+// persist gate below existed, every mount of this component — and it
+// remounts on every room switch — wrote one "healthy patient" row
+// (HR 80 / SpO2 98 / 120/80 / 37.0 °C / EtCO2 38) before the case's real
+// vitals had been applied. Restoring such a row on the next mount would
+// then adopt the phantom as the session's baseline and carry the wrong
+// temp/EtCO2 for the rest of the case, so the restore path skips them.
+//
+// Refusing the row is safe even in the vanishingly rare case where a case
+// genuinely sits on all seven factory numbers: the case baseline that
+// loads instead carries exactly the same values. Note `temp` is a float
+// the jitter loop moves in ±0.1 °C steps, so a *lived-in* session can
+// essentially never land back on all seven simultaneously.
+const isFactoryDefaultVitalsRow = (row) => {
+   if (!row) return false;
+   const f = FACTORY_DEFAULTS.params;
+   const same = (value, target) =>
+      Number.isFinite(value) && Math.abs(value - target) < 1e-6;
+   return same(row.hr, f.hr)
+      && same(row.spo2, f.spo2)
+      && same(row.rr, f.rr)
+      && same(row.bp_sys, f.bpSys)
+      && same(row.bp_dia, f.bpDia)
+      && same(row.temp, f.temp)
+      && same(row.etco2, f.etco2);
+};
+
 // Load settings from localStorage
 const loadSavedSettings = () => {
    try {
@@ -426,9 +454,19 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    const overriddenVitalsRef = useRef(new Set());
    useEffect(() => { overriddenVitalsRef.current = overriddenVitals; }, [overriddenVitals]);
 
+   // UI test review 2.9.108 #8 — the vitals-persist gate. The monitor
+   // mounts holding FACTORY_DEFAULTS (or a previous case's localStorage
+   // leftovers) and only learns the patient's real vitals when the
+   // case-load effect near the bottom of this component runs. Until then
+   // nothing may be written to /sessions/:id/vitals. `caseVitalsAppliedRef`
+   // is armed by that effect; the params-sync effect just below flips the
+   // state flag one commit later, when `displayVitals` — the thing we
+   // actually persist — has caught up.
+   const caseVitalsAppliedRef = useRef(false);
+   const [vitalsBaselineReady, setVitalsBaselineReady] = useState(false);
+
    // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
-      console.log('[PatientMonitor] Params changed, syncing:', params.hr, 'activeScenario:', activeScenario);
       simulationParams.current = params;
 
       // Apply treatment effects to base params
@@ -445,6 +483,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
       // Always sync displayVitals when params change (scenario will override via its own loop)
       setDisplayVitals(vitalsWithEffects);
+
+      // #8: displayVitals now carries the case's own vitals, so the next
+      // commit may start persisting. Doing it here rather than in the
+      // case-load effect is what keeps the very first persisted row from
+      // being the factory-default phantom.
+      if (caseVitalsAppliedRef.current) setVitalsBaselineReady(true);
    }, [params, treatmentEffects.aggregate]);
 
    // Update displayVitals when treatment effects change (separate from params sync)
@@ -554,9 +598,23 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // vital crosses its deadband. Lives here (after `activeScenario` state) so
    // the source-tag can distinguish scenario-driven from learner-driven changes
    // without hitting a temporal-dead-zone error on the deps array.
+   //
+   // UI test review 2.9.108 #8: this effect used to fire on MOUNT, and
+   // `lastPersistedVitalsRef.current === null` forces `crossed = true` on
+   // the first run — so every mount posted whatever `params` happened to
+   // hold at that instant. At mount that is FACTORY_DEFAULTS (or the
+   // localStorage leftovers of a previous case), because the case's own
+   // vitals only land when the case-load effect further down runs. The
+   // monitor remounts on every room switch, so a 24 s STEMI session
+   // produced 9 rows of which 4 were fabricated "healthy patient"
+   // readings. `vitalsBaselineReady` gates the persist on the case's
+   // vitals having actually been applied — a state flag (declared up with
+   // the params-sync effect), deliberately not a ref, so flipping it
+   // re-runs this effect and the first REAL baseline row is still written.
    const lastPersistedVitalsRef = useRef(null);
    useEffect(() => {
       if (!sessionId) return;
+      if (!vitalsBaselineReady) return;
       const prev = lastPersistedVitalsRef.current ?? displayVitals;
       const current = displayVitals;
       const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
@@ -584,20 +642,30 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          etco2: current.etco2,
          source: activeScenario ? 'scenario' : 'monitor',
       }).catch(err => console.warn('[Vitals] persist failed:', err.message));
-   }, [displayVitals, sessionId, rhythm, activeScenario, elapsedTime]);
+   }, [displayVitals, sessionId, rhythm, activeScenario, elapsedTime, vitalsBaselineReady]);
 
    // On session restore, fetch the most recent persisted vitals snapshot
    // and seed `params` with it so the monitor resumes from where the
    // learner left off rather than snapping back to the case baseline.
+   //
+   // UI test review 2.9.108 #8 (second half): sessions recorded before the
+   // persist gate above landed still carry phantom factory-default rows,
+   // and adopting one here re-infected the whole session — the phantom's
+   // temp/EtCO2 were never repaired afterwards because the scenario engine
+   // interpolates only hr/spo2/rr/bpSys/bpDia. Walk back to the newest row
+   // that is an actual reading; if every row is a phantom we restore
+   // nothing and the case baseline stands.
    useEffect(() => {
       if (!sessionId) return;
       let cancelled = false;
       (async () => {
          try {
             const data = await apiFetch(`/sessions/${sessionId}/vitals`);
-            const last = Array.isArray(data?.vitals) && data.vitals.length > 0
-               ? data.vitals[data.vitals.length - 1]
-               : null;
+            const rows = Array.isArray(data?.vitals) ? data.vitals : [];
+            let last = null;
+            for (let i = rows.length - 1; i >= 0; i -= 1) {
+               if (!isFactoryDefaultVitalsRow(rows[i])) { last = rows[i]; break; }
+            }
             if (!last || cancelled) return;
             const restored = {};
             if (Number.isFinite(last.hr)) restored.hr = last.hr;
@@ -650,6 +718,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
    // Load initial vitals and scenario from case data when case loads
    useEffect(() => {
+      // No case yet → nothing to persist against. The vitals-persist gate
+      // stays closed: a session always has a case, so an empty `caseData`
+      // here means the host hasn't resolved it yet, not that the factory
+      // defaults are the patient.
       if (caseData) {
          // Load initial vitals from case config
          // Priority: initialVitals > scenario first frame > legacy config > factory defaults
@@ -680,9 +752,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                temp: initialVitals?.temp ?? scenarioParams?.temp ?? legacyConfig?.temp ?? FACTORY_DEFAULTS.params.temp,
                etco2: initialVitals?.etco2 ?? scenarioParams?.etco2 ?? legacyConfig?.etco2 ?? FACTORY_DEFAULTS.params.etco2
             };
-            console.log('[PatientMonitor] Loading case vitals:', baselineParams, 'source:', hasNewVitals ? 'initialVitals' : hasScenarioVitals ? 'scenario' : 'legacy');
             setCaseBaseline(baselineParams);
             setParams(baselineParams);
+            // #8: `params` is about to become the case's vitals, but
+            // `displayVitals` (what we persist) only catches up in the
+            // params-sync effect one commit later. Arm the ref here and let
+            // that effect open the persist gate, so the first row we write
+            // is the patient's real baseline and never the factory one.
+            caseVitalsAppliedRef.current = true;
 
             // Set rhythm from case (priority: initialVitals > scenario > legacy)
             const scenarioRhythm = scenarioFirstFrame?.rhythm;
@@ -784,6 +861,11 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
          // case-load is already logged by App.jsx (EventLogger.caseLoaded)
          // when the case is selected, so we don't double-log here.
+
+         // #8: a case that carries no vitals at all leaves `params` exactly
+         // as mounted — there is no later commit to wait for, so open the
+         // persist gate directly.
+         if (!caseVitalsAppliedRef.current) setVitalsBaselineReady(true);
       }
    }, [caseData, caseSnapshot]);
 
@@ -1549,7 +1631,17 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      </div>
                   </div>
                   <div className="absolute bottom-2 left-3 text-[10px] text-neutral-500">
-                     AUTO 15min • <span className="text-neutral-300">14:02</span>
+                     {/* UI test review 2.9.108 #24: this line used to end
+                         in a hardcoded clock time — a fake wall clock that
+                         never moved and contradicted every other readout on
+                         the panel. There is no
+                         per-cuff measurement timestamp in the model to put
+                         here (the NIBP numbers come from the same
+                         continuous simulation as the rest), and echoing the
+                         session clock would just print the timer that
+                         already sits in the header. So the cycle mode
+                         stands alone and nothing is invented. */}
+                     {t('nibp_cycle_auto', { minutes: 15 })}
                   </div>
                </div>
 

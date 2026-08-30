@@ -457,7 +457,10 @@ export const getTemplatesByCategory = (category) => {
 // Search aliases for smart search
 export const SEARCH_ALIASES = {
     // Common abbreviations
-    'cbc': ['WBC', 'RBC', 'Hemoglobin', 'Hematocrit', 'Platelet count', 'MCV', 'MCH', 'MCHC'],
+    // Full names, not bare 'WBC'/'RBC': the search is a substring match, and
+    // the bare abbreviations also matched "CSF WBC Count"/"CSF RBC Count",
+    // pulling cerebrospinal-fluid tests into the CBC panel.
+    'cbc': ['White Blood Cell Count', 'Red Blood Cell Count', 'Hemoglobin', 'Hematocrit', 'Platelet Count', 'MCV', 'MCH', 'MCHC'],
     'bmp': ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose'],
     'cmp': ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose', 'Calcium', 'Albumin', 'Bilirubin', 'ALT', 'AST', 'Alkaline phosphatase'],
     'lft': ['ALT', 'AST', 'Alkaline phosphatase', 'Bilirubin', 'Albumin', 'GGT'],
@@ -505,7 +508,7 @@ export const SEARCH_ALIASES = {
     'electrolytes': ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'Magnesium', 'Phosphorus', 'Calcium'],
     'lytes': ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate'],
     'inflammatory': ['CRP', 'ESR', 'Procalcitonin'],
-    'sepsis': ['Lactate', 'Procalcitonin', 'WBC', 'CRP'],
+    'sepsis': ['Lactate', 'Procalcitonin', 'White Blood Cell Count', 'CRP'],
 
     // Abbreviations
     'na': ['Sodium'],

@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.114] — 2026-08-30
+
+### Fixed
+
+- Patient monitor renders only vitals that exist — no NaN traces.
+- Orders drawer dropped its retired labs surface (1142→267 lines).
+- Treatment effects hook is referentially stable across ticks.
+- Lab panel quick-search aliases use full test names (a bare "WBC"
+  matched CSF tests into blood panels).
+
 ## [2.9.113] — 2026-08-30
 
 ### Fixed

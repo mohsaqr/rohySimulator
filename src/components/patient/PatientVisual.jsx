@@ -18,6 +18,11 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
 //     avatar_id?:    string  — GLB filename
 //     avatar_camera?: { pos, lookY, fov }
 //     gender?:       string  — for platform-default fallback resolution
+//     genderSource?: 'declared' | 'guessed' — 'guessed' means it came from a
+//                    name/role heuristic (agents carry no stored gender), so
+//                    it may route an avatar but must never be CAPTIONED: the
+//                    seeded nurse was labelled "male" under her own face
+//                    (2026-08-30 UI review, #35b).
 //     name?:         string
 //     age?:          number  — for the demographic auto-pick fallback
 //   }
@@ -101,12 +106,18 @@ export default function PatientVisual({ caseData, participant }) {
                 layout height. */}
             {p?.name && (
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 max-w-[85%] px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-center pointer-events-none select-none">
+                    {/* Only a DECLARED gender is captioned — a guessed one
+                        drives avatar routing and nothing the learner reads. */}
                     <div className="text-base font-bold text-white leading-tight truncate">{p.name}</div>
-                    {(p.age || p.gender) && (
-                        <div className="text-[11px] text-neutral-300 leading-tight truncate">
-                            {p.age ? t('age_y', { age: p.age }) : ''}{p.age && p.gender ? ' ' : ''}{p.gender || ''}
-                        </div>
-                    )}
+                    {(() => {
+                        const shownGender = p.genderSource === 'guessed' ? '' : (p.gender || '');
+                        if (!p.age && !shownGender) return null;
+                        return (
+                            <div className="text-[11px] text-neutral-300 leading-tight truncate">
+                                {p.age ? t('age_y', { age: p.age }) : ''}{p.age && shownGender ? ' ' : ''}{shownGender}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
         </div>

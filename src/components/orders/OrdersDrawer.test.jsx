@@ -417,61 +417,11 @@ describe.skip('OrdersDrawer — POST /order-radiology (retired — covered by In
     });
 });
 
-describe('OrdersDrawer — view action', () => {
-    it('clicking "View" on a ready order calls onViewResult(order) once', async () => {
-        const order = {
-            id: 'o-ready',
-            investigation_id: 'lab-cbc-wbc',
-            test_name: 'WBC',
-            is_ready: true,
-            viewed_at: null,
-            minutes_remaining: 0,
-            available_at: new Date(Date.now() - 60000).toISOString(),
-        };
-        labOrdersFixture = [order];
-        const onViewResult = vi.fn();
-        renderWithProviders(<OrdersDrawer {...baseProps({ onViewResult })} />);
+// The 'view action' describe that lived here drove the labs result list
+// — the unreachable surface deleted with the labs/radiology tabs
+// (2026-08-30 UI review #20). The View flow now lives in
+// InvestigationsScreen and is locked by its own tests.
 
-        // Wait for the floating "Ordered Tests" panel to render.
-        const viewBtn = await waitFor(() => {
-            const matches = screen.getAllByText(/^View$/);
-            return matches[0];
-        });
-        await act(async () => { fireEvent.click(viewBtn); });
-
-        expect(onViewResult).toHaveBeenCalledTimes(1);
-        const passed = onViewResult.mock.calls[0][0];
-        expect(passed.id).toBe('o-ready');
-        expect(passed.test_name).toBe('WBC');
-        // The PUT /orders/:id/view is fired by the *result modal* (see
-        // ResultsModal.jsx), not the drawer. The drawer's contribution is
-        // the onViewResult callback — locked above.
-    });
-
-    it('clicking "View" twice on the same order calls onViewResult twice (drawer surface, no internal dedup)', async () => {
-        labOrdersFixture = [{
-            id: 'o-ready-2',
-            investigation_id: 'lab-bmp-na',
-            test_name: 'Sodium',
-            is_ready: true,
-            viewed_at: null,
-            minutes_remaining: 0,
-            available_at: new Date(Date.now() - 60000).toISOString(),
-        }];
-        const onViewResult = vi.fn();
-        renderWithProviders(<OrdersDrawer {...baseProps({ onViewResult })} />);
-
-        const firstClick = await waitFor(() => screen.getAllByText(/^View$/)[0]);
-        await act(async () => { fireEvent.click(firstClick); });
-        const secondClick = screen.getAllByText(/^View$/)[0];
-        await act(async () => { fireEvent.click(secondClick); });
-
-        expect(onViewResult).toHaveBeenCalledTimes(2);
-        // The dedup contract for /orders/:id/view lives in ResultsModal +
-        // server route, not here. Drawer fires the callback once per click
-        // — locked.
-    });
-});
 
 describe('OrdersDrawer — bulk-delete confirmation (spec divergence)', () => {
     it('drawer source has no bulk-delete UI (current contract)', async () => {

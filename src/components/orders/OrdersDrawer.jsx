@@ -1,61 +1,44 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-    FlaskConical, X, ChevronUp, ChevronDown,
-    Search, Clock, CheckCircle, Loader2, List,
-    Eye, FileText, Scan, Activity, Syringe
-} from 'lucide-react';
+import React, { useCallback, useState, useEffect } from 'react';
+import { X, ChevronUp, ChevronDown, FileText, Activity, Syringe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { timeMs } from '../../../server/shared/time.js';
 import PatientRecordViewer from '../PatientRecordViewer';
-import { useToast } from '../../contexts/ToastContext';
-import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
 import { TreatmentPanel } from '../treatments';
-import { ApiError, apiFetch, apiPost } from '../../services/apiClient';
-import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
+import { apiFetch } from '../../services/apiClient';
+
+// Treatment-order statuses that mean "this treatment is live on the
+// patient right now". Mirrors the vocabulary the server writes in
+// server/routes/orders-routes.js: an order starts 'ordered', becomes
+// 'in_progress' once a CONTINUOUS treatment is administered (a discrete
+// dose goes straight to 'administered'), and ends 'discontinued'.
+const ACTIVE_TREATMENT_STATUSES = new Set(['ordered', 'in_progress']);
 
 /**
  * Bottom Orders Drawer
- * Provides a unified interface for ordering:
- * - Laboratory Investigations
- * - Radiology Studies
- * - Medications/Drugs
+ *
+ * Surfaces the order-entry tabs that are NOT full rooms: treatments,
+ * clinical records, and (admin only) the raw patient-record debug view.
+ *
+ * Scope note — UI test review 2.9.108 #20: this component used to carry a
+ * complete labs tab and a complete radiology tab, ~596 lines of JSX plus
+ * two 5-second polling loops (`/orders` and `/radiology-orders`). Neither
+ * tab had been reachable since the floating Laboratory / Radiology pills
+ * were retired in favour of the bottom RoomNavigator: `tabs` below is the
+ * ONLY thing that can set `activeTab`, and it offers neither id. The dead
+ * JSX still rendered off-screen and the dead polls still cost every
+ * learner 12 requests per 30 s for data nothing could display. Lab and
+ * radiology ordering, result viewing and turnaround display all live in
+ * InvestigationsScreen now — that is the canonical surface.
+ *
+ * The `onViewResult` prop was part of the deleted labs/radiology result
+ * list; callers may still pass it, this component no longer reads it.
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, isAdmin = false }) {
+export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = false }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
+    const [activeTab, setActiveTab] = useState('treatments'); // treatments, records, memory
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
     const { t } = useTranslation('orders');
-    const toast = useToast();
-    const { ordered } = usePatientRecord();
-
-    // Settings state - persist to localStorage
-    const [labSettings, setLabSettings] = useState(() => {
-        try {
-            const saved = localStorage.getItem('rohy_lab_settings');
-            if (saved) return JSON.parse(saved);
-        } catch {}
-        return {
-            globalTurnaround: 0, // 0 = use per-test defaults
-            showNormalRanges: true,
-            showFlags: true,
-            instantResults: false, // If true, results are immediate
-            autoRefreshInterval: 5 // seconds
-        };
-    });
-
-    // Save settings when changed
-    useEffect(() => {
-        localStorage.setItem('rohy_lab_settings', JSON.stringify(labSettings));
-    }, [labSettings]);
-
-    const updateSetting = (key, value) => {
-        const oldValue = labSettings[key];
-        setLabSettings(prev => ({ ...prev, [key]: value }));
-        // Log setting change
-        EventLogger.settingChanged(key, oldValue, value, COMPONENTS.ORDERS_DRAWER);
-    };
 
     // Log drawer open/close
     const handleDrawerOpen = (tab) => {
@@ -76,286 +59,6 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         EventLogger.tabSwitched(tab, COMPONENTS.ORDERS_DRAWER);
     };
 
-    // Lab state
-    const [availableLabs, setAvailableLabs] = useState([]);
-    const [labGroups, setLabGroups] = useState([]);
-    const [labOrders, setLabOrders] = useState([]);
-    const [selectedLabs, setSelectedLabs] = useState([]);
-    const [labSearchQuery, setLabSearchQuery] = useState('');
-    const [labSelectedGroup, setLabSelectedGroup] = useState('all');
-    const [labViewMode, setLabViewMode] = useState('search');
-    const [expandedGroups, setExpandedGroups] = useState(new Set());
-    const [loadingLabs, setLoadingLabs] = useState(false);
-    // eslint-disable-next-line unused-imports/no-unused-vars -- value not surfaced
-    // to the user yet, but the setter is wired so the existing telemetry/
-    // logging captures every error path; renaming with `_` documents intent.
-    const [_orderError, setOrderError] = useState(null);
-
-    // Radiology state
-    const [availableRadiology, setAvailableRadiology] = useState([]);
-    const [radiologyGroups, setRadiologyGroups] = useState([]);
-    const [radiologyOrders, setRadiologyOrders] = useState([]);
-    const [selectedRadiology, setSelectedRadiology] = useState([]);
-    const [radiologySearchQuery, setRadiologySearchQuery] = useState('');
-    const [radiologySelectedGroup, setRadiologySelectedGroup] = useState('all');
-    const [loadingRadiology, setLoadingRadiology] = useState(false);
-
-    // Fetch available labs
-    useEffect(() => {
-        if (!sessionId) return;
-
-        const fetchLabs = async () => {
-            try {
-                const data = await apiFetch(`/sessions/${sessionId}/available-labs`);
-                const labs = data?.labs || [];
-                setAvailableLabs(labs);
-                const groups = [...new Set(labs.map(lab => lab.test_group))].sort();
-                setLabGroups(groups);
-            } catch (error) {
-                console.error('Failed to fetch labs:', error);
-            }
-        };
-
-        fetchLabs();
-    }, [sessionId]);
-
-    // Fetch lab orders. The lastRefresh timestamp state was retired
-    // alongside the floating mini-window on 2026-05-14 — nothing reads
-    // it now. Re-introduce as state only if a surface needs to show it.
-    const fetchLabOrders = async () => {
-        if (!sessionId) {
-            console.log('[Orders] No sessionId, skipping order fetch');
-            return;
-        }
-
-        try {
-            console.log(`[Orders] Fetching orders for session ${sessionId}...`);
-            const data = await apiFetch(`/sessions/${sessionId}/orders`);
-            const orders = data?.orders || [];
-            const now = new Date();
-
-            console.log(`[Orders] Session ${sessionId} @ ${now.toISOString()}: ${orders.length} total orders`);
-            orders.forEach(o => {
-                const status = o.viewed_at ? 'VIEWED' : o.is_ready ? 'READY' : 'PENDING';
-                console.log(`  - ${o.test_name}: ${status}, is_ready=${o.is_ready}, mins_remaining=${o.minutes_remaining}, available_at=${o.available_at}`);
-            });
-            setLabOrders(orders);
-            setOrderError(null);
-        } catch (error) {
-            if (error instanceof ApiError) {
-                console.error('[Orders] Fetch failed:', error.status, error.message);
-                setOrderError(`Failed to fetch orders: ${error.status}`);
-            } else {
-                console.error('[Orders] Fetch error:', error);
-                setOrderError(error.message);
-            }
-        }
-    };
-
-    useEffect(() => {
-        fetchLabOrders();
-        const intervalMs = (labSettings.autoRefreshInterval || 5) * 1000;
-        const interval = setInterval(fetchLabOrders, intervalMs);
-        return () => clearInterval(interval);
-    }, [sessionId, labSettings.autoRefreshInterval]);
-
-    // Fetch available radiology studies from API
-    useEffect(() => {
-        if (!sessionId) return;
-
-        const fetchRadiology = async () => {
-            try {
-                const data = await apiFetch(`/sessions/${sessionId}/available-radiology`);
-                const studies = (data?.studies || []).map(study => ({
-                    id: study.id,
-                    test_name: study.name,
-                    test_group: study.modality,
-                    turnaround_minutes: study.turnaround_minutes,
-                    body_region: study.body_region,
-                    common_indications: study.common_indications
-                }));
-                setAvailableRadiology(studies);
-                setRadiologyGroups(data?.groups || []);
-            } catch (error) {
-                console.error('Failed to fetch radiology:', error);
-            }
-        };
-
-        fetchRadiology();
-    }, [sessionId]);
-
-    // Fetch radiology orders
-    const fetchRadiologyOrders = async () => {
-        if (!sessionId) return;
-        try {
-            const data = await apiFetch(`/sessions/${sessionId}/radiology-orders`);
-            setRadiologyOrders(data?.orders || []);
-        } catch (error) {
-            console.error('Failed to fetch radiology orders:', error);
-        }
-    };
-
-    useEffect(() => {
-        fetchRadiologyOrders();
-        const interval = setInterval(fetchRadiologyOrders, 5000);
-        return () => clearInterval(interval);
-    }, [sessionId]);
-
-    // Order radiology
-    const handleOrderRadiology = async () => {
-        if (selectedRadiology.length === 0) return;
-
-        setLoadingRadiology(true);
-        try {
-            await apiPost(`/sessions/${sessionId}/order-radiology`, {
-                radiology_ids: selectedRadiology,
-                instant: labSettings.instantResults,
-                // Stamp the active room so the server-side ORDERED_IMAGING
-                // learning_events row records where the study was ordered.
-                room: EventLogger.getStatus?.()?.room || null,
-            });
-            toast.success(t('ordered_radiology', { count: selectedRadiology.length }));
-            selectedRadiology.forEach(radId => {
-                const study = availableRadiology.find(r => r.id === radId);
-                ordered('radiology', study?.test_name || radId, { urgency: labSettings.instantResults ? 'stat' : 'routine' });
-            });
-            setSelectedRadiology([]);
-            await fetchRadiologyOrders();
-        } catch (error) {
-            toast.error(t('failed_order_radiology_error', { error: error.message || t('failed_order_radiology') }));
-        } finally {
-            setLoadingRadiology(false);
-        }
-    };
-
-    // Filter radiology
-    const filteredRadiology = availableRadiology.filter(study => {
-        const matchesSearch = !radiologySearchQuery ||
-            study.test_name.toLowerCase().includes(radiologySearchQuery.toLowerCase()) ||
-            study.test_group.toLowerCase().includes(radiologySearchQuery.toLowerCase());
-        const matchesGroup = radiologySelectedGroup === 'all' || study.test_group === radiologySelectedGroup;
-        return matchesSearch && matchesGroup;
-    });
-
-    // Order labs
-    const handleOrderLabs = async () => {
-        if (selectedLabs.length === 0) return;
-
-        setLoadingLabs(true);
-        setOrderError(null);
-        try {
-            // Build request body with optional turnaround override
-            const body = {
-                lab_ids: selectedLabs,
-                turnaround_override: labSettings.instantResults ? 0 :
-                    (labSettings.globalTurnaround > 0 ? labSettings.globalTurnaround : null),
-                // Attach the active room so the server-side learning_events
-                // INSERT stamps where this order was placed (typically 'lab'
-                // when ordering from InvestigationsScreen, 'chat' when
-                // ordering from the floating drawer in the patient room).
-                room: EventLogger.getStatus?.()?.room || null,
-            };
-
-            console.log('[Orders] Submitting order:', {
-                sessionId,
-                lab_ids: selectedLabs,
-                turnaround_override: body.turnaround_override,
-                settings: {
-                    instantResults: labSettings.instantResults,
-                    globalTurnaround: labSettings.globalTurnaround
-                }
-            });
-            await apiPost(`/sessions/${sessionId}/order-labs`, body);
-            toast.success(t('ordered_labs', { count: selectedLabs.length }));
-
-            selectedLabs.forEach(labId => {
-                const lab = availableLabs.find(l => l.id === labId);
-                EventLogger.labOrdered(labId, lab?.test_name || labId, COMPONENTS.ORDERS_DRAWER);
-                ordered('lab', lab?.test_name || labId, {
-                    urgency: labSettings.instantResults ? 'stat' : 'routine'
-                });
-            });
-
-            setSelectedLabs([]);
-            await fetchLabOrders();
-        } catch (error) {
-            const msg = error.message || t('failed_order_labs');
-            toast.error(t('failed_order_labs_error', { error: msg }));
-            setOrderError(msg);
-        } finally {
-            setLoadingLabs(false);
-        }
-    };
-
-    // Log search queries (debounced)
-    const searchTimeoutRef = useRef(null);
-    const handleSearchChange = (value) => {
-        setLabSearchQuery(value);
-        // Debounce search logging
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = setTimeout(() => {
-            if (value.trim()) {
-                const resultsCount = availableLabs.filter(lab =>
-                    lab.test_name.toLowerCase().includes(value.toLowerCase()) ||
-                    lab.test_group.toLowerCase().includes(value.toLowerCase())
-                ).length;
-                EventLogger.labSearched(value, resultsCount, COMPONENTS.ORDERS_DRAWER);
-            }
-        }, 500);
-    };
-
-    // Log filter changes
-    const handleFilterChange = (group) => {
-        setLabSelectedGroup(group);
-        EventLogger.labFiltered('group', group, COMPONENTS.ORDERS_DRAWER);
-    };
-
-    // Filter labs
-    const filteredLabs = availableLabs.filter(lab => {
-        const matchesSearch = !labSearchQuery ||
-            lab.test_name.toLowerCase().includes(labSearchQuery.toLowerCase()) ||
-            lab.test_group.toLowerCase().includes(labSearchQuery.toLowerCase());
-        const matchesGroup = labSelectedGroup === 'all' || lab.test_group === labSelectedGroup;
-        return matchesSearch && matchesGroup;
-    });
-
-    // Group labs
-    const groupedLabs = filteredLabs.reduce((acc, lab) => {
-        if (!acc[lab.test_group]) acc[lab.test_group] = [];
-        acc[lab.test_group].push(lab);
-        return acc;
-    }, {});
-
-    // Time remaining helper
-    const getTimeRemaining = (order) => {
-        // Use minutes_remaining from backend if available (more accurate)
-        if (order.minutes_remaining !== undefined && order.minutes_remaining > 0) {
-            const mins = Math.floor(order.minutes_remaining);
-            const secs = Math.floor((order.minutes_remaining - mins) * 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
-        // Fallback to client-side calculation
-        // `available_at + 'Z'` was correct only while every row was legacy.
-        // Migration 0050 normalised the column to ISO-Z, which made the same
-        // line produce '...ZZ' and an Invalid Date for every pre-existing
-        // order. timeMs reads either shape.
-        const available = timeMs(order.available_at);
-        if (available == null) return '';
-        const diff = available - Date.now();
-        if (diff <= 0) return t('ready');
-        const minutes = Math.floor(diff / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    // labOrders kept in state so the drawer's own labs tab can render
-    // pending/ready/viewed splits internally. The on-patient-screen mini
-    // window that used to fan these out was retired 2026-05-14 — the
-    // ambient "results ready" signal is now a small badge on the Lab /
-    // Radiology buttons in the bottom RoomNavigator.
-    const pendingOrders = labOrders.filter(o => !o.is_ready);
-    const readyOrders = labOrders.filter(o => o.is_ready && !o.viewed_at);
-    const viewedOrders = labOrders.filter(o => o.is_ready && o.viewed_at);
     const [treatmentOrdersCount, setTreatmentOrdersCount] = useState(0);
 
     // Hooks must run unconditionally on every render to keep React's
@@ -366,21 +69,34 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
     // the parent hadn't resolved the route params yet. The guard now
     // lives below these declarations.
 
-    // Fetch treatment orders count
-    useEffect(() => {
+    // Fetch the ACTIVE treatment-order count behind the Treatments badge.
+    //
+    // UI test review 2.9.108 #21: this used to request
+    // `?status=ordered`, so the moment a learner administered a continuous
+    // treatment the server moved that row to 'in_progress' and the badge
+    // dropped to 0 — the badge read "nothing on board" while an infusion
+    // was running. The endpoint only filters on a single exact status, so
+    // we fetch the session's orders unfiltered and count the active ones
+    // here against the shared status vocabulary.
+    const refreshTreatmentCount = useCallback(async () => {
         if (!sessionId) return;
-        const fetchTreatmentCount = async () => {
-            try {
-                const data = await apiFetch(`/sessions/${sessionId}/treatment-orders?status=ordered`);
-                setTreatmentOrdersCount(data?.orders?.length || 0);
-            } catch (error) {
-                console.error('Failed to fetch treatment orders count:', error);
-            }
-        };
-        fetchTreatmentCount();
-        const interval = setInterval(fetchTreatmentCount, 10000);
-        return () => clearInterval(interval);
+        try {
+            const data = await apiFetch(`/sessions/${sessionId}/treatment-orders`);
+            const orders = Array.isArray(data?.orders) ? data.orders : [];
+            setTreatmentOrdersCount(
+                orders.filter(order => ACTIVE_TREATMENT_STATUSES.has(order?.status)).length
+            );
+        } catch (error) {
+            console.error('Failed to fetch treatment orders count:', error);
+        }
     }, [sessionId]);
+
+    useEffect(() => {
+        if (!sessionId) return undefined;
+        refreshTreatmentCount();
+        const interval = setInterval(refreshTreatmentCount, 10000);
+        return () => clearInterval(interval);
+    }, [sessionId, refreshTreatmentCount]);
 
     // Render nothing until the parent has wired the route params. Lives
     // *after* every hook so hook-call ordering stays stable across renders.
@@ -492,9 +208,7 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
                                     onClick={() => handleTabSwitch(tab.id)}
                                     className={`flex-1 px-4 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors ${
                                         activeTab === tab.id
-                                            ? tab.id === 'labs' ? 'bg-purple-600 text-white' :
-                                              tab.id === 'radiology' ? 'bg-cyan-600 text-white' :
-                                              tab.id === 'records' ? 'bg-amber-600 text-white' :
+                                            ? tab.id === 'records' ? 'bg-amber-600 text-white' :
                                               tab.id === 'memory' ? 'bg-rose-600 text-white' :
                                               'bg-neutral-700 text-white'
                                             : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-white'
@@ -514,609 +228,21 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
 
                     {/* Content Area */}
                     <div className="flex-1 overflow-hidden">
-                        {/* Labs Tab */}
-                        {activeTab === 'labs' && (
-                            <div className="h-full flex">
-                                {/* Left: Available Tests */}
-                                <div className="flex-1 flex flex-col border-r border-neutral-800">
-                                    {/* Search & Filter */}
-                                    <div className="p-4 space-y-3 border-b border-neutral-800">
-                                        <div className="flex gap-2 items-center">
-                                            <button
-                                                onClick={() => setLabViewMode('search')}
-                                                className={`px-3 py-1.5 rounded text-xs font-bold ${
-                                                    labViewMode === 'search' ? 'bg-purple-600 text-white' : 'bg-neutral-800 text-neutral-400'
-                                                }`}
-                                            >
-                                                <Search className="w-3 h-3 inline mr-1" />
-                                                {t('search')}
-                                            </button>
-                                            <button
-                                                onClick={() => setLabViewMode('browse')}
-                                                className={`px-3 py-1.5 rounded text-xs font-bold ${
-                                                    labViewMode === 'browse' ? 'bg-purple-600 text-white' : 'bg-neutral-800 text-neutral-400'
-                                                }`}
-                                            >
-                                                <List className="w-3 h-3 inline mr-1" />
-                                                {t('browse')}
-                                            </button>
-                                            <div className="ml-auto flex items-center gap-2">
-                                                {/* Show effective turnaround mode */}
-                                                {caseData?.config?.investigations?.instantResults ? (
-                                                    <span className="text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded" title={t('case_instant_title')}>
-                                                        {t('case_instant')}
-                                                    </span>
-                                                ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
-                                                    <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded" title={t('case_turnaround_title')}>
-                                                        {t('case_turnaround', { minutes: caseData.config.investigations.defaultTurnaround })}
-                                                    </span>
-                                                ) : null}
-                                                <label className="flex items-center gap-1.5 cursor-pointer" title={t('instant_title')}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={labSettings.instantResults}
-                                                        onChange={(e) => updateSetting('instantResults', e.target.checked)}
-                                                        className="w-3 h-3"
-                                                    />
-                                                    <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
-                                                        {t('instant')}
-                                                    </span>
-                                                </label>
-                                                <button
-                                                    onClick={() => {
-                                                        localStorage.removeItem('rohy_lab_settings');
-                                                        setLabSettings({
-                                                            globalTurnaround: 0,
-                                                            showNormalRanges: true,
-                                                            showFlags: true,
-                                                            instantResults: false,
-                                                            autoRefreshInterval: 5
-                                                        });
-                                                        toast.info(t('settings_reset'));
-                                                    }}
-                                                    className="text-[10px] text-neutral-500 hover:text-neutral-300 underline"
-                                                    title={t('reset_title')}
-                                                >
-                                                    {t('reset')}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Quick Panel Selection */}
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {[
-                                                { id: 'cbc', label: 'CBC', tests: ['WBC', 'RBC', 'Hemoglobin', 'Hematocrit', 'Platelet', 'MCV', 'MCH', 'MCHC'] },
-                                                { id: 'bmp', label: 'BMP', tests: ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose'] },
-                                                { id: 'cmp', label: 'CMP', tests: ['Sodium', 'Potassium', 'Chloride', 'Bicarbonate', 'BUN', 'Creatinine', 'Glucose', 'Calcium', 'Albumin', 'Bilirubin', 'ALT', 'AST', 'Alkaline'] },
-                                                { id: 'lft', label: 'LFTs', tests: ['ALT', 'AST', 'Alkaline phosphatase', 'Bilirubin', 'Albumin', 'GGT'] },
-                                                { id: 'coags', label: 'Coags', tests: ['PT', 'PTT', 'INR', 'Fibrinogen', 'D-dimer'] },
-                                                { id: 'cardiac', label: 'Cardiac', tests: ['Troponin', 'BNP', 'Myoglobin', 'Creatine Kinase'] },
-                                                { id: 'lipid', label: 'Lipids', tests: ['Cholesterol', 'Triglyceride', 'HDL', 'LDL'] },
-                                                { id: 'thyroid', label: 'TFTs', tests: ['TSH', 'T4', 'T3', 'Free T4', 'Free T3'] },
-                                            ].map(panel => {
-                                                // Find matching labs for this panel
-                                                const matchingLabs = availableLabs.filter(lab =>
-                                                    panel.tests.some(t => lab.test_name.toLowerCase().includes(t.toLowerCase()))
-                                                );
-                                                const unorderedMatches = matchingLabs.filter(lab =>
-                                                    !labOrders.some(o => o.investigation_id === lab.id)
-                                                );
-                                                const allSelected = unorderedMatches.length > 0 &&
-                                                    unorderedMatches.every(lab => selectedLabs.includes(lab.id));
-
-                                                return (
-                                                    <button
-                                                        key={panel.id}
-                                                        onClick={() => {
-                                                            if (allSelected) {
-                                                                // Deselect all from this panel
-                                                                setSelectedLabs(prev =>
-                                                                    prev.filter(id => !unorderedMatches.some(lab => lab.id === id))
-                                                                );
-                                                            } else {
-                                                                // Select all unordered from this panel
-                                                                setSelectedLabs(prev => {
-                                                                    const newIds = unorderedMatches
-                                                                        .map(lab => lab.id)
-                                                                        .filter(id => !prev.includes(id));
-                                                                    return [...prev, ...newIds];
-                                                                });
-                                                            }
-                                                        }}
-                                                        disabled={unorderedMatches.length === 0}
-                                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
-                                                            allSelected
-                                                                ? 'bg-green-600 text-white'
-                                                                : unorderedMatches.length === 0
-                                                                    ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
-                                                                    : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50 border border-blue-700/50'
-                                                        }`}
-                                                        title={t('panel_title', { label: panel.label, tests: matchingLabs.length, available: unorderedMatches.length })}
-                                                    >
-                                                        {panel.label}
-                                                        {unorderedMatches.length > 0 && (
-                                                            <span className="ml-1 text-[10px] opacity-70">({unorderedMatches.length})</span>
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 relative">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                                                <input
-                                                    type="text"
-                                                    value={labSearchQuery}
-                                                    onChange={(e) => handleSearchChange(e.target.value)}
-                                                    placeholder={t('search_tests_placeholder')}
-                                                    className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
-                                                />
-                                            </div>
-                                            <select
-                                                value={labSelectedGroup}
-                                                onChange={(e) => handleFilterChange(e.target.value)}
-                                                className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:border-purple-500 focus:outline-none"
-                                            >
-                                                <option value="all">{t('all_groups')}</option>
-                                                {labGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* Tests List */}
-                                    <div className="flex-1 overflow-y-auto p-4">
-                                        {labViewMode === 'search' ? (
-                                            <div className="space-y-2">
-                                                {filteredLabs.map(lab => {
-                                                    const ordered = labOrders.some(o => o.investigation_id === lab.id);
-                                                    return (
-                                                        <label
-                                                            key={lab.id}
-                                                            className={`flex items-center gap-3 p-3 rounded border transition-colors ${
-                                                                ordered ? 'opacity-50 cursor-not-allowed border-neutral-700' :
-                                                                selectedLabs.includes(lab.id) ? 'bg-purple-900/30 border-purple-600' :
-                                                                'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800 cursor-pointer'
-                                                            }`}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedLabs.includes(lab.id)}
-                                                                onChange={() => !ordered && setSelectedLabs(prev =>
-                                                                    prev.includes(lab.id) ? prev.filter(id => id !== lab.id) : [...prev, lab.id]
-                                                                )}
-                                                                disabled={ordered}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="text-sm font-bold text-white truncate">{lab.test_name}</div>
-                                                                {/* effective_turnaround_minutes is the server-resolved wait (case
-                                                                    default / instant applied) — the same number the worklist counts
-                                                                    down, so the two surfaces agree (bug report 2.9.15 #4). */}
-                                                                <div className="text-xs text-neutral-400">{lab.test_group} - {lab.effective_turnaround_minutes ?? lab.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES}min</div>
-                                                            </div>
-                                                            {ordered && <span className="text-xs text-blue-400">{t('ordered_badge')}</span>}
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {Object.entries(groupedLabs).map(([group, labs]) => (
-                                                    <div key={group} className="border border-neutral-700 rounded overflow-hidden">
-                                                        <button
-                                                            onClick={() => setExpandedGroups(prev => {
-                                                                const next = new Set(prev);
-                                                                next.has(group) ? next.delete(group) : next.add(group);
-                                                                return next;
-                                                            })}
-                                                            className="w-full px-4 py-2 bg-neutral-800 flex items-center justify-between"
-                                                        >
-                                                            <span className="font-bold text-sm text-white">{group} ({labs.length})</span>
-                                                            {expandedGroups.has(group) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                                        </button>
-                                                        {expandedGroups.has(group) && (
-                                                            <div className="p-2 space-y-1">
-                                                                {labs.map(lab => {
-                                                                    const ordered = labOrders.some(o => o.investigation_id === lab.id);
-                                                                    return (
-                                                                        <label
-                                                                            key={lab.id}
-                                                                            className={`flex items-center gap-2 p-2 rounded ${
-                                                                                ordered ? 'opacity-50' :
-                                                                                selectedLabs.includes(lab.id) ? 'bg-purple-900/30' : 'hover:bg-neutral-800'
-                                                                            } ${ordered ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                                                        >
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={selectedLabs.includes(lab.id)}
-                                                                                onChange={() => !ordered && setSelectedLabs(prev =>
-                                                                                    prev.includes(lab.id) ? prev.filter(id => id !== lab.id) : [...prev, lab.id]
-                                                                                )}
-                                                                                disabled={ordered}
-                                                                                className="w-4 h-4"
-                                                                            />
-                                                                            <span className="text-sm text-white flex-1">{lab.test_name}</span>
-                                                                            <span className="text-xs text-neutral-500">{lab.effective_turnaround_minutes ?? lab.turnaround_minutes ?? DEFAULT_TURNAROUND_MINUTES}m</span>
-                                                                        </label>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Order Button */}
-                                    {selectedLabs.length > 0 && (
-                                        <div className="p-4 border-t border-neutral-800 space-y-2">
-                                            {/* Turnaround info */}
-                                            <div className="text-xs text-center">
-                                                {labSettings.instantResults || caseData?.config?.investigations?.instantResults ? (
-                                                    <span className="text-green-400">{t('results_immediate')}</span>
-                                                ) : labSettings.globalTurnaround > 0 ? (
-                                                    <span className="text-blue-400">{t('results_in_minutes', { minutes: labSettings.globalTurnaround })}</span>
-                                                ) : caseData?.config?.investigations?.defaultTurnaround > 0 ? (
-                                                    <span className="text-blue-400">{t('results_in_minutes_case', { minutes: caseData.config.investigations.defaultTurnaround })}</span>
-                                                ) : (
-                                                    <span className="text-neutral-400">{t('results_per_test')}</span>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={handleOrderLabs}
-                                                disabled={loadingLabs}
-                                                className="w-full px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-neutral-600 text-white rounded-lg font-bold flex items-center justify-center gap-2"
-                                            >
-                                                {loadingLabs ? (
-                                                    <><Loader2 className="w-5 h-5 animate-spin" /> {t('ordering')}</>
-                                                ) : (
-                                                    <>{t('order_n_tests', { count: selectedLabs.length })}</>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Right: Order Status - All Ordered Tests */}
-                                <div className="w-80 flex flex-col bg-neutral-900/50">
-                                    <div className="p-4 border-b border-neutral-700 bg-neutral-800">
-                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                            <FlaskConical className="w-4 h-4 text-purple-400" />
-                                            {t('order_status')}
-                                            {labOrders.length > 0 && (
-                                                <span className="ml-auto text-xs text-neutral-400">
-                                                    {t('n_tests', { count: labOrders.length })}
-                                                </span>
-                                            )}
-                                        </h3>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto">
-                                        {labOrders.length === 0 ? (
-                                            <div className="text-center py-12 text-neutral-500">
-                                                <FlaskConical className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                                                <p className="text-sm">{t('no_tests_ordered')}</p>
-                                                <p className="text-xs mt-1 text-neutral-600">{t('select_tests_hint')}</p>
-                                            </div>
-                                        ) : (
-                                            <div className="divide-y divide-neutral-800">
-                                                {/* Sort: Ready first (newest), then Pending, then Viewed */}
-                                                {[...readyOrders, ...pendingOrders, ...viewedOrders].map(order => {
-                                                    // Use backend-calculated is_ready to avoid timezone issues
-                                                    const isViewed = !!order.viewed_at;
-                                                    const isReady = order.is_ready && !isViewed;
-                                                    const isPending = !order.is_ready && !isViewed;
-
-                                                    return (
-                                                        <div
-                                                            key={order.id}
-                                                            className={`p-3 transition-all ${
-                                                                isReady
-                                                                    ? 'bg-green-900/30 border-l-4 border-green-500 animate-pulse'
-                                                                    : isPending
-                                                                    ? 'bg-neutral-800/50 border-l-4 border-yellow-500/50'
-                                                                    : 'bg-neutral-900/30 border-l-4 border-neutral-700'
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className={`text-sm font-medium truncate ${
-                                                                        isReady ? 'text-green-100' :
-                                                                        isPending ? 'text-neutral-300' :
-                                                                        'text-neutral-500'
-                                                                    }`}>
-                                                                        {order.test_name}
-                                                                    </div>
-                                                                    <div className={`text-xs mt-1 flex items-center gap-1 ${
-                                                                        isReady ? 'text-green-400 font-bold' :
-                                                                        isPending ? 'text-yellow-500' :
-                                                                        'text-neutral-600'
-                                                                    }`}>
-                                                                        {isReady && (
-                                                                            <>
-                                                                                <CheckCircle className="w-3 h-3" />
-                                                                                {t('ready_click_view')}
-                                                                            </>
-                                                                        )}
-                                                                        {isPending && (
-                                                                            <>
-                                                                                <Clock className="w-3 h-3 animate-pulse" />
-                                                                                {getTimeRemaining(order)}
-                                                                            </>
-                                                                        )}
-                                                                        {isViewed && (
-                                                                            <>
-                                                                                <Eye className="w-3 h-3" />
-                                                                                {t('viewed')}
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                {(isReady || isViewed) && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            onViewResult(order);
-                                                                        }}
-                                                                        className={`px-2 py-1 text-xs rounded transition-colors ${
-                                                                            isReady
-                                                                                ? 'bg-green-600 hover:bg-green-500 text-white font-bold'
-                                                                                : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
-                                                                        }`}
-                                                                    >
-                                                                        {isReady ? t('view') : t('review')}
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                    {/* Summary Footer */}
-                                    {labOrders.length > 0 && (
-                                        <div className="p-3 border-t border-neutral-700 bg-neutral-800 text-xs flex gap-4">
-                                            {pendingOrders.length > 0 && (
-                                                <span className="text-yellow-400">
-                                                    <Clock className="w-3 h-3 inline mr-1" />
-                                                    {t('n_pending', { count: pendingOrders.length })}
-                                                </span>
-                                            )}
-                                            {readyOrders.length > 0 && (
-                                                <span className="text-green-400 font-bold">
-                                                    <CheckCircle className="w-3 h-3 inline mr-1" />
-                                                    {t('n_ready', { count: readyOrders.length })}
-                                                </span>
-                                            )}
-                                            {viewedOrders.length > 0 && (
-                                                <span className="text-neutral-500">
-                                                    <Eye className="w-3 h-3 inline mr-1" />
-                                                    {t('n_viewed', { count: viewedOrders.length })}
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Radiology Tab */}
-                        {activeTab === 'radiology' && (
-                            <div className="h-full flex">
-                                {/* Left: Available Studies */}
-                                <div className="flex-1 flex flex-col border-r border-neutral-800">
-                                    {/* Search & Filter */}
-                                    <div className="p-4 space-y-3 border-b border-neutral-800">
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 relative">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                                                <input
-                                                    type="text"
-                                                    value={radiologySearchQuery}
-                                                    onChange={(e) => setRadiologySearchQuery(e.target.value)}
-                                                    placeholder={t('search_studies_placeholder')}
-                                                    className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-cyan-500 focus:outline-none"
-                                                />
-                                            </div>
-                                            <select
-                                                value={radiologySelectedGroup}
-                                                onChange={(e) => setRadiologySelectedGroup(e.target.value)}
-                                                className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:border-cyan-500 focus:outline-none"
-                                            >
-                                                <option value="all">{t('all_modalities')}</option>
-                                                {radiologyGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={labSettings.instantResults}
-                                                    onChange={(e) => updateSetting('instantResults', e.target.checked)}
-                                                    className="w-3 h-3"
-                                                />
-                                                <span className={`text-xs ${labSettings.instantResults ? 'text-green-400 font-bold' : 'text-neutral-400'}`}>
-                                                    {t('instant_results')}
-                                                </span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {/* Studies List */}
-                                    <div className="flex-1 overflow-y-auto p-4">
-                                        {filteredRadiology.length === 0 ? (
-                                            <div className="text-center py-12">
-                                                <Scan className="w-12 h-12 mx-auto mb-2 text-neutral-600" />
-                                                <p className="text-sm text-neutral-400">{t('no_studies_available')}</p>
-                                                <p className="text-xs text-neutral-500 mt-1">{t('configure_radiology_hint')}</p>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {filteredRadiology.map(study => {
-                                                    const ordered = radiologyOrders.some(o => o.study_id === study.id);
-                                                    return (
-                                                        <label
-                                                            key={study.id}
-                                                            className={`flex items-center gap-3 p-3 rounded border transition-colors ${
-                                                                ordered ? 'opacity-50 cursor-not-allowed border-neutral-700' :
-                                                                selectedRadiology.includes(study.id) ? 'bg-cyan-900/30 border-cyan-600' :
-                                                                'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800 cursor-pointer'
-                                                            }`}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedRadiology.includes(study.id)}
-                                                                onChange={() => !ordered && setSelectedRadiology(prev =>
-                                                                    prev.includes(study.id) ? prev.filter(id => id !== study.id) : [...prev, study.id]
-                                                                )}
-                                                                disabled={ordered}
-                                                                className="w-4 h-4"
-                                                            />
-                                                            <Scan className="w-5 h-5 text-cyan-400" />
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="text-sm font-bold text-white truncate">{study.test_name}</div>
-                                                                <div className="text-xs text-neutral-400">{study.test_group} - {study.turnaround_minutes}min</div>
-                                                            </div>
-                                                            {ordered && <span className="text-xs text-cyan-400">{t('ordered_badge')}</span>}
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Order Button */}
-                                    {selectedRadiology.length > 0 && (
-                                        <div className="p-4 border-t border-neutral-800">
-                                            <button
-                                                onClick={handleOrderRadiology}
-                                                disabled={loadingRadiology}
-                                                className="w-full px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-neutral-600 text-white rounded-lg font-bold flex items-center justify-center gap-2"
-                                            >
-                                                {loadingRadiology ? (
-                                                    <><Loader2 className="w-5 h-5 animate-spin" /> {t('ordering')}</>
-                                                ) : (
-                                                    <>{t('order_n_studies', { count: selectedRadiology.length })}</>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Right: Order Status */}
-                                <div className="w-80 flex flex-col bg-neutral-900/50">
-                                    <div className="p-4 border-b border-neutral-700 bg-neutral-800">
-                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                            <Scan className="w-4 h-4 text-cyan-400" />
-                                            {t('order_status')}
-                                            {radiologyOrders.length > 0 && (
-                                                <span className="ml-auto text-xs text-neutral-400">
-                                                    {t('n_studies', { count: radiologyOrders.length })}
-                                                </span>
-                                            )}
-                                        </h3>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto">
-                                        {radiologyOrders.length === 0 ? (
-                                            <div className="text-center py-12 text-neutral-500">
-                                                <Scan className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                                                <p className="text-sm">{t('no_studies_ordered')}</p>
-                                            </div>
-                                        ) : (
-                                            <div className="divide-y divide-neutral-800">
-                                                {radiologyOrders.map(order => {
-                                                    const isViewed = !!order.viewed_at;
-                                                    const isReady = order.is_ready;
-                                                    // Parse result_data for findings
-                                                    let resultData = {};
-                                                    try {
-                                                        resultData = typeof order.result_data === 'string'
-                                                            ? JSON.parse(order.result_data)
-                                                            : (order.result_data || {});
-                                                    } catch {}
-                                                    const hasFindings = resultData.findings || resultData.interpretation;
-                                                    return (
-                                                        <div
-                                                            key={order.id}
-                                                            className={`p-3 ${
-                                                                isReady && !isViewed ? 'bg-cyan-900/30 border-l-4 border-cyan-500' :
-                                                                isViewed ? 'bg-neutral-800/30 border-l-4 border-green-500/50' :
-                                                                'bg-neutral-800/50 border-l-4 border-yellow-500/50'
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="text-sm font-medium text-white">{order.test_name}</div>
-                                                                    <div className="text-xs text-neutral-400">{order.modality}</div>
-                                                                    {!isReady && (
-                                                                        <div className="text-xs text-yellow-500 mt-1">
-                                                                            <Clock className="w-3 h-3 inline mr-1" />
-                                                                            {t('min_remaining', { minutes: Math.ceil(order.minutes_remaining) })}
-                                                                        </div>
-                                                                    )}
-                                                                    {isReady && !isViewed && (
-                                                                        <div className="text-xs text-cyan-400 mt-1">{t('ready_click_view_radiology')}</div>
-                                                                    )}
-                                                                    {isViewed && (
-                                                                        <div className="text-xs text-green-400 mt-1">
-                                                                            <CheckCircle className="w-3 h-3 inline mr-1" />
-                                                                            {t('viewed')}
-                                                                        </div>
-                                                                    )}
-                                                                    {/* Show findings preview when viewed */}
-                                                                    {isViewed && hasFindings && (
-                                                                        <div className="mt-2 p-2 bg-neutral-900/50 rounded text-xs">
-                                                                            {resultData.interpretation && (
-                                                                                <div className="text-white font-medium mb-1">
-                                                                                    {resultData.interpretation.length > 100
-                                                                                        ? resultData.interpretation.substring(0, 100) + '...'
-                                                                                        : resultData.interpretation}
-                                                                                </div>
-                                                                            )}
-                                                                            {resultData.findings && !resultData.interpretation && (
-                                                                                <div className="text-neutral-300">
-                                                                                    {resultData.findings.length > 100
-                                                                                        ? resultData.findings.substring(0, 100) + '...'
-                                                                                        : resultData.findings}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                {isReady && (
-                                                                    <button
-                                                                        onClick={() => onViewResult({
-                                                                            ...order,
-                                                                            result_data: resultData
-                                                                        })}
-                                                                        className={`px-3 py-1.5 text-xs rounded font-bold shrink-0 ${
-                                                                            isViewed
-                                                                                ? 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
-                                                                                : 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                                                                        }`}
-                                                                    >
-                                                                        {isViewed ? t('review') : t('view')}
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Treatments Tab */}
                         {activeTab === 'treatments' && (
                             <div className="h-full">
+                                {/* UI test review 2.9.108 #21: this used to
+                                    be `setTreatmentOrdersCount(c => c)` — a
+                                    functional update that returns the same
+                                    value, which React bails out of, so the
+                                    "immediate refresh" after administering
+                                    or discontinuing a treatment refreshed
+                                    nothing and the badge sat stale for up
+                                    to 10 s. Refetch for real. */}
                                 <TreatmentPanel
                                     sessionId={sessionId}
                                     caseId={caseId}
-                                    onEffectsUpdate={() => setTreatmentOrdersCount(c => c)} // Trigger re-fetch
+                                    onEffectsUpdate={refreshTreatmentCount}
                                 />
                             </div>
                         )}
