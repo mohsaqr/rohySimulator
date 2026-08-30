@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.132] — 2026-08-30
+
+### Fixed
+
+- Release artifacts and CI checkouts pass the vendored-package stamp
+  gate again (a Finder .DS_Store had been hashed into the ecg stamp);
+  the vendor tool now ignores OS junk. Local-only knowledge-base tests
+  skip on CI instead of failing on missing sources.
+
 ## [2.9.131] — 2026-08-30
 
 ### Fixed

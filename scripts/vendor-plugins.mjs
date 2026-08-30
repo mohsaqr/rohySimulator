@@ -124,6 +124,12 @@ export function upstreamOf(entry) {
 function walk(dir, base = dir) {
     if (!existsSync(dir)) return [];
     return readdirSync(dir, { withFileTypes: true })
+        // OS junk is neither content nor provenance. A .DS_Store Finder drops
+        // into an upstream folder would otherwise be copied AND hashed into
+        // the stamp — while .gitignore keeps it out of the commit, so every
+        // checkout but the author's fails the stamp (seen on CI: "30 files
+        // here, 31 stamped").
+        .filter((e) => e.name !== '.DS_Store' && e.name !== 'Thumbs.db')
         .flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name), base) : [relative(base, join(dir, e.name))]))
         .sort();
 }
