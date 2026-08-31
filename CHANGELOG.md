@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.145] — 2026-08-31
+
+### Fixed
+
+- The room navigator wrapped onto three lines. The plugin rooms wrote
+  sentences where the core rooms use one word — "Interpret a calibrated
+  12-lead tracing" beside "chat" and "physical exam" — and because the
+  buttons share a row, one wrapped label makes the whole bar taller.
+  Shortened to the register the core rooms already use, in all six
+  locales: `interpretation`, `workstation`, `slides`, and `Radiology` for
+  a title that ran to two lines.
+- The radiology SUBTITLE is unchanged on purpose. It is what tells a
+  student the room holds the diagnostic tests as well as imaging, which
+  the navigator's own tests document; only its title was wrapping.
+- Labels are now held to one line and truncate. Wording alone cannot fix
+  this — German builds `Befundungsarbeitsplatz` and Finnish
+  `kuvantamistyöasema`, single compounds no editing shortens — so the row
+  has to hold a label that does not fit. Truncating one keeps the bar a
+  single line; wrapping it moves every other room. `min-w-0` is what lets
+  the flex child shrink at all; without it `truncate` silently does
+  nothing.
+
 ## [2.9.144] — 2026-08-31
 
 ### Added

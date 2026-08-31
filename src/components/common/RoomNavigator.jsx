@@ -252,15 +252,30 @@ function RoomButton({ room, active, badge, onClick }) {
                     </span>
                 )}
             </div>
-            <div className="flex flex-col items-start leading-tight">
-                <span className={`text-sm font-semibold ${
-                    active ? 'text-white' : 'text-slate-300 group-hover:text-white'
-                }`}>
+            {/* min-w-0 so the flex child MAY shrink: without it a long label
+                cannot be truncated, it just forces the row wider. The labels
+                are deliberately short — one word and one subtitle, the register
+                the core rooms already use — but German and Finnish build
+                compounds that no wording discipline shortens
+                ("Befundungsarbeitsplatz", "kuvantamistyöasema"), so the bar
+                must hold one that does not fit. Truncating one label is a
+                readable row; wrapping it is a three-line row and every other
+                room moves. */}
+            <div className="flex min-w-0 flex-col items-start leading-tight">
+                <span
+                    title={label}
+                    className={`w-full truncate text-sm font-semibold ${
+                        active ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                    }`}
+                >
                     {label}
                 </span>
-                <span className={`text-[10px] uppercase tracking-wider ${
-                    active ? room.activeText : 'text-slate-500'
-                }`}>
+                <span
+                    title={t(room.subKey)}
+                    className={`w-full truncate text-[10px] uppercase tracking-wider ${
+                        active ? room.activeText : 'text-slate-500'
+                    }`}
+                >
                     {t(room.subKey)}
                 </span>
             </div>
