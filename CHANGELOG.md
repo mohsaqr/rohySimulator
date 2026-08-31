@@ -9,6 +9,37 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.138] — 2026-08-31
+
+### Added
+
+- **`npm run setup:content`** — installs the imaging and slide content at
+  install time, the way rohy already installs the Oyon models:
+  SHA-256 verified, idempotent, safe to re-run. One transfer per
+  deployment instead of one per tile per learner, and nothing breaks
+  afterwards if the publisher is offline.
+- The source is a flag, not a constant. What the installer trusts is the
+  checksum, not the host, so the transport is interchangeable — a GitHub
+  release, a mirror, a shared drive a colleague downloaded by hand, or a
+  stick carried into an air-gapped hospital:
+
+      npm run setup:content
+      npm run setup:content -- --from /media/usb/rohy-content
+      npm run setup:content -- --only pathology
+
+  The same verification catches the three failures that matter in all of
+  them: a truncated transfer, the wrong archive, and the HTML
+  interstitial that large-file services hand out instead of a file. The
+  check runs **before** anything is deleted, so a bad download cannot
+  destroy a working installation.
+- **`npm run pack:content`** builds the release archives and records
+  their checksums. Gzip takes the imaging bundle from 1,483 MB to 731 MB
+  — inside GitHub's 2 GB asset ceiling, which the packer now prints so
+  the limit is visible before it is hit.
+- `deploy/env.example` now leads with `setup:content`. Most deployments
+  need no content-origin configuration at all; the origin variables are
+  for the other case, a site serving imaging from its own archive.
+
 ## [2.9.137] — 2026-08-31
 
 ### Added

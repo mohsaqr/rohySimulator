@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "version": "v1",
+  "note": "URLs are filled in once a release is cut. setup:content trusts the sha256, not the host — see the script header.",
+  "baseUrl": "https://github.com/mohsaqr/rohy-content/releases/download/content-v1",
+  "archives": [
+    {
+      "plugin": "pacs",
+      "file": "rohy-content-pacs-v1.tar.gz",
+      "bytes": 766538659,
+      "sha256": "75dee2dd5c90f885c449609e7f47a6d57c8add3317773dac73ad6c447f91266b",
+      "contentVersion": "starter-20260831T113013Z",
+      "files": 4267
+    },
+    {
+      "plugin": "pathology",
+      "file": "rohy-content-pathology-v1.tar.gz",
+      "bytes": 36819246,
+      "sha256": "1cc3ab43aead30208faf63738826dcb01c6132b7e0c7c665e612598a8458742a",
+      "contentVersion": "starter-20260831T103656Z",
+      "files": 1257
+    }
+  ]
+}

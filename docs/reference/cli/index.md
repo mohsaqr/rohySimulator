@@ -98,6 +98,7 @@ Each boots/probes a running server and asserts a subsystem contract. 18 audit sc
 | `npm run install:piper` | `bash server/scripts/install-piper.sh` |
 | `npm run oyon:update` | `bash scripts/update-oyonr.sh` |
 | `npm run production` | `NODE_ENV=production node server/server.js` |
+| `npm run setup:content` | `node scripts/setup-content.mjs` |
 | `npm run setup:oyon` | `bash OyonR/scripts/download-models.sh && npm run verify:oyon` |
 | `npm run verify:oyon` | `node scripts/verify-oyon-install.mjs` |
 

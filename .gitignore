@@ -207,3 +207,10 @@ data/knowledge.db-shm
 # built into the artefacts that ship (the Docker image, the air-gap tarball) on
 # a machine that has the archives.
 server/plugin-content/
+
+# Content release archives and the download cache. `npm run pack:content`
+# produces the first from server/plugin-content/; `npm run setup:content`
+# fills the second on its way to producing it. Neither belongs in git — they
+# are hundreds of megabytes and are published as release assets.
+dist-content-release/
+.content-cache/

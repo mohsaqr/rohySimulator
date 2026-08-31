@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "2.9.137",
+  "version": "2.9.138",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -59,7 +59,9 @@
     "vendor:check": "node scripts/vendor-plugins.mjs --check",
     "kb": "node scripts/knowledge/kb.mjs",
     "kb:build": "node scripts/knowledge/build.mjs",
-    "starter-content": "node scripts/build-starter-content.mjs"
+    "starter-content": "node scripts/build-starter-content.mjs",
+    "setup:content": "node scripts/setup-content.mjs",
+    "pack:content": "node scripts/pack-content.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
