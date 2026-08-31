@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.141] — 2026-08-31
+
+### Changed
+
+- The installation documentation covers imaging content. `README.md`,
+  `docs/INSTALL.md` and `docs/operator/install.md` now name
+  `npm run setup:content` as an install **step**, not an option — the
+  default case orders four imaging studies, so a learner on the advanced
+  channel reaches the PACS room on the first case they open, and without
+  content that room is empty.
+- All three documents now state which channel a deployment is on:
+  `current` is the pre-plugin build with no PACS, Pathology or ECG rooms
+  and nothing to install; `advanced` has the rooms and needs the content.
+  That distinction existed in the tags and in nobody's documentation.
+- The offline route (`--from`), the own-archive route
+  (`ROHY_PLUGIN_ORIGINS`), `ROHY_STARTER_CONTENT=off`, and the private-repo
+  404 are all documented, along with the known gap: the Docker image and
+  air-gap tarballs do not yet carry content.
+
 ## [2.9.140] — 2026-08-31
 
 ### Fixed

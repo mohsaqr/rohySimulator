@@ -78,7 +78,14 @@ npm install
 cp server/.env.example server/.env
 # Edit server/.env — at minimum set JWT_SECRET (required, server refuses to start without it)
 
-# 3. Start frontend + backend together
+# 3. Imaging and slide content — ADVANCED CHANNEL ONLY.
+#    731 MB of imaging + 35 MB of cardiac pathology, SHA-256 verified and
+#    idempotent. Needs ROHY_CONTENT_TOKEN (the content repo is private), or
+#    `--from <path>` for an archive you already have. Skip on the `current`
+#    channel, which ships without the PACS/Pathology/ECG rooms.
+npm run setup:content
+
+# 4. Start frontend + backend together
 npm run dev
 ```
 
@@ -91,6 +98,11 @@ If the Oyon download was skipped (no `curl`, no network during `npm install`, be
 ```bash
 npm run setup:oyon          # idempotent — only fetches missing files
 ```
+
+Without step 3 the PACS and Pathology rooms are empty — and the default case
+orders four imaging studies, so a learner reaches one on the first case they
+open. See [docs/INSTALL.md § Imaging content](docs/INSTALL.md#imaging-content)
+for the offline and own-archive routes.
 
 For optional local TTS, install Piper:
 

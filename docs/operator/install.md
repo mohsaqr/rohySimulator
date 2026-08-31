@@ -26,7 +26,19 @@ Terms like *snapshot* and *additive migration* are defined in the
 | **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build` — Caddy auto-TLS, persistent volumes |
 | **Air-gapped** (no internet on target) | [§ Air-gap](#air-gapped-target) | One signed tarball, sha256-verified, platform-stamped |
 
-After any path, go to [§ First boot](#first-boot) and [§ Smoke verify](#smoke-verify).
+After any path, install [§ Imaging content](#imaging-content) if you are on the
+advanced channel, then go to [§ First boot](#first-boot) and
+[§ Smoke verify](#smoke-verify).
+
+### Which channel
+
+| tag | what it is |
+|---|---|
+| `current` | the stable, **pre-plugin** build — no PACS, Pathology or ECG rooms |
+| `advanced` | those rooms included; needs imaging content installed (below) |
+
+Take `current` if you do not teach imaging. There is nothing to install and
+nothing in the imaging section applies to you.
 
 ---
 
@@ -126,6 +138,78 @@ If `npm install` ran without `curl` or network, Oyon won't work until you re-fet
 ```bash
 npm run setup:oyon          # idempotent — only fetches missing files
 ```
+
+---
+
+## Imaging content
+
+**Advanced channel only.** The PACS and Pathology rooms read gigabytes of
+pixels — DICOM series and Deep Zoom tile pyramids — far too large to live in
+the repository or the image. They are published separately and installed with
+one command:
+
+```bash
+npm run setup:content
+```
+
+That fetches 731 MB of imaging (48 studies) and 35 MB of cardiac pathology
+(27 slides), verifies both by SHA-256, and installs them under
+`server/plugin-content/`, which rohy serves from its own disk. Re-running it
+after an upgrade is a no-op unless the content version changed.
+
+**This is a step, not an option.** The default case orders four imaging
+studies, so a learner on the advanced channel reaches the PACS room on the
+first case they open. Without content that room is empty.
+
+### Credentials
+
+The content repository is private, so the download needs a GitHub token with
+read access:
+
+```bash
+export ROHY_CONTENT_TOKEN=ghp_...      # or GITHUB_TOKEN, or be logged into `gh`
+npm run setup:content
+```
+
+Tokens are issued per deployment, so one site's access can be revoked without
+affecting the others. An unauthenticated request to a private release answers
+**404, not 401**; the installer names that case rather than letting it read as
+a missing release.
+
+### Without network access to GitHub
+
+The installer trusts the archive's checksum, not the host it came from, so any
+transport works — a mirror, a shared drive, a stick carried to an offline site.
+No token is needed on this path:
+
+```bash
+npm run setup:content -- --from /media/usb/rohy-content
+npm run setup:content -- --only pathology      # slides without the 731 MB
+```
+
+A truncated transfer, the wrong archive, and the HTML error page some services
+return instead of a file are all refused before anything is written, so a bad
+download cannot damage a working installation.
+
+### If you serve your own archive
+
+A site with its own licensed imaging points rohy at it and installs nothing:
+
+```
+ROHY_PLUGIN_ORIGINS=pacs=https://slides.example.edu
+ROHY_PLUGIN_ORIGIN_TOKENS=pacs=...     # if that origin is closed
+```
+
+A configured origin always wins over installed content. To run the advanced
+channel with **no** imaging at all, set `ROHY_STARTER_CONTENT=off`: the rooms
+then report honestly that no content is configured, which is the right state
+for a deployment that must show only its own material.
+
+### Known gaps
+
+The Docker image and the air-gap tarballs do **not** yet carry imaging content.
+On those paths, run `npm run setup:content` inside the container or on the host
+after installing.
 
 ---
 
