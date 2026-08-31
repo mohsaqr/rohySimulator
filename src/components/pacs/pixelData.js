@@ -74,7 +74,7 @@ export function readFrame(dicom, frameIndex = 0) {
  *   shape readRealFrame returns, so windowing code needs no special case.
  */
 export function readPreviewFrame(dicom, { maxSize = 128, frameIndex = 0 } = {}) {
-    const { raw, rows, columns, frames, signed, bitsAllocated, start } = pixelLayout(dicom, frameIndex);
+    const { raw, rows, columns, frames, samples, signed, bitsAllocated, start } = pixelLayout(dicom, frameIndex);
     const step = Math.max(1, Math.ceil(Math.max(rows, columns) / Math.max(1, maxSize)));
     const outRows = Math.max(1, Math.ceil(rows / step));
     const outColumns = Math.max(1, Math.ceil(columns / step));
@@ -85,21 +85,44 @@ export function readPreviewFrame(dicom, { maxSize = 128, frameIndex = 0 } = {}) 
     const le = dicom.littleEndian;
     const wide = bitsAllocated === 16;
 
+    // A COLOUR frame is already rendered: there is no modality LUT to apply and
+    // nothing to measure, so what a preview needs from it is only that it be
+    // recognisable. The three channels are collapsed to luma. Sampling one
+    // channel and calling it grey would tint every ultrasound in the rail —
+    // and reading the interleaved bytes as if they were grayscale, which is
+    // what this function did before it knew about `samples`, produced a
+    // barber's pole rather than a picture.
+    const colour = samples === 3;
+    const planar = colour && dicom.number('PlanarConfiguration', 0) === 1;
+    const ybr = colour && dicom.string('PhotometricInterpretation', 'RGB').startsWith('YBR');
+    const plane = rows * columns;
+
     const values = new Float32Array(outRows * outColumns);
     let min = Infinity;
     let max = -Infinity;
     for (let y = 0; y < outRows; y++) {
         const srcRow = Math.min(rows - 1, y * step) * columns;
         for (let x = 0; x < outColumns; x++) {
-            const at = start + (srcRow + Math.min(columns - 1, x * step)) * (wide ? 2 : 1);
+            const pixel = srcRow + Math.min(columns - 1, x * step);
             let stored;
-            if (!wide) {
-                const byte = dv.getUint8(at);
+            if (colour) {
+                // YBR already carries luma in the first channel, so there is
+                // nothing to compute; RGB is collapsed with ITU-R BT.601, the
+                // same weighting the YBR encoding itself used.
+                const a = dv.getUint8(start + (planar ? pixel : pixel * 3));
+                if (ybr) stored = a;
+                else {
+                    const g = dv.getUint8(start + (planar ? plane + pixel : pixel * 3 + 1));
+                    const b = dv.getUint8(start + (planar ? 2 * plane + pixel : pixel * 3 + 2));
+                    stored = 0.299 * a + 0.587 * g + 0.114 * b;
+                }
+            } else if (!wide) {
+                const byte = dv.getUint8(start + pixel);
                 stored = signed && byte > 127 ? byte - 256 : byte;
             } else {
-                stored = signed ? dv.getInt16(at, le) : dv.getUint16(at, le);
+                stored = signed ? dv.getInt16(start + pixel * 2, le) : dv.getUint16(start + pixel * 2, le);
             }
-            const value = identity ? stored : stored * slope + intercept;
+            const value = identity || colour ? stored : stored * slope + intercept;
             values[y * outColumns + x] = value;
             if (value < min) min = value;
             if (value > max) max = value;

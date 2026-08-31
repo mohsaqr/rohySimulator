@@ -183,6 +183,7 @@ export function PacsScreen({
                 count: series.count,
                 plane: series.plane,
                 spacing: series.spacing,
+                frameRate: series.frameRate ?? null,
                 seriesList,
             },
         }));
@@ -285,11 +286,19 @@ export function PacsScreen({
 
     // The cine loop. One pane plays at a time — matching how cine is used
     // (watching one stack move), and keeping "space bar" unambiguous.
+    //
+    // A loop that states its own rate is played at THAT rate. CINE_FPS is a
+    // reasonable speed for scrolling a CT stack, where there is no true rate to
+    // honour, and a badly wrong one for an echo: replayed at 12 fps a ventricle
+    // acquired at 50 looks like it is failing, and no amount of care elsewhere
+    // undoes a viewer that misrepresents wall motion.
+    const cineFps = paneInfo[cine.pane]?.frameRate;
     useEffect(() => {
         if (!cine.playing) return undefined;
-        const timer = setInterval(() => updateViewport(cine.pane, (v) => cineStep(v)), 1000 / CINE_FPS);
+        const fps = Number.isFinite(cineFps) && cineFps > 0 ? cineFps : CINE_FPS;
+        const timer = setInterval(() => updateViewport(cine.pane, (v) => cineStep(v)), 1000 / fps);
         return () => clearInterval(timer);
-    }, [cine, updateViewport]);
+    }, [cine, cineFps, updateViewport]);
 
     // Room-level shortcuts. Guarded so typing in any form control is never
     // hijacked, and skipped when the focused viewport already handled the key.

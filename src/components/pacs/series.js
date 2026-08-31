@@ -113,6 +113,10 @@ export function describeInstance(dicom, { source } = {}) {
         rows: dicom.number('Rows'),
         columns: dicom.number('Columns'),
         frames: Math.max(1, Math.trunc(dicom.number('NumberOfFrames', 1))),
+        // Cine timing, when the object states it. FrameTime (ms per frame) is
+        // the authoritative one; CineRate is what the device reported.
+        frameTime: dicom.number('FrameTime', null),
+        cineRate: dicom.number('CineRate', null),
         windowCenter: dicom.number('WindowCenter'),
         windowWidth: dicom.number('WindowWidth'),
         source,
@@ -139,8 +143,44 @@ export function buildSeries(instances) {
     });
 
     return Array.from(groups.entries())
-        .flatMap(([seriesInstanceUid, members]) => buildStacks(seriesInstanceUid, members))
+        .flatMap(([seriesInstanceUid, members]) => bySeriesNumber(members)
+            .flatMap(({ suffix, members: subset }) => buildStacks(seriesInstanceUid, subset, suffix)))
         .sort((a, b) => (a.seriesNumber ?? 0) - (b.seriesNumber ?? 0) || a.stackId.localeCompare(b.stackId));
+}
+
+/**
+ * Rescue a study whose exporter gave every series the SAME SeriesInstanceUID.
+ *
+ * That is not legal DICOM, and it is not hypothetical. The Sunnybrook Cardiac
+ * Data — a widely used public cine-MRI collection — ships one UID across all
+ * 23 series of a study: the cine short-axis stack, the long-axis stack, the
+ * RVOT views, the perfusion series, the scouts and a dozen unnamed acquisitions
+ * all claim to be the same series. Grouping by UID alone, as the standard says
+ * you may, produced ONE stack of 1109 images labelled "axial, 0.00 mm,
+ * IRREGULAR SPACING": every image in the examination, in no coherent order.
+ *
+ * SeriesNumber is what actually distinguishes them, and by definition it is a
+ * SERIES-level attribute — constant within a real series. So splitting on it
+ * cannot change a conformant study, and repairs a non-conformant one. The
+ * subdivision only happens when a single UID carries more than one
+ * SeriesNumber, so nothing else in the archive takes this path at all.
+ *
+ * `splitCoincident` below handles the opposite and legitimate case: one series
+ * that genuinely holds several interleaved stacks.
+ */
+function bySeriesNumber(members) {
+    const numbers = new Set(members.map((m) => m.seriesNumber ?? null));
+    if (numbers.size <= 1) return [{ suffix: null, members }];
+
+    const groups = new Map();
+    members.forEach((m) => {
+        const key = m.seriesNumber ?? 0;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(m);
+    });
+    return Array.from(groups.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([number, subset]) => ({ suffix: `series${number}`, members: subset }));
 }
 
 /**
@@ -162,7 +202,7 @@ export function buildSeries(instances) {
  * synthetic fixture had exercised, because a phantom writes one image per
  * position by construction.
  */
-function buildStacks(seriesInstanceUid, members) {
+function buildStacks(seriesInstanceUid, members, uidSuffix = null) {
     const normal = sliceNormal(members[0]?.orientation);
     const positioned = members.map((m) => ({ ...m, along: slicePosition(m.position, normal) }));
     const spatial = positioned.every((m) => m.along !== null);
@@ -175,19 +215,25 @@ function buildStacks(seriesInstanceUid, members) {
             return (a.instanceNumber ?? 0) - (b.instanceNumber ?? 0);
         });
         const description = members[0]?.seriesDescription;
+        const layout = frameLayout(ordered);
         return {
             seriesInstanceUid,
             // Unique per STACK. The frame cache and the UI key on this: two
             // stacks sharing a series UID would otherwise collide in the cache
             // and serve each other's pixels.
-            stackId: key === null ? seriesInstanceUid : `${seriesInstanceUid}#${key}`,
+            stackId: [seriesInstanceUid, uidSuffix, key === null ? null : key].filter((p) => p !== null).join('#'),
             modality: members[0]?.modality,
             seriesNumber: members[0]?.seriesNumber,
             description: label ? `${description ?? 'Series'} ${label}` : description,
             plane: planeOf(members[0]?.orientation),
             orderedBy: spatial ? 'position' : 'instance_number',
             instances: ordered,
-            count: ordered.length,
+            // A stack is scrolled by FRAME, not by instance. See frameLayout().
+            count: layout.frameCount,
+            instanceCount: ordered.length,
+            multiframe: layout.multiframe,
+            frameStarts: layout.frameStarts,
+            frameRate: frameRateOf(ordered),
             ...spacingOf(ordered, spatial),
             geometry: {
                 rows: members[0]?.rows,
@@ -197,6 +243,84 @@ function buildStacks(seriesInstanceUid, members) {
             },
         };
     });
+}
+
+/**
+ * The rate a loop should be replayed at, in frames per second, or null.
+ *
+ * Not cosmetic. An echo acquired at 50 fps and replayed at a viewer's fixed 12
+ * shows a ventricle contracting in slow motion, which is indistinguishable from
+ * one that genuinely contracts poorly. A viewer that cannot honour the rate
+ * should say so; a viewer that silently picks its own is teaching an artefact.
+ */
+export function frameRateOf(instances) {
+    const first = (instances ?? []).find((i) => i?.frames > 1) ?? (instances ?? [])[0];
+    if (!first) return null;
+    if (Number.isFinite(first.cineRate) && first.cineRate > 0) return first.cineRate;
+    if (Number.isFinite(first.frameTime) && first.frameTime > 0) return 1000 / first.frameTime;
+    return null;
+}
+
+/**
+ * How a stack's scroll positions map onto its instances.
+ *
+ * For every study in the archive until cardiac imaging arrived, the two were
+ * the same thing: one file, one image, and `count` could be the number of
+ * files. Ultrasound breaks that. An echo loop is a SINGLE instance carrying
+ * forty frames in one PixelData element, and a viewer that counts instances
+ * displays it as `Im 1/1` — one still frame, thirty-nine hidden behind a
+ * scrollbar that cannot move, and a cine button with nothing to play.
+ *
+ * So a stack counts frames and remembers where each instance's run begins.
+ * Single-frame instances are unaffected by construction: `frameCount` equals
+ * the instance count and `multiframe` is false, which is the fast path in
+ * `frameAddress()`.
+ *
+ * @returns {{ frameStarts: number[], frameCount: number, multiframe: boolean }}
+ */
+export function frameLayout(instances) {
+    const frameStarts = [];
+    let frameCount = 0;
+    (instances ?? []).forEach((instance) => {
+        frameStarts.push(frameCount);
+        const frames = Math.trunc(instance?.frames ?? 1);
+        frameCount += Number.isFinite(frames) && frames > 0 ? frames : 1;
+    });
+    return { frameStarts, frameCount, multiframe: frameCount !== (instances ?? []).length };
+}
+
+/**
+ * Resolve a scroll position to the instance that holds it and the frame within.
+ *
+ * @returns {{ instance: object, instanceIndex: number, frameIndex: number }|null}
+ *   null when the index is outside the stack — a caller renders that as a
+ *   loading state, never as a crash.
+ */
+export function frameAddress(series, index) {
+    const instances = series?.instances;
+    if (!Array.isArray(instances) || !Number.isInteger(index) || index < 0) return null;
+
+    if (!series.multiframe) {
+        const instance = instances[index];
+        return instance ? { instance, instanceIndex: index, frameIndex: 0 } : null;
+    }
+
+    // The last run that starts at or before `index`. Binary search rather than
+    // a walk: a 40-frame loop is nothing, but this is also the path a 499-slice
+    // CT takes once any one of its instances is multi-frame.
+    const starts = series.frameStarts ?? [];
+    let lo = 0;
+    let hi = starts.length - 1;
+    let at = -1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (starts[mid] <= index) { at = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    const instance = instances[at];
+    if (!instance) return null;
+    const frameIndex = index - starts[at];
+    const frames = Math.max(1, Math.trunc(instance.frames ?? 1) || 1);
+    return frameIndex < frames ? { instance, instanceIndex: at, frameIndex } : null;
 }
 
 /**
@@ -280,6 +404,43 @@ function splitCoincident(positioned) {
     );
     if (byAcquisition) return byAcquisition;
 
+    // A TIME SERIES is not a multi-contrast acquisition, and splitting it the
+    // same way inverts the axis a reader needs.
+    //
+    // The cases above are dual-echo MR (two images per position) and
+    // multi-phase CT (three or four): a handful of stacks, each a full sweep
+    // through the anatomy at one contrast. Cardiac cine is not that. It is
+    // twenty phases through the cardiac cycle at each of twelve slice levels,
+    // and splitting it by "the nth image at each position" gives twenty
+    // near-identical anatomical sweeps — one per phase — and throws the motion
+    // away. On the Sunnybrook Cardiac Data that turned one study into 229
+    // stacks, none of which could be played.
+    //
+    // So: above a multiplicity no multi-contrast protocol reaches, group by
+    // POSITION instead. Each stack is then one slice level across time — the
+    // loop a cardiologist actually watches, and the thing the cine button was
+    // built for. The threshold sits well clear of both real cases: the widest
+    // multi-phase CT is about five, and cardiac cine starts around fifteen.
+    if (modal >= TIME_SERIES_PHASES) {
+        const byPosition = new Map();
+        positioned.forEach((m) => {
+            if (!byPosition.has(m.along)) byPosition.set(m.along, []);
+            byPosition.get(m.along).push(m);
+        });
+        return Array.from(byPosition.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([along, members], i) => ({
+                key: `p${i + 1}`,
+                label: `(slice ${i + 1} of ${byPosition.size})`,
+                // Within one position the order is TIME, not space: every
+                // member sits at the same `along`, so the spatial sort in
+                // buildStacks has nothing to order by and falls through to
+                // InstanceNumber, which is the acquisition order.
+                members: members.slice().sort((x, y) => (x.instanceNumber ?? 0) - (y.instanceNumber ?? 0)),
+                along,
+            }));
+    }
+
     // Last resort: the nth image at each position.
     const seenAtPosition = new Map();
     const groups = new Map();
@@ -292,6 +453,12 @@ function splitCoincident(positioned) {
     });
     return groups.size > 1 ? Array.from(groups.values()).sort((a, b) => a.key.localeCompare(b.key)) : single;
 }
+
+/**
+ * The multiplicity at which coincident images stop being contrasts and start
+ * being time. Above the widest multi-phase CT protocol, below cardiac cine.
+ */
+const TIME_SERIES_PHASES = 8;
 
 /**
  * Slice spacing measured from the positions themselves, not from

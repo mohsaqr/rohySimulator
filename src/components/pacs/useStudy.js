@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { parseDicom } from './dicomParse.js';
-import { readRealFrame, isInverted } from './pixelData.js';
-import { buildSeries, describeInstance } from './series.js';
+import { readRealFrame, readRenderedFrame, isInverted, isRendered, toRealValues, rescaleOf } from './pixelData.js';
+import { decodeCompressedFrame } from './compressed.js';
+import { buildSeries, describeInstance, frameAddress, frameLayout } from './series.js';
 import { defaultWindow } from './windowLevel.js';
 import { createFrameCache } from './frameCache.js';
 
@@ -45,6 +46,13 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
     const [, setArrivals] = useState(0);
     const [fetched, setFetched] = useState(0);
     const throttleRef = useRef(null);
+    // Parsed headers, memoised per instance. Deciding whether an object is
+    // compressed means parsing it, and doing that once per rendered frame
+    // would re-walk a 400-frame loop's elements four hundred times.
+    const dicomRef = useRef(new Map());
+    // Frame keys with a decode already in flight, so a re-render during the
+    // await does not start a second decode of the same frame.
+    const decodingRef = useRef(new Set());
 
     if (cacheRef.current === null) cacheRef.current = createFrameCache({ budgetBytes });
     if (bytesRef.current === null) {
@@ -67,6 +75,8 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
         setState({ status: 'loading', instances: [], series: [], error: null });
         cacheRef.current.clear();
         bytesRef.current.clear();
+        dicomRef.current = new Map();
+        decodingRef.current = new Set();
         pendingRef.current = new Set();
         refRef.current = ref;
         setFetched(0);
@@ -161,30 +171,65 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
      * rather than stuttering one request at a time.
      */
     const frameAt = useCallback((series, index) => {
-        const instance = series?.instances?.[index];
-        if (!instance) return null;
+        // `index` is a position in the STACK, which for a multi-frame series
+        // is a frame inside some instance rather than an instance of its own.
+        const address = frameAddress(series, index);
+        if (!address) return null;
+        const { instance, frameIndex } = address;
 
         if (lazy) {
             const around = 4;
             for (let i = Math.max(0, index - around); i <= Math.min(series.count - 1, index + around); i++) {
-                const neighbour = series.instances[i];
+                // Neighbouring FRAMES frequently live in the instance already
+                // being fetched; `request` de-duplicates by name, so an echo
+                // loop asks for its one file once rather than nine times.
+                const neighbour = frameAddress(series, i)?.instance;
                 if (neighbour?.name) request(series.ref ?? refRef.current, neighbour.name);
             }
-            const bytes = bytesRef.current.read(instance.name);
-            if (!bytes) return null;
-            return cacheRef.current.get(`${series.stackId}:${index}`, () => decodeFrame(bytes));
         }
 
-        // Same guard as the lazy branch above: on a study switch the byte
-        // store is cleared while a stale render can still hold the OLD series
-        // and ask for its frames — decodeFrame(undefined) would throw
+        // Same guard in both branches: on a study switch the byte store is
+        // cleared while a stale render can still hold the OLD series and ask
+        // for its frames — decodeFrame(undefined) would throw
         // DicomError('bad_input') in the middle of render. A missing frame is
         // a loading state, never a crash.
-        const stored = bytesRef.current.read(instance.source);
-        if (!stored) return null;
-        return cacheRef.current.get(`${series.stackId ?? series.seriesInstanceUid}:${index}`, () => (
-            decodeFrame(stored)
-        ));
+        const store = lazy ? instance.name : instance.source;
+        const bytes = bytesRef.current.read(store);
+        if (!bytes) return null;
+
+        const key = `${series.stackId ?? series.seriesInstanceUid}:${index}`;
+        const cached = cacheRef.current.read(key);
+        if (cached) return cached;
+
+        // Parse once per instance, not once per frame.
+        let dicom = dicomRef.current.get(store);
+        if (!dicom) {
+            dicom = parseDicom(bytes);
+            dicomRef.current.set(store, dicom);
+        }
+
+        // COMPRESSED pixel data cannot be decoded synchronously: JPEG goes
+        // through the browser's own image decoder, which is a promise. So the
+        // frame is requested, null is returned, and the render that follows
+        // its arrival picks it up from the cache — exactly the pattern the
+        // lazy byte fetch above already uses, and the reason `put()` exists.
+        if (dicom.isEncapsulated()) {
+            if (!decodingRef.current.has(key)) {
+                decodingRef.current.add(key);
+                const forRef = refRef.current;
+                decodeCompressedFrame(dicom, frameIndex)
+                    .then((decoded) => {
+                        if (refRef.current !== forRef) return; // the reader moved on
+                        cacheRef.current.put(key, fromCompressed(dicom, decoded));
+                        setArrivals((n) => n + 1);
+                    })
+                    .catch(() => { /* one undecodable frame must not fail the study */ })
+                    .finally(() => decodingRef.current.delete(key));
+            }
+            return null;
+        }
+
+        return cacheRef.current.get(key, () => decodeFrame(bytes, frameIndex, dicom));
     }, [lazy, request]);
 
     const total = state.series[0]?.count ?? 0;
@@ -197,9 +242,68 @@ export function useStudy({ ref, loadSeries, loadSeriesIndex, loadInstance, budge
     };
 }
 
-function decodeFrame(bytes) {
-    const dicom = parseDicom(bytes);
-    const frame = readRealFrame(dicom);
+/**
+ * Decode one frame, by the kind of image it is.
+ *
+ * `readRenderedFrame`'s own documentation says the viewer must honour the
+ * distinction between a MEASURED image and an ALREADY-RENDERED one — and until
+ * cardiac imaging arrived, nothing called it. Every decode went through
+ * `readRealFrame`, which throws `unsupported_pixels` on three samples per
+ * pixel. So any colour object — a Doppler echo, an angiographic run, a
+ * secondary capture — failed to display, with the code to display it sitting
+ * unused two functions away.
+ *
+ * A rendered frame carries `rgba` and NO `values`: there is no modality LUT
+ * behind it, so there is nothing to window and nothing to probe, and callers
+ * key on the absence rather than being told a window that means nothing.
+ */
+function decodeFrame(bytes, frameIndex = 0, parsed = null) {
+    const dicom = parsed ?? parseDicom(bytes);
+    if (isRendered(dicom)) {
+        return { ...readRenderedFrame(dicom, frameIndex), inverted: false, window: null };
+    }
+    const frame = readRealFrame(dicom, frameIndex);
+    return { ...frame, inverted: isInverted(dicom), window: defaultWindow(dicom, frame) };
+}
+
+/**
+ * A decoded COMPRESSED frame, in the shape the viewer's uncompressed frames
+ * have — so nothing downstream has to know how the pixels arrived.
+ *
+ * JPEG comes back as RGBA whatever the object's samples-per-pixel, because the
+ * browser's decoder renders it; that is a rendered frame and is presented as
+ * one. RLE comes back as stored integers, which still owe the modality LUT.
+ */
+export function fromCompressed(dicom, decoded) {
+    if (decoded.rgba) {
+        return {
+            rows: decoded.rows,
+            columns: decoded.columns,
+            frames: decoded.frames,
+            rgba: decoded.rgba,
+            rendered: true,
+            inverted: false,
+            window: null,
+        };
+    }
+
+    const rescale = rescaleOf(dicom);
+    const values = toRealValues(decoded, rescale);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < values.length; i++) {
+        if (values[i] < min) min = values[i];
+        if (values[i] > max) max = values[i];
+    }
+    const frame = {
+        rows: decoded.rows,
+        columns: decoded.columns,
+        frames: decoded.frames,
+        values,
+        units: rescale.units,
+        min: Number.isFinite(min) ? min : 0,
+        max: Number.isFinite(max) ? max : 0,
+    };
     return { ...frame, inverted: isInverted(dicom), window: defaultWindow(dicom, frame) };
 }
 
@@ -223,19 +327,26 @@ function fromBytes(files, bytesRef) {
  * bare filenames still works: the stack is then ordered by file name, which is
  * the order it was written in.
  */
-function fromIndex(index, ref) {
+export function fromIndex(index, ref) {
     const raw = Array.isArray(index?.instances) ? index.instances : [];
     if (raw.length === 0) throw new Error(`the series index for ${ref} lists no instances`);
 
     const instances = raw.map((entry, i) => (typeof entry === 'string'
-        ? { name: entry, source: i, instanceNumber: i + 1, position: null, orientation: null }
+        ? { name: entry, source: i, instanceNumber: i + 1, position: null, orientation: null, frames: 1 }
         : {
             name: entry.name,
             source: i,
             instanceNumber: entry.instanceNumber ?? i + 1,
             position: entry.position ?? null,
             orientation: entry.orientation ?? null,
+            // The index exists so the viewer knows the shape of the stack
+            // before fetching a byte. For a multi-frame series that shape is
+            // its FRAME count, so ingest writes `frames` per instance. An
+            // older index that omits it reads as 1 — which is what every
+            // pre-cardiac series in the archive actually is.
+            frames: Number.isFinite(entry.frames) && entry.frames > 0 ? Math.trunc(entry.frames) : 1,
         }));
+    const layout = frameLayout(instances);
 
     const series = [{
         seriesInstanceUid: index.seriesInstanceUid ?? ref,
@@ -246,7 +357,11 @@ function fromIndex(index, ref) {
         plane: index.plane ?? 'unknown',
         orderedBy: index.orderedBy ?? 'position',
         instances,
-        count: instances.length,
+        count: layout.frameCount,
+        instanceCount: instances.length,
+        multiframe: layout.multiframe,
+        frameStarts: layout.frameStarts,
+        frameRate: Number.isFinite(index.frameRate) && index.frameRate > 0 ? index.frameRate : null,
         spacing: Number.isFinite(index.spacing) ? index.spacing : null,
         spacingIsUniform: typeof index.spacingIsUniform === 'boolean' ? index.spacingIsUniform : null,
         spacingRange: null,

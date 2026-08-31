@@ -51,12 +51,18 @@ export const DICTIONARY = {
 
     // Acquisition
     '00180015': { vr: 'CS', name: 'BodyPartExamined' },
+    // Cine timing. A loop played at the wrong rate is not a cosmetic problem:
+    // an echo acquired at 50 fps and replayed at 12 shows a ventricle that
+    // looks like it is failing. FrameTime is the authoritative one (ms between
+    // frames); CineRate is the acquisition rate the device reported.
+    '00180040': { vr: 'IS', name: 'CineRate' },
     '00180050': { vr: 'DS', name: 'SliceThickness' },
     '00180060': { vr: 'DS', name: 'KVP' },
     '00180081': { vr: 'DS', name: 'EchoTime' },
     '00180086': { vr: 'IS', name: 'EchoNumbers' },
     '00180088': { vr: 'DS', name: 'SpacingBetweenSlices' },
     '00181030': { vr: 'LO', name: 'ProtocolName' },
+    '00181063': { vr: 'DS', name: 'FrameTime' },
     '00185100': { vr: 'CS', name: 'PatientPosition' },
 
     // Relationship — the tags that turn a pile of files into an ordered volume.

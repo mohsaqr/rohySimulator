@@ -9,6 +9,44 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.133] — 2026-08-31
+
+### Added
+
+- **Cardiac imaging in the PACS room.** Twelve licence-audited cardiac
+  entries reach the archive: echocardiography (standard TTE and TEE,
+  mitral prolapse, post-infarct free wall rupture, aortic valve
+  vegetation, Gerbode shunt, constrictive pericarditis, heart failure
+  with LBBB, coronary colour Doppler, pacing and exercise stress) and
+  cine cardiac MRI (a normal study and heart failure with infarct).
+  Every one is CC0, CC BY or CC BY-SA and ships with its attribution;
+  the content origin grows to 48 entries and 195 series.
+
+### Fixed
+
+- **Colour ultrasound and angiography display at all.** The vendored
+  viewer only ever called the grayscale reader, which raises on three
+  samples per pixel, so a Doppler echo or an angiographic run rendered
+  nothing.
+- **A cine loop plays.** A stack was counted in files rather than
+  images, so a forty-frame echo showed as a single still reading
+  `Im 1/1`, and it now plays at the rate the loop itself states — an
+  echo acquired at 50 fps and replayed at a fixed 12 shows a ventricle
+  that looks like it is failing.
+- **Compressed (JPEG/RLE) studies display.** The decoder existed and
+  nothing called it.
+- **A cardiac MRI resolves into readable series.** Studies whose
+  exporter reuses one SeriesInstanceUID across an entire examination no
+  longer collapse into a single stack of every image, and a cine series
+  is grouped by slice level rather than by cardiac phase.
+- **The ECG trace is legible.** Its stroke width was a millimetre value
+  read as pixels — 0.27 of a pixel — which the browser drew as a pale
+  grey wash at every zoom. Calipers carried the same fault.
+
+### Changed
+
+- Vendored radoyon 0.3.3 (`e32735ac`) and cardoyon 0.2.2 (`91dd191f`).
+
 ## [2.9.132] — 2026-08-30
 
 ### Fixed

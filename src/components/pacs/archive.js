@@ -105,6 +105,17 @@ function readSeriesRef(raw) {
         description: raw?.description ?? '',
         plane: raw?.plane ?? 'unknown',
         instances: Number(raw?.instances) || 0,
+        // How many IMAGES the series holds, which for a cine loop is not how
+        // many files it holds. One echo instance carries forty frames, and a
+        // library that reported "1 image" for it would be describing a
+        // successful ingest in the words of a failed download.
+        //
+        // Carried for the reason the comment below gives about geometry: an
+        // allowlist normaliser that omits a field does not fail loudly. This
+        // one was omitted, and the bundle's catalogue lost the frame count
+        // while the series index kept it — so the viewer played the loop
+        // correctly and the library beside it said there was one image.
+        frames: Number(raw?.frames) || Number(raw?.instances) || 0,
         ref: typeof raw?.ref === 'string' ? raw.ref : '',
         // Carried, not dropped. caseDocument.js judges whether spliced slices
         // are geometrically compatible with the series they are spliced into,

@@ -206,16 +206,42 @@
 .ecg-paper.has-lens { cursor: zoom-in; }
 .ecg-cell { transition: opacity 120ms ease; }
 .ecg-cell.is-dimmed { opacity: .18; }
-.ecg-trace, .ecg-calibration { fill: none; stroke: #172131; stroke-width: .27; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
-.ecg-calibration { stroke-width: .36; }
+/* STROKE WIDTHS BELOW ARE IN CSS PIXELS, NOT MILLIMETRES.
+ *
+ * The paper's coordinate system IS millimetres — the viewBox is
+ * `0 0 width_mm height_mm` and every path is plotted in mm — so a stroke-width
+ * here reads as a mm value and 0.27 is a believable one: a real ECG stylus
+ * lays down about a third of a millimetre.
+ *
+ * But `vector-effect: non-scaling-stroke` takes the stroke out of user space
+ * and draws it in SCREEN space, so 0.27 means 0.27 device-independent pixels.
+ * A quarter of a pixel cannot be drawn; the browser antialiases it to a pale
+ * grey wash, at every zoom level and in the magnifier too, which is why the
+ * symptom was "the trace is faint" rather than "the trace is thin".
+ *
+ * The value was a millimetre value that was never converted when
+ * non-scaling-stroke was introduced. `.ecg-case-preview-trace` above is the
+ * same trace on the same paper and already carries a converted number, 1.05 —
+ * which is where the conversion started. 1.4 is that, dialled up on review:
+ * a reading trace wants more weight than a thumbnail.
+ *
+ * The calibration pulse stays a third heavier than the trace, as it was when
+ * both were still millimetres, so it keeps reading as a reference mark rather
+ * than as another beat.
+ *
+ * If you change these, change them in pixels. Anything below about 0.8 is a
+ * ghost rather than a thin line.
+ */
+.ecg-trace, .ecg-calibration { fill: none; stroke: #172131; stroke-width: 1.4; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.ecg-calibration { stroke-width: 1.85; }
 .ecg-lead-label { fill: #5e2931; font: 700 3.2px ui-monospace, monospace; paint-order: stroke; stroke: #fffafa; stroke-width: .7px; stroke-linejoin: round; }
 .ecg-lead-label-focus { font-size: 4px; }
-.ecg-calipers line { stroke: #087c8e; stroke-width: .22; stroke-dasharray: 1.2 1; vector-effect: non-scaling-stroke; }
-.ecg-calipers circle { fill: #fff; stroke: #087c8e; stroke-width: .32; vector-effect: non-scaling-stroke; }
+.ecg-calipers line { stroke: #087c8e; stroke-width: 1; stroke-dasharray: 1.2 1; vector-effect: non-scaling-stroke; }
+.ecg-calipers circle { fill: #fff; stroke: #087c8e; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
 
-.ecg-calipers .ecg-caliper-span { stroke: #087c8e; stroke-width: .46; stroke-dasharray: none; }
-.ecg-caliper-grip { fill: #fff; stroke: #087c8e; stroke-width: .42; cursor: ew-resize; }
-.ecg-caliper-march { stroke: #b0563f; stroke-width: .2; stroke-dasharray: .8 1.4; vector-effect: non-scaling-stroke; }
+.ecg-calipers .ecg-caliper-span { stroke: #087c8e; stroke-width: 1.8; stroke-dasharray: none; }
+.ecg-caliper-grip { fill: #fff; stroke: #087c8e; stroke-width: 1.6; cursor: ew-resize; }
+.ecg-caliper-march { stroke: #b0563f; stroke-width: .9; stroke-dasharray: .8 1.4; vector-effect: non-scaling-stroke; }
 .ecg-caliper-readout rect { fill: #087c8e; stroke: none; }
 .ecg-caliper-readout text { fill: #fff; font: 700 3.6px ui-monospace, monospace; text-anchor: middle; }
 .ecg-lens { pointer-events: none; }

@@ -82,7 +82,7 @@ export function Viewport({
 
     // Window the pixels once per (frame, window) into an offscreen canvas.
     useEffect(() => {
-        if (!frame?.values) return;
+        if (!frame?.values && !frame?.rgba) return;
         const { rows, columns } = frame;
         let offscreen = offscreenRef.current;
         if (!offscreen || offscreen.width !== columns || offscreen.height !== rows) {
@@ -91,6 +91,29 @@ export function Viewport({
             offscreen.height = rows;
             offscreenRef.current = offscreen;
         }
+        const context = offscreen.getContext('2d');
+        const image = context.createImageData(columns, rows);
+
+        if (frame.rgba) {
+            // ALREADY RENDERED — ultrasound, angiography, secondary capture.
+            // The device did the windowing and what is stored is a picture, so
+            // there is no window to apply and no stored value to sharpen back
+            // toward: both would edit the manufacturer's rendering while
+            // pretending to reveal data underneath it. Invert is kept, because
+            // reading an angiographic run inverted is a real technique and it
+            // is a display transform either way.
+            image.data.set(frame.rgba);
+            if (viewport.invert) {
+                for (let j = 0; j < image.data.length; j += 4) {
+                    image.data[j] = 255 - image.data[j];
+                    image.data[j + 1] = 255 - image.data[j + 1];
+                    image.data[j + 2] = 255 - image.data[j + 2];
+                }
+            }
+            context.putImageData(image, 0, 0);
+            return;
+        }
+
         const windowed = applyWindow(frame.values, {
             ...viewport.window,
             invert: inverted !== viewport.invert,
@@ -100,14 +123,13 @@ export function Viewport({
         // Enhancement acts on the displayed image, never on `frame.values` —
         // so a probe and a measurement still read what the scanner recorded.
         const grey = sharpen(windowed, { rows, columns, amount: viewport.sharpen ?? 0 });
-        const image = offscreen.getContext('2d').createImageData(columns, rows);
         for (let i = 0, j = 0; i < grey.length; i++, j += 4) {
             image.data[j] = grey[i];
             image.data[j + 1] = grey[i];
             image.data[j + 2] = grey[i];
             image.data[j + 3] = 255;
         }
-        offscreen.getContext('2d').putImageData(image, 0, 0);
+        context.putImageData(image, 0, 0);
     }, [frame, viewport.window, viewport.invert, inverted, viewport.voiFunction, viewport.gamma, viewport.sharpen]);
 
     // Composite: the windowed image, then the overlays, at device resolution.

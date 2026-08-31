@@ -24,7 +24,11 @@ export function createFrameCache({
     // How big a cached value is. The default measures a decoded frame; a store
     // of raw instance bytes passes `(b) => b.byteLength` and reuses the same
     // eviction machinery rather than growing a second, untested LRU.
-    sizeOf = (value) => value?.values?.byteLength ?? 0,
+    // A rendered (colour) frame carries `rgba` and no `values`; measuring only
+    // `values` would size every ultrasound frame at zero bytes, so the budget
+    // would never be reached and the cache would grow without bound on exactly
+    // the studies — echo loops — that hold the most frames.
+    sizeOf = (value) => value?.values?.byteLength ?? value?.rgba?.byteLength ?? 0,
 } = {}) {
     // A Map iterates in insertion order, which is what makes it an LRU: delete
     // and re-set on every hit, and the oldest key is always the first one.

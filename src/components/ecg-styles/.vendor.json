@@ -1,11 +1,11 @@
 {
   "package": "cardoyon",
-  "version": "0.2.0",
-  "commit": "1e9a4edaab169197e698b92d24c4701273df04e0",
-  "vendoredAt": "2026-08-30",
+  "version": "0.2.2",
+  "commit": "91dd191f9f18a850812cdd7f323800f7f1625f86",
+  "vendoredAt": "2026-08-31",
   "from": "styles",
   "files": 2,
-  "sha256": "d807abff5bacca18aa32a89af7104e2513fc0af9fc78c6553f6a489a2e98843c",
+  "sha256": "ce94fce4964cc2cdba7714684e9624ff15c55d5536879c028ccdbbbee30ab0a9",
   "hostOwned": [
     "README.md"
   ],
