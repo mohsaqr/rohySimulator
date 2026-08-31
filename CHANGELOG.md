@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.139] — 2026-08-31
+
+### Added
+
+- Content is published: **`mohsaqr/rohy-content`, release `content-v1`**
+  — 731 MB of imaging (48 entries) and 35 MB of cardiac pathology (27
+  slides). `npm run setup:content` installs from it.
+- The repository is private, so `setup:content` authenticates: it reads
+  `ROHY_CONTENT_TOKEN` or `GITHUB_TOKEN`, falls back to the `gh` CLI when
+  that is logged in, and resolves the asset through the GitHub API — a
+  private asset's `browser_download_url` is not fetchable with a token,
+  the API's asset endpoint is. An unauthenticated request to a private
+  release answers **404, not 401**, which reads as a missing release; the
+  installer names that case rather than letting someone hunt a
+  publishing mistake that never happened. `--from` still needs no token.
+
 ## [2.9.138] — 2026-08-31
 
 ### Added

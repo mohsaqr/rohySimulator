@@ -80,8 +80,51 @@ function resolveSource(from, archive, baseUrl) {
     return { kind: 'file', at: asFile };
 }
 
-async function fetchTo(url, dest) {
-    const res = await fetch(url, { redirect: 'follow' });
+/**
+ * A credential for the publisher, if this deployment has one.
+ *
+ * Release assets on a PRIVATE repository answer 404 — not 401 — to an
+ * unauthenticated request, which is GitHub declining to confirm the repository
+ * exists. Left unhandled that reads as "the release is missing" and sends
+ * someone looking for a publishing mistake that did not happen.
+ */
+function publisherToken() {
+    const explicit = process.env.ROHY_CONTENT_TOKEN || process.env.GITHUB_TOKEN;
+    if (explicit) return explicit;
+    // The gh CLI, if this machine is logged in. Common on a maintainer's box,
+    // absent on a deployment, and cheap to ask.
+    const gh = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
+    return gh.status === 0 ? String(gh.stdout).trim() : null;
+}
+
+/**
+ * Resolve a private release asset to a download URL through the API.
+ *
+ * The browser_download_url of a private asset is not fetchable with a token;
+ * the API's asset endpoint with `Accept: application/octet-stream` is.
+ */
+async function privateAssetUrl(repo, tag, file, token) {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, {
+        headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`GitHub API ${res.status} for ${repo} ${tag}`);
+    const release = await res.json();
+    const asset = (release.assets ?? []).find((a) => a.name === file);
+    if (!asset) throw new Error(`release ${tag} has no asset named ${file}`);
+    return asset.url;
+}
+
+async function fetchTo(url, dest, { token, api } = {}) {
+    const headers = {};
+    if (token) headers.authorization = `Bearer ${token}`;
+    if (api) headers.accept = 'application/octet-stream';
+    const res = await fetch(url, { redirect: 'follow', headers });
+    if (res.status === 404 && !token) {
+        throw new Error(`HTTP 404 from ${url}\n`
+            + '  If the content repository is private this is what an unauthenticated request gets.\n'
+            + '  Set ROHY_CONTENT_TOKEN to a GitHub token with read access, or download the archive\n'
+            + '  by hand and use --from.');
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
     // Streamed, because these are hundreds of megabytes and buffering the lot
     // to compute a hash afterwards is a needless copy in memory.
@@ -130,10 +173,21 @@ for (const archive of archives) {
         file = cached;
         say(`${archive.plugin}: using verified download already in .content-cache`);
     } else {
-        say(`${archive.plugin} ← ${source.at}`);
+        const token = sources.private ? publisherToken() : null;
+        let at = source.at;
+        let api = false;
+        if (sources.private && token && sources.repo && sources.tag && !args.from) {
+            try {
+                at = await privateAssetUrl(sources.repo, sources.tag, archive.file, token);
+                api = true;
+            } catch (err) {
+                fail(`${archive.plugin}: could not resolve the release asset — ${err.message}`);
+            }
+        }
+        say(`${archive.plugin} ← ${api ? `${sources.repo} ${sources.tag} (${archive.file})` : at}`);
         say(`  ${(archive.bytes / 1048576).toFixed(0)} MB, this takes a while`);
         try {
-            await fetchTo(source.at, cached);
+            await fetchTo(at, cached, { token, api });
         } catch (err) {
             fail(`${archive.plugin}: download failed — ${err.message}`);
         }
