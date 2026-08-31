@@ -161,8 +161,11 @@ describe('a deployment that imports slides but ships no content bundle', () => {
         libraryDir = await mkdtemp(join(tmpdir(), 'rohy-lib-nobundle-'));
         server = await startTestServer({
             seed: false,
-            // Deliberately NO ROHY_PLUGIN_ORIGINS.
-            env: { ROHY_PLUGIN_LIBRARY_DIRS: `pathology=${libraryDir}` },
+            // Deliberately NO ROHY_PLUGIN_ORIGINS, and the starter bundle off.
+            // This suite is about the MANAGED half standing alone, so the
+            // bundle half must genuinely be absent; with starter content on,
+            // rohy serves its own samples and there is no missing half to name.
+            env: { ROHY_PLUGIN_LIBRARY_DIRS: `pathology=${libraryDir}`, ROHY_STARTER_CONTENT: 'off' },
         });
         await dbRun(server.dbPath,
             `INSERT INTO plugin_assets (id, tenant_id, plugin_id, label, state, native_objective, native_mpp_x, tiled_objective, width, height)

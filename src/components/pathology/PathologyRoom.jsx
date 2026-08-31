@@ -239,6 +239,15 @@ export function PathologyRoom({
                 'tool.point': ANNOTATION_KINDS.POINT,
                 'tool.countingFrame': ANNOTATION_KINDS.COUNTING_FRAME,
             };
+            // A counting frame IS an area in mm² — that is the whole point of
+            // it, since WHO's classification asks for mitoses per mm² rather
+            // than per high-power field. On a slide with no micron scale there
+            // is no such area to place, so the tool is withheld rather than
+            // placed and left meaningless.
+            if (command === 'tool.countingFrame' && slide?.measurable === false) {
+                event.preventDefault();
+                return;
+            }
             if (tools[command]) { setTool(tools[command]); event.preventDefault(); return; }
 
             const doc = annotationsRef.current;
@@ -272,7 +281,7 @@ export function PathologyRoom({
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [commands, module]);
+    }, [commands, module, slide?.measurable]);
 
     // --- files -------------------------------------------------------------
 

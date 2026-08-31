@@ -25,6 +25,10 @@
 //     The two sides share a path and nothing else.
 //   - It does not write. GET only: a proxy that can POST is a confused deputy
 //     with rohy's network position.
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticateToken, requireStudent } from '../middleware/auth.js';
@@ -164,6 +168,107 @@ function catalogShape(manifest) {
  * @param {{collection: string, refFields: string[]}} shape
  * @returns {Promise<{ok: true, catalog: object}|{ok: false, error: string, code: string}>}
  */
+/**
+ * The STARTER content a deployment gets before anyone configures an origin.
+ *
+ * `ROHY_PLUGIN_ORIGINS` names where a deployment's own imaging lives, and
+ * until it is set every plugin room is empty and says so by naming an
+ * environment variable at an educator who cannot set it. That is the honest
+ * answer to "where are the pixels" and a useless one to the person reading it:
+ * there is no public host to point the variable at, because an origin is
+ * something you BUILD from a licence-audited archive.
+ *
+ * So rohy ships a small one. It is real, licence-audited imaging — CC0, CC BY
+ * and CC BY-SA entries that `redistributableEntries()` already passes — not a
+ * phantom, because the archive was audited precisely so that it could ship.
+ *
+ * Served from disk rather than fetched: these are rohy's own files, so no host
+ * is contacted, `normalizeOrigin()` is not involved, and the SSRF surface the
+ * proxy exists to bound is untouched. A configured origin always wins — the
+ * starter is what a deployment has INSTEAD of one, never as well.
+ *
+ * It lives under `server/` because the Docker runtime stage copies that whole
+ * directory. The lab catalogue learned this the hard way from the repo root.
+ */
+const STARTER_ROOT = resolve(fileURLToPath(new URL('../plugin-content', import.meta.url)));
+
+/** The starter directory for a plugin, or null. Cached: this is on the hot path. */
+const starterDirs = new Map();
+function starterContentDir(pluginId) {
+    // An operator may refuse the samples outright. Some deployments must show
+    // only their own material — a hospital where an unrelated teaching image
+    // appearing in a reading room is a governance problem, not a convenience.
+    // Read per call rather than cached, so a test can set it per server.
+    if (String(process.env.ROHY_STARTER_CONTENT ?? '').toLowerCase() === 'off') return null;
+    if (!starterDirs.has(pluginId)) {
+        // The plugin id is already `[a-z][a-z0-9_]*` by manifest validation, so
+        // it cannot traverse; resolving and re-checking the prefix anyway costs
+        // nothing and means one changed assumption cannot become a path escape.
+        const dir = resolve(join(STARTER_ROOT, pluginId));
+        const inside = dir === STARTER_ROOT || dir.startsWith(STARTER_ROOT + sep);
+        starterDirs.set(pluginId, inside && existsSync(join(dir, 'content.json')) ? dir : null);
+    }
+    return starterDirs.get(pluginId);
+}
+
+/** Read the starter bundle's catalogue, in the shape fetchBundleCatalog returns. */
+function readStarterCatalog(dir, shape) {
+    const file = join(dir, 'catalog.json');
+    if (!existsSync(file)) {
+        return { ok: false, status: 404, error: 'this content origin ships no catalog', code: 'plugin_catalog_missing' };
+    }
+    let catalog;
+    try { catalog = JSON.parse(readFileSync(file, 'utf8')); } catch {
+        return { ok: false, status: 502, error: 'plugin catalog is not JSON', code: 'plugin_catalog_invalid' };
+    }
+    if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog[shape.collection])) {
+        return { ok: false, status: 502, error: 'plugin catalog is malformed', code: 'plugin_catalog_invalid' };
+    }
+    return { ok: true, catalog };
+}
+
+/**
+ * Serve one file from the starter bundle.
+ *
+ * `built.path` has already been parsed and checked against the manifest's
+ * declared prefixes by the caller. This resolves it and checks CONTAINMENT
+ * anyway: two independent reasons a traversal cannot succeed is the right
+ * number for a route that turns a URL into a file read.
+ */
+function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
+    const target = resolve(join(dir, normalize(contentPath).replace(/^[/\\]+/, '')));
+    if (target !== dir && !target.startsWith(dir + sep)) {
+        log.warn('starter content path escaped its directory', { pluginId, contentPath });
+        return res.status(403).json({ error: 'forbidden', code: 'plugin_remote_bad_path' });
+    }
+    let stat;
+    try { stat = statSync(target); } catch { stat = null; }
+    if (!stat || !stat.isFile()) {
+        return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
+    }
+
+    const type = contentPath.endsWith('.json') ? 'application/json'
+        : contentPath.endsWith('.dzi') ? 'application/xml'
+            : contentPath.endsWith('.png') ? 'image/png'
+                : contentPath.endsWith('.dcm') ? 'application/dicom'
+                    : 'image/jpeg';
+    if (!manifest.remote.contentTypes.includes(type)) {
+        // The manifest lists what this plugin's content may BE. A bundle file
+        // outside that list is a packaging error, not something to serve.
+        log.warn('starter content type is not declared by the manifest', { pluginId, contentPath, type });
+        return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
+    }
+
+    res.setHeader('Content-Type', type);
+    res.setHeader('Content-Length', String(stat.size));
+    // A tile is immutable by construction — its bytes are named by the pyramid
+    // level and position of a fixed image. The catalogue is not.
+    res.setHeader('Cache-Control', contentPath.endsWith('.json')
+        ? 'no-cache'
+        : 'public, max-age=31536000, immutable');
+    return createReadStream(target).pipe(res);
+}
+
 async function fetchBundleCatalog(origin, pluginId, shape) {
     let upstream;
     try {
@@ -319,13 +424,21 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     // merging one in would put a foreign row into its library.
     const managed = shape.collection === 'assets' ? await managedAssets(pluginId, tenantId(req)) : [];
     const origin = pluginOrigins().get(pluginId);
+    // A configured origin always wins; the starter bundle is what a deployment
+    // has INSTEAD of one, never as well as one. Otherwise an operator who
+    // pointed rohy at their own archive would still be served rohy's samples.
+    const starter = origin ? null : starterContentDir(pluginId);
     let catalog = { schemaVersion: '1.0.0', version: 1, [shape.collection]: [] };
-    let bundleUnavailable = origin
+    let bundleUnavailable = (origin || starter)
         ? null
         : { status: 503, error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`, code: 'plugin_remote_not_configured' };
 
     if (origin) {
         const bundle = await fetchBundleCatalog(origin, pluginId, shape);
+        if (bundle.ok) catalog = bundle.catalog;
+        else bundleUnavailable = bundle;
+    } else if (starter) {
+        const bundle = readStarterCatalog(starter, shape);
         if (bundle.ok) catalog = bundle.catalog;
         else bundleUnavailable = bundle;
     }
@@ -525,7 +638,8 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     }
 
     const origin = pluginOrigins().get(pluginId);
-    if (!origin) {
+    const starter = origin ? null : starterContentDir(pluginId);
+    if (!origin && !starter) {
         return res.status(503).json({
             error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`,
             code: 'plugin_remote_not_configured',
@@ -542,6 +656,12 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
             code: 'plugin_remote_undeclared_path',
         });
     }
+
+    // The SAME path has now passed the SAME two gates it would have passed on
+    // its way to a remote origin — parsed and confirmed declared — before
+    // anything touches the filesystem. Reversing that order is how a content
+    // route becomes a file-read primitive.
+    if (starter) return serveStarterFile(res, starter, built.path, manifest, pluginId);
 
     const target = `${origin}${built.path}`;
     let upstream;

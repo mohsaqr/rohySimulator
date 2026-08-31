@@ -244,7 +244,9 @@ describe('plugin remote-content proxy with no origin configured', () => {
     beforeAll(async () => {
         // No ROHY_PLUGIN_ORIGINS: the default posture of a fresh install is that
         // rohy talks to nothing.
-        server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '' } });
+        // Starter content off as well: with it on, a deployment with no origin
+        // serves rohy's own bundled samples from disk rather than 503ing.
+        server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '', ROHY_STARTER_CONTENT: 'off' } });
         await seedUser(server.dbPath, 'unconfigured-reader', 'student');
         token = await login(server.baseUrl, 'unconfigured-reader');
     });

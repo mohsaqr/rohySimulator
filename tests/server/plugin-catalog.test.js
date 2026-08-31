@@ -100,7 +100,11 @@ describe('GET /api/plugins/:pluginId/catalog — operator states are honest, nev
     }, 90_000);
 
     it('no origin configured → 503 plugin_remote_not_configured', async () => {
-        const srv = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '' } });
+        // No origin AND no starter bundle: the case where there is genuinely
+        // nothing to show. rohy now ships starter content for pathology, so
+        // 'no origin' alone no longer means 'nothing' — the 503 belongs to
+        // the deployment that has neither.
+        const srv = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '', ROHY_STARTER_CONTENT: 'off' } });
         try {
             const res = await authed(srv.baseUrl, await login(srv.baseUrl, 'admin', 'admin123'))('/api/plugins/pathology/catalog');
             expect(res.status).toBe(503);

@@ -97,7 +97,22 @@ function validateRevision(revision, path) {
         const dzi = revision.derivatives?.dzi;
         if (!isObject(dzi)) throw new TypeError(`${path}.derivatives.dzi must be present when a revision is ready.`);
         requireNonEmptyString(dzi.url, `${path}.derivatives.dzi.url`);
-        verifiedOptics(revision.optics, `${path}.optics`);
+        // A slide with no measured optics is DISPLAYABLE but not MEASURABLE,
+        // and it has to say so. See `measurable` below: the absence of optics
+        // is never enough on its own, because the commonest way to arrive
+        // here is a scanner slide whose optics failed to parse, and that must
+        // stay an error rather than quietly becoming a different kind of
+        // slide.
+        if (revision.measurable === false) {
+            if (revision.optics !== undefined) {
+                throw new TypeError(
+                    `${path} declares measurable: false but also carries optics — `
+                    + 'a slide is measurable or it is not, and two answers is not one of the options.',
+                );
+            }
+        } else {
+            verifiedOptics(revision.optics, `${path}.optics`);
+        }
     }
 }
 
@@ -259,6 +274,38 @@ export function materializeSlideAsset(slide, asset, options = {}) {
     if (!isObject(options)) throw new TypeError('materializeSlideAsset(): options must be an object.');
     const checkedAsset = validateCatalogAsset(asset);
     const revision = selectReadyRevision(checkedAsset, options.revisionId);
+
+    // An UNMEASURABLE slide carries no optics at all — not a zero, not a
+    // placeholder. Every measurement in this package is `slidePixels *
+    // nativeMpp`, so a slide with no micron scale must arrive without the
+    // fields that would let one be computed; anything that reads them gets
+    // `undefined` and fails, rather than silently measuring against a number
+    // somebody guessed. `measurable: false` is what the UI reads to withhold
+    // the ruler and the counting frame.
+    //
+    // ONLY the unmeasurable case carries the flag. A slide without it is
+    // measurable by construction, because validateRevision has already refused
+    // any ready revision carrying neither optics nor the flag — so its absence
+    // is a guarantee, not a default. It also matters that the shape does not
+    // change for existing slides: the case schema is additionalProperties:
+    // false, and a new field on every materialised slide would invalidate
+    // every case document already saved.
+    if (revision.measurable === false) {
+        return {
+            ...slide,
+            assetId: checkedAsset.id,
+            assetRevisionId: revision.id,
+            dzi: revision.derivatives.dzi.url,
+            measurable: false,
+            assetBinding: {
+                revisionId: revision.id,
+                sourceChecksum: revision.sourceChecksum ?? null,
+                derivativeKind: 'dzi',
+                opticsProvenance: null,
+            },
+        };
+    }
+
     const optics = verifiedOptics(revision.optics, `asset ${checkedAsset.id} revision ${revision.id} optics`);
 
     const next = {

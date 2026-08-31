@@ -220,16 +220,30 @@ export function annotationVertices(annotation) {
  *            perMm2:number|null}}
  */
 export function measureAnnotation(annotation, slide) {
+    const blank = {
+        lengthUm: null, perimeterUm: null, areaUm2: null, areaMm2: null,
+        widthUm: null, heightUm: null, perMm2: null,
+    };
+
+    // A slide DECLARED unmeasurable has no micron scale, so every physical
+    // figure is null — the same shape a point annotation has always returned,
+    // which is why every caller already renders it as absent rather than as
+    // zero. An annotation can still be drawn and still means something: you
+    // can circle the neutrophils on a published micrograph, you just cannot
+    // say how many microns across they are.
+    //
+    // Distinct from the throw below, which is for a slide that should have a
+    // scale and does not. That stays an error: silence there would turn a
+    // scanner slide with unparsed optics into a slide that quietly measures
+    // nothing.
+    if (slide?.measurable === false) return blank;
+
     const mpp = slide?.nativeMpp;
     if (!(typeof mpp === 'number' && Number.isFinite(mpp) && mpp > 0)) {
         throw new TypeError(
             `measureAnnotation(): slide.nativeMpp must be a finite positive number, received ${mpp}`,
         );
     }
-    const blank = {
-        lengthUm: null, perimeterUm: null, areaUm2: null, areaMm2: null,
-        widthUm: null, heightUm: null, perMm2: null,
-    };
 
     if (annotation.kind === ANNOTATION_KINDS.POINT) return blank;
 

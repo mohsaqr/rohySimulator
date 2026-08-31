@@ -1,0 +1,156 @@
+// Starter content — what a deployment serves before anyone configures an
+// origin.
+//
+// `ROHY_PLUGIN_ORIGINS` names where a deployment's own imaging lives, and
+// until it is set every plugin room was empty and said so by naming an
+// environment variable at an educator who cannot set one. There is no public
+// host to point that variable at either: an origin is something you BUILD from
+// a licence-audited archive. So rohy ships a small one, and these tests hold
+// the three properties that make that safe — a configured origin still wins,
+// the samples are refusable, and the route is still not a file-read primitive.
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import http from 'node:http';
+import bcrypt from 'bcrypt';
+import sqlite3 from 'sqlite3';
+import { startTestServer } from '../utils/startTestServer.js';
+
+const PASSWORD = 'St4rterP4th!';
+
+function openDb(dbPath) {
+    const sqlite = sqlite3.verbose();
+    return new Promise((res, rej) => {
+        const db = new sqlite.Database(dbPath, (e) => (e ? rej(e) : res(db)));
+    });
+}
+async function seedUser(dbPath, username, role) {
+    const db = await openDb(dbPath);
+    const hash = await bcrypt.hash(PASSWORD, 4);
+    await new Promise((res, rej) => db.run(
+        `INSERT INTO users (username, name, email, password_hash, role, tenant_id, status)
+         VALUES (?, ?, ?, ?, ?, 1, 'active')`,
+        [username, username, `${username}@example.com`, hash, role], (e) => (e ? rej(e) : res()),
+    ));
+    await new Promise((r) => db.close(() => r()));
+}
+async function login(baseUrl, username) {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username, password: PASSWORD }),
+    });
+    return (await res.json()).token;
+}
+
+describe('a fresh deployment with no origin serves the starter bundle', () => {
+    let server; let token;
+    beforeAll(async () => {
+        server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '' } });
+        await seedUser(server.dbPath, 'starter-reader', 'educator');
+        token = await login(server.baseUrl, 'starter-reader');
+    }, 90_000);
+    afterAll(async () => { await server?.close(); });
+
+    const get = (path) => fetch(`${server.baseUrl}${path}`, { headers: { authorization: `Bearer ${token}` } });
+
+    it('the pathology library is populated instead of reporting an unset variable', async () => {
+        const res = await get('/api/plugins/pathology/catalog');
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        const assets = body.catalog?.assets ?? [];
+        expect(assets.length).toBeGreaterThan(0);
+        // Real, licence-audited imaging — not a phantom.
+        expect(assets.every((a) => a.provenance?.redistribution)).toBe(true);
+    });
+
+    it('a tile is served from disk, with an immutable cache and the right type', async () => {
+        const catalog = await (await get('/api/plugins/pathology/catalog')).json();
+        const asset = (catalog.catalog?.assets ?? [])[0];
+        const dzi = asset.revisions[0].derivatives.dzi.url.replace('remote:', '');
+
+        const res = await get(`/api/plugins/pathology/${dzi}`);
+        expect(res.status).toBe(200);
+        expect(await res.text()).toContain('<Image');
+        // A tile's bytes are named by a fixed image's level and position.
+        expect(res.headers.get('cache-control')).toMatch(/immutable/);
+    });
+
+    it('every attribution_only slide carries its notice', async () => {
+        const catalog = await (await get('/api/plugins/pathology/catalog')).json();
+        const needAttribution = (catalog.catalog?.assets ?? [])
+            .filter((a) => a.provenance?.redistribution === 'attribution_only');
+        expect(needAttribution.length).toBeGreaterThan(0);
+        // Shipping the pixels and leaving the notice behind does not satisfy
+        // CC BY, so an entry that requires one must carry one.
+        needAttribution.forEach((a) => expect(a.provenance.attribution).toBeTruthy());
+    });
+
+    it('REGRESSION — the content route is still not a file-read primitive', async () => {
+        for (const attempt of [
+            '/api/plugins/pathology/../../package.json',
+            '/api/plugins/pathology/tiles/../../../server/server.js',
+            '/api/plugins/pathology/server/server.js',
+        ]) {
+            const res = await get(attempt);
+            expect(res.status).not.toBe(200);
+        }
+    });
+});
+
+describe('a configured origin always wins over the starter bundle', () => {
+    let upstream; let server; let token; let asked;
+    beforeAll(async () => {
+        asked = [];
+        upstream = http.createServer((req, res) => {
+            asked.push(req.url);
+            if (req.url === '/catalog.json') {
+                res.writeHead(200, { 'content-type': 'application/json' });
+                return res.end(JSON.stringify({ schemaVersion: '1.0.0', version: 1, assets: [] }));
+            }
+            res.writeHead(200, { 'content-type': 'application/xml' });
+            return res.end('<Image/>');
+        });
+        await new Promise((r) => upstream.listen(0, '127.0.0.1', r));
+        const origin = `http://127.0.0.1:${upstream.address().port}`;
+
+        server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: `pathology=${origin}` } });
+        await seedUser(server.dbPath, 'origin-reader', 'educator');
+        token = await login(server.baseUrl, 'origin-reader');
+    }, 90_000);
+    afterAll(async () => {
+        await server?.close();
+        await new Promise((r) => upstream.close(r));
+    });
+
+    it('asks the operator\'s origin, never the bundled samples', async () => {
+        const res = await fetch(`${server.baseUrl}/api/plugins/pathology/catalog`, {
+            headers: { authorization: `Bearer ${token}` },
+        });
+        expect(res.status).toBe(200);
+        // An operator who pointed rohy at their own archive must not be served
+        // rohy's teaching samples alongside — or instead of — their own.
+        expect((await res.json()).catalog.assets).toEqual([]);
+        expect(asked).toContain('/catalog.json');
+    });
+});
+
+describe('an operator can refuse the starter bundle', () => {
+    let server; let token;
+    beforeAll(async () => {
+        server = await startTestServer({
+            seed: false,
+            env: { ROHY_PLUGIN_ORIGINS: '', ROHY_STARTER_CONTENT: 'off' },
+        });
+        await seedUser(server.dbPath, 'nostarter-reader', 'student');
+        token = await login(server.baseUrl, 'nostarter-reader');
+    }, 90_000);
+    afterAll(async () => { await server?.close(); });
+
+    it('is back to the honest 503, for a deployment that must show only its own material', async () => {
+        const res = await fetch(`${server.baseUrl}/api/plugins/pathology/tiles/anything.dzi`, {
+            headers: { authorization: `Bearer ${token}` },
+        });
+        expect(res.status).toBe(503);
+        expect((await res.json()).code).toBe('plugin_remote_not_configured');
+    });
+});

@@ -9,6 +9,49 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.134] — 2026-08-31
+
+### Added
+
+- **A fresh deployment now finds imaging instead of an environment
+  variable.** Both plugin rooms were empty until an operator set
+  `ROHY_PLUGIN_ORIGINS`, and the Slide Library said so by naming that
+  variable at an educator who cannot set one — with no public host to
+  point it at, because a content origin is something you build from a
+  licence-audited archive. rohy now serves a small bundled one from
+  disk when no origin is configured: 14 imaging studies and 27 cardiac
+  pathology slides, all CC0/CC BY/CC BY-SA, every attribution notice
+  travelling with the pixels. A configured origin always wins, and
+  `ROHY_STARTER_CONTENT=off` refuses the samples outright for a
+  deployment that must show only its own material.
+- **Cardiac histopathology**: a complete infarct ageing series (myofiber
+  waviness at 0–4 h through to a dense fibrous scar past two months),
+  normal myocardium from 40× to 400×, reperfusion injury with
+  contraction-band necrosis, and lymphocytic myocarditis as the
+  differential.
+- **The default STEMI case is filled out.** Its config went from 349
+  bytes to 49 KB: 32 laboratory results validated against the lab
+  database, 4 imaging studies, 80 examination findings across 25
+  regions, a 6-frame haemodynamic scenario with VF-arrest and
+  cardiogenic-shock alternatives, structured history, medications,
+  procedures, differential and management plan.
+- `npm run starter-content` builds the bundles from the sibling content
+  origins. They are gitignored, not committed.
+
+### Fixed
+
+- Pathology slides can be **displayable without being measurable**. The
+  catalogue refused any slide without measured optics — correctly, since
+  every measurement is `slidePixels × nativeMpp` and a plausible scanner
+  value is still wrong data — which also meant a published
+  photomicrograph could not enter the library at all. Such slides now
+  carry no optics and say so; the ruler and the counting frame are
+  withheld rather than reporting a number derived from a guess.
+
+### Changed
+
+- Vendored pathoyon 0.1.1 (`1a00bbe8`).
+
 ## [2.9.133] — 2026-08-31
 
 ### Added
