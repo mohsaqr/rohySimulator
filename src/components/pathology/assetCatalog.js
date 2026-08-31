@@ -205,6 +205,62 @@ export function validateAssetCatalog(catalog) {
  * @param {object} [filters]
  * @returns {Array<object>}
  */
+/**
+ * What may be done with an asset's pixels after they are on disk.
+ *
+ * The same vocabulary the imaging archive uses, for the same reason: a tile
+ * tree looks identical whether it may ship in a bundle or may not leave the
+ * building, so the answer has to be recorded at ingest and computable
+ * afterwards rather than reconstructed by archaeology.
+ */
+export const REDISTRIBUTION = Object.freeze({
+    PERMITTED: 'permitted',              // CC0, public domain — ship it
+    ATTRIBUTION_ONLY: 'attribution_only', // CC BY, CC BY-SA — ship it WITH the notice
+    LOCAL_ONLY: 'local_only',            // usable here, must not be redistributed
+    UNKNOWN: 'unknown',                  // never bundled
+});
+
+/**
+ * The assets that may lawfully be redistributed.
+ *
+ * This is the gate a bundler asks, and it must be a LICENCE question. Selecting
+ * by id prefix or by folder is the same shape of mistake as trusting a filename
+ * to say what is inside a file: it happens to be right until someone renames
+ * something, and it fails silently in both directions — omitting material that
+ * may ship, and shipping material that may not.
+ *
+ * An asset with no provenance at all is refused. That is not pedantry: three
+ * slides in this library have sat here since the beginning with a sha256, a
+ * stain and a calibration recorded and nothing about who may use them, and
+ * nobody can now say whether they may be sent to anyone.
+ *
+ * @param {Array<object>} assets
+ * @returns {Array<object>} those that may ship, in catalogue order
+ */
+export function redistributableAssets(assets) {
+    return (assets ?? []).filter((a) => {
+        const p = a?.provenance;
+        if (!p || !p.licence) return false;
+        if (p.redistribution === REDISTRIBUTION.PERMITTED) return true;
+        // A CC BY asset may ship only while its notice ships with it. An
+        // attribution requirement with no attribution recorded is not a
+        // licence to distribute; it is a licence breach waiting to be built.
+        return p.redistribution === REDISTRIBUTION.ATTRIBUTION_ONLY && Boolean(p.attribution);
+    });
+}
+
+/**
+ * The distinct notices a bundle must carry, deduplicated and sorted.
+ *
+ * @param {Array<object>} assets
+ * @returns {string[]}
+ */
+export function attributionNotices(assets) {
+    return [...new Set(
+        redistributableAssets(assets).map((a) => a.provenance.attribution).filter(Boolean),
+    )].sort();
+}
+
 export function filterCatalogAssets(assets, filters = {}) {
     if (!Array.isArray(assets)) throw new TypeError('filterCatalogAssets(): assets must be an array.');
     if (!isObject(filters)) throw new TypeError('filterCatalogAssets(): filters must be an object.');

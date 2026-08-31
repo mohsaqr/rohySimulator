@@ -69,8 +69,22 @@ const OUT_ROOT = join(ROOT, 'server', 'plugin-content');
  */
 const wantsPacsEntry = () => true;
 
-/** Pathology ships the cardiac teaching set; `cardiac-` is its id prefix. */
-const PATHOLOGY_PREFIX = 'cardiac-';
+/**
+ * Pathology ships whatever the licence gate passes — the same rule as imaging.
+ *
+ * This selected by the `cardiac-` id prefix, which gave the right answer only
+ * because the three slides that cannot ship happen to be named `local-*`. That
+ * is a naming coincidence doing the work of a licence control, and it fails
+ * silently in both directions: rename a slide and shippable material is
+ * dropped, or unshippable material is bundled. `redistributableAssets()` asks
+ * the real question.
+ */
+const wantsPathologyAsset = (asset) => {
+    const p = asset?.provenance;
+    if (!p || !p.licence) return false;
+    if (p.redistribution === 'permitted') return true;
+    return p.redistribution === 'attribution_only' && Boolean(p.attribution);
+};
 
 const say = (m) => console.log(`  ${m}`);
 const fail = (m) => { console.error(`build-starter-content: ${m}`); process.exit(1); };
@@ -175,8 +189,13 @@ function buildPathology(src) {
     mkdirSync(join(out, 'tiles', 'previews'), { recursive: true });
 
     const cat = JSON.parse(readFileSync(join(src, 'catalog.json'), 'utf8'));
-    const keep = (cat.assets ?? []).filter((a) => a.id.startsWith(PATHOLOGY_PREFIX));
-    if (keep.length === 0) fail(`the pathology origin has no "${PATHOLOGY_PREFIX}" assets`);
+    const all = cat.assets ?? [];
+    const keep = all.filter(wantsPathologyAsset);
+    if (keep.length === 0) fail('no asset in the pathology origin may be redistributed');
+    const refused = all.filter((a) => !keep.includes(a));
+    // Named, not silent. An asset dropped for want of a licence is a thing
+    // someone should go and establish, not a number to be noticed later.
+    refused.forEach((a) => say(`  excluded ${a.id} — ${a.provenance?.licence ? 'licence forbids redistribution' : 'no provenance recorded'}`));
 
     const seen = [];
     keep.forEach((a) => {
@@ -186,10 +205,13 @@ function buildPathology(src) {
         copyOne(src, out, a.preview.url.replace('remote:', ''), seen);
     });
 
+    // CC BY permits shipping the pixels only while the notice ships with them.
+    const attribution = [...new Set(keep.map((a) => a.provenance?.attribution).filter(Boolean))].sort();
     writeFileSync(join(out, 'catalog.json'), `${JSON.stringify({
         schemaVersion: cat.schemaVersion ?? '1.0.0',
         version: 1,
-        title: 'Cardiac pathology — starter set',
+        title: 'Pathology slides',
+        attribution,
         assets: keep,
     }, null, 2)}\n`);
 

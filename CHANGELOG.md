@@ -9,6 +9,32 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.140] — 2026-08-31
+
+### Fixed
+
+- **The slide bundler selected by id prefix rather than by licence.** It
+  kept assets whose id began `cardiac-`, which gave the right answer only
+  because the three slides that cannot ship happen to be named `local-*`.
+  A naming coincidence was doing the work of a licence control, and it
+  would have failed silently in both directions the moment anything was
+  renamed. Both bundlers now ask `redistributableAssets()` /
+  `redistributableEntries()`, and both name every asset they exclude and
+  why — material dropped for want of a licence is something to go and
+  establish, not a number to notice later.
+- The slide bundle now carries its attribution notices at the top level,
+  as the imaging bundle already did.
+
+### Added
+
+- `docs/contributing/imaging-content.md` — the pipeline from finding an
+  open dataset to a learner in another country opening the study, with
+  the gate at each step and the release checklist. The rule it rests on:
+  provenance is recorded at ingest because that is the only moment the
+  person who knows is present.
+- Vendored pathoyon 0.1.2, which adds `redistributableAssets()` and
+  `attributionNotices()`.
+
 ## [2.9.139] — 2026-08-31
 
 ### Added
