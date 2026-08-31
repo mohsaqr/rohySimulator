@@ -47,19 +47,22 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const OUT_ROOT = join(ROOT, 'server', 'plugin-content');
 
 /**
- * The starter selection, by archive entry id.
+ * The starter selection: ABNORMAL CHEST.
  *
- * Chosen for breadth of modality rather than volume: a deployment opening the
- * PACS room should find an X-ray, an echo, an MRI and a CT, normal and
- * abnormal, rather than ten of one thing.
+ * Selected from the archive's OWN metadata rather than a list of ids typed
+ * here. A hardcoded list goes stale silently — it was one, chosen for breadth
+ * of modality before the default case was filled with anterior-STEMI content,
+ * and the result was a starter kit with no cardiac MRI on a platform whose
+ * flagship case is an acute myocardial infarction. A predicate cannot drift
+ * from the archive that way: add a chest study upstream and it ships.
+ *
+ * "Chest" is the archive's region, not a guess, and in this catalogue that
+ * includes echocardiography — an echo IS a chest study — so the cardiac
+ * material the default case orders comes with it.
  */
-const PACS_ENTRIES = [
-    'normal/vhm_mri_brain', 'normal/echo_valve_motion', 'normal/echo_stress_pacing_negative',
-    'abnormal/echo_endocarditis_aortic', 'abnormal/echo_constrictive_pericarditis',
-    'abnormal/echo_hf_lbbb', 'abnormal/echo_mitral_prolapse', 'abnormal/mri_shoulder',
-    'abnormal/mri_lspine', 'normal/xr_lspine', 'abnormal/mri_brain', 'normal/xr_knee',
-    'normal/xr_chest', 'abnormal/rul_nodule',
-];
+const wantsPacsEntry = (entry) => (
+    String(entry.id).startsWith('abnormal/') && /chest/i.test(entry.bodyRegion ?? '')
+);
 
 /** Pathology ships the cardiac teaching set; `cardiac-` is its id prefix. */
 const PATHOLOGY_PREFIX = 'cardiac-';
@@ -120,9 +123,8 @@ function buildPacs(src) {
 
     const raw = JSON.parse(readFileSync(join(src, 'catalog.json'), 'utf8'));
     const all = Array.isArray(raw) ? raw : raw.entries;
-    const keep = all.filter((e) => PACS_ENTRIES.includes(e.id));
-    const missing = PACS_ENTRIES.filter((id) => !keep.some((e) => e.id === id));
-    if (missing.length) fail(`the pacs origin has no entry for: ${missing.join(', ')}`);
+    const keep = all.filter(wantsPacsEntry);
+    if (keep.length === 0) fail('the pacs origin has no abnormal chest entries');
 
     const seen = [];
     keep.forEach((e) => (e.series ?? []).forEach((s) => (

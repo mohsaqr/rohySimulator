@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.135] — 2026-08-31
+
+### Changed
+
+- The PACS starter bundle is **abnormal chest studies**, selected by a
+  predicate over the archive's own metadata rather than a hardcoded list
+  of entry ids. The list had gone stale in the way hardcoded lists do:
+  it was chosen for breadth of modality before the default case was
+  filled with anterior-STEMI content, and shipped no cardiac MRI on a
+  platform whose flagship case is an acute myocardial infarction. The
+  bundle is now 13 entries — chest radiographs and CT, the full
+  echocardiography set including the transoesophageal study and the
+  post-infarct free wall rupture, exercise stress, and cine cardiac MRI.
+
 ## [2.9.134] — 2026-08-31
 
 ### Added
