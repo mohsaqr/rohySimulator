@@ -45,6 +45,21 @@ nothing below applies to you.
 | **Python 3** | 3.10+ | Optional, only for `post-verify-rohy.sh` JSON parsing |
 | **OS** | macOS arm64, Linux x86_64, Linux arm64 | Native binaries are platform-locked; cross-builds need Docker (see [§ Air-gap](#air-gapped-target)) |
 
+### The `dynajs` sibling — clone it before `npm install`
+
+`package.json` declares `dynajs` as `file:../dynajs`, so it must be cloned
+**beside** the rohy checkout, not inside it:
+
+```bash
+git clone https://github.com/mohsaqr/rohySimulator.git rohy
+git clone https://github.com/mohsaqr/dynajs.git dynajs     # sibling, not nested
+cd dynajs && npm install && cd ../rohy
+```
+
+Get this wrong and `npm install` does not fail. It resolves the dependency to
+an empty stub, and the build breaks later somewhere unrelated — which is why
+this is the first item here rather than a footnote.
+
 ---
 
 ## Published release (recommended)

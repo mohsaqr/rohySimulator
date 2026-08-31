@@ -5544,7 +5544,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/health-routes.js:210",
+        "x-rohy-source": "server/routes/health-routes.js:253",
         "x-rohy-auth": [
           "public"
         ],

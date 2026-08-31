@@ -207,6 +207,49 @@ async function libraryHealth(pluginId) {
     }
 }
 
+/**
+ * The content INSTALLED on this host, as opposed to fetched from an origin.
+ *
+ * A deployment that ran `npm run setup:content` has no configured origin, so
+ * the origin probe reports nothing and the response reads identically to a
+ * deployment with no content at all. That is the one thing an operator
+ * verifying an install most needs to tell apart.
+ *
+ * Counts and the content version only. This route is public so the deploy
+ * verify needs no credentials, and a file listing is not public information.
+ */
+function starterHealth() {
+    const root = process.env.ROHY_STARTER_CONTENT_DIR
+        ? path.resolve(process.env.ROHY_STARTER_CONTENT_DIR)
+        : path.resolve(fileURLToPath(new URL('../plugin-content', import.meta.url)));
+    if (String(process.env.ROHY_STARTER_CONTENT ?? '').toLowerCase() === 'off') {
+        return { refused: true };
+    }
+    let names;
+    try { names = fs.readdirSync(root, { withFileTypes: true }); } catch { return {}; }
+
+    const installed = {};
+    names.filter((e) => e.isDirectory()).forEach((e) => {
+        const stamp = path.join(root, e.name, 'content.json');
+        if (!fs.existsSync(stamp)) return;
+        try {
+            const content = JSON.parse(fs.readFileSync(stamp, 'utf8'));
+            installed[e.name] = {
+                version: typeof content.version === 'string' ? content.version : null,
+                file_count: Number.isInteger(content.fileCount) ? content.fileCount : null,
+                kilobytes: Number.isInteger(content.kilobytes) ? content.kilobytes : null,
+            };
+        } catch {
+            // A bundle whose stamp will not parse is reported as present and
+            // broken rather than omitted: silence here reads as "not
+            // installed", which would send an operator to reinstall something
+            // that is already there and damaged.
+            installed[e.name] = { version: null, error: 'content.json is unreadable' };
+        }
+    });
+    return Object.keys(installed).length ? { installed } : {};
+}
+
 router.get('/health/plugins', async (req, res) => {
     // pluginOrigins() is a Map (plugin id → origin), parsed once at boot.
     const origins = pluginOrigins();
@@ -243,5 +286,9 @@ router.get('/health/plugins', async (req, res) => {
         configured: configured.length,
         unreachable,
         plugins,
+        // What is installed locally. A deployment serving bundled content has
+        // `configured: 0` and is perfectly healthy; without this the response
+        // cannot say so.
+        content: starterHealth(),
     });
 });

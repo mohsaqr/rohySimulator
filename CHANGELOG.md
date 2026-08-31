@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.144] — 2026-08-31
+
+### Added
+
+- `GET /api/health/plugins` reports the content **installed on this host**,
+  not only what a configured origin serves. A deployment that ran
+  `npm run setup:content` has no origin, so the response previously read
+  identically to one with no content at all — the single thing an operator
+  verifying an install most needs to distinguish. Counts and the content
+  version only; the route is public so the deploy verify needs no
+  credentials.
+
+### Fixed
+
+- The install documentation never told anyone to clone `dynajs` as a
+  sibling, though `package.json` declares it `file:../dynajs`. Getting it
+  wrong does not fail `npm install` — it resolves to an empty stub and the
+  build breaks later somewhere unrelated. Now the first step in
+  `README.md`, `docs/INSTALL.md` and `docs/operator/install.md`.
+
 ## [2.9.143] — 2026-08-31
 
 ### Fixed
