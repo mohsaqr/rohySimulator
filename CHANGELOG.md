@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.136] — 2026-08-31
+
+### Changed
+
+- The PACS starter ships **the whole redistributable archive** — 48
+  entries, 1.48 GB, 21 attribution notices — rather than a curated
+  subset. Curating was tried twice and failed silently both times: a
+  hardcoded list of entry ids stopped describing what the product needed
+  once the default case became an anterior STEMI, and narrowing to
+  abnormal chest removed every normal comparator, which is most of what
+  makes an abnormal legible. "Everything we are allowed to send" has no
+  such failure mode, and the licence audit exists so that rule can be
+  stated: the built origin already ships only `redistributableEntries()`,
+  so everything in its catalogue is shippable by construction.
+
 ## [2.9.135] — 2026-08-31
 
 ### Changed

@@ -47,22 +47,27 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const OUT_ROOT = join(ROOT, 'server', 'plugin-content');
 
 /**
- * The starter selection: ABNORMAL CHEST.
+ * The starter selection: EVERYTHING THAT MAY LAWFULLY SHIP.
  *
- * Selected from the archive's OWN metadata rather than a list of ids typed
- * here. A hardcoded list goes stale silently — it was one, chosen for breadth
- * of modality before the default case was filled with anterior-STEMI content,
- * and the result was a starter kit with no cardiac MRI on a platform whose
- * flagship case is an acute myocardial infarction. A predicate cannot drift
- * from the archive that way: add a chest study upstream and it ships.
+ * Not a curated subset. The archive's entries have carried a redistribution
+ * decision since the day it was built, and `redistributableEntries()` is the
+ * predicate that answers "may these pixels leave the building" — CC0 and
+ * public-domain entries outright, CC BY and CC BY-SA entries while their
+ * notice ships with them. Everything that passes it, ships.
  *
- * "Chest" is the archive's region, not a guess, and in this catalogue that
- * includes echocardiography — an echo IS a chest study — so the cardiac
- * material the default case orders comes with it.
+ * Curating was tried and went wrong twice, both times silently. A hardcoded
+ * list of fourteen ids, chosen for breadth of modality, stopped describing
+ * what the product needed the moment the default case became an anterior
+ * STEMI — it shipped a knee X-ray and no cardiac MRI. Narrowing to abnormal
+ * chest then removed every normal comparator, which is most of what makes an
+ * abnormal legible. A rule that says "everything we are allowed to send" has
+ * no such failure mode, and the licence audit exists precisely so that rule
+ * can be stated.
+ *
+ * The gate is the archive's own, so an entry whose licence was never reviewed
+ * cannot reach the bundle by being added to a list here.
  */
-const wantsPacsEntry = (entry) => (
-    String(entry.id).startsWith('abnormal/') && /chest/i.test(entry.bodyRegion ?? '')
-);
+const wantsPacsEntry = () => true;
 
 /** Pathology ships the cardiac teaching set; `cardiac-` is its id prefix. */
 const PATHOLOGY_PREFIX = 'cardiac-';
@@ -121,10 +126,15 @@ function buildPacs(src) {
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });
 
+    // The built origin has ALREADY passed the licence gate — content-bundle
+    // ships only `redistributableEntries()` — so everything in this catalogue
+    // is shippable by construction. The filter stays as the seam where a
+    // narrower rule would go, and as the place that would have to be changed
+    // deliberately rather than by editing a list of ids.
     const raw = JSON.parse(readFileSync(join(src, 'catalog.json'), 'utf8'));
     const all = Array.isArray(raw) ? raw : raw.entries;
     const keep = all.filter(wantsPacsEntry);
-    if (keep.length === 0) fail('the pacs origin has no abnormal chest entries');
+    if (keep.length === 0) fail('the pacs origin catalogue is empty');
 
     const seen = [];
     keep.forEach((e) => (e.series ?? []).forEach((s) => (
