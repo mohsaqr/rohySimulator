@@ -61,8 +61,9 @@ export function validateEnv(env = process.env) {
         try {
             parsePluginOriginTokens(env.ROHY_PLUGIN_ORIGIN_TOKENS);
         } catch (err) {
-            // The message never quotes the entry — it contains a secret.
-            fatal.push(`ROHY_PLUGIN_ORIGIN_TOKENS is malformed: ${err.message}`);
+            // The parser's message names the variable and never quotes the
+            // entry, because the entry is the thing that is secret.
+            errors.push(err.message);
         }
     }
 

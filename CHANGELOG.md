@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.142] — 2026-08-31
+
+### Fixed
+
+- `validateEnv` threw `ReferenceError: fatal is not defined` whenever a
+  deployment set `ROHY_PLUGIN_ORIGIN_TOKENS` — the branch pushed to an
+  array that does not exist. The variable is `errors`, as the block
+  directly below it uses. Caught by ESLint in CI, which is late: the
+  branch had no test, so nothing exercised the path it validates.
+- Added the missing tests, verified by breaking the fix on purpose: a
+  malformed credential map is an error, the credential never appears in
+  that error, and a well-formed or absent map is accepted.
+
 ## [2.9.141] — 2026-08-31
 
 ### Changed

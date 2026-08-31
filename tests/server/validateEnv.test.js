@@ -10,6 +10,38 @@ const baseProdEnv = () => ({
 });
 
 describe('validateEnv', () => {
+    describe('ROHY_PLUGIN_ORIGIN_TOKENS', () => {
+        // This branch shipped with `fatal.push(...)` against an array called
+        // `errors`, so it threw ReferenceError the moment a deployment set the
+        // variable — and only ESLint caught it, in CI, because nothing here
+        // exercised the path. A validator with no test validates nothing.
+        it('rejects a malformed credential map', () => {
+            const { errors } = validateEnv({
+                JWT_SECRET: 'a'.repeat(64),
+                ROHY_PLUGIN_ORIGIN_TOKENS: 'no-equals-sign',
+            });
+            expect(errors).toEqual(expect.arrayContaining([
+                expect.stringMatching(/ROHY_PLUGIN_ORIGIN_TOKENS/),
+            ]));
+        });
+
+        it('never puts the credential in the error, because the bad entry IS the secret', () => {
+            const { errors } = validateEnv({
+                JWT_SECRET: 'a'.repeat(64),
+                ROHY_PLUGIN_ORIGIN_TOKENS: 'sup3rs3cr3t-with-no-equals',
+            });
+            expect(errors.join(' ')).not.toContain('sup3rs3cr3t');
+        });
+
+        it('accepts a well-formed map, and unset is not an error', () => {
+            const base = { JWT_SECRET: 'a'.repeat(64) };
+            expect(validateEnv({ ...base, ROHY_PLUGIN_ORIGIN_TOKENS: 'pacs=abc,pathology=def' }).errors)
+                .toHaveLength(0);
+            expect(validateEnv(base).errors).toHaveLength(0);
+        });
+    });
+
+
     describe('JWT_SECRET', () => {
         it('errors when missing in any environment', () => {
             const { errors } = validateEnv({});
