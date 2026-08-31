@@ -9,6 +9,38 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.137] — 2026-08-31
+
+### Added
+
+- **`ROHY_PLUGIN_ORIGIN_TOKENS`** — a per-deployment credential rohy
+  presents to a plugin content origin, so imaging can be hosted centrally
+  and closed to the public rather than merely unadvertised. Sent only on
+  rohy's own server-to-server fetch; the learner's browser never contacts
+  the origin, so the page's CSP stays at `'self'` and the origin need not
+  be reachable from the public internet. It is not the caller's
+  credential — the proxy still forwards no cookies, no Authorization
+  header and no query string upstream — because rohy deciding whether
+  this learner may read and the origin deciding whether this
+  *installation* may read are two different questions. Malformed is fatal
+  at boot; the value is classified as a secret and never appears in a log
+  or an error message.
+- A 401 from an origin now reports `plugin_remote_unauthorized`, distinct
+  from a wrong slide path, because the fix is a credential rather than a
+  path.
+- `deploy/env.example` documents content origins for the first time — the
+  deploy path previously never mentioned them, which is why a deployer
+  could follow it end to end and still find empty rooms.
+- `deploy/nginx/content-origin.conf.example` — the hosting side, with
+  per-deployment bearer tokens, the `types{}` block DICOM needs, and
+  access logging that names which deployment is pulling.
+
+### Fixed
+
+- The config docs generator classified `*_TOKEN` as a secret but not
+  `*_TOKENS`. A variable holding several credentials is no less secret
+  than one holding a single credential.
+
 ## [2.9.136] — 2026-08-31
 
 ### Changed

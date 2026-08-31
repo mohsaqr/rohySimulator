@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import { logger } from '../logger.js';
+import { parsePluginOriginTokens } from '../lib/pluginOriginTokens.js';
 import { parsePluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { parseImportOrigins } from '../lib/pluginImportOrigins.js';
 import { parseLibraryDirs } from '../lib/pluginServerSlot.js';
@@ -53,6 +54,18 @@ export function validateEnv(env = process.env) {
     // ROHY_PLUGIN_ORIGINS — fatal if malformed. Checked here rather than left
     // to the first tile request, because the failure mode this prevents is an
     // operator who believes slides are coming from a host rohy never contacts.
+    // A malformed credential map is fatal for the same reason a malformed
+    // origin is: a typo must not degrade into "the imaging quietly stopped
+    // loading" while an operator believes the host is authenticated.
+    if (env.ROHY_PLUGIN_ORIGIN_TOKENS) {
+        try {
+            parsePluginOriginTokens(env.ROHY_PLUGIN_ORIGIN_TOKENS);
+        } catch (err) {
+            // The message never quotes the entry — it contains a secret.
+            fatal.push(`ROHY_PLUGIN_ORIGIN_TOKENS is malformed: ${err.message}`);
+        }
+    }
+
     if (env.ROHY_PLUGIN_ORIGINS) {
         try {
             parsePluginOrigins(env.ROHY_PLUGIN_ORIGINS);

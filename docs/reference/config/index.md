@@ -16,6 +16,7 @@ The following variables carry credentials or signing material. Never commit them
 - `OPENAI_API_KEY`
 - `ROHY_ADMIN_PASSWORD`
 - `ROHY_PASSWORD`
+- `ROHY_PLUGIN_ORIGIN_TOKENS`
 - `ROHY_TOKEN`
 :::
 
@@ -39,6 +40,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_ADMIN_PASSWORD` | No | — | Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. **⚠ secret — see security note above.** | `server/seeders/users.js:57` |
 | `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:56` |
 | `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:80`<br>`server/routes/registration-routes.js:38` |
+| `ROHY_PLUGIN_ORIGIN_TOKENS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;token&gt;` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy's own server-to-server fetch as `Authorization: Bearer &lt;token&gt;` — never returned to a browser, never logged, and never the caller's own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation's access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. **⚠ secret — see security note above.** | `server/lib/pluginOriginTokens.js:84` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:77` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:64` |
 | `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:56` |
@@ -59,7 +61,7 @@ The following variables carry credentials or signing material. Never commit them
 | `LOG_LEVEL` | No | — | Server log verbosity. | `server/logger.js:27` |
 | `ROHY_LOG_LEVEL` | No | `info` | Server log verbosity (Rohy-prefixed alias). | `server/logger.js:27`<br>`server/observability.js:17` |
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
-| `ROHY_PATHOLOGY_CONTENT` | No | — | _see source_ | `scripts/build-starter-content.mjs:193` |
+| `ROHY_PATHOLOGY_CONTENT` | No | — | _see source_ | `scripts/build-starter-content.mjs:205` |
 | `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:38` |
 | `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:400` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
@@ -119,14 +121,14 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:72` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:61` |
-| `ROHY_PACS_CONTENT` | No | — | _see source_ | `scripts/build-starter-content.mjs:192` |
+| `ROHY_PACS_CONTENT` | No | — | _see source_ | `scripts/build-starter-content.mjs:204` |
 | `ROHY_PASSWORD` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:49` |
-| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:509` |
+| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:513` |
 | `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:119` |
 | `ROHY_PLUGIN_VIPS_CONCURRENCY` | No | — | How many threads an image tool (libvips) may use for a plugin conversion job. Defaults to half the machine's cores, minimum 1. libvips otherwise uses every core: measured on a 4-core server, one unbounded `dzsave` took 301% CPU for 21 seconds — three of four cores — starving the web server sharing the box, and its peak memory scales with thread count too, so an unbounded tool on a wide machine uses far more RAM than a capacity proof taken on a narrow one. Raise it on a dedicated conversion host. | `server/lib/pluginSpawn.js:63` |
-| `ROHY_STARTER_CONTENT` | No | `'' (empty string)` | Set to `off` to refuse the starter content bundles rohy ships under `server/plugin-content/`. Those bundles are a licence-audited subset of the plugins' real content origins, served from disk when `ROHY_PLUGIN_ORIGINS` names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience. | `server/routes/plugins-routes.js:202` |
+| `ROHY_STARTER_CONTENT` | No | `'' (empty string)` | Set to `off` to refuse the starter content bundles rohy ships under `server/plugin-content/`. Those bundles are a licence-audited subset of the plugins' real content origins, served from disk when `ROHY_PLUGIN_ORIGINS` names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience. | `server/routes/plugins-routes.js:203` |
 | `ROHY_USERNAME` | No | — | _see source_ | `scripts/llm-language-smoke.mjs:48` |
 
 ---
 
-_58 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._
+_59 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._

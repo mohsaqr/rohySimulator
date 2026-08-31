@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
+import { originRequestHeaders } from '../lib/pluginOriginTokens.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
@@ -125,10 +126,14 @@ export default router;
 // manifest paths only), and this endpoint never returns the origin's body.
 const ORIGIN_PROBE_TIMEOUT_MS = 2500;
 
-async function probeOrigin(origin) {
+async function probeOrigin(origin, pluginId) {
     const started = Date.now();
     try {
         const res = await fetch(`${origin}/content.json`, {
+            // The probe must authenticate too, or a correctly-configured
+            // authenticated origin reports itself dark and an operator chases
+            // a network fault that is really a missing credential.
+            headers: originRequestHeaders(pluginId),
             redirect: 'manual',
             signal: AbortSignal.timeout(ORIGIN_PROBE_TIMEOUT_MS),
         });
@@ -141,7 +146,11 @@ async function probeOrigin(origin) {
         // thing to look at.
         let hasCatalog = false;
         try {
-            const head = await fetch(`${origin}/catalog.json`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(ORIGIN_PROBE_TIMEOUT_MS) });
+            const head = await fetch(`${origin}/catalog.json`, {
+                method: 'HEAD', redirect: 'manual',
+                headers: originRequestHeaders(pluginId),
+                signal: AbortSignal.timeout(ORIGIN_PROBE_TIMEOUT_MS),
+            });
             hasCatalog = head.ok;
         } catch { hasCatalog = false; }
         return {
@@ -204,7 +213,7 @@ router.get('/health/plugins', async (req, res) => {
     const configured = [...origins.keys()];
     const entries = await Promise.all(configured.map(async (id) => {
         const manifest = PLUGIN_MANIFESTS.find((m) => m.id === id) || null;
-        const probe = await probeOrigin(origins.get(id));
+        const probe = await probeOrigin(origins.get(id), id);
         // The origin must describe itself as THIS plugin's content: a bundle
         // for another plugin on the right port is the kind of mistake that
         // otherwise surfaces as "every slide is a 404".

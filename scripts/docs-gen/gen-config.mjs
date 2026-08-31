@@ -112,7 +112,7 @@ function classify(name) {
     // Auth / security / TLS.
     if (
         n.includes('JWT') || n.includes('TLS') ||
-        n.endsWith('_KEY') || n.endsWith('_SECRET') || n.endsWith('_TOKEN') ||
+        n.endsWith('_KEY') || n.endsWith('_SECRET') || n.endsWith('_TOKEN') || n.endsWith('_TOKENS') ||
         n === 'ALLOW_DEFAULT_USERS' || n === 'ROHY_DISABLE_AUTH_RATE_LIMIT' ||
         n === 'ROHY_TRUST_PROXY' || n.startsWith('ROHY_ADMIN_')
     ) {
@@ -159,6 +159,9 @@ function isSecret(name) {
         n.endsWith('_KEY') ||
         n.endsWith('_SECRET') ||
         n.endsWith('_TOKEN') ||
+        // A var holding SEVERAL credentials is no less secret than one
+        // holding a single credential; the plural nearly slipped through.
+        n.endsWith('_TOKENS') ||
         n.endsWith('_PASSWORD') ||
         n.includes('API_KEY')
     );
@@ -178,6 +181,7 @@ const PURPOSES = {
     ROHY_PLUGIN_VIPS_CONCURRENCY: 'How many threads an image tool (libvips) may use for a plugin conversion job. Defaults to half the machine\u0027s cores, minimum 1. libvips otherwise uses every core: measured on a 4-core server, one unbounded `dzsave` took 301% CPU for 21 seconds \u2014 three of four cores \u2014 starving the web server sharing the box, and its peak memory scales with thread count too, so an unbounded tool on a wide machine uses far more RAM than a capacity proof taken on a narrow one. Raise it on a dedicated conversion host.',
     ROHY_PLUGIN_IMPORT_MAX_BYTES: 'Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) \u2014 today pathology\u0027s `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest\u0027s own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value.',
     ROHY_STARTER_CONTENT: 'Set to `off` to refuse the starter content bundles rohy ships under `server/plugin-content/`. Those bundles are a licence-audited subset of the plugins\' real content origins, served from disk when `ROHY_PLUGIN_ORIGINS` names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience.',
+    ROHY_PLUGIN_ORIGIN_TOKENS: 'Comma-separated `<pluginId>=<token>` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy\u0027s own server-to-server fetch as `Authorization: Bearer <token>` \u2014 never returned to a browser, never logged, and never the caller\u0027s own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation\u0027s access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot.',
     ROHY_PLUGIN_ORIGINS: 'Comma-separated `<pluginId>=<origin>` allowlist naming where each RPS-1 plugin\'s remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin: the plugin serves the bundled starter content if any is installed, and otherwise every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request.',
     JWT_EXPIRY: 'Lifetime of issued JWTs.',
     TLS_CERT_PATH: 'Path to TLS certificate; must be paired with `TLS_KEY_PATH`.',

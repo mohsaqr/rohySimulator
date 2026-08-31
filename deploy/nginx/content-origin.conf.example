@@ -1,0 +1,89 @@
+# A plugin CONTENT ORIGIN, closed to the public.
+#
+# This is the saqr.me side of ROHY_PLUGIN_ORIGINS. It serves the built bundles
+# — Radoyon's `dist-content/` for pacs, Pathoyon's for pathology — to rohy
+# deployments that present a per-deployment bearer token, and to nobody else.
+#
+# WHO TALKS TO THIS HOST
+#
+# Only rohy's server. A learner's browser never contacts it: every tile is
+# relayed through `GET /api/plugins/:pluginId/*`, which is what lets the page's
+# CSP stay at `default-src 'self'` and what makes "who may read which slide" a
+# question rohy can answer. So this host does not need to be in anyone's CSP,
+# does not need CORS, and should not be linked from anywhere.
+#
+# WHY A TOKEN PER DEPLOYMENT
+#
+# So one installation's access can be revoked without breaking the others, and
+# so the access log says which installation is pulling. Generate one per
+# deployment and hand it over out of band:
+#
+#     openssl rand -hex 32
+#
+# The deployment sets it as ROHY_PLUGIN_ORIGIN_TOKENS=pacs=<token>,pathology=<token>
+
+map $http_authorization $content_client {
+    default                              "";
+    # One line per deployment. The comment is the point: an opaque token with
+    # no name beside it cannot be revoked with any confidence.
+    "Bearer REPLACE_WITH_TOKEN_FOR_SITE_A"  "site-a";
+    "Bearer REPLACE_WITH_TOKEN_FOR_SITE_B"  "site-b";
+}
+
+server {
+    listen 443 ssl http2;
+    server_name content.saqr.me;
+
+    ssl_certificate     /etc/letsencrypt/live/content.saqr.me/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/content.saqr.me/privkey.pem;
+
+    # Which deployment is asking, so revocation is an informed act.
+    log_format content '$remote_addr $content_client "$request" $status $body_bytes_sent';
+    access_log /var/log/nginx/content-origin.log content;
+
+    # An unknown or absent credential is 401 — distinct from 403/404, because
+    # rohy reports it separately (plugin_remote_unauthorized) and the fix is a
+    # credential rather than a path.
+    if ($content_client = "") { return 401; }
+
+    # A DICOM instance has no extension nginx recognises, and a tile tree is
+    # JPEG. This types{} block REPLACES the default map rather than extending
+    # it, so it must name every type served here — the trap ARCHIVE.md records.
+    types {
+        application/dicom  dcm;
+        application/json   json;
+        application/xml    dzi;
+        image/jpeg         jpg jpeg;
+        image/png          png;
+    }
+    default_type application/octet-stream;
+
+    # Only the prefixes the plugin manifests declare are reachable, plus the
+    # two self-description files at each root. Everything else, including a
+    # directory listing, is 404 — a bundle file outside a declared prefix is
+    # unreachable by design.
+    autoindex off;
+
+    location ~ ^/pacs/(dicom|thumbs)/ {
+        alias /srv/content/pacs/;
+        try_files /$1$uri =404;
+        # Instances and tiles are immutable: their bytes are named by a fixed
+        # image. The catalogue is not, so it is revalidated.
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    location ~ ^/pathology/tiles/ {
+        alias /srv/content/pathology/;
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location ~ ^/(pacs|pathology)/(content|catalog)\.json$ {
+        alias /srv/content/;
+        try_files /$1/$2.json =404;
+        add_header Cache-Control "no-cache";
+    }
+
+    location / { return 404; }
+}

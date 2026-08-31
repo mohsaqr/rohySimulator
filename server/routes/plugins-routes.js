@@ -35,6 +35,7 @@ import { authenticateToken, requireStudent } from '../middleware/auth.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
+import { originRequestHeaders } from '../lib/pluginOriginTokens.js';
 import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
 
 import { importOriginsFor } from '../lib/pluginImportOrigins.js';
@@ -275,7 +276,10 @@ async function fetchBundleCatalog(origin, pluginId, shape) {
         upstream = await fetch(`${origin}/catalog.json`, {
             method: 'GET', redirect: 'manual',
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-            headers: { accept: 'application/json' },
+            // rohy's own credential for this origin, not the caller's. See
+            // pluginOriginTokens.js: two separate authorisations, and the
+            // learner's is not the one that travels upstream.
+            headers: originRequestHeaders(pluginId, { accept: 'application/json' }),
         });
     } catch (err) {
         log.warn('plugin catalog fetch failed', { pluginId, error: err.message });
@@ -672,7 +676,7 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
             // configured origin hand rohy any other address on the network.
             redirect: 'manual',
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-            headers: { accept: manifest.remote.contentTypes.join(', ') },
+            headers: originRequestHeaders(pluginId, { accept: manifest.remote.contentTypes.join(', ') }),
         });
     } catch (err) {
         // Deliberately not surfaced to the caller: the failure text names the
@@ -687,6 +691,14 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
             pluginId, path: built.path, status: upstream.status,
         });
         return res.status(502).json({ error: 'plugin content is unavailable', code: 'plugin_remote_redirect' });
+    }
+    if (upstream.status === 401) {
+        // The origin refused rohy, not the learner. Distinguished from 403
+        // below because the fix is entirely different: a wrong or missing
+        // ROHY_PLUGIN_ORIGIN_TOKENS entry, not a wrong slide path. Logged for
+        // the operator; the learner is told only that content is unavailable.
+        log.warn('plugin origin rejected our credential', { pluginId, path: built.path });
+        return res.status(502).json({ error: 'plugin content is unavailable', code: 'plugin_remote_unauthorized' });
     }
     if (!upstream.ok) {
         // 404 and 403 are passed through because they are the author's problem
