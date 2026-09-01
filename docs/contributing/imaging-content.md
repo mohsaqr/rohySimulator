@@ -57,9 +57,32 @@ Two honesty constraints the tools enforce, not preferences:
   published micrograph is ingested `measurable: false`, displayed with the
   ruler and counting frame withheld. A plausible value is still wrong data, and
   a wrong measurement carries the full authority of a number on a screen.
-- **Burned-in identifiers are a human's job.** Ingest de-identifies headers and
-  prints `REVIEW REQUIRED` for ultrasound and angiography, because no header
-  operation touches text rendered into the pixels. Look at them.
+- **Burned-in identifiers are a human's job, and ingest now refuses without
+  one.** Ingest de-identifies headers, but no header operation touches text
+  rendered into the *pixels*. `burnedInAnnotationRisk()` flags the modalities
+  that routinely carry it (US, XA, SC, OT, ES, NM), and an at-risk study
+  **will not ingest** unless you pass
+  `--pixels-reviewed "<who looked, when, what was masked>"`, which is recorded
+  in the entry's `provenance.pixelsReviewed`.
+
+  This used to be a warning printed at the end of a successful run. On
+  2026-09-01 a review of the shipped starter bundle found four full patient
+  names, two hospital names, a probable date of birth and four accession
+  numbers burned into eleven ultrasound entries — every one of them correctly
+  flagged at ingest, every flag cleared by nobody. A warning nothing blocks on
+  is a warning that ships.
+
+  **Reviewing means max-projecting every frame, not looking at the first
+  one.** Burned-in text changes within a loop: in one stress echo the patient's
+  name was in frame 0 and the acquisition date appeared only after frame ~350.
+  Take the per-pixel maximum across all frames of a series, and any text that
+  ever appears shows up in one image. Mask, then re-project the masked output
+  to confirm nothing survives.
+
+  The masks applied to the current starter bundle are recorded in
+  [`burned-in-masks.json`](./burned-in-masks.json) — geometry and categories
+  only. It deliberately does not record the strings that were removed: writing
+  them down re-creates the disclosure the masking exists to undo.
 
 ## 3. Build the origins
 
@@ -99,6 +122,7 @@ clear failure at install rather than three confusing ones later.
 - [ ] `archiveIssues()` reports no errors
 - [ ] every `attribution_only` entry has an attribution
 - [ ] burned-in annotation reviewed for every ultrasound and angiographic entry
+      — max-projection of **every frame**, and `provenance.pixelsReviewed` set
 - [ ] `npm run starter-content` excluded nothing you expected to ship
 - [ ] checksums in `scripts/content-sources.json` match the published assets
 - [ ] a clean `npm run setup:content` installs and the rooms render

@@ -9,6 +9,49 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.146] — 2026-09-01
+
+### Security
+
+- **Burned-in patient identifiers removed from the shipped imaging.** Every
+  ultrasound entry in the starter archive was reviewed pixel by pixel — 28
+  series across 11 entries, max-projected over every frame, because burned-in
+  text changes within a loop and frame 0 does not show it. Nineteen series
+  carried identifiers rendered into the image itself, where no header
+  operation reaches: patient names, hospital and department names, a probable
+  date of birth, accession numbers and acquisition dates and times. All are
+  masked on every frame. View labels, stress stage, heart rate, ECG trace,
+  depth, probe and MI/TIS are preserved — they carry no identity and the study
+  cannot be read without them.
+
+  Masking was applied at the source archive and rebuilt forward, so a later
+  rebuild cannot restore the originals. DICOM headers were separately
+  confirmed clean across all 4,070 instances: every patient name is a
+  pseudonym, every id is synthetic or a public dataset citation key, and no
+  institution, accession, physician, birth date or address value survives.
+
+- **Ingest now refuses to write an at-risk study that nobody has looked at.**
+  `burnedInAnnotationRisk()` had flagged all eleven ultrasound entries
+  correctly, every run — and printed `REVIEW REQUIRED` at the end of a
+  *successful* one. Detection was never the problem; the warning had no
+  consumer, so the archive shipped anyway. An at-risk study now requires
+  `--pixels-reviewed "<who looked, when>"`, recorded in the entry's
+  `provenance.pixelsReviewed` beside its licence (Radoyon 0.3.4).
+
+### Changed
+
+- Content archives repacked and republished; `scripts/content-sources.json`
+  carries the new checksums, sizes and content versions. The imaging archive
+  is now 741 MB (re-encoding the masked frames costs about 10 MB).
+- Installation instructions lead with the no-credential `--from` path, which
+  needs no token because the installer verifies the archive's checksum rather
+  than trusting its host. The token section now specifies a fine-grained,
+  single-repository, read-only token and warns that an expired token returns
+  the same 404 as a missing one.
+- `docs/contributing/burned-in-masks.json` records the mask geometry and the
+  categories removed — deliberately not the strings, since writing those down
+  re-creates the disclosure the masking exists to undo.
+
 ## [2.9.145] — 2026-08-31
 
 ### Fixed
