@@ -34,9 +34,11 @@ import {
     formatPersonalityForPrompt,
 } from '../../utils/casePromptContext';
 import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
+import { resolvePatientTemplate } from '../../utils/patientTemplate';
 import { getAffectSnapshot } from '../../utils/latestAffect';
 import { buildAffectSignal } from '../../utils/affectSignal';
 import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
+import SubtitleBand from '../voice/SubtitleBand';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -438,47 +440,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 });
                 setAgentStates(states);
 
-                // Patient template resolution: prefer per-case attached row;
-                // otherwise pick a platform-default patient template by gender.
-                // Order tried:
-                //   1. Exact match — first-letter of case demographics.gender
-                //      matches a template's config.voice.gender.
-                //   2. For non-female cases (including empty gender, "Other",
-                //      "Non-binary", anything that doesn't start with 'f'),
-                //      fall back to the first NON-female template. This
-                //      matches the seed doc that "Default Patient is used
-                //      otherwise" and keeps the patient audible for cases
-                //      that don't slot cleanly into male/female.
-                //   3. Otherwise null. A female-coded case with only male
-                //      templates seeded must NOT silently pick the male one
-                //      — that's a real misconfig the admin needs to see, so
-                //      we surface a loud error instead.
-                const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
-                if (attachedPatient) {
-                    setPatientTemplate(normalizePatientAgent(attachedPatient, activeCase.id));
-                } else {
-                    try {
-                        const templates = await AgentService.getTemplates();
-                        const patientDefaults = (templates || []).filter(t =>
-                            t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true)
-                        );
-                        const caseGender = (activeCase?.config?.demographics?.gender || '').toLowerCase();
-                        const firstLetter = caseGender.charAt(0);
-                        const isFemaleCase = firstLetter === 'f';
-                        const templateGender = (t) =>
-                            (parseConfig(t.config)?.voice?.gender || '').toLowerCase();
-                        const exact = patientDefaults.find((t) =>
-                            firstLetter && templateGender(t).charAt(0) === firstLetter
-                        );
-                        const nonFemale = isFemaleCase
-                            ? null
-                            : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
-                        const fallback = exact || nonFemale || null;
-                        setPatientTemplate(fallback ? normalizePatientAgent(fallback, activeCase.id) : null);
-                    } catch {
-                        setPatientTemplate(null);
-                    }
-                }
+                // Patient template resolution (per-case attached row, else a
+                // platform default matched on the case's gender) now lives in
+                // utils/patientTemplate, so the 3D room resolves the SAME
+                // persona — and therefore the same voice — as this chat.
+                // Its rules, including the deliberate refusal to hand a
+                // female case a male template, are documented there.
+                setPatientTemplate(
+                    await resolvePatientTemplate(agentList, activeCase, () => AgentService.getTemplates()),
+                );
 
                 // Load team communications
                 const log = await AgentService.getTeamCommunications(sessionId);
@@ -1911,62 +1881,30 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     only content. */}
                 {voiceMode && !showTranscript && activeTab === 'patient' && (() => {
                     let line = null;
+                    let isListening = false;
                     if (listening && input) {
                         line = input;
+                        isListening = true;
                     } else if (speaking && subtitleReady) {
                         const latest = currentMessages[currentMessages.length - 1] || null;
                         if (latest?.role === 'assistant' && latest.content) {
                             line = latest.content;
                         }
                     }
-                    if (!line) return null;
-                    // Haze: a feathered ellipse of dim+blur sitting only
-                    // behind the caption, fading to fully transparent at the
-                    // edges — never a full-screen scrim. Mask-image is the
-                    // mechanism: it controls where the dim/blur layer is
-                    // visible, with a soft radial falloff.
-                    const hazeMask = 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 90%)';
                     return (
-                        <button
-                            type="button"
+                        <SubtitleBand
+                            line={line}
+                            listening={isListening}
+                            // Pixel-anchored under the RESP waveform:
+                            // PatientMonitor stacks three 128px canvases below
+                            // a ~64px header, so the resp line ends at ~448px.
+                            // 29rem + 1cm keeps a breathing gap below it, and a
+                            // pixel anchor stays glued to the stack at any
+                            // viewport height.
+                            anchor="calc(29rem + 1cm)"
                             onClick={() => setShowTranscript(true)}
-                            aria-label={t('show_full_transcript')}
-                            // Anchored pixel-wise to the bottom edge of the
-                            // resp waveform: PatientMonitor.jsx stacks three
-                            // 128px canvases (ECG / PLETH / RESP) below a
-                            // ~64px header, so the resp line ends at ~448px.
-                            // Base anchor 29rem (464px) + 1cm breathing gap
-                            // per user feedback so the caption sits clearly
-                            // below the waveform rather than abutting it.
-                            // Pixel anchor (not vh) so the position stays
-                            // glued to the waveform stack regardless of
-                            // viewport height. No speaker label per prior
-                            // user request.
-                            // pointer-events-none on the full-width strip so it
-                            // never swallows taps meant for the controls behind
-                            // it (Bug 17); only the visible caption block below
-                            // re-enables pointer events to stay dismissable.
-                            className="fixed inset-x-0 z-40 flex justify-center items-center px-6 py-8 text-center group pointer-events-none"
-                            style={{ top: 'calc(29rem + 1cm)', background: 'transparent' }}
-                        >
-                            <div
-                                aria-hidden
-                                className="absolute inset-0 backdrop-blur-sm"
-                                style={{
-                                    backgroundColor: 'rgba(0,0,0,0.30)',
-                                    WebkitMaskImage: hazeMask,
-                                    maskImage: hazeMask,
-                                }}
-                            />
-                            <div
-                                className="relative max-w-2xl pointer-events-auto cursor-pointer"
-                                style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
-                            >
-                                <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
-                                    {line}
-                                </p>
-                            </div>
-                        </button>
+                            label={t('show_full_transcript')}
+                        />
                     );
                 })()}
             </div>
@@ -2080,34 +2018,4 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     );
 }
 
-// Normalise either a per-case attached agent row (from /cases/:id/agents) or
-// a raw template row (from /agents/templates) into a uniform shape. Per-case
-// rows carry name_override / system_prompt_override / config_override which
-// take precedence; raw templates supply the underlying defaults.
-function normalizePatientAgent(raw, caseId = null) {
-    if (!raw) return null;
-    const config = parseConfigSafe(raw.config) || parseConfigSafe(raw.config_override) || {};
-    return {
-        templateId: raw.agent_template_id || raw.id,
-        name: raw.name_override || raw.name || 'Patient',
-        roleTitle: raw.role_title || 'Simulated Patient',
-        avatarUrl: raw.avatar_url || null,
-        systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
-        contextFilter: raw.context_filter_override || raw.context_filter || 'history',
-        config,
-        // Stamp the case this template was resolved for. The agents loader
-        // is gated on `sessionId && activeCase`, so during a case switch
-        // there is a window where sessionId is briefly null and the loader
-        // is suspended; without this stamp, patientTemplate retains case
-        // A's value while activeCase is already B and buildPatientSystemPrompt
-        // happily glues B's persona to A's template prose. See the
-        // _caseId guard in buildPatientSystemPrompt for the consumer side.
-        _caseId: caseId,
-    };
-}
 
-function parseConfigSafe(value) {
-    if (!value) return null;
-    if (typeof value === 'object') return value;
-    try { return JSON.parse(value); } catch { return null; }
-}

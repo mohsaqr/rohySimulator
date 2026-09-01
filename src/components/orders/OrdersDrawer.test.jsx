@@ -246,6 +246,32 @@ describe('OrdersDrawer — guard render', () => {
         expect(labButtons.length).toBeLessThanOrEqual(1);
         expect(radButtons.length).toBeLessThanOrEqual(1);
     });
+
+    it('docks the floating pills at the seam by default and at the very left for fabAlign="left"', async () => {
+        // Full-surface plugin rooms (the 3D room) pass fabAlign='left' so
+        // the pill strip never covers the room's bottom-center surfaces
+        // (e.g. the examination finding card).
+        const { unmount } = renderWithProviders(<OrdersDrawer {...baseProps()} />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
+        });
+        const strip = () => screen.getAllByText('Treatments')
+            .map((label) => label.closest('div.fixed'))
+            .find(Boolean);
+        // jsdom re-serializes calc(max(...)) unfaithfully, so pin the
+        // contract (seam = a calc off the column boundary, not the edge)
+        // rather than the exact string.
+        expect(strip().style.left).toContain('max(');
+        expect(strip().style.left).not.toBe('1rem');
+        unmount();
+
+        renderWithProviders(<OrdersDrawer {...baseProps()} fabAlign="left" />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
+        });
+        expect(strip().style.left).toBe('1rem');
+        expect(strip().style.bottom).toBe('88px');
+    });
 });
 
 // "OrdersDrawer — orders list rendering" describe removed 2026-05-14:
