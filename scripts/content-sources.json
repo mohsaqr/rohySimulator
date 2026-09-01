@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "version": "v1",
-  "note": "Release assets on a PRIVATE repository need a token. setup:content reads ROHY_CONTENT_TOKEN or GITHUB_TOKEN, or falls back to the gh CLI if it is logged in. It trusts the sha256, not the host, so --from works with no token at all.",
+  "note": "Release assets are public: setup:content downloads them with no credential. It trusts the sha256, not the host, so --from works from any transport \u2014 a mirror, a shared drive, a stick carried to an offline site.",
   "baseUrl": "https://github.com/mohsaqr/rohy-content/releases/download/content-v1",
   "archives": [
     {
@@ -23,5 +23,5 @@
   ],
   "repo": "mohsaqr/rohy-content",
   "tag": "content-v1",
-  "private": true
+  "private": false
 }

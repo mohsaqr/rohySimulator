@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.147] — 2026-09-01
+
+### Changed
+
+- **The content archives are public; `setup:content` needs no credential.**
+  The repository was private because the licensing position was unsettled and
+  then because the pixels were unreviewed. Both are now closed — every item is
+  CC0, CC BY or CC BY-SA, and the burned-in identifier review is done — so the
+  gate was no longer protecting anything. It was also never a security
+  boundary: `--from` is a documented, credential-free path, because what the
+  installer trusts is the SHA-256 in `content-sources.json`, not the host the
+  bytes came from. A gate whose bypass is in the install instructions is an
+  install tax, not a control.
+
+  `scripts/content-sources.json` sets `"private": false`. Installation
+  instructions, `deploy/env.example` and the README drop the token sections.
+  `ROHY_CONTENT_TOKEN` still works and is still documented, for a deployment
+  that mirrors the archives behind its own private release.
+
 ## [2.9.146] — 2026-09-01
 
 ### Security

@@ -155,7 +155,6 @@ live in the repository or the image. They are published separately and
 installed with one command:
 
 ```bash
-export ROHY_CONTENT_TOKEN=…            # while the content repository is private
 npm run setup:content
 ```
 
@@ -196,26 +195,15 @@ written — so a bad download cannot damage a working installation.
 This is the simplest route for a new site, and the only one that works behind a
 firewall that cannot reach GitHub.
 
-### Installing from the release — needs a token while the repo is private
+### Installing from the published release
 
 ```bash
-export ROHY_CONTENT_TOKEN=ghp_…        # or GITHUB_TOKEN, or be logged into `gh`
 npm run setup:content
 ```
 
-Ask for a token — they are issued per deployment so that one site's access can
-be revoked without affecting the others. Use a **fine-grained** token scoped to
-the content repository alone with `Contents: Read`; a classic token's `repo`
-scope grants read/write on every private repository the issuer owns.
-
-An unauthenticated request to a private release answers **404, not 401** —
-GitHub declining to confirm the repository exists — and the installer names
-that case rather than letting it read as a missing release. An **expired**
-token gives the same 404, so record the expiry date somewhere you will look.
-
-If the content repository is ever made public, this whole section stops
-applying: set `"private": false` in `scripts/content-sources.json` and
-`npm run setup:content` needs no credential from anyone.
+The archives are public: no token, no account, nothing to configure. The
+installer resolves them from `scripts/content-sources.json` and refuses
+anything whose SHA-256 does not match.
 
 ### If you serve your own archive
 
