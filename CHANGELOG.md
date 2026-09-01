@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [2.9.148] — 2026-09-01
+
+### Fixed
+
+- **Server tests that build their own database no longer race a 5s clock.**
+  `vitest.config.js` already raised `hookTimeout` to 90s because parallel
+  server boots contend for ports and sqlite migrations, and `--coverage`
+  makes it worse — but several server tests do that setup in the TEST body
+  (`await createTestDb()`, `await freshCtx(...)`), applying fifty-odd
+  migrations before the first assertion, where `hookTimeout` does not reach
+  them. They passed in 2.6s locally and timed out on a loaded CI runner where
+  the full suite takes ~28 minutes. `testTimeout: 30_000` on the server
+  project only; the client project keeps the 5s default.
+
 ## [2.9.147] — 2026-09-01
 
 ### Changed
