@@ -21,7 +21,7 @@ import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, openRequest = null, fabAlign = 'seam' }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -63,6 +63,14 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         EventLogger.drawerOpened('OrdersDrawer');
         EventLogger.tabSwitched(tab, COMPONENTS.ORDERS_DRAWER);
     };
+
+    // External open requests (e.g. the 3D room's chart/IV/oxygen objects ask
+    // for a specific tab). A nonce field makes repeat requests re-fire.
+    // handleDrawerOpen is re-created each render, so only the request itself
+    // may be a dependency — re-firing on the handler would reopen the drawer.
+    useEffect(() => {
+        if (openRequest?.tab) handleDrawerOpen(openRequest.tab);
+    }, [openRequest]);
 
     const handleDrawerClose = () => {
         setIsOpen(false);
@@ -394,12 +402,15 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         <>
             {/* Floating Action Buttons — horizontal strip sitting one
                 tier above the RoomNavigator (72px nav + 16px gap = 88px
-                from bottom). Left edge starts at the column seam so the
-                strip lies over the vitals monitor, never the chat. */}
+                from bottom). fabAlign 'seam' (chat layout) starts the
+                strip at the column seam so it lies over the vitals
+                monitor, never the chat; 'left' (full-surface plugin
+                rooms like the 3D room) docks it at the very left so it
+                never covers the room's own bottom-center surfaces. */}
             {!isOpen && (
                 <div
                     className="fixed z-40 flex gap-2"
-                    style={{ bottom: '88px', left: 'calc(max(35vw, 350px) + 1rem)' }}
+                    style={{ bottom: '88px', left: fabAlign === 'left' ? '1rem' : 'calc(max(35vw, 350px) + 1rem)' }}
                 >
                     {tabs.map(tab => (
                         <button

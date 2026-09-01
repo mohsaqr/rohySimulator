@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PLUGIN_ROOMS } from '../../plugins/registry.js';
 import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope, BookOpen } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 
@@ -132,7 +133,7 @@ export default function RoomNavigator({ currentRoom, onSelectRoom, onOpenCourse 
             className="flex items-stretch gap-1 px-3 py-2 bg-slate-950/95 backdrop-blur border-t border-slate-800 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
             aria-label={t('room_navigation')}
         >
-            {ROOM_DEFS.map((room) => (
+            {[...ROOM_DEFS, ...PLUGIN_ROOMS.map((plugin) => plugin.navigatorDef)].map((room) => (
                 <RoomButton
                     key={room.key}
                     room={room}
@@ -163,7 +164,7 @@ function RoomButton({ room, active, badge, onClick }) {
     const Icon = room.icon;
     // Room names come from the static ROOM_DEFS key map; every labelKey /
     // subKey has a matching entry in src/locales/en/common.json.
-    const label = t(room.labelKey);
+    const label = t(room.labelKey, { defaultValue: room.labelDefault });
     // The badge accent is only declared on lab/radiology room defs, so
     // its absence doubles as the gate for "this room never shows a badge."
     const showBadge = badge > 0 && Boolean(room.badgeAccent);
@@ -200,7 +201,7 @@ function RoomButton({ room, active, badge, onClick }) {
                 <span className={`text-[10px] uppercase tracking-wider ${
                     active ? room.activeText : 'text-slate-500'
                 }`}>
-                    {t(room.subKey)}
+                    {t(room.subKey, { defaultValue: room.subDefault })}
                 </span>
             </div>
             {active && (

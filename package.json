@@ -81,6 +81,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^17.0.8",
+    "rohy-3d-patient-room": "file:../3D",
     "sqlite3": "^5.1.7",
     "three": "^0.184.0",
     "wawa-lipsync": "^0.0.2"

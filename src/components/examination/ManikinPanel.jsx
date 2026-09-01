@@ -5,10 +5,10 @@ import BodyMap from './BodyMap';
 import ExamTypeSelector from './ExamTypeSelector';
 import FindingDisplay from './FindingDisplay';
 import ExamLog from './ExamLog';
-import { BODY_REGIONS, getDefaultFinding, SAMPLE_ABNORMAL_EXAM } from '../../data/examRegions';
+import { BODY_REGIONS, SAMPLE_ABNORMAL_EXAM } from '../../data/examRegions';
+import usePhysicalExam from '../../hooks/usePhysicalExam';
 import { regionLabel } from './examinationLabels';
 import { useToast } from '../../contexts/ToastContext';
-import { usePatientRecord } from '../../services/PatientRecord';
 
 /**
  * Manikin Panel - Main Physical Examination Interface
@@ -40,7 +40,7 @@ export default function ManikinPanel({
 }) {
     const { t } = useTranslation('examination');
     const toast = useToast();
-    const { examined, elicited } = usePatientRecord();
+    const performExam = usePhysicalExam({ physicalExam: physicalExam || SAMPLE_ABNORMAL_EXAM });
     // State
     const [view, setView] = useState('anterior'); // anterior | posterior
     const [gender, setGender] = useState(patientGender); // male | female
@@ -56,8 +56,6 @@ export default function ManikinPanel({
     const [examLog, setExamLog] = useState([]);
     const [currentFinding, setCurrentFinding] = useState(null);
 
-    // Use sample abnormal exam if no physicalExam provided (for demo)
-    const examData = physicalExam || SAMPLE_ABNORMAL_EXAM;
 
     // Compute examined regions and abnormal regions from log
     const { examinedRegions, abnormalRegions } = useMemo(() => {
@@ -96,41 +94,19 @@ export default function ManikinPanel({
 
         setSelectedExamType(examType);
 
-        // Get the finding for this region and exam type
-        let finding = '';
-        let abnormal = false;
-        let audioUrl = null;
-        let audioUrls = {};
-        let heartAudio = null;
-        let lungAudio = null;
+        // The finding, the record write and the log entry all come from the
+        // shared hook, so this room and the 3D room cannot drift apart.
+        const entry = performExam(selectedRegion, examType, specialTestName);
+        const { rawFinding, ...logEntry } = entry;
 
-        // Check if we have configured data for this exam
-        if (examData[selectedRegion] && examData[selectedRegion][examType]) {
-            finding = examData[selectedRegion][examType].finding;
-            abnormal = examData[selectedRegion][examType].abnormal || false;
-            audioUrl = examData[selectedRegion][examType].audioUrl || null;
-            audioUrls = examData[selectedRegion][examType].audioUrls || {};
-            heartAudio = examData[selectedRegion][examType].heartAudio || null;
-            lungAudio = examData[selectedRegion][examType].lungAudio || null;
-        } else {
-            // Use default finding
-            finding = getDefaultFinding(selectedRegion, examType);
-            abnormal = false;
-        }
-
-        setCurrentFinding({ finding, abnormal, audioUrl, audioUrls, heartAudio, lungAudio });
-
-        // Add to exam log. specialTestName (Bug 3) records WHICH special
-        // test the learner ran; the finding itself is the region's combined
-        // `special` result since that is all the data model carries.
-        const logEntry = {
-            regionId: selectedRegion,
-            examType: examType,
-            specialTest: specialTestName || null,
-            finding: specialTestName ? `${specialTestName}: ${finding}` : finding,
-            abnormal: abnormal,
-            timestamp: new Date().toISOString()
-        };
+        setCurrentFinding({
+            finding: rawFinding,
+            abnormal: entry.abnormal,
+            audioUrl: entry.audioUrl,
+            audioUrls: entry.audioUrls,
+            heartAudio: entry.heartAudio,
+            lungAudio: entry.lungAudio
+        });
 
         setExamLog(prev => {
             // Check if already performed (avoid duplicates)
@@ -149,16 +125,7 @@ export default function ManikinPanel({
         if (onExamPerformed) {
             onExamPerformed(logEntry);
         }
-
-        // Record to PatientRecord
-        examined(selectedRegion, examType, finding);
-        if (finding) {
-            elicited('exam', finding, abnormal, {
-                category: selectedRegion,
-                significance: abnormal ? 'Abnormal finding' : 'Normal finding'
-            });
-        }
-    }, [selectedRegion, examData, onExamPerformed, examined, elicited]);
+    }, [selectedRegion, performExam, onExamPerformed]);
 
     // Handle clicking on a log entry
     const handleSelectExam = useCallback((entry) => {

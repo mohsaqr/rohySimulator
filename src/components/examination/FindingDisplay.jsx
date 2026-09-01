@@ -18,7 +18,20 @@ export default function FindingDisplay({
     audioUrl,
     audioUrls = {},
     heartAudio,
-    lungAudio
+    lungAudio,
+    // Forwarded to AuscultationPanel: 'diagram' (default) keeps the
+    // schematic figure, 'manikin' draws the anatomical examination body.
+    figure = 'diagram',
+    layout = 'row',
+    transport = 'default',
+    // 'card' (default) keeps this component's own frame and header; 'bare'
+    // drops both for hosts that already provide them — the 3D room's chart
+    // names the region and technique in its own header, so repeating them
+    // inside a nested card is a frame too many.
+    chrome = 'card',
+    // false withholds the "normal" verdict badge: the finding text is the
+    // observation, and calling it normal is the learner's job.
+    normalLabel = true
 }) {
     const { t } = useTranslation('examination');
     // No region selected
@@ -71,11 +84,24 @@ export default function FindingDisplay({
                 selectedRegion={selectedRegion}
                 auscultationProfile={region?.auscultationProfile}
                 regionName={regionLabel(t, selectedRegion, region?.name)}
+                figure={figure}
+                layout={layout}
+                transport={transport}
+                normalLabel={normalLabel}
+                chrome={chrome}
             />
         );
     }
 
     // Both region and exam type selected - show finding
+    if (chrome === 'bare') {
+        return (
+            <div className={`text-sm leading-relaxed ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
+                {finding || t('no_finding')}
+            </div>
+        );
+    }
+
     return (
         <div className={`
             rounded-lg border p-4 transition-all
@@ -96,12 +122,12 @@ export default function FindingDisplay({
                         <AlertTriangle className="w-3 h-3" />
                         {t('abnormal')}
                     </span>
-                ) : (
+                ) : normalLabel ? (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
                         {t('normal')}
                     </span>
-                )}
+                ) : null}
             </div>
 
             {/* Finding text */}
