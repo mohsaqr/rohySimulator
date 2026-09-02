@@ -283,6 +283,8 @@
   "room_radiology": "Radiologia e diagnostica",
   "room_radiology_sub": "imaging e test",
   "room_ready_results": "{label} — {count, plural, one {# risultato pronto} other {# risultati pronti}}",
+  "room_room3d": "Stanza 3D",
+  "room_room3d_sub": "al letto del paziente",
   "save": "Salva",
   "saving": "Salvataggio…",
   "search": "Cerca",

@@ -283,6 +283,8 @@
   "room_radiology": "[Ŕáðíóĺóğý & ðíáğñóšţíçš····]",
   "room_radiology_sub": "[íɱáğíñğ & ţéšţš···]",
   "room_ready_results": "{label} — {count, plural, one {# ready result} other {# ready results}}",
+  "room_room3d": "[3Ð Ŕóóɱ·]",
+  "room_room3d_sub": "[áţ ţĥé ƀéðšíðé···]",
   "save": "[Šáṽé·]",
   "saving": "[Šáṽíñğ…··]",
   "search": "[Šéáŕçĥ··]",

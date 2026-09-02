@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Play, Pause, Volume2, VolumeX, AlertTriangle, CheckCircle, Heart, Wind, Activity } from 'lucide-react';
 import EventLogger from '../../services/eventLogger';
 import { baseUrl } from '../../config/api';
+import {
+    PATIENT_FIGURE_HEIGHT,
+    PATIENT_FIGURE_MASK,
+    PATIENT_FIGURE_WIDTH
+} from './patientFigure';
 
 /**
  * Auscultation Panel - zoomed body view with audio playback.
@@ -131,6 +136,71 @@ const COLOR_CLASSES = {
     violet: { sel: 'bg-violet-500 ring-2 ring-violet-400 ring-offset-1 ring-offset-slate-900 scale-125', idle: 'bg-violet-600/80 hover:bg-violet-500 hover:scale-110', ping: 'bg-violet-400', text: 'text-violet-300' }
 };
 
+// ——— Anatomical figure (additive, opt-in via `figure="manikin"`) ———
+//
+// The default background is a schematic ellipse. `figure="manikin"` draws
+// the SAME ink-coverage patient Cardoyon's ECG lead selector uses (see
+// patientFigure.js), painted through an SVG mask so the theme owns the
+// colour, with dashed landmarks named the way a clinician names them. One
+// body, one visual language, whichever room the learner is standing in.
+//
+// Coordinates live in that figure's 232x282 frame. Cardoyon measured the
+// sternal midline at x=113 and the 4th/5th intercostal spaces at y=128/140;
+// the auscultation sites below were measured against the same crop, so an
+// intercostal space is 12 units and the umbilicus sits at (116, 180). Crops
+// are square because the viewport is: with a non-square crop the SVG's slice
+// fit would quietly shave the narrower axis, landmark labels included.
+// Laterality is the standard anterior view: the patient's RIGHT is on the
+// viewer's LEFT (x < 113).
+const MANIKIN_FIGURES = {
+    cardio: {
+        crop: { x0: 70, y0: 78, x1: 162, y1: 170 },
+        landmarks: {
+            midline: 113,
+            spaces: [
+                { y: 104, label: '2nd' },
+                { y: 128, label: '4th' },
+                { y: 140, label: '5th' }
+            ]
+        },
+        points: {
+            aortic: { x: 105, y: 104, code: 'Ao' },
+            pulmonic: { x: 121, y: 104, code: 'P' },
+            erb: { x: 121, y: 116, code: 'E' },
+            tricuspid: { x: 121, y: 128, code: 'T' },
+            mitral: { x: 137, y: 141, code: 'M' },
+            lungLeft: { x: 142, y: 108, code: 'LL' },
+            lungRight: { x: 92, y: 108, code: 'RL' },
+            lungBaseLeft: { x: 144, y: 152, code: 'LB' },
+            lungBaseRight: { x: 90, y: 152, code: 'RB' }
+        }
+    },
+    abdomen: {
+        crop: { x0: 72, y0: 148, x1: 160, y1: 236 },
+        landmarks: { midline: 113, spaces: [] },
+        points: {
+            ruq: { x: 100, y: 165, code: 'RUQ' },
+            luq: { x: 132, y: 165, code: 'LUQ' },
+            rlq: { x: 100, y: 197, code: 'RLQ' },
+            llq: { x: 132, y: 197, code: 'LLQ' },
+            aorticBruit: { x: 116, y: 160, code: 'Ao' },
+            renalRight: { x: 104, y: 180, code: 'RR' },
+            renalLeft: { x: 128, y: 180, code: 'LR' },
+            femoralRight: { x: 99, y: 222, code: 'RF' },
+            femoralLeft: { x: 133, y: 222, code: 'LF' }
+        }
+    }
+};
+
+// Map a point from the figure's frame into percentages of the cropped
+// viewport, so the same coordinates work at any panel size.
+function cropPercent(crop, point) {
+    return {
+        left: ((point.x - crop.x0) / (crop.x1 - crop.x0)) * 100,
+        top: ((point.y - crop.y0) / (crop.y1 - crop.y0)) * 100
+    };
+}
+
 export default function AuscultationPanel({
     finding,
     isAbnormal,
@@ -140,17 +210,55 @@ export default function AuscultationPanel({
     lungAudio,         // Custom lung sound (overrides default for all lung points)
     selectedRegion,        // Region key — fallback profile heuristic
     auscultationProfile,   // Explicit profile id from examRegions.js (preferred)
-    regionName = 'Chest'
+    regionName = 'Chest',
+    figure = 'diagram',    // 'diagram' (default) | 'manikin' (anatomical)
+    layout = 'row',        // 'row' (default) | 'stack' for narrow panels
+    transport = 'default', // 'default' | 'compact' (tiny play + seek)
+    normalLabel = true,    // false hides the "normal" verdict badge
+    chrome = 'card'        // 'card' (default) | 'bare' — host owns the frame
 }) {
     const { t } = useTranslation('examination');
     const profile = getProfile(auscultationProfile, selectedRegion, regionName);
     const POINTS = profile.points;
+    // The manikin figure only applies where anatomical coordinates exist for
+    // the active profile; anything else falls back to the schematic diagram.
+    const figureKey = POINTS === ABDOMEN_POINTS ? 'abdomen' : 'cardio';
+    const manikin = figure === 'manikin' ? MANIKIN_FIGURES[figureKey] : null;
+    // The crop is magnified into a 280px box, so Cardoyon's pixel-sized
+    // landmark strokes and labels have to be divided by that magnification
+    // or they scale up into the picture instead of orienting it.
+    const figureUnit = manikin ? (manikin.crop.x1 - manikin.crop.x0) / 280 : 1;
+    const stacked = layout === 'stack';
+    const bare = chrome === 'bare';
+    const pointPosition = (id, point) => {
+        const anatomical = manikin?.points[id];
+        return anatomical
+            ? cropPercent(manikin.crop, anatomical)
+            : { left: point.x, top: point.y };
+    };
 
     const [selectedPoint, setSelectedPoint] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    // Real playback position: the progress bar used to be hardcoded to 60%
+    // with a pulse, which told the learner nothing about the recording.
+    const [playedSeconds, setPlayedSeconds] = useState(0);
+    const [clipSeconds, setClipSeconds] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
-    const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
+    // A ref, not state: React's dev double-invocation of effects ran the
+    // auto-play (and its analytics row) twice before the state update
+    // landed. A ref flips synchronously inside the first run.
+    const hasAutoPlayedRef = useRef(false);
     const audioRef = useRef(null);
+
+    const playedFraction = clipSeconds > 0 ? Math.min(playedSeconds / clipSeconds, 1) : 0;
+    const clock = (seconds) => (Number.isFinite(seconds) && seconds >= 0
+        ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+        : '0:00');
+    const seekTo = (seconds) => {
+        if (!audioRef.current) return;
+        audioRef.current.currentTime = seconds;
+        setPlayedSeconds(seconds);
+    };
 
     // Normalise any audio URL to the SPA's deploy base. Uploaded audio
     // arrives as either `./uploads/foo.mp3` (legacy relative) or
@@ -222,10 +330,10 @@ export default function AuscultationPanel({
 
     // Auto-select the profile's first point and play on mount
     useEffect(() => {
-        if (!hasAutoPlayed && audioRef.current) {
+        if (!hasAutoPlayedRef.current && audioRef.current) {
+            hasAutoPlayedRef.current = true;
             const defaultPoint = profile.defaultPoint;
             setSelectedPoint(defaultPoint);
-            setHasAutoPlayed(true);
 
             const audioSrc = getAudioForPoint(defaultPoint);
             if (audioSrc) {
@@ -248,7 +356,7 @@ export default function AuscultationPanel({
                 audioSrc
             );
         }
-    }, [hasAutoPlayed, finding]);
+    }, [finding]);
 
     // Update audio source when point changes (for prop changes)
     useEffect(() => {
@@ -284,30 +392,95 @@ export default function AuscultationPanel({
     const currentMeta = currentPoint ? (POINT_TYPE[currentPoint.type] || POINT_TYPE.heart) : null;
 
     return (
-        <div className={`rounded-lg border p-4 ${isAbnormal ? 'bg-red-950/30 border-red-800' : 'bg-slate-800/50 border-slate-700'}`}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
+        <div className={bare
+            ? ''
+            : `rounded-lg border p-4 ${isAbnormal ? 'bg-red-950/30 border-red-800' : 'bg-slate-800/50 border-slate-700'}`}>
+            {/* Header. Hidden when the host frames this panel itself and has
+                already named the region and technique above it. */}
+            <div className={`flex items-center justify-between mb-3${bare ? ' hidden' : ''}`}>
                 <div className="flex items-center gap-2">
                     <Volume2 className="w-5 h-5 text-cyan-400" />
                     <span className="text-white font-medium">{t('auscultation_title', { region: regionName })}</span>
                 </div>
+                {/* An abnormal finding is flagged because it is safety
+                    relevant. "Normal" is withheld where the host asks
+                    (normalLabel={false}): naming the verdict does the
+                    learner's interpretation for them. */}
                 {isAbnormal ? (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
                         <AlertTriangle className="w-3 h-3" />
                         {t('abnormal')}
                     </span>
-                ) : (
+                ) : normalLabel ? (
                     <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
                         {t('normal')}
                     </span>
-                )}
+                ) : null}
             </div>
 
-            <div className="flex gap-4">
+            {/* Side by side needs ~600px; in a docked panel that squeezes the
+                finding into a 3-words-per-line ribbon, so narrow hosts ask for
+                'stack' and the figure sits above its text at full width. */}
+            <div className={stacked ? 'flex flex-col gap-4' : 'flex gap-4'}>
                 {/* Zoomed body view */}
-                <div className="relative bg-slate-900 rounded-lg overflow-hidden" style={{ width: '280px', height: '280px' }}>
-                    {profile.renderBackground()}
+                <div
+                    className={`relative rounded-lg overflow-hidden ${manikin ? 'bg-slate-950' : 'bg-slate-900'} ${
+                        stacked ? 'mx-auto aspect-square w-full max-w-[280px]' : ''
+                    }`}
+                    style={stacked ? undefined : { width: '280px', height: '280px' }}
+                >
+                    {manikin ? (
+                        // The patient as ink coverage, painted through a mask
+                        // so the panel's own colour carries it — Cardoyon's
+                        // treatment, on Cardoyon's figure, in its own frame.
+                        <svg
+                            className="absolute inset-0 h-full w-full"
+                            viewBox={`${manikin.crop.x0} ${manikin.crop.y0} ${manikin.crop.x1 - manikin.crop.x0} ${manikin.crop.y1 - manikin.crop.y0}`}
+                            preserveAspectRatio="xMidYMid slice"
+                            aria-hidden="true"
+                        >
+                            <defs>
+                                <mask id={`exam-figure-${figureKey}`} maskUnits="userSpaceOnUse"
+                                    x="0" y="0" width={PATIENT_FIGURE_WIDTH} height={PATIENT_FIGURE_HEIGHT}>
+                                    <image href={PATIENT_FIGURE_MASK} x="0" y="0"
+                                        width={PATIENT_FIGURE_WIDTH} height={PATIENT_FIGURE_HEIGHT} />
+                                </mask>
+                            </defs>
+                            <rect x="0" y="0" width={PATIENT_FIGURE_WIDTH} height={PATIENT_FIGURE_HEIGHT}
+                                fill="#9db4cb" mask={`url(#exam-figure-${figureKey})`} />
+                            {/* Landmarks a clinician would find by hand,
+                                drawn faintly so they orient the sites
+                                without becoming the picture. */}
+                            <line
+                                x1={manikin.landmarks.midline} y1={manikin.crop.y0 + 6}
+                                x2={manikin.landmarks.midline} y2={manikin.crop.y1 - 6}
+                                stroke="rgba(151,176,203,.3)"
+                                strokeWidth={figureUnit}
+                                strokeDasharray={`${4 * figureUnit} ${3.4 * figureUnit}`}
+                            />
+                            {manikin.landmarks.spaces.map((space) => (
+                                <g key={space.label}>
+                                    <line
+                                        x1={manikin.crop.x0 + 9} y1={space.y}
+                                        x2={manikin.crop.x1 - 2} y2={space.y}
+                                        stroke="rgba(151,176,203,.3)"
+                                        strokeWidth={figureUnit}
+                                        strokeDasharray={`${4 * figureUnit} ${3.4 * figureUnit}`}
+                                    />
+                                    <text
+                                        x={manikin.crop.x0 + 1.5}
+                                        y={space.y + 1 * figureUnit}
+                                        fill="rgba(151,176,203,.55)"
+                                        style={{ font: `600 ${7 * figureUnit}px ui-monospace, monospace` }}
+                                        textAnchor="start"
+                                    >
+                                        {space.label}
+                                    </text>
+                                </g>
+                            ))}
+                        </svg>
+                    ) : profile.renderBackground()}
 
                     {/* Auscultation points */}
                     {Object.entries(POINTS).map(([id, point]) => {
@@ -316,22 +489,40 @@ export default function AuscultationPanel({
                         const meta = POINT_TYPE[point.type] || POINT_TYPE.heart;
                         const PointIcon = meta.Icon;
                         const cc = COLOR_CLASSES[meta.color];
+                        // On the manikin the sites are read as targets on a
+                        // body, so they follow the lead-map's restraint: a
+                        // small ringed dot with its clinical shorthand, teal
+                        // only where the reader is actually listening.
+                        const code = manikin?.points[id]?.code;
                         return (
                             <button
                                 key={id}
                                 onClick={() => handlePointClick(id)}
-                                className={`absolute w-7 h-7 rounded-full transform -translate-x-1/2 -translate-y-1/2 transition-all flex items-center justify-center cursor-pointer ${
-                                    isSelected
-                                        ? cc.sel
-                                        : pointHasAudio
-                                        ? cc.idle
-                                        : 'bg-slate-600 hover:bg-slate-500'
-                                }`}
-                                style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                                className={manikin
+                                    ? `absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border font-mono text-[9px] font-bold transition-all ${
+                                        isSelected
+                                            ? 'border-teal-200 bg-teal-400 text-teal-950 scale-110'
+                                            : pointHasAudio
+                                            ? 'border-slate-400/50 bg-slate-950/60 text-slate-300 hover:border-teal-300 hover:bg-slate-800'
+                                            : 'border-slate-600/40 border-dashed bg-slate-950/40 text-slate-500'
+                                    }`
+                                    : `absolute w-7 h-7 rounded-full transform -translate-x-1/2 -translate-y-1/2 transition-all flex items-center justify-center cursor-pointer ${
+                                        isSelected
+                                            ? cc.sel
+                                            : pointHasAudio
+                                            ? cc.idle
+                                            : 'bg-slate-600 hover:bg-slate-500'
+                                    }`}
+                                style={{
+                                    left: `${pointPosition(id, point).left}%`,
+                                    top: `${pointPosition(id, point).top}%`
+                                }}
                                 title={t('point_tooltip', { label: t(point.labelKey), description: t(point.descKey) })}
                             >
-                                <PointIcon className="w-3.5 h-3.5 text-white" />
-                                {isSelected && (
+                                {manikin
+                                    ? code
+                                    : <PointIcon className="w-3.5 h-3.5 text-white" />}
+                                {isSelected && !manikin && (
                                     <span className={`absolute inset-0 rounded-full animate-ping opacity-50 ${cc.ping}`} />
                                 )}
                             </button>
@@ -350,22 +541,165 @@ export default function AuscultationPanel({
                     )}
                 </div>
 
-                {/* Right side - Finding and Audio */}
-                <div className="flex-1 flex flex-col">
+                {/* Outside the layout branches: switching between docked and
+                    fullscreen must not remount this and cut the sound off. */}
+                <audio
+                    ref={audioRef}
+                    onTimeUpdate={(event) => setPlayedSeconds(event.currentTarget.currentTime)}
+                    onLoadedMetadata={(event) => {
+                        const { duration } = event.currentTarget;
+                        setClipSeconds(Number.isFinite(duration) ? duration : 0);
+                        setPlayedSeconds(0);
+                    }}
+                    onEnded={() => {
+                        setIsPlaying(false);
+                        setPlayedSeconds(0);
+                    }}
+                    onError={() => console.error('Audio failed to load')}
+                />
+
+                {/* Stacked panels read top-down: the body, the controls
+                    for the site just clicked on it, then the finding it
+                    produced. Side by side keeps the finding leading its
+                    own column with the player beneath. */}
+                {stacked ? (
+                    <>
+                            {/* Audio Player. The compact transport is one line —
+                            tiny play, a real seek bar, elapsed/length — for
+                            panels that cannot spare a 40px control block. */}
+                        {currentAudioUrl && transport === 'compact' ? (
+                            <div className="rounded-lg bg-slate-900 px-2 py-1.5">
+                                <div className="mb-1 truncate px-1 text-[10px] text-slate-400">
+                                    {currentPoint ? t('point_sounds', { point: t(currentPoint.labelKey) }) : t(profile.playerLabelKey)}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={togglePlay}
+                                        aria-label={isPlaying ? 'Pause' : 'Play'}
+                                        className="grid h-7 w-7 flex-none place-items-center rounded-full bg-cyan-600 transition-colors hover:bg-cyan-500"
+                                    >
+                                        {isPlaying
+                                            ? <Pause className="h-3.5 w-3.5 text-white" />
+                                            : <Play className="ml-0.5 h-3.5 w-3.5 text-white" />}
+                                    </button>
+                                    <span className="flex-none font-mono text-[10px] tabular-nums text-slate-400">
+                                        {clock(playedSeconds)}
+                                    </span>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={clipSeconds || 0}
+                                        step="0.05"
+                                        value={Math.min(playedSeconds, clipSeconds || 0)}
+                                        onChange={(event) => seekTo(Number(event.target.value))}
+                                        aria-label="Seek"
+                                        className="h-1 min-w-0 flex-1 cursor-pointer accent-cyan-500"
+                                    />
+                                    <span className="flex-none font-mono text-[10px] tabular-nums text-slate-500">
+                                        {clock(clipSeconds)}
+                                    </span>
+                                    <button
+                                        onClick={toggleMute}
+                                        aria-label={isMuted ? 'Unmute' : 'Mute'}
+                                        className="flex-none p-1 text-slate-400 hover:text-white"
+                                    >
+                                        {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : currentAudioUrl ? (
+                            <div className="bg-slate-900 rounded-lg p-3">
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={togglePlay}
+                                        className="w-10 h-10 rounded-full bg-cyan-600 hover:bg-cyan-500 flex items-center justify-center transition-colors"
+                                    >
+                                        {isPlaying ? (
+                                            <Pause className="w-5 h-5 text-white" />
+                                        ) : (
+                                            <Play className="w-5 h-5 text-white ml-0.5" />
+                                        )}
+                                    </button>
+                                    <div className="flex-1">
+                                        <div className="text-xs text-slate-400 mb-1">
+                                            {currentPoint ? t('point_sounds', { point: t(currentPoint.labelKey) }) : t(profile.playerLabelKey)}
+                                        </div>
+                                        <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-cyan-500 transition-all"
+                                                style={{ width: `${playedFraction * 100}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={toggleMute}
+                                        className="p-2 text-slate-400 hover:text-white"
+                                    >
+                                        {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-900/50 rounded-lg p-3 text-center text-slate-500 text-xs">
+                                {t('no_audio')}
+                            </div>
+                        )}
+                            {/* Finding text */}
+                        <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
+                            {finding || t('auscultate_prompt')}
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex-1 flex flex-col">
                     {/* Finding text */}
                     <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
                         {finding || t('auscultate_prompt')}
                     </div>
 
-                    {/* Hidden audio element - always rendered so ref is available */}
-                    <audio
-                        ref={audioRef}
-                        onEnded={() => setIsPlaying(false)}
-                        onError={() => console.error('Audio failed to load')}
-                    />
-
-                    {/* Audio Player */}
-                    {currentAudioUrl ? (
+                    {/* Audio Player. The compact transport is one line —
+                        tiny play, a real seek bar, elapsed/length — for
+                        panels that cannot spare a 40px control block. */}
+                    {currentAudioUrl && transport === 'compact' ? (
+                        <div className="rounded-lg bg-slate-900 px-2 py-1.5">
+                            <div className="mb-1 truncate px-1 text-[10px] text-slate-400">
+                                {currentPoint ? t('point_sounds', { point: t(currentPoint.labelKey) }) : t(profile.playerLabelKey)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={togglePlay}
+                                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                                    className="grid h-7 w-7 flex-none place-items-center rounded-full bg-cyan-600 transition-colors hover:bg-cyan-500"
+                                >
+                                    {isPlaying
+                                        ? <Pause className="h-3.5 w-3.5 text-white" />
+                                        : <Play className="ml-0.5 h-3.5 w-3.5 text-white" />}
+                                </button>
+                                <span className="flex-none font-mono text-[10px] tabular-nums text-slate-400">
+                                    {clock(playedSeconds)}
+                                </span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max={clipSeconds || 0}
+                                    step="0.05"
+                                    value={Math.min(playedSeconds, clipSeconds || 0)}
+                                    onChange={(event) => seekTo(Number(event.target.value))}
+                                    aria-label="Seek"
+                                    className="h-1 min-w-0 flex-1 cursor-pointer accent-cyan-500"
+                                />
+                                <span className="flex-none font-mono text-[10px] tabular-nums text-slate-500">
+                                    {clock(clipSeconds)}
+                                </span>
+                                <button
+                                    onClick={toggleMute}
+                                    aria-label={isMuted ? 'Unmute' : 'Mute'}
+                                    className="flex-none p-1 text-slate-400 hover:text-white"
+                                >
+                                    {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                                </button>
+                            </div>
+                        </div>
+                    ) : currentAudioUrl ? (
                         <div className="bg-slate-900 rounded-lg p-3">
                             <div className="flex items-center gap-3">
                                 <button
@@ -383,7 +717,10 @@ export default function AuscultationPanel({
                                         {currentPoint ? t('point_sounds', { point: t(currentPoint.labelKey) }) : t(profile.playerLabelKey)}
                                     </div>
                                     <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-                                        <div className={`h-full bg-cyan-500 transition-all ${isPlaying ? 'animate-pulse' : ''}`} style={{ width: isPlaying ? '60%' : '0%' }} />
+                                        <div
+                                            className="h-full bg-cyan-500 transition-all"
+                                            style={{ width: `${playedFraction * 100}%` }}
+                                        />
                                     </div>
                                 </div>
                                 <button
@@ -399,7 +736,8 @@ export default function AuscultationPanel({
                             {t('no_audio')}
                         </div>
                     )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Auscultation point legend */}

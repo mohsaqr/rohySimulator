@@ -19,7 +19,7 @@
 #
 # Usage:
 #   deploy/bundle-airgap.sh                                          # both, no HF cache
-#   deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs
+#   deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 #   deploy/bundle-airgap.sh --mode=docker --output=/srv/builds
 #   deploy/bundle-airgap.sh --dry-run                                # plan only
 #
@@ -38,6 +38,7 @@ MODE="both"
 OUTPUT_DIR=""
 WITH_HF_CACHE=0
 WITH_DYNAJS=0
+WITH_3D=0
 WITH_PIPER="auto"   # auto | yes | no
 SKIP_CHECKSUM=0
 DRY_RUN=0
@@ -48,6 +49,7 @@ for arg in "$@"; do
         --output=*)      OUTPUT_DIR="${arg#--output=}" ;;
         --with-hf-cache) WITH_HF_CACHE=1 ;;
         --with-dynajs)   WITH_DYNAJS=1 ;;
+        --with-3d)       WITH_3D=1 ;;
         --with-piper)    WITH_PIPER="yes" ;;
         --no-piper)      WITH_PIPER="no" ;;
         --skip-checksum) SKIP_CHECKSUM=1 ;;
@@ -116,6 +118,7 @@ printf 'commit          : %s\n' "$GIT_SHA"
 printf 'platform        : %s\n' "$PLATFORM"
 printf 'with hf cache   : %s\n' "$([[ $WITH_HF_CACHE -eq 1 ]] && echo yes || echo no)"
 printf 'with dynajs     : %s\n' "$([[ $WITH_DYNAJS -eq 1 ]] && echo yes || echo no)"
+printf 'with 3D room    : %s\n' "$([[ $WITH_3D -eq 1 ]] && echo yes || echo no)"
 printf 'with piper      : %s\n' "$WITH_PIPER"
 printf 'dry-run         : %s\n' "$([[ $DRY_RUN -eq 1 ]] && echo yes || echo no)"
 echo ""
@@ -182,6 +185,13 @@ if (( WITH_DYNAJS )); then
         exit 1
     fi
 fi
+if (( WITH_3D )); then
+    ROOM3D_DIR="$(cd "$REPO_SRC/.." && pwd)/3D"
+    if [[ ! -f "$ROOM3D_DIR/src/main.js" ]]; then
+        echo "FATAL: --with-3d requested but $ROOM3D_DIR/src/main.js not found." >&2
+        exit 1
+    fi
+fi
 
 if [[ "$MODE" == "docker" || "$MODE" == "both" ]]; then
     if ! command -v docker >/dev/null 2>&1; then
@@ -213,6 +223,7 @@ build_source_bundle() {
         fi
         (( WITH_HF_CACHE )) && echo "  include: hf-cache from $HF_CACHE (~$(sizeof "$HF_CACHE"))"
         (( WITH_DYNAJS ))   && echo "  include: dynajs from $DYNAJS_DIR"
+        (( WITH_3D ))       && echo "  include: 3D patient room from $ROOM3D_DIR"
         echo "[source] (dry-run) would tar -> $OUTPUT_DIR/rohy-airgap-source-${STAMP}.tar.gz"
         return
     fi
@@ -261,6 +272,11 @@ build_source_bundle() {
         echo "[source] adding dynajs from $DYNAJS_DIR"
         mkdir -p "$root/dynajs"
         rsync -a --exclude='.git/' "$DYNAJS_DIR/" "$root/dynajs/"
+    fi
+    if (( WITH_3D )); then
+        echo "[source] adding 3D patient room from $ROOM3D_DIR"
+        mkdir -p "$root/3D"
+        rsync -a --exclude='.git/' --exclude='node_modules/' --exclude='tmp/' --exclude='dist/' "$ROOM3D_DIR/" "$root/3D/"
     fi
 
     # Embed the offline installer. Heredoc keeps it inline with this script
@@ -362,6 +378,12 @@ if [[ -d "$BUNDLE/dynajs" ]]; then
     rsync -a "$BUNDLE/dynajs/" "$DYNAJS_DST/"
     chown -R "$ROHY_USER:$ROHY_USER" "$DYNAJS_DST"
 fi
+if [[ -d "$BUNDLE/3D" ]]; then
+    ROOM3D_DST="$(cd "$REPO_DIR/.." && pwd)/3D"
+    echo "[airgap] placing 3D patient room sibling at $ROOM3D_DST"
+    rsync -a "$BUNDLE/3D/" "$ROOM3D_DST/"
+    chown -R "$ROHY_USER:$ROHY_USER" "$ROOM3D_DST"
+fi
 
 # Env file — generate fresh JWT, never reuse across deploys.
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -438,6 +460,7 @@ INSTALLER_EOF
   "platform": "${PLATFORM}",
   "with_hf_cache": $([[ $WITH_HF_CACHE -eq 1 ]] && echo true || echo false),
   "with_dynajs": $([[ $WITH_DYNAJS -eq 1 ]] && echo true || echo false),
+  "with_3d": $([[ $WITH_3D -eq 1 ]] && echo true || echo false),
   "with_piper": ${piper_in_bundle},
   "node_modules_size": "$(sizeof "$root/repo/node_modules" 2>/dev/null || echo unknown)",
   "oyon_size": "$(sizeof "$root/repo/OyonR" 2>/dev/null || echo unknown)"

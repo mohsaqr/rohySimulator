@@ -27,13 +27,15 @@
 // to the same setter and exercising the button is the realistic path).
 
 import React, { useEffect } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
 import ChatInterface from './ChatInterface.jsx';
+import { LLMService } from '../../services/llmService.js';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
+import { usePatientConversation } from '../../contexts/PatientConversationContext.jsx';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 import { ttsHandlers, getRecordedRequests, resetRecordedRequests } from '../../../tests/utils/mockTtsServer.js';
 
@@ -274,6 +276,14 @@ async function waitForLlmRequest() {
     await waitFor(() => {
         expect(llmRequests.length).toBeGreaterThan(0);
     }, { timeout: 5000 });
+}
+
+// Reaches the shared conversation bus from beside ChatInterface, the way the
+// host does when it narrows it into a plugin's 'conversation' grant.
+function BusProbe({ onBus }) {
+    const bus = usePatientConversation();
+    useEffect(() => { onBus(bus); }, [bus, onBus]);
+    return null;
 }
 
 // ---------- Tests -------------------------------------------------------
@@ -650,5 +660,71 @@ describe('Oyon typing capture wiring', () => {
         await waitFor(() => expect(calls.attach.length).toBeGreaterThan(0));
         unmount();
         expect(calls.abandon).toBeGreaterThan(0);
+    });
+});
+
+describe('ChatInterface — the shared patient conversation (PatientConversationContext)', () => {
+    function mountWithBus(activeCase) {
+        let bus = null;
+        const props = {
+            activeCase,
+            onSessionStart: () => {},
+            restoredSessionId: 999,
+            sessionStartTime: Date.now(),
+            currentVitals: null,
+        };
+        renderWithProviders(
+            <>
+                <ChatInterface {...props} />
+                <BusProbe onBus={(b) => { bus = b; }} />
+            </>,
+            { withPatientRecord: false }
+        );
+        return () => bus;
+    }
+
+    it('a turn sent through the bus runs the chat\'s own handler and is persisted with its source', async () => {
+        const logged = vi.spyOn(LLMService, 'logInteraction').mockResolvedValue(undefined);
+        llmResponseText = 'It hurts here.';
+        const getBus = mountWithBus(caseFixture);
+        await screen.findByPlaceholderText(/message alice original/i);
+        await waitFor(() => expect(getBus()?.sessionId).toBe(999));
+
+        await getBus().send('Where does it hurt?', { source: 'room3d', spoken: false });
+
+        // The chat transcript carries the bedside question and the reply.
+        await waitFor(() => {
+            expect(screen.getByText('Where does it hurt?')).toBeInTheDocument();
+            expect(screen.getByText('It hurts here.')).toBeInTheDocument();
+        }, { timeout: 5000 });
+        // The bus mirrors the transcript, with the asker on both turns.
+        await waitFor(() => expect(getBus().messages.length).toBeGreaterThanOrEqual(2));
+        const messages = getBus().messages;
+        expect(messages.at(-2)).toEqual(expect.objectContaining({ role: 'user', content: 'Where does it hurt?', source: 'room3d' }));
+        expect(messages.at(-1)).toEqual(expect.objectContaining({ role: 'assistant', content: 'It hurts here.', source: 'room3d' }));
+        // The model saw role + content only.
+        const lastBody = llmRequests[llmRequests.length - 1].body;
+        lastBody.messages.forEach((m) => expect(Object.keys(m).sort()).toEqual(['content', 'role']));
+        // Both persisted rows carry the source.
+        await waitFor(() => expect(logged).toHaveBeenCalledTimes(2));
+        expect(logged.mock.calls.map((c) => [c[1], c[3]])).toEqual([['user', 'room3d'], ['assistant', 'room3d']]);
+        logged.mockRestore();
+        // Nothing is being voiced once the turn is over.
+        await waitFor(() => expect(getBus().voiced).toBeNull());
+        expect(getBus().loading).toBe(false);
+    });
+
+    it('refuses a second bus turn while one is in flight', async () => {
+        llmResponseText = 'One at a time.';
+        const getBus = mountWithBus(caseFixture);
+        await screen.findByPlaceholderText(/message alice original/i);
+        await waitFor(() => expect(getBus()?.sessionId).toBe(999));
+
+        const first = getBus().send('First question', { source: 'room3d' });
+        await expect(getBus().send('Second question', { source: 'room3d' })).rejects.toThrow(/still answering/i);
+        await first;
+        // Exactly one turn went to the model.
+        expect(llmRequests.filter((r) => r.body?.messages?.some((m) => m.content === 'First question')).length).toBe(1);
+        expect(llmRequests.some((r) => r.body?.messages?.some((m) => m.content === 'Second question'))).toBe(false);
     });
 });

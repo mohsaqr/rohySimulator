@@ -2,7 +2,7 @@
 
 For the **trainee** — the learner who runs a virtual-patient case.
 
-You move through five rooms — talk to the patient, examine them, order
+You move through six rooms — talk to the patient, examine them, order
 investigations, treat them, then reflect in a voice debrief — while their
 vitals respond in real time.
 

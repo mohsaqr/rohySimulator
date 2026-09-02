@@ -283,6 +283,8 @@
   "room_radiology": "Radiología y diagnóstico",
   "room_radiology_sub": "imágenes y pruebas",
   "room_ready_results": "{label} — {count, plural, one {# resultado listo} other {# resultados listos}}",
+  "room_room3d": "Sala 3D",
+  "room_room3d_sub": "a pie de cama",
   "save": "Guardar",
   "saving": "Guardando…",
   "search": "Buscar",

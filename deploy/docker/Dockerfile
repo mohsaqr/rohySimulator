@@ -22,11 +22,19 @@
 # Pin the dynajs commit (recommended for reproducible builds):
 #   docker build -f deploy/docker/Dockerfile \
 #     --build-arg DYNAJS_GIT_REF=<sha-or-tag> -t rohy:latest .
+#
+# The 3D patient room (`rohy-3d-patient-room`, "file:../3D") is a second
+# sibling. Its repository is private: pass a URL that carries credentials
+# (`--build-arg ROOM3D_GIT_URL=https://<token>@github.com/mohsaqr/3D.git`)
+# or build from an air-gap bundle made with `--with-3d`. It has no build
+# step — a clone is the whole install.
 
 ARG NODE_VERSION=22-bookworm-slim
 ARG INCLUDE_PIPER=0
 ARG DYNAJS_GIT_URL=https://github.com/mohsaqr/dynajs.git
 ARG DYNAJS_GIT_REF=main
+ARG ROOM3D_GIT_URL=https://github.com/mohsaqr/3D.git
+ARG ROOM3D_GIT_REF=main
 
 # ===========================================================================
 # Stage 1: builder
@@ -35,6 +43,8 @@ FROM node:${NODE_VERSION} AS builder
 
 ARG DYNAJS_GIT_URL
 ARG DYNAJS_GIT_REF
+ARG ROOM3D_GIT_URL
+ARG ROOM3D_GIT_REF
 
 # Build deps: git for cloning dynajs, python3/make/g++ for sqlite3 native
 # build, curl for OyonR/scripts/download-models.sh (fetches the ~93 MB
@@ -52,6 +62,12 @@ RUN git clone --depth 1 --branch "${DYNAJS_GIT_REF}" "${DYNAJS_GIT_URL}" dynajs 
 WORKDIR /workspace/dynajs
 # Use install (not ci) so the prepare script that produces dist/ runs.
 RUN npm install --prefer-offline --no-audit --no-fund
+
+# The 3D patient room beside rohy as well ("file:../3D"). Raw ES modules:
+# nothing to build, so no install step. Layer is cached on ROOM3D_GIT_REF.
+WORKDIR /workspace
+RUN git clone --depth 1 --branch "${ROOM3D_GIT_REF}" "${ROOM3D_GIT_URL}" 3D \
+ || git clone "${ROOM3D_GIT_URL}" 3D && cd 3D && git checkout "${ROOM3D_GIT_REF}"
 
 # Copy rohy and install. The bind-mount of package*.json gives a cached
 # layer when source changes but deps don't. OyonR/ has to be copied
@@ -182,10 +198,11 @@ COPY --from=builder --chown=node:node /workspace/rohy/LICENSE ./LICENSE
 COPY --from=builder --chown=node:node /workspace/rohy/NOTICE.md ./NOTICE.md
 COPY --from=builder --chown=node:node /workspace/rohy/licenses ./licenses
 COPY --from=builder --chown=node:node /workspace/dynajs /opt/dynajs
+COPY --from=builder --chown=node:node /workspace/3D /opt/3D
 
-# rohy's package.json declares dynajs at "file:../dynajs". Recreate that
-# relative layout: /opt/dynajs is the sibling of /opt/rohy.
-RUN ln -snf /opt/dynajs ../dynajs
+# rohy's package.json declares dynajs at "file:../dynajs" and the 3D room at
+# "file:../3D". Recreate that relative layout: both are siblings of /opt/rohy.
+RUN ln -snf /opt/dynajs ../dynajs && ln -snf /opt/3D ../3D
 
 # Optional Piper venv (empty dir if INCLUDE_PIPER=0 — TTS still works via
 # Kokoro/Google/OpenAI; admin can switch the provider in Settings).

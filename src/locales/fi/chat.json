@@ -52,6 +52,7 @@
   "patient_generic": "potilas",
   "patient_label": "Potilas",
   "patient_speaking": "Potilas puhuu…",
+  "patient_turn_in_flight": "Potilas vastaa vielä – odota vastausta.",
   "show": "Näytä",
   "show_full_transcript": "Näytä koko keskusteluloki",
   "show_transcript_title": "Näytä keskusteluloki",

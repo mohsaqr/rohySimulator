@@ -16,6 +16,7 @@ import { render } from '@testing-library/react';
 import { AuthProvider } from '../../src/contexts/AuthContext.jsx';
 import { ToastProvider } from '../../src/contexts/ToastContext.jsx';
 import { VoiceProvider } from '../../src/contexts/VoiceContext.jsx';
+import { PatientConversationProvider } from '../../src/contexts/PatientConversationContext.jsx';
 import { NotificationProvider } from '../../src/notifications/NotificationContext.jsx';
 import { PatientRecordProvider } from '../../src/services/PatientRecord/PatientRecordContext.jsx';
 
@@ -30,6 +31,7 @@ function Pass({ children }) { return children; }
  * @param {boolean} [opts.withAuth=true]
  * @param {boolean} [opts.withToast=true]
  * @param {boolean} [opts.withVoice=true]
+ * @param {boolean} [opts.withConversation=true]   // the shared patient-conversation bus
  * @param {boolean} [opts.withNotifications=true]
  * @param {boolean} [opts.withPatientRecord=false]   // opt-in (needs a sessionId/caseId)
  * @param {object}  [opts.patientRecord]             // { sessionId, caseId, patientInfo }
@@ -42,6 +44,7 @@ export function renderWithProviders(ui, opts = {}) {
         withAuth = true,
         withToast = true,
         withVoice = true,
+        withConversation = true,
         withNotifications = true,
         withPatientRecord = false,
         patientRecord = {},
@@ -53,6 +56,7 @@ export function renderWithProviders(ui, opts = {}) {
     const Notifications = withNotifications ? NotificationProvider : Pass;
     const Toast = withToast ? ToastProvider : Pass;
     const Voice = withVoice ? VoiceProvider : Pass;
+    const Conversation = withConversation ? PatientConversationProvider : Pass;
     // PatientRecord requires a sessionId/caseId/patientInfo; only mount if
     // explicitly requested. Tests that don't touch the record can leave it
     // out.
@@ -75,7 +79,9 @@ export function renderWithProviders(ui, opts = {}) {
                     <Notifications>
                         <Toast>
                             <Voice>
-                                <PR>{children}</PR>
+                                <Conversation>
+                                    <PR>{children}</PR>
+                                </Conversation>
                             </Voice>
                         </Toast>
                     </Notifications>

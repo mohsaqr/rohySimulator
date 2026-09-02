@@ -140,8 +140,18 @@ try {
 
 const router = express.Router();
 
+// Valid `source` values: where a turn came from. 'typed' and 'voice' are the
+// chat room's keyboard and microphone; anything else is a plugin room id
+// (lower_snake_case, the same shape the plugin registry enforces).
+export const INTERACTION_SOURCE = /^[a-z][a-z0-9_]{0,63}$/;
+/** The stored `source` for a client-supplied value: the value when it is a valid source id, else null. */
+export function interactionSource(value) {
+    return typeof value === 'string' && INTERACTION_SOURCE.test(value) ? value : null;
+}
+
 router.post('/interactions', authenticateToken, (req, res) => {
     const { session_id, role, content } = req.body;
+    const source = interactionSource(req.body.source);
     
     // Verify user owns the session
     dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [session_id, tenantId(req)], (err, session) => {
@@ -152,10 +162,10 @@ router.post('/interactions', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const sql = `INSERT INTO interactions (session_id, role, content, tenant_id, timestamp) VALUES (?, ?, ?, ?, ${SQL_NOW})`;
-        dbAdapter.run(sql, [session_id, role, content, tenantId(req)], function (err) {
+        const sql = `INSERT INTO interactions (session_id, role, content, source, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`;
+        dbAdapter.run(sql, [session_id, role, content, source, tenantId(req)], function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, session_id, role, content });
+            res.json({ id: this.lastID, session_id, role, content, source });
         });
     });
 });
@@ -171,7 +181,9 @@ router.get('/interactions/:session_id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const sql = "SELECT * FROM interactions WHERE session_id = ? AND tenant_id = ? ORDER BY timestamp ASC";
+        // `id` breaks ties: two turns can land in the same millisecond, and
+        // the restored thread must not shuffle them.
+        const sql = "SELECT * FROM interactions WHERE session_id = ? AND tenant_id = ? ORDER BY timestamp ASC, id ASC";
         dbAdapter.all(sql, [req.params.session_id, tenantId(req)], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ interactions: rows });

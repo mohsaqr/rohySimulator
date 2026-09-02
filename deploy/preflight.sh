@@ -29,6 +29,7 @@
 #   - TRANSFORMERS_CACHE set + parent dir exists + writable
 #   - Disk space at ROHY_DB parent (>= 500 MB free)
 #   - dynajs sibling repo built (if file:../dynajs is in package.json)
+#   - rohy-3d-patient-room sibling present (if file:../3D is in package.json)
 #   - PORT and HTTPS_PORT free (no other listener)
 #   - Optional: Piper venv present if tts_provider may be piper
 
@@ -266,7 +267,7 @@ else
 fi
 
 # -- 8. dynajs sibling -----------------------------------------------------
-printf '\n[8/9] checking dynajs sibling (if used)\n'
+printf '\n[8/10] checking dynajs sibling (if used)\n'
 if grep -q '"dynajs"' "$REPO_DIR/package.json" 2>/dev/null; then
     if grep -q '"dynajs": "file:' "$REPO_DIR/package.json"; then
         dynajs_dir="$(cd "$REPO_DIR/.." && pwd)/dynajs"
@@ -284,8 +285,25 @@ else
     ok "dynajs not in package.json"
 fi
 
-# -- 9. Port availability --------------------------------------------------
-printf '\n[9/9] checking listener ports\n'
+# -- 9. rohy-3d-patient-room sibling ---------------------------------------
+# The 3D patient room ships as raw ES modules (no dist/), so presence of its
+# entry module is the whole check.
+printf '\n[9/10] checking 3D patient room sibling (if used)\n'
+if grep -q '"rohy-3d-patient-room": "file:' "$REPO_DIR/package.json" 2>/dev/null; then
+    room3d_dir="$(cd "$REPO_DIR/.." && pwd)/3D"
+    if [[ -f "$room3d_dir/src/main.js" ]]; then
+        ok "3D patient room at $room3d_dir"
+    elif [[ -d "$room3d_dir" ]]; then
+        fail "3D found at $room3d_dir but src/main.js missing — wrong checkout?"
+    else
+        fail "3D sibling expected at $room3d_dir but missing — clone https://github.com/mohsaqr/3D beside rohy before deploy"
+    fi
+else
+    ok "rohy-3d-patient-room not a file: dependency — npm ci handles it"
+fi
+
+# -- 10. Port availability -------------------------------------------------
+printf '\n[10/10] checking listener ports\n'
 PORT=$(read_env_var PORT || true); PORT="${PORT:-3000}"
 HTTPS_PORT=$(read_env_var HTTPS_PORT || true)
 check_port_free() {

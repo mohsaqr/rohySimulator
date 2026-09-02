@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [react()],
   base: process.env.NODE_ENV === 'production' ? '/rohy/' : '/',
   resolve: {
+    // rohy-3d-patient-room is a file:-linked package whose own node_modules
+    // carries a second copy of three; force resolution to the host's copy so
+    // exactly one three.js instance is bundled.
+    dedupe: ['three'],
     alias: [
       // Keep onnxruntime-web out of the SPA bundle. `oyon/signal-capture`
       // statically reaches the voice VAD, which lazily imports ONNX — and a

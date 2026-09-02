@@ -75,6 +75,8 @@ situation evolves.
 #    to an empty stub and the build breaks later, somewhere unrelated.
 git clone https://github.com/mohsaqr/dynajs.git ../dynajs
 (cd ../dynajs && npm install)
+#    The 3D patient room is a sibling too (`file:../3D`); it has no build step.
+git clone https://github.com/mohsaqr/3D.git ../3D
 
 # 1. Install (also downloads ~93 MB of Oyon MediaPipe + ONNX bundles
 #    via the postinstall hook — needs `curl` on PATH and internet)

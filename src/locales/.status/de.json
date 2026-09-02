@@ -11843,6 +11843,13 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.patient_turn_in_flight": {
+    "src": "d66e9816593f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.show": {
     "src": "0df6f1cad36c",
     "state": "machine",
@@ -14106,6 +14113,20 @@
   },
   "common.room_ready_results": {
     "src": "63f6fa53bda6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_room3d": {
+    "src": "ac99fc15807f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.room_room3d_sub": {
+    "src": "2b3d29dc77cd",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -21239,6 +21260,552 @@
   },
   "profile.username": {
     "src": "e3b89e9d33f8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.acute_presentation": {
+    "src": "bf3a8bb4c642",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.bed_label": {
+    "src": "b64ac05f17e6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.body_map": {
+    "src": "0a2e15e0fc75",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_camera_views": {
+    "src": "140614fa871c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_case_time": {
+    "src": "eb53da241fcd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_choose_view": {
+    "src": "a1129c537cbc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_copy_critical": {
+    "src": "69303e9146c8",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_copy_stabilizing": {
+    "src": "f7e20ce33a0c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_copy_stable": {
+    "src": "a3611c367bc1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_copy_unstable": {
+    "src": "d6a1692dc3db",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_ecg_aria": {
+    "src": "43988c4c3195",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_ecg_lead": {
+    "src": "97acdcf4e1fc",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_finding_close": {
+    "src": "d1a592d5a7b6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_last_reading": {
+    "src": "1e21c98144d7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_live_monitor": {
+    "src": "86bd9795a425",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_live_vitals": {
+    "src": "aa018f35fdef",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_move": {
+    "src": "6ecc3df6bffd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_nudge_foot": {
+    "src": "ed21307e7bbd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_nudge_group": {
+    "src": "3299d5ed1726",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_nudge_head": {
+    "src": "e68c143b5884",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_nudge_left": {
+    "src": "69399feb2b5e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_nudge_right": {
+    "src": "cb30d415c735",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_open_view_menu": {
+    "src": "f6233f5fb378",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_reduced_visuals": {
+    "src": "087027d096e7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_reduced_visuals_live": {
+    "src": "a4aaf4b8a1e9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_rhythm_sinus": {
+    "src": "52a96bb60b9b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_rhythm_sinus_tach": {
+    "src": "d7641f0cfd7a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_room": {
+    "src": "73145b46c491",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_scenario_time": {
+    "src": "c6fad4eb5eac",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_status_critical": {
+    "src": "427dd2969bd1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_status_stabilizing": {
+    "src": "befcaaca40ca",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_status_stable": {
+    "src": "90ee305714d7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_status_unstable": {
+    "src": "6ee605008933",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_trends_close": {
+    "src": "e04168409655",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_trends_note_live": {
+    "src": "e9be9b8a004a",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_trends_title": {
+    "src": "d35921aab7f7",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_unavailable_body": {
+    "src": "21b8ac616002",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_unavailable_title": {
+    "src": "560011789e95",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_airway": {
+    "src": "a1b344bbff1e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_airway_hint": {
+    "src": "48a2c5597696",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_equipment": {
+    "src": "7f2465ac7cef",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_equipment_hint": {
+    "src": "51c26fcdc274",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_hub": {
+    "src": "dcc839a4015c",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_monitor": {
+    "src": "4c2e1df4570b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_monitor_hint": {
+    "src": "ce846c810967",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_overview": {
+    "src": "d4b1ea5708dd",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_overview_hint": {
+    "src": "43c16c2519bf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_patient": {
+    "src": "835043ec8e6b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_patient_hint": {
+    "src": "e9359caaa124",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.chrome_view_trends": {
+    "src": "9632e308bc47",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.finding_close": {
+    "src": "d1a592d5a7b6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.finding_exit_fullscreen": {
+    "src": "897e0cf78b80",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.finding_fullscreen": {
+    "src": "9be000728a73",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.finding_region": {
+    "src": "98b22bf336b3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.location": {
+    "src": "f8a7a678f095",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.manikin_close": {
+    "src": "572a5a96d99e",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_bodymap": {
+    "src": "0a2e15e0fc75",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_bodymap_hint": {
+    "src": "e7442cd48934",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_examine": {
+    "src": "8898b9f2350b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_examine_hint": {
+    "src": "fb5f09ac6680",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_records": {
+    "src": "47a84e92d5b2",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.nav_records_hint": {
+    "src": "3e5b90ae053f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.no_answer": {
+    "src": "d45cf14e13d1",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.not_ready": {
+    "src": "401b4dd185a6",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.not_recorded": {
+    "src": "b37c7879f6c3",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.opening_line": {
+    "src": "f29e3019deb9",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.reaction_abdomen": {
+    "src": "bec06026e75b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.reaction_chest": {
+    "src": "fb164cd71bbf",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.reaction_default": {
+    "src": "2bde2c5be788",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.reaction_heart": {
+    "src": "cba4b274caec",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.see_record": {
+    "src": "8c91098d364d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.speaker_patient": {
+    "src": "835043ec8e6b",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.speaker_you": {
+    "src": "08b041935798",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.unknown_patient": {
+    "src": "bd79af9aa481",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.voice_label": {
+    "src": "87bf2bc08589",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.voice_mute": {
+    "src": "79f5460e0995",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.voice_speaking": {
+    "src": "ef98b35ae322",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "room3d.voice_unmute": {
+    "src": "68f04927c128",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

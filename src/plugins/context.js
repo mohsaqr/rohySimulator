@@ -161,6 +161,30 @@ export function resolveRemoteRefs(value, pluginId) {
 
 const REMOTE_SCHEME = 'remote:';
 
+/**
+ * A deep-frozen copy of a host object, for a grant that promises read-only
+ * data. The host's live case is shared by every core room (the persona
+ * prompt, the exam model, the patient record); handing the same reference
+ * to a plugin would let one line of plugin code rewrite the answer key for
+ * all of them. The case is plain JSON, so a JSON round-trip is the copy.
+ * Once per mount (createPluginContext is memoised on the mount's identity).
+ *
+ * @param {*} value
+ * @returns {*} the frozen copy, or null for nothing
+ */
+export function frozenCopy(value) {
+    if (value === null || value === undefined) return null;
+    const copy = JSON.parse(JSON.stringify(value));
+    const freeze = (node) => {
+        if (node && typeof node === 'object' && !Object.isFrozen(node)) {
+            Object.freeze(node);
+            Object.values(node).forEach(freeze);
+        }
+        return node;
+    };
+    return freeze(copy);
+}
+
 export function createPluginContext({ manifest, session, caseConfig, eventLogger, notify, t, navigate, grants = {} }) {
     const id = manifest.id;
     const requested = manifest.capabilities ?? [];
@@ -168,6 +192,16 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
 
     if (requested.includes('llm') && typeof grants.complete === 'function') {
         capabilities.llm = { complete: grants.complete };
+    }
+    // The one patient conversation, narrowed by the host (see
+    // PatientConversationContext): speak into it, read it, nothing else.
+    if (requested.includes('conversation') && grants.conversation) {
+        capabilities.conversation = grants.conversation;
+    }
+    // Open the host's orders drawer on a tab. The host closes over its own
+    // drawer state; the plugin names a tab and nothing more.
+    if (requested.includes('drawer') && typeof grants.openDrawer === 'function') {
+        capabilities.openDrawer = grants.openDrawer;
     }
     if (requested.includes('notify') && typeof notify === 'function') {
         // `source` LAST: spreading payload last let a plugin overwrite the
@@ -224,6 +258,10 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
         // `ctx.data` instead of handing over a getter. `available()` reads it
         // too, and availability is given no services at all.
         orders: requested.includes('orders') ? readOrders(grants.orders) : null,
+        // The 'case' capability: the frozen case snapshot, whole and read-only.
+        // Data beside `data` and `orders`, for the same reason those are —
+        // absent (null) for a plugin that did not ask.
+        patientCase: requested.includes('case') ? frozenCopy(grants.patientCase) : null,
     };
 }
 

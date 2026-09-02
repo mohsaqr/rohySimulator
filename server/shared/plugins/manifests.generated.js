@@ -615,6 +615,37 @@ export const PLUGIN_MANIFESTS = [
                 }
             }
         }
+    },
+    {
+        "capabilities": [
+            "case",
+            "conversation",
+            "drawer"
+        ],
+        "id": "room3d",
+        "minRole": "student",
+        "room": {
+            "accent": "teal",
+            "icon": "Bed",
+            "key": "room3d",
+            "labelKey": "room_room3d",
+            "order": 15,
+            "presentation": "overlay",
+            "subKey": "room_room3d_sub"
+        },
+        "states": {
+            "interpretations": {},
+            "objectOverrides": {},
+            "verbFallbacks": {}
+        },
+        "version": "1.0.0",
+        "vocabulary": {
+            "components": {
+                "ROOM3D": "Room3D"
+            },
+            "objectTypes": {},
+            "verbs": {}
+        }
     }
 ];
 

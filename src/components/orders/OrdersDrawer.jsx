@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { X, ChevronUp, ChevronDown, FileText, Activity, Syringe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import PatientRecordViewer from '../PatientRecordViewer';
@@ -34,7 +34,7 @@ const ACTIVE_TREATMENT_STATUSES = new Set(['ordered', 'in_progress']);
  * The `onViewResult` prop was part of the deleted labs/radiology result
  * list; callers may still pass it, this component no longer reads it.
  */
-export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = false }) {
+export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = false, openRequest = null, onOpenRequestConsumed = null, fabAlign = 'seam' }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('treatments'); // treatments, records, memory
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -47,6 +47,30 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
         EventLogger.drawerOpened('OrdersDrawer');
         EventLogger.tabSwitched(tab, COMPONENTS.ORDERS_DRAWER);
     };
+
+    // External open requests (e.g. the 3D room's chart/IV/oxygen objects ask
+    // for a specific tab). A nonce field makes repeat requests re-fire.
+    // handleDrawerOpen is re-created each render, so only the request itself
+    // may be a dependency — re-firing on the handler would reopen the drawer.
+    // Each request is consumed once, by its `at` stamp, and the host is
+    // told so it can drop it: the drawer unmounts whenever a full-screen
+    // room takes over, and a remount must not replay a request the learner
+    // already acted on and closed.
+    const consumedRequestRef = useRef(null);
+    useEffect(() => {
+        if (!openRequest?.tab || openRequest.at === consumedRequestRef.current) return;
+        consumedRequestRef.current = openRequest.at;
+        handleDrawerOpen(openRequest.tab);
+        onOpenRequestConsumed?.(openRequest);
+    }, [openRequest]);
+
+    // Escape closes an open drawer, like the backdrop click does.
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const onKey = (event) => { if (event.key === 'Escape') handleDrawerClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isOpen]);
 
     const handleDrawerClose = () => {
         setIsOpen(false);
@@ -122,12 +146,15 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
         <>
             {/* Floating Action Buttons — horizontal strip sitting one
                 tier above the RoomNavigator (72px nav + 16px gap = 88px
-                from bottom). Left edge starts at the column seam so the
-                strip lies over the vitals monitor, never the chat. */}
+                from bottom). fabAlign 'seam' (chat layout) starts the
+                strip at the column seam so it lies over the vitals
+                monitor, never the chat; 'left' (full-surface plugin
+                rooms like the 3D room) docks it at the very left so it
+                never covers the room's own bottom-center surfaces. */}
             {!isOpen && (
                 <div
                     className="fixed z-40 flex gap-2"
-                    style={{ bottom: '88px', left: 'calc(max(35vw, 350px) + 1rem)' }}
+                    style={{ bottom: '88px', left: fabAlign === 'left' ? '1rem' : 'calc(max(35vw, 350px) + 1rem)' }}
                 >
                     {tabs.map(tab => (
                         <button
@@ -159,19 +186,30 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
                 peek above the nav. The backdrop below uses inset-0 so it
                 still dims the entire screen including under the nav, but
                 the nav itself remains clickable. */}
+            {/* Backdrop: a SIBLING of the panel, not a child. The panel is
+                transformed (translate), and a transformed element is the
+                containing block for fixed descendants — inside it, inset-0
+                covered only the panel, so nothing dimmed and click-outside
+                never closed. z-40 puts it over the rooms and under the panel;
+                the RoomNavigator shares z-40 and comes later in the tree, so
+                it stays clickable. */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50"
+                    onClick={handleDrawerClose}
+                    aria-hidden="true"
+                />
+            )}
             <div
                 className={`fixed bottom-[72px] left-0 right-0 z-50 transition-transform duration-300 ease-out ${
                     isOpen ? 'translate-y-0' : 'translate-y-[calc(100%+72px)]'
                 }`}
                 style={{ height: drawerHeight }}
+                // Off-screen is not out of reach: closed, the whole catalogue
+                // was still in the tab order (and reachable from inside an
+                // overlay room). inert takes it out until it opens.
+                inert={!isOpen || undefined}
             >
-                {/* Backdrop */}
-                {isOpen && (
-                    <div
-                        className="fixed inset-0 bg-black/50 -z-10"
-                        onClick={handleDrawerClose}
-                    />
-                )}
 
                 <div className="h-full bg-neutral-900 border-t border-neutral-700 rounded-t-2xl shadow-2xl flex flex-col">
                     {/* Drawer Handle */}
@@ -193,6 +231,7 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
                                 </button>
                                 <button
                                     onClick={handleDrawerClose}
+                                    aria-label={t('close', { ns: 'common' })}
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
                                 >
                                     <X className="w-5 h-5" />

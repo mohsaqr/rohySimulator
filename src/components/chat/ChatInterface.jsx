@@ -34,9 +34,12 @@ import {
     formatPersonalityForPrompt,
 } from '../../utils/casePromptContext';
 import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
+import { usePatientConversation } from '../../contexts/PatientConversationContext';
+import { resolvePatientTemplate } from '../../utils/patientTemplate';
 import { getAffectSnapshot } from '../../utils/latestAffect';
 import { buildAffectSignal } from '../../utils/affectSignal';
 import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
+import SubtitleBand from '../voice/SubtitleBand';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -352,6 +355,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setActiveParticipant
     } = useVoice();
 
+    // The shared patient conversation (PatientConversationContext). This
+    // component stays the owner of the turn; the bus only mirrors the
+    // transcript out and lets another surface (the 3D bedside room) send a
+    // turn THROUGH the same handler. Inert when no provider is mounted.
+    const conversationBus = usePatientConversation();
+    const sendRef = useRef(null);
+    // One patient turn at a time. The chat's own controls are disabled
+    // while `loading`, but a turn arriving through the bus (a second
+    // recognised utterance at the bedside) has no such guard: two turns in
+    // flight persist interleaved and the second's prompt lacks the first.
+    const turnInFlightRef = useRef(false);
+
     // Raw global voice settings live separately from per-case voice overrides.
     // VoiceContext must stay platform-only; patient/case overrides are passed
     // directly to resolveSpeakerVoice at the patient TTS callsite.
@@ -546,47 +561,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 });
                 setAgentStates(states);
 
-                // Patient template resolution: prefer per-case attached row;
-                // otherwise pick a platform-default patient template by gender.
-                // Order tried:
-                //   1. Exact match — first-letter of case demographics.gender
-                //      matches a template's config.voice.gender.
-                //   2. For non-female cases (including empty gender, "Other",
-                //      "Non-binary", anything that doesn't start with 'f'),
-                //      fall back to the first NON-female template. This
-                //      matches the seed doc that "Default Patient is used
-                //      otherwise" and keeps the patient audible for cases
-                //      that don't slot cleanly into male/female.
-                //   3. Otherwise null. A female-coded case with only male
-                //      templates seeded must NOT silently pick the male one
-                //      — that's a real misconfig the admin needs to see, so
-                //      we surface a loud error instead.
-                const attachedPatient = agentList.find(a => a.agent_type === 'patient' && a.enabled !== 0 && a.enabled !== false);
-                if (attachedPatient) {
-                    setPatientTemplate(normalizePatientAgent(attachedPatient, activeCase.id));
-                } else {
-                    try {
-                        const templates = await AgentService.getTemplates();
-                        const patientDefaults = (templates || []).filter(t =>
-                            t.agent_type === 'patient' && (t.is_default === 1 || t.is_default === true)
-                        );
-                        const caseGender = (activeCase?.config?.demographics?.gender || '').toLowerCase();
-                        const firstLetter = caseGender.charAt(0);
-                        const isFemaleCase = firstLetter === 'f';
-                        const templateGender = (t) =>
-                            (parseConfig(t.config)?.voice?.gender || '').toLowerCase();
-                        const exact = patientDefaults.find((t) =>
-                            firstLetter && templateGender(t).charAt(0) === firstLetter
-                        );
-                        const nonFemale = isFemaleCase
-                            ? null
-                            : patientDefaults.find((t) => templateGender(t).charAt(0) !== 'f');
-                        const fallback = exact || nonFemale || null;
-                        setPatientTemplate(fallback ? normalizePatientAgent(fallback, activeCase.id) : null);
-                    } catch {
-                        setPatientTemplate(null);
-                    }
-                }
+                // Patient template resolution (per-case attached row, else a
+                // platform default matched on the case's gender) now lives in
+                // utils/patientTemplate, so the 3D room resolves the SAME
+                // persona — and therefore the same voice — as this chat.
+                // Its rules, including the deliberate refusal to hand a
+                // female case a male template, are documented there.
+                setPatientTemplate(
+                    await resolvePatientTemplate(agentList, activeCase, () => AgentService.getTemplates()),
+                );
 
                 // Load team communications
                 const log = await AgentService.getTeamCommunications(sessionId);
@@ -811,7 +794,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     if (data?.interactions?.length > 0) {
                         const chatMessages = data.interactions.map(i => ({
                             role: i.role,
-                            content: i.content
+                            content: i.content,
+                            // Where the turn came from (typed / voice / a
+                            // plugin room), so the bedside can tell its own
+                            // replies apart after a reload as well as before.
+                            source: i.source ?? null,
                         }));
                         console.log('Restored chat from database:', chatMessages.length, 'messages');
                         setMessages(chatMessages);
@@ -1237,17 +1224,47 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return () => { cancelled = true; };
     }, []);
 
-    const handleSendToPatient = async (overrideText) => {
+    // `meta.source` says where the turn came from ('typed' / 'voice' here; a
+    // plugin room passes its id through the conversation bus) and is stored
+    // with the interaction. `meta.spoken` forces a voiced reply for a turn
+    // that was spoken, whatever the chat's own voice mode says.
+    const handleSendToPatient = async (overrideText, meta = {}) => {
         const text = (overrideText ?? input).trim();
         if (!text) return;
+        const source = meta.source ?? 'typed';
+        const wantSpeech = meta.spoken === true || voiceMode;
+        if (turnInFlightRef.current) {
+            // A caller that came through the bus gets told; the chat's own
+            // path is already gated by `loading` and stays silent.
+            if (source !== 'typed' && source !== 'voice') {
+                throw new Error(t('patient_turn_in_flight'));
+            }
+            return;
+        }
+        turnInFlightRef.current = true;
+        try {
+            await runPatientTurn(text, source, wantSpeech);
+        } finally {
+            turnInFlightRef.current = false;
+            // The reply is over, spoken or not: nothing is being voiced now.
+            conversationBus.publish({ voiced: null });
+        }
+    };
 
-        const userMsg = { role: 'user', content: text };
+    const runPatientTurn = async (text, source, wantSpeech) => {
+
+        // `source` rides on the message so a consumer of the shared
+        // transcript can tell who asked; the model never sees it (see
+        // LLMService.streamMessage, which sends role + content only).
+        const userMsg = { role: 'user', content: text, source };
         setMessages(prev => [...prev, userMsg]);
 
-        EventLogger.messageSent(text, COMPONENTS.CHAT_INTERFACE);
+        EventLogger.messageSent(text, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source);
 
         setInput('');
         setLoading(true);
+        // Not yet known whether this reply will be voiced (see below).
+        conversationBus.publish({ voiced: null });
 
         const richSystemPrompt = buildPatientSystemPrompt();
 
@@ -1266,7 +1283,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // "first-sentence duration + first Kokoro chunk RTT".
         let speech = null;
         let voiceErrored = false;
-        if (voiceMode) {
+        if (wantSpeech) {
             // Patient voice precedence (Voice 2.0):
             //   1. activeCase.config.voice.case_voice  — per-case override.
             //   2. patientTemplate.config.voice        — Patient persona
@@ -1339,10 +1356,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         voiceErrored = true;
                         setSpeaking(false);
                         ttsErrorToast(toast, err, t);
+                        // Tell the bus: a consumer holding its caption for
+                        // the audio would otherwise wait forever.
+                        conversationBus.publish({ voiced: false });
                     }
                 });
             }
         }
+        // Whether this reply is actually going to be spoken: a speech
+        // session exists and the voice resolved. Published BEFORE the
+        // stream starts so a consumer can decide how to reveal the words.
+        conversationBus.publish({ voiced: Boolean(speech) && !voiceErrored });
 
         let acc = '';            // raw accumulator (for chat bubble + bubble-final)
         let speechBuffer = '';   // sentence detector buffer (TTS only)
@@ -1358,8 +1382,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 sessionId,
                 [...messages, userMsg],
                 richSystemPrompt,
-                voiceMode ? 'voice' : undefined,
+                wantSpeech ? 'voice' : undefined,
                 {
+                    source,
                     agentTemplateId: patientTemplate?.templateId || null,
                     // Server appends the output-language directive for this code
                     // (systemPromptAssembly) — never inject it into the prompt here.
@@ -1405,13 +1430,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setMessages(prev => {
             const copy = [...prev];
             if (assistantIdx >= 0 && copy[assistantIdx]?.role === 'assistant') {
-                copy[assistantIdx] = { role: 'assistant', content: finalDisplay, error: isError || !responseText };
+                // `source` names who asked, on the answer too, so a restored
+                // transcript still knows which room a reply belongs to.
+                copy[assistantIdx] = { role: 'assistant', content: finalDisplay, error: isError || !responseText, source };
             }
             return copy;
         });
 
         const loggedText = isError ? finalDisplay : responseText;
-        EventLogger.messageReceived(loggedText, COMPONENTS.CHAT_INTERFACE);
+        EventLogger.messageReceived(loggedText, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source);
         obtained('history', text, loggedText);
         setLoading(false);
 
@@ -1427,6 +1454,22 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         }
     };
+    // Written in an effect, not during render: a render React throws away
+    // must not leave the ref pointing at its handler.
+    useEffect(() => {
+        sendRef.current = handleSendToPatient;
+    });
+
+    // Register once; the ref always points at the latest handler, so a send
+    // from the bus runs with this render's persona, messages and voice.
+    useEffect(() => conversationBus.register({
+        send: (text, meta) => sendRef.current?.(text, meta),
+    }), [conversationBus]);
+
+    // Mirror the transcript and turn state out to the bus.
+    useEffect(() => {
+        conversationBus.publish({ messages, loading, sessionId: sessionId || restoredSessionId || null });
+    }, [conversationBus, messages, loading, sessionId, restoredSessionId]);
 
     // Shared speak helper used by the agent send path (which doesn't expose an
     // LLM streaming hook today, so it stays single-shot). Goes through the
@@ -1626,7 +1669,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             onEnd: ({ final }) => {
                 setListening(false);
                 if (final) {
-                    handleSendToPatient(final);
+                    handleSendToPatient(final, { source: 'voice' });
                 } else if (!sawError) {
                     // Recogniser ended without ever hearing speech and without
                     // emitting a code — typical of "started, immediately ended"
@@ -2099,62 +2142,30 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     only content. */}
                 {voiceMode && !showTranscript && activeTab === 'patient' && (() => {
                     let line = null;
+                    let isListening = false;
                     if (listening && input) {
                         line = input;
+                        isListening = true;
                     } else if (speaking && subtitleReady) {
                         const latest = currentMessages[currentMessages.length - 1] || null;
                         if (latest?.role === 'assistant' && latest.content) {
                             line = latest.content;
                         }
                     }
-                    if (!line) return null;
-                    // Haze: a feathered ellipse of dim+blur sitting only
-                    // behind the caption, fading to fully transparent at the
-                    // edges — never a full-screen scrim. Mask-image is the
-                    // mechanism: it controls where the dim/blur layer is
-                    // visible, with a soft radial falloff.
-                    const hazeMask = 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 90%)';
                     return (
-                        <button
-                            type="button"
+                        <SubtitleBand
+                            line={line}
+                            listening={isListening}
+                            // Pixel-anchored under the RESP waveform:
+                            // PatientMonitor stacks three 128px canvases below
+                            // a ~64px header, so the resp line ends at ~448px.
+                            // 29rem + 1cm keeps a breathing gap below it, and a
+                            // pixel anchor stays glued to the stack at any
+                            // viewport height.
+                            anchor="calc(29rem + 1cm)"
                             onClick={() => setShowTranscript(true)}
-                            aria-label={t('show_full_transcript')}
-                            // Anchored pixel-wise to the bottom edge of the
-                            // resp waveform: PatientMonitor.jsx stacks three
-                            // 128px canvases (ECG / PLETH / RESP) below a
-                            // ~64px header, so the resp line ends at ~448px.
-                            // Base anchor 29rem (464px) + 1cm breathing gap
-                            // per user feedback so the caption sits clearly
-                            // below the waveform rather than abutting it.
-                            // Pixel anchor (not vh) so the position stays
-                            // glued to the waveform stack regardless of
-                            // viewport height. No speaker label per prior
-                            // user request.
-                            // pointer-events-none on the full-width strip so it
-                            // never swallows taps meant for the controls behind
-                            // it (Bug 17); only the visible caption block below
-                            // re-enables pointer events to stay dismissable.
-                            className="fixed inset-x-0 z-40 flex justify-center items-center px-6 py-8 text-center group pointer-events-none"
-                            style={{ top: 'calc(29rem + 1cm)', background: 'transparent' }}
-                        >
-                            <div
-                                aria-hidden
-                                className="absolute inset-0 backdrop-blur-sm"
-                                style={{
-                                    backgroundColor: 'rgba(0,0,0,0.30)',
-                                    WebkitMaskImage: hazeMask,
-                                    maskImage: hazeMask,
-                                }}
-                            />
-                            <div
-                                className="relative max-w-2xl pointer-events-auto cursor-pointer"
-                                style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
-                            >
-                                <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
-                                    {line}
-                                </p>
-                            </div>
-                        </button>
+                            label={t('show_full_transcript')}
+                        />
                     );
                 })()}
             </div>
@@ -2270,34 +2281,4 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     );
 }
 
-// Normalise either a per-case attached agent row (from /cases/:id/agents) or
-// a raw template row (from /agents/templates) into a uniform shape. Per-case
-// rows carry name_override / system_prompt_override / config_override which
-// take precedence; raw templates supply the underlying defaults.
-function normalizePatientAgent(raw, caseId = null) {
-    if (!raw) return null;
-    const config = parseConfigSafe(raw.config) || parseConfigSafe(raw.config_override) || {};
-    return {
-        templateId: raw.agent_template_id || raw.id,
-        name: raw.name_override || raw.name || 'Patient',
-        roleTitle: raw.role_title || 'Simulated Patient',
-        avatarUrl: raw.avatar_url || null,
-        systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
-        contextFilter: raw.context_filter_override || raw.context_filter || 'history',
-        config,
-        // Stamp the case this template was resolved for. The agents loader
-        // is gated on `sessionId && activeCase`, so during a case switch
-        // there is a window where sessionId is briefly null and the loader
-        // is suspended; without this stamp, patientTemplate retains case
-        // A's value while activeCase is already B and buildPatientSystemPrompt
-        // happily glues B's persona to A's template prose. See the
-        // _caseId guard in buildPatientSystemPrompt for the consumer side.
-        _caseId: caseId,
-    };
-}
 
-function parseConfigSafe(value) {
-    if (!value) return null;
-    if (typeof value === 'object') return value;
-    try { return JSON.parse(value); } catch { return null; }
-}

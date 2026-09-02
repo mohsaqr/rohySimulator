@@ -19,7 +19,12 @@
  *               `accent` are STRINGS resolved against static allowlists on the
  *               client: a manifest cannot carry a React component (this module
  *               is server-importable), and Tailwind cannot JIT a class name it
- *               never sees as a literal.
+ *               never sees as a literal. `order` sorts it among the core rooms
+ *               (chat 10 … consultant 90). `presentation` is 'replace'
+ *               (default: the room takes the chat layout's place) or
+ *               'overlay' (drawn over the chat layout, which stays mounted
+ *               and inert — for a room that is a second view of the live
+ *               session and needs its physiology and conversation running).
  *   vocabulary  the xAPI verbs / object types the plugin emits. The SERVER
  *               needs this to validate POST /learning-events, which is the
  *               whole reason a manifest exists instead of a plain JS object
@@ -45,7 +50,25 @@ export const CLINICAL_STATES = [
 // rohy's order API itself, from inside a package that is meant to be portable.
 // The host builds the adapter instead — the same rule every other capability
 // follows — so the plugin sees `{imaging: [...]}` and never an endpoint.
-export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote', 'orders'];
+//
+// 'case' is the session's frozen case snapshot, whole. Most plugins want a
+// slice of the case config under their own id (`ctx.data`); a plugin that IS
+// a view of the patient — a bed with the case's patient in it — needs the
+// patient, and a copy of the same fields under a plugin key would be a second
+// source of truth. Read-only data on `ctx.patientCase`, never a setter.
+//
+// 'conversation' is the session's ONE patient conversation, narrowed to
+// `{send(text, meta), messages, loading}`: a plugin can speak into the same
+// thread the chat room writes and read what was said, but the persona, the
+// model call, persistence and the voice all stay with the host. This is the
+// deliberate opposite of the 'llm' grant, which is refused precisely because
+// it would write into the patient transcript — here, writing into the patient
+// transcript is the point.
+//
+// 'drawer' opens the host's orders drawer on a tab (`openDrawer('records')`),
+// so a plugin's chart or IV pole can lead to the real records / treatments
+// surfaces instead of re-implementing them.
+export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote', 'orders', 'case', 'conversation', 'drawer'];
 
 /**
  * A plugin's remote-content declaration (`manifest.remote`), which is what the
@@ -78,6 +101,9 @@ export const ROLE_RANKS = { guest: 0, student: 1, reviewer: 2, educator: 3, admi
  *  tab and a plugin that can never mount, since the core rooms are matched
  *  earlier in App.jsx's render chain. */
 export const CORE_ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
+
+/** How a plugin room is presented by the host; see validateManifest. */
+export const ROOM_PRESENTATIONS = ['replace', 'overlay'];
 
 /** These mirror the CHECK constraints on learning_events (migration 0001).
  *  A verb declaring anything else does not fail loudly — the INSERT is
@@ -154,6 +180,15 @@ export function validateManifest(manifest) {
     }
     if (CORE_ROOM_KEYS.includes(manifest.id)) {
         throw new Error(`Plugin id '${manifest.id}' is a core rohy room — it would render a duplicate navigator tab and could never mount`);
+    }
+    // `room.presentation` decides whether the host REPLACES the chat layout
+    // with the room (default) or draws the room OVER it with the chat
+    // mounted and inert beneath ('overlay' — for a room that is a second
+    // view of the live session: physiology and conversation keep running
+    // underneath). A misspelling here would fail open into the wrong mode,
+    // so it is validated like the room key.
+    if (manifest.room.presentation !== undefined && !ROOM_PRESENTATIONS.includes(manifest.room.presentation)) {
+        throw new Error(`Plugin '${manifest.id}' declares room.presentation '${manifest.room.presentation}'; it must be one of ${ROOM_PRESENTATIONS.join(', ')} or absent`);
     }
     const verbs = manifest.vocabulary.verbs || {};
     Object.entries(verbs).forEach(([verb, meta]) => {

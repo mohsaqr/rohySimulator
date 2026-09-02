@@ -70,6 +70,20 @@ this is the first item here rather than a footnote.
 
 ---
 
+### The `3D` sibling — the 3D patient room, also beside the checkout
+
+`package.json` also declares `rohy-3d-patient-room` as `file:../3D`. It is a
+plain ES-module package (no build step), so a clone is enough:
+
+```bash
+git clone https://github.com/mohsaqr/3D.git 3D                # sibling, not nested
+```
+
+`deploy/preflight.sh` checks for it (step 9), and `npm run build` refuses to
+start without it (`scripts/verify-room3d-install.mjs`).
+
+---
+
 ## Published release (recommended)
 
 If a release has been tagged, the fastest install is to pull the pre-built
@@ -346,6 +360,7 @@ Common bundler flags:
 | `--mode=source\|docker\|both` | Source tarball (needs node + sqlite3 on target), `docker save`d image (needs only docker), or both |
 | `--with-hf-cache` | Bundle `$TRANSFORMERS_CACHE` so Kokoro TTS works offline on first request |
 | `--with-dynajs` | Bundle the `../dynajs` sibling clone if `package.json` uses `file:../dynajs` |
+| `--with-3d` | Bundle the `../3D` sibling clone (the 3D patient room) if `package.json` uses `file:../3D` |
 | `--no-piper` / `--with-piper` | Exclude/require the Piper venv (auto-detected; saves ~326 MB if excluded) |
 
 **Cross-platform note**: bundles are platform-stamped because they

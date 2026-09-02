@@ -41,6 +41,14 @@ export class LLMError extends Error {
     }
 }
 
+// What the model is sent: role and content, nothing else. The client's
+// message objects carry bookkeeping (`source`, `error`) that must never
+// reach a provider — strict OpenAI-compatible servers reject unknown
+// message properties, and the rest silently accept them.
+export function wireMessages(messages) {
+    return (messages ?? []).map(({ role, content }) => ({ role, content }));
+}
+
 export const LLMService = {
 
     /**
@@ -88,7 +96,7 @@ export const LLMService = {
         try {
             const body = {
                 session_id: sessionId,
-                messages,
+                messages: wireMessages(messages),
                 system_prompt: systemPrompt || 'You are a patient.'
             };
             if (sessionMode) body.session_mode = sessionMode;
@@ -137,7 +145,7 @@ export const LLMService = {
      * Caller-initiated abort (the `signal` option) still resolves with '' —
      * that is a cancellation, not a failure.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null, studentAffect = null } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null, studentAffect = null, source = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -151,7 +159,7 @@ export const LLMService = {
         // made the discussant conversation reappear in the patient chat on
         // restore (Bug 8, 16.5.2026 report).
         if (persistInteractions && !silent && lastMsg?.role === 'user') {
-            this.logInteraction(sessionId, 'user', lastMsg.content);
+            this.logInteraction(sessionId, 'user', lastMsg.content, source);
         }
 
         // Defensive 60s watchdog: if no SSE event arrives in that window, abort
@@ -178,7 +186,7 @@ export const LLMService = {
         try {
             const body = {
                 session_id: sessionId,
-                messages,
+                messages: wireMessages(messages),
                 system_prompt: systemPrompt || 'You are a patient.',
                 stream: true
             };
@@ -271,7 +279,7 @@ export const LLMService = {
 
             console.log(`[LLMService] full response in ${Math.round(performance.now() - t0)}ms (${acc.length} chars)`);
             if (persistInteractions) {
-                this.logInteraction(sessionId, 'assistant', acc);
+                this.logInteraction(sessionId, 'assistant', acc, source);
             }
             return acc;
         } catch (err) {
@@ -315,10 +323,14 @@ export const LLMService = {
         }
     },
 
-    async logInteraction(sessionId, role, content) {
+    // `source` says where a turn came from — 'typed', 'voice' (the chat's
+    // microphone) or a plugin room id — so the educator's transcript and the
+    // analytics can tell a typed question from a spoken one. Null = unknown,
+    // which is what every row before the column existed reads as.
+    async logInteraction(sessionId, role, content, source = null) {
         if (!sessionId) return;
         try {
-            await apiPost('/interactions', { session_id: sessionId, role, content });
+            await apiPost('/interactions', { session_id: sessionId, role, content, ...(source ? { source } : {}) });
         } catch (e) {
             console.error('Logging failed', e);
         }

@@ -284,6 +284,56 @@ describe('OrdersDrawer — guard render', () => {
         expect(labButtons.length).toBeLessThanOrEqual(1);
         expect(radButtons.length).toBeLessThanOrEqual(1);
     });
+
+    it('opens on an openRequest, reports it consumed, and does not replay the same stamp', async () => {
+        // The 3D room asks for a tab through App's drawerRequest. The drawer
+        // opens once per stamp and tells the host, which drops the request —
+        // so a remount (a full-screen room took over and gave back) never
+        // springs the same request open again.
+        const consumed = vi.fn();
+        const request = { tab: 'records', at: 1234 };
+        const view = renderWithProviders(
+            <OrdersDrawer {...baseProps()} openRequest={request} onOpenRequestConsumed={consumed} />,
+        );
+        await waitFor(() => {
+            expect(view.container.querySelector('.translate-y-0')).toBeTruthy();
+        });
+        expect(consumed).toHaveBeenCalledTimes(1);
+        expect(consumed).toHaveBeenCalledWith(request);
+        // The same stamp again (a rerender with the request still set) is
+        // not a new request.
+        view.rerender(<OrdersDrawer {...baseProps()} openRequest={request} onOpenRequestConsumed={consumed} />);
+        expect(consumed).toHaveBeenCalledTimes(1);
+        // A fresh stamp for the same tab is.
+        view.rerender(<OrdersDrawer {...baseProps()} openRequest={{ tab: 'records', at: 5678 }} onOpenRequestConsumed={consumed} />);
+        await waitFor(() => expect(consumed).toHaveBeenCalledTimes(2));
+    });
+
+    it('docks the floating pills at the seam by default and at the very left for fabAlign="left"', async () => {
+        // Full-surface plugin rooms (the 3D room) pass fabAlign='left' so
+        // the pill strip never covers the room's bottom-center surfaces
+        // (e.g. the examination finding card).
+        const { unmount } = renderWithProviders(<OrdersDrawer {...baseProps()} />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
+        });
+        const strip = () => screen.getAllByText('Treatments')
+            .map((label) => label.closest('div.fixed'))
+            .find(Boolean);
+        // jsdom re-serializes calc(max(...)) unfaithfully, so pin the
+        // contract (seam = a calc off the column boundary, not the edge)
+        // rather than the exact string.
+        expect(strip().style.left).toContain('max(');
+        expect(strip().style.left).not.toBe('1rem');
+        unmount();
+
+        renderWithProviders(<OrdersDrawer {...baseProps()} fabAlign="left" />);
+        await waitFor(() => {
+            expect(screen.getAllByText('Treatments').length).toBeGreaterThan(0);
+        });
+        expect(strip().style.left).toBe('1rem');
+        expect(strip().style.bottom).toBe('88px');
+    });
 });
 
 // "OrdersDrawer — orders list rendering" describe removed 2026-05-14:

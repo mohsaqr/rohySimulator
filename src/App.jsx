@@ -37,6 +37,7 @@ import DiscussionScreen from './components/discussion/DiscussionScreen';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
 import { registry as pluginRegistry, PluginRoom, useHostOrders } from './plugins/index.js';
+import { PatientConversationProvider, usePatientConversation, narrowConversation } from './contexts/PatientConversationContext';
 import RoomNavigator from './components/common/RoomNavigator';
 import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
@@ -319,7 +320,23 @@ function MainApp() {
    // ordered in Radiology, and a case whose author authored no imaging still
    // owes the learner the normal study they ordered.
    const pluginOrders = useHostOrders(sessionId);
-   const pluginGrants = useMemo(() => ({ orders: pluginOrders }), [pluginOrders]);
+   // The 'conversation' grant: the session's one patient conversation, as
+   // published by ChatInterface through PatientConversationContext and
+   // narrowed to send + read. Null until the chat room has mounted.
+   const conversationBus = usePatientConversation();
+   const pluginConversation = useMemo(() => narrowConversation(conversationBus), [conversationBus]);
+   // The 'drawer' grant: open the orders drawer on a tab. `at` makes a repeat
+   // request for the same tab a fresh one.
+   const [drawerRequest, setDrawerRequest] = useState(null);
+   const openDrawer = useCallback((tab) => setDrawerRequest({ tab, at: Date.now() }), []);
+   // The 'case' grant: the frozen snapshot, whole and read-only.
+   const pluginCase = caseSnapshot ?? activeCase ?? null;
+   const pluginGrants = useMemo(() => ({
+      orders: pluginOrders,
+      conversation: pluginConversation,
+      openDrawer,
+      patientCase: pluginCase,
+   }), [pluginOrders, pluginConversation, openDrawer, pluginCase]);
 
    // Which plugin rooms this case actually offers. A plugin gates itself —
    // pathology declines a case with no slides — so the navigator shows no tab
@@ -346,6 +363,13 @@ function MainApp() {
    const activePlugin = enabledPlugins.includes(currentRoom)
       ? pluginRegistry.get(currentRoom)
       : null;
+   // A plugin room whose manifest says `presentation: 'overlay'` is drawn
+   // OVER the chat layout rather than in place of it. The chat layout stays
+   // mounted underneath — inert, so nothing in it can be reached — because
+   // it is where the session lives: PatientMonitor is the physiology engine
+   // and ChatInterface owns the patient conversation. The 3D bedside is a
+   // second view of that same patient, not a second patient.
+   const overlayPlugin = activePlugin?.manifest?.room?.presentation === 'overlay' ? activePlugin : null;
 
    // A room can become unavailable underneath the learner (case switch, or a
    // restored `rohy_view` blob naming a plugin room this case does not offer).
@@ -1025,7 +1049,7 @@ function MainApp() {
                   />
                }
             />
-         ) : activePlugin ? (
+         ) : activePlugin && !overlayPlugin ? (
             // Generic plugin mount. App knows the room key and the case
             // config; everything plugin-specific — which prop is called
             // `pathologyCase`, how annotations persist — lives in the
@@ -1106,7 +1130,7 @@ function MainApp() {
              it. Below `lg` the two stack instead: conversation on top (it's
              what the learner drives), vitals underneath. Desktop is
              untouched. */}
-         <div className="lg:w-[35%] lg:min-w-[350px] max-lg:h-[52%] flex flex-col border-b lg:border-b-0 lg:border-r border-neutral-800 bg-neutral-900">
+         <div className="lg:w-[35%] lg:min-w-[350px] max-lg:h-[52%] flex flex-col border-b lg:border-b-0 lg:border-r border-neutral-800 bg-neutral-900" inert={overlayPlugin ? true : undefined}>
 
             {/* Top Left: Patient Visual — a smaller slice when stacked, so
                 the chat below it keeps a usable number of lines. */}
@@ -1165,7 +1189,7 @@ function MainApp() {
 
          {/* Right Column (Monitor) - Remaining width (remaining height when
              stacked; the 600px floor is a side-by-side constraint only). */}
-         <div className="flex-1 min-h-0 lg:h-full lg:min-w-[600px] bg-black relative">
+         <div className="flex-1 min-h-0 lg:h-full lg:min-w-[600px] bg-black relative" inert={overlayPlugin ? true : undefined}>
             {/* ISSUE-0015: the monitor must know the case is over — "Back to
                 patient" from the debrief lands here, and a still-ticking clock
                 and drifting vitals read as a case that never ended. */}
@@ -1191,6 +1215,24 @@ function MainApp() {
                onViewResult={handleViewResult}
                caseData={activeCase}
                isAdmin={isAdmin()}
+               openRequest={drawerRequest}
+               onOpenRequestConsumed={() => setDrawerRequest(null)}
+               fabAlign={overlayPlugin ? 'left' : 'seam'}
+            />
+         )}
+
+         {/* Overlay plugin room (manifest `presentation: 'overlay'`). The
+             room's own surface is fixed and full-bleed at z-30; the bottom
+             RoomNavigator (z-40) and OrdersDrawer (z-50) stay above it, and
+             the chat layout underneath keeps simulating and conversing. */}
+         {overlayPlugin && activeCase && sessionId && (
+            <PluginRoom
+               pluginId={currentRoom}
+               session={pluginSession}
+               caseConfig={pluginCaseConfig}
+               eventLogger={EventLogger}
+               grants={pluginGrants}
+               navigate={navigateToRoom}
             />
          )}
 
@@ -1363,6 +1405,9 @@ export default function App() {
                    TTS mismatch warnings) can key off caseLanguage. */}
                <LanguageProvider>
                   <VoiceProvider>
+                     {/* The one patient conversation, shared between the chat
+                         room (its owner) and any plugin room granted it. */}
+                     <PatientConversationProvider>
                      {/* App-wide containment: a render throw anywhere below
                          shows a recoverable panel instead of a white screen.
                          PluginRoom carries its own narrower boundary so a
@@ -1370,6 +1415,7 @@ export default function App() {
                      <ErrorBoundary scope="app">
                         <AuthenticatedApp />
                      </ErrorBoundary>
+                     </PatientConversationProvider>
                      {/* Surfaces. They render fixed-position UI / side effects, so they
                          can sit at the root regardless of which page is active. */}
                      <ToastSurface />

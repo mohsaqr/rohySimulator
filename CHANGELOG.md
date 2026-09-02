@@ -9,6 +9,63 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.2] — 2026-09-02
+
+Second beta of Rohy 3. Rohy 3 adds a sixth room: the patient in a 3D bedside room, sharing the
+session's physiology and its one patient conversation with the chat room.
+The major bump marks a new sibling dependency and a new plugin capability
+surface; no existing API or data shape changes.
+
+### Added
+
+- **The 3D Room** (`src/plugins/room3d/`), an RPS-1 plugin rendering the
+  `rohy-3d-patient-room` package (`file:../3D`, a sibling clone like
+  `dynajs`) as the SECOND room in the navigator. The case's patient lies in
+  bed with the live monitor, the room's camera wheel and the examination
+  wheel; findings open the real finding chart (auscultation points and
+  sounds included) and persist like the 2D room's; the chart and IV pole
+  open the Records and Treatments drawers. The room is drawn OVER the chat
+  layout (`room.presentation: 'overlay'`), so the physiology engine and the
+  conversation keep running underneath.
+- **One patient conversation.** `PatientConversationContext` publishes the
+  chat room's transcript and send handler; the host narrows it into a new
+  `conversation` plugin capability. A question spoken at the bedside runs
+  through the chat's own handler (persona, agent template, record write,
+  voice) and appears in the chat transcript as it streams; a typed question
+  is captioned at the bedside. One turn at a time is enforced.
+- `interactions.source` (migration 0053): where a turn came from — `typed`,
+  `voice`, or a plugin room id — for the educator's transcript and analytics.
+- Plugin capabilities `case` (a deep-frozen copy of the case snapshot),
+  `conversation`, and `drawer`; `room.presentation` on the manifest,
+  validated. `PluginRoom` layers live grants onto the memoised context.
+- The room is translated in all seven locales (`room3d` namespace), including
+  the package chrome through its new `labels` option; rhythm names come from
+  the monitor's vocabulary.
+- `deploy/preflight.sh` step 9 and `scripts/verify-room3d-install.mjs`
+  (`prebuild`) check the `3D` sibling; `deploy/bundle-airgap.sh --with-3d`;
+  the Docker builder clones it beside rohy (`ROOM3D_GIT_URL` / `_REF`).
+- Core generalisations shared with the new room: `hooks/usePhysicalExam`
+  (now also persists exam findings for both rooms), `services/ecgWaveform`
+  (extracted from PatientMonitor, bit-identical), `utils/patientTemplate`,
+  `components/voice/SubtitleBand` + `useSubtitleReveal`, additive props on
+  `VoiceControl`, `AuscultationPanel`, `FindingDisplay`, `OrdersDrawer`.
+
+### Changed
+
+- Trainee docs: "The five rooms" is now "The six rooms".
+- `OrdersDrawer`: the backdrop is a sibling of the panel (click-outside and
+  dimming work again), Escape closes, the close button has a name, and the
+  closed panel is inert (its catalogue was in the tab order).
+- The chat's `handleSendToPatient(text, meta)` accepts `source` and
+  `spoken`; the model payload is projected to role + content.
+- `AuscultationPanel` guards its one-shot auto-play with a ref (no double
+  analytics row under StrictMode).
+
+### Fixed
+
+- (3D package) a WebGL context leaked per room visit; avatars of different
+  heights are placed by their head bone so no head sits under the pillow.
+
 ## [2.9.144] — 2026-08-31
 
 ### Added

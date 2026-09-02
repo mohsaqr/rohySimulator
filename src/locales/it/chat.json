@@ -52,6 +52,7 @@
   "patient_generic": "il paziente",
   "patient_label": "Paziente",
   "patient_speaking": "Il paziente sta parlando…",
+  "patient_turn_in_flight": "Il paziente sta ancora rispondendo: attendi la risposta.",
   "show": "Mostra",
   "show_full_transcript": "Mostra trascrizione completa",
   "show_transcript_title": "Mostra trascrizione",

@@ -51,10 +51,21 @@ export function PluginRoom({
     // from disk each time: a learner reading a study would be thrown out of it
     // every fifteen seconds. `base.orders === null` means this plugin never
     // asked, and then there is nothing to layer.
+    //
+    // The 'conversation' capability is the other live one: it is the
+    // session's patient transcript as it streams, so a room that captions
+    // the patient's answer must see every delta. Same treatment — layered on
+    // top of the memoised base, only for a plugin that asked for it.
+    const wantsConversation = Boolean(plugin?.manifest?.capabilities?.includes('conversation'));
     const ctx = useMemo(() => {
-        if (!base || base.orders === null) return base;
-        return { ...base, orders: readOrders(grants?.orders) };
-    }, [base, grants?.orders]);
+        if (!base) return base;
+        let next = base;
+        if (base.orders !== null) next = { ...next, orders: readOrders(grants?.orders) };
+        if (wantsConversation) {
+            next = { ...next, capabilities: { ...next.capabilities, conversation: grants?.conversation ?? null } };
+        }
+        return next;
+    }, [base, grants?.orders, grants?.conversation, wantsConversation]);
 
     // `null` means "not loaded yet" — a separate ready flag would need an
     // eager reset inside the effect, which is the setState-in-effect pattern

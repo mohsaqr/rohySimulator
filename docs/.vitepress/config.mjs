@@ -103,7 +103,7 @@ export default defineConfig({
           items: [
             { text: 'Overview', link: '/trainee/' },
             { text: 'Getting started', link: '/trainee/getting-started' },
-            { text: 'The five rooms', link: '/trainee/rooms' },
+            { text: 'The six rooms', link: '/trainee/rooms' },
             { text: 'Taking a history', link: '/trainee/history' },
             { text: 'Physical examination', link: '/trainee/examination' },
             { text: 'Ordering labs & imaging', link: '/trainee/investigations' },

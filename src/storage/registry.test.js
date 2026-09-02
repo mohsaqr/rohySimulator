@@ -69,7 +69,10 @@ describe('localStorage namespace registry', () => {
         expect(isRegisteredKey('rohy_unknown_key')).toBe(false);
     });
 
-    it('every literal rohy_* key in src/ is declared in the registry', () => {
+    // Shells out to grep over src/, which under a full parallel run can
+    // take several seconds; the default 5 s budget was the only thing
+    // failing.
+    it('every literal rohy_* key in src/ is declared in the registry', { timeout: 20_000 }, () => {
         // CONTRACT: this is the regression-lock that catches "someone
         // localStorage.setItem'd a new rohy_* key without registering it."
         // When this fails, you've added a key without declaring its owner /

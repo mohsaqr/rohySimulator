@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlaskConical, GraduationCap, HeartPulse, MessageCircle, Microscope, Scan, Stethoscope, BookOpen } from 'lucide-react';
+import { Bed, FlaskConical, GraduationCap, HeartPulse, MessageCircle, Microscope, Scan, Stethoscope, BookOpen } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { PLUGIN_MANIFESTS } from '../../../server/shared/plugins/manifests.generated.js';
 
@@ -9,7 +9,7 @@ import { PLUGIN_MANIFESTS } from '../../../server/shared/plugins/manifests.gener
 // rather than a React component and a class list. Both must be resolved
 // against literals here: Tailwind's JIT only emits a class it can see written
 // out, so a computed `bg-${accent}-500/15` would silently render unstyled.
-const PLUGIN_ICONS = { Microscope, FlaskConical, Scan, Stethoscope, BookOpen, GraduationCap, HeartPulse };
+const PLUGIN_ICONS = { Microscope, FlaskConical, Scan, Stethoscope, BookOpen, GraduationCap, HeartPulse, Bed };
 const PLUGIN_ACCENTS = {
     fuchsia: {
         iconText: 'text-fuchsia-300', activeText: 'text-fuchsia-200',

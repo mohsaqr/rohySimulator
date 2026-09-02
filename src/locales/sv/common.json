@@ -283,6 +283,8 @@
   "room_radiology": "Radiologi & diagnostik",
   "room_radiology_sub": "bilddiagnostik & tester",
   "room_ready_results": "{label} — {count, plural, one {# klart svar} other {# klara svar}}",
+  "room_room3d": "3D-rum",
+  "room_room3d_sub": "vid sängkanten",
   "save": "Spara",
   "saving": "Sparar…",
   "search": "Sök",
