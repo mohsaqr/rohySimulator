@@ -157,6 +157,16 @@ export default defineConfig({
                     // startTestServer's waitForReady budget (60s) so the hook
                     // doesn't abort before readiness reports.
                     hookTimeout: 90_000,
+                    // Same contention, but paid in the TEST body rather than a
+                    // hook: several server tests build their own database
+                    // inline (`await createTestDb()`, `await freshCtx(...)`),
+                    // which applies every migration — 50+ of them — before the
+                    // first assertion. hookTimeout does not cover that, so
+                    // those tests were still racing the 5s default: green in
+                    // 2.6s locally, timed out on a loaded CI runner where the
+                    // full suite takes ~28 minutes under --coverage. The work
+                    // is legitimate and bounded; the 5s cap was the accident.
+                    testTimeout: 30_000,
                     // Phase 7 benchmarks: bench files run in this (node)
                     // project so kokoro-js / child_process / fs imports
                     // resolve correctly. `vitest bench` reads benchmark.*

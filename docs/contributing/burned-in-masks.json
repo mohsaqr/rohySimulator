@@ -1,0 +1,45 @@
+{
+  "note": "Burned-in identifier masks applied to the PACS starter bundle. Rectangles are (x0,y0,x1,y1) in native frame pixels, blacked out on EVERY frame of the named series. Categories only: the literal strings removed are deliberately not recorded here, because writing them down re-creates the disclosure the masking exists to undo.",
+  "reviewedAt": "2026-09-01",
+  "method": "Per series: max-projection over every frame (burned-in text changes within a loop, so frame 0 is not the region); visual review; mask; re-project the masked output and confirm peak luminance inside each box is noise, not glyphs.",
+  "masks": {
+    "abnormal/echo_stress_exercise": {
+      "series": ["s1", "s2", "s3", "s4"],
+      "layout": "2x2 montage, boxes relative to each pane origin",
+      "perPane": { "top": [0, 0, 190, 122], "bottom": [0, 0, 190, 58] },
+      "removed": ["patient name", "acquisition date", "acquisition time"]
+    },
+    "abnormal/echo_mitral_prolapse": {
+      "series": ["s1", "s2", "s3"], "boxes": [[70, 20, 240, 52]],
+      "removed": ["accession number"]
+    },
+    "abnormal/echo_lv_free_wall_rupture": {
+      "series": ["s1", "s2", "s3", "s4", "s5"], "boxes": [[0, 0, 639, 50]],
+      "removed": ["institution name", "accession number", "acquisition date", "acquisition time"]
+    },
+    "abnormal/echo_hf_lbbb": {
+      "series": ["s2"], "boxes": [[540, 0, 639, 26]],
+      "removed": ["accession number"]
+    },
+    "normal/echo_stress_pacing_negative": {
+      "series": ["s1", "s2"], "boxes": [[0, 20, 115, 170]],
+      "removed": ["institution name", "probable date of birth"]
+    },
+    "abnormal/echo_coronary_doppler": {
+      "perSeries": {
+        "s1": [[80, 0, 510, 50]], "s2": [[315, 0, 515, 30]],
+        "s4": [[0, 0, 575, 58]], "s6": [[310, 0, 490, 28]]
+      },
+      "removed": ["patient initials", "accession number", "institution name", "acquisition date", "acquisition time"]
+    }
+  },
+  "reviewedClean": [
+    "normal/echo_valve_motion s1", "abnormal/echo_endocarditis_aortic s1",
+    "abnormal/echo_tee_endocarditis s1", "abnormal/echo_tee_endocarditis s2",
+    "abnormal/echo_constrictive_pericarditis s1", "abnormal/echo_hf_lbbb s1",
+    "abnormal/echo_coronary_doppler s3", "abnormal/echo_coronary_doppler s5",
+    "abnormal/us_liver s1"
+  ],
+  "preserved": "View labels (LAX/SAX/AP4/AP2), REST/PEAK stage, heart rate, ECG strip, depth, probe, MI/TIS, timers — clinical and technical annotation carries no identity and is needed to read the study.",
+  "outOfScope": "Non-US modalities in this bundle (CR, CT, DX, MG, MR) are not burned-in-annotation risk modalities per burnedInAnnotationRisk()."
+}

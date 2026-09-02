@@ -66,6 +66,104 @@ surface; no existing API or data shape changes.
 - (3D package) a WebGL context leaked per room visit; avatars of different
   heights are placed by their head bone so no head sits under the pillow.
 
+## [2.9.148] — 2026-09-01
+
+### Fixed
+
+- **Server tests that build their own database no longer race a 5s clock.**
+  `vitest.config.js` already raised `hookTimeout` to 90s because parallel
+  server boots contend for ports and sqlite migrations, and `--coverage`
+  makes it worse — but several server tests do that setup in the TEST body
+  (`await createTestDb()`, `await freshCtx(...)`), applying fifty-odd
+  migrations before the first assertion, where `hookTimeout` does not reach
+  them. They passed in 2.6s locally and timed out on a loaded CI runner where
+  the full suite takes ~28 minutes. `testTimeout: 30_000` on the server
+  project only; the client project keeps the 5s default.
+
+## [2.9.147] — 2026-09-01
+
+### Changed
+
+- **The content archives are public; `setup:content` needs no credential.**
+  The repository was private because the licensing position was unsettled and
+  then because the pixels were unreviewed. Both are now closed — every item is
+  CC0, CC BY or CC BY-SA, and the burned-in identifier review is done — so the
+  gate was no longer protecting anything. It was also never a security
+  boundary: `--from` is a documented, credential-free path, because what the
+  installer trusts is the SHA-256 in `content-sources.json`, not the host the
+  bytes came from. A gate whose bypass is in the install instructions is an
+  install tax, not a control.
+
+  `scripts/content-sources.json` sets `"private": false`. Installation
+  instructions, `deploy/env.example` and the README drop the token sections.
+  `ROHY_CONTENT_TOKEN` still works and is still documented, for a deployment
+  that mirrors the archives behind its own private release.
+
+## [2.9.146] — 2026-09-01
+
+### Security
+
+- **Burned-in patient identifiers removed from the shipped imaging.** Every
+  ultrasound entry in the starter archive was reviewed pixel by pixel — 28
+  series across 11 entries, max-projected over every frame, because burned-in
+  text changes within a loop and frame 0 does not show it. Nineteen series
+  carried identifiers rendered into the image itself, where no header
+  operation reaches: patient names, hospital and department names, a probable
+  date of birth, accession numbers and acquisition dates and times. All are
+  masked on every frame. View labels, stress stage, heart rate, ECG trace,
+  depth, probe and MI/TIS are preserved — they carry no identity and the study
+  cannot be read without them.
+
+  Masking was applied at the source archive and rebuilt forward, so a later
+  rebuild cannot restore the originals. DICOM headers were separately
+  confirmed clean across all 4,070 instances: every patient name is a
+  pseudonym, every id is synthetic or a public dataset citation key, and no
+  institution, accession, physician, birth date or address value survives.
+
+- **Ingest now refuses to write an at-risk study that nobody has looked at.**
+  `burnedInAnnotationRisk()` had flagged all eleven ultrasound entries
+  correctly, every run — and printed `REVIEW REQUIRED` at the end of a
+  *successful* one. Detection was never the problem; the warning had no
+  consumer, so the archive shipped anyway. An at-risk study now requires
+  `--pixels-reviewed "<who looked, when>"`, recorded in the entry's
+  `provenance.pixelsReviewed` beside its licence (Radoyon 0.3.4).
+
+### Changed
+
+- Content archives repacked and republished; `scripts/content-sources.json`
+  carries the new checksums, sizes and content versions. The imaging archive
+  is now 741 MB (re-encoding the masked frames costs about 10 MB).
+- Installation instructions lead with the no-credential `--from` path, which
+  needs no token because the installer verifies the archive's checksum rather
+  than trusting its host. The token section now specifies a fine-grained,
+  single-repository, read-only token and warns that an expired token returns
+  the same 404 as a missing one.
+- `docs/contributing/burned-in-masks.json` records the mask geometry and the
+  categories removed — deliberately not the strings, since writing those down
+  re-creates the disclosure the masking exists to undo.
+
+## [2.9.145] — 2026-08-31
+
+### Fixed
+
+- The room navigator wrapped onto three lines. The plugin rooms wrote
+  sentences where the core rooms use one word — "Interpret a calibrated
+  12-lead tracing" beside "chat" and "physical exam" — and because the
+  buttons share a row, one wrapped label makes the whole bar taller.
+  Shortened to the register the core rooms already use, in all six
+  locales: `interpretation`, `workstation`, `slides`, and `Radiology` for
+  a title that ran to two lines.
+- The radiology SUBTITLE is unchanged on purpose. It is what tells a
+  student the room holds the diagnostic tests as well as imaging, which
+  the navigator's own tests document; only its title was wrapping.
+- Labels are now held to one line and truncate. Wording alone cannot fix
+  this — German builds `Befundungsarbeitsplatz` and Finnish
+  `kuvantamistyöasema`, single compounds no editing shortens — so the row
+  has to hold a label that does not fit. Truncating one keeps the bar a
+  single line; wrapping it moves every other room. `min-w-0` is what lets
+  the flex child shrink at all; without it `truncate` silently does
+  nothing.
+
 ## [2.9.144] — 2026-08-31
 
 ### Added

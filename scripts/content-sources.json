@@ -1,27 +1,27 @@
 {
   "schemaVersion": "1.0.0",
   "version": "v1",
-  "note": "Release assets on a PRIVATE repository need a token. setup:content reads ROHY_CONTENT_TOKEN or GITHUB_TOKEN, or falls back to the gh CLI if it is logged in. It trusts the sha256, not the host, so --from works with no token at all.",
+  "note": "Release assets are public: setup:content downloads them with no credential. It trusts the sha256, not the host, so --from works from any transport \u2014 a mirror, a shared drive, a stick carried to an offline site.",
   "baseUrl": "https://github.com/mohsaqr/rohy-content/releases/download/content-v1",
   "archives": [
     {
       "plugin": "pacs",
       "file": "rohy-content-pacs-v1.tar.gz",
-      "bytes": 766538659,
-      "sha256": "75dee2dd5c90f885c449609e7f47a6d57c8add3317773dac73ad6c447f91266b",
-      "contentVersion": "starter-20260831T113013Z",
+      "bytes": 777460547,
+      "sha256": "e4977c9f1cda272ad0cfc7acb16e3ab1e306fcfed224dedf95a0cbe800152097",
+      "contentVersion": "starter-20260901T143337Z",
       "files": 4267
     },
     {
       "plugin": "pathology",
       "file": "rohy-content-pathology-v1.tar.gz",
-      "bytes": 36819246,
-      "sha256": "1cc3ab43aead30208faf63738826dcb01c6132b7e0c7c665e612598a8458742a",
-      "contentVersion": "starter-20260831T103656Z",
+      "bytes": 36818816,
+      "sha256": "adea00ec8a346e691309b3b82f9ed499884a37a6388f7176f720eb39490e2e39",
+      "contentVersion": "starter-20260831T130639Z",
       "files": 1257
     }
   ],
   "repo": "mohsaqr/rohy-content",
   "tag": "content-v1",
-  "private": true
+  "private": false
 }

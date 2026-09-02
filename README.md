@@ -87,8 +87,8 @@ cp server/.env.example server/.env
 # Edit server/.env — at minimum set JWT_SECRET (required, server refuses to start without it)
 
 # 3. Imaging and slide content — ADVANCED CHANNEL ONLY.
-#    731 MB of imaging + 35 MB of cardiac pathology, SHA-256 verified and
-#    idempotent. Needs ROHY_CONTENT_TOKEN (the content repo is private), or
+#    741 MB of imaging + 35 MB of cardiac pathology, SHA-256 verified and
+#    idempotent. The archives are public — no credential needed. Or
 #    `--from <path>` for an archive you already have. Skip on the `current`
 #    channel, which ships without the PACS/Pathology/ECG rooms.
 npm run setup:content

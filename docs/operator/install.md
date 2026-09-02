@@ -181,44 +181,51 @@ one command:
 npm run setup:content
 ```
 
-That fetches 731 MB of imaging (48 studies) and 35 MB of cardiac pathology
+That fetches 741 MB of imaging (48 studies) and 35 MB of cardiac pathology
 (27 slides), verifies both by SHA-256, and installs them under
 `server/plugin-content/`, which rohy serves from its own disk. Re-running it
 after an upgrade is a no-op unless the content version changed.
+
+The imaging is de-identified in the DICOM headers, and the pixels of every
+ultrasound and angiographic study have been reviewed by hand for identifiers
+burned into the image itself — text no header operation can reach. Where any
+were found they are masked. Clinical and technical annotation (view, stage,
+heart rate, ECG, depth, probe) is left intact because it carries no identity
+and you need it to read the study.
 
 **This is a step, not an option.** The default case orders four imaging
 studies, so a learner on the advanced channel reaches the PACS room on the
 first case they open. Without content that room is empty.
 
-### Credentials
+### Installing from a file — no credentials at all
 
-The content repository is private, so the download needs a GitHub token with
-read access:
+The installer verifies each archive against the SHA-256 recorded in
+`scripts/content-sources.json`, **not** against the host the bytes came from.
+So the transport is interchangeable and needs no token: a download, a shared
+folder, a university mirror, a stick carried into an offline site.
 
 ```bash
-export ROHY_CONTENT_TOKEN=ghp_...      # or GITHUB_TOKEN, or be logged into `gh`
+npm run setup:content -- --from /path/to/downloaded/folder
+npm run setup:content -- --only pathology      # slides without the 741 MB
+```
+
+Point `--from` at a directory holding the `.tar.gz` files, or straight at one
+of them. A truncated transfer, the wrong archive, and the HTML error page some
+services hand out instead of a file are all refused before anything is
+written, so a bad download cannot damage a working installation.
+
+This is the simplest route for a new site, and the only one that works behind a
+firewall that cannot reach GitHub.
+
+### Installing from the published release
+
+```bash
 npm run setup:content
 ```
 
-Tokens are issued per deployment, so one site's access can be revoked without
-affecting the others. An unauthenticated request to a private release answers
-**404, not 401**; the installer names that case rather than letting it read as
-a missing release.
-
-### Without network access to GitHub
-
-The installer trusts the archive's checksum, not the host it came from, so any
-transport works — a mirror, a shared drive, a stick carried to an offline site.
-No token is needed on this path:
-
-```bash
-npm run setup:content -- --from /media/usb/rohy-content
-npm run setup:content -- --only pathology      # slides without the 731 MB
-```
-
-A truncated transfer, the wrong archive, and the HTML error page some services
-return instead of a file are all refused before anything is written, so a bad
-download cannot damage a working installation.
+The archives are public: no token, no account, nothing to configure. The
+installer resolves them from `scripts/content-sources.json` and refuses
+anything whose SHA-256 does not match.
 
 ### If you serve your own archive
 
