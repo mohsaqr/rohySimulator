@@ -684,6 +684,7 @@ Stores interactions records.
 | `timestamp` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `deleted_at` | DATETIME | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `source` | TEXT | — | `0053_interactions_source.sql` |
 
 ## `investigation_orders`
 
