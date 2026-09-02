@@ -85,6 +85,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The Dockerfile clones the 3D patient room sibling (mohsaqr/3D); when
+      # that repository is private, ROOM3D_GIT_TOKEN must be a repo secret.
+      - name: Resolve 3D patient room clone URL
+        id: room3d
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: |
+          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
+            echo "url=https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://github.com/mohsaqr/3D.git" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push image
         id: build
         uses: docker/build-push-action@v5
@@ -93,6 +106,9 @@ jobs:
           file: deploy/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            ROOM3D_GIT_URL=${{ steps.room3d.outputs.url }}
+            ROOM3D_GIT_REF=v1.0.0-beta.2
           tags: |
             ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
             ${{ env.IMAGE }}:latest
