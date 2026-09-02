@@ -14,7 +14,8 @@ describe('VersionBadge', () => {
 
     it('includes the patch version in the label', () => {
         const { container } = render(<VersionBadge />);
-        expect(container.textContent).toMatch(/^Rohy \d+\.\d+\.\d+$/);
+        // A pre-release suffix (3.0.0-beta.2) is a legitimate version too.
+        expect(container.textContent).toMatch(/^Rohy \d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/);
     });
 
     it('renders as a click-through wordmark with no fixed positioning of its own', () => {

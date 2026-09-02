@@ -134,7 +134,8 @@ export function changelog(path = 'CHANGELOG.md') {
     };
 
     lines.forEach((line, i) => {
-        const rel = /^##\s+\[?([0-9]+\.[0-9]+\.[0-9]+)\]?\s*[—–-]?\s*(\d{4}-\d{2}-\d{2})?/.exec(line);
+        // A pre-release suffix (3.0.0-beta.2) is part of the version, not noise.
+        const rel = /^##\s+\[?([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?)\]?\s*[—–-]?\s*(\d{4}-\d{2}-\d{2})?/.exec(line);
         if (rel) {
             flushBullet();
             cur = { version: rel[1], released_on: rel[2] ?? null, body: [], source_line: i + 1 };
