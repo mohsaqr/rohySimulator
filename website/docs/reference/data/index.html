@@ -268,7 +268,7 @@
 </tbody></table></div>
 <h2 id="migration-policy">Migration policy</h2>
 <p>Schema evolves only through versioned <code>migrations/*.sql</code>. Each migration is classified <strong>additive</strong> (previous-version code still runs) or <strong>destructive</strong> in <code>migrations/MANIFEST.md</code>, which <code>bin/rohy-update</code> reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.</p>
-<p>Parsed <strong>52 migration files</strong> beyond the base schema (<code>0001_initial.sql</code>).</p>
+<p>Parsed <strong>53 migration files</strong> beyond the base schema (<code>0001_initial.sql</code>).</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -541,6 +541,11 @@
 <td><code>0053_interactions_source.sql</code></td>
 <td>additive</td>
 <td>Where a patient-conversation turn came from. <code>interactions</code> is the session&#39;s one patient thread and is now written from two surfaces — the chat room (<code>typed</code> / <code>voice</code>) and a plugin room such as the 3D bedside (<code>room3d</code>) — so without a marker the educator&#39;s transcript and every analytics query over <code>interactions</code> treat a spoken bedside question and a typed one as the same thing. One nullable <code>ADD COLUMN source TEXT</code>; rows written before this release read NULL (&quot;unknown&quot;) rather than being relabelled, and pre-migration code never selects it. Validated on ingest to <code>^[a-z][a-z0-9_]{0,63}$</code>, the plugin-id shape.</td>
+</tr>
+<tr>
+<td><code>0054_patient_template_short_answers.sql</code></td>
+<td>additive</td>
+<td>The two default patient templates answer only what is asked: one question, one answer, one or two sentences, nothing volunteered. Two idempotent <code>UPDATE</code>s on <code>agent_templates</code>, both guarded on the shipped text (the earlier prompt&#39;s opening sentence; the earlier first &quot;do&quot;), so an admin-edited template keeps the admin&#39;s words. Fresh installs get the same text from <code>server/db.js</code> <code>PATIENT_TEMPLATE_PROMPT</code>. No column changes.</td>
 </tr>
 </tbody></table></div>
 <h2 id="tables-by-concern">Tables by concern</h2>

@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.8] — 2026-09-03
+
+### Changed
+
+- **The default patient answers only what is asked** (`server/db.js`
+  `PATIENT_TEMPLATE_PROMPT`, migration `0054`). The shipped "Default Patient"
+  and "Default Female Patient" prompts told the model to answer truthfully and
+  express feelings, and small models recited the whole case on "how are
+  you?". The new baseline is one question, one answer, one or two sentences,
+  nothing volunteered, everyday words, a number when a number is asked for,
+  with a short example exchange. The dos and don'ts lists match. Migration
+  0054 rewrites installed copies that still carry the shipped text and leaves
+  an admin-edited template alone. Regression lock in
+  `tests/server/patient-template-short-answers.test.js`.
+
 ## [3.0.0-beta.7] — 2026-09-03
 
 ### Added

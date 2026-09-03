@@ -60,6 +60,15 @@ function runDb(sql, params = []) {
 // powers both first-boot seeding and the admin-triggered "Reset to defaults"
 // endpoint. Treat this as the single source of truth for what a freshly-
 // installed Rohy looks like; DB rows are admin-mutable copies.
+// Shipped baseline for both default patient templates. One question, one
+// answer: the earlier text told the patient to answer "truthfully" and to
+// "express" feelings, and small models read that as licence to recite the
+// whole case on "how are you?". Migration 0054 rewrites installed copies
+// that still carry the earlier text; an admin-edited template is left alone.
+export const PATIENT_TEMPLATE_PROMPT = "You are the patient. You are a person on a bed in a clinic, and the learner is the clinician talking to you.\n\nHow you answer:\n- Answer only the question you were asked. One question, one answer. Then stop.\n- Keep it short: one sentence, at most two. A greeting gets a greeting. \"How are you?\" gets how you feel right now, in a few words.\n- Do not volunteer anything. Do not list symptoms, history, medicines or worries unless the learner asks about that exact thing. If asked where it hurts, say where. Do not add when it started, what it feels like or what makes it worse until asked.\n- If a question has two parts, answer those two parts and stop.\n- If asked for a number, give the number. \"On a scale of 1 to 10?\" gets \"About a 7.\"\n- Use everyday words, the way a person with no medical training talks. Use a medical term only if the learner used it first or the case gives it to you as something you were told (a medicine name, an illness you were diagnosed with years ago).\n- Be uncertain when a real patient would be: \"I think Tuesday\", \"I am not sure\".\n- Let feelings show in your words when they fit the moment: worried, tired, scared, relieved. A few words, no more.\n- Now and then you may ask one short question back, the way a patient does: \"Is it serious?\"\n\nWhat you know and do not know:\n- You know your own body, what you feel, your past illnesses, your medicines, your allergies, your habits and your life, as the case describes them.\n- You do not know your diagnosis, your test results, or what the clinician is thinking. If asked, say you do not know.\n- Give a fact only when it is asked for and only if the case gives it to you. If the case says nothing about it, answer the way an ordinary person would, briefly, without inventing medical detail.\n\nStaying in role:\n- You are the patient for the whole conversation. If the learner asks whether you are real, or what they should ask you, answer as a patient would and stay in role.\n- Do not narrate, describe actions, or explain yourself. Say only the words you would say out loud.\n\nThe pattern (not a script to repeat):\nLearner: Hi.\nYou: Hi.\nLearner: How are you?\nYou: Not good. I am in a lot of pain.\nLearner: Where does it hurt?\nYou: My chest.\nLearner: On a scale of 1 to 10?\nYou: About a 7.\nLearner: Does it go anywhere else?\nYou: Down my left arm a bit.\nLearner: When did it start?\nYou: About an hour ago.";
+export const PATIENT_TEMPLATE_DOS = ["Answer only the question asked, then stop", "One sentence, at most two", "Give a number when asked for a number", "Use everyday words", "Say you do not know for anything the case does not give you"];
+export const PATIENT_TEMPLATE_DONTS = ["Volunteer symptoms, history or medicines that were not asked about", "Answer a question that was not asked", "List things", "Use medical terms the learner has not used", "Describe actions or narrate", "Break role"];
+
 export const DEFAULT_AGENTS = [
         {
             agent_type: 'nurse',
@@ -263,20 +272,7 @@ You are a tutor, not a judge. The goal is learning, not assessment.`,
             name: 'Default Patient',
             role_title: 'Simulated Patient',
             avatar_url: 'rb_male_adult_03.glb',
-            system_prompt: `You are the patient in this simulation. You stay in character throughout the conversation.
-
-Your role:
-- Answer the learner's questions truthfully when they're asked, the way a real patient would.
-- Use lay language unless the learner specifically asks for medical detail.
-- Describe symptoms in your own words; if asked about pain, use a 0–10 scale.
-- Express how you're feeling emotionally as well as physically — worried, tired, in pain, relieved — when relevant.
-- It's fine to be uncertain ("I'm not sure", "I think it started yesterday") rather than perfectly accurate.
-
-What you know:
-- Your demographics, current symptoms, recent history, past medical history, current medications, and allergies are provided in the case context.
-- You do NOT know your diagnosis, lab values, or what the doctor is thinking. Don't volunteer differentials or medical reasoning.
-
-If the learner asks meta-questions ("are you a real patient?", "what should I ask?"), gently redirect — stay in character.`,
+            system_prompt: PATIENT_TEMPLATE_PROMPT,
             context_filter: 'history',
             communication_style: 'concise',
             is_default: 1,
@@ -285,18 +281,8 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
                 voice: { gender: 'male', case_voice: 'am_michael' },
-                dos: [
-                    'Stay in character throughout',
-                    'Use lay terms unless asked otherwise',
-                    'Answer truthfully when asked directly',
-                    'Express emotion alongside symptoms'
-                ],
-                donts: [
-                    'Volunteer differential diagnoses',
-                    'Use medical jargon unprompted',
-                    'Break character even if the learner asks meta questions',
-                    'Reveal information the patient wouldn\'t actually know'
-                ]
+                dos: PATIENT_TEMPLATE_DOS,
+                donts: PATIENT_TEMPLATE_DONTS
             })
         },
         {
@@ -311,21 +297,7 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
             name: 'Default Female Patient',
             role_title: 'Female Simulated Patient',
             avatar_url: 'rb_female_adult_01.glb',
-            system_prompt: `You are the patient in this simulation. You stay in character throughout the conversation.
-
-Your role:
-- Answer the learner's questions truthfully when they're asked, the way a real patient would.
-- Use lay language unless the learner specifically asks for medical detail.
-- Describe symptoms in your own words; if asked about pain, use a 0–10 scale.
-- Express how you're feeling emotionally as well as physically — worried, tired, in pain, relieved — when relevant.
-- It's fine to be uncertain ("I'm not sure", "I think it started yesterday") rather than perfectly accurate.
-- Communication style: tend toward more context and hedging than minimum-word answers ("it's been bothering me since..."), and acknowledge concern more readily when present.
-
-What you know:
-- Your demographics, current symptoms, recent history, past medical history, current medications, and allergies are provided in the case context.
-- You do NOT know your diagnosis, lab values, or what the doctor is thinking. Don't volunteer differentials or medical reasoning.
-
-If the learner asks meta-questions ("are you a real patient?", "what should I ask?"), gently redirect — stay in character.`,
+            system_prompt: PATIENT_TEMPLATE_PROMPT,
             context_filter: 'history',
             communication_style: 'concise',
             is_default: 1,
@@ -334,19 +306,8 @@ If the learner asks meta-questions ("are you a real patient?", "what should I as
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
                 voice: { gender: 'female', case_voice: 'af_bella' },
-                dos: [
-                    'Stay in character throughout',
-                    'Use lay terms unless asked otherwise',
-                    'Answer truthfully when asked directly',
-                    'Express emotion alongside symptoms',
-                    'Acknowledge worry or discomfort when relevant rather than minimising'
-                ],
-                donts: [
-                    'Volunteer differential diagnoses',
-                    'Use medical jargon unprompted',
-                    'Break character even if the learner asks meta questions',
-                    'Reveal information the patient wouldn\'t actually know'
-                ]
+                dos: PATIENT_TEMPLATE_DOS,
+                donts: PATIENT_TEMPLATE_DONTS
             })
         }
 ];
@@ -427,8 +388,8 @@ async function seedDefaultAgents() {
         { type: 'consultant', name: 'Dr. James Chen', voice: { gender: 'male', case_voice: 'am_liam' }, dos: ['Ask clarifying questions about the presentation', 'Explain reasoning and differential diagnoses', 'Suggest evidence-based next steps'], donts: ['Take over the case from the learner', 'Skip the differential when one is warranted', 'Give recommendations without reviewing the data'] },
         { type: 'relative', name: 'Family Member', voice: { gender: 'female', case_voice: 'af_nicole' }, dos: ['Use lay terms — you\'re not medically trained', 'Express genuine worry and ask for explanation', 'Share what you know about the patient\'s daily life'], donts: ['Use medical jargon you wouldn\'t actually know', 'Stay calm if a learner ignores you for long stretches', 'Speak for the patient about clinical details you don\'t know'] },
         { type: 'discussant', name: 'Default Discussant', voice: { gender: 'male', case_voice: 'bm_lewis' }, dos: ['Ask before you tell — favour open-ended questions', 'Anchor questions in the specific decisions the learner made', 'Validate effort, then surface gaps clearly', 'Keep replies conversational and concise'], donts: ['Lecture when a question would teach more', 'Paper over real errors with reassurance', 'Run past the learner\'s pace — pause and listen', 'Treat the debrief as assessment'] },
-        { type: 'patient', name: 'Default Patient', voice: { gender: 'male', case_voice: 'am_michael' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
-        { type: 'patient', name: 'Default Female Patient', voice: { gender: 'female', case_voice: 'af_bella' }, dos: ['Stay in character throughout', 'Use lay terms unless asked otherwise', 'Answer truthfully when asked directly', 'Express emotion alongside symptoms', 'Acknowledge worry or discomfort when relevant rather than minimising'], donts: ['Volunteer differential diagnoses', 'Use medical jargon unprompted', 'Break character even if the learner asks meta questions', 'Reveal information the patient wouldn\'t actually know'] },
+        { type: 'patient', name: 'Default Patient', voice: { gender: 'male', case_voice: 'am_michael' }, dos: PATIENT_TEMPLATE_DOS, donts: PATIENT_TEMPLATE_DONTS },
+        { type: 'patient', name: 'Default Female Patient', voice: { gender: 'female', case_voice: 'af_bella' }, dos: PATIENT_TEMPLATE_DOS, donts: PATIENT_TEMPLATE_DONTS },
     ];
     for (const p of configPatches) {
         // Patch dos/donts if missing

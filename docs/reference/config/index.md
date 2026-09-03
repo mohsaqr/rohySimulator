@@ -112,7 +112,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:521` |
+| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:482` |
 | `ROHY_NO_AUTO_SEED` | No | — | Skips automatic seeders on boot. | `server/db.js:44` |
 
 ## Uncategorized
