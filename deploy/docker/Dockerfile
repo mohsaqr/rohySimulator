@@ -24,17 +24,16 @@
 #     --build-arg DYNAJS_GIT_REF=<sha-or-tag> -t rohy:latest .
 #
 # The 3D patient room (`rohy-3d-patient-room`, "file:../3D") is a second
-# sibling. Its repository is private: pass a URL that carries credentials
-# (`--build-arg ROOM3D_GIT_URL=https://<token>@github.com/mohsaqr/3D.git`)
-# or build from an air-gap bundle made with `--with-3d`. It has no build
-# step — a clone is the whole install.
+# sibling. For a private repository, pass its credential as a BuildKit secret:
+#   docker build --secret id=room3d_token,env=ROOM3D_GIT_TOKEN ...
+# The pinned ref/version live in scripts/room3d-version.json. Credentials are
+# never put in a build argument or Git remote, and clone-room3d.sh removes
+# repository metadata before the package reaches the runtime image.
 
 ARG NODE_VERSION=22-bookworm-slim
 ARG INCLUDE_PIPER=0
 ARG DYNAJS_GIT_URL=https://github.com/mohsaqr/dynajs.git
 ARG DYNAJS_GIT_REF=main
-ARG ROOM3D_GIT_URL=https://github.com/mohsaqr/3D.git
-ARG ROOM3D_GIT_REF=main
 
 # ===========================================================================
 # Stage 1: builder
@@ -43,8 +42,6 @@ FROM node:${NODE_VERSION} AS builder
 
 ARG DYNAJS_GIT_URL
 ARG DYNAJS_GIT_REF
-ARG ROOM3D_GIT_URL
-ARG ROOM3D_GIT_REF
 
 # Build deps: git for cloning dynajs, python3/make/g++ for sqlite3 native
 # build, curl for OyonR/scripts/download-models.sh (fetches the ~93 MB
@@ -64,10 +61,15 @@ WORKDIR /workspace/dynajs
 RUN npm install --prefer-offline --no-audit --no-fund
 
 # The 3D patient room beside rohy as well ("file:../3D"). Raw ES modules:
-# nothing to build, so no install step. Layer is cached on ROOM3D_GIT_REF.
+# nothing to build, so no install step. The optional secret is consumed only
+# by this RUN and the helper removes .git before the layer is committed.
 WORKDIR /workspace
-RUN git clone --depth 1 --branch "${ROOM3D_GIT_REF}" "${ROOM3D_GIT_URL}" 3D \
- || git clone "${ROOM3D_GIT_URL}" 3D && cd 3D && git checkout "${ROOM3D_GIT_REF}"
+COPY scripts/clone-room3d.sh scripts/room3d-version.json /workspace/room3d-bootstrap/
+RUN --mount=type=secret,id=room3d_token,required=false \
+    if [ -s /run/secrets/room3d_token ]; then \
+        export ROOM3D_GIT_TOKEN="$(cat /run/secrets/room3d_token)"; \
+    fi; \
+    bash /workspace/room3d-bootstrap/clone-room3d.sh /workspace/3D
 
 # Copy rohy and install. The bind-mount of package*.json gives a cached
 # layer when source changes but deps don't. OyonR/ has to be copied

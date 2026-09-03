@@ -10,7 +10,7 @@ repository root `node_modules`) for the two generators.
 | Page | Purpose |
 |---|---|
 | `index.html` | Overview: hero, CRETIC context, the rooms at a glance, care team, physiology, analytics, Oyon, authoring, governance, install, author. |
-| `rooms.html` | Every room in depth with a screenshot each. Five core rooms (Patient, Examination, Laboratory, Radiology, Consultant) and four plugin rooms (3D Room, 12-lead ECG, Pathology, PACS), in navigator order, plus navigation between rooms. The room list follows `RoomNavigator.jsx` and the plugin manifests, as the root README does. |
+| `rooms.html` | Every room in depth with a screenshot each. Five core rooms (Patient, Examination, Laboratory, Radiology, Consultant) and four plugin rooms (Bedside, 12-lead ECG, Pathology, PACS), in navigator order, plus navigation between rooms. The room list follows `RoomNavigator.jsx` and the plugin manifests, as the root README does. |
 | `whats-new.html` | What changed from v1.0.0 to the current 3.0 beta, with a release arc. |
 | `help.html` | **Generated.** The repository `README.md` rendered into the site shell: status, requirements, install, the rooms, features, screenshots, architecture, configuration, testing, documentation, development, roles, author, licence. This is the *public site's* help page. The application has its own **Help & Support** drawer (`src/help/`, 18 role-gated articles linking into the VitePress docs at `/rohy/docs/`); the two are separate surfaces and neither generates the other. |
 | `about.html` | The author: photo, background, research context, licence, and profile links (saqr.me, UEF, Scholar, ORCID, ResearchGate, Scopus, Semantic Scholar, GitHub, LinkedIn, X). |

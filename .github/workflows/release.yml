@@ -85,19 +85,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The Dockerfile clones the 3D patient room sibling (mohsaqr/3D); when
-      # that repository is private, ROOM3D_GIT_TOKEN must be a repo secret.
-      - name: Resolve 3D patient room clone URL
-        id: room3d
-        env:
-          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
-        run: |
-          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
-            echo "url=https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://github.com/mohsaqr/3D.git" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build and push image
         id: build
         uses: docker/build-push-action@v5
@@ -106,9 +93,10 @@ jobs:
           file: deploy/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: |
-            ROOM3D_GIT_URL=${{ steps.room3d.outputs.url }}
-            ROOM3D_GIT_REF=v1.0.0-beta.2
+          # BuildKit mounts this for the clone RUN only. It never becomes a
+          # build argument, layer environment, Git remote, or image file.
+          secrets: |
+            room3d_token=${{ secrets.ROOM3D_GIT_TOKEN }}
           tags: |
             ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
             ${{ env.IMAGE }}:latest
@@ -155,6 +143,11 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Clone pinned 3D patient room sibling
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: bash scripts/clone-room3d.sh ../3D
+
       - name: Install build prereqs
         run: |
           sudo apt-get update -qq
@@ -167,11 +160,12 @@ jobs:
       # Bundler defaults: source mode, no HF cache (saves ~330 MB; Kokoro
       # downloads on first request anyway), no Piper (saves ~326 MB; Piper
       # is opt-in TTS), no dynajs sibling (not needed when OyonR
-      # standalone/vendor/dynajs is already tracked in-repo). Operators
-      # who need any of the above can rebuild with `--with-*` flags.
+      # standalone/vendor/dynajs is already tracked in-repo). The 3D package
+      # is required by package.json, so the published source bundle carries
+      # the same pinned, metadata-free package as CI and Docker.
       - name: Build air-gap source tarball
         run: |
-          bash deploy/bundle-airgap.sh --mode=source --output=dist/airgap
+          bash deploy/bundle-airgap.sh --mode=source --with-3d --output=dist/airgap
           ls -la dist/airgap/
 
       - name: Verify sha256

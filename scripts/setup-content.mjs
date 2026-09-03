@@ -34,15 +34,15 @@
  * much later, somewhere unrelated.
  */
 
-import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
-    createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync,
+    createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync,
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { installArchiveAtomically, sha256File } from './content-install-utils.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DEST = join(ROOT, 'server', 'plugin-content');
@@ -58,8 +58,6 @@ function parseArgs(argv) {
 }
 const say = (m) => console.log(`  ${m}`);
 const fail = (m) => { console.error(`setup-content: ${m}`); process.exit(1); };
-
-const sha256Of = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
 /** Where this archive's bytes come from: a local file, a directory of them, or a URL. */
 function resolveSource(from, archive, baseUrl) {
@@ -149,13 +147,18 @@ for (const archive of archives) {
     // Idempotent. The installed bundle names the content version it came from,
     // so a re-run after `npm install` is a no-op rather than a re-download.
     if (!args.force && existsSync(stamp)) {
-        const have = JSON.parse(readFileSync(stamp, 'utf8')).version;
+        let have = null;
+        try { have = JSON.parse(readFileSync(stamp, 'utf8')).version; } catch {
+            say(`${archive.plugin}: installed content.json is unreadable; replacing`);
+        }
         if (have === archive.contentVersion) {
             say(`${archive.plugin}: already installed (${have})`);
             skipped++;
             continue;
         }
-        say(`${archive.plugin}: installed version ${have} differs from ${archive.contentVersion}; replacing`);
+        if (have !== null) {
+            say(`${archive.plugin}: installed version ${have} differs from ${archive.contentVersion}; replacing`);
+        }
     }
 
     const source = resolveSource(typeof args.from === 'string' ? args.from : null, archive, sources.baseUrl);
@@ -169,7 +172,7 @@ for (const archive of archives) {
         }
         file = source.at;
         say(`${archive.plugin} ← ${file}`);
-    } else if (!args.force && existsSync(cached) && sha256Of(cached) === archive.sha256) {
+    } else if (!args.force && existsSync(cached) && await sha256File(cached) === archive.sha256) {
         file = cached;
         say(`${archive.plugin}: using verified download already in .content-cache`);
     } else {
@@ -198,7 +201,7 @@ for (const archive of archives) {
     // the HTML "confirm this large download" page that some services return
     // instead of a file are all the same failure here — a clear one — rather
     // than three different confusing ones after extraction.
-    const actual = sha256Of(file);
+    const actual = await sha256File(file);
     if (actual !== archive.sha256) {
         const size = statSync(file).size;
         fail(`${archive.plugin}: checksum mismatch on ${basename(file)}\n`
@@ -208,11 +211,16 @@ for (const archive of archives) {
             + '  expected it is probably an error page saved with the right name.');
     }
 
-    rmSync(target, { recursive: true, force: true });
-    mkdirSync(target, { recursive: true });
-    const tar = spawnSync('tar', ['-xzf', file, '-C', target], { encoding: 'utf8' });
-    if (tar.status !== 0) fail(`${archive.plugin}: tar failed — ${tar.stderr}`);
-    if (!existsSync(stamp)) fail(`${archive.plugin}: the archive extracted without a content.json — it is not a content bundle`);
+    try {
+        installArchiveAtomically({
+            archiveFile: file,
+            target,
+            plugin: archive.plugin,
+            contentVersion: archive.contentVersion,
+        });
+    } catch (err) {
+        fail(`${archive.plugin}: install failed — ${err.message}`);
+    }
 
     say(`  installed ${archive.files} files to server/plugin-content/${archive.plugin}/`);
     installed++;

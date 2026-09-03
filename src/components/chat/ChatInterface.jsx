@@ -1232,7 +1232,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const text = (overrideText ?? input).trim();
         if (!text) return;
         const source = meta.source ?? 'typed';
-        const wantSpeech = meta.spoken === true || voiceMode;
+        // A room-level control is authoritative in both directions. `true`
+        // forces speech, `false` forces silence, and only an omitted value
+        // falls back to the chat room's own voice-mode switch.
+        const wantSpeech = meta.spoken === undefined ? voiceMode : meta.spoken === true;
         if (turnInFlightRef.current) {
             // A caller that came through the bus gets told; the chat's own
             // path is already gated by `loading` and stays silent.
@@ -2280,5 +2283,4 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         </div>
     );
 }
-
 

@@ -12,7 +12,7 @@ includes the material they present.
 | Room | Bottom-bar label | What it is for | Type | When it appears |
 |---|---|---|---|---|
 | Patient | **Patient** · chat | Talk to the patient and take the history | Core | Always |
-| 3D Room | **3D Room** · at the bedside | Stand at the bed with the same patient in 3D, speak to them out loud, examine them | Plugin | When the case enables it |
+| Bedside | **Bedside** · immersive patient view | Stand at the bed with the same patient in 3D, speak to them out loud, examine them | Plugin | When the case enables it |
 | Examination | **Examination** · physical exam | Perform a physical examination on a body map | Core | Always |
 | Laboratory | **Laboratory** · investigations | Order blood and other lab tests, read results | Core | Always |
 | Radiology | **Radiology** · imaging & tests | Order imaging studies, read reports | Core | Always |
@@ -26,20 +26,20 @@ The bottom bar lists them in this order.
 The **Patient** room is where every case starts, and where the patient
 monitor and the **Treatments** controls live.
 
-## The 3D Room
+## Bedside
 
-The **3D Room** is the same patient, seen from the bedside. It is drawn over
+**Bedside** is the same patient, seen from the bedside. It is drawn over
 the Patient room, so the monitor keeps running underneath and the
 conversation is the same one: a question you type in the chat is answered at
 the bedside, and a question you speak at the bedside appears in the chat
 transcript. Clicking a body region opens an examination wheel, and the
 findings count exactly like Examination-room findings.
 
-See [The 3D Room](/trainee/room-3d) for the full walkthrough.
+See [Bedside](/trainee/room-3d) for the full walkthrough.
 
 ## Plugin rooms
 
-The 3D Room, 12-lead ECG, Pathology and PACS are plugin rooms. A plugin room
+Bedside, 12-lead ECG, Pathology and PACS are plugin rooms. A plugin room
 appears in the bottom bar only when the case you are running includes that
 material. A case built around an ECG shows the **12-lead ECG** room; a case
 with no slides leaves **Pathology** out of the bar.
@@ -48,7 +48,7 @@ So a missing **PACS**, **Pathology** or **12-lead ECG** button means the
 current case has nothing for that room to show. Those three rooms also ship
 only on the `advanced` release channel, so an install on the stock `current`
 channel shows the Patient, Examination, Laboratory, Radiology and Consultant
-rooms plus the 3D Room.
+rooms plus Bedside.
 
 ::: tip A missing room is a case detail
 A room you saw in one case and miss in the next is a property of the case,
@@ -56,7 +56,7 @@ so there is nothing to report and nothing to fix. Ask your instructor if you
 expected a study or a slide that the case does not carry.
 :::
 
-- [The 3D Room](/trainee/room-3d)
+- [Bedside](/trainee/room-3d)
 - [Reading imaging in PACS](/trainee/imaging-reading-room)
 - [Pathology slides](/trainee/pathology)
 - [12-lead ECG](/trainee/ecg)
@@ -100,7 +100,7 @@ different case, or your instructor ends it.
 
 ## Next steps
 
-- [The 3D Room](/trainee/room-3d)
+- [Bedside](/trainee/room-3d)
 - [Taking a history](/trainee/history)
 - [Physical examination](/trainee/examination)
 - [Ordering labs & imaging](/trainee/investigations)

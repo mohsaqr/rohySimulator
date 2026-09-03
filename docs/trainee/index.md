@@ -5,7 +5,7 @@ For the **trainee**: the learner who runs a virtual-patient case.
 You move through a set of peer rooms: talk to the patient, examine them, order
 investigations, treat them, then reflect in a voice debrief, while their vitals
 respond in real time. The Patient, Examination, Laboratory, Radiology and
-Consultant rooms are present in every install. The 3D Room, 12-lead ECG,
+Consultant rooms are present in every install. Bedside, 12-lead ECG,
 Pathology and PACS rooms appear when the case includes that material.
 
 ## Start here
@@ -21,7 +21,7 @@ Pathology and PACS rooms appear when the case includes that material.
 | [Getting started](/trainee/getting-started) | Log in, pick a case, start a session |
 | [The rooms](/trainee/rooms) | Every room, and which of them your case shows |
 | [Taking a history](/trainee/history) | Chatting with the patient, voice vs. text |
-| [The 3D Room](/trainee/room-3d) | The bedside view, speaking aloud, examining in 3D |
+| [Bedside](/trainee/room-3d) | The bedside view, speaking aloud, examining in 3D |
 | [Physical examination](/trainee/examination) | Body map, regions, findings |
 | [Ordering labs & imaging](/trainee/investigations) | Worklist, turnaround, viewing results |
 | [12-lead ECG](/trainee/ecg) | The ECG workstation, calipers, interpretation |
@@ -35,7 +35,7 @@ Pathology and PACS rooms appear when the case includes that material.
 | [FAQ & troubleshooting](/trainee/faq) | Common questions and fixes |
 
 ::: tip Some rooms are case-dependent
-The 3D Room, 12-lead ECG, Pathology and PACS rooms appear in the bottom
+Bedside, 12-lead ECG, Pathology and PACS rooms appear in the bottom
 navigator when the case includes that material. A case that carries no slides
 shows no Pathology tab. See [The rooms](/trainee/rooms).
 :::

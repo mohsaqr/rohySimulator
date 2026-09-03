@@ -664,7 +664,7 @@ describe('Oyon typing capture wiring', () => {
 });
 
 describe('ChatInterface — the shared patient conversation (PatientConversationContext)', () => {
-    function mountWithBus(activeCase) {
+    function mountWithBus(activeCase, { forceVoiceMode = false } = {}) {
         let bus = null;
         const props = {
             activeCase,
@@ -676,6 +676,7 @@ describe('ChatInterface — the shared patient conversation (PatientConversation
         renderWithProviders(
             <>
                 <ChatInterface {...props} />
+                <VoiceModeForcer on={forceVoiceMode} />
                 <BusProbe onBus={(b) => { bus = b; }} />
             </>,
             { withPatientRecord: false }
@@ -712,6 +713,18 @@ describe('ChatInterface — the shared patient conversation (PatientConversation
         // Nothing is being voiced once the turn is over.
         await waitFor(() => expect(getBus().voiced).toBeNull());
         expect(getBus().loading).toBe(false);
+    });
+
+    it('an explicit room mute overrides the hidden chat voice mode', async () => {
+        llmResponseText = 'This reply must stay silent.';
+        const getBus = mountWithBus(caseFixture, { forceVoiceMode: true });
+        await waitFor(() => expect(screen.getByTestId('voice-state')).toHaveAttribute('data-voice-mode', 'true'));
+        await waitFor(() => expect(getBus()?.sessionId).toBe(999));
+
+        await getBus().send('Answer without speaking.', { source: 'room3d', spoken: false });
+
+        await waitFor(() => expect(screen.getByText('This reply must stay silent.')).toBeInTheDocument());
+        expect(getRecordedRequests()).toEqual([]);
     });
 
     it('refuses a second bus turn while one is in flight', async () => {

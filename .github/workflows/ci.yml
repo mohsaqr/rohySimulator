@@ -55,20 +55,12 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
-      # The 3D patient room is a second sibling (`"rohy-3d-patient-room":
-      # "file:../3D"`), raw ES modules with no build step. Its repository
-      # may be private: ROOM3D_GIT_TOKEN (a repo secret holding a token that
-      # can read mohsaqr/3D) is used when set, and a plain clone otherwise.
+      # The helper reads the one ref/version contract used by Docker, local
+      # installs and verification. Auth is a one-shot header, never a remote URL.
       - name: Clone 3D patient room sibling
         env:
           ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
-        run: |
-          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
-            git clone --depth 1 "https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git" ../3D
-          else
-            git clone --depth 1 https://github.com/mohsaqr/3D.git ../3D
-          fi
-          test -f ../3D/src/main.js
+        run: bash scripts/clone-room3d.sh ../3D
       - name: Install dependencies
         run: npm ci
       - name: Build
@@ -95,20 +87,11 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
-      # The 3D patient room is a second sibling (`"rohy-3d-patient-room":
-      # "file:../3D"`), raw ES modules with no build step. Its repository
-      # may be private: ROOM3D_GIT_TOKEN (a repo secret holding a token that
-      # can read mohsaqr/3D) is used when set, and a plain clone otherwise.
+      # Same pinned package the release image builds.
       - name: Clone 3D patient room sibling
         env:
           ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
-        run: |
-          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
-            git clone --depth 1 "https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git" ../3D
-          else
-            git clone --depth 1 https://github.com/mohsaqr/3D.git ../3D
-          fi
-          test -f ../3D/src/main.js
+        run: bash scripts/clone-room3d.sh ../3D
       - name: Install dependencies
         run: npm ci
       - name: Run tests with coverage and JUnit
@@ -176,20 +159,11 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
-      # The 3D patient room is a second sibling (`"rohy-3d-patient-room":
-      # "file:../3D"`), raw ES modules with no build step. Its repository
-      # may be private: ROOM3D_GIT_TOKEN (a repo secret holding a token that
-      # can read mohsaqr/3D) is used when set, and a plain clone otherwise.
+      # Same pinned package the release image builds.
       - name: Clone 3D patient room sibling
         env:
           ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
-        run: |
-          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
-            git clone --depth 1 "https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git" ../3D
-          else
-            git clone --depth 1 https://github.com/mohsaqr/3D.git ../3D
-          fi
-          test -f ../3D/src/main.js
+        run: bash scripts/clone-room3d.sh ../3D
       - name: Install dependencies
         run: npm ci
       # The audit-*.sh scripts (except audit-observability.sh, which spins

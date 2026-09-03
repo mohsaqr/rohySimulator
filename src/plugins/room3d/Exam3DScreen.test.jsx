@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import Exam3DScreen from './Exam3DScreen.jsx';
 import { VoiceProvider } from '../../contexts/VoiceContext';
 import EventLogger from '../../services/eventLogger';
+import { setAppLanguage } from '../../i18n';
 
 const controller = {
     update: vi.fn(),
@@ -154,6 +155,21 @@ describe('Exam3DScreen', () => {
         expect(options.patient).toMatchObject({ name: 'Daniel Moreau', pronouns: 'he/him' });
         expect(options.records).toBeUndefined();
         expect(options.treatments).toBeUndefined();
+    });
+
+    it('remounts translated room callbacks and chrome when the language changes', async () => {
+        renderRoom({ activeCase: ACTIVE_CASE, sessionId: 7 });
+        expect(mountPatientRoom.mock.calls[0][1].labels.room).toBe('Bedside');
+
+        try {
+            await act(async () => { await setAppLanguage('fi'); });
+            expect(mountPatientRoom).toHaveBeenCalledTimes(2);
+            expect(controller.dispose).toHaveBeenCalledTimes(1);
+            expect(mountPatientRoom.mock.calls[1][1].labels.room).toBe('Vuoteen vierellä');
+            expect(mountPatientRoom.mock.calls[1][1].on_event).toEqual(expect.any(Function));
+        } finally {
+            await act(async () => { await setAppLanguage('en'); });
+        }
     });
 
     it('attaches the real exam model to every supine region for the exam wheel', () => {

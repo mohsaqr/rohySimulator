@@ -50,6 +50,8 @@
         <p class="sub">Every released version of Rohy with the changes it carried.</p>
         <nav class="subnav" aria-label="On this page">
             <span class="subnav-label">On this page</span>
+            <a href="#300-beta9-2026-09-03">[3.0.0-beta.9] — 2026-09-03</a>
+            <a href="#300-beta8-2026-09-03">[3.0.0-beta.8] — 2026-09-03</a>
             <a href="#300-beta7-2026-09-03">[3.0.0-beta.7] — 2026-09-03</a>
             <a href="#300-beta6-2026-09-03">[3.0.0-beta.6] — 2026-09-03</a>
             <a href="#300-beta5-2026-09-03">[3.0.0-beta.5] — 2026-09-03</a>
@@ -60,8 +62,6 @@
             <a href="#29147-2026-09-01">[2.9.147] — 2026-09-01</a>
             <a href="#29146-2026-09-01">[2.9.146] — 2026-09-01</a>
             <a href="#29145-2026-08-31">[2.9.145] — 2026-08-31</a>
-            <a href="#29144-2026-08-31">[2.9.144] — 2026-08-31</a>
-            <a href="#29143-2026-08-31">[2.9.143] — 2026-08-31</a>
         </nav>
     </div>
 </section>
@@ -86,7 +86,7 @@
                     <a href="trainee/getting-started.html">Getting started</a>
                     <a href="trainee/rooms.html">The rooms</a>
                     <a href="trainee/history.html">Taking a history</a>
-                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/room-3d.html">Bedside</a>
                     <a href="trainee/examination.html">Physical examination</a>
                     <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
                     <a href="trainee/ecg.html">12-lead ECG</a>
@@ -244,6 +244,36 @@ adheres to <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning</a>
 repo root (this updates <code>package.json</code> + <code>package-lock.json</code> and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.</p>
+<span class="anchor-alias" id="300-beta9--2026-09-03"></span><h2 id="300-beta9-2026-09-03">[3.0.0-beta.9] — 2026-09-03</h2>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><strong>Plugin delivery and content installation hardening.</strong> The private 3D-room
+credential is now a BuildKit secret rather than a URL/build argument, Git
+metadata is removed before packaging, and one version contract pins CI,
+Docker, source bundles and local verification. Remote PACS/Pathology bodies
+are byte-limited while streaming. Starter archives are hashed without a
+whole-file allocation, staged and validated before replacement, and restored
+on a failed swap.</li>
+<li><strong>Bedside naming, voice and language state.</strong> The user-facing 3D room is now
+named <strong>Bedside</strong> in navigation, room chrome, help and documentation. An
+explicit room mute now overrides the hidden chat voice mode, and a runtime
+language switch remounts translated Bedside chrome, callbacks and monitor
+labels.</li>
+</ul>
+<span class="anchor-alias" id="300-beta8--2026-09-03"></span><h2 id="300-beta8-2026-09-03">[3.0.0-beta.8] — 2026-09-03</h2>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong>The default patient answers only what is asked</strong> (<code>server/db.js</code>
+<code>PATIENT_TEMPLATE_PROMPT</code>, migration <code>0054</code>). The shipped &quot;Default Patient&quot;
+and &quot;Default Female Patient&quot; prompts told the model to answer truthfully and
+express feelings, and small models recited the whole case on &quot;how are
+you?&quot;. The new baseline is one question, one answer, one or two sentences,
+nothing volunteered, everyday words, a number when a number is asked for,
+with a short example exchange. The dos and don&#39;ts lists match. Migration
+0054 rewrites installed copies that still carry the shipped text and leaves
+an admin-edited template alone. Regression lock in
+<code>tests/server/patient-template-short-answers.test.js</code>.</li>
+</ul>
 <span class="anchor-alias" id="300-beta7--2026-09-03"></span><h2 id="300-beta7-2026-09-03">[3.0.0-beta.7] — 2026-09-03</h2>
 <h3 id="added">Added</h3>
 <ul>
@@ -260,7 +290,7 @@ generator, which now shares the same shell template.</li>
 install links point at the rendered pages. Page titles use <code>Name · Rohy</code>.</li>
 </ul>
 <span class="anchor-alias" id="300-beta6--2026-09-03"></span><h2 id="300-beta6-2026-09-03">[3.0.0-beta.6] — 2026-09-03</h2>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><strong>Documentation style pass</strong> over the trainee, educator, admin, operator
 and product guides plus <code>INSTALL.md</code>, <code>DEPLOY.md</code>, <code>UPDATING.md</code> and the
@@ -272,7 +302,7 @@ headings changed text and none was referenced by an anchor. The
 <code>bin/rohy-update</code> emits; two <code>docs/index.md</code> frontmatter values are quoted.</li>
 </ul>
 <span class="anchor-alias" id="300-beta5--2026-09-03"></span><h2 id="300-beta5-2026-09-03">[3.0.0-beta.5] — 2026-09-03</h2>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><strong>Public website rebuilt</strong> (<code>website/</code>): shared <code>site.css</code>/<code>site.js</code>, new
 <code>rooms.html</code> (every room with a screenshot, in navigator order),
@@ -288,7 +318,7 @@ testing, roles and licence.</li>
 <h3 id="added-1">Added</h3>
 <ul>
 <li><strong>Trainee documentation for the plugin rooms</strong> (<code>docs/trainee/</code>): five new
-pages — the 3D Room, 12-lead ECG, reading a pathology slide, the PACS
+pages — Bedside, 12-lead ECG, reading a pathology slide, the PACS
 reading room, and courses, lessons &amp; surveys — wired into the VitePress
 sidebar. <code>rooms.md</code> now covers all nine rooms in navigator order.</li>
 <li><strong>Help &amp; Support drawer</strong> lists the same pages (<code>src/help/helpContent.js</code>)
@@ -297,7 +327,7 @@ case does not enable a plugin room still gets the article explaining why the
 tab is absent. New <code>help</code> catalogue keys in all six languages plus <code>en-XA</code>.</li>
 </ul>
 <span class="anchor-alias" id="300-beta3--2026-09-03"></span><h2 id="300-beta3-2026-09-03">[3.0.0-beta.3] — 2026-09-03</h2>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><strong>Intermittent Cloudflare 502s on a healthy server</strong> (<code>server/config/keepAlive.js</code>).
 rohy.lacarm.com sits behind cloudflared, which pools idle origin sockets for
@@ -316,7 +346,7 @@ The major bump marks a new sibling dependency and a new plugin capability
 surface; no existing API or data shape changes.</p>
 <h3 id="added-2">Added</h3>
 <ul>
-<li><strong>The 3D Room</strong> (<code>src/plugins/room3d/</code>), an RPS-1 plugin rendering the
+<li><strong>Bedside</strong> (<code>src/plugins/room3d/</code>), an RPS-1 plugin rendering the
 <code>rohy-3d-patient-room</code> package (<code>file:../3D</code>, a sibling clone like
 <code>dynajs</code>) as the SECOND room in the navigator. The case&#39;s patient lies in
 bed with the live monitor, the room&#39;s camera wheel and the examination
@@ -348,7 +378,7 @@ the Docker builder clones it beside rohy (<code>ROOM3D_GIT_URL</code> / <code>_R
 <code>components/voice/SubtitleBand</code> + <code>useSubtitleReveal</code>, additive props on
 <code>VoiceControl</code>, <code>AuscultationPanel</code>, <code>FindingDisplay</code>, <code>OrdersDrawer</code>.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li>Trainee docs: &quot;The five rooms&quot; is now &quot;The six rooms&quot;.</li>
 <li><code>OrdersDrawer</code>: the backdrop is a sibling of the panel (click-outside and
@@ -359,13 +389,13 @@ closed panel is inert (its catalogue was in the tab order).</li>
 <li><code>AuscultationPanel</code> guards its one-shot auto-play with a ref (no double
 analytics row under StrictMode).</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li>(3D package) a WebGL context leaked per room visit; avatars of different
 heights are placed by their head bone so no head sits under the pillow.</li>
 </ul>
 <span class="anchor-alias" id="29148--2026-09-01"></span><h2 id="29148-2026-09-01">[2.9.148] — 2026-09-01</h2>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><strong>Server tests that build their own database no longer race a 5s clock.</strong>
 <code>vitest.config.js</code> already raised <code>hookTimeout</code> to 90s because parallel
@@ -378,7 +408,7 @@ the full suite takes ~28 minutes. <code>testTimeout: 30_000</code> on the server
 project only; the client project keeps the 5s default.</li>
 </ul>
 <span class="anchor-alias" id="29147--2026-09-01"></span><h2 id="29147-2026-09-01">[2.9.147] — 2026-09-01</h2>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><p><strong>The content archives are public; <code>setup:content</code> needs no credential.</strong>
 The repository was private because the licensing position was unsettled and
@@ -423,7 +453,7 @@ consumer, so the archive shipped anyway. An at-risk study now requires
 <code>provenance.pixelsReviewed</code> beside its licence (Radoyon 0.3.4).</p>
 </li>
 </ul>
-<h3 id="changed-4">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li>Content archives repacked and republished; <code>scripts/content-sources.json</code>
 carries the new checksums, sizes and content versions. The imaging archive
@@ -438,7 +468,7 @@ categories removed — deliberately not the strings, since writing those down
 re-creates the disclosure the masking exists to undo.</li>
 </ul>
 <span class="anchor-alias" id="29145--2026-08-31"></span><h2 id="29145-2026-08-31">[2.9.145] — 2026-08-31</h2>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li>The room navigator wrapped onto three lines. The plugin rooms wrote
 sentences where the core rooms use one word — &quot;Interpret a calibrated
@@ -469,7 +499,7 @@ verifying an install most needs to distinguish. Counts and the content
 version only; the route is public so the deploy verify needs no
 credentials.</li>
 </ul>
-<h3 id="fixed-4">Fixed</h3>
+<h3 id="fixed-5">Fixed</h3>
 <ul>
 <li>The install documentation never told anyone to clone <code>dynajs</code> as a
 sibling, though <code>package.json</code> declares it <code>file:../dynajs</code>. Getting it
@@ -478,7 +508,7 @@ build breaks later somewhere unrelated. Now the first step in
 <code>README.md</code>, <code>docs/INSTALL.md</code> and <code>docs/operator/install.md</code>.</li>
 </ul>
 <span class="anchor-alias" id="29143--2026-08-31"></span><h2 id="29143-2026-08-31">[2.9.143] — 2026-08-31</h2>
-<h3 id="fixed-5">Fixed</h3>
+<h3 id="fixed-6">Fixed</h3>
 <ul>
 <li>The starter-content tests depended on content being installed on the
 machine. The bundles are gigabytes, generated by <code>npm run setup:content</code>
@@ -498,7 +528,7 @@ also answers the open question in the delivery plan about whether the
 Docker image should bake content in — it need not.</li>
 </ul>
 <span class="anchor-alias" id="29142--2026-08-31"></span><h2 id="29142-2026-08-31">[2.9.142] — 2026-08-31</h2>
-<h3 id="fixed-6">Fixed</h3>
+<h3 id="fixed-7">Fixed</h3>
 <ul>
 <li><code>validateEnv</code> threw <code>ReferenceError: fatal is not defined</code> whenever a
 deployment set <code>ROHY_PLUGIN_ORIGIN_TOKENS</code> — the branch pushed to an
@@ -510,7 +540,7 @@ malformed credential map is an error, the credential never appears in
 that error, and a well-formed or absent map is accepted.</li>
 </ul>
 <span class="anchor-alias" id="29141--2026-08-31"></span><h2 id="29141-2026-08-31">[2.9.141] — 2026-08-31</h2>
-<h3 id="changed-5">Changed</h3>
+<h3 id="changed-6">Changed</h3>
 <ul>
 <li>The installation documentation covers imaging content. <code>README.md</code>,
 <code>docs/INSTALL.md</code> and <code>docs/operator/install.md</code> now name
@@ -528,7 +558,7 @@ That distinction existed in the tags and in nobody&#39;s documentation.</li>
 air-gap tarballs do not yet carry content.</li>
 </ul>
 <span class="anchor-alias" id="29140--2026-08-31"></span><h2 id="29140-2026-08-31">[2.9.140] — 2026-08-31</h2>
-<h3 id="fixed-7">Fixed</h3>
+<h3 id="fixed-8">Fixed</h3>
 <ul>
 <li><strong>The slide bundler selected by id prefix rather than by licence.</strong> It
 kept assets whose id began <code>cardiac-</code>, which gave the right answer only
@@ -625,14 +655,14 @@ could follow it end to end and still find empty rooms.</li>
 per-deployment bearer tokens, the <code>types{}</code> block DICOM needs, and
 access logging that names which deployment is pulling.</li>
 </ul>
-<h3 id="fixed-8">Fixed</h3>
+<h3 id="fixed-9">Fixed</h3>
 <ul>
 <li>The config docs generator classified <code>*_TOKEN</code> as a secret but not
 <code>*_TOKENS</code>. A variable holding several credentials is no less secret
 than one holding a single credential.</li>
 </ul>
 <span class="anchor-alias" id="29136--2026-08-31"></span><h2 id="29136-2026-08-31">[2.9.136] — 2026-08-31</h2>
-<h3 id="changed-6">Changed</h3>
+<h3 id="changed-7">Changed</h3>
 <ul>
 <li>The PACS starter ships <strong>the whole redistributable archive</strong> — 48
 entries, 1.48 GB, 21 attribution notices — rather than a curated
@@ -646,7 +676,7 @@ stated: the built origin already ships only <code>redistributableEntries()</code
 so everything in its catalogue is shippable by construction.</li>
 </ul>
 <span class="anchor-alias" id="29135--2026-08-31"></span><h2 id="29135-2026-08-31">[2.9.135] — 2026-08-31</h2>
-<h3 id="changed-7">Changed</h3>
+<h3 id="changed-8">Changed</h3>
 <ul>
 <li>The PACS starter bundle is <strong>abnormal chest studies</strong>, selected by a
 predicate over the archive&#39;s own metadata rather than a hardcoded list
@@ -686,7 +716,7 @@ procedures, differential and management plan.</li>
 <li><code>npm run starter-content</code> builds the bundles from the sibling content
 origins. They are gitignored, not committed.</li>
 </ul>
-<h3 id="fixed-9">Fixed</h3>
+<h3 id="fixed-10">Fixed</h3>
 <ul>
 <li>Pathology slides can be <strong>displayable without being measurable</strong>. The
 catalogue refused any slide without measured optics — correctly, since
@@ -696,7 +726,7 @@ photomicrograph could not enter the library at all. Such slides now
 carry no optics and say so; the ruler and the counting frame are
 withheld rather than reporting a number derived from a guess.</li>
 </ul>
-<h3 id="changed-8">Changed</h3>
+<h3 id="changed-9">Changed</h3>
 <ul>
 <li>Vendored pathoyon 0.1.1 (<code>1a00bbe8</code>).</li>
 </ul>
@@ -712,7 +742,7 @@ cine cardiac MRI (a normal study and heart failure with infarct).
 Every one is CC0, CC BY or CC BY-SA and ships with its attribution;
 the content origin grows to 48 entries and 195 series.</li>
 </ul>
-<h3 id="fixed-10">Fixed</h3>
+<h3 id="fixed-11">Fixed</h3>
 <ul>
 <li><strong>Colour ultrasound and angiography display at all.</strong> The vendored
 viewer only ever called the grayscale reader, which raises on three
@@ -733,12 +763,12 @@ is grouped by slice level rather than by cardiac phase.</li>
 read as pixels — 0.27 of a pixel — which the browser drew as a pale
 grey wash at every zoom. Calipers carried the same fault.</li>
 </ul>
-<h3 id="changed-9">Changed</h3>
+<h3 id="changed-10">Changed</h3>
 <ul>
 <li>Vendored radoyon 0.3.3 (<code>e32735ac</code>) and cardoyon 0.2.2 (<code>91dd191f</code>).</li>
 </ul>
 <span class="anchor-alias" id="29132--2026-08-30"></span><h2 id="29132-2026-08-30">[2.9.132] — 2026-08-30</h2>
-<h3 id="fixed-11">Fixed</h3>
+<h3 id="fixed-12">Fixed</h3>
 <ul>
 <li>Release artifacts and CI checkouts pass the vendored-package stamp
 gate again (a Finder .DS_Store had been hashed into the ecg stamp);
@@ -746,7 +776,7 @@ the vendor tool now ignores OS junk. Local-only knowledge-base tests
 skip on CI instead of failing on missing sources.</li>
 </ul>
 <span class="anchor-alias" id="29131--2026-08-30"></span><h2 id="29131-2026-08-30">[2.9.131] — 2026-08-30</h2>
-<h3 id="fixed-12">Fixed</h3>
+<h3 id="fixed-13">Fixed</h3>
 <ul>
 <li><strong>The PACS room no longer crashes to the error boundary when switching
 studies while images are loading</strong> — a missing frame renders as loading
@@ -764,27 +794,27 @@ PACS&quot; link on the radiology report. Studies without archive backing
 say so honestly.</li>
 </ul>
 <span class="anchor-alias" id="29129--2026-08-30"></span><h2 id="29129-2026-08-30">[2.9.129] — 2026-08-30</h2>
-<h3 id="fixed-13">Fixed</h3>
+<h3 id="fixed-14">Fixed</h3>
 <ul>
 <li><strong>The ECG studio no longer demands a clinical-review sign-off</strong> to
 publish, and no longer duplicates the case&#39;s patient details (age,
 vitals, history) inside the plugin — the case owns the patient.</li>
 </ul>
 <span class="anchor-alias" id="29128--2026-08-30"></span><h2 id="29128-2026-08-30">[2.9.128] — 2026-08-30</h2>
-<h3 id="fixed-14">Fixed</h3>
+<h3 id="fixed-15">Fixed</h3>
 <ul>
 <li><strong>The ECG authoring studio can be saved, exited, and scrolled</strong> — the
 host&#39;s Done/Discard controls now reach the studio&#39;s header slot, and
 the studio scrolls inside the authoring overlay.</li>
 </ul>
 <span class="anchor-alias" id="29127--2026-08-30"></span><h2 id="29127-2026-08-30">[2.9.127] — 2026-08-30</h2>
-<h3 id="fixed-15">Fixed</h3>
+<h3 id="fixed-16">Fixed</h3>
 <ul>
 <li>A ~180 requests/minute <code>GET /api/patient-record</code> retry loop — the
 record-init effect no longer re-arms on every render.</li>
 </ul>
 <span class="anchor-alias" id="29126--2026-08-30"></span><h2 id="29126-2026-08-30">[2.9.126] — 2026-08-30</h2>
-<h3 id="fixed-16">Fixed</h3>
+<h3 id="fixed-17">Fixed</h3>
 <ul>
 <li><strong>Radiology imaging works end to end.</strong> The case editor lists rohy&#39;s
 full 74-study catalogue, relays the content origin&#39;s archive of real
@@ -794,7 +824,7 @@ says so instead of showing an empty catalogue. The series loader now
 accepts the origin&#39;s v2 indexes.</li>
 </ul>
 <span class="anchor-alias" id="29125--2026-08-30"></span><h2 id="29125-2026-08-30">[2.9.125] — 2026-08-30</h2>
-<h3 id="fixed-17">Fixed</h3>
+<h3 id="fixed-18">Fixed</h3>
 <ul>
 <li><strong>You can exit the ECG and PACS rooms again, and the ECG room
 scrolls.</strong> The workstation was viewport-sized inside a smaller pane,
@@ -803,7 +833,7 @@ height from the host, the tracing stays put, and the interpretation
 rail scrolls in its own pane.</li>
 </ul>
 <span class="anchor-alias" id="29124--2026-08-30"></span><h2 id="29124-2026-08-30">[2.9.124] — 2026-08-30</h2>
-<h3 id="fixed-18">Fixed</h3>
+<h3 id="fixed-19">Fixed</h3>
 <ul>
 <li><strong><code>POST /api/sessions</code> dedup responses carry the full create shape</strong>
 (id, case_id, user_id, student_name, tenant_id) plus the reuse note.</li>
@@ -812,7 +842,7 @@ rail scrolls in its own pane.</li>
 production.</li>
 </ul>
 <span class="anchor-alias" id="29123--2026-08-30"></span><h2 id="29123-2026-08-30">[2.9.123] — 2026-08-30</h2>
-<h3 id="changed-10">Changed</h3>
+<h3 id="changed-11">Changed</h3>
 <ul>
 <li><strong>Locale catalogues synced across all six languages</strong>: review-session
 strings, 148 new PACS workstation keys (740 machine translations,
@@ -829,14 +859,14 @@ rubric never reaches the learner&#39;s browser. Vendored and stamped like
 PACS and Pathology (<code>npm run vendor -- ecg</code> / <code>-- ecg-styles</code>).</li>
 </ul>
 <span class="anchor-alias" id="29121--2026-08-30"></span><h2 id="29121-2026-08-30">[2.9.121] — 2026-08-30</h2>
-<h3 id="changed-11">Changed</h3>
+<h3 id="changed-12">Changed</h3>
 <ul>
 <li><strong>PACS workstation lifted to Radoyon 0.3.1</strong>: hanging layouts, real
 radiographs, compressed pixel decode (RLE/JPEG), reader&#39;s report pane,
 and the new two-library case editor.</li>
 </ul>
 <span class="anchor-alias" id="29120--2026-08-30"></span><h2 id="29120-2026-08-30">[2.9.120] — 2026-08-30</h2>
-<h3 id="changed-12">Changed</h3>
+<h3 id="changed-13">Changed</h3>
 <ul>
 <li>Pathology package re-vendored at upstream&#39;s hardening commit
 (<code>befc00c4</code>); stamps verified.</li>
@@ -848,13 +878,13 @@ and the new two-library case editor.</li>
 namespace, six locales).</li>
 </ul>
 <span class="anchor-alias" id="29118--2026-08-30"></span><h2 id="29118-2026-08-30">[2.9.118] — 2026-08-30</h2>
-<h3 id="fixed-19">Fixed</h3>
+<h3 id="fixed-20">Fixed</h3>
 <ul>
 <li>Oyon capture widget reports loading/local-only/error states honestly;
 the vendored element no longer throws at load when webgazer is absent.</li>
 </ul>
 <span class="anchor-alias" id="29117--2026-08-30"></span><h2 id="29117-2026-08-30">[2.9.117] — 2026-08-30</h2>
-<h3 id="fixed-20">Fixed</h3>
+<h3 id="fixed-21">Fixed</h3>
 <ul>
 <li><strong>A rate-limited or 5xx token verify no longer logs you out</strong> — only
 401/403 are definitive; everything else retries.</li>
@@ -862,7 +892,7 @@ the vendored element no longer throws at load when webgazer is absent.</li>
 <li>Profile password change enforces the same policy as the server.</li>
 </ul>
 <span class="anchor-alias" id="29116--2026-08-30"></span><h2 id="29116-2026-08-30">[2.9.116] — 2026-08-30</h2>
-<h3 id="fixed-21">Fixed</h3>
+<h3 id="fixed-22">Fixed</h3>
 <ul>
 <li>Chat remembers the active agent tab; agent vs transport failures are
 distinguished in the banner.</li>
@@ -871,14 +901,14 @@ instead of silently dropped.</li>
 <li>Config panel shows the effective discussant override.</li>
 </ul>
 <span class="anchor-alias" id="29115--2026-08-30"></span><h2 id="29115-2026-08-30">[2.9.115] — 2026-08-30</h2>
-<h3 id="fixed-22">Fixed</h3>
+<h3 id="fixed-23">Fixed</h3>
 <ul>
 <li>TNA dashboard shows explicit empty states; the clusters spinner
 terminates when there is nothing to cluster.</li>
 <li>Patient-record context is memoised; storage registry dropped a dead key.</li>
 </ul>
 <span class="anchor-alias" id="29114--2026-08-30"></span><h2 id="29114-2026-08-30">[2.9.114] — 2026-08-30</h2>
-<h3 id="fixed-23">Fixed</h3>
+<h3 id="fixed-24">Fixed</h3>
 <ul>
 <li>Patient monitor renders only vitals that exist — no NaN traces.</li>
 <li>Orders drawer dropped its retired labs surface (1142→267 lines).</li>
@@ -887,7 +917,7 @@ terminates when there is nothing to cluster.</li>
 matched CSF tests into blood panels).</li>
 </ul>
 <span class="anchor-alias" id="29113--2026-08-30"></span><h2 id="29113-2026-08-30">[2.9.113] — 2026-08-30</h2>
-<h3 id="fixed-24">Fixed</h3>
+<h3 id="fixed-25">Fixed</h3>
 <ul>
 <li><strong>Identity timestamps are UTC ISO</strong> (migration 0052; automatic on boot,
 with the standard pre-migration backup).</li>
@@ -903,19 +933,19 @@ educator prompt internals.</li>
 crash shows a localized retryable fallback instead of a white screen,
 and a plugin crash is contained to its room.</li>
 </ul>
-<h3 id="fixed-25">Fixed</h3>
+<h3 id="fixed-26">Fixed</h3>
 <ul>
 <li>Room-change events are stamped synchronously, so analytics ordering
 survives a crashing room.</li>
 </ul>
 <span class="anchor-alias" id="29111--2026-08-30"></span><h2 id="29111-2026-08-30">[2.9.111] — 2026-08-30</h2>
-<h3 id="fixed-26">Fixed</h3>
+<h3 id="fixed-27">Fixed</h3>
 <ul>
 <li>Pale <code>-50</code> tint compatibility selectors no longer substring-match <code>-500</code>
 classes (24 selectors moved to whole-token <code>[class~=…]</code> matching).</li>
 </ul>
 <span class="anchor-alias" id="29110--2026-08-30"></span><h2 id="29110-2026-08-30">[2.9.110] — 2026-08-30</h2>
-<h3 id="fixed-27">Fixed</h3>
+<h3 id="fixed-28">Fixed</h3>
 <ul>
 <li><strong>Alarm logging and notification persistence work again for
 cookie-authenticated users</strong> — four dead pre-cookie token guards removed.</li>
@@ -923,7 +953,7 @@ cookie-authenticated users</strong> — four dead pre-cookie token guards remove
 backend persistence; &quot;be quieter&quot; is not &quot;stop recording&quot;.</li>
 </ul>
 <span class="anchor-alias" id="29109--2026-08-30"></span><h2 id="29109-2026-08-30">[2.9.109] — 2026-08-30</h2>
-<h3 id="fixed-28">Fixed</h3>
+<h3 id="fixed-29">Fixed</h3>
 <ul>
 <li><strong>A token refresh can no longer log you out.</strong> Every JWT now carries a
 unique <code>jti</code>, and a refresh that cannot record its server-side session
@@ -932,7 +962,7 @@ fails with 500 instead of silently revoking the caller&#39;s own token.</li>
 auth cookie (new <code>server/middleware/authTtl.js</code>).</li>
 </ul>
 <span class="anchor-alias" id="29108--2026-08-30"></span><h2 id="29108-2026-08-30">[2.9.108] — 2026-08-30</h2>
-<h3 id="changed-13">Changed</h3>
+<h3 id="changed-14">Changed</h3>
 <ul>
 <li><p><strong>The lab catalogue moved out of the repo root, and the Docker special case
 went with it.</strong> <code>Lab_database.json</code> and <code>heart.txt</code> sat at the root only
@@ -953,7 +983,7 @@ Verified from the new path: 222 tests across 33 groups, cardiac set merged.</p>
 <li><p><code>codecov.yml</code> → <code>.github/codecov.yml</code>, a location Codecov reads natively.</p>
 </li>
 </ul>
-<h3 id="fixed-29">Fixed</h3>
+<h3 id="fixed-30">Fixed</h3>
 <ul>
 <li><strong><code>POST /api/admin/seed/lab-tests</code> has never worked.</strong> It read
 <code>../../Lab_database.txt</code> — a file that has never existed in this repository —
@@ -961,7 +991,7 @@ and then <code>JSON.parse</code>d it, so the endpoint returned 404 on every call
 was written. It now reads the catalogue the rest of the platform uses.</li>
 </ul>
 <span class="anchor-alias" id="29107--2026-08-30"></span><h2 id="29107-2026-08-30">[2.9.107] — 2026-08-30</h2>
-<h3 id="changed-14">Changed</h3>
+<h3 id="changed-15">Changed</h3>
 <ul>
 <li><p><strong>The repository root is readable again.</strong> It carried four superseded planning
 documents, two setup scripts still branded with the pre-rename product name, an
@@ -991,7 +1021,7 @@ the exact shape of a bug this project has already shipped twice.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="29106--2026-08-30"></span><h2 id="29106-2026-08-30">[2.9.106] — 2026-08-30</h2>
-<h3 id="changed-15">Changed</h3>
+<h3 id="changed-16">Changed</h3>
 <ul>
 <li><p><strong>README opens with what Rohy actually is.</strong> Rohy combines the diagnostic depth
 of virtual patients with the time pressure of educational escape rooms: the
@@ -1008,7 +1038,7 @@ is generated rather than looped.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="29105--2026-08-30"></span><h2 id="29105-2026-08-30">[2.9.105] — 2026-08-30</h2>
-<h3 id="changed-16">Changed</h3>
+<h3 id="changed-17">Changed</h3>
 <ul>
 <li><p><strong>README: every count removed, and a screenshot tour added.</strong> The counts had
 already drifted — it claimed <em>24 versioned migrations</em> against 51 on disk,
@@ -1023,7 +1053,7 @@ design rather than a caption of what is visible.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="29104--2026-08-30"></span><h2 id="29104-2026-08-30">[2.9.104] — 2026-08-30</h2>
-<h3 id="fixed-30">Fixed</h3>
+<h3 id="fixed-31">Fixed</h3>
 <ul>
 <li><p><strong>&quot;Last Active&quot; in the Users tab was stale by the viewer&#39;s UTC offset.</strong>
 <code>users.last_login</code> was written with <code>CURRENT_TIMESTAMP</code>, whose
@@ -1054,7 +1084,7 @@ byte-identical before and after, idempotent on re-run, and an unparseable row
 left exactly as it is rather than nulled.</p>
 </li>
 </ul>
-<h3 id="changed-17">Changed</h3>
+<h3 id="changed-18">Changed</h3>
 <ul>
 <li><strong>The time-contract test now scans <code>UPDATE</code>s.</strong> It checked `INSERT INTO<div class="table-wrap"><table> ( … )` column lists, and an UPDATE names no column list — so
 `UPDATE users SET last_login = CURRENT_TIMESTAMP` was invisible to it *by
@@ -1065,7 +1095,7 @@ writes remain and nothing renders them, and a rule that fires on those is
 noise that ends up disabled.</li>
 </ul>
 <span class="anchor-alias" id="29103--2026-08-30"></span><h2 id="29103-2026-08-30">[2.9.103] — 2026-08-30</h2>
-<h3 id="fixed-31">Fixed</h3>
+<h3 id="fixed-32">Fixed</h3>
 <ul>
 <li><p><strong>Selected medications were unreadable in the Treatments room.</strong> The row built
 its class name by interpolation — <code>`bg-${color}-900/30`</code> — and Tailwind&#39;s
@@ -1087,7 +1117,7 @@ utility returns. Reported against v2.9.82.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="29102--2026-08-30"></span><h2 id="29102-2026-08-30">[2.9.102] — 2026-08-30</h2>
-<h3 id="fixed-32">Fixed</h3>
+<h3 id="fixed-33">Fixed</h3>
 <ul>
 <li><p><strong>Course self-check headers rendered <code>Q{{I}} OF {{N}}</code>.</strong> rohy runs
 <code>i18next-icu</code> for <strong>all</strong> messages (Finnish and Swedish plurals need it), and
@@ -1104,7 +1134,7 @@ avoiding &quot;file(s)&quot; is what ICU was turned on for. Reported against v2.
 </li>
 </ul>
 <span class="anchor-alias" id="29101--2026-08-30"></span><h2 id="29101-2026-08-30">[2.9.101] — 2026-08-30</h2>
-<h3 id="fixed-33">Fixed</h3>
+<h3 id="fixed-34">Fixed</h3>
 <ul>
 <li><p><strong>The case summary showed learners <code>thighRight</code> and <code>upperBack</code>.</strong> Debriefing
 is where a learner reviews what they examined, and the one surface that
@@ -1119,7 +1149,7 @@ namespace, so the modal takes a second <code>tExam</code> hook, the same pattern
 </li>
 </ul>
 <span class="anchor-alias" id="29100--2026-08-30"></span><h2 id="29100-2026-08-30">[2.9.100] — 2026-08-30</h2>
-<h3 id="fixed-34">Fixed</h3>
+<h3 id="fixed-35">Fixed</h3>
 <ul>
 <li><strong>Centrality tabs in the Network view read &quot;Sna.m in strength&quot;.</strong> The LAILA
 i18n shim humanises any key it has no override for — strip a <code>ns:</code> prefix,
@@ -1130,7 +1160,7 @@ key. Seven measures now have explicit labels, the same way the <code>sna.layout_
 family already did. Reported against v2.9.82.</li>
 </ul>
 <span class="anchor-alias" id="2999--2026-08-30"></span><h2 id="2999-2026-08-30">[2.9.99] — 2026-08-30</h2>
-<h3 id="fixed-35">Fixed</h3>
+<h3 id="fixed-36">Fixed</h3>
 <ul>
 <li><p><strong>A saved per-case discussant override never displayed, and re-saving
 silently reverted it.</strong> <code>GET /cases/:id/agents</code> returns the merged
@@ -1230,7 +1260,7 @@ educator turns it on for the case (v2.9.98).</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2995--2026-08-29"></span><h2 id="2995-2026-08-29">[2.9.95] — 2026-08-29</h2>
-<h3 id="fixed-36">Fixed</h3>
+<h3 id="fixed-37">Fixed</h3>
 <ul>
 <li><p><strong><code>kb -- stale</code> reported &quot;0 of 7 open bugs&quot; while all seven were invisible to
 it.</strong> A bug that cites no file was skipped by a bare <code>continue</code>, so a set it
@@ -1286,7 +1316,7 @@ re-triage. It currently flags <strong>14 of 21</strong> open bugs.</p>
 <li><p>Documentation: <code>docs/integrator/knowledge-base.md</code>.</p>
 </li>
 </ul>
-<h3 id="fixed-37">Fixed</h3>
+<h3 id="fixed-38">Fixed</h3>
 <ul>
 <li>Three defects the tool found in itself while being built, each caught by a
 view rather than by a crash:<ul>
@@ -1309,7 +1339,7 @@ at 182 commits and told nobody anything. They are <code>repo:meta</code> now.</l
 </li>
 </ul>
 <span class="anchor-alias" id="2993--2026-08-29"></span><h2 id="2993-2026-08-29">[2.9.93] — 2026-08-29</h2>
-<h3 id="fixed-38">Fixed</h3>
+<h3 id="fixed-39">Fixed</h3>
 <ul>
 <li><p><strong>Two timestamp shapes lived in the same columns, and the ordering was wrong
 because of it.</strong> Anything a browser wrote arrived as
@@ -1361,7 +1391,7 @@ re-vendored; the package now pins the rule with its own source-scanning tests
 so the author sees the failure before the host does.</p>
 </li>
 </ul>
-<h3 id="changed-18">Changed</h3>
+<h3 id="changed-19">Changed</h3>
 <ul>
 <li><p><strong>The server owns the clock; the learner&#39;s device is recorded, not trusted.</strong>
 <code>/learning-events/batch</code> used to persist whatever the browser put in
@@ -1413,7 +1443,7 @@ two halves of plugin telemetry differ).</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2992--2026-08-29"></span><h2 id="2992-2026-08-29">[2.9.92] — 2026-08-29</h2>
-<h3 id="fixed-39">Fixed</h3>
+<h3 id="fixed-40">Fixed</h3>
 <ul>
 <li><strong>A race in the PACS room test, surfaced by re-vendoring.</strong> It waited for the
 series rail to appear and then read the logged analytics verbs <em>synchronously</em>.
@@ -1453,7 +1483,7 @@ stay green against stale code. rohy&#39;s copy is now current with radoyon
 </ul>
 </li>
 </ul>
-<h3 id="fixed-40">Fixed</h3>
+<h3 id="fixed-41">Fixed</h3>
 <ul>
 <li><strong>A conversion job could starve the server it runs on.</strong> libvips uses every
 core by default; measured on the 4-core target server, one <code>dzsave</code> took
@@ -1470,7 +1500,7 @@ the spawner read them. They are the operating system&#39;s, not knobs an operato
 sets; inherited names are now skipped unless <code>ROHY_</code>-prefixed.</li>
 </ul>
 <span class="anchor-alias" id="2990--2026-08-29"></span><h2 id="2990-2026-08-29">[2.9.90] — 2026-08-29</h2>
-<h3 id="fixed-41">Fixed</h3>
+<h3 id="fixed-42">Fixed</h3>
 <ul>
 <li><strong><code>npm run build</code> failed on <code>main</code>: the frozen plugin manifest was missing
 <code>pacs</code>.</strong> <code>server/shared/plugins/manifests.generated.js</code> is the snapshot the
@@ -1516,7 +1546,7 @@ multi-file formats yet).</li>
 rules that keep the host&#39;s <code>/library</code> and the bundle&#39;s prefixes from
 destroying each other, and why the two halves fail independently.</li>
 </ul>
-<h3 id="fixed-42">Fixed</h3>
+<h3 id="fixed-43">Fixed</h3>
 <ul>
 <li><strong>The end-to-end import test was order-dependent.</strong> Its cases shared one
 asset, so the re-import case reset the calibration the case before it had just
@@ -1567,7 +1597,7 @@ genuinely does not work without it.</li>
 </ul>
 </li>
 </ul>
-<h3 id="fixed-43">Fixed</h3>
+<h3 id="fixed-44">Fixed</h3>
 <ul>
 <li><strong>A deployment that imports slides but ships no content bundle had an
 invisible library.</strong> <code>GET /catalog</code> answered 503 the moment no content origin
@@ -1615,7 +1645,7 @@ the allowlist and the byte cap exist to mediate.</li>
 </ul>
 </li>
 </ul>
-<h3 id="fixed-44">Fixed</h3>
+<h3 id="fixed-45">Fixed</h3>
 <ul>
 <li><strong><code>tiling.regionShrink</code> shipped a value libvips rejects.</strong> The design note
 called the default <code>average</code>; libvips calls it <code>mean</code>, and <code>dzsave</code> exits 1
@@ -1733,7 +1763,7 @@ conformance rows, §14.2 narrowed. 28 tests.</li>
 </ul>
 </li>
 </ul>
-<h3 id="fixed-45">Fixed</h3>
+<h3 id="fixed-46">Fixed</h3>
 <ul>
 <li><strong>The API reference was silently omitting 7 endpoints.</strong> <code>gen-api.mjs</code> matched
 route registrations only on the literal identifier <code>router</code>, so a file
@@ -1791,7 +1821,7 @@ setting type and <code>ROHY_PLUGIN_ORIGINS</code> now share <code>normalizeOrigi
 refuse a userinfo segment in one place and accept it in the other.</li>
 </ul>
 <span class="anchor-alias" id="2983--2026-08-29"></span><h2 id="2983-2026-08-29">[2.9.83] — 2026-08-29</h2>
-<h3 id="fixed-46">Fixed</h3>
+<h3 id="fixed-47">Fixed</h3>
 <ul>
 <li><strong>The documented re-vendor command had become destructive.</strong> The README in
 <code>src/components/pathology/</code> told you to
@@ -1809,7 +1839,7 @@ discipline as <code>content-bundle.sh</code> refusing a bundle with no <code>.dz
 stale path is corrected in <code>docs/design/plugin-standard.md</code> too.</li>
 </ul>
 <span class="anchor-alias" id="2982--2026-08-29"></span><h2 id="2982-2026-08-29">[2.9.82] — 2026-08-29</h2>
-<h3 id="fixed-47">Fixed</h3>
+<h3 id="fixed-48">Fixed</h3>
 <ul>
 <li><strong>The pathology editor&#39;s slide library was empty on rohy.</strong> The editor asks
 an injected <code>assetService.list()</code> for its catalog; the standalone app
@@ -1825,7 +1855,7 @@ of <code>resolveRemoteRefs</code>), so the case never stores a host address.
 <code>/api/health/plugins</code> reports <code>has_catalog</code>.</li>
 </ul>
 <span class="anchor-alias" id="2981--2026-08-29"></span><h2 id="2981-2026-08-29">[2.9.81] — 2026-08-29</h2>
-<h3 id="fixed-48">Fixed</h3>
+<h3 id="fixed-49">Fixed</h3>
 <ul>
 <li><strong>Case wizard step strip truncated every label at desktop widths.</strong> With a
 twelfth step (Plugins, 2.9.73) the desktop-only equal-width row shrank each
@@ -1852,7 +1882,7 @@ in Pathoyon (<code>scripts/content-bundle.sh</code>) and the <code>KIND=plugin-c
 recipe in the deploy hub (<code>./deploy.sh pathoyoncontent</code>).</li>
 </ul>
 <span class="anchor-alias" id="2979--2026-08-29"></span><h2 id="2979-2026-08-29">[2.9.79] — 2026-08-29</h2>
-<h3 id="fixed-49">Fixed</h3>
+<h3 id="fixed-50">Fixed</h3>
 <ul>
 <li><p><strong>Re-vendored upstream: the pathology editor&#39;s publish lifecycle and slide
 scoring both worked against the author.</strong> Publish was offered on a draft and
@@ -1871,7 +1901,7 @@ card says so.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2978--2026-08-29"></span><h2 id="2978-2026-08-29">[2.9.78] — 2026-08-29</h2>
-<h3 id="fixed-50">Fixed</h3>
+<h3 id="fixed-51">Fixed</h3>
 <ul>
 <li><strong>A plugin&#39;s answer key no longer reaches a learner&#39;s browser.</strong> The
 pathology room rendered the package&#39;s learner projection, but <code>GET /cases</code>,
@@ -1892,7 +1922,7 @@ it now removes the key, as <em>Remove</em> does. The Plugins step index is deriv
 from <code>WIZARD_STEP_KEYS</code> rather than the literal 12.</li>
 </ul>
 <span class="anchor-alias" id="2977--2026-08-29"></span><h2 id="2977-2026-08-29">[2.9.77] — 2026-08-29</h2>
-<h3 id="fixed-51">Fixed</h3>
+<h3 id="fixed-52">Fixed</h3>
 <ul>
 <li><strong>Analytics &quot;Minutes&quot; tile showed the calendar span of the dataset, not
 time spent.</strong> It was <code>max(timestamp) − min(timestamp)</code> over every filtered
@@ -1942,7 +1972,7 @@ host&#39;s rule, and a package that knew rohy&#39;s mount could not be dropped i
 anything else. Vendored copy re-synced and byte-identical.</li>
 </ul>
 <span class="anchor-alias" id="2975--2026-08-29"></span><h2 id="2975-2026-08-29">[2.9.75] — 2026-08-29</h2>
-<h3 id="changed-19">Changed</h3>
+<h3 id="changed-20">Changed</h3>
 <ul>
 <li><p><strong>RPS-1 1.3 is implemented, and the spec says so.</strong> Status header moved to
 &quot;1.0–1.3 implemented (rohy v2.9.59–v2.9.74)&quot;; every <em>(1.3, proposed)</em> marker
@@ -1978,7 +2008,7 @@ the second header the surface exists to avoid. Discard is guarded once the
 draft is dirty: authored material is expensive to recreate.</p>
 </li>
 </ul>
-<h3 id="changed-20">Changed</h3>
+<h3 id="changed-21">Changed</h3>
 <ul>
 <li>The wizard&#39;s &quot;Save &amp; Finish&quot; test now targets the final step rather than
 naming Agents, and a sibling test asserts Next still appears on the step
@@ -2073,7 +2103,7 @@ about 1 KB, so the limit only bites on embedded images, which belong behind the
 remote proxy. Closing this needs an upload path (§14.2), which does not exist.</li>
 </ul>
 <span class="anchor-alias" id="2971--2026-08-29"></span><h2 id="2971-2026-08-29">[2.9.71] — 2026-08-29</h2>
-<h3 id="changed-21">Changed</h3>
+<h3 id="changed-22">Changed</h3>
 <ul>
 <li><strong>Pathology reads through the document contract (RPS-1 1.3, read side).</strong>
 The adapter no longer decides anything about a pathology case itself; it
@@ -2106,7 +2136,7 @@ manifest-driven server guard. Every new section is marked <em>(1.3, proposed)</e
 Implementation plan: <code>todo/pathology-authoring-plan.md</code>.</li>
 </ul>
 <span class="anchor-alias" id="2969--2026-08-28"></span><h2 id="2969-2026-08-28">[2.9.69] — 2026-08-28</h2>
-<h3 id="fixed-52">Fixed</h3>
+<h3 id="fixed-53">Fixed</h3>
 <ul>
 <li><strong>Pathology: re-vendored from the real upstream, and the record set
 straight.</strong> 2.9.68 said the package&#39;s upstream checkout was retired and the
@@ -2124,7 +2154,7 @@ and now walks subfolders and allows <code>react-dom</code>, matching upstream&#3
 <code>ALLOWED</code> list. README rewritten with the re-vendor procedure.</li>
 </ul>
 <span class="anchor-alias" id="2968--2026-08-28"></span><h2 id="2968-2026-08-28">[2.9.68] — 2026-08-28</h2>
-<h3 id="changed-22">Changed</h3>
+<h3 id="changed-23">Changed</h3>
 <ul>
 <li><strong>The pathology package is now a package, and the tree is its home.</strong>
 <code>PathologyScreen</code> used to call <code>useTranslation()</code> — a reach for a host React
@@ -2168,7 +2198,7 @@ Settings header — which has no top-bar menu at all — gets a Logout
 button beside &quot;Back to Simulation&quot;. The menu item stays.</li>
 </ul>
 <span class="anchor-alias" id="2965--2026-08-28"></span><h2 id="2965-2026-08-28">[2.9.65] — 2026-08-28</h2>
-<h3 id="fixed-53">Fixed</h3>
+<h3 id="fixed-54">Fixed</h3>
 <ul>
 <li><strong>An ended case kept &quot;living&quot; on the monitor</strong> (QA ISSUE-0015). After
 End &amp; Debrief → back to the patient room, the session clock, scenario
@@ -2183,7 +2213,7 @@ placeholder.</li>
 returns to the patient room; there was never a case list behind it.</li>
 </ul>
 <span class="anchor-alias" id="2964--2026-08-28"></span><h2 id="2964-2026-08-28">[2.9.64] — 2026-08-28</h2>
-<h3 id="fixed-54">Fixed</h3>
+<h3 id="fixed-55">Fixed</h3>
 <ul>
 <li><strong>First-run wizard: the Emotion-capture pill said &quot;Off&quot; while its checkbox
 was ticked</strong> (QA ISSUE-0014). The tenant&#39;s <code>oyon_settings</code> row is created
@@ -2197,7 +2227,7 @@ not loaded (<code>OYON_ENABLED</code> unset). Regression lock in
 <li><code>docs/reference/**</code> regenerated (line-number drift in <code>admin-routes.js</code>).</li>
 </ul>
 <span class="anchor-alias" id="2963--2026-08-28"></span><h2 id="2963-2026-08-28">[2.9.63] — 2026-08-28</h2>
-<h3 id="fixed-55">Fixed</h3>
+<h3 id="fixed-56">Fixed</h3>
 <ul>
 <li><strong>&quot;Detect models&quot; in the first-run wizard was unreadable</strong> (QA ISSUE-0017).
 The button carried <code>rohy-btn-secondary</code>, a light-theme class that paints a
@@ -2205,7 +2235,7 @@ white surface, under the dark-only wizard&#39;s grey text. It now uses the
 same plain dark classes as its sibling buttons.</li>
 </ul>
 <span class="anchor-alias" id="2962--2026-08-26"></span><h2 id="2962-2026-08-26">[2.9.62] — 2026-08-26</h2>
-<h3 id="fixed-56">Fixed</h3>
+<h3 id="fixed-57">Fixed</h3>
 <ul>
 <li><strong><code>npm ci</code> rejected the lockfile, so CI and Docs both failed at the install
 step.</strong> v2.9.59 added a real dependency (<code>openseadragon</code>, for the pathology
@@ -2270,7 +2300,7 @@ HTML-injection primitive handed out by a well-meaning image proxy.</li>
 query strings are not forwarded upstream and upstream <code>Set-Cookie</code> is not
 returned. The two sides share a path and nothing else.</li>
 </ul>
-<h3 id="changed-23">Changed</h3>
+<h3 id="changed-24">Changed</h3>
 <ul>
 <li>The plugin proxy is exempt from <code>generalLimiter</code> and carries its own limiter
 at 2000/min keyed by (tenant, user). <code>generalLimiter</code> is 600/min keyed by IP,
@@ -2307,7 +2337,7 @@ are gated by their own educator guard.</li>
 re-created analysable activity for someone who had asked to be forgotten,
 after the purge that would have collected it had already run.</li>
 </ul>
-<h3 id="fixed-57">Fixed</h3>
+<h3 id="fixed-58">Fixed</h3>
 <ul>
 <li><strong><code>learning_events.severity</code> and <code>.category</code> are actually written.</strong> Both
 columns exist, both carry <code>CHECK</code> constraints, and the client faithfully sent
@@ -2328,7 +2358,7 @@ surfaced as an infrastructure <code>db_error</code> and hidden the client bug.</
 It previously survived the round trip only through the lowercase notification
 severity, which is lossy: <code>ACTION</code> collapsed into <code>info</code> and came back <code>INFO</code>.</li>
 </ul>
-<h3 id="changed-24">Changed</h3>
+<h3 id="changed-25">Changed</h3>
 <ul>
 <li><code>POST /api/learning-events/batch</code> now caps a batch at 500 events
 (<code>batch_too_large</code>), matching BackendSurface&#39;s own queue cap, and runs behind
@@ -2368,7 +2398,7 @@ Pathology annotations, draft reports and diagnoses now survive leaving and
 re-entering the room; previously <code>onAnnotationsChange</code> was never wired at the
 mount site and every annotation was discarded on unmount.</li>
 </ul>
-<h3 id="fixed-58">Fixed</h3>
+<h3 id="fixed-59">Fixed</h3>
 <ul>
 <li><strong>Plugin verbs were accepted or rejected depending on which endpoint the
 client used.</strong> <code>POST /learning-events</code> validated against a hardcoded
@@ -2390,7 +2420,7 @@ gate themselves via <code>available(ctx)</code>; the navigator hides a declined 
 rather than opening onto an empty state.</li>
 </ul>
 <span class="anchor-alias" id="2958--2026-08-26"></span><h2 id="2958-2026-08-26">[2.9.58] — 2026-08-26</h2>
-<h3 id="fixed-59">Fixed</h3>
+<h3 id="fixed-60">Fixed</h3>
 <ul>
 <li><strong>A test server that died mid-run was invisible.</strong> <code>startTestServer</code> only
 watched the child until readiness; after that nothing did. When the process
@@ -2414,7 +2444,7 @@ five full local runs.</li>
 </li>
 </ul>
 <span class="anchor-alias" id="2957--2026-08-25"></span><h2 id="2957-2026-08-25">[2.9.57] — 2026-08-25</h2>
-<h3 id="fixed-60">Fixed</h3>
+<h3 id="fixed-61">Fixed</h3>
 <ul>
 <li><strong><code>package-lock.json</code> claimed rohy was MIT.</strong> rohy is licensed under the
 <strong>Carm Research License v1.4</strong> (&quot;all rights reserved&quot;), and <code>package.json</code>
@@ -2460,7 +2490,7 @@ is a broken-image icon, which is worse than the card alone. This adds the
 first tests to the vendored <code>src/components/lessons/**</code> module.</li>
 </ul>
 <span class="anchor-alias" id="2954--2026-08-25"></span><h2 id="2954-2026-08-25">[2.9.54] — 2026-08-25</h2>
-<h3 id="fixed-61">Fixed</h3>
+<h3 id="fixed-62">Fixed</h3>
 <ul>
 <li><strong>The Chat Log now names the speaker for <code>learning_events</code> rows</strong> (bug report
 2.9.37 #5). <code>speakerFor()</code> resolved a speaker for <code>interaction</code>, <code>agent</code> and
@@ -2480,7 +2510,7 @@ write to <code>agent_conversations</code> with an <code>agent_type</code>, never
 </li>
 </ul>
 <span class="anchor-alias" id="2953--2026-08-25"></span><h2 id="2953-2026-08-25">[2.9.53] — 2026-08-25</h2>
-<h3 id="fixed-62">Fixed</h3>
+<h3 id="fixed-63">Fixed</h3>
 <ul>
 <li><strong>The horn button on the Alarm System panel now silences a sounding alarm</strong>
 (bug report 2.9.37 #6). <code>routeNotification()</code> runs once at <code>notify()</code> time and
@@ -2522,7 +2552,7 @@ languages + pseudo-locale (registered as <code>machine</code> in the review
 sidecars). Server round-trip test + editor tests.</li>
 </ul>
 <span class="anchor-alias" id="2951--2026-08-16"></span><h2 id="2951-2026-08-16">[2.9.51] — 2026-08-16</h2>
-<h3 id="changed-25">Changed</h3>
+<h3 id="changed-26">Changed</h3>
 <ul>
 <li><strong>Kokoro TTS is loaded lazily and unloaded when idle.</strong> The ~330 MB
 Kokoro-82M model used to be warmed at boot and held resident for the
@@ -2543,7 +2573,7 @@ changes. <code>server/.env.example</code> documents both <code>TRANSFORMERS_CACH
 the new variable; the config reference is regenerated.</li>
 </ul>
 <span class="anchor-alias" id="2950--2026-08-16"></span><h2 id="2950-2026-08-16">[2.9.50] — 2026-08-16</h2>
-<h3 id="changed-26">Changed</h3>
+<h3 id="changed-27">Changed</h3>
 <ul>
 <li><strong>Release notes come from the CHANGELOG.</strong> The Release workflow now
 writes the tag&#39;s <code>## [x.y.z]</code> section above the install-path text
@@ -2552,7 +2582,7 @@ fences are never command-substituted; owner/repo/tag are substituted
 afterwards).</li>
 </ul>
 <span class="anchor-alias" id="2949--2026-08-16"></span><h2 id="2949-2026-08-16">[2.9.49] — 2026-08-16</h2>
-<h3 id="fixed-63">Fixed</h3>
+<h3 id="fixed-64">Fixed</h3>
 <p>Adversarial review (Codex, range v2.9.12 → v2.9.48; 12 findings, 9 fixed,
 1 rejected, 2 by decision — full report in <code>reports/</code>):</p>
 <ul>
@@ -2619,7 +2649,7 @@ corrections (Flumazenil carried fentanyl&#39;s; three nulls resolved). The
 medications mirror now links sublingual and rectal rows too.</li>
 </ul>
 <span class="anchor-alias" id="2947--2026-08-16"></span><h2 id="2947-2026-08-16">[2.9.47] — 2026-08-16</h2>
-<h3 id="fixed-64">Fixed</h3>
+<h3 id="fixed-65">Fixed</h3>
 <ul>
 <li><strong>Treatments library: &quot;Show deactivated&quot; read as a no-op.</strong> The
 checkbox only mixed deactivated rows, faintly styled, into the active
@@ -2679,7 +2709,7 @@ before). The Medications reference catalogue is unchanged.</li>
 language filter and flag badge in the list, <code>?language=</code> on
 <code>GET /scenarios</code>, round-tripped by export/import.</li>
 </ul>
-<h3 id="changed-27">Changed</h3>
+<h3 id="changed-28">Changed</h3>
 <ul>
 <li><strong>Scenario categories are a shared vocabulary</strong> with translated labels
 (<code>server/shared/scenarioCategories.js</code>) instead of free text with a
@@ -2697,7 +2727,7 @@ editor.</li>
 </li>
 </ul>
 <span class="anchor-alias" id="2943--2026-08-16"></span><h2 id="2943-2026-08-16">[2.9.43] — 2026-08-16</h2>
-<h3 id="changed-28">Changed</h3>
+<h3 id="changed-29">Changed</h3>
 <ul>
 <li><strong>&quot;Radiology&quot; is now &quot;Radiology &amp; diagnostics&quot;.</strong> The 12-lead ECG,
 Holter, echo and the other <em>Cardiac</em> studies were always orderable
@@ -2714,7 +2744,7 @@ data-drift test now locks the two together). Internal room key
 unchanged.</li>
 </ul>
 <span class="anchor-alias" id="2942--2026-08-16"></span><h2 id="2942-2026-08-16">[2.9.42] — 2026-08-16</h2>
-<h3 id="fixed-65">Fixed</h3>
+<h3 id="fixed-66">Fixed</h3>
 <ul>
 <li><strong>Importing a case whose gender is written in the UI language works.</strong>
 <code>resolvePatientGender()</code> now accepts every locale&#39;s own labels
@@ -2729,7 +2759,7 @@ the config so column and config agree. Version restore now re-derives
 through the resolver instead of <code>|| &#39;Male&#39;</code>.</li>
 </ul>
 <span class="anchor-alias" id="2941--2026-08-16"></span><h2 id="2941-2026-08-16">[2.9.41] — 2026-08-16</h2>
-<h3 id="fixed-66">Fixed</h3>
+<h3 id="fixed-67">Fixed</h3>
 <ul>
 <li><strong>The default course is now flagged, not named.</strong> Migration 0044 adds
 <code>cohorts.is_default</code> (backfilled from the seeded &quot;Basic course&quot;,
@@ -2742,7 +2772,7 @@ and Courses screens show it through the UI language (&quot;Corso base&quot;,
 own name.</li>
 </ul>
 <span class="anchor-alias" id="2940--2026-08-16"></span><h2 id="2940-2026-08-16">[2.9.40] — 2026-08-16</h2>
-<h3 id="fixed-67">Fixed</h3>
+<h3 id="fixed-68">Fixed</h3>
 <ul>
 <li><strong>One ECG rhythm vocabulary.</strong> The case editor, the scenario
 repository and the monitor engine each had their own rhythm strings —
@@ -2757,7 +2787,7 @@ save/import canonicalise on the way in and reject unknown values with
 point (case load, scenario frames, persisted vitals, settings import).</li>
 </ul>
 <span class="anchor-alias" id="2939--2026-08-16"></span><h2 id="2939-2026-08-16">[2.9.39] — 2026-08-16</h2>
-<h3 id="fixed-68">Fixed</h3>
+<h3 id="fixed-69">Fixed</h3>
 <ul>
 <li><strong>Posterior body-map hit-areas land on the limbs again.</strong> The
 coordinate editor drew the silhouette letterboxed inside a fixed
@@ -2776,7 +2806,7 @@ i18n at all (title, buttons, hints, toasts, region names, a raw
 the existing region/technique key maps.</li>
 </ul>
 <span class="anchor-alias" id="2938--2026-08-16"></span><h2 id="2938-2026-08-16">[2.9.38] — 2026-08-16</h2>
-<h3 id="fixed-69">Fixed</h3>
+<h3 id="fixed-70">Fixed</h3>
 <ul>
 <li><strong>Confirm dialogs no longer show an English &quot;Cancel&quot;/&quot;Confirm&quot; in
 other languages.</strong> <code>ToastContext</code> hardcoded the fallback labels and
@@ -2786,7 +2816,7 @@ notification-preferences reset also moved from <code>window.confirm</code> to
 the translated dialog.</li>
 </ul>
 <span class="anchor-alias" id="2937--2026-08-09"></span><h2 id="2937-2026-08-09">[2.9.37] — 2026-08-09</h2>
-<h3 id="fixed-70">Fixed</h3>
+<h3 id="fixed-71">Fixed</h3>
 <ul>
 <li><strong>Uploaded body-map images now survive image redeploys.</strong> They were
 written into the container layer (<code>public/uploads/</code>), which every
@@ -2798,7 +2828,7 @@ breaks writes). Additive for existing stacks — the volume starts
 empty, matching what a redeploy would have left anyway.</li>
 </ul>
 <span class="anchor-alias" id="2936--2026-08-09"></span><h2 id="2936-2026-08-09">[2.9.36] — 2026-08-09</h2>
-<h3 id="fixed-71">Fixed</h3>
+<h3 id="fixed-72">Fixed</h3>
 <ul>
 <li><strong>Empty lab catalogue — the last open item of the 2.9.15 tester
 report (#3) — closed with wire evidence.</strong> Reproduced against a live
@@ -2812,7 +2842,7 @@ moment that combination exists (&quot;Students will see NO lab tests…&quot;),
 in all six languages.</li>
 </ul>
 <span class="anchor-alias" id="2935--2026-08-09"></span><h2 id="2935-2026-08-09">[2.9.35] — 2026-08-09</h2>
-<h3 id="fixed-72">Fixed</h3>
+<h3 id="fixed-73">Fixed</h3>
 <p>Three defects surfaced by an adversarial (Codex) review of the
 v2.9.20–v2.9.34 series:</p>
 <ul>
@@ -2842,7 +2872,7 @@ orders on an ended session now return 409 <code>SESSION_ENDED</code>.</p>
 points toast and CI warning; per-order probing reveals only what the
 learner has already committed to).</p>
 <span class="anchor-alias" id="2934--2026-08-09"></span><h2 id="2934-2026-08-09">[2.9.34] — 2026-08-09</h2>
-<h3 id="fixed-73">Fixed</h3>
+<h3 id="fixed-74">Fixed</h3>
 <ul>
 <li><strong>The Playwright e2e suite runs again</strong> (it left CI on 2026-05-17 and
 quietly rotted: 20 of 88 tests failed on the current app for harness
@@ -2866,7 +2896,7 @@ from inter-spec state bleed on the shared server — the suite&#39;s known
 pre-existing weakness, documented for a dedicated isolation pass.</li>
 </ul>
 <span class="anchor-alias" id="2933--2026-08-08"></span><h2 id="2933-2026-08-08">[2.9.33] — 2026-08-08</h2>
-<h3 id="fixed-74">Fixed</h3>
+<h3 id="fixed-75">Fixed</h3>
 <ul>
 <li><strong>&quot;View full case summary&quot; was missing History, Initial vital signs,
 and Examination findings</strong> (tester bug report 2.9.15 #16). Three
@@ -2922,7 +2952,7 @@ renders the new section (six new i18n keys; en + pseudo shipped,
 de/es/it/fi/sv machine translations pending — English fallback until
 then).</li>
 </ul>
-<h3 id="fixed-75">Fixed</h3>
+<h3 id="fixed-76">Fixed</h3>
 <ul>
 <li><strong>Every treatment name in the case summary rendered blank</strong> — the
 renderer read <code>treatment_name</code> but the <code>treatment_orders</code> column is
@@ -2930,7 +2960,7 @@ renderer read <code>treatment_name</code> but the <code>treatment_orders</code> 
 i18n function on the same line).</li>
 </ul>
 <span class="anchor-alias" id="2929--2026-08-08"></span><h2 id="2929-2026-08-08">[2.9.29] — 2026-08-08</h2>
-<h3 id="fixed-76">Fixed</h3>
+<h3 id="fixed-77">Fixed</h3>
 <ul>
 <li><p><strong>Configured lab tests ignored the case&#39;s default wait time, and the
 catalogue disagreed with the worklist about pending times</strong> (tester
@@ -2954,7 +2984,7 @@ ever produced instant behavior, so nothing real is lost).</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2928--2026-08-08"></span><h2 id="2928-2026-08-08">[2.9.28] — 2026-08-08</h2>
-<h3 id="fixed-77">Fixed</h3>
+<h3 id="fixed-78">Fixed</h3>
 <ul>
 <li><p><strong>Students received the treatment answer key</strong> (tester bug report
 2.9.15 #7, plus #8 and #9). The available-treatments payload carried
@@ -2975,7 +3005,7 @@ arrive, the safety flag (contraindicated) wins.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2927--2026-08-08"></span><h2 id="2927-2026-08-08">[2.9.27] — 2026-08-08</h2>
-<h3 id="fixed-78">Fixed</h3>
+<h3 id="fixed-79">Fixed</h3>
 <ul>
 <li><p><strong>Selecting a scenario from Browse Repository dropped the teacher on
 the Story step</strong> (tester bug report 2.9.15 #2). The return step was a
@@ -2996,7 +3026,7 @@ image redeploys — a volume for <code>public/uploads</code> is a follow-up.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2926--2026-08-08"></span><h2 id="2926-2026-08-08">[2.9.26] — 2026-08-08</h2>
-<h3 id="fixed-79">Fixed</h3>
+<h3 id="fixed-80">Fixed</h3>
 <ul>
 <li><p><strong>Emotion-questionnaire answers were stored but invisible everywhere</strong>
 (tester bug report 2.9.15 #19). Both admin log feeds queried
@@ -3016,7 +3046,7 @@ shows patient / student / the agent&#39;s role (e.g. consultant).</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2925--2026-08-08"></span><h2 id="2925-2026-08-08">[2.9.25] — 2026-08-08</h2>
-<h3 id="fixed-80">Fixed</h3>
+<h3 id="fixed-81">Fixed</h3>
 <ul>
 <li><strong>Lesson-editor image/video/file uploads always failed with &quot;Something
 went wrong&quot;</strong> (tester bug report 2.9.15 #12). The vendored lessons
@@ -3029,7 +3059,7 @@ under <code>/rohy/</code>), and the server&#39;s actual error message reaches th
 toast. Seven regression tests lock the wire shape.</li>
 </ul>
 <span class="anchor-alias" id="2924--2026-08-08"></span><h2 id="2924-2026-08-08">[2.9.24] — 2026-08-08</h2>
-<h3 id="fixed-81">Fixed</h3>
+<h3 id="fixed-82">Fixed</h3>
 <ul>
 <li><strong>&quot;Brunette — middle-aged&quot; and &quot;Brunette — elderly&quot; were the same 3D
 head</strong> (tester bug report 2.9.15 #1). <code>brunette-t.glb</code> is a
@@ -3044,7 +3074,7 @@ missing-elderly-head gap. Four manifest-integrity regression tests
 now lock bucket/label consistency.</li>
 </ul>
 <span class="anchor-alias" id="2923--2026-08-08"></span><h2 id="2923-2026-08-08">[2.9.23] — 2026-08-08</h2>
-<h3 id="fixed-82">Fixed</h3>
+<h3 id="fixed-83">Fixed</h3>
 <ul>
 <li><strong>The monitor&#39;s &quot;Alarm&quot; bell and &quot;Monitor settings&quot; gear opened the
 exact same window for students</strong> (tester bug report 2.9.15 #17).
@@ -3053,7 +3083,7 @@ duplicate of the bell; it is now rendered for admins only, where it
 opens on the rhythm tab. A source-contract test locks the rule.</li>
 </ul>
 <span class="anchor-alias" id="2922--2026-08-08"></span><h2 id="2922-2026-08-08">[2.9.22] — 2026-08-08</h2>
-<h3 id="fixed-83">Fixed</h3>
+<h3 id="fixed-84">Fixed</h3>
 <ul>
 <li><strong>Enabled AI agents showed &quot;Not Available&quot; during simulation — no Call
 button, dead composer</strong> (tester bug report 2.9.15 #11). The
@@ -3066,7 +3096,7 @@ shape the server never produced, masking this) now matches the real
 wire format.</li>
 </ul>
 <span class="anchor-alias" id="2921--2026-08-08"></span><h2 id="2921-2026-08-08">[2.9.21] — 2026-08-08</h2>
-<h3 id="fixed-84">Fixed</h3>
+<h3 id="fixed-85">Fixed</h3>
 <ul>
 <li><p><strong>The session clock reset to 0 on every room switch, and the vital-sign
 scenario replayed from the beginning</strong> (tester bug report 2.9.15 #14).
@@ -3089,7 +3119,7 @@ restored on mount — only genuinely new breaches sound.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2920--2026-08-08"></span><h2 id="2920-2026-08-08">[2.9.20] — 2026-08-08</h2>
-<h3 id="fixed-85">Fixed</h3>
+<h3 id="fixed-86">Fixed</h3>
 <ul>
 <li><p><strong>Logins collapsed after 4 idle hours — and a laptop sleeping through
 the refresh window got logged out mid-case.</strong> The login lifetime was
@@ -3111,7 +3141,7 @@ in 2.9.21.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2919--2026-08-07"></span><h2 id="2919-2026-08-07">[2.9.19] — 2026-08-07</h2>
-<h3 id="fixed-86">Fixed</h3>
+<h3 id="fixed-87">Fixed</h3>
 <ul>
 <li><p><strong>Paging an agent did nothing visible, and the agent never arrived.</strong>
 <code>agents</code> is fetched once per session and never written again;
@@ -3146,7 +3176,7 @@ renders and nothing has to converge — the two mechanisms most likely
 to strand a learner are simply not involved.</p>
 </li>
 </ul>
-<h3 id="changed-29">Changed</h3>
+<h3 id="changed-30">Changed</h3>
 <ul>
 <li><p><strong>Agent arrival is instant by default.</strong> Every seeded persona ships
 <code>response_time 0/0</code>, and migration <code>0042</code> zeroes existing rows plus the
@@ -3187,7 +3217,7 @@ confirmed to fail against the pre-fix code.</p>
 </li>
 </ul>
 <span class="anchor-alias" id="2918--2026-08-06"></span><h2 id="2918-2026-08-06">[2.9.18] — 2026-08-06</h2>
-<h3 id="fixed-87">Fixed</h3>
+<h3 id="fixed-88">Fixed</h3>
 <ul>
 <li><p><strong><code>docker compose up</code> no longer fails on the compose file itself.</strong>
 Since v2.9.12 the file set</p>
@@ -3215,7 +3245,7 @@ production without a known origin. An unset hostname now reaches that
 guard and the container refuses to start, naming both ways to fix it.</p>
 </li>
 </ul>
-<h3 id="changed-30">Changed</h3>
+<h3 id="changed-31">Changed</h3>
 <ul>
 <li><strong>Documented the compose project name.</strong> With no <code>name:</code> in the file,
 Compose derives the project from its directory — <code>deploy/docker/</code> — so
@@ -3239,7 +3269,7 @@ detector was a human typing <code>docker compose up</code>; this is that detecto
 Verified to fail against the v2.9.12 file.</li>
 </ul>
 <span class="anchor-alias" id="2917--2026-08-06"></span><h2 id="2917-2026-08-06">[2.9.17] — 2026-08-06</h2>
-<h3 id="fixed-88">Fixed</h3>
+<h3 id="fixed-89">Fixed</h3>
 <ul>
 <li><strong>The patient room no longer clips the monitor on an iPad in portrait.</strong>
 The chat column and the monitor column carried 350px and 600px minimum
@@ -3288,7 +3318,7 @@ not merely ugly) and writing a screenshot per room per viewport to
 rest of the Playwright suite it is not in CI.</li>
 </ul>
 <span class="anchor-alias" id="2916--2026-08-06"></span><h2 id="2916-2026-08-06">[2.9.16] — 2026-08-06</h2>
-<h3 id="fixed-89">Fixed</h3>
+<h3 id="fixed-90">Fixed</h3>
 <ul>
 <li><strong>The Voice settings tab no longer claims the default voice is a
 fallback.</strong> It said the per-language default plays &quot;when a configured
@@ -3300,7 +3330,7 @@ cloud voice to be replaced got silence instead. The tab now states the
 real rule — a default speaks only for a character with no voice
 configured at all — and points at the case editor and persona editor.</li>
 </ul>
-<h3 id="changed-31">Changed</h3>
+<h3 id="changed-32">Changed</h3>
 <ul>
 <li><strong>The case wizard&#39;s second step is now labelled &quot;Avatar &amp; Voice&quot;</strong>
 (was &quot;Avatar&quot;) in all six languages. The patient&#39;s voice picker has
@@ -3315,7 +3345,7 @@ and a persona-template voice both reported tier <code>override</code>, which lef
 reading the database.</li>
 </ul>
 <span class="anchor-alias" id="2915--2026-07-31"></span><h2 id="2915-2026-07-31">[2.9.15] — 2026-07-31</h2>
-<h3 id="fixed-90">Fixed</h3>
+<h3 id="fixed-91">Fixed</h3>
 <ul>
 <li><p><strong>Saving a case no longer fails when the interface is not in English.</strong>
 Creating or updating a case returned a server error in German, Spanish,
@@ -3362,7 +3392,7 @@ run. A second test drives a real server in all five languages and locks the
 rejection behaviour for both create and update.</li>
 </ul>
 <span class="anchor-alias" id="2914--2026-07-31"></span><h2 id="2914-2026-07-31">[2.9.14] — 2026-07-31</h2>
-<h3 id="changed-32">Changed</h3>
+<h3 id="changed-33">Changed</h3>
 <ul>
 <li><p><strong>rohy is now licensed under the Carm Research License v1.4</strong>, replacing MIT
 and bringing it in line with the rest of the Carm ecosystem (Oyon, ChatOyon,
@@ -3400,7 +3430,7 @@ pinned to a tag rather than a branch, and the Docker image genuinely
 carries <code>LICENSE</code>, <code>NOTICE.md</code> and <code>licenses/</code>.</p>
 </li>
 </ul>
-<h3 id="fixed-91">Fixed</h3>
+<h3 id="fixed-92">Fixed</h3>
 <ul>
 <li><strong>The container image no longer ships without its license.</strong>
 <code>deploy/docker/Dockerfile</code> labelled images <code>MIT</code> and copied no license file
@@ -3436,14 +3466,14 @@ recorded anywhere in the repository or its history. It is listed as unresolved
 rather than omitted, because an unknown license is a risk to a redistributor
 and an empty row is more honest than an invented one.</p>
 <span class="anchor-alias" id="2913--2026-07-31"></span><h2 id="2913-2026-07-31">[2.9.13] — 2026-07-31</h2>
-<h3 id="fixed-92">Fixed</h3>
+<h3 id="fixed-93">Fixed</h3>
 <ul>
 <li><strong>The dark strip below the Oyon dashboard is gone.</strong> The panel stopped short
 of the bottom of the window, leaving a dead band of empty space. It now fills
 the room properly.</li>
 </ul>
 <span class="anchor-alias" id="2912--2026-07-30"></span><h2 id="2912-2026-07-30">[2.9.12] — 2026-07-30</h2>
-<h3 id="fixed-93">Fixed</h3>
+<h3 id="fixed-94">Fixed</h3>
 <ul>
 <li><strong>The container image builds again.</strong> The v2.9.11 image build failed outright:
 the Oyon asset verifier added in &quot;build: harden Oyon asset installation&quot; runs
@@ -3453,7 +3483,7 @@ tarball was unaffected. Operators should use v2.9.12; the v2.9.11 release has
 no container image.</li>
 </ul>
 <span class="anchor-alias" id="2911--2026-07-30"></span><h2 id="2911-2026-07-30">[2.9.11] — 2026-07-30</h2>
-<h3 id="fixed-94">Fixed</h3>
+<h3 id="fixed-95">Fixed</h3>
 <ul>
 <li><strong>The Oyon dashboard no longer goes blank after a page refresh.</strong> It used to
 render on the way in and then show &quot;No stored windows yet&quot; on reload. The
@@ -3479,7 +3509,7 @@ bursts, revisions and whether a message was sent or abandoned — never the
 words themselves. Consented learners only.</li>
 <li>Interaction signals (pointer, scroll, focus, idle) record alongside it.</li>
 </ul>
-<h3 id="fixed-95">Fixed</h3>
+<h3 id="fixed-96">Fixed</h3>
 <ul>
 <li>Signal capture no longer depends on the camera being switched on. Consent for a
 session is registered once and shared, so a tenant running Oyon without the
@@ -3491,7 +3521,7 @@ camera gets typing analytics instead of silence.</li>
 <li>The plumbing that carries the new Oyon signals to the server, loaded only when
 a tenant has enabled them and the learner has consented.</li>
 </ul>
-<h3 id="changed-33">Changed</h3>
+<h3 id="changed-34">Changed</h3>
 <ul>
 <li>The Oyon signal engine is loaded on demand, keeping it out of the main
 application bundle: startup is unchanged for everyone.</li>
@@ -3511,7 +3541,7 @@ be changed later under Settings → Oyon.</li>
 <li>The consent version a learner actually saw is recorded when they answer, so a
 future change of scope asks again rather than assuming.</li>
 </ul>
-<h3 id="changed-34">Changed</h3>
+<h3 id="changed-35">Changed</h3>
 <ul>
 <li>Learners who declined are not asked again, and learners who have never
 answered continue to see the first-run consent card rather than this prompt.</li>
@@ -3530,7 +3560,7 @@ signals are unaffected and continue to work under the original consent.</li>
 AI-assistance under Settings → Oyon → Signals. They stay dormant until a
 learner accepts the new consent, whatever the switches say.</li>
 </ul>
-<h3 id="changed-35">Changed</h3>
+<h3 id="changed-36">Changed</h3>
 <ul>
 <li>Tenants still using the original default consent version are moved to the new
 one. An administrator who set a custom consent version keeps it.</li>
@@ -3556,7 +3586,7 @@ this closes that gap, so the settings now reflect what actually runs.</li>
 estimates about the <strong>learner</strong> — never clinical measurements, and unrelated to
 the simulated patient&#39;s vital signs.</li>
 </ul>
-<h3 id="changed-36">Changed</h3>
+<h3 id="changed-37">Changed</h3>
 <ul>
 <li>Body posture is <strong>off by default</strong>. Its pose model is not bundled with rohy, so
 switching it on makes the browser download the model from an external CDN,
@@ -3579,13 +3609,13 @@ per-role tenant setting — and all authorisation stays on the server.</li>
 rate, respiration, illumination, capture quality) are now passed through to
 the dashboards, so the new signals can be displayed as they start arriving.</li>
 </ul>
-<h3 id="changed-37">Changed</h3>
+<h3 id="changed-38">Changed</h3>
 <ul>
 <li>The German, Spanish, Italian, Finnish and Swedish strings for the new
 dashboard are provisional and awaiting native review.</li>
 </ul>
 <span class="anchor-alias" id="293--2026-07-30"></span><h2 id="293-2026-07-30">[2.9.3] — 2026-07-30</h2>
-<h3 id="fixed-96">Fixed</h3>
+<h3 id="fixed-97">Fixed</h3>
 <ul>
 <li>Regenerated the <code>en-XA</code> pseudo-locale for <code>authoring_config</code>, which had been
 stale since the 2.7.x registration/approval-queue work: 25 keys existed in
@@ -3604,7 +3634,7 @@ discourse, ai-assist), plus six nullable columns on <code>oyon_emotion_records</
 the blocks that ride on the emotion window. New <code>GET /addons/oyon/ signal-windows</code> sits behind the existing Oyon read policy (role + per-role
 tenant flag, tenant scoping, redaction) and reports which modalities hold data.</li>
 </ul>
-<h3 id="fixed-97">Fixed</h3>
+<h3 id="fixed-98">Fixed</h3>
 <ul>
 <li><strong>Oyon 3 window blocks were discarded on ingest.</strong> Every <code>*_window_share</code>
 setting defaults on, so <code>facial</code>, <code>posture</code>, <code>heart_rate</code>, <code>respiration</code>,
@@ -3619,7 +3649,7 @@ about v1 discarding <code>gaze</code> and <code>engagement</code>, repeated for 
 that bound NULL into a NOT NULL column, so the insert threw and the entire
 batch was rejected — losing the emotion windows travelling with it.</li>
 </ul>
-<h3 id="changed-38">Changed</h3>
+<h3 id="changed-39">Changed</h3>
 <ul>
 <li>Ingest now splits on Oyon&#39;s own <code>isModalityOnlyEvent</code> seam, so emotion windows
 keep their existing path unchanged. <code>inserted</code> / <code>skipped</code> still count emotion
@@ -3629,7 +3659,7 @@ response shapes are untouched — the new rows live in a separate table that
 legacy SQL cannot address.</li>
 </ul>
 <span class="anchor-alias" id="291--2026-07-30"></span><h2 id="291-2026-07-30">[2.9.1] — 2026-07-30</h2>
-<h3 id="fixed-98">Fixed</h3>
+<h3 id="fixed-99">Fixed</h3>
 <ul>
 <li>Regenerated <code>docs/reference/cli/index.md</code>, which had drifted since 2.9.0: the
 release added <code>scripts/verify-oyon-install.mjs</code> and the <code>verify:oyon</code> script
@@ -3638,7 +3668,7 @@ release added <code>scripts/verify-oyon-install.mjs</code> and the <code>verify:
 release branches, so nothing caught it.</li>
 </ul>
 <span class="anchor-alias" id="290--2026-07-29"></span><h2 id="290-2026-07-29">[2.9.0] — 2026-07-29</h2>
-<h3 id="changed-39">Changed</h3>
+<h3 id="changed-40">Changed</h3>
 <ul>
 <li>Upgraded the isolated 2.9 release line from vendored Oyon 2.2.0 to the
 immutable Oyon 3.3.2 release, retaining Rohy&#39;s existing capture, consent,
@@ -3680,7 +3710,7 @@ password hashes.</li>
 affect signals can inform the AI patient&#39;s in-character response without
 exposing raw camera data or claiming to measure emotion.</li>
 </ul>
-<h3 id="changed-40">Changed</h3>
+<h3 id="changed-41">Changed</h3>
 <ul>
 <li>Redesigned LLM settings, consolidated top-bar controls, expanded course and
 case browsing, immutable case languages and codes, and plain-text response
@@ -3692,7 +3722,7 @@ installations retain their prior open behavior until configured.</li>
 MediaPipe assets are packaged and probed across Docker, air-gap, and
 published-image installation paths.</li>
 </ul>
-<h3 id="fixed-99">Fixed</h3>
+<h3 id="fixed-100">Fixed</h3>
 <ul>
 <li>Corrected course co-teacher visibility, availability-window updates,
 join-code normalisation, course case-move authorization, affect-setting error
@@ -3715,7 +3745,7 @@ order administration atomic.</li>
 peer administrators through direct API calls.</li>
 </ul>
 <span class="anchor-alias" id="2714--2026-07-15"></span><h2 id="2714-2026-07-15">[2.7.14] — 2026-07-15</h2>
-<h3 id="changed-41">Changed</h3>
+<h3 id="changed-42">Changed</h3>
 <ul>
 <li>Regenerated the <code>docs/reference/**</code> reference from source now that the new
 registration/approval routes and migration 0038 have landed (adds the
@@ -3735,14 +3765,14 @@ skips queue, closed-admits-invite, lockout east of UTC, suspended login).
 Shared <code>tests/utils/authHttp.js</code> helper for HTTP + DB seeding.</li>
 </ul>
 <span class="anchor-alias" id="2712--2026-07-15"></span><h2 id="2712-2026-07-15">[2.7.12] — 2026-07-15</h2>
-<h3 id="fixed-100">Fixed</h3>
+<h3 id="fixed-101">Fixed</h3>
 <ul>
 <li>The affect-settings load/update handlers now log the error before returning
 500 — the failure was previously swallowed, leaving a 500 with no trace. Also
 dropped an unused <code>getAllProviderStatus</code> import from the proxy routes.</li>
 </ul>
 <span class="anchor-alias" id="2711--2026-07-15"></span><h2 id="2711-2026-07-15">[2.7.11] — 2026-07-15</h2>
-<h3 id="fixed-101">Fixed</h3>
+<h3 id="fixed-102">Fixed</h3>
 <ul>
 <li><strong>Course-administration defects (audit).</strong> A co-teacher now sees the courses
 they co-teach in <code>GET /cohorts</code> — the list filtered on <code>owner_user_id</code> alone,
@@ -3766,7 +3796,7 @@ never a user row) and an admin approves or rejects from the Users workspace; on
 approval the hash moves into the new <code>users</code> row untouched, so the applicant
 signs in with the password they chose. A valid invite skips the queue.</li>
 </ul>
-<h3 id="fixed-102">Fixed</h3>
+<h3 id="fixed-103">Fixed</h3>
 <ul>
 <li><strong>Auth-entry hardening (audit).</strong> Account lockout compared a SQLite UTC
 timestamp parsed as local time, so on a server east of UTC the lock was always
@@ -3776,7 +3806,7 @@ minting a token that immediately stops working. A valid invite now opens a
 <code>closed</code> door (closed governs strangers, not admin-issued invitees).</li>
 </ul>
 <span class="anchor-alias" id="279--2026-07-15"></span><h2 id="279-2026-07-15">[2.7.9] — 2026-07-15</h2>
-<h3 id="fixed-103">Fixed</h3>
+<h3 id="fixed-104">Fixed</h3>
 <ul>
 <li><strong>Session-running IDOR and tenant escapes (audit).</strong> <code>GET /sessions/:id/lab-results</code> now requires session ownership — it previously
 carried <code>authenticateToken</code> and nothing else, so any logged-in student could
@@ -3792,7 +3822,7 @@ and the client-supplied turnaround override is clamped, so <code>Infinity</code>
 longer permanently brick an investigation.</li>
 </ul>
 <span class="anchor-alias" id="278--2026-07-15"></span><h2 id="278-2026-07-15">[2.7.8] — 2026-07-15</h2>
-<h3 id="fixed-104">Fixed</h3>
+<h3 id="fixed-105">Fixed</h3>
 <ul>
 <li><strong>ESLint is back to zero errors.</strong> Cleared 12 pre-existing errors that were
 blocking a clean lint gate: unused imports/props in <code>App.jsx</code>,
@@ -3819,7 +3849,7 @@ with two deliveries — a link and something you can read down the phone — so 
 is now reachable in <em>every</em> mode that permits registration, not only invite-only.
 Left collapsed behind a one-line prompt otherwise, and marked optional when it is.</li>
 </ul>
-<h3 id="fixed-105">Fixed</h3>
+<h3 id="fixed-106">Fixed</h3>
 <ul>
 <li><strong>The register form no longer accepts passwords the server rejects.</strong> It asked for six
 characters; the server demanded eight with an uppercase letter, a lowercase letter and
@@ -3843,7 +3873,7 @@ on the front door.</li>
 <li>Invites are revocable (people who already joined keep their accounts), and every
 redemption is recorded. The code itself never reaches the audit log.</li>
 </ul>
-<h3 id="fixed-106">Fixed</h3>
+<h3 id="fixed-107">Fixed</h3>
 <ul>
 <li><strong>Invite links would have 404&#39;d in production.</strong> Only <code>/</code> ever served the app,
 so any path-based link died at the web server — invisible in development, where
@@ -3870,7 +3900,7 @@ domains. Accounts an administrator creates are never restricted.</li>
 screen no longer shows a dead &quot;Create Account&quot; link; it shows who to ask, using
 the text you set.</li>
 </ul>
-<h3 id="changed-42">Changed</h3>
+<h3 id="changed-43">Changed</h3>
 <ul>
 <li><strong>A brand-new install is now closed by default.</strong> Previously any freshly
 deployed instance was open to whoever found the URL. <strong>Existing installs are
@@ -3901,7 +3931,7 @@ where the server would accept it.</li>
 <span class="anchor-alias" id="272--2026-07-14"></span><h2 id="272-2026-07-14">[2.7.2] — 2026-07-14</h2>
 <p>Ports the two fixes released as 2.5.2 on the 2.5.x line (see below); both bugs
 were present here too.</p>
-<h3 id="fixed-107">Fixed</h3>
+<h3 id="fixed-108">Fixed</h3>
 <ul>
 <li><strong>A fresh install can reach an admin again.</strong> Production refuses to seed the
 well-known <code>admin</code>/<code>admin123</code> account and <code>/auth/register</code> forced every signup
@@ -3938,7 +3968,7 @@ Choices are saved to your account, so they follow you across devices.</li>
 users start in (previously always English). Each user&#39;s own choice still
 wins.</li>
 </ul>
-<h3 id="fixed-108">Fixed</h3>
+<h3 id="fixed-109">Fixed</h3>
 <ul>
 <li>Your &quot;talk to the patient&quot; preference now survives a page reload instead
 of resetting to off every time.</li>
@@ -3956,7 +3986,7 @@ freshness thresholds), and restricted to local AI providers unless
 explicitly widened. Nothing is routed without your capture consent.</li>
 </ul>
 <span class="anchor-alias" id="256--2026-07-19"></span><h2 id="256-2026-07-19"><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v2.5.6">2.5.6</a> — 2026-07-19</h2>
-<h3 id="fixed-109">Fixed</h3>
+<h3 id="fixed-110">Fixed</h3>
 <ul>
 <li><strong>Release verification now checks the real MediaPipe model path.</strong> The
 published image correctly ships
@@ -3966,7 +3996,7 @@ published-image gate now mirrors the complete fresh-install asset list, and
 a regression test keeps both workflows aligned.</li>
 </ul>
 <span class="anchor-alias" id="255--2026-07-19"></span><h2 id="255-2026-07-19"><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v2.5.5">2.5.5</a> — 2026-07-19</h2>
-<h3 id="fixed-110">Fixed</h3>
+<h3 id="fixed-111">Fixed</h3>
 <ul>
 <li><strong>Published-image release verification now reaches the Oyon probes.</strong> The
 verifier booted the production container without its required
@@ -3977,7 +4007,7 @@ fresh-install Docker gate, with a regression assertion covering the boot
 contract.</li>
 </ul>
 <span class="anchor-alias" id="254--2026-07-19"></span><h2 id="254-2026-07-19"><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v2.5.4">2.5.4</a> — 2026-07-19</h2>
-<h3 id="fixed-111">Fixed</h3>
+<h3 id="fixed-112">Fixed</h3>
 <ul>
 <li><strong>Oyon emotion capture now starts on fresh installs.</strong> The browser-side
 ONNX Runtime selects <code>ort-wasm-simd-threaded.asyncify.{mjs,wasm}</code> for the
@@ -3990,7 +4020,7 @@ both asyncify files as required assets, preventing the same 404 regression
 from reaching another release.</li>
 </ul>
 <span class="anchor-alias" id="252--2026-07-14"></span><h2 id="252-2026-07-14">[2.5.2] — 2026-07-14</h2>
-<h3 id="fixed-112">Fixed</h3>
+<h3 id="fixed-113">Fixed</h3>
 <ul>
 <li><strong>A fresh install can reach an admin again.</strong> In <code>NODE_ENV=production</code> the
 seeder refuses to create the well-known <code>admin</code>/<code>admin123</code> account, and
@@ -4037,7 +4067,7 @@ often each area is used; reference catalogues (Body Map, Lab Database,
 Medications) live under Libraries near the bottom.</li>
 </ul>
 <span class="anchor-alias" id="2310--2026-05-17"></span><h2 id="2310-2026-05-17">[2.3.10] — 2026-05-17</h2>
-<h3 id="changed-43">Changed</h3>
+<h3 id="changed-44">Changed</h3>
 <ul>
 <li><strong>Removed the Playwright E2E job from CI.</strong> It is a pre-existing
 brittle/flaky UI harness (many specs maintainer-marked
@@ -4052,7 +4082,7 @@ locally via <code>npm run test:e2e</code>; CI now gates on lint + build + Vitest
 </ul>
 <span class="anchor-alias" id="239--2026-05-17"></span><h2 id="239-2026-05-17">[2.3.9] — 2026-05-17</h2>
 <p>Patch release. Kokoro is the default everywhere on a clean install.</p>
-<h3 id="changed-44">Changed</h3>
+<h3 id="changed-45">Changed</h3>
 <ul>
 <li><strong><code>audit-voices.sh</code> now defaults to <code>kokoro</code></strong>, matching the
 clean-install <code>tts_provider</code> the server already seeds
@@ -4065,7 +4095,7 @@ audits the engine it actually runs — kokoro — with no special-casing.</li>
 </ul>
 <span class="anchor-alias" id="238--2026-05-17"></span><h2 id="238-2026-05-17">[2.3.8] — 2026-05-17</h2>
 <p>Patch release. Last pre-existing CI audit failure.</p>
-<h3 id="fixed-113">Fixed</h3>
+<h3 id="fixed-114">Fixed</h3>
 <ul>
 <li><strong><code>audit-voices.sh</code> failed in CI</strong> because it asserted HTTP 200 from
 <code>/api/tts</code> for piper (no binary/voices) and google/openai (no API
@@ -4076,7 +4106,7 @@ Not a regression — asserting an unconfigured provider works was wrong.</li>
 </ul>
 <span class="anchor-alias" id="237--2026-05-17"></span><h2 id="237-2026-05-17">[2.3.7] — 2026-05-17</h2>
 <p>Patch release. Pre-existing CI failures (red on main before this branch).</p>
-<h3 id="fixed-114">Fixed</h3>
+<h3 id="fixed-115">Fixed</h3>
 <ul>
 <li><strong><code>JWT_SECRET</code> killed in-process server tests.</strong> <code>server/middleware/ auth.js</code> <code>process.exit(1)</code>s at import if <code>JWT_SECRET</code> is unset; CI has
 no <code>server/.env</code>, so any test importing an auth-touching module
@@ -4102,7 +4132,7 @@ the 16.5.2026 bug fixes; needs a dedicated stabilization effort.</li>
 </ul>
 <span class="anchor-alias" id="236--2026-05-17"></span><h2 id="236-2026-05-17">[2.3.6] — 2026-05-17</h2>
 <p>Patch release. Regenerated API reference (docs drift gate).</p>
-<h3 id="fixed-115">Fixed</h3>
+<h3 id="fixed-116">Fixed</h3>
 <ul>
 <li><strong>Generated reference was stale vs source.</strong> The Bug 5/6 changes to
 <code>server/routes/orders-routes.js</code> (tenant_id on order rows, turnaround
@@ -4113,7 +4143,7 @@ Docs workflow&#39;s drift gate passes.</li>
 </ul>
 <span class="anchor-alias" id="235--2026-05-17"></span><h2 id="235-2026-05-17">[2.3.5] — 2026-05-17</h2>
 <p>Patch release. The actual fix for red CI — npm-version lockfile skew.</p>
-<h3 id="fixed-116">Fixed</h3>
+<h3 id="fixed-117">Fixed</h3>
 <ul>
 <li><strong><code>package-lock.json</code> was generated by npm 11 (local Node 25); CI,
 server and Docker run npm 10 (Node 22).</strong> An npm-11 lock omits part of
@@ -4129,7 +4159,7 @@ npm 10, not a newer npm.</li>
 <span class="anchor-alias" id="234--2026-05-17"></span><h2 id="234-2026-05-17">[2.3.4] — 2026-05-17</h2>
 <p>Patch release. Fixes red CI / broken clean installs (root cause of the
 2.3.1–2.3.3 deploy pain).</p>
-<h3 id="fixed-117">Fixed</h3>
+<h3 id="fixed-118">Fixed</h3>
 <ul>
 <li><strong><code>package-lock.json</code> was structurally out of sync with
 <code>package.json</code></strong> since the docs/teacher-cohorts stages. Any <code>npm ci</code>
@@ -4144,7 +4174,7 @@ papering over this; they remain as defence-in-depth.</li>
 </ul>
 <span class="anchor-alias" id="233--2026-05-17"></span><h2 id="233-2026-05-17">[2.3.3] — 2026-05-17</h2>
 <p>Patch release. Operator update path made consistent with install paths.</p>
-<h3 id="fixed-118">Fixed</h3>
+<h3 id="fixed-119">Fixed</h3>
 <ul>
 <li><strong><code>bin/rohy-update</code> used <code>npm ci</code></strong> while every fresh-install path
 (<code>deploy/docker/Dockerfile</code>, <code>deploy/bootstrap.sh</code>,
@@ -4157,7 +4187,7 @@ install would fail (and could trigger a needless rollback). All three
 </ul>
 <span class="anchor-alias" id="232--2026-05-17"></span><h2 id="232-2026-05-17">[2.3.2] — 2026-05-17</h2>
 <p>Patch release. Docs site reachable behind the prefix-stripping reverse proxy.</p>
-<h3 id="fixed-119">Fixed</h3>
+<h3 id="fixed-120">Fixed</h3>
 <ul>
 <li><strong>In-app Help article links 404&#39;d in production.</strong> The VitePress docs
 were mounted only at <code>/rohy/docs</code>, but the deploy reverse proxy strips
@@ -4168,7 +4198,7 @@ Help links resolve regardless of front-proxy prefix handling.</li>
 </ul>
 <span class="anchor-alias" id="231--2026-05-17"></span><h2 id="231-2026-05-17">[2.3.1] — 2026-05-17</h2>
 <p>Patch release. Release-packaging fixes so a clean deploy actually works.</p>
-<h3 id="fixed-120">Fixed</h3>
+<h3 id="fixed-121">Fixed</h3>
 <ul>
 <li><strong><code>npm ci</code> failed on clean installs.</strong> <code>package-lock.json</code> was out of
 sync with <code>package.json</code> (the docs/VitePress devDependency closure was
@@ -4194,7 +4224,7 @@ operator → integrator → security) with local search, served at
 <code>/rohy/docs/</code>, plus an in-app <strong>Help &amp; Support</strong> drawer (role-filtered
 articles, parsed release notes, redacted diagnostics bundle).</li>
 </ul>
-<h3 id="fixed-121">Fixed</h3>
+<h3 id="fixed-122">Fixed</h3>
 <ul>
 <li><strong>Investigations.</strong> Default labs no longer hardcode a 30-minute
 turnaround; lab/radiology order rows now persist <code>tenant_id</code> so
@@ -4243,7 +4273,7 @@ version from <code>package.json</code> so <code>npm version</code> is the only p
 release number lives. Mounted once at the entry point
 (<code>src/main.jsx</code>) alongside <code>&lt;App /&gt;</code>.</li>
 </ul>
-<h3 id="changed-45">Changed</h3>
+<h3 id="changed-46">Changed</h3>
 <ul>
 <li><strong><code>AgentService.sendAgentMessage</code> payload.</strong> No longer forwards
 <code>provider</code>, <code>model</code>, <code>api_key</code>, or <code>endpoint</code> from the client.
@@ -4298,7 +4328,7 @@ hostable anywhere, no build step.</li>
 <code>migrations/MANIFEST.md</code> to decide whether a migration is additive
 (auto-apply) or destructive (refuse without <code>--allow-destructive</code>).</li>
 </ul>
-<h3 id="changed-46">Changed</h3>
+<h3 id="changed-47">Changed</h3>
 <ul>
 <li><strong>Enterprise prompt stability across case switches</strong> (this release):
 cross-case LLM role bleed eliminated via three defence-in-depth
@@ -4320,7 +4350,7 @@ systems are retired.</li>
 voice the client asks for; admins pick gender-appropriate voices in
 Settings → Voice or the case editor.</li>
 </ul>
-<h3 id="fixed-122">Fixed</h3>
+<h3 id="fixed-123">Fixed</h3>
 <ul>
 <li><strong>Cross-case prompt assembly</strong> (<code>patientTemplate</code> retaining the prior
 case&#39;s value during the case-switch async window).</li>

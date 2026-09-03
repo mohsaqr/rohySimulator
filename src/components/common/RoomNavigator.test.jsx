@@ -44,6 +44,15 @@ describe('RoomNavigator', () => {
         expect(screen.queryByRole('button', { name: /End Session/i })).toBeNull();
     });
 
+    it('presents the immersive room as Bedside without changing its room key', () => {
+        const { onSelectRoom } = renderNav();
+        const bedside = screen.getByRole('button', { name: 'Bedside' });
+        expect(screen.queryByRole('button', { name: /3D Room/i })).toBeNull();
+        expect(bedside.textContent).toMatch(/immersive patient view/);
+        fireEvent.click(bedside);
+        expect(onSelectRoom).toHaveBeenCalledWith('room3d');
+    });
+
     it('aria-pressed reflects the active room', () => {
         renderNav({ currentRoom: 'lab' });
         const lab = screen.getByRole('button', { name: /Laboratory/ });

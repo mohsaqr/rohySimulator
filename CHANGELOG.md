@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.9] — 2026-09-03
+
+### Fixed
+
+- **Plugin delivery and content installation hardening.** The private 3D-room
+  credential is now a BuildKit secret rather than a URL/build argument, Git
+  metadata is removed before packaging, and one version contract pins CI,
+  Docker, source bundles and local verification. Remote PACS/Pathology bodies
+  are byte-limited while streaming. Starter archives are hashed without a
+  whole-file allocation, staged and validated before replacement, and restored
+  on a failed swap.
+- **Bedside naming, voice and language state.** The user-facing 3D room is now
+  named **Bedside** in navigation, room chrome, help and documentation. An
+  explicit room mute now overrides the hidden chat voice mode, and a runtime
+  language switch remounts translated Bedside chrome, callbacks and monitor
+  labels.
+
 ## [3.0.0-beta.8] — 2026-09-03
 
 ### Changed
@@ -72,7 +89,7 @@ release before tagging.
 ### Added
 
 - **Trainee documentation for the plugin rooms** (`docs/trainee/`): five new
-  pages — the 3D Room, 12-lead ECG, reading a pathology slide, the PACS
+  pages — Bedside, 12-lead ECG, reading a pathology slide, the PACS
   reading room, and courses, lessons & surveys — wired into the VitePress
   sidebar. `rooms.md` now covers all nine rooms in navigator order.
 - **Help & Support drawer** lists the same pages (`src/help/helpContent.js`)
@@ -103,7 +120,7 @@ surface; no existing API or data shape changes.
 
 ### Added
 
-- **The 3D Room** (`src/plugins/room3d/`), an RPS-1 plugin rendering the
+- **Bedside** (`src/plugins/room3d/`), an RPS-1 plugin rendering the
   `rohy-3d-patient-room` package (`file:../3D`, a sibling clone like
   `dynajs`) as the SECOND room in the navigator. The case's patient lies in
   bed with the live monitor, the room's camera wheel and the examination

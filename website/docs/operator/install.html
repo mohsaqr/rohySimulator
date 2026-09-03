@@ -87,7 +87,7 @@
                     <a href="../trainee/getting-started.html">Getting started</a>
                     <a href="../trainee/rooms.html">The rooms</a>
                     <a href="../trainee/history.html">Taking a history</a>
-                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/room-3d.html">Bedside</a>
                     <a href="../trainee/examination.html">Physical examination</a>
                     <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
                     <a href="../trainee/ecg.html">12-lead ECG</a>
@@ -365,13 +365,16 @@ cd dynajs &amp;&amp; npm install &amp;&amp; cd ../rohy
 an empty stub, and the build breaks later, somewhere that looks unrelated.
 That is why this item appears first in this document.</p>
 <hr>
-<h3 id="the-3d-sibling-the-3d-patient-room-also-beside-the-checkout">The <code>3D</code> sibling: the 3D patient room, also beside the checkout</h3>
+<h3 id="the-3d-sibling-the-bedside-package-also-beside-the-checkout">The <code>3D</code> sibling: the Bedside package, also beside the checkout</h3>
 <p><code>package.json</code> also declares <code>rohy-3d-patient-room</code> as <code>file:../3D</code>. It is a
-plain ES-module package (no build step), so a clone is enough:</p>
-<pre><code class="language-bash">git clone https://github.com/mohsaqr/3D.git 3D                # sibling, not nested
+plain ES-module package (no build step). Install the exact release pinned by
+this Rohy checkout:</p>
+<pre><code class="language-bash">bash scripts/clone-room3d.sh ../3D                           # sibling, not nested
 </code></pre>
-<p><code>deploy/preflight.sh</code> checks for it (step 9), and <code>npm run build</code> refuses to
-start without it (<code>scripts/verify-room3d-install.mjs</code>).</p>
+<p>The helper reads <code>scripts/room3d-version.json</code>, uses <code>ROOM3D_GIT_TOKEN</code> as a
+one-shot HTTP credential when the repository is private, and removes Git
+metadata after cloning. <code>deploy/preflight.sh</code> checks for the package (step 9),
+and <code>npm run build</code> refuses a missing or mismatched version.</p>
 <hr>
 <h2 id="published-release-recommended">Published release (recommended)</h2>
 <p>If a release has been tagged, the fastest install pulls the pre-built
@@ -657,7 +660,7 @@ by the bundler at build time.</p>
 </tr>
 <tr>
 <td><code>--with-3d</code></td>
-<td>Bundle the <code>../3D</code> sibling clone (the 3D patient room) if <code>package.json</code> uses <code>file:../3D</code></td>
+<td>Bundle the <code>../3D</code> sibling clone (the Bedside package) if <code>package.json</code> uses <code>file:../3D</code></td>
 </tr>
 <tr>
 <td><code>--no-piper</code> / <code>--with-piper</code></td>

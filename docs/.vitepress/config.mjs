@@ -105,7 +105,7 @@ export default defineConfig({
             { text: 'Getting started', link: '/trainee/getting-started' },
             { text: 'The rooms', link: '/trainee/rooms' },
             { text: 'Taking a history', link: '/trainee/history' },
-            { text: 'The 3D Room', link: '/trainee/room-3d' },
+            { text: 'Bedside', link: '/trainee/room-3d' },
             { text: 'Physical examination', link: '/trainee/examination' },
             { text: 'Ordering labs & imaging', link: '/trainee/investigations' },
             { text: '12-lead ECG', link: '/trainee/ecg' },

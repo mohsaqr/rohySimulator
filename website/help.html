@@ -84,15 +84,15 @@
 </thead>
 <tbody><tr>
 <td>Package version</td>
-<td><code>3.0.0-beta.2</code> (<code>package.json</code>)</td>
+<td><code>3.0.0-beta.9</code> (<code>package.json</code>)</td>
 </tr>
 <tr>
 <td>Latest git tag</td>
-<td><code>v3.0.0-beta.2</code></td>
+<td><code>v3.0.0-beta.9</code></td>
 </tr>
 <tr>
 <td>Latest release</td>
-<td><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.2"><code>v3.0.0-beta.2</code></a>, published 2026-09-02</td>
+<td><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.9"><code>v3.0.0-beta.9</code></a>, published 2026-09-03</td>
 </tr>
 <tr>
 <td>Release assets</td>
@@ -100,7 +100,7 @@
 </tr>
 <tr>
 <td>Container image</td>
-<td><code>ghcr.io/mohsaqr/rohy:v3.0.0-beta.2</code> and <code>ghcr.io/mohsaqr/rohy:latest</code>, an OCI index covering <code>linux/amd64</code> and <code>linux/arm64</code></td>
+<td><code>ghcr.io/mohsaqr/rohy:v3.0.0-beta.9</code> and <code>ghcr.io/mohsaqr/rohy:latest</code>, an OCI index covering <code>linux/amd64</code> and <code>linux/arm64</code></td>
 </tr>
 <tr>
 <td>Licence</td>
@@ -163,7 +163,7 @@
 <p>Clone both siblings first, because <code>package.json</code> declares them as <code>file:</code> dependencies. <code>npm install</code> then runs <code>postinstall</code>, which calls <code>npm run setup:oyon</code> and downloads the model files.</p>
 <pre><code class="language-bash">git clone https://github.com/mohsaqr/dynajs.git ../dynajs
 (cd ../dynajs &amp;&amp; npm install)
-git clone https://github.com/mohsaqr/3D.git ../3D
+bash scripts/clone-room3d.sh ../3D
 npm install
 cp server/.env.example server/.env
 npm run dev
@@ -172,7 +172,7 @@ npm run dev
 <p>Optional add-ons: <code>npm run setup:oyon</code> re-runs the model download on its own, <code>npm run setup:content</code> installs the PACS and Pathology archives, and <code>npm run install:piper</code> installs local Piper voices.</p>
 <h3 id="production-update-and-air-gap">Production, update and air-gap</h3>
 <p>The published image runs under the compose stack. <code>deploy/bootstrap.sh</code> installs from source onto a Linux host with systemd and nginx, and also accepts <code>--dry-run</code>, <code>--no-nginx</code>, <code>--no-piper</code>, <code>--no-audit</code>, <code>--skip-build</code>, <code>--prewarm-kokoro</code> and <code>--reverse-proxy</code>. <code>bin/rohy-update</code> drives upgrades of source and systemd installs, with subcommands <code>check</code>, <code>apply</code>, <code>rollback</code>, <code>list-backups</code> and <code>restore-backup</code>. <code>deploy/bundle-airgap.sh</code> writes a self-contained tarball in <code>source</code>, <code>docker</code> or <code>both</code> mode.</p>
-<pre><code class="language-bash">docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.2
+<pre><code class="language-bash">docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.9
 docker compose -f deploy/docker/compose.yml up -d
 sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
 sudo rohy-update check
@@ -198,8 +198,8 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 <td><code>src/components/chat/</code>, <code>src/components/monitor/</code></td>
 </tr>
 <tr>
-<td>3D Room</td>
-<td><code>3D Room</code> · <code>at the bedside</code></td>
+<td>Bedside</td>
+<td><code>Bedside</code> · <code>immersive patient view</code></td>
 <td>The same patient at the bedside, sharing the session physiology and the one patient conversation; the body opens the examination wheel, the chart and the IV pole open the Records and Treatments drawers</td>
 <td><code>src/plugins/room3d/</code></td>
 </tr>
@@ -289,7 +289,7 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 <li><code>src/services/ecgWaveform.js</code> builds the trace from a sum of Gaussians, with the PR interval from an Atterhög 1977 regression and QT by Fridericia.</li>
 <li>The monitor vocabulary names 10 rhythms: Normal Sinus Rhythm, Sinus Bradycardia, Sinus Tachycardia, Atrial Fibrillation, Atrial Flutter, Supraventricular Tachycardia, Ventricular Tachycardia, Ventricular Fibrillation, Asystole, Pulseless Electrical Activity.</li>
 <li>Vitals persist through a deadband of <code>{ hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 }</code>.</li>
-<li>The 3D room samples the same generator, so both views show one physiology.</li>
+<li>Bedside samples the same generator, so both views show one physiology.</li>
 </ul>
 <h3 id="treatments">Treatments</h3>
 <p><code>server/data/treatment_effects.json</code> carries 264 rows over 245 distinct treatment names, each with onset, peak and duration in minutes, per-channel effects, and <code>rxcui</code>, <code>pk_source</code> and <code>pk_evidence_url</code> provenance fields. By type: <code>medication</code> 204 rows over 185 names, <code>nursing</code> 31, <code>iv_fluid</code> 16, <code>oxygen</code> 13.</p>

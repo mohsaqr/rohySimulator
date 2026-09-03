@@ -100,7 +100,10 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     const { t: tMonitor } = useTranslation('monitor');
     const { t } = useTranslation('chat');
     const hostRef = useRef(null);
-    const reactionLine = (regionId) => tRoom(REACTION_KEYS[regionId] ?? 'reaction_default');
+    const reactionLine = useCallback(
+        (regionId) => tRoom(REACTION_KEYS[regionId] ?? 'reaction_default'),
+        [tRoom],
+    );
     // Rohy's examination manikin, opened from the "Body map" pill.
     const [manikinOpen, setManikinOpen] = useState(false);
     const manikinOpenRef = useRef(manikinOpen);
@@ -323,7 +326,7 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
             room.dispose();
             roomRef.current = null;
         };
-    }, [activeCase, sessionId, bodyRegions, avatar.url]);
+    }, [activeCase, sessionId, bodyRegions, avatar.url, reactionLine, tMonitor, tRoom]);
 
     // The finding chart docks left, so hand that side over while it is up.
     useEffect(() => {

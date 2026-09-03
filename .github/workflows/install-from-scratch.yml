@@ -37,6 +37,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.gitignore'
+      - 'scripts/clone-room3d.sh'
+      - 'scripts/room3d-version.json'
       - 'scripts/tech-test.sh'
       - '.github/workflows/install-from-scratch.yml'
   pull_request:
@@ -48,6 +50,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.gitignore'
+      - 'scripts/clone-room3d.sh'
+      - 'scripts/room3d-version.json'
   workflow_dispatch:
 
 permissions:
@@ -75,24 +79,20 @@ jobs:
       # run could mask a regression like "rohy-tna got removed from git
       # but the cached layer still has it." Burn ~10 min once a day to
       # be sure the build is reproducible from scratch.
-      # The Dockerfile clones the 3D patient room sibling; its repository may
-      # be private, so hand it a token-bearing URL when ROOM3D_GIT_TOKEN is
-      # set (the default URL is the plain public one).
+      # The Dockerfile consumes the optional token as a BuildKit secret. The
+      # clone helper owns the pinned ref and removes repository metadata.
       - name: Build rohy production image (no cache)
         env:
           ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
         run: |
-          ROOM3D_URL="https://github.com/mohsaqr/3D.git"
-          if [ -n "$ROOM3D_GIT_TOKEN" ]; then
-            ROOM3D_URL="https://x-access-token:${ROOM3D_GIT_TOKEN}@github.com/mohsaqr/3D.git"
-          fi
           docker build \
             --no-cache \
             --progress=plain \
-            --build-arg "ROOM3D_GIT_URL=${ROOM3D_URL}" \
+            --secret id=room3d_token,env=ROOM3D_GIT_TOKEN \
             -f deploy/docker/Dockerfile \
             -t rohy:ci \
             .
+          docker run --rm --entrypoint sh rohy:ci -c 'test ! -e /opt/3D/.git'
 
       # JWT_SECRET is required (server refuses to start without it). We
       # use ALLOW_DEFAULT_USERS=1 only so the seeded `admin` user is

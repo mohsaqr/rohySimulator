@@ -118,7 +118,7 @@ printf 'commit          : %s\n' "$GIT_SHA"
 printf 'platform        : %s\n' "$PLATFORM"
 printf 'with hf cache   : %s\n' "$([[ $WITH_HF_CACHE -eq 1 ]] && echo yes || echo no)"
 printf 'with dynajs     : %s\n' "$([[ $WITH_DYNAJS -eq 1 ]] && echo yes || echo no)"
-printf 'with 3D room    : %s\n' "$([[ $WITH_3D -eq 1 ]] && echo yes || echo no)"
+printf 'with Bedside   : %s\n' "$([[ $WITH_3D -eq 1 ]] && echo yes || echo no)"
 printf 'with piper      : %s\n' "$WITH_PIPER"
 printf 'dry-run         : %s\n' "$([[ $DRY_RUN -eq 1 ]] && echo yes || echo no)"
 echo ""
@@ -223,7 +223,7 @@ build_source_bundle() {
         fi
         (( WITH_HF_CACHE )) && echo "  include: hf-cache from $HF_CACHE (~$(sizeof "$HF_CACHE"))"
         (( WITH_DYNAJS ))   && echo "  include: dynajs from $DYNAJS_DIR"
-        (( WITH_3D ))       && echo "  include: 3D patient room from $ROOM3D_DIR"
+        (( WITH_3D ))       && echo "  include: Bedside package from $ROOM3D_DIR"
         echo "[source] (dry-run) would tar -> $OUTPUT_DIR/rohy-airgap-source-${STAMP}.tar.gz"
         return
     fi
@@ -274,7 +274,7 @@ build_source_bundle() {
         rsync -a --exclude='.git/' "$DYNAJS_DIR/" "$root/dynajs/"
     fi
     if (( WITH_3D )); then
-        echo "[source] adding 3D patient room from $ROOM3D_DIR"
+        echo "[source] adding Bedside package from $ROOM3D_DIR"
         mkdir -p "$root/3D"
         rsync -a --exclude='.git/' --exclude='node_modules/' --exclude='tmp/' --exclude='dist/' "$ROOM3D_DIR/" "$root/3D/"
     fi
@@ -380,7 +380,7 @@ if [[ -d "$BUNDLE/dynajs" ]]; then
 fi
 if [[ -d "$BUNDLE/3D" ]]; then
     ROOM3D_DST="$(cd "$REPO_DIR/.." && pwd)/3D"
-    echo "[airgap] placing 3D patient room sibling at $ROOM3D_DST"
+    echo "[airgap] placing Bedside sibling at $ROOM3D_DST"
     rsync -a "$BUNDLE/3D/" "$ROOM3D_DST/"
     chown -R "$ROHY_USER:$ROHY_USER" "$ROOM3D_DST"
 fi

@@ -1,6 +1,6 @@
-# room3d — the 3D patient room as a Rohy plugin
+# room3d — Bedside as a Rohy plugin
 
-The SECOND room in the navigator ("3D Room", `order: 15`, right after
+The SECOND room in the navigator ("Bedside", `order: 15`, right after
 Patient), rendering the `rohy-3d-patient-room` package bound to live case
 data: the case's patient record and avatar, the monitor's real vitals (via
 `EventLogger.currentVitals`) and real ECG generator, rhythm labels,

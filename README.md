@@ -8,11 +8,11 @@ The public website is `website/index.html`. The documentation site sources live 
 
 | Item | Value |
 |---|---|
-| Package version | `3.0.0-beta.2` (`package.json`) |
-| Latest git tag | `v3.0.0-beta.2` |
-| Latest release | [`v3.0.0-beta.2`](https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.2), published 2026-09-02 |
+| Package version | `3.0.0-beta.9` (`package.json`) |
+| Latest git tag | `v3.0.0-beta.9` |
+| Latest release | [`v3.0.0-beta.9`](https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.9), published 2026-09-03 |
 | Release assets | air-gap source tarball and air-gap Docker tarball, each with a `.sha256` |
-| Container image | `ghcr.io/mohsaqr/rohy:v3.0.0-beta.2` and `ghcr.io/mohsaqr/rohy:latest`, an OCI index covering `linux/amd64` and `linux/arm64` |
+| Container image | `ghcr.io/mohsaqr/rohy:v3.0.0-beta.9` and `ghcr.io/mohsaqr/rohy:latest`, an OCI index covering `linux/amd64` and `linux/arm64` |
 | Licence | Carm Research License v1.4 ([`LICENSE`](LICENSE)) |
 
 Releases carry a channel in their title: `v2.9.119` is titled "Stable fixes (pre-plugin channel)" and `v2.9.132` is titled "Advanced: PACS, Pathology & ECG workstations". [`docs/INSTALL.md`](docs/INSTALL.md) names the two channels `current` (without the PACS, Pathology and ECG rooms) and `advanced` (with those rooms, imaging content required).
@@ -39,7 +39,7 @@ Clone both siblings first, because `package.json` declares them as `file:` depen
 ```bash
 git clone https://github.com/mohsaqr/dynajs.git ../dynajs
 (cd ../dynajs && npm install)
-git clone https://github.com/mohsaqr/3D.git ../3D
+bash scripts/clone-room3d.sh ../3D
 npm install
 cp server/.env.example server/.env
 npm run dev
@@ -54,7 +54,7 @@ Optional add-ons: `npm run setup:oyon` re-runs the model download on its own, `n
 The published image runs under the compose stack. `deploy/bootstrap.sh` installs from source onto a Linux host with systemd and nginx, and also accepts `--dry-run`, `--no-nginx`, `--no-piper`, `--no-audit`, `--skip-build`, `--prewarm-kokoro` and `--reverse-proxy`. `bin/rohy-update` drives upgrades of source and systemd installs, with subcommands `check`, `apply`, `rollback`, `list-backups` and `restore-backup`. `deploy/bundle-airgap.sh` writes a self-contained tarball in `source`, `docker` or `both` mode.
 
 ```bash
-docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.2
+docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.9
 docker compose -f deploy/docker/compose.yml up -d
 sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
 sudo rohy-update check
@@ -71,7 +71,7 @@ The bottom navigator holds core rooms and plugin rooms, sorted by the `order` fi
 | Room | Navigator label | What happens there | Source location |
 |---|---|---|---|
 | Patient | `Patient` · `chat` | The patient interview, the live monitor, the treatment controls, the End & Debrief action | `src/components/chat/`, `src/components/monitor/` |
-| 3D Room | `3D Room` · `at the bedside` | The same patient at the bedside, sharing the session physiology and the one patient conversation; the body opens the examination wheel, the chart and the IV pole open the Records and Treatments drawers | `src/plugins/room3d/` |
+| Bedside | `Bedside` · `immersive patient view` | The same patient at the bedside, sharing the session physiology and the one patient conversation; the body opens the examination wheel, the chart and the IV pole open the Records and Treatments drawers | `src/plugins/room3d/` |
 | Examination | `Examination` · `physical exam` | Region and technique selection on a body map, auscultation point picker, examination log | `src/components/examination/` |
 | Laboratory | `Laboratory` · `investigations` | Test catalogue, ordering, worklist with a turnaround, rendered report | `src/components/investigations/` |
 | Radiology | `Radiology` · `imaging & tests` | Imaging catalogue, ordering, worklist, report | `src/components/investigations/` |
@@ -105,7 +105,7 @@ The bottom navigator holds core rooms and plugin rooms, sorted by the `order` fi
 - `src/services/ecgWaveform.js` builds the trace from a sum of Gaussians, with the PR interval from an Atterhög 1977 regression and QT by Fridericia.
 - The monitor vocabulary names 10 rhythms: Normal Sinus Rhythm, Sinus Bradycardia, Sinus Tachycardia, Atrial Fibrillation, Atrial Flutter, Supraventricular Tachycardia, Ventricular Tachycardia, Ventricular Fibrillation, Asystole, Pulseless Electrical Activity.
 - Vitals persist through a deadband of `{ hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 }`.
-- The 3D room samples the same generator, so both views show one physiology.
+- Bedside samples the same generator, so both views show one physiology.
 
 ### Treatments
 

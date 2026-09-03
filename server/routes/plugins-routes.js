@@ -66,6 +66,33 @@ const proxyLimiter = rateLimit({
 const UPSTREAM_TIMEOUT_MS = 15000;
 const MAX_UPSTREAM_BYTES = 32 * 1024 * 1024;
 
+/**
+ * Read an upstream response without ever buffering more than the declared cap.
+ * `Response.arrayBuffer()` cannot enforce a limit while bytes arrive: a
+ * chunked origin can exhaust the process before a post-read size check runs.
+ */
+export async function readUpstreamBody(response, maxBytes = MAX_UPSTREAM_BYTES) {
+    if (!response.body) return { ok: true, buffer: Buffer.alloc(0) };
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maxBytes) {
+                try { await reader.cancel('plugin response exceeded byte limit'); } catch { /* already closed */ }
+                return { ok: false, buffer: null };
+            }
+            chunks.push(Buffer.from(value));
+        }
+        return { ok: true, buffer: Buffer.concat(chunks, total) };
+    } finally {
+        reader.releaseLock();
+    }
+}
+
 const MANIFESTS_BY_ID = new Map(PLUGIN_MANIFESTS.map((m) => [m.id, m]));
 
 /**
@@ -284,7 +311,20 @@ function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
     res.setHeader('Cache-Control', contentPath.endsWith('.json')
         ? 'no-cache'
         : 'public, max-age=31536000, immutable');
-    return createReadStream(target).pipe(res);
+    const stream = createReadStream(target);
+    stream.once('error', (err) => {
+        // The bundle can be replaced between stat() and open(). A stream error
+        // without a listener is process-fatal; turn that race into one failed
+        // request while the atomically staged replacement becomes visible.
+        log.warn('starter content stream failed', { pluginId, contentPath, error: err.message });
+        if (!res.headersSent) {
+            res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
+        } else {
+            res.destroy(err);
+        }
+    });
+    stream.pipe(res);
+    return res;
 }
 
 async function fetchBundleCatalog(origin, pluginId, shape) {
@@ -736,15 +776,21 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
 
     const declaredLength = Number(upstream.headers.get('content-length'));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_UPSTREAM_BYTES) {
+        try { await upstream.body?.cancel(); } catch { /* body already closed */ }
         return res.status(502).json({ error: 'plugin content is too large', code: 'plugin_remote_too_large' });
     }
 
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-    // Checked again after reading: a chunked response has no Content-Length to
-    // check up front, so the header test above is an early out, not the limit.
-    if (buffer.byteLength > MAX_UPSTREAM_BYTES) {
+    let body;
+    try {
+        body = await readUpstreamBody(upstream);
+    } catch (err) {
+        log.warn('plugin upstream body failed', { pluginId, path: built.path, error: err.message });
+        return res.status(502).json({ error: 'plugin content is unavailable', code: 'plugin_remote_unreachable' });
+    }
+    if (!body.ok) {
         return res.status(502).json({ error: 'plugin content is too large', code: 'plugin_remote_too_large' });
     }
+    const { buffer } = body;
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', String(buffer.byteLength));

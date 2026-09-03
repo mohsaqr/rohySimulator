@@ -16,8 +16,29 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import { resolveRemoteRefs } from '../../src/plugins/context.js';
+import { readUpstreamBody } from '../../server/routes/plugins-routes.js';
 
 const PASSWORD = 'RemoteP4th!';
+
+describe('bounded plugin response reader', () => {
+    it('cancels a chunked body as soon as it crosses the byte cap', async () => {
+        let pulls = 0;
+        let cancelled = false;
+        const body = new ReadableStream({
+            pull(controller) {
+                pulls++;
+                controller.enqueue(new Uint8Array(4));
+            },
+            cancel() { cancelled = true; },
+        });
+
+        const result = await readUpstreamBody({ body }, 8);
+
+        expect(result).toEqual({ ok: false, buffer: null });
+        expect(pulls).toBeLessThanOrEqual(4);
+        expect(cancelled).toBe(true);
+    });
+});
 
 function openDb(dbPath) {
     const sqlite = sqlite3.verbose();

@@ -14119,14 +14119,14 @@
     "risk": "low"
   },
   "common.room_room3d": {
-    "src": "ac99fc15807f",
+    "src": "a88fa314c25d",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
     "risk": "low"
   },
   "common.room_room3d_sub": {
-    "src": "2b3d29dc77cd",
+    "src": "767ef390ea73",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -17451,7 +17451,7 @@
     "risk": "low"
   },
   "help.article_bedside": {
-    "src": "03b0f845311f",
+    "src": "a88fa314c25d",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -21490,7 +21490,7 @@
     "risk": "low"
   },
   "room3d.chrome_room": {
-    "src": "73145b46c491",
+    "src": "a88fa314c25d",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

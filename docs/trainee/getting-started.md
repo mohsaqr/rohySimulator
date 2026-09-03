@@ -73,7 +73,7 @@ screen. Every install carries these:
 | **Radiology** | Order and read imaging |
 | **Consultant** | Debrief and reflect after you end the case |
 
-The 3D Room, 12-lead ECG, Pathology and PACS rooms join the bar when the case
+Bedside, 12-lead ECG, Pathology and PACS rooms join the bar when the case
 includes that material. See [the rooms](/trainee/rooms) for how moving between
 them works. Order medications from the **Treatments** button that floats above
 the bottom bar on the patient screen.

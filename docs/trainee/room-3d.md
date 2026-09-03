@@ -1,34 +1,34 @@
-# The 3D Room
+# Bedside
 
-The **3D Room** puts you at the patient's bedside. The case's patient lies
+**Bedside** puts you at the patient's bedside. The case's patient lies
 in bed in a three-dimensional room with the live monitor beside them, and
 you can speak to them out loud, examine them by clicking their body, and
 open their chart from the bedside table.
 
-The bottom-bar button is labelled **3D Room · at the bedside**, and it sits
+The bottom-bar button is labelled **Bedside · immersive patient view**, and it sits
 second in the navigation bar, between **Patient** and **Examination**.
 
 ## The room is drawn over the Patient room
 
-The 3D Room is an overlay. When you open it, the Patient screen stays
+Bedside is an overlay. When you open it, the Patient screen stays
 mounted underneath and keeps working:
 
 - The patient monitor keeps running the physiology, so vitals, rhythms and
   alarms carry on while you are at the bedside.
-- The chat conversation stays live. The monitor you see in the 3D Room
+- The chat conversation stays live. The monitor you see in Bedside
   mirrors the same heart rate, rhythm and ECG waveform as the monitor on the
   Patient screen.
 
 ## One patient conversation
 
 There is a single conversation with the patient, shared between the Patient
-room and the 3D Room:
+room and Bedside:
 
 - A question you type in the Patient room is answered here, and the answer
   appears as a caption over the bed.
 - A question you speak here is sent through the same handler the chat uses,
   so it lands in the chat transcript your educator reviews, stamped as
-  coming from the 3D Room.
+  coming from Bedside.
 
 Only one turn runs at a time. While the patient is thinking, the microphone
 is disabled until the answer arrives.
