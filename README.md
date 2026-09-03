@@ -1,698 +1,400 @@
-# Rohy — AI Virtual Patient Simulation Platform
+# Rohy
 
-![License](https://img.shields.io/badge/license-Carm%20Research%20v1.4-green)
-![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Stack](https://img.shields.io/badge/stack-React%2019%20%7C%20Node%20%7C%20SQLite-blue)
-![Tests](https://img.shields.io/badge/tests-vitest%20%2B%20playwright-success)
+Rohy is a virtual-patient clinical simulation platform. A learner interviews an AI patient whose vital signs advance on a physiology engine, moves between rooms that stay live across one session, calls a multi-agent care team, and closes the case in a debrief with a separate AI discussant. Every action is written to a learning-event log that feeds a transition-network analytics dashboard.
 
-Rohy combines the diagnostic depth of virtual patients with the time pressure of
-educational escape rooms into a single platform. The patient can be diagnosed and
-treated, but only if the student works fast enough and in the right order. It is
-an open-source simulator where the patient evolves in real time, deteriorates if
-untreated, and responds to both the student's actions and inactions. The platform
-brings together realistic patient monitoring, AI-powered interactions across
-multiple roles, a comprehensive laboratory and investigation system, and
-scenario-based clinical progression — all designed to capture the temporal,
-dynamic nature of clinical reasoning as it actually happens at the bedside. The
-entire system is free, self-hosted, and designed so that a single instructor can
-set up a case in minutes and run it with a class of students.
+The public website is `website/index.html`. The documentation site sources live in [`docs/`](docs/) and build with `npm run docs:build`.
 
-### Instruments, not pictures of instruments
+## Status
 
-Where a simulator would normally show a learner a flat image, Rohy gives them the
-tool a clinician actually uses:
+| Item | Value |
+|---|---|
+| Package version | `3.0.0-beta.2` (`package.json`) |
+| Latest git tag | `v3.0.0-beta.2` |
+| Latest release | [`v3.0.0-beta.2`](https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.2), published 2026-09-02 |
+| Release assets | air-gap source tarball and air-gap Docker tarball, each with a `.sha256` |
+| Container image | `ghcr.io/mohsaqr/rohy:v3.0.0-beta.2` and `ghcr.io/mohsaqr/rohy:latest`, an OCI index covering `linux/amd64` and `linux/arm64` |
+| Licence | Carm Research License v1.4 ([`LICENSE`](LICENSE)) |
 
-- **DICOM** — a real reading room. Multi-series studies with a thumbnail rail and
-  side-by-side viewports, driven by window width and level rather than
-  brightness and contrast, with linear and sigmoid transfer functions. Display
-  adjustments are marked as display-only and never touch the measurements.
-- **Digital pathology** — whole-slide imaging with a magnification ladder, a
-  scale bar in microns, and annotation tools that measure real areas from scanner
-  metadata rather than from screen pixels.
-- **Twelve-lead ECG** — a workstation with calibrated paper, selectable gain and
-  sweep speed, diagnostic and monitor filters, and working calipers that span an
-  interval and keep the measurement.
-- **The bedside monitor** — the ECG is generated, not looped: a sum-of-Gaussians
-  waveform producing a morphologically correct PQRST at whatever rate the case is
-  running, so a rhythm change is something the learner sees rather than something
-  the interface announces.
-- **Laboratory and imaging catalogues** — gender-specific reference ranges,
-  panel templates, and results that arrive on a turnaround rather than instantly.
-- **Structured physical examination** — an anatomical body map with named regions
-  across anterior and posterior views, technique by technique, with auscultation
-  audio per site.
+Releases carry a channel in their title: `v2.9.119` is titled "Stable fixes (pre-plugin channel)" and `v2.9.132` is titled "Advanced: PACS, Pathology & ECG workstations". [`docs/INSTALL.md`](docs/INSTALL.md) names the two channels `current` (without the PACS, Pathology and ECG rooms) and `advanced` (with those rooms, imaging content required).
 
-Everything runs on your own infrastructure. Local TTS (Piper, Kokoro) and local
-LLMs (LM Studio, Ollama) are first-class — cloud providers (Anthropic, OpenAI,
-Google) are optional. Multi-tenant ready, role-hierarchy aware, audit-logged,
-soft-deleted with right-to-erasure purge, and instrumented with structured-NDJSON
-observability.
+## Requirements
 
-### The project behind it
+| Requirement | Value | Where it is pinned |
+|---|---|---|
+| Node | 22.x | `.github/workflows/ci.yml`; `deploy/docker/Dockerfile` (`ARG NODE_VERSION=22-bookworm-slim`) |
+| Sibling clone | `dynajs` at `../dynajs` | `package.json` (`"dynajs": "file:../dynajs"`) |
+| Sibling clone | `rohy-3d-patient-room` at `../3D` | `package.json` (`"rohy-3d-patient-room": "file:../3D"`) |
+| `curl` on PATH | fetches the Oyon model files during `postinstall` | `OyonR/scripts/download-models.sh` |
+| Docker | optional, for the published image and the compose stack | `deploy/docker/compose.yml` |
+| Disk, Oyon models | 66.6 MiB across 5 files (69,811,801 bytes) | measured under `OyonR/standalone/models/` |
+| Disk, PACS archive | 777,460,547 bytes (741.4 MiB), 4,267 files | `scripts/content-sources.json` |
+| Disk, Pathology archive | 36,818,816 bytes (35.1 MiB), 1,257 files | `scripts/content-sources.json` |
 
-Rohy is developed within the **CRETIC** project (Optimizing Clinical Reasoning in
-Time-Critical Scenarios), led by **Sonsoles López-Pernas** and funded by the
-**Research Council of Finland**. The project aims to optimize clinical reasoning
-and decision-making in time-critical scenarios through multimodal learning
-analytics and gamified virtual patients. Rohy is the simulation platform at the
-heart of that effort.
+## Install
 
-### The name
+### Quick start
 
-*Rohy* comes from the Egyptian Arabic word for soul or spirit. A patient simulator
-without personality is just a dashboard of numbers. The ambition behind Rohy is to
-give the simulated patient something closer to presence — a coherent history,
-emotional responses to questions, and behavior that changes as the clinical
-situation evolves.
-
----
-
-## Quick Start
+Clone both siblings first, because `package.json` declares them as `file:` dependencies. `npm install` then runs `postinstall`, which calls `npm run setup:oyon` and downloads the model files.
 
 ```bash
-# 0. Clone dynajs as a SIBLING first — package.json declares it as
-#    `file:../dynajs`. Without it npm install does not fail; it resolves
-#    to an empty stub and the build breaks later, somewhere unrelated.
 git clone https://github.com/mohsaqr/dynajs.git ../dynajs
 (cd ../dynajs && npm install)
-#    The 3D patient room is a sibling too (`file:../3D`); it has no build step.
 git clone https://github.com/mohsaqr/3D.git ../3D
-
-# 1. Install (also downloads ~93 MB of Oyon MediaPipe + ONNX bundles
-#    via the postinstall hook — needs `curl` on PATH and internet)
 npm install
-
-# 2. Configure environment
 cp server/.env.example server/.env
-# Edit server/.env — at minimum set JWT_SECRET (required, server refuses to start without it)
-
-# 3. Imaging and slide content — ADVANCED CHANNEL ONLY.
-#    741 MB of imaging + 35 MB of cardiac pathology, SHA-256 verified and
-#    idempotent. The archives are public — no credential needed. Or
-#    `--from <path>` for an archive you already have. Skip on the `current`
-#    channel, which ships without the PACS/Pathology/ECG rooms.
-npm run setup:content
-
-# 4. Start frontend + backend together
 npm run dev
 ```
 
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:3000
-- **Default seeded users (development only):** `admin` / `admin123`, `student` / `student123` — refused in production unless you set `ALLOW_DEFAULT_USERS=1`
+Set `JWT_SECRET` in `server/.env` before starting. The Vite dev server listens on port 5173 and proxies `/api` to `http://localhost:3000`; the Express server reads `PORT` and falls back to 3000. The development seeder creates `admin` / `admin123` and `student` / `student123`; in production that seeder requires `ALLOW_DEFAULT_USERS=1`.
 
-If the Oyon download was skipped (no `curl`, no network during `npm install`, behind a proxy), face/emotion capture won't work until you re-run:
+Optional add-ons: `npm run setup:oyon` re-runs the model download on its own, `npm run setup:content` installs the PACS and Pathology archives, and `npm run install:piper` installs local Piper voices.
 
-```bash
-npm run setup:oyon          # idempotent — only fetches missing files
-```
+### Production, update and air-gap
 
-Without step 3 the PACS and Pathology rooms are empty — and the default case
-orders four imaging studies, so a learner reaches one on the first case they
-open. See [docs/INSTALL.md § Imaging content](docs/INSTALL.md#imaging-content)
-for the offline and own-archive routes.
-
-For optional local TTS, install Piper:
+The published image runs under the compose stack. `deploy/bootstrap.sh` installs from source onto a Linux host with systemd and nginx, and also accepts `--dry-run`, `--no-nginx`, `--no-piper`, `--no-audit`, `--skip-build`, `--prewarm-kokoro` and `--reverse-proxy`. `bin/rohy-update` drives upgrades of source and systemd installs, with subcommands `check`, `apply`, `rollback`, `list-backups` and `restore-backup`. `deploy/bundle-airgap.sh` writes a self-contained tarball in `source`, `docker` or `both` mode.
 
 ```bash
-bash server/scripts/install-piper.sh
-```
-
-Kokoro TTS (~330 MB) is downloaded automatically on first use and warmed up at boot when selected.
-
-### Going to production?
-
-**Latest release:** [`v2.8.0`](https://github.com/mohsaqr/rohySimulator/releases/tag/v2.8.0) — multi-arch Docker image at `ghcr.io/mohsaqr/rohy:v2.8.0`, plus self-contained source and Docker tarballs (sha256-verified, for air-gapped sites). The release workflow boots the published image and runs `tech-test.sh` against it before the tag finalises, so "tag exists" already means "verified to install."
-
-Three sibling docs cover the operator lifecycle end-to-end:
-
-| Doc | When to read it |
-|---|---|
-| **[docs/INSTALL.md](docs/INSTALL.md)** | Putting Rohy on a new machine. Five paths: published image (recommended) / Docker build / Linux+systemd / single-machine / air-gapped. Prerequisites, smoke verify, first-boot checklist, troubleshooting. |
-| **[docs/DEPLOY.md](docs/DEPLOY.md)** | Hardening a real deploy. Build-vs-pull, reverse proxy (nginx/Caddy), TLS, environment reference, security checklist, deploy verification + live monitoring (`/admin/health`), Postgres readiness, retention. |
-| **[docs/UPDATING.md](docs/UPDATING.md)** | Two upgrade paths: `bin/rohy-update` (source/systemd installs) or `docker pull` a newer tag (Docker installs). Pre-flight, atomic upgrade procedure, automatic rollback, off-site backup recipes, troubleshooting, contract-probe creds setup. Design rationale: [docs/UPDATE-STRATEGY.md](docs/UPDATE-STRATEGY.md). |
-
-**TL;DR for the impatient:**
-
-```bash
-# Fastest: pull the published image
-docker pull ghcr.io/mohsaqr/rohy:v2.8.0
+docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.2
 docker compose -f deploy/docker/compose.yml up -d
-
-# OR — Linux + systemd from source, public DNS, auto-TLS via certbot
 sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
-
-# Once installed, ongoing upgrades:
-sudo rohy-update check       # source path — what would change?
-sudo rohy-update apply       # snapshot → upgrade → verify → auto-rollback on failure
-docker compose pull rohy     # docker path — fetch the new image tag
-docker compose up -d         # apply
+sudo rohy-update check
+sudo rohy-update apply
+deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 ```
 
-**Oyon (local-browser emotion capture) is ON by default in every deploy path.** Routes mount under `/api/addons/oyon/*`, the standalone analytics page at `/oyon/standalone/`, models auto-downloaded by `npm install`. Disable: `OYON_ENABLED=0` in env, restart. When disabled, the Settings tab shows a friendly panel — install size unchanged, only routes gated. See [DEPLOY.md § Disabling features](docs/DEPLOY.md#disabling-features) for path-by-path detail.
+Operator guides: [`docs/INSTALL.md`](docs/INSTALL.md), [`docs/DEPLOY.md`](docs/DEPLOY.md), [`docs/UPDATING.md`](docs/UPDATING.md), [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md).
 
----
+## The rooms
 
----
+The bottom navigator holds core rooms and plugin rooms, sorted by the `order` field on each room definition. The core rooms are always present; plugin rooms render when the case enables them. Labels are the on-screen strings from `src/locales/en/common.json`.
 
-## A tour of the interface
+| Room | Navigator label | What happens there | Source location |
+|---|---|---|---|
+| Patient | `Patient` · `chat` | The patient interview, the live monitor, the treatment controls, the End & Debrief action | `src/components/chat/`, `src/components/monitor/` |
+| 3D Room | `3D Room` · `at the bedside` | The same patient at the bedside, sharing the session physiology and the one patient conversation; the body opens the examination wheel, the chart and the IV pole open the Records and Treatments drawers | `src/plugins/room3d/` |
+| Examination | `Examination` · `physical exam` | Region and technique selection on a body map, auscultation point picker, examination log | `src/components/examination/` |
+| Laboratory | `Laboratory` · `investigations` | Test catalogue, ordering, worklist with a turnaround, rendered report | `src/components/investigations/` |
+| Radiology | `Radiology` · `imaging & tests` | Imaging catalogue, ordering, worklist, report | `src/components/investigations/` |
+| 12-lead ECG | `12-lead ECG` · `interpretation` | Twelve-lead reading workstation with calipers and a lead map | `src/plugins/ecg/`, `src/components/ecg/` |
+| Pathology | `Pathology` · `slides` | Whole-slide viewer with a magnification ladder, scale bar and annotation measurement | `src/plugins/pathology/`, `src/components/pathology/` |
+| PACS | `PACS` · `workstation` | DICOM reading room: multi-series studies, thumbnail rail, side-by-side viewports, window width and level | `src/plugins/pacs/`, `src/components/pacs/` |
+| Consultant | `Consultant` · `debrief` | The debrief room with its own persona, voice, avatar and model | `src/components/discussion/` |
 
-Thirteen screens, in roughly the order a learner meets them. Everything below is
-the running application, not a mockup.
+[`docs/trainee/rooms.md`](docs/trainee/rooms.md) documents every room, and which of them a given case shows.
 
-### The patient room
+## Features
 
-![The patient room — avatar, chat, and the live monitor](docs/images/screens/patient-room.jpg)
+### Conversation and agents
 
-The default surface: the patient on the left, the monitor on the right, and the
-conversation between them. The ECG is generated, not looped — a sum-of-Gaussians
-waveform producing a morphologically correct PQRST at whatever rate the case is
-currently running, so a rhythm change is visible rather than announced. The red
-banner is the notification centre's *clinical-critical* surface, with **Snooze**
-and **Acknowledge** rather than a dismiss: an alarm a learner ignores is data,
-and silently discarding it would lose that. Note the session clock at top right —
-wall-clock-anchored, so a browser refresh does not rewind the case.
+| Fact | Value |
+|---|---|
+| LLM platforms through `/api/proxy/llm` | `anthropic`, `openai`, `google`, `lmstudio`, `custom` (`server/routes/proxy-routes.js`) |
+| Shipped agent templates | 6, in `DEFAULT_AGENTS` (`server/db.js`) |
+| Agent types | `patient` (two templates), `nurse`, `consultant`, `relative`, `discussant` |
+| Named personas | Default Patient, Default Female Patient, Sarah Mitchell (Bedside Nurse), Dr. James Chen (Senior Consultant), Family Member, Default Discussant |
+| Paging | `agent_session_state.arrives_at` is stamped server-side (`migrations/0024_agent_arrives_at.sql`) |
+| Turn provenance | `interactions.source` records `typed`, `voice` or a plugin room id (`migrations/0053_interactions_source.sql`) |
 
-### Physical examination
+### Voice and avatars
 
-![Structured physical examination on an anatomical body map](docs/images/screens/physical-exam.jpg)
+`TTS_PROVIDERS` in `server/shared/voiceIdentity.js` lists four engines: `kokoro` (local, in-process through `kokoro-js`), `piper` (local subprocess, voices under `server/data/piper/`), `google` (cloud) and `openai` (cloud). The voice id determines the engine by exact catalogue membership. `public/avatars/heads/` holds 28 GLB heads and a `manifest.json`. Lipsync runs through `wawa-lipsync` over Three.js and `@react-three/fiber`.
 
-The body map is an SVG silhouette with invisible polygon hit regions over named
-anatomical areas, anterior and posterior, gender-specific. Choosing a region then
-a technique — inspection, palpation, percussion, auscultation — returns the
-finding the case author wrote for that pair, or the normal text if they wrote
-none. Auscultation adds a point picker (aortic, pulmonic, Erb's, tricuspid,
-mitral, lung fields) with audio per site. The **Examination Log** at the bottom
-is the learner's own record of what they have actually done, which is exactly
-what the debriefing tutor is given.
+### Patient monitor and physiology
 
-### Laboratory
+- Seven channels: HR, SpO₂, systolic and diastolic NIBP, RR, temperature, EtCO₂.
+- `src/services/ecgWaveform.js` builds the trace from a sum of Gaussians, with the PR interval from an Atterhög 1977 regression and QT by Fridericia.
+- The monitor vocabulary names 10 rhythms: Normal Sinus Rhythm, Sinus Bradycardia, Sinus Tachycardia, Atrial Fibrillation, Atrial Flutter, Supraventricular Tachycardia, Ventricular Tachycardia, Ventricular Fibrillation, Asystole, Pulseless Electrical Activity.
+- Vitals persist through a deadband of `{ hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 }`.
+- The 3D room samples the same generator, so both views show one physiology.
 
-![Laboratory investigations — catalogue, report, and worklist](docs/images/screens/laboratory.jpg)
+### Treatments
 
-Three columns: the searchable catalogue on the left, the rendered report in the
-middle, the worklist on the right. Ordered tests do not appear instantly — each
-carries a turnaround, and the worklist moves them from **pending** to **ready**
-to **viewed** on its own. The report is laid out as a real lab report, with
-reference ranges and flags the learner can toggle off. The catalogue stays
-complete on purpose: narrowing it to the tests an author configured would tell
-the learner which ones matter, which is the answer key by omission.
+`server/data/treatment_effects.json` carries 264 rows over 245 distinct treatment names, each with onset, peak and duration in minutes, per-channel effects, and `rxcui`, `pk_source` and `pk_evidence_url` provenance fields. By type: `medication` 204 rows over 185 names, `nursing` 31, `iv_fluid` 16, `oxygen` 13.
 
-### Radiology, and a real reading room
+### Investigations
 
-![Radiology worklist with pending studies](docs/images/screens/radiology-worklist.jpg)
+| Catalogue | Count | Source |
+|---|---|---|
+| Laboratory tests | 222 (215 base plus 7 merged cardiac) | `server/data/lab_database.json` and `server/data/lab_cardiac_tests.txt`, merged by `server/services/labDatabase.js` |
+| Laboratory groups | 33 | derived from the merged catalogue |
+| Lab panel templates, search aliases | 32, 62 | `src/data/labPanelTemplates.js` |
+| Radiology studies | 74 | `server/data/radiology_database.json` |
+| Radiology modalities | 9: Cardiac 16, X-Ray 13, Ultrasound 12, CT 11, MRI 11, Nuclear Medicine 6, Fluoroscopy 3, Mammography 1, DEXA 1 | same file |
+| Lab and radiology result templates | 8 and 6 | `src/data/investigationTemplates.js` |
 
-The imaging equivalent, with the same pending/ready/viewed lifecycle. The banner
-states the contract plainly — reports land automatically, no refresh needed —
-because the most common misreading of a simulated wait is that something has
-broken.
+Reference ranges split by `category` where clinically relevant: Hemoglobin is 12-16 g/dL for Female and 14-18 g/dL for Male. Turnaround is clamped to a 1 to 5 minute band by `migrations/0023_clamp_turnaround_to_5min.sql`. The DICOM reading room, the whole-slide viewer and the twelve-lead workstation are RPS-1 plugins with their own manifests, capabilities and authoring surfaces.
 
-![DICOM reading room — MRI chest, dual viewport with window/level controls](docs/images/screens/radiology-pacs.jpg)
+### Examination
 
-Behind that catalogue sits a genuine DICOM viewer: multi-series studies, a
-thumbnail rail, side-by-side viewports, and window/level controls that behave
-like a workstation's rather than an image editor's. Width and level are the real
-radiographic parameters; the transfer function offers sigmoid as well as linear,
-because clipping the apices to see the mediastinum is a habit worth teaching.
-Edge enhancement is explicitly marked *display only — measurements are
-unaffected*, which is the kind of boundary a teaching tool has to be loud about.
+`src/data/examRegions.js` defines 57 body regions (37 anterior, 18 posterior, 2 special) and 12 techniques: inspection, palpation, percussion, auscultation, special tests, mental status, cranial nerves, motor, sensory, reflexes, coordination, gait. Each region carries default findings per technique and a `specialTests` list.
 
-### Pathology
+### Alarms and notifications
 
-![Whole-slide pathology viewer with measurement and annotation](docs/images/screens/pathology-slide.jpg)
-
-Whole-slide imaging with a magnification ladder, a scale bar in microns, and
-annotation tools that measure — the ellipse here reports 32,024 µm². Brightness,
-contrast, gamma and saturation carry the same warning as the DICOM viewer: they
-change what you see, never what you measure, and the measurements come from
-scanner metadata. Both viewers are plugins rather than core screens, which is why
-a room can be added without touching the navigator.
-
-### ECG workstation
-
-![Twelve-lead ECG workstation with calipers and lead map](docs/images/screens/ecg-workstation.jpg)
-
-A twelve-lead workstation with calibrated paper, selectable gain and sweep speed,
-diagnostic and monitor filters, and working calipers — click two points and the
-interval is measured and kept in a list. The lead map on the right shows which
-wall each lead is looking at. This is deliberately a reading *instrument* rather
-than a picture of an ECG.
+One `NotificationCenter` (`src/notifications/`) with six surfaces: `AudioSurface`, `BackendSurface`, `BannerSurface`, `ConsoleSurface`, `HistorySurface`, `ToastSurface`. Routing, persistence and defaults are separate modules with their own tests.
 
 ### Debrief
 
-![Case debrief with the AI discussant](docs/images/screens/debrief.jpg)
+Ending a case opens `src/components/discussion/`, which resolves its own persona, voice, avatar and model from the `discussant` agent type. `server/services/encounterRecord.js` assembles the learner's encounter record for that conversation.
 
-Ending a case unlocks a separate room with its own persona, voice, avatar and
-model. The discussant is not the patient with a different prompt. Since v2.9.97
-it is also given the learner's actual encounter record — every examination,
-order and treatment in elapsed time — so it can ask about *reasoning* instead of
-asking the learner to recall what they did, and so an omission is visible to it
-as an omission rather than as missing information.
+### Analytics and learning events
 
-### Analytics
+`server/shared/learningVerbs.js` holds 90 base verbs; with the registered plugin vocabularies the whitelist reaches 136. Events carry one of eight categories (SESSION, NAVIGATION, CLINICAL, COMMUNICATION, MONITORING, CONFIGURATION, ASSESSMENT, ERROR) and one of five severities (DEBUG, INFO, ACTION, IMPORTANT, CRITICAL), both derived server-side from the verb. `learning_events.room` stamps the active room (`migrations/0021_learning_events_room.sql`). The dashboard is `src/components/analytics/tna/TnaDashboardV2.jsx`, with sequence, clinical-state and window modules beside it.
 
-![Transition network analysis — clusters, networks, and state distributions](docs/images/screens/tna-clusters.jpg)
+### Oyon capture
 
-Every action is logged as a verb stamped with its room, which makes a session a
-sequence and a cohort a set of sequences. This is the clustering view: learners
-grouped by how their sessions unfold, each with its transition network and its
-state distribution over time. The contrast is the point — cluster 1 here is a
-single session of 3,262 events dominated by *monitoring*, while cluster 3 holds
-most of the cohort with far shorter, more varied sequences. The silhouette score
-is shown so the grouping can be judged rather than trusted.
+Face landmarking and emotion classification run in the browser. `OyonR/scripts/download-models.sh` fetches five files, each checked against a SHA-256 recorded in the script.
 
-### Oyon — local emotion and attention capture
-
-![Live affect signals — emotion, rPPG heart rate, head pose, posture](docs/images/screens/oyon-signals.jpg)
-
-Optional, off by default, and entirely in-browser: the webcam frame never leaves
-the tab. Eight-emotion classification, gaze, head pose and action units, body
-posture, and an rPPG heart-rate estimate from facial colour change. The panel is
-candid about its own limits — heart rate is integrated over twelve seconds
-because it is a frequency and cannot be resolved from a single frame, breathing
-is flagged *low signal quality*, and posture reports what fraction of the upper
-body is actually visible.
-
-![Affect analytics — co-occurrence, heat strip, and the arousal-valence plane](docs/images/screens/affect-analytics.jpg)
-
-Aggregated afterwards rather than shown live to the learner: which emotions
-co-occur, how they are distributed across the session, and where the session sits
-on the arousal–valence plane. Counts are given alongside percentages so a 2.0%
-slice is visibly twenty samples and not a trend.
-
-![Gaze distribution by screen zone and by room](docs/images/screens/gaze-analytics.jpg)
-
-Gaze reduced to per-screen-ninth shares, then broken down by room. Stored as
-windowed aggregates, never as a raw point stream — the per-room breakdown answers
-"where did attention go in the lab versus in the debrief" without retaining
-anything that could reconstruct a scanpath.
-
-### Administration
-
-![Case management — multi-language cases grouped by course](docs/images/screens/admin-cases.jpg)
-
-Cases are authored through a wizard and managed here. Language is a property of
-the *case*, not the course, so one course can hold English, German, Spanish and
-Italian cases side by side — the flag and the case code (`EN-0001`, `DE-0008`)
-carry it. A case's language is fixed once set: the patient's voice, the clinical
-content and the LLM's output directive all derive from it, and changing it later
-would silently orphan all three. The `live` badge counts sessions currently
-running against a case.
-
-## Feature Catalogue
-
-### Conversation & Multi-Agent System
-
-- **Multi-provider LLM backends** — Anthropic Claude, OpenAI, Google Gemini, LM Studio (local), Ollama (local). Per-platform API keys, runtime model switching, server-side streaming via `/api/proxy/llm`, resolver precedence (platform → case → agent → session → user), per-user and platform-wide token usage tracking with admin-editable pricing tables.
-- **Default agent personas, fully editable** — Patient, Nurse (Sarah Mitchell), Consultant (Dr. James Chen), Family Member, Discussant. Each with its own persona prompt, dos/don'ts list, voice slot, avatar, communication style, memory access matrix, and LLM override.
-- **Per-case agent rosters** — Assign any agents to a case with arrival/departure scripting, override their name and prompt per-case via `case_agents.config_override`, and route between them via the chat UI's tab system.
-- **Page / Call flow with server-anchored ETA** — Paging an agent (Consultant, Nurse, etc.) computes a 1–3 minute arrival time server-side and stamps it on `agent_session_state.arrives_at` (migration 0024). The client drives the countdown from the row, so a browser refresh, room hop, or chat remount picks up exactly where it left off — the old in-memory `setTimeout` could drop the timer. Auto-arrival is convergent: any read of `/sessions/:id/agents` flips overdue paged agents to `present` in a single bounded UPDATE.
-- **Discussant debrief flow** — Trainees end a case via a dedicated **End & Debrief** button that unlocks a separate `DiscussionScreen` with its own voice, avatar, LLM, and persona. The discussant's opening turn is sent as a `silent: true` LLM call so the meta-prompt never appears in the learner-utterance audit trail. Per-case attached discussants override the platform default; the resolver guarantees the patient's case voice does not leak into the discussant's playback (regression-locked at unit + component + e2e since 2026-05-06). Captures performance feedback and stores it in session notes.
-- **Team communications log** — Cross-agent message history per session, queryable for analytics. Tenant-scoped reads + writes since the May-2026 audit hardening.
-- **Stage-direction stripping** — `*nods*`-style annotations are removed from both the rendered transcript and the TTS request body (locked end-to-end with regression tests).
-
-### Voice Mode (cloud + local TTS, 3D avatars, viseme-driven lipsync)
-
-| Provider | Type | Voices | Notes |
-|---|---|---|---|
-| **Google Cloud TTS** | Cloud | Chirp 3 HD, Chirp HD, Neural2 across en-US, en-GB and the multilingual set | Semitone pitch control, headphone-class EQ profile, streaming PCM |
-| **OpenAI TTS** | Cloud | Alloy, Echo, Fable, Onyx, Nova, Shimmer | tts-1 / tts-1-hd, native streaming PCM at 24 kHz |
-| **Kokoro** | **Local, in-process** | All bundled Kokoro voices | Runs via `kokoro-js` (ONNX), one-time ~330 MB download, warmed at boot |
-| **Piper** | **Local subprocess** | Any installed `.onnx` voice | Auto-discovered from `server/data/piper/voices/` |
-
-- **3D talking avatars** — **Pre-bundled GLB heads** (RocketBox + RPM + procedural fallbacks). Viseme-driven lipsync via [`wawa-lipsync`](https://www.npmjs.com/package/wawa-lipsync) wired through Three.js / React-Three-Fiber. **Morph targets in canonical Oculus order** for cross-platform compatibility.
-- **Per-case + per-agent voice overrides** — Each case can pin a `case_voice` and `tts_pitch` (in semitones) and `tts_rate` independently of the platform default. Each agent template can override the same. The discussant's voice is resolved from a separate path so per-case patient overrides do not leak (locked at unit, component, and e2e test layers — incident date 2026-05-06).
-- **Browser STT** — Web Speech API for input. Continuous mode with auto-pause on assistant speech.
-- **Sentence-level streaming** — Streaming LLM replies are split at sentence boundaries and pre-fetched as TTS one sentence ahead, giving sub-second time-to-first-audio on local engines.
-- **Diagnostic Bar** — Live runtime panel showing the literal `/api/tts` request body (voice, provider, pitch, rate, text), wire history (last 12 requests), and one-click audition replay so a contributor can A/B-compare what was actually sent vs. the platform's gender-slot voice.
-
-### Patient Monitor (physiologic ECG + vital channels)
-
-- **Vital signs** — HR, SpO₂, NIBP (sys/dia), RR, Temp, EtCO₂ — each with admin-editable display range, alarm thresholds (low/high), audio pattern (urgent/beep/chime/silent), and per-case override.
-- **Physiologic ECG generator** — **Sum-of-Gaussians waveform** producing morphologically correct PQRST-T at any heart rate. **Base rhythms** (Normal Sinus Rhythm, Atrial Fibrillation, Ventricular Tachycardia, Ventricular Fibrillation, Asystole) plus **ECG modifiers** (STEMI ST elevation, NSTEMI ST depression, Angina, Hyperkalemia wide QRS, Hypokalemia T-wave inversion, Pericarditis diffuse ST elevation, LBBB, PVC ectopics, signal noise level).
-- **SpO₂ plethysmograph waveform** — pulsatile waveform synced to HR, optional toggle.
-- **Treatment effects engine** — **Default interventions seeded** with onset, peak, and duration kinetics, split across four categories:
-  - **Medications**: Epinephrine, Atropine, Adenosine, Amiodarone, Metoprolol, Esmolol, Norepinephrine, Dopamine, Vasopressin, Labetalol, Hydralazine, Nitroglycerin, Morphine, Fentanyl, Midazolam, Propofol, Furosemide, Albuterol
-  - **IV fluids**: Normal Saline 500ml & 1000ml boluses, Lactated Ringers 500ml bolus, D5W 500ml, Albumin 5% 250ml
-  - **Oxygen delivery modes**: Nasal Cannula 2 / 4 / 6 L/min, Simple Face Mask 8 L/min, Non-Rebreather Mask 15 L/min
-  - **Nursing positioning maneuvers**: Trendelenburg, Fowler 45°, High Fowler 90°, Supine, Left Lateral
-
-  Active treatments produce **time-decaying changes to vitals** — a fluid bolus raises BP then washes out, an oxygen mask lifts SpO₂, a positioning change adjusts hemodynamics — visible in the `ActiveEffectsIndicator` overlay. Admins can author additional medications + custom effect curves via `POST /api/master/medications` (with bulk import at `POST /api/master/medications/bulk`); each medication can have multiple dose forms tracked in `medication_doses`. The `medications` master catalog table records `medication_code`, `generic_name`, `brand_names[]`, `drug_class`, `route`, `typical_dose`, `frequency`, `indications[]`, `contraindications[]`, `side_effects[]`, `is_controlled`, `is_high_alert`.
-- **Scenario timeline engine** — Time-keyframed vital-sign trajectories with linear interpolation between frames. **Stage-5 override guard**: any vital, rhythm, or condition the trainee manually pins is preserved across subsequent engine ticks (pre-fix only `rhythm` was guarded). Auto-stop fires ~2s past the last frame.
-- **Snapshot binding** — Sessions freeze `cases.config` + `cases.scenario` into `sessions.case_snapshot` at session start so admin edits during a running session do not bleed into the simulator (Stage-1 audit fix, regression-locked at unit + e2e).
-- **Vitals persistence** — Deadband-thresholded posts to `/sessions/:id/vitals`. On reload the monitor restores the latest persisted state instead of reverting to baseline.
-
-### Investigations (labs, imaging, structured physical exam)
-
-- **Laboratory** — **A lab catalogue assembled at runtime** — `server/data/lab_database.json` plus the cardiac-crisis set merged in from `lab_cardiac_tests.txt` by `server/services/labDatabase.js`. Categories include Hematology (CBC, Differential), Basic Metabolic Panel, Renal Function, Liver Function, Coagulation, Thyroid, Blood Gases, Cardiac Markers, Cardiology Crisis, Inflammatory Markers, Iron Studies, Vitamins, Lipid Panel, Diabetes, Metabolic, Urinalysis, Pancreatic, Adrenal, Reproductive Hormones, Tumor Markers, Drug Levels, Body Fluids, CSF, Autoimmune, Cardiovascular Risk, Toxicology, Trace Elements, Pituitary, Hemolysis Markers, Thrombophilia, Immunoglobulins, Parathyroid. **Gender-specific reference ranges where clinically relevant** (split by Male / Female: Hemoglobin 12-16 g/dL female / 14-18 g/dL male, Hematocrit, Iron, Testosterone, Estradiol, …). Search by test name or panel; admin can bulk-import additional tests via `POST /api/master/lab-tests`.
-- **Lab panel templates** — Acute MI Panel, Heart Failure, Unstable Angina, **Diabetic Ketoacidosis (DKA)**, Hyperosmolar Hyperglycemic State, Sepsis, Stroke Workup, Pulmonary Embolism, Acute Pancreatitis, Liver Failure, Renal Failure, … Each panel pins specific tests with `value_multiplier` or `custom_value` overrides for case-specific abnormal results.
-- **Radiology** — **A pre-loaded study catalogue** spanning X-Ray, CT, MRI, Ultrasound, Cardiac (12-lead ECG, echocardiogram), Nuclear Medicine, Fluoroscopy, Mammography. Normal-report database for each study; per-case admin editor for abnormal reports; image / video upload + display for case-attached findings.
-- **Investigations screen — pill-stack viewer** — When a lab or radiology order is ready, clicking the worklist row both adds it to the persistent pill stack (newest on top, dismissible via the per-pill X) *and* expands the full report in the right pane (single-click flow since `ab266a4`; the previous two-step "click row → pill, click pill → expand" was retired). Re-opening a previously viewed report from the stack flips the same pane back to the full report; closing returns to the welcome card + pill row. Orders that were already `viewed_at` on first poll auto-populate the stack so refreshing mid-session doesn't lose your scratch-pad.
-- **1–5 minute turnaround band** — `case_investigations.turnaround_minutes` is clamped to the 1–5 minute simulation band (migration 0023 normalised legacy 30 / 60 / 240 / 2880 minute waits seeded before the clamp). Case authors who want longer waits adjust through the case wizard; the band keeps a single session tractable inside a teaching slot.
-- **Physical Examination** — Two parallel surfaces:
-  - **BodyMap**: anatomically accurate SVG silhouette with **invisible polygon hit regions** keyed to **named exam regions** (head/face/neck, chest, abdomen, back, extremities, perineum) across anterior + posterior + lateral views, gender-specific.
-  - **ManikinPanel**: structured grid of region × exam-type (auscultation, palpation, percussion, inspection, special tests). Cranial nerves, motor, sensory, reflexes, coordination as discrete examinable items.
-  - **Multi-region auscultation** — chest, abdomen, posterior, neck — with audio-clip playback per region.
-  - **Idempotent recording** — `POST /sessions/:id/exam-findings` is keyed on `(session_id, body_region, exam_type)` so retries don't duplicate findings (Stage-6 audit fix).
-- **Medication catalog** — Searchable drug database with admin bulk-import. Each medication has dose forms, routes, and links to treatment effect curves.
-- **Clinical & patient records** — Hidden context the AI can read but the trainee discovers through interaction (medical history, social history, family history, recent encounters). Admin-controlled access scopes per agent (`memory_access` matrix).
-
-### Notifications & Alarms (centralized, multi-surface)
-
-Replaced 4 parallel notification systems (Toast, useAlarms, EventLogger, native `alert()`) with **one central NotificationCenter** that every producer reports to.
-
-- **Surfaces** — Toast (hover-pause + click-anywhere-to-dismiss), Banner (clinical-critical with Ack/Snooze, `role="alert"` aria-live), Audio (urgent/beep/chime/silent patterns, configurable frequency), Backend log (bounded queue with `sendBeacon` on unload), Console, History (per-user pane in Notification Settings).
-- **Routing matrix** — Per-(severity × source) routing. Trainees and clinicians get their own DND, snooze duration, severity threshold, source mute, surface mute.
-- **Mute hierarchy** — `acked → snoozed → DND → minSeverity → source/surface mutes`. Critical clinical alarms bypass DND but still respect ack and snooze.
-- **Cross-case ack clearing** — `clearTransient(reason)` is called on every `sessionId` change so case A's acked alarms don't silence brand-new alarms in case B.
-- **Audio resume** — Globally listens for click/keydown/touchstart to unblock the AudioContext (fixes the "alarms silent until you click PatientMonitor first" legacy bug).
-
-### Room Navigation & Room-Aware State
-
-- **Bottom RoomNavigator with five peer rooms** — Patient, Examination, Laboratory, Radiology, Consultant. Single source of truth on `App.jsx`'s `currentRoom` (consolidated from three floating-pill booleans). Each room is a peer, not a modal — switching rooms preserves the running session, the patient monitor, active treatment effects, and the chat transcript.
-- **Badge dots on every room button** — A small unread dot signals per-room state the trainee needs to attend to: ready labs awaiting review, ready radiology awaiting review, and a paged consultant who has arrived. Replaces the retired floating "Ordered Tests (N)" panel that used to overlap the chat surface.
-- **Every event carries the active room** — `learning_events.room` (migration 0021) stamps the room name (`chat` / `examination` / `lab` / `radiology` / `consultant`) on every event row server-side. TNA reads now segregate "the trainee paged the consultant from the lab room" from "from the patient room," which previously collapsed.
-- **No back button on room screens** — Rooms exit through the RoomNavigator, not via in-screen Back affordances. The old inline "Switch room" / `[ ]` hotkey hint inside InvestigationsScreen was removed.
-
-### Authoring (case wizard + scenario repository + agent editor)
-
-- **Full-page Agent Persona Editor** — Identity, avatar with live 3D preview + framing sliders, voice (engine + voice ID + rate + pitch in semitones with preview), persona prompt, editable Dos / Don'ts lists with reorder, behaviour, LLM (with test button), memory access matrix, conditional discussant section. Reset-to-defaults restores shipped values from a JS source-of-truth array.
-- **Case Wizard (12-step flow)** — Persona, demographics, vitals, scenario, alarms, agents, treatments, labs, radiology, physical exam, clinical records, and patient record documents.
-- **Scenario Repository** — **Pre-seeded clinical scenarios** — Septic Shock, STEMI Progression, Hypertensive Crisis, Progressive Respiratory Failure, Post-Resuscitation Recovery, Anaphylactic Shock, Diabetic Ketoacidosis, Acute Ischemic Stroke (CVA), Pulmonary Embolism, Upper GI Bleed, COPD Exacerbation, Severe Hypoglycemia, Complete Heart Block, AFib with RVR, Opioid Overdose, Acute Decompensated Heart Failure. Reusable templates with import / export.
-- **Pre-built acute clinical cases** — split between two seeders:
-  - **Auto-seeded on first boot** (`server/seeders/cases.js`): Acute Chest Pain (STEMI), Septic Shock (Pneumonia), Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke (Left MCA), Maria Mercedes (Acute STEMI)
-  - **Additional, via `node server/scripts/seed-acute-cases.cjs`**: Massive Pulmonary Embolism (post-op DVT, hemodynamic instability), Acute Left MCA Stroke (tPA window), Diabetic Ketoacidosis – Severe (insulin pump failure), Opioid Overdose – Fentanyl, Complete Heart Block – Symptomatic, Flash Pulmonary Edema (decompensated heart failure)
-
-  Each case ships with full vitals, scenario timelines, lab results, radiology reports, exam findings, agent rosters, family member personas, medication lists, allergies, social history, and PMH — evidence-based emergencies designed for state-of-the-art simulation.
-- **Versioning** — Cases keep edit history in `case_versions`; admins can restore previous versions. Soft-deleted with `deleted_at` (Stage E7 retention).
-- **JSON import / export** — Cases, scenarios, settings, lab panels — all round-trip through structured JSON.
-
-### Analytics (TNA + xAPI event log)
-
-- **Transition Network Analysis dashboard** — Sequences of trainee actions are mined into a directed weighted graph via [`tnaj`](https://github.com/mohsaqr/tna-js). Includes:
-  - Network graph with curved bidirectional edges and self-loops
-  - Levenshtein-distance + Ward's D2 hierarchical clustering of trainee behaviour
-  - InStrength centrality, frequency, distribution, and sequence index plots
-  - Per-cluster sub-views with light/dark theme toggle
-- **xAPI-style event log** — Every navigation, examination, order, treatment, message, monitoring action, alarm response, and form interaction captured with **a controlled verb vocabulary**. Server-side merging into clinical labels for analysis. Pre-mount events buffer and replay on first center-bound `log()` after mount.
-- **Exports** — Login logs, chat logs, settings logs, complete-session bundles, questionnaire responses, audit logs (CSV / JSON).
-- **Emotion logging** — Stage-triggered emotion + intensity questionnaire surfacing during scenario state transitions.
-- **Post-case questionnaires** — Clinical Reasoning Assessment + User Experience tracker, exportable per-cohort.
-
-### Enterprise (audit stages E1–E9 shipped)
-
-| Stage | Subject | Highlights |
+| File | Size | Upstream |
 |---|---|---|
-| **E1** | Schema integrity | FK cascades, hard-delete orphan prevention, missing-index sweep |
-| **E2** | Migration framework | Versioned `migrations/*.sql` with checksum tracking, dry-run, baseline stamping |
-| **E3** | RBAC role hierarchy | `guest(0) < student(1) < reviewer(2) < educator(3) < admin(4)` with central `requireRole()` enforcement, role_rank generated column |
-| **E4** | Audit log coverage | Sensitive mutations log `oldValue` / `newValue` / metadata via `auditSuccess()`; secrets redacted before persistence |
-| **E5** | Data classification + redaction | Centralized `redaction.js` policy (secrets, PII scope-controlled, internal); `apiKey` etc. redacted before any response leaves the server |
-| **E6** | Multi-tenant readiness | `tenants` table, tenant-scoped queries on tables, `requireSameTenant()` middleware, mass-assignment-resistant inserts |
-| **E7** | Soft-delete + retention | `deleted_at` on user-authored tables, retention sweep cron (`scripts/retention-sweep.js`), GDPR-aligned purge endpoint with dry-run |
-| **E8** | Connection pooling + portability | Promise-based `dbAdapter.js` shim; SQL fragment helpers (`now()`, `upsert()`); Postgres readiness inventory |
-| **E9** | Observability hooks | NDJSON request logging with request-id propagation, slow-query threshold, error tracker; configurable via `ROHY_LOG_LEVEL`, `ROHY_SLOW_QUERY_MS`, `ROHY_LOG_SKIP_PATHS` |
+| `face_landmarker.task` | 3.6 MiB | MediaPipe |
+| `mobilevit_va_mtl.onnx` | 37.6 MiB | EmotiEffLib |
+| `enet_b0_8_va_mtl.onnx` | 15.3 MiB | EmotiEffLib |
+| `mbf_va_mtl.onnx` | 7.9 MiB | EmotiEffLib |
+| `silero_vad.onnx` | 2.2 MiB | Silero VAD v5.1.2 |
 
-**May-2026 audit follow-up cycle** — Targeted hardening of gaps E3/E5/E6 found in a second-pass review:
-- **Agent + session route ownership.** `POST/PUT/DELETE /cases/:id/agents` now require educator+ (`requireEducator`). Every session-scoped runtime endpoint (`/sessions/:id/agents`, `/page`, `/arrive`, `/depart`, `/status`, `/conversation`, `/team-communications`) goes through `verifySessionOwnership` so students can't read/write across each other's sessions by guessing the integer id. Every INSERT into `case_agents` / `agent_conversations` / `agent_session_state` / `team_communications_log` now stamps `tenant_id` (rows used to silently default to tenant 1 after migration 0004).
-- **Orders/labs/radiology/treatment reads.** `/sessions/:id/orders`, `available-labs`, `available-radiology`, `radiology-orders`, `treatment-orders`, `active-effects` are now session-ownership-gated and tenant-filtered. Treatment endpoints used to `SELECT user_id FROM sessions` but never compared it to the caller — that fake-defence pattern is gone.
-- **Oyon row-level visibility.** `oyon_emotion_records` carry frozen-at-write `student_can_view` / `educator_can_view` / `admin_can_view` flags. Reads now honour those flags via a caller-role-keyed predicate (`buildEmotionRecordsWhere`, `/admin/live`, `/analytics/session`, `/analytics/students`). Flipping a tenant toggle can no longer retroactively expose data captured under stricter rules; an educator cannot see admin-only rows.
-- **Migration 0022 reclassified `destructive`** in `MANIFEST.md`. Predicate-based row DELETEs on user-authored tables (`cases`, `platform_settings`) without an FK guard are destructive per the contract; future operators upgrading past 0022 go through the `--allow-destructive` gate. The policy section now explicitly covers `DELETE FROM <table>` and `UPDATE <table> SET …` that overwrites user data.
+The server mounts the Oyon routes when `OYON_ENABLED=1`, and `deploy/env.example` ships that value. With the variable unset, the routes answer a structured 503 and the settings tab renders a disabled panel. Oyon tables and settings arrive through `migrations/0011_oyon_addon.sql` and eleven later Oyon migrations.
 
-### Oyon — Local-Browser Emotion Capture & Analytics
+### Courses, lessons and users
 
-Camera-side emotion analytics for capture sessions. **Inference runs entirely
-in the browser** (MediaPipe face landmarker + ONNX Runtime Web emotion
-classifier); only aggregated 10-second windows leave the device — never
-raw frames or landmarks (server validator hard-rejects raw-media fields).
+Cohorts, courses and lessons have their own tables and routers: `migrations/0025_cohorts.sql`, `0027_cohort_entity.sql`, `0032_lessons.sql`, `server/routes/cohorts-routes.js`, `server/routes/lessons-routes.js`, `server/routes/surveys-routes.js`. Registration invites and requests arrive in `migrations/0037_registration_invites.sql` and `0038_registration_requests.sql`.
 
-- **Three production multi-task models** (HSE EfficientNet-B0, EmotiEffLib MobileViT, EmotiEffLib MobileFaceNet — all 8-emotion AffectNet: anger / contempt / disgust / fear / happy / neutral / sad / surprise + valence/arousal regression). Auto-downloaded by `npm install` from jsDelivr (~93 MB total). Air-gap path bundles them in the tarball.
-- **Window aggregation** — 10s default window, 1Hz sampling, configurable per-tenant (window length, sample interval, min valid frames, smoothing alpha, hold time, switch confidence).
-- **Per-session DB persistence** — `oyon_emotion_records` stores window-level dominant emotion + per-label probabilities + valence/arousal/entropy/stability/missing-face-ratio/quality-JSON. Dynamics features (`computeDynamicalFeatures`) attached when enabled.
-- **Consent — opt-out by default once tenant enables Oyon.** Per-user toggle in Settings → Oyon. Server stamps records with the consent row's `consent_version`, not the client's claim (avoids version drift).
-- **Live operator dashboards** — `/api/addons/oyon/admin/live` shows latest window per session; `/api/addons/oyon/admin/health` exposes per-endpoint 4xx counts (5min + 1h windows). Per-tenant view gates: admin / educator / student each toggleable.
-- **Standalone analytics page** at `/oyon/standalone/` — works either as a guest demo or, when a `rohy_session` cookie is present, automatically attaches to the rohy backend. Includes logs dashboard at `/oyon/standalone/logs.html`.
-- **Drift prevention (4 layers)**:
-  1. Single canonical `ALLOWED_EMOTIONS` constant (`OyonR/src/config/emotionLabels.js`) imported by aggregator, validator, and every model config. Each model asserts its labels are a permutation of the canonical set at *import time* — typos fail to load.
-  2. Pre-merge contract test (`OyonR/tests/contract.test.js`) composes synthetic samples → aggregator → validator end-to-end for every shipped profile, with a negative control reproducing the May-2026 7-of-8 sum bug.
-  3. `tech-test.sh` contract probe (section 6) — when armed via `~/.rohy-deploy-creds`, every deploy POSTs a malformed batch and asserts the validator catches it.
-  4. In-memory rejection counter at `/admin/health` — surfaces 4xx spikes without parsing journalctl.
-- **Forward-compatible migrations** — Schema changes are additive-only by default; destructive changes follow a multi-release add → backfill → switch-reads → drop procedure. Policy in `migrations/MANIFEST.md`.
-- **Toggle**: `OYON_ENABLED=0` in env disables the routes (Settings tab shows a friendly disabled panel; binary bundles still ship — toggling does not change install size).
+### Help and support
 
-The standalone library is also published independently — see [`OyonR/README.md`](OyonR/README.md) and [`OyonR/INSTALL.md`](OyonR/INSTALL.md) for embedding into a non-rohy app.
+`src/help/` mounts a Help & Support drawer from `App.jsx` with three tabs. The Help tab lists 23 articles from `HELP_ARTICLES`, filtered by role rank: 15 reach `student`, 20 reach `educator`, 23 reach `admin`, grouped as Using the simulator, Teaching and Administration. Each article links to a page on the VitePress docs site under `DOCS_BASE` (`/rohy/docs/`, overridable with `VITE_DOCS_BASE`), and all 23 target files exist under `docs/`. The What's new tab reads `GET /api/help/release-notes`, which parses `CHANGELOG.md` in Keep a Changelog format. The Support tab reads `GET /api/help/diagnostics`, a bundle of version, runtime and boolean health flags passed through `server/redaction.js`. `OnboardingTour` plays a per-role first-run tour at `TOUR_VERSION` 1, four steps for `student` and four for `educator`, recorded in `localStorage` under `rohy.onboarding.<role>.v<version>`. The drawer chrome is translated: 62 keys per locale in `src/locales/<lang>/help.json` across all seven locale directories.
 
-### Auth & Multi-User
+### Administration and authoring
 
-- **JWT auth** with 4-hour default TTL, bcrypt password hashing.
-- **Roles** — guest, student, reviewer, educator, admin (rank-comparison via `requireRole()`).
-- **Self-registration** — first user becomes admin if zero users exist; subsequent registrations default to `student`.
-- **Force-logout**, **batch user creation**, **password change**, **profile preferences** with admin-controlled required-fields matrix.
-- **Rate-limited** — 10 login attempts / 15 min / IP, 5 registrations / hour / IP; general API rate at 600 req/min/IP.
-- **Token refresh on every request** — role / status / tenant_id refresh from `users` table so revocations take effect immediately.
+`src/components/settings/` holds 32 non-test `.jsx` components, including the agent persona editor and the per-tab settings editors. `src/data/scenarioTemplates.js` carries 16 scenario templates. `server/seeders/cases.js` seeds 6 cases on first boot: Acute Chest Pain - STEMI, Septic Shock - Pneumonia, Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke - Left MCA, Maria Mercedes - Acute STEMI. `server/scripts/seed-acute-cases.cjs` seeds a further set on demand. Case codes come from `migrations/0035_case_code.sql`.
 
----
+### Internationalisation
+
+Six languages in `server/shared/languages.js`: English, Italian, Finnish, Swedish, German, Spanish, with `en` as the default. Each entry carries a display name, a native name, a flag, a Web Speech STT locale and an LLM output directive. `src/locales/` also holds the `en-XA` pseudo-locale produced by `npm run i18n:pseudo`. Extraction, status, XLIFF export and XLIFF import each have an npm script.
+
+### Security and governance
+
+| Area | Value |
+|---|---|
+| Role ranks | `guest` 0, `student` 1, `reviewer` 2, `educator` 3, `admin` 4 (`server/middleware/auth.js`) |
+| Password hashing | `bcrypt` |
+| Session TTL | `DEFAULT_TTL_SECONDS = 7 * 86400`; `server/.env.example` sets `JWT_EXPIRY=24h` |
+| Rate limits | 600 requests per minute overall, 10 login attempts per 15 minutes, 5 registrations per hour |
+| Audit hash chain | `migrations/0008_audit_hash_chain.sql`, `server/audit-chain.js`, `scripts/verify-audit-chain.js` |
+| Response redaction | `server/redaction.js` |
+| Tenancy | `migrations/0004_tenants.sql` |
+| Retention | `migrations/0005_retention.sql`, `scripts/retention-sweep.js` |
+| Audit shell scripts | 18 at `scripts/audit-*.sh` |
+
+## Screenshots
+
+The 13 images below live in [`docs/images/screens/`](docs/images/screens/).
+
+![Patient room](docs/images/screens/patient-room.jpg)
+The patient room: avatar and chat on the left, the live monitor on the right, a red clinical alarm banner with Snooze and Acknowledge, the session clock at top right, and the room navigator along the bottom.
+
+![Physical examination](docs/images/screens/physical-exam.jpg)
+The examination room: an anatomical body map with region hit areas, a technique chooser, the auscultation point picker, and the Examination Log.
+
+![Laboratory](docs/images/screens/laboratory.jpg)
+The laboratory: the searchable test catalogue on the left, a rendered lab report with reference ranges in the middle, and the worklist with pending, ready and viewed states on the right.
+
+![Radiology worklist](docs/images/screens/radiology-worklist.jpg)
+The radiology room: the imaging catalogue, counters for pending, ready and viewed studies, and the worklist of ordered studies.
+
+![DICOM reading room](docs/images/screens/radiology-pacs.jpg)
+The PACS room: a multi-series MRI study with a thumbnail rail, two viewports side by side, and window width and level controls.
+
+![ECG workstation](docs/images/screens/ecg-workstation.jpg)
+The twelve-lead ECG room: calibrated paper, gain and sweep-speed selectors, filter selectors, calipers with retained measurements, and a lead map.
+
+![Pathology slide](docs/images/screens/pathology-slide.jpg)
+The pathology room: a whole-slide H&E image with a magnification ladder, a scale bar in microns, an ellipse annotation reporting an area, and the display-only adjustment panel.
+
+![Debrief](docs/images/screens/debrief.jpg)
+The debrief room: the discussant with its own avatar and voice, in voice mode, after the case has ended.
+
+![Transition network analysis](docs/images/screens/tna-clusters.jpg)
+The analytics dashboard: learner clusters, one transition network per cluster, and state distributions over time with a silhouette score.
+
+![Oyon live signals](docs/images/screens/oyon-signals.jpg)
+The Oyon panel: emotion probabilities, gaze, head pose, body posture, and an rPPG heart-rate estimate with its integration window and signal-quality flags.
+
+![Affect analytics](docs/images/screens/affect-analytics.jpg)
+Post-session affect: an emotion co-occurrence map, a heat strip across the session, and the arousal-valence plane, with counts beside percentages.
+
+![Gaze analytics](docs/images/screens/gaze-analytics.jpg)
+Gaze aggregates: per-screen-ninth shares, gaze centroids, and the same shares broken down by room.
+
+![Case management](docs/images/screens/admin-cases.jpg)
+The admin case list: English, German, Spanish and Italian cases in one course, each with a language flag, a case code, and a live-session count.
 
 ## Architecture
 
 ```
 rohySimulator/
-├── server/                            # Node 22+ / Express 5
-│   ├── server.js                      # Bootstrap, CORS, voice-key migration, Kokoro warmup
-│   ├── db.js                          # SQLite schema + default seeders
-│   ├── routes.js                      # 210 API endpoints
-│   ├── dbAdapter.js                   # Promise wrappers, SQL fragment helpers (Stage E8)
-│   ├── migrationRunner.js             # Versioned migration framework (Stage E2)
-│   ├── observability.js               # Request-id, NDJSON, slow-query (Stage E9)
-│   ├── redaction.js                   # Central response-redaction policy (Stage E5)
-│   ├── middleware/
-│   │   ├── auth.js                    # JWT, role hierarchy, tenant resolution
-│   │   ├── requestId.js               # X-Request-Id propagation
-│   │   ├── requestLogger.js           # NDJSON access log
-│   │   └── errorHandler.js            # Last-mile error tracker
-│   ├── seeders/                       # Default users, acute cases, agent personas
-│   └── services/                      # Lab DB, googleTts, openaiTts, kokoroTts, voiceFallbacks, wav
-├── migrations/                        # 24 versioned SQL migrations + MANIFEST.md (additive-by-default, destructive opt-in via --allow-destructive)
-├── OyonR/                             # Local-browser emotion capture (MediaPipe + ONNX-Web)
-│   ├── src/                           # Camera, face tracker, classifier, aggregator,
-│   │                                  # validator, transports, settings, model configs
-│   ├── tests/                         # incl. contract.test.js (pre-merge guard)
-│   ├── standalone/                    # Self-contained demo + logs dashboard
-│   ├── examples/rohy-backend/         # Reference Express route adapter
-│   └── scripts/download-models.sh     # jsDelivr vendor population (atomic, idempotent)
-├── bin/
-│   └── rohy-update                    # Operator CLI: check/apply/rollback/list-backups
-├── src/                               # React 19 + Vite 7
-│   ├── components/
-│   │   ├── auth/                      # Login + register
-│   │   ├── chat/                      # ChatInterface, PatientAvatar (lipsync-rigged)
-│   │   ├── monitor/                   # PatientMonitor, EventLog
-│   │   ├── examination/               # BodyMap, BodyMapDebug, ManikinPanel, AuscultationPanel,
-│   │   │                              # ExamLog, ExamTypeSelector, FindingDisplay
-│   │   ├── investigations/            # Lab + Radiology results modals, ClinicalRecordsPanel,
-│   │   │                              # InvestigationPanel, LabValueEditor
-│   │   ├── orders/                    # OrdersDrawer with idempotent /order-labs + /order-radiology
-│   │   ├── treatments/                # TreatmentPanel, ActiveEffectsIndicator
-│   │   ├── analytics/tna/             # 7 components: NetworkGraph, ClusterPanel, …
-│   │   ├── discussion/                # DiscussionScreen + transcript + voice control
-│   │   ├── debug/                     # DiagnosticBar (live wire payload + audition replay)
-│   │   ├── patient/                   # PatientVisual, PatientSummaryCard
-│   │   └── settings/                  # 23 components: ConfigPanel + per-tab editors
-│   │                                  # (LLM, voice, avatars, agents, scenarios, alarms,
-│   │                                  # labs, medications, body map, notifications, users)
-│   ├── hooks/                         # useAlarms, useDiscussionEngine, useTreatmentEffects
-│   ├── notifications/                 # Central NotificationCenter + 6 surfaces
-│   ├── services/                      # AgentService, voiceService, eventLogger,
-│   │                                  # PatientRecord, llmService, AuthService, discussionService
-│   ├── contexts/                      # Auth, Toast, Voice, PatientRecord
-│   └── data/                          # Lab tests, lab panels, scenario templates,
-│                                      # investigation templates, exam regions, scenario timelines
-├── public/avatars/heads/              # 28 GLB avatars + manifest.json
-│                                      # (the standalone embeddable voice+avatar kit now
-│                                      #  lives as a workspace sibling: ../talking-avatars/)
-├── scripts/
-│   ├── audit-*.sh                     # 18 enterprise audit scripts (E1-E9 + per-area)
-│   ├── retention-sweep.js             # Cron-able log retention sweeper (E7)
-│   ├── migrate.js                     # Manual migration runner (E2)
-│   ├── rohy-backup.sh                 # Standalone DB snapshotter (VACUUM INTO)
-│   ├── tech-test.sh                   # Comprehensive deploy verifier (POST_VERIFY hook)
-│   ├── post-verify-rohy.sh            # Wrapper: mints a token before tech-test.sh
-│   ├── smoke.sh                       # Lightweight liveness check
-│   └── rocketbox-convert/             # GLB pipeline for adding new avatars
-├── tests/                             # Vitest + Playwright suite (server, client, e2e, audio)
-│   ├── server/                        # Server unit + integration tests
-│   ├── e2e/                           # Playwright specs
-│   └── utils/                         # seedDb, startTestServer, mockTtsServer, renderWithProviders
-├── bench/                             # vitest benches: TTS latency, LLM throughput, concurrent sessions
-└── docs/                              # Operator lifecycle, design records, generated reference
+├── bench/        vitest benchmarks (3 files)
+├── bin/          rohy-update, the operator CLI
+├── deploy/       bootstrap.sh, local-install.sh, bundle-airgap.sh, preflight.sh,
+│                 rollback.sh, env.example, docker/, nginx/, systemd/
+├── docs/         VitePress site: trainee, educator, admin, operator, integrator,
+│                 security, product, design, tutorials, reference, audits
+├── licenses/     embedded third-party licence texts
+├── migrations/   53 versioned SQL migrations plus MANIFEST.md
+├── OyonR/        in-browser emotion capture package (src, tests, standalone, scripts)
+├── public/       static assets, including avatars/heads/ (28 GLB + manifest.json)
+├── scripts/      18 audit-*.sh, docs-gen/, i18n/, knowledge/, rocketbox-convert/,
+│                 migrate.js, retention-sweep.js, tech-test.sh, smoke.sh, and the
+│                 setup-content / plugin-manifest / vendor generators
+├── server/       Express 5 application: routes/ (24 router modules composed by
+│                 server/routes.js), middleware/ (auth, request id, logger, error
+│                 handler, route timeout), config/, data/, lib/, seeders/,
+│                 services/, shared/, and db.js, dbAdapter.js, migrationRunner.js,
+│                 observability.js, redaction.js, server.js
+├── src/          React 19 client: components/ (22 areas including chat, monitor,
+│                 examination, investigations, orders, treatments, analytics,
+│                 discussion, settings, voice, ecg, pacs, pathology, oyon, lessons),
+│                 help/ (the Help & Support drawer and onboarding tour), plugins/
+│                 (RPS-1 registry plus ecg, pacs, pathology, room3d), notifications/
+│                 (center, routing, 6 surfaces), contexts/, data/, hooks/, i18n/,
+│                 locales/ (7 dirs), services/, storage/, utils/, config/, constants/
+├── tests/        145 server tests, 14 Playwright specs, shared utils
+└── website/      the static public site
 ```
 
-### Database (SQLite, versioned migrations)
+### Request flow
 
-Core: `users`, `cases`, `sessions`, `interactions`, `event_log`, `case_versions`, `system_audit_log`.
+`server/server.js` boots Express, mounts `server/routes.js` under `/api`, and composes 24 router modules from `server/routes/`. `server/middleware/auth.js` extracts the JWT, resolves the role rank and the tenant, and refreshes role, status and tenant from the `users` table on every request. `server/middleware/routeTimeout.js` bounds each request, with the TTS and LLM proxy routes exempt because they stream. `server/redaction.js` filters the response before it leaves the process, and `server/observability.js` writes NDJSON access records carrying the request id.
 
-Tenants: `tenants`, plus `tenant_id` columns on all user-owned tables (Stage E6).
+### Database and migrations
 
-Investigations: `lab_tests`, `lab_panels`, `panel_tests`, `case_investigations`, `investigation_orders`, `investigation_templates`, `investigation_parameters`, `investigation_views`, `lab_definitions`, `physical_exam_findings`, `body_regions`, `region_exam_types`, `body_map_coordinates`, `clinical_notes`, `medications`, `medication_doses`, `diagnoses`.
+SQLite through the `sqlite3` async API, wrapped by `server/dbAdapter.js`. `server/migrationRunner.js` applies the 53 files in `migrations/` in order and records them in `schema_migrations`. `migrations/MANIFEST.md` states the policy: additive by default, with destructive changes gated behind `--allow-destructive`.
 
-Scenarios: `scenarios`, `scenario_templates`, `scenario_timeline_points`, `scenario_events`, `vital_sign_history`, `session_vitals`.
+### Plugins
 
-Treatments: `treatment_orders`, `treatment_effects`, `active_treatments`, `case_treatments`.
+`src/plugins/index.js` discovers plugins with `import.meta.glob('./*/index.jsx')`, so deleting a plugin directory removes its room and leaves the build working. `npm run plugins:gen` freezes each `manifest.js` into `server/shared/plugins/manifests.generated.js`, which allows the server to read plugin vocabulary without importing from `src/`. `npm run plugins:check` runs in `prebuild`.
 
-Multi-agent: `agent_templates`, `case_agents`, `agent_conversations`, `agent_session_state`, `team_communications_log`.
+| Plugin | Room order | Declared capabilities |
+|---|---|---|
+| `room3d` | 15 | `case`, `conversation`, `drawer` |
+| `ecg` | 45 | `persist` |
+| `pathology` | 50 | `persist`, `remote` |
+| `pacs` | 55 | `persist`, `remote`, `orders` |
 
-Observability + governance: `llm_usage`, `llm_request_log`, `llm_model_pricing`, `tts_usage`, `alarm_config`, `alarm_events`, `emotion_logs`, `questionnaire_responses`, `export_records`, `login_logs`, `settings_logs`, `session_settings`, `session_notes`, `active_sessions`, `user_preferences`, `learning_events`, `patient_information`, `patient_record_events`, `patient_record_documents`, `exam_techniques`, `region_special_tests`, `region_default_findings`, `vital_sign_definitions`, `clinical_pathways`, `search_aliases`, `schema_migrations`.
-
----
-
-## Tech Stack
-
-| Layer | Stack |
-|---|---|
-| **Frontend** | React 19, Vite 7, TailwindCSS 4, Lucide icons, Three.js 0.184, @react-three/fiber 9, @react-three/drei 10, [`wawa-lipsync`](https://www.npmjs.com/package/wawa-lipsync) |
-| **Backend** | Node 22+, Express 5, SQLite 3 (`sqlite3` async API + Promise adapter), JWT, bcrypt, multer, express-rate-limit |
-| **TTS** | Piper (local CLI), Kokoro (`kokoro-js`, in-process ONNX), Google Cloud TTS, OpenAI TTS |
-| **LLM** | Anthropic Claude, OpenAI, Google Gemini, LM Studio, Ollama (proxied through `/api/proxy/llm`) |
-| **Analytics** | [`tnaj`](https://github.com/mohsaqr/tna-js) — `tna`, `clusterSequences`, `centralities` |
-| **Testing** | Vitest 4 (client jsdom + server node projects), React Testing Library, msw, supertest, Playwright |
-| **CI** | GitHub Actions (lint → build, test, audit, e2e) + Codecov gate (project ±1%, patch 60%) |
-
----
+A manifest may also declare `authoring` (a case-editor slot with its own minimum role), `settings` (operator fields), `remote` (allowed content path prefixes and content types), `catalog` (an archive shape plus learner-visible keys), and `document.learnerOmit` (paths the server strips for roles below reviewer).
 
 ## Configuration
 
-Runtime configuration lives in two places:
+From `deploy/env.example`. The values shown are the ones the template writes.
 
-- **Platform Settings** (admin-only) — persisted in `platform_settings`. Categories: LLM, Voice, Avatars, Monitor, Chat, Notifications, Rate limits, Retention, Observability. Nothing model- or voice-specific is hardcoded in the client.
-- **Environment** (`server/.env` in dev, `/etc/rohy/env` in systemd, `deploy/docker/.env` in compose) — `JWT_SECRET`, `NODE_ENV`, `FRONTEND_URL`, `ROHY_DB`, `OYON_ENABLED`, observability knobs, etc. Full reference table in [DEPLOY.md § Environment](docs/DEPLOY.md#environment-reference).
+| Variable | Template value | Purpose |
+|---|---|---|
+| `JWT_SECRET` | `REPLACE_ME_WITH_A_LONG_RANDOM_STRING` | Signs every auth token. The server refuses to start without it. |
+| `NODE_ENV` | `production` | Disables seeders, dev helpers and request-body verbosity. |
+| `FRONTEND_URL` | `https://your-deploy-host/rohy` | The public URL, added to the CORS allowlist. |
+| `ROHY_DB` | `/opt/data/rohy/database.sqlite` | Absolute path to the SQLite database. |
+| `TRANSFORMERS_CACHE` | `/var/cache/rohy-hf` | Where the Kokoro model cache lives. |
+| `PORT` | `4000` | HTTP listener. The server default is 3000. |
+| `OYON_ENABLED` | `1` | Mounts the Oyon add-on routes. |
+| `HTTPS_PORT` | commented | Direct HTTPS listener. Defaults to `PORT` plus 1000. |
+| `TLS_CERT_PATH` | commented | PEM certificate for the optional HTTPS listener. |
+| `TLS_KEY_PATH` | commented | PEM key for the optional HTTPS listener. |
+| `ROHY_TRUST_PROXY` | commented | Express trust-proxy setting. Default `loopback`. |
+| `ROHY_SHUTDOWN_GRACE_MS` | commented | Graceful-shutdown wait after SIGTERM. Default 15000. |
+| `ROHY_ROUTE_TIMEOUT_MS` | commented | Per-request timeout. Default 30000. |
+| `ROHY_BACKUP_BEFORE_MIGRATE` | commented | Set to 0 to skip the pre-migration backup. |
+| `ROHY_NO_AUTO_SEED` | commented | Set to 1 to suppress first-boot seeding in the request-serving process. |
+| `ROHY_PLUGIN_ORIGINS` | commented | Per-plugin content origin, as `<pluginId>=<origin>` pairs. Operator configuration only. |
+| `ROHY_PLUGIN_ORIGIN_TOKENS` | commented | Per-deployment credential presented to that origin. Secret. |
+| `ROHY_STARTER_CONTENT_DIR` | commented | Where installed plugin content lives when it sits outside `server/plugin-content/`. |
+| `ROHY_STARTER_CONTENT` | commented | Set to `off` to refuse the bundled starter content. |
+| `ALLOW_DEFAULT_USERS` | commented | Gates the default-user seeder in production. Remove after the first login. |
 
----
+`server/.env.example` is the shorter development template: `JWT_SECRET`, `JWT_EXPIRY=24h` and `PORT=3000` active, with `TRANSFORMERS_CACHE`, `ROHY_KOKORO_IDLE_UNLOAD_MIN` and `ROHY_PLUGIN_ORIGINS` commented.
 
 ## Testing
 
-The repo ships a comprehensive test pyramid (vitest + playwright):
+| Command | What it runs | Where the tests live |
+|---|---|---|
+| `npm test` | `vitest run` over both projects | `src/` and `tests/` |
+| `npm run test:client` | the `client` vitest project (jsdom) | 197 `.test.js` and `.test.jsx` files under `src/` |
+| `npm run test:server` | the `server` vitest project (node) | 145 `.test.js` files under `tests/server/` |
+| `npm run test:watch` / `npm run test:ui` | vitest in watch mode, with or without the UI | as above |
+| `npm run test:ci` | vitest with the JUnit reporter and coverage | as above |
+| `npm run test:e2e` | `playwright test` | 14 `.spec.js` files under `tests/e2e/` |
+| `npm run test:e2e:tablet` | one Playwright spec | `tests/e2e/tablet-layout.spec.js` |
+| `npm run test:e2e:ui` | `playwright test --ui` | `tests/e2e/` |
+| `npm run test:e2e:install` | installs Chromium with its dependencies | browser install only |
+| `npm run bench` | `vitest bench --run` | 3 `.bench.js` files under `bench/` |
+| `npm run license:verify` | licence sync in strict mode plus the licence contract test | `tests/server/license-contract.test.js` |
 
-| Tier | Files | Run with | Notes |
-|---|---|---|---|
-| Unit (utils, services, hooks) | `src/**/*.test.js`, `tests/server/**` | `npm test` | < 10s |
-| Component (RTL) | `src/components/**/*.test.jsx` | `npm run test:client` | < 30s |
-| Server route (supertest + spawned server) | `tests/server/**` | `npm run test:server` | < 10s |
-| Audio fidelity (live API + FFT pitch shift) | `tests/server/audio/**` | `npm run test:server` | Skip without API keys |
-| **Playwright E2E** | `tests/e2e/**/*.spec.js` | `npm run test:e2e` | Includes the 2026-05-06 regression lock |
-| **OyonR contract** | `OyonR/tests/contract.test.js` | `cd OyonR && npm test` | Composes aggregator → validator with 8-emotion synthetic samples per shipped model. Negative control reproduces the May-2026 7-of-8 sum bug. |
-| Benchmarks | `bench/**/*.bench.js` | `npm run bench` | Vitest bench mode |
-
-Plus **enterprise audit shell scripts** at `scripts/audit-*.sh` (one per E-stage and one per feature area) that exercise the HTTP boundary and self-clean. **`scripts/tech-test.sh`** verifies a live deploy end-to-end; see "Deploy verification & live monitoring" above.
-
----
+Shell-level checks: 18 `scripts/audit-*.sh` scripts, `scripts/tech-test.sh` for a live deploy, `scripts/smoke.sh` for liveness, and `deploy/preflight.sh`.
 
 ## Documentation
 
-### Operator-facing
-
-| Document | What's inside |
+| Path | Contents |
 |---|---|
-| [`docs/UPDATING.md`](docs/UPDATING.md) | Operator manual for `bin/rohy-update`: pre-flight, upgrade procedure, rollback paths, off-site backup recipes (rsync + rclone), troubleshooting, contract-probe creds setup. |
-| [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md) | Design rationale: why operator-pull, why 1–2h downtime is OK, four-pillar architecture, phased roadmap. Read this before changing the update tool. |
-| [`migrations/MANIFEST.md`](migrations/MANIFEST.md) | Migration policy: additive-only by default, multi-release procedure for destructive changes. |
+| [`docs/index.md`](docs/index.md) | VitePress home, one entry per role |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Six install paths, channels, imaging content, first boot, smoke verify |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Production hardening, reverse proxy, TLS, environment reference |
+| [`docs/UPDATING.md`](docs/UPDATING.md) | `bin/rohy-update` and the Docker upgrade path |
+| [`docs/UPDATE-STRATEGY.md`](docs/UPDATE-STRATEGY.md) | Design record behind the update tool |
+| [`docs/ADMIN_FIRST_RUN.md`](docs/ADMIN_FIRST_RUN.md) | First administrator session |
+| [`docs/trainee/`](docs/trainee/) | 11 pages: rooms, history, examination, investigations, treatments, vitals, voice, debrief, FAQ |
+| [`docs/educator/`](docs/educator/) (12), [`docs/admin/`](docs/admin/) (9), [`docs/operator/`](docs/operator/) (10), [`docs/integrator/`](docs/integrator/) (9) | Role guides: cohorts and authoring; users, roles and catalogues; install, deploy and recovery; API, embedding and extension |
+| [`docs/security/`](docs/security/) (8), [`docs/product/`](docs/product/) (6), [`docs/design/`](docs/design/) (8), [`docs/tutorials/`](docs/tutorials/) (6) | RBAC, audit chain, redaction and retention; module and evidence descriptions; design records; walkthroughs |
+| [`docs/reference/`](docs/reference/) | Generated API, CLI, config, data and glossary references. [`docs/reference/api/`](docs/reference/api/) holds an OpenAPI 3.1 document plus one table page per router area |
+| [`migrations/MANIFEST.md`](migrations/MANIFEST.md) | Migration policy |
+| [`OyonR/README.md`](OyonR/README.md), [`OyonR/INSTALL.md`](OyonR/INSTALL.md) | The emotion-capture package, and embedding it elsewhere |
+| [`NOTICE.md`](NOTICE.md), [`CHANGELOG.md`](CHANGELOG.md) | Third-party component index; release history, which the Help drawer parses |
 
-### Oyon (emotion capture)
-
-| Document | What's inside |
-|---|---|
-| [`OyonR/README.md`](OyonR/README.md) | Library overview: standalone usage, browser-only inference, transports. |
-| [`OyonR/INSTALL.md`](OyonR/INSTALL.md) | Embedding into a non-rohy host app. |
-
-### Engineering
-
-| Document | What's inside |
-|---|---|
-| [`../talking-avatars/`](../talking-avatars/) | Embeddable voice + avatar kit — now a **standalone workspace-sibling repo** (relocated out of `kits/`). Ships a Claude Code skill (`SKILL.md`) and `LEARNINGS.md`. |
-
----
+The generated OpenAPI document lists 293 paths and 371 operations. The same docs site is reached from inside the application through the Help & Support drawer, which links to 23 of these pages by role.
 
 ## Development
 
 ```bash
-npm run dev          # frontend (Vite) + backend (node --watch) concurrently
-npm run client       # frontend only
-npm run server       # backend only
+npm run dev          # Vite dev server and the Express server together
+npm run client       # Vite only
+npm run server       # Express only, under node --watch
 npm run lint         # ESLint
-npm run build        # production build, outputs to frontend/ via dist/
-npm run production   # run prebuilt server
-npm test             # full unit + component + server suite (vitest)
-npm run test:watch   # vitest watch mode
-npm run test:client  # client-only (jsdom)
-npm run test:server  # server-only (node)
-npm run test:ci      # JUnit XML + coverage report
-npm run test:e2e     # Playwright e2e
-npm run bench        # vitest bench mode
+npm run build        # docs site, then vite build into dist/ and frontend/
+npm run production   # run the built server with NODE_ENV=production
 ```
 
-Development tips:
-- Vite dev server proxies `/api` → `http://localhost:3000`.
-- Reset DB: stop the server, delete `server/database.sqlite`, restart — migrations + seeders re-run automatically.
-- Adding a TTS provider: implement an async-iterator service under `server/services/` mirroring `kokoroTts.js`, register it in the `/api/tts` route, and add a UI tab under `src/components/settings/VoiceSettingsTab.jsx`.
-- Adding an avatar: drop a viseme-rigged GLB in `public/avatars/heads/`, append to `manifest.json`. The `scripts/rocketbox-convert/` pipeline handles RocketBox source models with the canonical the canonical morph targets in Oculus order.
-- Adding a lab test: append to `server/data/lab_database.json` (test_name, group, category, min_value, max_value, unit, normal_samples) — the seeder picks it up on next boot.
-- Adding a scenario template: append to `src/data/scenarioTemplates.js` with timeline keyframes; it appears in the Scenario Repository.
-- Adding an audit endpoint: write `scripts/audit-<area>.sh` mirroring the pattern in `scripts/audit-observability.sh` (start isolated server, drive HTTP, assert).
+Further script groups, all defined in `package.json`:
 
----
+| Group | Scripts |
+|---|---|
+| Docs site | `docs:dev`, `docs:build`, `docs:preview`, `docs:check` |
+| Generated references | `docs:gen:api`, `docs:gen:cli`, `docs:gen:config`, `docs:gen:data` |
+| Internationalisation | `i18n:extract`, `i18n:check`, `i18n:pseudo`, `i18n:status`, `i18n:xliff:export`, `i18n:xliff:import`, `i18n:translate` |
+| Plugins and content | `plugins:gen`, `plugins:check`, `vendor`, `vendor:check`, `setup:content`, `pack:content`, `starter-content` |
+| Licences | `license:sync`, `license:verify`, `license:latest` |
+| Verification | `verify:oyon`, `verify:room3d`, `oyon:update` |
+| Knowledge base | `kb`, `kb:build` |
+
+For a local LLM, point the platform LLM settings at an LM Studio or OpenAI-compatible endpoint; `server/routes/proxy-routes.js` handles the `lmstudio` and `custom` platforms. For local speech, `npm run install:piper` installs Piper with its voices under `server/data/piper/`, and the `kokoro` provider runs in process with its cache at `TRANSFORMERS_CACHE`.
 
 ## Roles
 
-**Guest (rank 0)** — pre-authentication.
+From `ROLE_RANKS` and `VALID_ROLES` in `server/middleware/auth.js`. `user` is an alias for `student` at rank 1.
 
-**Student / Trainee (rank 1)**
-- Run sessions, talk to the patient (text or voice), order labs / radiology / treatments, examine, view own session history.
+| Role | Rank | Guard |
+|---|---|---|
+| `guest` | 0 | none |
+| `student` | 1 | `requireStudent` |
+| `reviewer` | 2 | `requireReviewer` |
+| `educator` | 3 | `requireEducator` |
+| `admin` | 4 | `requireAdmin` |
 
-**Reviewer (rank 2)**
-- Read-only analytics + catalog access. Useful for QA reviewers without authoring rights.
-
-**Educator (rank 3)**
-- Trainee-level + create / edit cases, scenarios, agents, lab catalogs. Cannot touch platform settings, users, or audit logs.
-
-**Admin (rank 4)**
-- Full authoring + user management, agent persona editor, platform settings, audit logs + system_audit_log, soft-delete + purge endpoints, audit script runner.
-
----
-
-## Embedding the Voice + Avatar Kit
-
-The talking-avatars stack is also distributed as a **standalone embeddable kit**, now relocated to a workspace-sibling repo at [`../talking-avatars/`](../talking-avatars/) — a self-contained drop-in bundle of the entire talking-head + lipsync + TTS pipeline. Includes the 28-avatar GLB library, server-side TTS routes (Google + Kokoro), client-side `PatientAvatar` component, viseme map, a vanilla-JS standalone example, a Claude Code skill (`SKILL.md`), and a distilled `LEARNINGS.md`.
-
----
+`requireRole(minRank)` answers 401 without a user and 403 below the rank. Plugin manifests declare `minRole` for the room and a separate `authoring.minRole` for the case editor; every plugin room declares `student`, and every authoring slot declares `educator`.
 
 ## Author
 
-**Mohammed Saqr** — Professor of Computer Science, University of Eastern Finland
-[www.saqr.me](https://www.saqr.me)
+Rohy is written by Mohammed Saqr, Professor of Computer Science at the University of Eastern Finland, whose contact details are recorded in the `author` field of `package.json`. Profile links and background are on the project website at [`website/about.html`](website/about.html) and at [www.saqr.me](https://www.saqr.me).
 
 ## License
 
-Carm Research License v1.4 — full text embedded at [`LICENSE`](LICENSE), synced
-from the canonical [mohsaqr/carm-license](https://github.com/mohsaqr/carm-license)
-repository.
+Carm Research License v1.4. The full text is at [`LICENSE`](LICENSE).
 
-Free for research, teaching, personal learning and non-profit use — including
-industry-sponsored and collaboratively funded academic work, which the license
-places explicitly inside the free grant regardless of funding source. A paid
-license is required for commercial use. Anything you produce by running rohy on
-your own data — case exports, analytics, reports — is yours, without restriction.
+Use, copying and distribution for non-commercial purposes are granted free of charge, and the licence places academic research and teaching inside that grant whatever the funding source. Commercial use requires a paid licence. Outputs produced by running Rohy on your own data belong to you and may be shared without restriction. Third-party component texts are embedded under [`licenses/`](licenses/) and [`OyonR/licenses/`](OyonR/licenses/), indexed in [`NOTICE.md`](NOTICE.md).
 
-Every third-party component rohy ships carries its full license text, embedded
-under [`licenses/`](licenses/) for rohy's own dependencies and under
-[`OyonR/licenses/`](OyonR/licenses/) for the vendored Oyon addon, all indexed in
-[`NOTICE.md`](NOTICE.md). Three things there are worth knowing before you deploy:
-
-- Building the Docker image with `INCLUDE_PIPER=1` **redistributes GPL-3.0
-  software** (Piper TTS). The default build does not.
-- The default Piper voices are **not uniformly MIT** — several are trained on
-  research-restricted corpora. Check each voice's `MODEL_CARD`.
-- The CALIPER paediatric reference ranges are **CC BY-NC-SA**, so a commercial
-  deployment must drop that data source. It is isolated behind its own
-  `data_sources` row precisely so it can be dropped cleanly.
-
-For paid licensing, institutional agreements, or inquiries:
-[saqr@saqr.me](mailto:saqr@saqr.me) · [saqr.me](https://saqr.me)
+For paid licensing and institutional agreements: [saqr@saqr.me](mailto:saqr@saqr.me).

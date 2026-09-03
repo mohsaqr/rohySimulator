@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.5] — 2026-09-03
+
+### Changed
+
+- **Public website rebuilt** (`website/`): shared `site.css`/`site.js`, new
+  `rooms.html` (every room with a screenshot, in navigator order),
+  `about.html` (author page) and a generated `help.html` (the root README
+  rendered into the site shell by `website/build-help.mjs`); `index.html` and
+  `whats-new.html` rewritten for the 3.0 beta. Screenshots replaced with
+  current JPEG captures of the rooms and analytics.
+- **README rewritten** as the source of the website's help page: shorter
+  install path, the nine rooms, features, architecture, configuration,
+  testing, roles and licence.
+
 ## [3.0.0-beta.4] — 2026-09-03
 
 ### Added

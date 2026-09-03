@@ -3,1006 +3,413 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rohy — Artificial Intelligence for clinical reasoning research</title>
-    <meta name="description" content="An Artificial-Intelligence virtual patient platform for clinical reasoning research and education: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time emotion capture, and research-grade learning analytics with clustering, sequence/process mining, and transition-network analytics.">
+    <title>Rohy — AI clinical simulation for clinical reasoning research</title>
+    <meta name="description" content="Rohy is an AI-enabled virtual patient simulation platform: a conversational patient, a live physiological monitor, structured examination, laboratory and imaging workflows, a DICOM reading room, whole-slide pathology, a 12-lead ECG workstation, a multi-agent care team, a post-case debrief, and transition-network learning analytics in one environment.">
     <meta name="theme-color" content="#09090b">
 
-    <meta property="og:title" content="Rohy — Artificial Intelligence for clinical reasoning research">
-    <meta property="og:description" content="An Artificial-Intelligence virtual patient platform for clinical reasoning research and education: multi-agent care team, real rhythm engine, emergency-driven scenarios, real-time emotion capture, and research-grade learning analytics with clustering, sequence/process mining, and transition-network analytics.">
-    <meta property="og:image" content="assets/hero-chat.png">
+    <meta property="og:title" content="Rohy — AI clinical simulation for clinical reasoning research">
+    <meta property="og:description" content="A virtual patient, a live monitor, specialised clinical rooms, a multi-agent care team, a debrief, and learning analytics in one environment.">
+    <meta property="og:image" content="assets/patient-room.jpg">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-
-    <style>
-        :root {
-            --bg: #09090b;
-            --bg-elev: #18181b;
-            --bg-elev-2: #1f1f23;
-            --border: #27272a;
-            --border-bright: #3f3f46;
-            --text: #fafafa;
-            --text-dim: #a1a1aa;
-            --text-dimmer: #71717a;
-            --indigo: #818cf8;
-            --indigo-600: #6366f1;
-            --indigo-700: #4f46e5;
-            --cyan: #22d3ee;
-            --emerald: #10b981;
-            --rose: #fb7185;
-            --amber: #fbbf24;
-            --content-w: 1180px;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body {
-            margin: 0;
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            font-size: 18px;
-            line-height: 1.6;
-            font-weight: 400;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            font-feature-settings: 'ss01', 'cv11';
-            overflow-x: hidden;
-        }
-        a { color: inherit; text-decoration: none; }
-        h1, h2, h3, p { margin: 0; }
-        img { display: block; max-width: 100%; height: auto; }
-        code {
-            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-            font-size: 0.9em;
-            color: var(--cyan);
-            background: rgba(34, 211, 238, 0.06);
-            padding: 1px 6px;
-            border-radius: 4px;
-        }
-
-        .wrap { max-width: var(--content-w); margin: 0 auto; padding: 0 24px; }
-        .eyebrow {
-            display: inline-block;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--text-dim);
-            margin-bottom: 18px;
-        }
-        .eyebrow.accent { color: var(--cyan); }
-        h1 { font-size: clamp(40px, 6vw, 64px); font-weight: 900; letter-spacing: -0.02em; line-height: 1.05; }
-        h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -0.01em; line-height: 1.12; }
-        h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.005em; }
-        p { color: var(--text-dim); }
-        p.lead { color: var(--text); font-size: 19px; }
-
-        .nav {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-            background: rgba(9, 9, 11, 0.78);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid rgba(39, 39, 42, 0.6);
-        }
-        .nav .wrap {
-            display: flex; align-items: center; justify-content: space-between;
-            height: 60px;
-        }
-        .brand {
-            font-weight: 900; letter-spacing: -0.02em; font-size: 20px;
-            display: flex; align-items: center; gap: 10px;
-        }
-        .brand-dot {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--cyan), var(--indigo));
-            box-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
-        }
-        .nav-links { display: flex; gap: 26px; align-items: center; }
-        .nav-links a {
-            font-size: 14px; color: var(--text-dim);
-            transition: color 0.15s;
-        }
-        .nav-links a:hover { color: var(--text); }
-        .nav-cta {
-            font-size: 14px; font-weight: 600;
-            padding: 8px 14px; border-radius: 8px;
-            background: var(--indigo-600); color: white;
-            transition: background 0.15s;
-        }
-        .nav-cta:hover { background: var(--indigo-700); }
-        @media (max-width: 880px) {
-            .nav-links a:not(.nav-cta) { display: none; }
-        }
-
-        .hero {
-            position: relative;
-            padding: 160px 0 96px;
-            text-align: center;
-            overflow: hidden;
-        }
-        .hero::before {
-            content: "";
-            position: absolute;
-            top: -200px; left: 50%; transform: translateX(-50%);
-            width: 1000px; height: 700px;
-            background:
-                radial-gradient(circle at 30% 40%, rgba(34, 211, 238, 0.12), transparent 50%),
-                radial-gradient(circle at 70% 60%, rgba(129, 140, 248, 0.10), transparent 55%);
-            filter: blur(40px);
-            pointer-events: none;
-            z-index: 0;
-        }
-        .hero-inner { position: relative; z-index: 1; }
-        .hero h1 { max-width: 19ch; margin: 0 auto 24px; }
-        .hero h1 .accent {
-            background: linear-gradient(110deg, var(--cyan) 10%, var(--indigo) 70%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .hero .sub {
-            max-width: 70ch; margin: 0 auto 36px;
-            font-size: 19px; color: var(--text-dim);
-            line-height: 1.6;
-        }
-        .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 64px; }
-        .btn {
-            display: inline-flex; align-items: center; gap: 8px;
-            font-size: 15px; font-weight: 600;
-            padding: 12px 22px; border-radius: 10px;
-            transition: transform 0.12s, background 0.15s, border-color 0.15s;
-        }
-        .btn-primary {
-            background: var(--indigo-600); color: white;
-            border: 1px solid var(--indigo-600);
-        }
-        .btn-primary:hover { background: var(--indigo-700); border-color: var(--indigo-700); }
-        .btn-ghost {
-            background: transparent; color: var(--text);
-            border: 1px solid var(--border-bright);
-        }
-        .btn-ghost:hover { border-color: var(--text-dim); }
-        .btn .arrow { transition: transform 0.15s; }
-        .btn:hover .arrow { transform: translateX(3px); }
-
-        .hero-shot {
-            position: relative; z-index: 1;
-            max-width: 1180px;
-            margin: 0 auto;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            overflow: hidden;
-            background: var(--bg-elev);
-            box-shadow:
-                0 30px 60px -20px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(34, 211, 238, 0.03);
-        }
-        .hero-shot img { width: 100%; display: block; }
-
-        /* capability strip — replaces the marketing number strip */
-        .capabilities {
-            margin: 56px 0 0;
-            padding: 18px 28px;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            background: rgba(24, 24, 27, 0.5);
-            display: flex; gap: 8px 28px; justify-content: center; flex-wrap: wrap;
-            font-size: 13px;
-        }
-        .capabilities .item { color: var(--text); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
-        .capabilities .item::before {
-            content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan);
-            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
-        }
-        @media (max-width: 720px) {
-            .capabilities { border-radius: 16px; padding: 16px 20px; gap: 10px 18px; }
-        }
-
-        section { padding: 96px 0; position: relative; }
-        section.tight { padding: 64px 0; }
-        section.band {
-            background: linear-gradient(180deg, transparent, rgba(99, 102, 241, 0.04), transparent);
-            border-top: 1px solid var(--border);
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* pillar — text + image rows */
-        .pillar {
-            display: grid; grid-template-columns: 1fr 1.2fr; gap: 56px;
-            align-items: center;
-        }
-        .pillar.reverse { direction: rtl; }
-        .pillar.reverse > * { direction: ltr; }
-        .pillar.text-only { grid-template-columns: 1fr; max-width: 820px; }
-        .pillar-text h2 { margin-bottom: 18px; }
-        .pillar-text p { font-size: 17px; margin-bottom: 14px; line-height: 1.65; }
-        .pillar-list { padding: 0; margin: 18px 0 0; list-style: none; display: grid; gap: 12px; }
-        .pillar-list li {
-            color: var(--text); font-size: 15px; line-height: 1.55;
-            padding-left: 22px; position: relative;
-        }
-        .pillar-list li::before {
-            content: "";
-            position: absolute; left: 0; top: 8px;
-            width: 6px; height: 6px; border-radius: 50%;
-            background: var(--cyan);
-            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
-        }
-        .pillar-shot {
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            overflow: hidden;
-            background: var(--bg-elev);
-            box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.6);
-            margin: 0;
-        }
-        @media (max-width: 980px) {
-            .pillar { grid-template-columns: 1fr; gap: 36px; }
-            .pillar.reverse { direction: ltr; }
-        }
-
-        /* single-column section with body + bullet list */
-        .single { max-width: 860px; }
-        .single h2 { margin-bottom: 18px; }
-        .single p.lead { margin-bottom: 24px; }
-
-        /* infra band */
-        .infra {
-            background:
-                radial-gradient(800px 400px at 50% -100px, rgba(129, 140, 248, 0.08), transparent),
-                radial-gradient(800px 400px at 50% 120%, rgba(34, 211, 238, 0.06), transparent);
-        }
-        .infra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-        .infra h2 { margin-bottom: 18px; }
-        .infra p { font-size: 17px; margin-bottom: 14px; }
-        .infra-tags {
-            display: flex; flex-wrap: wrap; gap: 8px;
-            margin-top: 12px;
-        }
-        .tag {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 6px 12px; font-size: 13px; font-weight: 500;
-            border: 1px solid var(--border); border-radius: 999px;
-            background: rgba(24, 24, 27, 0.4);
-            color: var(--text-dim);
-        }
-        .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); }
-        .tag.local .dot { background: var(--cyan); }
-        .tag.cloud .dot { background: var(--indigo); }
-        .infra-col-title {
-            font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
-            color: var(--text-dimmer); margin-bottom: 10px;
-        }
-        @media (max-width: 880px) { .infra-grid { grid-template-columns: 1fr; gap: 28px; } }
-
-        /* get started code block */
-        .code-block {
-            margin-top: 28px;
-            background: var(--bg-elev);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px 22px;
-            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-            font-size: 14px;
-            line-height: 1.7;
-            overflow-x: auto;
-        }
-        .code-block .comment { color: var(--text-dimmer); }
-        .code-block .cmd { color: var(--cyan); }
-
-        footer {
-            border-top: 1px solid var(--border);
-            padding: 56px 0 64px;
-            background: var(--bg);
-        }
-        .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; }
-        .footer-brand p { font-size: 14px; margin-top: 8px; max-width: 38ch; }
-        .footer-col h4 {
-            font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
-            text-transform: uppercase; color: var(--text-dimmer);
-            margin: 0 0 14px;
-        }
-        .footer-col a { display: block; font-size: 14px; color: var(--text-dim); margin-bottom: 8px; }
-        .footer-col a:hover { color: var(--text); }
-        .footer-bottom {
-            margin-top: 48px; padding-top: 24px;
-            border-top: 1px solid var(--border);
-            display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-            font-size: 13px; color: var(--text-dimmer);
-        }
-        @media (max-width: 720px) {
-            .footer-grid { grid-template-columns: 1fr; gap: 32px; }
-        }
-
-        .reveal {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.7s ease, transform 0.7s ease;
-            will-change: opacity, transform;
-        }
-        .reveal.in { opacity: 1; transform: none; }
-        @media (prefers-reduced-motion: reduce) {
-            .reveal { opacity: 1; transform: none; transition: none; }
-            html { scroll-behavior: auto; }
-        }
-
-        /* CRETIC research-context band */
-        .cretic { padding: 48px 0 24px; }
-        .cretic-card {
-            display: grid;
-            grid-template-columns: 168px 1fr;
-            gap: 36px;
-            align-items: center;
-            padding: 36px 40px;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background:
-                radial-gradient(circle at 0% 0%, rgba(225, 29, 72, 0.07), transparent 60%),
-                radial-gradient(circle at 100% 100%, rgba(34, 211, 238, 0.04), transparent 60%),
-                var(--bg-elev);
-        }
-        .cretic-icon { display: flex; align-items: center; justify-content: center; }
-        .cretic-icon img {
-            width: 148px; height: auto;
-            filter: drop-shadow(0 10px 28px rgba(225, 29, 72, 0.28));
-        }
-        .cretic-body span.eyebrow { margin-bottom: 10px; }
-        .cretic-body h2 {
-            margin-bottom: 14px;
-            font-size: clamp(24px, 3vw, 32px);
-        }
-        .cretic-body p {
-            font-size: 16px;
-            color: var(--text-dim);
-            margin-bottom: 12px;
-            line-height: 1.65;
-        }
-        .cretic-body p strong { color: var(--text); font-weight: 600; }
-        .cretic-pi {
-            font-size: 14px !important;
-            color: var(--text-dimmer) !important;
-            margin-top: 8px;
-            margin-bottom: 0 !important;
-        }
-        .cretic-pi a {
-            color: var(--cyan);
-            font-weight: 500;
-        }
-        .cretic-pi a:hover { text-decoration: underline; }
-        .cretic-meta {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 10px;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            color: var(--text-dimmer);
-        }
-        .cretic-meta::before {
-            content: "";
-            width: 6px; height: 6px; border-radius: 50%;
-            background: var(--cyan);
-            box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
-        }
-        @media (max-width: 760px) {
-            .cretic-card {
-                grid-template-columns: 1fr;
-                gap: 24px;
-                padding: 28px 24px;
-                text-align: center;
-            }
-            .cretic-icon img { width: 120px; }
-            .cretic-meta { justify-content: center; display: inline-flex; }
-        }
-
-        /* about the author card — bookends the page with the CRETIC card */
-        .author { padding: 64px 0; }
-        .author-card {
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 44px 52px;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background:
-                radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.06), transparent 60%),
-                radial-gradient(circle at 0% 100%, rgba(129, 140, 248, 0.04), transparent 60%),
-                var(--bg-elev);
-        }
-        .author-card .eyebrow { margin-bottom: 12px; }
-        .author-card h2 {
-            margin-bottom: 22px;
-            font-size: clamp(26px, 3.2vw, 34px);
-        }
-        .author-quote {
-            margin: 0 0 26px;
-            padding: 18px 24px;
-            border-left: 3px solid var(--cyan);
-            background: rgba(34, 211, 238, 0.04);
-            border-radius: 0 8px 8px 0;
-            font-size: 18px;
-            color: var(--text);
-            font-style: italic;
-            line-height: 1.6;
-        }
-        .author-body {
-            font-size: 16px;
-            color: var(--text-dim);
-            margin-bottom: 16px;
-            line-height: 1.7;
-        }
-        .author-body strong { color: var(--text); font-weight: 600; }
-        .author-meta {
-            margin: 28px 0 0;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            color: var(--text-dimmer);
-            display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
-        }
-        .author-meta a {
-            color: var(--cyan);
-            font-weight: 600;
-        }
-        .author-meta a:hover { text-decoration: underline; }
-        .author-meta .dot { color: var(--text-dimmer); }
-        @media (max-width: 760px) {
-            .author-card { padding: 32px 24px; }
-            .author-quote { padding: 16px 18px; font-size: 16px; }
-        }
-
-        /* install & update grids */
-        .install-h3 {
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--text-dim);
-            margin: 40px 0 16px;
-        }
-        .install-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 14px;
-        }
-        .install-card {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 22px 24px;
-            background: var(--bg-elev);
-            position: relative;
-        }
-        .install-card.recommended {
-            border-color: rgba(34, 211, 238, 0.3);
-            background: linear-gradient(180deg, rgba(34, 211, 238, 0.04), var(--bg-elev) 50%);
-        }
-        .install-card .tag-rec {
-            position: absolute;
-            top: 14px; right: 16px;
-            font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
-            padding: 3px 8px; border-radius: 999px;
-            background: rgba(34, 211, 238, 0.12);
-            color: var(--cyan);
-            border: 1px solid rgba(34, 211, 238, 0.3);
-        }
-        .install-card h4 {
-            margin: 0 0 6px;
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: -0.005em;
-        }
-        .install-card p {
-            font-size: 14px;
-            color: var(--text-dim);
-            margin: 0 0 14px;
-            line-height: 1.55;
-        }
-        .install-card .code-block {
-            margin-top: 0;
-            padding: 12px 14px;
-            font-size: 13px;
-            line-height: 1.5;
-            background: var(--bg);
-        }
-        .install-link {
-            margin-top: 32px;
-            font-size: 14px;
-            color: var(--text-dim);
-        }
-        .install-link a { color: var(--cyan); }
-        .install-link a:hover { text-decoration: underline; }
-        @media (max-width: 760px) {
-            .install-grid { grid-template-columns: 1fr; }
-        }
-
-        /* lightbox — click any screenshot to zoom */
-        .pillar-shot img, .hero-shot img {
-            cursor: zoom-in;
-            transition: opacity 0.15s ease, transform 0.15s ease;
-        }
-        .pillar-shot img:hover, .hero-shot img:hover {
-            opacity: 0.92;
-        }
-        .lightbox {
-            position: fixed; inset: 0; z-index: 1000;
-            background: rgba(0, 0, 0, 0.94);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            display: none;
-            align-items: center; justify-content: center;
-            padding: 24px;
-            cursor: zoom-out;
-            animation: lb-fade-in 0.18s ease;
-        }
-        .lightbox.open { display: flex; }
-        .lightbox img {
-            max-width: 96vw;
-            max-height: 92vh;
-            object-fit: contain;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
-            cursor: default;
-            user-select: none;
-        }
-        .lightbox-close {
-            position: fixed; top: 18px; right: 22px;
-            width: 40px; height: 40px;
-            border-radius: 50%;
-            background: rgba(24, 24, 27, 0.75);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: white;
-            font-size: 22px; line-height: 1;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s, border-color 0.15s;
-        }
-        .lightbox-close:hover {
-            background: rgba(39, 39, 42, 0.9);
-            border-color: rgba(255, 255, 255, 0.25);
-        }
-        .lightbox-hint {
-            position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-            font-size: 12px; color: rgba(255, 255, 255, 0.55);
-            letter-spacing: 0.06em;
-            pointer-events: none;
-        }
-        body.no-scroll { overflow: hidden; }
-        @keyframes lb-fade-in {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .lightbox { animation: none; }
-            .pillar-shot img, .hero-shot img { transition: none; }
-        }
-    </style>
+    <link rel="stylesheet" href="site.css">
 </head>
 <body>
 
-<!-- ── Fixed nav ─────────────────────────────────────────────── -->
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
 <header class="nav">
     <div class="wrap">
-        <a class="brand" href="#top">
+        <a class="brand" href="index.html">
             <span class="brand-dot"></span>
             <span>rohy</span>
         </a>
-        <nav class="nav-links">
+        <nav class="nav-links" aria-label="Site">
+            <a href="index.html" aria-current="page">Overview</a>
+            <a href="rooms.html">Rooms</a>
             <a href="whats-new.html">What's new</a>
-            <a href="#agents">Agents</a>
-            <a href="#monitor">Simulated monitor</a>
-            <a href="#scenarios">Scenarios</a>
-            <a href="#labs">Lab &amp; Radiology</a>
-            <a href="#analytics">Affect &amp; Analytics</a>
-            <a href="#install">Install</a>
+            <a href="help.html">Help</a>
+            <a href="index.html#install" class="optional">Install</a>
+            <a href="about.html">About the author</a>
             <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
         </nav>
     </div>
 </header>
 
+<main>
+
 <!-- ── Hero ──────────────────────────────────────────────────── -->
 <section class="hero" id="top">
     <div class="wrap hero-inner">
-        <span class="eyebrow accent">VIRTUAL PATIENT · CRETIC PROJECT</span>
-        <h1>Artificial Intelligence<br>for <span class="accent">clinical reasoning research.</span></h1>
+        <span class="eyebrow accent">Virtual patient · CRETIC project · Version 3 beta</span>
+        <h1>An AI clinical simulation environment for <span class="accent">clinical reasoning research.</span></h1>
         <p class="sub">
-            A high-fidelity, multi-agent, AI-powered simulation environment. A
-            multi-agent care team converses with the trainee; a real-rhythm simulated
-            monitor runs against emergency-driven scenarios with down-going trajectories;
-            real-time emotion capture and gaze tracking run on-device; and live process,
-            sequence and transition-network analytics turn every session into a
-            research-grade, process-oriented learning-analytics stream — every event row
-            enriched with the contemporary vital signs.
+            Rohy combines a conversational virtual patient, a live physiological monitor,
+            structured examination, laboratory and imaging workflows, a DICOM reading room,
+            whole-slide pathology, a 12-lead ECG workstation, treatments with time-dependent
+            effects, a multi-agent care team, a post-case debrief, and process-oriented learning
+            analytics in one environment. Every learner action is recorded in sequence, stamped
+            with the room it happened in and the vital signs at that moment.
         </p>
         <div class="cta-row">
-            <a class="btn btn-primary" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">
-                View on GitHub <span class="arrow">→</span>
-            </a>
-            <a class="btn btn-ghost" href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">
-                Read the docs
-            </a>
-            <a class="btn btn-ghost" href="whats-new.html">
-                What's new since v1
-            </a>
+            <a class="btn btn-primary" href="rooms.html">Explore the rooms <span class="arrow">→</span></a>
+            <a class="btn btn-ghost" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">View on GitHub</a>
+            <a class="btn btn-ghost" href="whats-new.html">What's new since v1</a>
         </div>
-
-        <div class="hero-shot reveal">
-            <img src="assets/hero-chat.png" alt="Rohy in voice mode — a 3D patient avatar with a cinema-style subtitle overlay reading 'I feel dizzy and lightheaded', live multi-lead ECG and plethysmograph, a vital-sign panel showing tachycardia and hypoxia, and an alarm banner for low diastolic pressure.">
-        </div>
-
-        <div class="capabilities reveal">
-            <span class="item">AI-driven</span>
-            <span class="item">Multi-agent</span>
-            <span class="item">Multimodal</span>
-            <span class="item">Real rhythm engine</span>
-            <span class="item">Emergency scenarios</span>
-            <span class="item">Real-time emotions</span>
-            <span class="item">Gaze tracking</span>
-            <span class="item">Process-oriented analytics</span>
+        <figure class="hero-shot">
+            <img src="assets/patient-room.jpg" alt="The Patient room. A 3D avatar of John Martinez, 55, above the chat panel on the left; a live monitor on the right with lead II ECG, plethysmograph and respiration waveforms, heart rate 120, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 and EtCO2 32; a latched warning banner reading 'HR high, hr = 122 (limit ≤ 120)' with Snooze and Acknowledge buttons; Treatments, Records and Memory buttons; and the room navigator along the bottom.">
+            <figcaption>The Patient room: avatar, dialogue and the live monitor in one space. The ECG is synthesised in real time, so rhythm changes are visible consequences of the evolving scenario.</figcaption>
+        </figure>
+        <div class="capabilities" aria-label="Capabilities">
+            <span class="item">Specialised clinical rooms</span>
+            <span class="item">Multi-agent care team</span>
+            <span class="item">Real-time ECG synthesis</span>
+            <span class="item">Time-dependent treatments</span>
+            <span class="item">DICOM reading room</span>
+            <span class="item">Whole-slide pathology</span>
+            <span class="item">12-lead ECG workstation</span>
             <span class="item">Transition network analytics</span>
-            <span class="item">Vital-enriched event log</span>
+            <span class="item">On-device affect and gaze</span>
+            <span class="item">Six languages</span>
         </div>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#rooms">The rooms</a>
+            <a href="#agents">Care team</a>
+            <a href="#physiology">Physiology</a>
+            <a href="#analytics">Analytics</a>
+            <a href="#oyon">Oyon</a>
+            <a href="#authoring">Authoring</a>
+            <a href="#governance">Governance</a>
+            <a href="#install">Install</a>
+            <a href="#author">Author</a>
+        </nav>
     </div>
 </section>
 
 <!-- ── CRETIC research context ───────────────────────────────── -->
 <section class="cretic" id="cretic">
-    <div class="wrap reveal">
-        <div class="cretic-card">
+    <div class="wrap">
+        <div class="cretic-card reveal">
             <div class="cretic-icon">
                 <img src="assets/cretic-icon.png" alt="CRETIC project emblem — a red heart with an inscribed ECG trace.">
             </div>
             <div class="cretic-body">
-                <span class="eyebrow accent">RESEARCH CONTEXT</span>
-                <h2>Built for CRETIC. Useful everywhere.</h2>
+                <span class="eyebrow">Research context</span>
+                <h2>Built for CRETIC. Designed to be general.</h2>
                 <p>
-                    Rohy is engineered to support
-                    <strong>CRETIC — Optimizing Clinical Reasoning in
-                    Time-Critical Scenarios: A data-driven multimodal
-                    approach</strong>, a Research Council of Finland project that
-                    develops an innovative gamified platform combining virtual
-                    patients and educational-escape-room elements to simulate
-                    clinical emergencies for healthcare students and trainees.
+                    Rohy supports <strong>CRETIC — Optimizing Clinical Reasoning in
+                    Time-Critical Scenarios: A data-driven multimodal approach</strong>, a
+                    Research Council of Finland project that develops a gamified platform
+                    combining virtual patients and educational-escape-room elements to
+                    simulate clinical emergencies for healthcare students and trainees.
                 </p>
                 <p>
-                    The platform is built to serve that research agenda — but is
-                    deliberately general. Every component above works in a
-                    non-CRETIC simulation context.
+                    Every component on this page works in any simulation context. The
+                    CRETIC research agenda shaped the platform; the platform runs
+                    independently of it.
                 </p>
                 <p class="cretic-pi">
                     Project led by
-                    <a href="https://uefconnect.uef.fi/en/sonsoles.lopez-pernas" target="_blank" rel="noopener">Sonsoles López-Pernas →</a>
+                    <a href="https://uefconnect.uef.fi/en/sonsoles.lopez-pernas" target="_blank" rel="noopener">Sonsoles López-Pernas</a>
                     · School of Computing, University of Eastern Finland.
                 </p>
-                <span class="cretic-meta">FUNDED BY THE RESEARCH COUNCIL OF FINLAND</span>
+                <span class="cretic-meta">Funded by the Research Council of Finland</span>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ── Multi-agent platform ──────────────────────────────────── -->
-<section id="agents">
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">MULTI-AGENT PLATFORM</span>
-            <h2>A care team, not a chatbot.</h2>
+<!-- ── The rooms ─────────────────────────────────────────────── -->
+<section id="rooms">
+    <div class="wrap">
+        <div class="section-head reveal">
+            <span class="eyebrow accent">The clinical workspace</span>
+            <h2>A specialised room for each task. One running case.</h2>
+            <p>
+                The encounter is organised into peer rooms: core rooms for the patient,
+                examination, laboratory, radiology and debrief, and plugin rooms (3D Room,
+                12-lead ECG, Pathology, PACS) that appear when the case enables them. The case keeps running while the learner moves between them: laboratory results become ready, treatment effects
+                continue, a paged consultant arrives. A count badge on the Laboratory and
+                Radiology buttons reports ready reports while the learner works elsewhere.
+                Every action is stamped with the room it happened in.
+                <a href="rooms.html" style="color: var(--cyan); font-weight: 600;">Each room in detail →</a>
+                <a href="rooms.html#between-rooms" style="color: var(--cyan); font-weight: 600;">· How navigation works →</a>
+            </p>
+        </div>
+        <div class="cards reveal">
+            <a class="card" href="rooms.html#patient">
+                <span class="card-index">01 · Patient</span>
+                <h3>Interview, monitor, treatments</h3>
+                <p>The patient answers by text or voice through an animated 3D avatar. The live monitor, the Treatments panel, the Records drawer and the End &amp; Debrief action live here.</p>
+                <span class="card-link">Patient room →</span>
+            </a>
+            <a class="card" href="rooms.html#room-3d">
+                <span class="card-index">02 · 3D Room</span>
+                <h3>The same patient at the bedside</h3>
+                <p>Rohy 3 adds a 3D bedside room. The patient lies in bed with the live monitor, a camera wheel, and an examination wheel. Conversation and findings are shared with the Patient room.</p>
+                <span class="card-link">3D Room →</span>
+            </a>
+            <a class="card" href="rooms.html#examination">
+                <span class="card-index">03 · Examination</span>
+                <h3>Structured physical examination</h3>
+                <p>A body map with 67 named regions. Inspection, palpation, percussion and auscultation reveal the finding the case author wrote for that pair, with site-specific heart and lung sounds.</p>
+                <span class="card-link">Examination room →</span>
+            </a>
+            <a class="card" href="rooms.html#laboratory">
+                <span class="card-index">04 · Laboratory</span>
+                <h3>Catalogue, orders, reports</h3>
+                <p>Over 200 tests in more than 30 clinical groups. Orders move from pending to ready to viewed on a one-to-five-minute turnaround, and reports are laid out like hospital reports.</p>
+                <span class="card-link">Laboratory →</span>
+            </a>
+            <a class="card" href="rooms.html#radiology">
+                <span class="card-index">05 · Radiology</span>
+                <h3>Imaging catalogue, orders, reports</h3>
+                <p>74 orderable studies across nine modalities with the same pending, ready and viewed lifecycle as the laboratory, and a per-case report authored by the educator.</p>
+                <span class="card-link">Radiology →</span>
+            </a>
+            <a class="card" href="rooms.html#ecg">
+                <span class="card-index">06 · 12-lead ECG · plugin</span>
+                <h3>A reading workstation with calipers</h3>
+                <p>Calibrated paper, selectable gain and sweep speed, diagnostic and monitor filters, interval, amplitude and rate calipers whose measurements are retained, and a lead map.</p>
+                <span class="card-link">ECG workstation →</span>
+            </a>
+            <a class="card" href="rooms.html#pathology">
+                <span class="card-index">07 · Pathology · plugin</span>
+                <h3>Whole-slide imaging with measurement</h3>
+                <p>Whole-slide navigation, a magnification ladder, a scale bar in micrometres, and annotation tools that report area. Display adjustments and measurements are kept separate.</p>
+                <span class="card-link">Pathology →</span>
+            </a>
+            <a class="card" href="rooms.html#pacs">
+                <span class="card-index">08 · PACS · plugin</span>
+                <h3>The DICOM reading room</h3>
+                <p>Multi-series studies, a thumbnail rail, side-by-side viewports, and window width and level controls. Display processing is labelled as such and leaves the pixel values untouched.</p>
+                <span class="card-link">PACS →</span>
+            </a>
+            <a class="card" href="rooms.html#consultant">
+                <span class="card-index">09 · Consultant</span>
+                <h3>Reflection during the case, debrief after it</h3>
+                <p>A separate discussant persona with its own voice, avatar and model receives the learner's encounter record and leads a Socratic debrief once End &amp; Debrief stops the case.</p>
+                <span class="card-link">Consultant and debrief →</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ── Care team ─────────────────────────────────────────────── -->
+<section id="agents" class="band">
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Multi-agent care team</span>
+            <h2>A care team of AI agents, each with its own knowledge.</h2>
             <p class="lead">
-                Real clinical encounters are not a single back-and-forth with one
-                person. A trainee — alone or working as part of a team — moves
-                between the patient, the patient's family when the patient cannot
-                give a history themselves, the bedside nurse who holds the
-                medication record and the recent vitals, and the on-call consultant
-                brought in for a second opinion. Each interlocutor is a distinct
-                AI agent with its own persona, voice, knowledge scope, and arrival
-                cue. Conversations branch and reconverge in a single session
-                transcript, with the dialogue fidelity an actual clinical
-                interview demands.
+                A clinical encounter involves several people. In Rohy the learner addresses the
+                patient, the patient's family when the patient is unable to give a history, the
+                bedside nurse who holds the medication record and the recent vitals, and the
+                on-call consultant who is paged for a second opinion. Each is a distinct AI agent
+                with its own persona, voice, knowledge scope, language model and arrival cue, and
+                all of them speak in one session transcript.
             </p>
             <ul class="pillar-list">
-                <li><strong>Patient interview</strong> — natural-language history-taking from a model that holds the case's clinical narrative, stays in role, and only volunteers what a patient at this stage of the encounter would plausibly volunteer.</li>
-                <li><strong>Family or surrogate</strong> — for the patient who cannot speak for themselves (unconscious, intoxicated, paediatric, post-arrest, dementia, aphasia), the family agent carries the collateral history. They know the home medications and what happened on the way to the ED; they do not know the labs.</li>
-                <li><strong>Bedside nurse and on-call consultant</strong> — the nurse holds the running medication record, the most recent set of vitals, and what was tried in the last few minutes. The consultant is paged in with a 1–3 minute server-anchored arrival and brings the broader differential. Per-case rosters script who is present from the start and who arrives on what cue.</li>
-                <li><strong>Solo or team problem-solving</strong> — a single trainee orchestrates the whole team in one session; cohort or team training reviews and analyses the same transcript exactly as the dialogue happened. Sessions are recorded turn-by-turn for replay and debrief.</li>
-                <li><strong>Knowledge scope is admin-controlled per agent, per case</strong> — the patient does not know the consultant's notes, the family does not know the labs, the nurse does not hold the post-discharge plan. The information asymmetry is the realism.</li>
-                <li>Local LLM backends (LM Studio, Ollama) are first-class; cloud providers are optional. Runtime model switching with per-user usage tracking.</li>
+                <li><strong>Patient.</strong> Answers from the case's own history and personality, in lay language, within what a patient at this stage of the encounter would know. A 3D avatar lip-syncs the spoken reply, blinks, and holds eye contact using the learner's face position when Oyon is enabled.</li>
+                <li><strong>Family or surrogate.</strong> Carries the collateral history for the unconscious, intoxicated, paediatric, post-arrest, aphasic or confused patient. Knows the home medications and what happened on the way in; the laboratory results are outside its scope.</li>
+                <li><strong>Bedside nurse.</strong> Holds the running medication record, the most recent set of vitals, and what was tried in the last few minutes.</li>
+                <li><strong>On-call consultant.</strong> Paged by the learner and arrives after a server-anchored interval of one to three minutes, so waiting, reassessment and interim management stay part of the encounter. Brings the broader differential.</li>
+                <li><strong>Debrief discussant.</strong> A senior clinician-educator persona, separate from the patient, that leads the post-case reflection.</li>
+                <li><strong>Knowledge scope is set per agent, per case.</strong> The patient is unaware of the consultant's notes, the family is unaware of the labs, and the nurse is unaware of the discharge plan. The information asymmetry is what makes the interview realistic.</li>
+                <li><strong>Per-persona model routing.</strong> Patient, discussant and agents each route through their own configured language-model settings. Local backends through LM Studio and Ollama are supported alongside Anthropic, OpenAI and Google.</li>
+                <li><strong>Affect-aware patient (optional, off by default).</strong> When an administrator enables affect routing, the patient is told each turn how the learner currently appears from consent-gated Oyon capture and reacts in character. Raw camera data stays in the browser.</li>
             </ul>
         </div>
     </div>
 </section>
 
-<!-- ── Real monitor, real rhythm engine ──────────────────────── -->
-<section id="monitor" class="band">
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">SIMULATED PATIENT MONITOR</span>
-            <h2>A simulated monitor, with a real rhythm engine.</h2>
+<!-- ── Physiology & treatment ────────────────────────────────── -->
+<section id="physiology">
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Dynamic physiology</span>
+            <h2>Physiology that changes over time, and responds to treatment.</h2>
             <p class="lead">
-                Sum-of-Gaussians waveform synthesis renders morphologically correct
-                PQRST-T at any heart rate. Rhythms compose with modifier overlays — ST
-                elevation, ST depression, electrolyte derangements, conduction blocks,
-                ectopic beats, signal noise — so a single engine can drive the full
-                continuum from physiological baseline through pathological extreme.
+                Cases evolve through changes in vital signs, rhythm and clinical state. A
+                time-keyframed scenario engine moves the patient toward deterioration or recovery,
+                treatment effects layer on top with onset, peak and duration, and alarms fire when a
+                vital crosses its threshold. This temporal model is what makes the central loop of
+                clinical reasoning possible: give a treatment, observe the response, judge whether it
+                is adequate, revise the plan.
             </p>
             <ul class="pillar-list">
-                <li>Heart rate, SpO₂, NIBP, respiratory rate, temperature, and EtCO₂ as independent channels with admin-editable display ranges and alarm thresholds.</li>
-                <li>A pharmacokinetically curated treatment-effects engine with explicit onset, peak, and duration parameters; time-decaying changes propagate to the relevant vitals automatically.</li>
-                <li>Manually pinned vitals and rhythm states survive engine ticks — the override is the educator's intent, not a transient.</li>
-                <li>Snapshot binding: admin edits to a case during a running session do not bleed into the running monitor.</li>
+                <li><strong>Six monitored channels.</strong> Heart rate, SpO₂, non-invasive blood pressure, respiratory rate, temperature and end-tidal CO₂, with admin-editable display ranges and alarm thresholds.</li>
+                <li><strong>Real-time ECG synthesis.</strong> Sum-of-Gaussians waveform generation renders morphologically correct PQRST complexes at any heart rate. Rhythms include normal sinus, atrial fibrillation, ventricular tachycardia, ventricular fibrillation and asystole. Modifiers add ST elevation or depression, electrolyte derangements, pericarditis, bundle branch block, premature ventricular complexes and signal noise. The plethysmograph is synchronised to the heart rate.</li>
+                <li><strong>A treatment engine with 33 default treatments.</strong> Medications with dose, route and frequency; intravenous fluids at a rate; oxygen by nasal cannula, simple mask or non-rebreather; positioning and nursing measures. Each carries onset, peak and duration, and its effect moves the vitals over the following minutes. Contraindicated and high-alert orders raise warnings. Ordering and administering are two separate steps.</li>
+                <li><strong>Alarms that latch.</strong> Alarms route to banner, toast, audio and the audit log through one central dispatcher. Acknowledging or snoozing silences the notification and is timestamped; the physiology stays abnormal until it is treated or the scenario changes. Acknowledgement state is kept per case.</li>
+                <li><strong>Session snapshots.</strong> The case configuration is frozen when a session starts. Authoring edits made during a running session apply to future sessions only.</li>
+                <li><strong>Instructor overrides persist.</strong> A pinned vital or rhythm survives engine ticks until it is released.</li>
             </ul>
         </div>
     </div>
 </section>
 
-<!-- ── Emergency scenarios ───────────────────────────────────── -->
-<section id="scenarios">
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">EMERGENCY-DRIVEN SCENARIOS</span>
-            <h2>Designed to deteriorate.</h2>
+<!-- ── Analytics ─────────────────────────────────────────────── -->
+<section id="analytics" class="band">
+    <div class="wrap">
+        <div class="pillar reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">Learning analytics</span>
+                <h2>Learner behaviour as sequences and transition networks.</h2>
+                <p>
+                    Every navigation, examination, order, treatment, message, monitor interaction
+                    and alarm response is recorded as a verb-typed event from a controlled
+                    vocabulary of over 130 verbs. Each row is stamped with the active room, the
+                    contemporary vital signs, and the Oyon affect window at the moment of the
+                    action. A session is therefore an ordered sequence, and a cohort is a set of
+                    sequences.
+                </p>
+                <p>
+                    Rohy analyses those sequences with Transition Network Analysis, which keeps the
+                    order of actions, the transitions between them, and their recurrent patterns as
+                    the analytic object. The dashboard runs against the live session.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Clustering.</strong> Learners are grouped by how their sessions unfold, using sequence similarity and hierarchical methods. The silhouette score is reported so cluster separation can be judged.</li>
+                    <li><strong>Transition networks.</strong> Directed weighted graphs with edge probabilities and centralities, one per cluster and per session, so behavioural archetypes can be compared side by side.</li>
+                    <li><strong>State distributions and temporal plots.</strong> Per-cluster histograms and stacked proportion plots show how the mix of communicating, examining, investigating, treating and regulating evolves across the timesteps of a case.</li>
+                    <li><strong>Course-aware views.</strong> Course filters, student activity frequencies, timeline and hourly views, and case and session drill-downs.</li>
+                    <li><strong>Export.</strong> Login logs, chat logs, complete session bundles and questionnaire responses in CSV or JSON.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/tna-clusters.jpg" alt="Transition network analysis dashboard. A header reads '3 clusters found, silhouette score 0.636 (cluster good)'. Three columns: Cluster 1 (1 session, 2%, average sequence length 3262, dominated by monitoring with 2449 events), Cluster 2 (7 sessions, 12%, average length 48.3, led by navigating), and Cluster 3 (51 sessions, 86%, average length 9.9, led by regulating and navigating). Each column shows a horizontal state-distribution bar chart, a circular directed weighted transition network with edge probabilities, and a stacked-bar plot of state proportions across timesteps.">
+                <figcaption>Behaviour as a directed weighted network. Clusters, transition networks and state distributions, with the silhouette score on display so the grouping can be evaluated.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Oyon ──────────────────────────────────────────────────── -->
+<section id="oyon">
+    <div class="wrap">
+        <div class="section-head reveal">
+            <span class="eyebrow accent">Oyon · affect and attention</span>
+            <h2>Affect and attention, measured in the browser and stored as aggregates.</h2>
+            <p>
+                Oyon is an optional component, off by default and consent-gated, for affective
+                and attentional measurement from the learner's webcam. Inference runs entirely in
+                the browser with the MediaPipe face landmarker and ONNX Runtime Web. Three
+                multi-task models trained on AffectNet produce an eight-emotion classification
+                and valence and arousal regression. The same stream yields gaze, head pose, facial
+                action units, body posture, and a remote-photoplethysmographic heart-rate
+                estimate. Measurements are aggregated into ten-second windows before they are
+                persisted, the server validator accepts aggregates only, and visibility
+                permissions are stored with each record at write time. The affect stream shares the
+                session, the time base and the active room with the action stream, so behavioural
+                and affective trajectories are analysed together.
+            </p>
+        </div>
+        <div class="shot-stack reveal">
+            <figure class="shot">
+                <img src="assets/oyon-signals.jpg" alt="Live Oyon signal panel. Left: an eight-emotion bar chart with Neutral at 83% confidence, Sad 8%, Anger 7%, Surprise 2%; live gaze coordinates with quality 1.00 over 901 samples; an eye module reading with openness 0.80, zone centre. Right: a recent-weighted gaze heat map on a dark screen-shaped canvas labelled 'in-tab only, not stored, not sent'. Below: heart rate and breathing at 76 bpm with signal quality 83% and SNR 8.5, marked partial and integrated over 12 seconds; head pose with yaw +4.9°, pitch −9.4°, roll +4.2° and action-unit bars for eye squint, mouth press, brow furrow, brow raise and smile; body posture with tilt +12.5°, proximity 0.373 and upper-body visibility 60%.">
+                <figcaption>Live signals with their limits on display. Eight emotion categories, valence and arousal, gaze, head pose, action units, posture and rPPG heart rate, each reported with its signal quality. Heart rate is integrated over twelve seconds because a frequency cannot be read from a single frame.</figcaption>
+            </figure>
+            <div class="cards two">
+                <figure class="shot">
+                    <img src="assets/affect-analytics.jpg" alt="Post-session affect analytics, four panels. An eight-emotion co-occurrence map with weighted arcs between emotions arranged in a ring. An emotion heat strip over the timeline with totals: Anger 20 (2.0%), Contempt 0, Disgust 54 (5.4%), Fear 0, Happy 25 (2.5%), Neutral 678 (67.8%), Sad 25 (2.5%), Surprise 13 (1.3%). An affect plane scattering windows across arousal and valence. A dynamics panel with affect-speed and instability traces and a quadrant breakdown: positive-active 57 (7.0%), positive-calm 16 (2.0%), negative-active 488 (59.9%).">
+                    <figcaption>Post-session affective analytics. Co-occurring classifications, distribution over time, and position in the arousal–valence plane. Counts sit next to percentages so the number of observations behind each proportion stays visible.</figcaption>
+                </figure>
+                <figure class="shot">
+                    <img src="assets/gaze-analytics.jpg" alt="Gaze analytics. Screen zones: a 3×3 grid of point-weighted gaze share with 39% top-centre and 46% middle-centre. Gaze centroids: hundreds of translucent circles on a screen-shaped canvas, one per window, dot size proportional to the square root of the point count. Gaze maps by screen: separate 3×3 zone maps for Patient (436 windows), Examination (77), Lab (17), Radiology (6) and Discussant (221).">
+                    <figcaption>Gaze aggregated by screen ninth and by clinical room. Storage stays at the level of windowed aggregates, which is enough to ask where attention went in the laboratory versus the debrief.</figcaption>
+                </figure>
+            </div>
+        </div>
+        <p class="reveal" style="max-width: 820px; margin-top: 28px; font-size: 15px;">
+            These signals index observable behaviour. Their relationship to internal
+            psychological states remains an open empirical question, and their value lies in
+            adding an observational layer that can support research on attention, behaviour and
+            interaction when used with appropriate methodological caution.
+        </p>
+    </div>
+</section>
+
+<!-- ── Case authoring & teaching ─────────────────────────────── -->
+<section id="authoring" class="band">
+    <div class="wrap">
+        <div class="pillar reverse reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">Case authoring and teaching</span>
+                <h2>Cases are authored, versioned and bound to a language.</h2>
+                <p>
+                    The case wizard covers patient persona, demographics, physiological state,
+                    scenario progression, alarms, agents, treatments, laboratory findings, imaging,
+                    physical-examination findings, clinical records and patient documents. The
+                    shipped repository includes septic shock, ST-elevation myocardial infarction,
+                    hypertensive crisis, respiratory failure, anaphylaxis, diabetic ketoacidosis,
+                    ischaemic stroke, pulmonary embolism, gastrointestinal bleeding, COPD
+                    exacerbation, severe hypoglycaemia, complete heart block, atrial fibrillation
+                    with rapid ventricular response, opioid overdose and acute decompensated heart
+                    failure.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Case versions are retained</strong> and earlier versions can be restored, because a change to a case alters task difficulty, the evidence available and the timing of events.</li>
+                    <li><strong>Language is a property of the case.</strong> English, German, Spanish, Italian, Finnish and Swedish. The setting drives the patient's voice, the clinical content and the language directive given to the model, and it is fixed once set.</li>
+                    <li><strong>Courses and cohorts.</strong> Teacher-owned courses with join and registration codes, co-teachers, per-course case assignment, rosters, a completion grid, a live feed, lessons, surveys and course export. Enrolled students see the default case plus the cases assigned to their course.</li>
+                    <li><strong>Registration governance.</strong> Open, closed, invite-only and administrator-approval modes, email-domain rules, revocable invitation links, and course auto-enrolment.</li>
+                    <li><strong>Settings Control Center.</strong> A card-based landing for cases, scenarios, agents, avatars, voice, affect, users, courses, lessons, analytics, Oyon, logs and the body-map and laboratory libraries.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/admin-cases.jpg" alt="Settings and administration, Manage Cases. Summary tiles read 10 total cases, 9 available, 1 hidden. Under 'Basic course (4)': Acute Chest Pain – STEMI in English (EN-0001, default, 35 live sessions), Akute Anaphylaxie nach Wespenstich in German (DE-0008), Cetoacidosis Diabetica – Diabetes Tipo 1 in Spanish (ES-0009, 1 live), and Ictus Ischemico Acuto – Codice Ictus in Italian (IT-0010). Each row has course assignment, Hide, Set Default, Load, Edit, Duplicate and Delete controls. A sidebar lists Simulation, Overview, Cases, Scenarios, Agents, Avatars, Voice, Affect, Users, Courses, Lessons, Analytics, Oyon, Logs, Body Map and Lab Database.">
+                <figcaption>Case management. One course holds cases in English, German, Spanish and Italian side by side; the flag and the case code carry the language, and the live badge counts sessions running against a case.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Governance ────────────────────────────────────────────── -->
+<section id="governance">
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Governance and data stewardship</span>
+            <h2>Roles, tenancy, audit and deletion are part of the design.</h2>
             <p class="lead">
-                Cases run on a time-keyframed scenario engine with explicit down-going
-                trajectories. Vitals drift toward decompensation unless the trainee
-                intervenes appropriately. Alarms cross severity thresholds, banners
-                surface, audio escalates; acknowledgement and snooze route the alarm
-                through audit history rather than silencing it.
+                A platform like this holds identifiable user information, detailed performance
+                traces and potentially sensitive behavioural data. Collection, access, retention
+                and deletion are treated as part of the research design.
             </p>
             <ul class="pillar-list">
-                <li>Time-keyframed vital trajectories with interpolation between frames; the engine ticks until trainee action redirects the course.</li>
-                <li>Severity-bounded alarms — urgent, beep, chime, silent — routed simultaneously to banner, toast, audio, and audit surfaces.</li>
-                <li>A central notification dispatcher with one routing matrix per role; no parallel toast/banner/alarm paths to silently disagree.</li>
-                <li>Cross-case acknowledgement clearing — case A's acknowledged alarms never silence brand-new alarms in case B.</li>
+                <li><strong>Roles.</strong> Guest, trainee, reviewer, educator and administrator, with permissions scaled accordingly. Educators author learning material; sensitive administrative functions stay restricted, and administrators are unable to edit or delete peer administrators through direct API calls.</li>
+                <li><strong>Tenant separation.</strong> Data, sessions, orders and staff access are bound to tenant and case. Session ownership is enforced on every read.</li>
+                <li><strong>Audit logging, retention and erasure.</strong> Soft deletion with a right-to-erasure purge, structured observability, and a diagnostics bundle for operators.</li>
+                <li><strong>Frozen visibility for affect data.</strong> Visibility permissions are stored with each Oyon record, so a later change in platform settings leaves already-collected observations under their original terms.</li>
+                <li><strong>Redaction and rate limiting.</strong> Centralised response redaction of sensitive configuration, and rate limits on login, registration and the general API.</li>
             </ul>
         </div>
     </div>
 </section>
 
-<!-- ── Multimodal ────────────────────────────────────────────── -->
-<section id="multimodal" class="band">
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">MULTIMODAL CAPABILITIES</span>
-            <h2>Text. Voice. 3D talking head.</h2>
-            <p class="lead">
-                The trainee can type to the patient or speak. A 3D talking head responds
-                with viseme-driven lipsync; in voice mode, a glassy cinema-style subtitle
-                overlay renders the current line as the model streams it. Sentence-level
-                pre-fetching keeps time-to-first-audio sub-second on local engines.
-            </p>
-            <ul class="pillar-list">
-                <li>Browser STT for input, continuous mode with auto-pause when the assistant speaks — no round-trip to a cloud transcription service required.</li>
-                <li>Local TTS backends (Kokoro in-process ONNX, Piper subprocess) ship by default; cloud TTS (Google, OpenAI) is optional.</li>
-                <li>Viseme-driven lipsync over the canonical morph-target ordering; every cross-platform avatar in the library conforms to the same rig.</li>
-                <li>Cinema-style subtitle overlay updates token-by-token during a streaming reply; click anywhere to reveal the full transcript.</li>
-            </ul>
-        </div>
-    </div>
-</section>
-
-<!-- ── Laboratory & Radiology ────────────────────────────────── -->
-<section id="labs">
-    <div class="wrap reveal">
-        <div class="pillar">
-            <div class="pillar-text">
-                <span class="eyebrow">LABORATORY &amp; RADIOLOGY ROOMS</span>
-                <h2>Order. Wait. Read.</h2>
-                <p>
-                    Laboratory and Radiology are first-class rooms in the simulation, not
-                    modal popups. A worklist tracks pending orders and ready reports;
-                    clicking a ready row opens the hospital-style report inline and adds
-                    it to a dismissible pill stack. Reference ranges are gender-specific
-                    where it clinically matters; flags surface high/low/abnormal
-                    automatically.
-                </p>
-                <ul class="pillar-list">
-                    <li>Searchable lab catalogue grouped by clinical category, with panel templates for common workups (Acute MI, DKA, Sepsis, Stroke, PE, …).</li>
-                    <li>Radiology suite covering X-ray, CT, MRI, ultrasound, cardiac (12-lead ECG, echocardiogram), nuclear medicine, and fluoroscopy.</li>
-                    <li>Realistic turnaround band so the wait pattern is felt without grinding a teaching slot to a halt.</li>
-                    <li>Per-case admin editor for abnormal reports; image and video upload for case-attached findings.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/investigations.png" alt="Laboratory Investigations screen — a searchable test catalogue on the left, a hospital-style Laboratory Report in the centre showing a Hematocrit result with reference range and flagging, and a worklist on the right with READY and VIEWED sections. The Laboratory room carries a numeric badge dot in the bottom navigator.">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Physical examination ──────────────────────────────────── -->
-<section class="band">
-    <div class="wrap reveal">
-        <div class="pillar reverse">
-            <div class="pillar-text">
-                <span class="eyebrow">PHYSICAL EXAMINATION</span>
-                <h2>Where you tap matters. So does how.</h2>
-                <p>
-                    An anatomically accurate body silhouette with invisible polygon hit
-                    regions surfaces named exam areas. Each region accepts inspection,
-                    palpation, percussion, and auscultation as discrete techniques;
-                    auscultation includes audio playback at the relevant location.
-                </p>
-                <ul class="pillar-list">
-                    <li>Anterior, posterior, and lateral views; gender-specific.</li>
-                    <li>Cranial nerves, motor, sensory, reflexes, and coordination as discrete examinables alongside the regional map.</li>
-                    <li>Idempotent recording keyed on (session, region, technique) — retries do not duplicate findings.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/examination.png" alt="Physical Examination screen — an Anterior/Posterior body silhouette with the chest region highlighted, an examination-technique chooser with Auscultation selected, and a clinical narrative reading 'Vesicular breath sounds are heard throughout all lung zones with no added sounds…'.">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Research-grade analytics dashboard ────────────────────── -->
-<section id="analytics">
-    <div class="wrap reveal">
-        <div class="pillar">
-            <div class="pillar-text">
-                <span class="eyebrow accent">RESEARCH-GRADE LEARNING ANALYTICS</span>
-                <h2>Clustering, pattern mining, transition networks — in real time.</h2>
-                <p>
-                    A research-grade learning-analytics dashboard runs against the
-                    live session. Every trainee action is encoded as a verb-typed
-                    event, fed through unsupervised clustering, sequence and process
-                    mining, and surfaced as state distributions, directed weighted
-                    transition networks, and temporal proportion plots — per cluster
-                    and per session. The pipeline is the same one a learning-analytics
-                    researcher would build by hand. It runs while the case is still in
-                    progress.
-                </p>
-                <ul class="pillar-list">
-                    <li><strong>Real-time clustering</strong> of trainee action sequences via unsupervised machine learning. Silhouette score, average sequence length per cluster, and per-cluster state-distribution histograms are all reported on the same dashboard.</li>
-                    <li><strong>Sequence and process mining</strong> — ordered trajectories per session, state frequencies, density, edge counts, temporal stacked plots showing how state proportions evolve across the timesteps of the case.</li>
-                    <li><strong>Transition-network analytics</strong> — directed weighted graphs with edge probabilities, in-strength centrality, and a per-cluster network so behavioural archetypes can be compared side-by-side.</li>
-                    <li><strong>Pattern mining</strong> over the verb-coded action stream surfaces recurring micro-sequences (communicating → regulating → examining → treating, …) that distinguish a cluster from the cohort baseline.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/analytics-clusters.png" alt="Research-grade learning-analytics dashboard. A top strip shows session-level statistics — 65 sequences, 783 events, 10 states, 45.0% density, 45 edges — alongside '3 clusters found, silhouette score 0.393'. Below, three columns for Cluster 1 (7 sequences, 11%, avg length 35.6), Cluster 2 (44 sequences, 68%, avg length 6.6), and Cluster 3 (14 sequences, 22%, avg length 17.1), each with a horizontal state-distribution bar chart (communicating, navigating, regulating, examining, treating, …), a circular directed-weighted transition network, and a stacked-bar temporal proportion plot showing how state mix evolves across the timesteps of each cluster.">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Real-time emotions ────────────────────────────────────── -->
-<section id="affect" class="band">
-    <div class="wrap reveal">
-        <div class="pillar reverse">
-            <div class="pillar-text">
-                <span class="eyebrow accent">REAL-TIME EMOTIONS</span>
-                <h2>Facial affect, valence and arousal — captured on-device, joined to the action stream.</h2>
-                <p>
-                    Camera-side emotion analytics runs entirely in the browser.
-                    Multi-task affect models produce a dominant-emotion estimate and
-                    valence/arousal regression at a configurable sample rate; only
-                    aggregated windows ever leave the device. The affect stream shares
-                    the session, the time base, and the active room with the action
-                    stream, so behavioural and affective trajectories are analysed
-                    jointly with no offline join.
-                </p>
-                <ul class="pillar-list">
-                    <li><strong>Emotion co-occurrence map</strong> and an <strong>emotion heat strip</strong> — per-emotion totals and session share, laid out over the timeline so shifts against the baseline are legible at a glance.</li>
-                    <li><strong>Affect plane</strong> — every window placed on a valence × arousal field, with the trajectory drawn between consecutive windows.</li>
-                    <li><strong>Dynamics &amp; arousal–valence mix</strong> — affect speed and instability as time series, plus the split across positive / negative × active / calm quadrants.</li>
-                    <li>Browser-only inference (MediaPipe face landmarker + ONNX Runtime Web); the server validator rejects raw frames or landmarks at the wire. Per-tenant capture config and frozen-at-write visibility flags.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/real-time-emotions.png" alt="Real-time emotions dashboard, four panels. Top-left: an emotion co-occurrence map — emotions arranged in a ring with weighted arcs between those that co-occur. Top-right: an emotion heat strip over the timeline with per-emotion totals and session share, neutral dominant with disgust, anger and sadness against the baseline. Bottom-left: an affect plane scattering windows across high/low arousal and negative/positive valence, mostly clustered negative. Bottom-right: Dynamics & Arousal-Valence Mix — affect-speed and instability traces above a positive/negative × active/calm quadrant breakdown.">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Gaze & attention tracking ─────────────────────────────── -->
-<section id="gaze">
-    <div class="wrap reveal">
-        <div class="pillar">
-            <div class="pillar-text">
-                <span class="eyebrow accent">GAZE &amp; ATTENTION TRACKING</span>
-                <h2>Where the trainee looked — per screen, per room, over time.</h2>
-                <p>
-                    The same on-device camera stream estimates gaze. Rohy never keeps a
-                    raw point stream — only aggregated windows: a screen-shaped centroid
-                    per window, a nine-zone share of attention, and dwell on the
-                    on-screen targets that matter — the patient's face, the vitals
-                    monitor, the chat. Because every window is room-stamped, attention
-                    resolves per screen — the patient room, examination, laboratory —
-                    not just for the session as a whole.
-                </p>
-                <ul class="pillar-list">
-                    <li><strong>Screen zones</strong> — point-weighted share of gaze across a 3×3 grid of screen ninths, so a centre-weighted “eyes on the patient” pattern reads at a glance.</li>
-                    <li><strong>Gaze centroids</strong> — each window's centroid on a screen-shaped canvas (dot size ∝ √points). Aggregates only — never a raw point stream.</li>
-                    <li><strong>Gaze maps by screen</strong> — a separate zone map per room (Patient · Examination · Laboratory · …), each labelled with its window count, so attention is compared across settings.</li>
-                    <li><strong>Attention targets &amp; dynamics</strong> — AOI dwell on the patient's face, monitor and chat with a room × target table; gaze-target and location transition networks; per-window dispersion, calibration quality, off-screen share and time-at-patient.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/gaze-tracking.png" alt="Gaze-tracking dashboard. Top-left 'Screen zones' — point-weighted share of gaze across a 3×3 grid of screen ninths, concentrated on middle-center 61% and top-center 28%. Top-right 'Gaze centroids' — hundreds of translucent circles clustered left-of-centre on a screen-shaped canvas labelled screen top-left to bottom-right, dot size proportional to the square root of tracked points; aggregates only, never a raw point stream. Bottom 'Gaze maps by screen' — three per-room 3×3 zone maps: Patient (main) · 89 windows (50% middle-center, 42% top-center), Examination · 63 windows (59% middle-center, 41% top-center), and Lab · 2 windows (64% middle-center, 28% top-center).">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Learning-analytics stream enriched with vitals ────────── -->
-<section>
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">VITAL-ENRICHED EVENT STREAM</span>
-            <h2>Every event row carries the patient's vitals — and the trainee's affect.</h2>
-            <p class="lead">
-                The session is not a black box. Every navigation, examination, order,
-                treatment, message, and alarm response is captured as a verb-typed event;
-                each row is enriched server-side with the active room, the contemporary
-                vital signs — heart rate, blood pressure, SpO₂, respiratory rate,
-                temperature, EtCO₂ — and the corresponding affect window at the moment
-                the action occurred.
-            </p>
-            <ul class="pillar-list">
-                <li>Verb-coded action stream merged into clinical labels for downstream analysis.</li>
-                <li>Each row stamped with the active room (Patient · Examination · Laboratory · Radiology · Consultant) so behavioural trajectories segregate by setting.</li>
-                <li>Vital-sign columns on every event let behavioural sequences correlate directly with physiologic state — no offline merge required.</li>
-                <li>Affect columns on every event row (valence, arousal, dominant emotion) close the loop on multimodal analysis.</li>
-                <li>Cohort export in CSV or JSON: login logs, chat logs, complete-session bundles, questionnaire responses.</li>
-            </ul>
-        </div>
-    </div>
-</section>
-
-<!-- ── Case debrief ──────────────────────────────────────────── -->
-<section>
-    <div class="wrap reveal">
-        <div class="pillar reverse">
-            <div class="pillar-text">
-                <span class="eyebrow">CASE DEBRIEF</span>
-                <h2>A tutor, not a judge.</h2>
-                <p>
-                    The End &amp; Debrief button hands the finished case to a Socratic
-                    discussant — a senior clinician-educator persona with its own voice,
-                    avatar, and LLM, separate from the patient. The opening turn is sent
-                    as a silent LLM call so meta-prompts never appear in the
-                    learner-utterance audit trail; the debrief itself probes reasoning,
-                    scaffolds answers, and asks before telling.
-                </p>
-                <ul class="pillar-list">
-                    <li>Separate persona, voice, avatar, and LLM from the patient; per-case overrides are first-class.</li>
-                    <li>Captures structured feedback into session notes for cohort export.</li>
-                    <li>Same multimodal infrastructure as the patient — text or voice, lipsync, subtitle overlay.</li>
-                </ul>
-            </div>
-            <figure class="pillar-shot">
-                <img src="assets/debrief.png" alt="Case Debrief landing screen — patient portrait and chief complaint on the left, a Default Discussant persona labelled 'Case Debrief Tutor' on the right with a Start debrief button. The Consultant room is active in the bottom navigator.">
-            </figure>
-        </div>
-    </div>
-</section>
-
-<!-- ── Runs on your infra ────────────────────────────────────── -->
-<section class="infra">
-    <div class="wrap reveal">
-        <div class="infra-grid">
+<!-- ── Infrastructure ────────────────────────────────────────── -->
+<section class="infra band" id="infra">
+    <div class="wrap">
+        <div class="infra-grid reveal">
             <div>
-                <span class="eyebrow accent">YOUR INFRASTRUCTURE</span>
-                <h2>Local-first. Cloud optional.</h2>
+                <span class="eyebrow accent">Your infrastructure</span>
+                <h2>Local first. Cloud optional.</h2>
                 <p>
-                    Local LLMs and local TTS are first-class. Cloud providers are
-                    optional. The default install path puts a local voice in the
-                    patient's mouth and routes inference through a local model server
-                    on the same host. Air-gapped installation is a documented operator
-                    path.
+                    The default install puts a local voice in the patient's mouth and routes
+                    inference through a local model server on the same host. Air-gapped
+                    installation is a documented operator path. Cloud language-model and
+                    text-to-speech providers can be added per tenant.
                 </p>
                 <p>
-                    Multi-tenant ready, role-hierarchy aware, audit-logged,
-                    soft-deleted with right-to-erasure purge, instrumented with
+                    Multi-tenant, role-hierarchy aware, audit-logged, and instrumented with
                     structured observability.
                 </p>
             </div>
             <div>
-                <div>
+                <div class="infra-col">
                     <div class="infra-col-title">LOCAL</div>
                     <div class="infra-tags">
                         <span class="tag local"><span class="dot"></span>Kokoro TTS</span>
@@ -1011,9 +418,10 @@
                         <span class="tag local"><span class="dot"></span>Ollama</span>
                         <span class="tag local"><span class="dot"></span>MediaPipe</span>
                         <span class="tag local"><span class="dot"></span>ONNX Runtime Web</span>
+                        <span class="tag local"><span class="dot"></span>Browser speech-to-text</span>
                     </div>
                 </div>
-                <div style="margin-top: 24px;">
+                <div class="infra-col">
                     <div class="infra-col-title">CLOUD (OPTIONAL)</div>
                     <div class="infra-tags">
                         <span class="tag cloud"><span class="dot"></span>Anthropic Claude</span>
@@ -1030,77 +438,62 @@
 
 <!-- ── Install & update ──────────────────────────────────────── -->
 <section id="install">
-    <div class="wrap reveal">
-        <div class="single">
-            <span class="eyebrow">INSTALL &amp; UPDATE</span>
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Install and update</span>
             <h2>Install in the shape that fits the site.</h2>
             <p class="lead">
-                Four install paths and two upgrade paths cover the realistic deployment
-                surface — from a single classroom laptop to an air-gapped institutional
-                host. The same operator tool handles in-place upgrades with snapshot
-                and automatic rollback on failure.
+                Four install paths and two upgrade paths cover the deployment surface, from a
+                single classroom laptop to an air-gapped institutional host. The operator tool
+                handles in-place upgrades with a database snapshot and automatic rollback on
+                failure. The release workflow boots the published image and runs the technical
+                test suite against it before a tag is finalised.
             </p>
+        </div>
 
+        <div class="reveal">
             <div class="install-h3">Install</div>
             <div class="install-grid">
-
                 <div class="install-card recommended">
                     <span class="tag-rec">RECOMMENDED</span>
                     <h4>Published Docker image</h4>
-                    <p>Multi-arch image, smoke-tested against the release tag before it ships. Migrations auto-run on first boot.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">docker pull</span> ghcr.io/mohsaqr/rohy:v1.0.0</div>
-                        <div><span class="cmd">docker compose</span> -f deploy/docker/compose.yml up -d</div>
-                    </div>
+                    <p>Multi-arch image, smoke-tested against the release tag before it ships. Migrations run automatically on first boot. The current tag is listed on the releases page.</p>
+                    <div class="code-block"><span class="cmd">docker pull ghcr.io/mohsaqr/rohy:v2.8.0</span>
+<span class="cmd">docker compose -f deploy/docker/compose.yml up -d</span></div>
                 </div>
-
                 <div class="install-card">
                     <h4>Linux + systemd from source</h4>
-                    <p>Full production install — bootstrap script wires up <code>rohy.service</code>, nginx, certbot, and the operator user.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">sudo</span> deploy/bootstrap.sh \</div>
-                        <div>  --frontend-url=https://your-host/rohy</div>
-                    </div>
+                    <p>Full production install. The bootstrap script wires up the service unit, nginx, certbot and the operator user.</p>
+                    <div class="code-block"><span class="cmd">sudo deploy/bootstrap.sh \</span>
+<span class="cmd">  --frontend-url=https://your-host/rohy</span></div>
                 </div>
-
                 <div class="install-card">
-                    <h4>Single-machine</h4>
-                    <p>Personal devbox, classroom lab, demo box. No systemd, no nginx — runs directly under your user account.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">bash</span> deploy/local-install.sh</div>
-                    </div>
+                    <h4>Single machine</h4>
+                    <p>Personal devbox, classroom lab, demo box. Runs directly under your user account without systemd or nginx.</p>
+                    <div class="code-block"><span class="cmd">bash deploy/local-install.sh</span></div>
                 </div>
-
                 <div class="install-card">
                     <h4>Air-gapped</h4>
-                    <p>Self-contained source tarball plus a Docker image tarball, both sha256-verified. Documented operator path for sites without internet.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">bash</span> deploy/bundle-airgap.sh</div>
-                        <div><span class="comment"># transfer + install per docs</span></div>
-                    </div>
+                    <p>A self-contained source tarball plus a Docker image tarball, both sha256-verified, with the Oyon model bundles included. A documented operator path for sites without internet.</p>
+                    <div class="code-block"><span class="cmd">bash deploy/bundle-airgap.sh</span>
+<span class="comment"># transfer + install per docs</span></div>
                 </div>
             </div>
 
             <div class="install-h3">Update</div>
             <div class="install-grid">
-
                 <div class="install-card">
                     <h4>Source / systemd</h4>
-                    <p>Snapshot the DB, run the pre-flight, apply, verify with smoke and the 27-check tech-test; automatic rollback on failure.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">sudo</span> rohy-update check</div>
-                        <div><span class="cmd">sudo</span> rohy-update apply</div>
-                        <div><span class="cmd">sudo</span> rohy-update rollback   <span class="comment"># if you need it</span></div>
-                    </div>
+                    <p>Snapshot the database, run the pre-flight, apply, verify with the smoke test and the technical test suite. Rollback is automatic on failure.</p>
+                    <div class="code-block"><span class="cmd">sudo rohy-update check</span>
+<span class="cmd">sudo rohy-update apply</span>
+<span class="cmd">sudo rohy-update rollback</span>   <span class="comment"># if you need it</span></div>
                 </div>
-
                 <div class="install-card">
                     <h4>Docker</h4>
-                    <p>Bump the image tag. Migrations auto-run on the new container's first boot; rollback is a pull of the previous tag.</p>
-                    <div class="code-block">
-                        <div><span class="cmd">docker compose pull</span> rohy</div>
-                        <div><span class="cmd">docker compose</span> up -d</div>
-                    </div>
+                    <p>Bump the image tag. Migrations run on the new container's first boot; rollback is a pull of the previous tag.</p>
+                    <div class="code-block"><span class="cmd">docker compose pull rohy</span>
+<span class="cmd">docker compose up -d</span></div>
                 </div>
             </div>
 
@@ -1118,192 +511,89 @@
     </div>
 </section>
 
-<!-- ── About the author ──────────────────────────────────────── -->
+<!-- ── Author ────────────────────────────────────────────────── -->
 <section class="author" id="author">
-    <div class="wrap reveal">
-        <div class="author-card">
-            <span class="eyebrow accent">ABOUT THE AUTHOR</span>
-            <h2>Built by a medical doctor — for medical doctors.</h2>
-
-            <blockquote class="author-quote">
-                “As a computer scientist now — who was a medical doctor before
-                — I was thinking of how to link computer science, analytics,
-                clinical reasoning, and medicine.”
-            </blockquote>
-
-            <p class="author-body">
-                <strong>Mohammed Saqr</strong> is a Professor of Computer Science at
-                the University of Eastern Finland. He
-                <strong>studied, trained, and practised medicine at the Faculty
-                of Medicine, University of Alexandria</strong>, where he
-                specialised in <strong>Neurology</strong> at the university's
-                flagship teaching hospital. He taught clinical reasoning to
-                medical students and residents, and has researched medicine,
-                medical education, learning analytics, and problem-based
-                learning extensively over the years.
-            </p>
-
-            <p class="author-body">
-                Rohy is the product of that joint perspective. The clinical
-                surfaces — symptom-led interview, alarm-bounded vitals,
-                family-as-surrogate when the patient cannot speak, a consultant
-                page that takes time — reflect what a clinician would actually
-                want a trainee to encounter. The analytics surfaces —
-                verb-coded events, real-time clustering, sequence and process
-                mining, transition networks, vital- and affect-enriched logs —
-                are what a learning-analytics researcher would expect to find.
-                <strong>Designed by a medical doctor, for the medical doctors
-                and educators who train the next ones.</strong>
-            </p>
-
-            <div class="author-meta">
-                <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me →</a>
-                <span class="dot">·</span>
-                <span>Professor of Computer Science · University of Eastern Finland</span>
-                <span class="dot">·</span>
-                <span>Trained neurologist · Alexandria Faculty of Medicine</span>
+    <div class="wrap">
+        <div class="author-card author-card-compact reveal">
+            <a class="author-photo" href="about.html">
+                <img src="assets/author.jpg" alt="Portrait of Mohammed Saqr.">
+            </a>
+            <div>
+                <span class="eyebrow accent">About the author</span>
+                <h2>Designed by a physician and computer scientist.</h2>
+                <p class="author-body">
+                    <strong>Mohammed Saqr</strong> is a Professor of Computer Science at the
+                    University of Eastern Finland and a trained neurologist from the Faculty of
+                    Medicine, University of Alexandria. Rohy joins the two perspectives: the
+                    clinical surfaces reflect what a clinician wants a trainee to encounter, and
+                    the analytics surfaces are what a learning-analytics researcher expects to
+                    find.
+                </p>
+                <div class="cta-row" style="justify-content: flex-start; margin: 8px 0 0;">
+                    <a class="btn btn-primary" href="about.html">About the author <span class="arrow">→</span></a>
+                    <a class="btn btn-ghost" href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ── Footer ────────────────────────────────────────────────── -->
+</main>
+
+<!-- ── Footer (identical on every page) ──────────────────────── -->
 <footer>
     <div class="wrap">
         <div class="footer-grid">
             <div class="footer-brand">
-                <div class="brand">
+                <a class="brand" href="index.html">
                     <span class="brand-dot"></span>
                     <span>rohy</span>
-                </div>
+                </a>
                 <p>
-                    AI-driven virtual patient platform for clinical reasoning research
-                    and education. Built by Mohammed Saqr — Professor of Computer
-                    Science, University of Eastern Finland.
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
                 </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="index.html">Overview</a>
+                <a href="rooms.html">Rooms</a>
+                <a href="whats-new.html">What's new</a>
+                <a href="help.html">Help</a>
+                <a href="about.html">About the author</a>
+                <a href="index.html#install">Install</a>
             </div>
             <div class="footer-col">
                 <h4>Project</h4>
                 <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
-                <a href="whats-new.html">What's new</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
             </div>
             <div class="footer-col">
                 <h4>Docs</h4>
+                <a href="https://rohy.lacarm.com/rohy/docs/trainee/" target="_blank" rel="noopener">Trainee guides</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">Migrations</a>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© 2026 Mohammed Saqr · MIT · <a href="https://www.saqr.me" target="_blank" rel="noopener" style="color:inherit;">saqr.me</a></span>
-            <span>Built for clinical reasoning research.</span>
+            <span>© 2026 Mohammed Saqr · <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
         </div>
     </div>
 </footer>
 
-<!-- ── Lightbox (screenshot zoom) ────────────────────────────── -->
+<!-- ── Lightbox ──────────────────────────────────────────────── -->
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer" hidden>
     <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close screenshot viewer">×</button>
     <img id="lightbox-img" alt="">
     <div class="lightbox-hint">Click outside or press Esc to close</div>
 </div>
 
-<script>
-    // Smooth scroll for in-page anchors.
-    document.querySelectorAll('a[href^="#"]').forEach(a => {
-        a.addEventListener('click', (e) => {
-            const id = a.getAttribute('href').slice(1);
-            if (!id) return;
-            const target = document.getElementById(id);
-            if (target) {
-                e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                history.replaceState(null, '', '#' + id);
-            }
-        });
-    });
-
-    // Reveal on scroll.
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!reduceMotion && 'IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('in');
-                    io.unobserve(entry.target);
-                }
-            }
-        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
-        document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-    } else {
-        document.querySelectorAll('.reveal').forEach(el => el.classList.add('in'));
-    }
-
-    // Lightbox — click any screenshot to view it full-screen. Backdrop /
-    // close button / Escape all dismiss. Keyboard-accessible: each shot
-    // takes focus and Enter / Space opens it like a real button.
-    (function setupLightbox() {
-        const lb = document.getElementById('lightbox');
-        const lbImg = document.getElementById('lightbox-img');
-        const lbClose = document.getElementById('lightbox-close');
-        let lastFocus = null;
-
-        function open(src, alt) {
-            lastFocus = document.activeElement;
-            lbImg.src = src;
-            lbImg.alt = alt || '';
-            lb.hidden = false;
-            // Force a reflow before adding .open so the fade-in keyframe runs.
-            void lb.offsetWidth;
-            lb.classList.add('open');
-            document.body.classList.add('no-scroll');
-            lbClose.focus();
-        }
-        function close() {
-            lb.classList.remove('open');
-            lb.hidden = true;
-            document.body.classList.remove('no-scroll');
-            // Drop the src so a long-poll on the cached file isn't sitting
-            // in memory while the page scrolls on.
-            lbImg.removeAttribute('src');
-            if (lastFocus && typeof lastFocus.focus === 'function') {
-                lastFocus.focus();
-                lastFocus = null;
-            }
-        }
-
-        document.querySelectorAll('.pillar-shot img, .hero-shot img').forEach(img => {
-            img.setAttribute('role', 'button');
-            img.setAttribute('tabindex', '0');
-            img.setAttribute('aria-haspopup', 'dialog');
-            img.addEventListener('click', () => open(img.currentSrc || img.src, img.alt));
-            img.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    open(img.currentSrc || img.src, img.alt);
-                }
-            });
-        });
-
-        // Click anywhere on the backdrop closes; clicks on the inner image
-        // don't bubble (so the picture itself doesn't dismiss).
-        lb.addEventListener('click', (e) => {
-            if (e.target === lb) close();
-        });
-        lbImg.addEventListener('click', (e) => e.stopPropagation());
-        lbClose.addEventListener('click', close);
-
-        document.addEventListener('keydown', (e) => {
-            if (!lb.hidden && e.key === 'Escape') {
-                e.preventDefault();
-                close();
-            }
-        });
-    })();
-</script>
-
+<script src="site.js"></script>
 </body>
 </html>

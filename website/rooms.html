@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The rooms — Rohy</title>
+    <meta name="description" content="Every room in the Rohy clinical simulation: Patient, 3D Room, Examination, Laboratory, Radiology and diagnostics with a DICOM reading room and a 12-lead ECG workstation, Pathology, and the Consultant room with the post-case debrief.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="The rooms — Rohy">
+    <meta property="og:description" content="A specialised room for each task, and one running case: Patient, 3D Room, Examination, Laboratory, Radiology, 12-lead ECG, Pathology, PACS, Consultant.">
+    <meta property="og:image" content="assets/room-3d.jpg">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="index.html">Overview</a>
+            <a href="rooms.html" aria-current="page">Rooms</a>
+            <a href="whats-new.html">What's new</a>
+            <a href="help.html">Help</a>
+            <a href="index.html#install" class="optional">Install</a>
+            <a href="about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">The clinical workspace</span>
+        <h1>A specialised room for each task. <span class="accent">One running case.</span></h1>
+        <p class="sub">
+            Rohy organises the encounter into peer rooms. The core rooms are Patient,
+            Examination, Laboratory, Radiology and Consultant. Plugin rooms appear
+            in the navigator when the case enables them: 3D Room, 12-lead ECG, Pathology and
+            PACS. The case keeps running while the learner moves between them. Laboratory results become ready while
+            the learner is talking to the patient, a consultant arrives while imaging is being
+            reviewed, and treatment effects continue in the background. Clinical practice
+            requires attention distributed across several sources of information and several
+            tasks, and the room model preserves how each learner distributes it.
+        </p>
+        <div class="cta-row">
+            <a class="btn btn-primary" href="#patient">Start with the Patient room <span class="arrow">→</span></a>
+            <a class="btn btn-ghost" href="index.html">Platform overview</a>
+        </div>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#patient">Patient</a>
+            <a href="#room-3d">3D Room</a>
+            <a href="#examination">Examination</a>
+            <a href="#laboratory">Laboratory</a>
+            <a href="#radiology">Radiology</a>
+            <a href="#ecg">12-lead ECG</a>
+            <a href="#pathology">Pathology</a>
+            <a href="#pacs">PACS</a>
+            <a href="#consultant">Consultant</a>
+            <a href="#between-rooms">Between rooms</a>
+            <a href="#guides">Learner guides</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── 01 Patient ────────────────────────────────────────────── -->
+<section id="patient">
+    <div class="wrap">
+        <div class="pillar reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">01 · Patient</span>
+                <h2>The interview, the monitor and the treatments.</h2>
+                <p>
+                    Every case starts here. The patient answers by text or by voice through an
+                    animated 3D avatar that lip-syncs the spoken reply, blinks and holds eye
+                    contact. The patient speaks from the case's own history and personality, in lay
+                    language, and stays within what a patient at this stage of the encounter would
+                    know. In voice mode a cinema-style subtitle renders the reply as the model
+                    streams it.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>The live monitor.</strong> Heart rate, SpO₂, non-invasive blood pressure, respiratory rate, temperature and end-tidal CO₂, with ECG, plethysmograph and respiration waveforms synthesised in real time.</li>
+                    <li><strong>Alarms.</strong> A threshold crossing latches a banner with Snooze and Acknowledge. Both are timestamped, and the physiology continues until it is treated.</li>
+                    <li><strong>Treatments, Records and Memory.</strong> The Treatments panel orders and then administers medications, fluids, oxygen and manoeuvres. The Records drawer holds the chart, medication history, allergies and social history. Memory holds what the patient has already been told.</li>
+                    <li><strong>The care team.</strong> The bedside nurse, the family member and the paged consultant join the same transcript, each with its own knowledge scope.</li>
+                    <li><strong>End &amp; Debrief.</strong> The deliberate action that stops the timeline, locks orders, exams and chat, and opens the debrief.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/patient-room.jpg" alt="The Patient room. A 3D avatar of John Martinez, 55, above the chat panel on the left; a live monitor on the right with lead II ECG, plethysmograph and respiration waveforms, heart rate 120, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 and EtCO2 32; a latched warning banner reading 'HR high, hr = 122 (limit ≤ 120)' with Snooze and Acknowledge buttons; Treatments, Records and Memory buttons; and the room navigator along the bottom.">
+                <figcaption>Avatar, dialogue and the live monitor in one space. The session clock, the alarm bell and the End &amp; Debrief action sit in the header.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 02 3D Room ────────────────────────────────────────────── -->
+<section id="room-3d" class="band">
+    <div class="wrap">
+        <div class="pillar reverse reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">02 · 3D Room · Rohy 3</span>
+                <h2>The same patient, seen from the bedside.</h2>
+                <p>
+                    Rohy 3 adds a 3D bedside room as the second room in the navigator. The case's
+                    patient lies in bed with the live monitor on the wall, a camera wheel that
+                    changes the view, and arrows that step around the bed. The room is drawn over
+                    the Patient room, so the monitor keeps running and the conversation is the same
+                    one: a question asked at the bedside appears in the chat transcript, and a reply
+                    typed in the chat is captioned here.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Talk out loud.</strong> Tap the microphone or press Space to speak to the patient. The reply is spoken when a voice is configured and always captioned.</li>
+                    <li><strong>Examine at the bedside.</strong> Clicking a region of the body opens the examination wheel. The finding opens the same chart, with the same auscultation sounds, as the Examination room, and counts exactly like an exam performed there.</li>
+                    <li><strong>The chart and the IV pole</strong> on the bedside table open the Records and Treatments drawers.</li>
+                    <li><strong>Shared physiology.</strong> The bedside monitor and the Patient room monitor read from the same session, so a treatment given here moves the vitals everywhere.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/room-3d.jpg" alt="The 3D Room during the Acute Chest Pain – STEMI case. A patient in a tweed jacket lies in a hospital bed in a rendered ward with an IV pole and a bedside table. A camera wheel labelled 'View: Patient' sits at the left, a Move arrow pad at the top, and a live monitor panel at the top right shows sinus tachycardia on lead II, heart rate 110, SpO2 94, respiratory rate 22, NIBP 158/94 and temperature 37.2 with the status 'Stabilizing — physiology is responding'. A caption reads: 'Doctor… my chest. It is like something heavy is sitting on it. It started about three quarters of an hour ago and it will not let go. My arm aches, my jaw aches. I am soaked through. Please… my father died of this.' Body map, Treatments and Records buttons sit at the bottom left, 'Tap to talk' at the bottom centre, and the room navigator shows 3D Room selected.">
+                <figcaption>The bedside. One patient, one conversation, one set of vitals, shared with the Patient room.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 03 Examination ────────────────────────────────────────── -->
+<section id="examination">
+    <div class="wrap">
+        <div class="pillar reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">03 · Examination</span>
+                <h2>Physical examination as a structured sequence.</h2>
+                <p>
+                    The learner selects an anatomical region on a body map, then an examination
+                    technique. Each combination reveals the finding the case author prepared for
+                    it, or the normal description when none was written. The system records which
+                    findings were available and what the learner chose to examine, so the
+                    examination log is a trace of information-seeking behaviour that the debrief
+                    can use to discuss both observed findings and clinically relevant omissions.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>67 named regions</strong> on an anatomically accurate silhouette with invisible polygon hit areas. Anterior, posterior and lateral views, with body maps differentiated by patient characteristics.</li>
+                    <li><strong>Four techniques</strong> per region: inspection, palpation, percussion and auscultation. Neurological examination adds cranial nerves, motor, sensory, reflexes and coordination as discrete examinables, and special tests are available where the case defines them.</li>
+                    <li><strong>Auscultation with a point picker.</strong> Aortic, pulmonic, Erb's point, tricuspid and mitral areas and the lung fields, each with audio playback where the case provides it.</li>
+                    <li><strong>Examined and abnormal regions are marked</strong> on the figure. The examination log at the bottom is the learner's own record and is what the debriefing discussant receives.</li>
+                    <li><strong>Idempotent recording</strong> keyed on session, region and technique, so a retry produces one finding. Findings can be exported, and free-text notes travel with the session.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/physical-exam.jpg" alt="The Examination room. An anterior male body silhouette on the left with the chest region highlighted and a legend for hover, normal, abnormal and selected. On the right, a technique chooser with Inspection, Palpation (marked Done), Percussion and Auscultation (selected). Below it, 'Auscultation – Chest' with a cardiac point picker showing Tricuspid selected at the 4th intercostal space, left sternal border, a clinical narrative reading 'Vesicular breath sounds are heard throughout all lung zones with no added sounds…', an audio player for tricuspid sounds, and clickable points for Aortic, Pulmonic, Erb's Point, Tricuspid, Mitral (Apex), left and right lung and bases. An examination log lists Abdomen – Inspection (abnormal), Chest – Palpation and Chest – Auscultation with timestamps.">
+                <figcaption>Examination on the body map. Region, then technique, then the finding, with auscultation localised to valve areas and lung fields.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 04 Laboratory ─────────────────────────────────────────── -->
+<section id="laboratory" class="band">
+    <div class="wrap">
+        <div class="pillar reverse reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">04 · Laboratory</span>
+                <h2>Deciding what to order is part of the diagnostic work.</h2>
+                <p>
+                    The Laboratory presents a complete catalogue, so the learner decides what to
+                    request. The catalogue holds over 200 tests in more than 30 groups: haematology,
+                    metabolic and renal testing, liver function, coagulation, thyroid and other
+                    endocrine investigations, blood gases, cardiac markers, inflammatory markers,
+                    iron studies, lipids, diabetes, urinalysis, toxicology, drug levels, body fluids,
+                    cerebrospinal fluid, autoimmune markers and more. Reference ranges vary by sex
+                    where that is clinically appropriate.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Three columns.</strong> The searchable catalogue on the left, the rendered report in the centre, the worklist on the right.</li>
+                    <li><strong>Pending, ready, viewed.</strong> Each test carries a turnaround inside a one-to-five-minute band. The worklist moves an order from pending to ready on its own, a count badge appears on the room button, and opening the report marks it viewed. Reports stay available for the rest of the session.</li>
+                    <li><strong>A hospital-style report.</strong> Patient, accession number, report date and status, then result, unit, reference range and a high, low or normal flag the learner can toggle off.</li>
+                    <li><strong>Panels for common workups</strong> such as acute myocardial infarction, diabetic ketoacidosis, sepsis, stroke and pulmonary embolism, and an administrator bulk-import for additional tests.</li>
+                </ul>
+                <p style="font-size: 15px;">
+                    The delay approximates a defining feature of clinical environments: decisions
+                    are often made while the evidence is still incomplete.
+                </p>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/laboratory.jpg" alt="The Laboratory room during the Acute Chest Pain – STEMI case. Left: a catalogue of 201 tests with a search box and group filter, listing bilirubin, AST, ALT, alkaline phosphatase, GGT and LDH, each with a 3-minute turnaround. Centre: a laboratory report for John Martinez, accession LAB-000056, status Final, showing ALT (SGPT) 30.00 U/L against a reference range of 7–56 with a Normal flag, plus Show Ranges and Show Flags toggles and a legend for high, low and normal. Right: a worklist of 12 with AST and alkaline phosphatase under Ready and ten tests under Viewed.">
+                <figcaption>Catalogue, report and worklist. Orders move through pending, ready and viewed, with a controlled delay between requesting information and receiving it.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 05 Radiology & diagnostics ────────────────────────────── -->
+<section id="radiology">
+    <div class="wrap">
+        <div class="pillar reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">05 · Radiology</span>
+                <h2>Imaging is requested, awaited and then read.</h2>
+                <p>
+                    Imaging follows the same lifecycle as the laboratory. The catalogue holds 74
+                    orderable studies, 58 imaging and 16 diagnostic, across nine modalities:
+                    radiography, computed tomography, magnetic resonance imaging, ultrasound,
+                    echocardiography, nuclear medicine, fluoroscopy, mammography and DEXA. Orders move
+                    from pending to ready to viewed, and reports land in the worklist on their own.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Ready, pending and viewed counters</strong> summarise the worklist; each pending study shows its remaining time.</li>
+                    <li><strong>Per-case reports</strong> authored by the educator, with image and video upload for case-attached findings.</li>
+                    <li><strong>Reading happens in two plugin rooms.</strong> DICOM studies open in the PACS room and electrocardiograms in the 12-lead ECG room, both described below. Plugin rooms are added through the plugin capability surface and appear in the navigator when the case enables them.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/radiology-worklist.jpg" alt="The Radiology and diagnostics room. Left: a catalogue of 74 studies filtered as All 74, Imaging 58, Diagnostics 16, listing ultrasound aorta and cardiac studies such as stress echocardiogram, dobutamine stress echo, cardiac MRI, cardiac MRI stress perfusion, coronary CT angiography and CT coronary calcium score, each with a turnaround. Centre: counters reading Ready 0, Pending 4, Viewed 0, and a notice that four studies are pending and reports land automatically. Right: a pending worklist with cardiac MRI, stress echocardiogram, FAST exam and ultrasound aorta showing two to five minutes remaining. A toast confirms 'Ordered 2 study(s)'.">
+                <figcaption>The radiology worklist. Imaging is requested and awaited, with the remaining time on each pending study.</figcaption>
+            </figure>
+        </div>
+
+        <div class="shot-stack wide-shot reveal" id="ecg">
+            <div class="section-head" style="margin-bottom: 8px;">
+                <span class="eyebrow accent">06 · 12-lead ECG · plugin room</span>
+                <h3 style="font-size: 24px; margin-bottom: 10px;">The 12-lead ECG workstation</h3>
+                <p>
+                    Electrocardiography gets a dedicated workstation so that interpretation is an
+                    active measurement task. Calibrated paper with selectable gain and sweep speed,
+                    diagnostic and monitor filters with 50 and 60 Hz notch options, and measurement
+                    calipers for interval, amplitude and rate. Click two points and the interval is
+                    measured and kept in a list for review. A chest-electrode map and a frontal-plane
+                    axis diagram show which wall each lead represents. Because the learner's
+                    measurements are retained, the debrief can discuss how a tracing was inspected
+                    and measured.
+                </p>
+            </div>
+            <figure class="shot">
+                <img src="assets/ecg-workstation.jpg" alt="ECGyon, the 12-lead ECG workstation. Controls for gain (5, 10, 20 mm/mV), speed (12.5, 25, 50 mm/s), filter (raw, diagnostic, monitor, 50 Hz, 60 Hz), caliper mode (interval, amplitude, rate) and paper grid. A twelve-lead tracing on calibrated pink paper with leads I, II, III, aVR, aVL, aVF and V1 to V6 plus a lead II rhythm strip, and an active caliper reading Δ 202 ms, 0.13 mV. On the right, a chest-electrode diagram, a frontal-plane hexaxial diagram with lead II highlighted and labelled 'left leg minus right arm, +60°, inferior wall', and a Measure tab listing six retained measurements with a classification dropdown and Discard button for each.">
+                <figcaption>Calibrated paper, selectable gain and sweep speed, diagnostic and monitor filters, calipers whose intervals are retained, and a lead map showing the anatomical region each lead represents.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 06 Pathology ──────────────────────────────────────────── -->
+<section id="pathology" class="band">
+    <div class="wrap">
+        <div class="pillar reverse reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">07 · Pathology · plugin room</span>
+                <h2>Whole-slide imaging as a measurable visual environment.</h2>
+                <p>
+                    Digital pathology follows the same logic as the DICOM viewer. The learner
+                    navigates a whole-slide image with a magnification ladder, reads scale in
+                    micrometres, and annotates with tools that measure. Brightness, contrast, gamma
+                    and saturation alter the visualisation; measurements come from scanner
+                    metadata and stay tied to it.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>Whole-slide navigation</strong> with a magnification ladder from 1× to 40×, a scale bar, the field area, and slide coordinates.</li>
+                    <li><strong>Annotation tools that measure.</strong> Arrows, rectangles, ellipses, polygons, freehand paths, points and grids; an ellipse reports its area in square micrometres, and annotations can be classified and summarised by class.</li>
+                    <li><strong>Display adjustments are labelled as such</strong>, with a single control to reset to the scanned image.</li>
+                    <li><strong>A slide library and a report field</strong>, with the slide's events counted for the session log.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/pathology-slide.jpg" alt="The Pathology room showing an H&E core biopsy of the left breast at 11× interpolated magnification. A toolbar offers pan, select, ruler, arrow, rectangle, ellipse, polygon, pen, curve, point and grid tools, a classification tag, a magnification ladder from 1× to 40×, and view controls. Overlays read '100 µm' scale bar, '536,000 µm² field' and slide coordinates x 66,317, y 48,227. An ellipse annotation is labelled 32,024 µm². A display panel with Brightness 1.16, Contrast 1.00, Gamma 1.00 and Saturation 1.00 sliders carries the note 'Display only. These change what you see, never the measurements — those come from scanner metadata', with a 'Reset to the scanned image' button. A slide navigator thumbnail and an 'Area by class' summary sit at the bottom right.">
+                <figcaption>Pathology as an interpretive workspace. Whole-slide navigation, magnification control, scale in micrometres, and annotation tools capable of quantitative measurement.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 08 PACS ───────────────────────────────────────────────── -->
+<section id="pacs">
+    <div class="wrap">
+        <div class="shot-stack reveal">
+            <div class="section-head" style="margin-bottom: 8px;">
+                <span class="eyebrow accent">08 · PACS · plugin room</span>
+                <h2>The DICOM reading room.</h2>
+                <p>
+                    DICOM studies open in the PACS room: multi-series studies, a thumbnail rail,
+                    side-by-side viewports, and window and level controls that behave like a
+                    workstation's. Width and level are the radiographic parameters, the transfer
+                    function offers sigmoid as well as linear, and gamma is available. Edge
+                    enhancement is labelled display only. Visual enhancement changes appearance
+                    while the underlying values are preserved, which reinforces the difference
+                    between changing the visualisation of data and changing the data.
+                </p>
+            </div>
+            <figure class="shot">
+                <img src="assets/radiology-pacs.jpg" alt="The DICOM reading room. A study list on the left with MRI studies such as MRI Chest (3 series, 210 images), MRI Brain, cervical spine, knee, lumbar spine, pelvis and shoulder. Two coronal chest MRI viewports side by side, T1 at window 490 level 245 and T2 at window 614 level 307, each labelled with orientation markers, image index and zoom. A series rail with three thumbnails. A right-hand panel with Width and Level sliders, Linear and Sigmoid transfer-function buttons, a Gamma control, an Edge enhancement slider labelled 'display only — measurements are unaffected', an 'Interpolate when zoomed out' checkbox, a 'Reset to as acquired' button, and a Findings report field.">
+                <figcaption>Multiple series, thumbnail navigation, dual viewports, and window and level manipulation. Display processing is explicitly separated from measurement.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── 09 Consultant & debrief ───────────────────────────────── -->
+<section id="consultant" class="band">
+    <div class="wrap">
+        <div class="pillar reveal">
+            <div class="pillar-text">
+                <span class="eyebrow accent">09 · Consultant · Debrief</span>
+                <h2>A debrief grounded in the learner's actual encounter.</h2>
+                <p>
+                    The Consultant room has two roles. During a live case, visiting it is
+                    navigation: the timeline continues and the learner can return. End &amp;
+                    Debrief is a separate, deliberate action that stops the timeline, locks orders,
+                    examinations and chat, and opens the reflective phase with the transcript, the
+                    learner's notes, a case summary and an AI discussant.
+                </p>
+                <ul class="pillar-list">
+                    <li><strong>A separate persona.</strong> The discussant is a senior clinician-educator with its own voice, avatar and language model, configured independently of the patient, with per-case overrides.</li>
+                    <li><strong>The encounter record.</strong> The discussant receives every examination, order and treatment in elapsed time, so it can refer to what was done and what was omitted and the learner is freed from reconstructing the case from memory.</li>
+                    <li><strong>Socratic method.</strong> The debrief probes reasoning, scaffolds answers and asks before telling: why an investigation was ordered, why treatment was delayed, why an examination was skipped, why attention shifted at a particular moment.</li>
+                    <li><strong>Silent opening turn.</strong> The opening prompt is sent as a silent model call, so meta-prompts stay out of the learner-utterance audit trail.</li>
+                    <li><strong>Same multimodal infrastructure.</strong> Text or voice, lipsync and subtitle overlay. Structured feedback is captured into session notes for cohort export.</li>
+                </ul>
+            </div>
+            <figure class="pillar-shot">
+                <img src="assets/debrief.jpg" alt="The Case Debrief screen for Acute Chest Pain – STEMI. Left: the patient card for John Martinez, 55, male, with a 'View full case summary' button. Right: the Default Discussant avatar, a woman with dark hair, above a subtitle reading 'so what do you think of my performance today with the case', a red listening button labelled 'Listening — talk now', and a 'Type instead' option. The header shows a Back to patient button, the Oyon status pill reading Happy 49%, Notes, and Transcript with 5 entries. The Consultant room is selected in the navigator.">
+                <figcaption>The debrief. The AI discussant has its own persona and access to the encounter history: examinations, orders, treatments and their temporal sequence.</figcaption>
+            </figure>
+        </div>
+    </div>
+</section>
+
+<!-- ── Between rooms ─────────────────────────────────────────── -->
+<section id="between-rooms">
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Between rooms</span>
+            <h2>Navigation keeps the session; ending it is a separate act.</h2>
+            <p class="lead">
+                A navigation bar runs along the bottom of every in-session surface. The current
+                room is highlighted with its own accent colour. Rooms can be visited in any order,
+                as many times as the learner likes.
+            </p>
+            <ul class="pillar-list">
+                <li><strong>Switching rooms keeps everything.</strong> The case, the timeline, the findings, the orders and the transcript persist across room changes.</li>
+                <li><strong>The results badge.</strong> When a laboratory or imaging result becomes ready and has yet to be opened, a count badge appears on the Laboratory or Radiology button. It refreshes roughly every ten seconds and clears once the result is opened.</li>
+                <li><strong>Refresh-safe.</strong> Reloading the page or reopening the tab brings the learner back to the same room, the same case and the same progress. A session ends only through End &amp; Debrief, loading a different case, or an instructor ending it.</li>
+                <li><strong>Room-stamped events.</strong> Every action carries the room it happened in, so analytics can separate behaviour by setting and gaze can be mapped per screen.</li>
+                <li><strong>Small distinctions with large meaning.</strong> Ordering is distinct from viewing, viewing from understanding, acknowledging from treating, navigating from ending, asking from examining, and a treatment order from an administered intervention. These boundaries make the learner's path interpretable.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ── Closing ───────────────────────────────────────────────── -->
+<section class="closing">
+    <div class="wrap reveal">
+        <span class="eyebrow accent">Next</span>
+        <h2>The rooms feed one event stream.</h2>
+        <p>
+            Every action across every room lands in one verb-coded, room-stamped,
+            vital-enriched sequence. The overview page describes the care team, the physiology
+            engine, the analytics, Oyon, case authoring and installation.
+        </p>
+        <div class="cta-row" style="margin-bottom: 0;">
+            <a class="btn btn-primary" href="index.html#analytics">Learning analytics <span class="arrow">→</span></a>
+            <a class="btn btn-ghost" href="index.html#oyon">Oyon affect and gaze</a>
+            <a class="btn btn-ghost" href="whats-new.html">What's new since v1</a>
+        </div>
+    </div>
+</section>
+
+<!-- ── Learner guides ────────────────────────────────────────── -->
+<section id="guides" class="tight">
+    <div class="wrap">
+        <div class="single reveal">
+            <span class="eyebrow accent">Learner guides</span>
+            <h2>Every room has a written guide.</h2>
+            <p class="lead">
+                The documentation site ships with the platform and is reachable from inside the
+                application through the Help &amp; Support drawer, which lists them filtered by
+                role. These are the learner-facing pages for the rooms above.
+            </p>
+            <ul class="link-list two" aria-label="Trainee guides">
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/history" target="_blank" rel="noopener">Taking a history <span class="host">Patient room</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/room-3d" target="_blank" rel="noopener">The 3D Room <span class="host">3D Room</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/examination" target="_blank" rel="noopener">Physical examination <span class="host">Examination</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/investigations" target="_blank" rel="noopener">Ordering labs &amp; imaging <span class="host">Laboratory & Radiology</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/ecg" target="_blank" rel="noopener">The ECG workstation <span class="host">12-lead ECG</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/pathology" target="_blank" rel="noopener">Reading a pathology slide <span class="host">Pathology</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/imaging-reading-room" target="_blank" rel="noopener">The PACS reading room <span class="host">PACS</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/debrief" target="_blank" rel="noopener">Debrief <span class="host">Consultant</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/rooms" target="_blank" rel="noopener">The rooms <span class="host">All rooms</span></a></li>
+                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/courses" target="_blank" rel="noopener">Courses, lessons &amp; surveys <span class="host">Courses</span></a></li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<!-- ── Footer (identical on every page) ──────────────────────── -->
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="index.html">Overview</a>
+                <a href="rooms.html">Rooms</a>
+                <a href="whats-new.html">What's new</a>
+                <a href="help.html">Help</a>
+                <a href="about.html">About the author</a>
+                <a href="index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="https://rohy.lacarm.com/rohy/docs/trainee/" target="_blank" rel="noopener">Trainee guides</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">Migrations</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<!-- ── Lightbox ──────────────────────────────────────────────── -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer" hidden>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close screenshot viewer">×</button>
+    <img id="lightbox-img" alt="">
+    <div class="lightbox-hint">Click outside or press Esc to close</div>
+</div>
+
+<script src="site.js"></script>
+</body>
+</html>

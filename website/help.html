@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Help — Rohy</title>
+    <meta name="description" content="The Rohy reference: status, requirements, install, the rooms, features, architecture, configuration, testing, documentation and licence.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Help — Rohy">
+    <meta property="og:description" content="The Rohy reference: status, requirements, install, the rooms, features, architecture, configuration, testing, documentation and licence.">
+    <meta property="og:image" content="assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="index.html">Overview</a>
+            <a href="rooms.html">Rooms</a>
+            <a href="whats-new.html">What's new</a>
+            <a href="help.html" aria-current="page">Help</a>
+            <a href="index.html#install" class="optional">Install</a>
+            <a href="about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Help</span>
+        <h1>The Rohy <span class="accent">reference.</span></h1>
+        <p class="sub">
+            This page is generated from the repository README. It records what the
+            platform is made of and how it is installed, configured, tested and
+            licensed, with every figure taken from the source it describes.
+        </p>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#status">Status</a>
+            <a href="#requirements">Requirements</a>
+            <a href="#install">Install</a>
+            <a href="#the-rooms">The rooms</a>
+            <a href="#features">Features</a>
+            <a href="#screenshots">Screenshots</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#configuration">Configuration</a>
+            <a href="#testing">Testing</a>
+            <a href="#documentation">Documentation</a>
+            <a href="#development">Development</a>
+            <a href="#roles">Roles</a>
+            <a href="#author">Author</a>
+            <a href="#license">License</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── README ────────────────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <article class="md-body">
+<p>Rohy is a virtual-patient clinical simulation platform. A learner interviews an AI patient whose vital signs advance on a physiology engine, moves between rooms that stay live across one session, calls a multi-agent care team, and closes the case in a debrief with a separate AI discussant. Every action is written to a learning-event log that feeds a transition-network analytics dashboard.</p>
+<p>The public website is <code>website/index.html</code>. The documentation site sources live in <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/"><code>docs/</code></a> and build with <code>npm run docs:build</code>.</p>
+<h2 id="status">Status</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Package version</td>
+<td><code>3.0.0-beta.2</code> (<code>package.json</code>)</td>
+</tr>
+<tr>
+<td>Latest git tag</td>
+<td><code>v3.0.0-beta.2</code></td>
+</tr>
+<tr>
+<td>Latest release</td>
+<td><a href="https://github.com/mohsaqr/rohySimulator/releases/tag/v3.0.0-beta.2"><code>v3.0.0-beta.2</code></a>, published 2026-09-02</td>
+</tr>
+<tr>
+<td>Release assets</td>
+<td>air-gap source tarball and air-gap Docker tarball, each with a <code>.sha256</code></td>
+</tr>
+<tr>
+<td>Container image</td>
+<td><code>ghcr.io/mohsaqr/rohy:v3.0.0-beta.2</code> and <code>ghcr.io/mohsaqr/rohy:latest</code>, an OCI index covering <code>linux/amd64</code> and <code>linux/arm64</code></td>
+</tr>
+<tr>
+<td>Licence</td>
+<td>Carm Research License v1.4 (<a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE"><code>LICENSE</code></a>)</td>
+</tr>
+</tbody></table></div>
+<p>Releases carry a channel in their title: <code>v2.9.119</code> is titled &quot;Stable fixes (pre-plugin channel)&quot; and <code>v2.9.132</code> is titled &quot;Advanced: PACS, Pathology &amp; ECG workstations&quot;. <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a> names the two channels <code>current</code> (without the PACS, Pathology and ECG rooms) and <code>advanced</code> (with those rooms, imaging content required).</p>
+<h2 id="requirements">Requirements</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Value</th>
+<th>Where it is pinned</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Node</td>
+<td>22.x</td>
+<td><code>.github/workflows/ci.yml</code>; <code>deploy/docker/Dockerfile</code> (<code>ARG NODE_VERSION=22-bookworm-slim</code>)</td>
+</tr>
+<tr>
+<td>Sibling clone</td>
+<td><code>dynajs</code> at <code>../dynajs</code></td>
+<td><code>package.json</code> (<code>&quot;dynajs&quot;: &quot;file:../dynajs&quot;</code>)</td>
+</tr>
+<tr>
+<td>Sibling clone</td>
+<td><code>rohy-3d-patient-room</code> at <code>../3D</code></td>
+<td><code>package.json</code> (<code>&quot;rohy-3d-patient-room&quot;: &quot;file:../3D&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>curl</code> on PATH</td>
+<td>fetches the Oyon model files during <code>postinstall</code></td>
+<td><code>OyonR/scripts/download-models.sh</code></td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>optional, for the published image and the compose stack</td>
+<td><code>deploy/docker/compose.yml</code></td>
+</tr>
+<tr>
+<td>Disk, Oyon models</td>
+<td>66.6 MiB across 5 files (69,811,801 bytes)</td>
+<td>measured under <code>OyonR/standalone/models/</code></td>
+</tr>
+<tr>
+<td>Disk, PACS archive</td>
+<td>777,460,547 bytes (741.4 MiB), 4,267 files</td>
+<td><code>scripts/content-sources.json</code></td>
+</tr>
+<tr>
+<td>Disk, Pathology archive</td>
+<td>36,818,816 bytes (35.1 MiB), 1,257 files</td>
+<td><code>scripts/content-sources.json</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="install">Install</h2>
+<h3>Quick start</h3>
+<p>Clone both siblings first, because <code>package.json</code> declares them as <code>file:</code> dependencies. <code>npm install</code> then runs <code>postinstall</code>, which calls <code>npm run setup:oyon</code> and downloads the model files.</p>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/dynajs.git ../dynajs
+(cd ../dynajs &amp;&amp; npm install)
+git clone https://github.com/mohsaqr/3D.git ../3D
+npm install
+cp server/.env.example server/.env
+npm run dev
+</code></pre>
+<p>Set <code>JWT_SECRET</code> in <code>server/.env</code> before starting. The Vite dev server listens on port 5173 and proxies <code>/api</code> to <code>http://localhost:3000</code>; the Express server reads <code>PORT</code> and falls back to 3000. The development seeder creates <code>admin</code> / <code>admin123</code> and <code>student</code> / <code>student123</code>; in production that seeder requires <code>ALLOW_DEFAULT_USERS=1</code>.</p>
+<p>Optional add-ons: <code>npm run setup:oyon</code> re-runs the model download on its own, <code>npm run setup:content</code> installs the PACS and Pathology archives, and <code>npm run install:piper</code> installs local Piper voices.</p>
+<h3>Production, update and air-gap</h3>
+<p>The published image runs under the compose stack. <code>deploy/bootstrap.sh</code> installs from source onto a Linux host with systemd and nginx, and also accepts <code>--dry-run</code>, <code>--no-nginx</code>, <code>--no-piper</code>, <code>--no-audit</code>, <code>--skip-build</code>, <code>--prewarm-kokoro</code> and <code>--reverse-proxy</code>. <code>bin/rohy-update</code> drives upgrades of source and systemd installs, with subcommands <code>check</code>, <code>apply</code>, <code>rollback</code>, <code>list-backups</code> and <code>restore-backup</code>. <code>deploy/bundle-airgap.sh</code> writes a self-contained tarball in <code>source</code>, <code>docker</code> or <code>both</code> mode.</p>
+<pre><code class="language-bash">docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.2
+docker compose -f deploy/docker/compose.yml up -d
+sudo deploy/bootstrap.sh --frontend-url=https://your-host/rohy --admin-bootstrap
+sudo rohy-update check
+sudo rohy-update apply
+deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
+</code></pre>
+<p>Operator guides: <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md"><code>docs/DEPLOY.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md"><code>docs/UPDATING.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATE-STRATEGY.md"><code>docs/UPDATE-STRATEGY.md</code></a>.</p>
+<h2 id="the-rooms">The rooms</h2>
+<p>The bottom navigator holds core rooms and plugin rooms, sorted by the <code>order</code> field on each room definition. The core rooms are always present; plugin rooms render when the case enables them. Labels are the on-screen strings from <code>src/locales/en/common.json</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Room</th>
+<th>Navigator label</th>
+<th>What happens there</th>
+<th>Source location</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Patient</td>
+<td><code>Patient</code> · <code>chat</code></td>
+<td>The patient interview, the live monitor, the treatment controls, the End &amp; Debrief action</td>
+<td><code>src/components/chat/</code>, <code>src/components/monitor/</code></td>
+</tr>
+<tr>
+<td>3D Room</td>
+<td><code>3D Room</code> · <code>at the bedside</code></td>
+<td>The same patient at the bedside, sharing the session physiology and the one patient conversation; the body opens the examination wheel, the chart and the IV pole open the Records and Treatments drawers</td>
+<td><code>src/plugins/room3d/</code></td>
+</tr>
+<tr>
+<td>Examination</td>
+<td><code>Examination</code> · <code>physical exam</code></td>
+<td>Region and technique selection on a body map, auscultation point picker, examination log</td>
+<td><code>src/components/examination/</code></td>
+</tr>
+<tr>
+<td>Laboratory</td>
+<td><code>Laboratory</code> · <code>investigations</code></td>
+<td>Test catalogue, ordering, worklist with a turnaround, rendered report</td>
+<td><code>src/components/investigations/</code></td>
+</tr>
+<tr>
+<td>Radiology</td>
+<td><code>Radiology</code> · <code>imaging &amp; tests</code></td>
+<td>Imaging catalogue, ordering, worklist, report</td>
+<td><code>src/components/investigations/</code></td>
+</tr>
+<tr>
+<td>12-lead ECG</td>
+<td><code>12-lead ECG</code> · <code>interpretation</code></td>
+<td>Twelve-lead reading workstation with calipers and a lead map</td>
+<td><code>src/plugins/ecg/</code>, <code>src/components/ecg/</code></td>
+</tr>
+<tr>
+<td>Pathology</td>
+<td><code>Pathology</code> · <code>slides</code></td>
+<td>Whole-slide viewer with a magnification ladder, scale bar and annotation measurement</td>
+<td><code>src/plugins/pathology/</code>, <code>src/components/pathology/</code></td>
+</tr>
+<tr>
+<td>PACS</td>
+<td><code>PACS</code> · <code>workstation</code></td>
+<td>DICOM reading room: multi-series studies, thumbnail rail, side-by-side viewports, window width and level</td>
+<td><code>src/plugins/pacs/</code>, <code>src/components/pacs/</code></td>
+</tr>
+<tr>
+<td>Consultant</td>
+<td><code>Consultant</code> · <code>debrief</code></td>
+<td>The debrief room with its own persona, voice, avatar and model</td>
+<td><code>src/components/discussion/</code></td>
+</tr>
+</tbody></table></div>
+<p><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/trainee/rooms.md"><code>docs/trainee/rooms.md</code></a> documents every room, and which of them a given case shows.</p>
+<h2 id="features">Features</h2>
+<h3>Conversation and agents</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Fact</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LLM platforms through <code>/api/proxy/llm</code></td>
+<td><code>anthropic</code>, <code>openai</code>, <code>google</code>, <code>lmstudio</code>, <code>custom</code> (<code>server/routes/proxy-routes.js</code>)</td>
+</tr>
+<tr>
+<td>Shipped agent templates</td>
+<td>6, in <code>DEFAULT_AGENTS</code> (<code>server/db.js</code>)</td>
+</tr>
+<tr>
+<td>Agent types</td>
+<td><code>patient</code> (two templates), <code>nurse</code>, <code>consultant</code>, <code>relative</code>, <code>discussant</code></td>
+</tr>
+<tr>
+<td>Named personas</td>
+<td>Default Patient, Default Female Patient, Sarah Mitchell (Bedside Nurse), Dr. James Chen (Senior Consultant), Family Member, Default Discussant</td>
+</tr>
+<tr>
+<td>Paging</td>
+<td><code>agent_session_state.arrives_at</code> is stamped server-side (<code>migrations/0024_agent_arrives_at.sql</code>)</td>
+</tr>
+<tr>
+<td>Turn provenance</td>
+<td><code>interactions.source</code> records <code>typed</code>, <code>voice</code> or a plugin room id (<code>migrations/0053_interactions_source.sql</code>)</td>
+</tr>
+</tbody></table></div>
+<h3>Voice and avatars</h3>
+<p><code>TTS_PROVIDERS</code> in <code>server/shared/voiceIdentity.js</code> lists four engines: <code>kokoro</code> (local, in-process through <code>kokoro-js</code>), <code>piper</code> (local subprocess, voices under <code>server/data/piper/</code>), <code>google</code> (cloud) and <code>openai</code> (cloud). The voice id determines the engine by exact catalogue membership. <code>public/avatars/heads/</code> holds 28 GLB heads and a <code>manifest.json</code>. Lipsync runs through <code>wawa-lipsync</code> over Three.js and <code>@react-three/fiber</code>.</p>
+<h3>Patient monitor and physiology</h3>
+<ul>
+<li>Seven channels: HR, SpO₂, systolic and diastolic NIBP, RR, temperature, EtCO₂.</li>
+<li><code>src/services/ecgWaveform.js</code> builds the trace from a sum of Gaussians, with the PR interval from an Atterhög 1977 regression and QT by Fridericia.</li>
+<li>The monitor vocabulary names 10 rhythms: Normal Sinus Rhythm, Sinus Bradycardia, Sinus Tachycardia, Atrial Fibrillation, Atrial Flutter, Supraventricular Tachycardia, Ventricular Tachycardia, Ventricular Fibrillation, Asystole, Pulseless Electrical Activity.</li>
+<li>Vitals persist through a deadband of <code>{ hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 }</code>.</li>
+<li>The 3D room samples the same generator, so both views show one physiology.</li>
+</ul>
+<h3>Treatments</h3>
+<p><code>server/data/treatment_effects.json</code> carries 264 rows over 245 distinct treatment names, each with onset, peak and duration in minutes, per-channel effects, and <code>rxcui</code>, <code>pk_source</code> and <code>pk_evidence_url</code> provenance fields. By type: <code>medication</code> 204 rows over 185 names, <code>nursing</code> 31, <code>iv_fluid</code> 16, <code>oxygen</code> 13.</p>
+<h3>Investigations</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Catalogue</th>
+<th>Count</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Laboratory tests</td>
+<td>222 (215 base plus 7 merged cardiac)</td>
+<td><code>server/data/lab_database.json</code> and <code>server/data/lab_cardiac_tests.txt</code>, merged by <code>server/services/labDatabase.js</code></td>
+</tr>
+<tr>
+<td>Laboratory groups</td>
+<td>33</td>
+<td>derived from the merged catalogue</td>
+</tr>
+<tr>
+<td>Lab panel templates, search aliases</td>
+<td>32, 62</td>
+<td><code>src/data/labPanelTemplates.js</code></td>
+</tr>
+<tr>
+<td>Radiology studies</td>
+<td>74</td>
+<td><code>server/data/radiology_database.json</code></td>
+</tr>
+<tr>
+<td>Radiology modalities</td>
+<td>9: Cardiac 16, X-Ray 13, Ultrasound 12, CT 11, MRI 11, Nuclear Medicine 6, Fluoroscopy 3, Mammography 1, DEXA 1</td>
+<td>same file</td>
+</tr>
+<tr>
+<td>Lab and radiology result templates</td>
+<td>8 and 6</td>
+<td><code>src/data/investigationTemplates.js</code></td>
+</tr>
+</tbody></table></div>
+<p>Reference ranges split by <code>category</code> where clinically relevant: Hemoglobin is 12-16 g/dL for Female and 14-18 g/dL for Male. Turnaround is clamped to a 1 to 5 minute band by <code>migrations/0023_clamp_turnaround_to_5min.sql</code>. The DICOM reading room, the whole-slide viewer and the twelve-lead workstation are RPS-1 plugins with their own manifests, capabilities and authoring surfaces.</p>
+<h3>Examination</h3>
+<p><code>src/data/examRegions.js</code> defines 57 body regions (37 anterior, 18 posterior, 2 special) and 12 techniques: inspection, palpation, percussion, auscultation, special tests, mental status, cranial nerves, motor, sensory, reflexes, coordination, gait. Each region carries default findings per technique and a <code>specialTests</code> list.</p>
+<h3>Alarms and notifications</h3>
+<p>One <code>NotificationCenter</code> (<code>src/notifications/</code>) with six surfaces: <code>AudioSurface</code>, <code>BackendSurface</code>, <code>BannerSurface</code>, <code>ConsoleSurface</code>, <code>HistorySurface</code>, <code>ToastSurface</code>. Routing, persistence and defaults are separate modules with their own tests.</p>
+<h3>Debrief</h3>
+<p>Ending a case opens <code>src/components/discussion/</code>, which resolves its own persona, voice, avatar and model from the <code>discussant</code> agent type. <code>server/services/encounterRecord.js</code> assembles the learner&#39;s encounter record for that conversation.</p>
+<h3>Analytics and learning events</h3>
+<p><code>server/shared/learningVerbs.js</code> holds 90 base verbs; with the registered plugin vocabularies the whitelist reaches 136. Events carry one of eight categories (SESSION, NAVIGATION, CLINICAL, COMMUNICATION, MONITORING, CONFIGURATION, ASSESSMENT, ERROR) and one of five severities (DEBUG, INFO, ACTION, IMPORTANT, CRITICAL), both derived server-side from the verb. <code>learning_events.room</code> stamps the active room (<code>migrations/0021_learning_events_room.sql</code>). The dashboard is <code>src/components/analytics/tna/TnaDashboardV2.jsx</code>, with sequence, clinical-state and window modules beside it.</p>
+<h3>Oyon capture</h3>
+<p>Face landmarking and emotion classification run in the browser. <code>OyonR/scripts/download-models.sh</code> fetches five files, each checked against a SHA-256 recorded in the script.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Size</th>
+<th>Upstream</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>face_landmarker.task</code></td>
+<td>3.6 MiB</td>
+<td>MediaPipe</td>
+</tr>
+<tr>
+<td><code>mobilevit_va_mtl.onnx</code></td>
+<td>37.6 MiB</td>
+<td>EmotiEffLib</td>
+</tr>
+<tr>
+<td><code>enet_b0_8_va_mtl.onnx</code></td>
+<td>15.3 MiB</td>
+<td>EmotiEffLib</td>
+</tr>
+<tr>
+<td><code>mbf_va_mtl.onnx</code></td>
+<td>7.9 MiB</td>
+<td>EmotiEffLib</td>
+</tr>
+<tr>
+<td><code>silero_vad.onnx</code></td>
+<td>2.2 MiB</td>
+<td>Silero VAD v5.1.2</td>
+</tr>
+</tbody></table></div>
+<p>The server mounts the Oyon routes when <code>OYON_ENABLED=1</code>, and <code>deploy/env.example</code> ships that value. With the variable unset, the routes answer a structured 503 and the settings tab renders a disabled panel. Oyon tables and settings arrive through <code>migrations/0011_oyon_addon.sql</code> and eleven later Oyon migrations.</p>
+<h3>Courses, lessons and users</h3>
+<p>Cohorts, courses and lessons have their own tables and routers: <code>migrations/0025_cohorts.sql</code>, <code>0027_cohort_entity.sql</code>, <code>0032_lessons.sql</code>, <code>server/routes/cohorts-routes.js</code>, <code>server/routes/lessons-routes.js</code>, <code>server/routes/surveys-routes.js</code>. Registration invites and requests arrive in <code>migrations/0037_registration_invites.sql</code> and <code>0038_registration_requests.sql</code>.</p>
+<h3>Help and support</h3>
+<p><code>src/help/</code> mounts a Help &amp; Support drawer from <code>App.jsx</code> with three tabs. The Help tab lists 23 articles from <code>HELP_ARTICLES</code>, filtered by role rank: 15 reach <code>student</code>, 20 reach <code>educator</code>, 23 reach <code>admin</code>, grouped as Using the simulator, Teaching and Administration. Each article links to a page on the VitePress docs site under <code>DOCS_BASE</code> (<code>/rohy/docs/</code>, overridable with <code>VITE_DOCS_BASE</code>), and all 23 target files exist under <code>docs/</code>. The What&#39;s new tab reads <code>GET /api/help/release-notes</code>, which parses <code>CHANGELOG.md</code> in Keep a Changelog format. The Support tab reads <code>GET /api/help/diagnostics</code>, a bundle of version, runtime and boolean health flags passed through <code>server/redaction.js</code>. <code>OnboardingTour</code> plays a per-role first-run tour at <code>TOUR_VERSION</code> 1, four steps for <code>student</code> and four for <code>educator</code>, recorded in <code>localStorage</code> under <code>rohy.onboarding.&lt;role&gt;.v&lt;version&gt;</code>. The drawer chrome is translated: 62 keys per locale in <code>src/locales/&lt;lang&gt;/help.json</code> across all seven locale directories.</p>
+<h3>Administration and authoring</h3>
+<p><code>src/components/settings/</code> holds 32 non-test <code>.jsx</code> components, including the agent persona editor and the per-tab settings editors. <code>src/data/scenarioTemplates.js</code> carries 16 scenario templates. <code>server/seeders/cases.js</code> seeds 6 cases on first boot: Acute Chest Pain - STEMI, Septic Shock - Pneumonia, Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke - Left MCA, Maria Mercedes - Acute STEMI. <code>server/scripts/seed-acute-cases.cjs</code> seeds a further set on demand. Case codes come from <code>migrations/0035_case_code.sql</code>.</p>
+<h3>Internationalisation</h3>
+<p>Six languages in <code>server/shared/languages.js</code>: English, Italian, Finnish, Swedish, German, Spanish, with <code>en</code> as the default. Each entry carries a display name, a native name, a flag, a Web Speech STT locale and an LLM output directive. <code>src/locales/</code> also holds the <code>en-XA</code> pseudo-locale produced by <code>npm run i18n:pseudo</code>. Extraction, status, XLIFF export and XLIFF import each have an npm script.</p>
+<h3>Security and governance</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Role ranks</td>
+<td><code>guest</code> 0, <code>student</code> 1, <code>reviewer</code> 2, <code>educator</code> 3, <code>admin</code> 4 (<code>server/middleware/auth.js</code>)</td>
+</tr>
+<tr>
+<td>Password hashing</td>
+<td><code>bcrypt</code></td>
+</tr>
+<tr>
+<td>Session TTL</td>
+<td><code>DEFAULT_TTL_SECONDS = 7 * 86400</code>; <code>server/.env.example</code> sets <code>JWT_EXPIRY=24h</code></td>
+</tr>
+<tr>
+<td>Rate limits</td>
+<td>600 requests per minute overall, 10 login attempts per 15 minutes, 5 registrations per hour</td>
+</tr>
+<tr>
+<td>Audit hash chain</td>
+<td><code>migrations/0008_audit_hash_chain.sql</code>, <code>server/audit-chain.js</code>, <code>scripts/verify-audit-chain.js</code></td>
+</tr>
+<tr>
+<td>Response redaction</td>
+<td><code>server/redaction.js</code></td>
+</tr>
+<tr>
+<td>Tenancy</td>
+<td><code>migrations/0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td>Retention</td>
+<td><code>migrations/0005_retention.sql</code>, <code>scripts/retention-sweep.js</code></td>
+</tr>
+<tr>
+<td>Audit shell scripts</td>
+<td>18 at <code>scripts/audit-*.sh</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="screenshots">Screenshots</h2>
+<p>The 13 images below live in <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/images/screens/"><code>docs/images/screens/</code></a>.</p>
+<p><img src="assets/patient-room.jpg" alt="Patient room">
+The patient room: avatar and chat on the left, the live monitor on the right, a red clinical alarm banner with Snooze and Acknowledge, the session clock at top right, and the room navigator along the bottom.</p>
+<p><img src="assets/physical-exam.jpg" alt="Physical examination">
+The examination room: an anatomical body map with region hit areas, a technique chooser, the auscultation point picker, and the Examination Log.</p>
+<p><img src="assets/laboratory.jpg" alt="Laboratory">
+The laboratory: the searchable test catalogue on the left, a rendered lab report with reference ranges in the middle, and the worklist with pending, ready and viewed states on the right.</p>
+<p><img src="assets/radiology-worklist.jpg" alt="Radiology worklist">
+The radiology room: the imaging catalogue, counters for pending, ready and viewed studies, and the worklist of ordered studies.</p>
+<p><img src="assets/radiology-pacs.jpg" alt="DICOM reading room">
+The PACS room: a multi-series MRI study with a thumbnail rail, two viewports side by side, and window width and level controls.</p>
+<p><img src="assets/ecg-workstation.jpg" alt="ECG workstation">
+The twelve-lead ECG room: calibrated paper, gain and sweep-speed selectors, filter selectors, calipers with retained measurements, and a lead map.</p>
+<p><img src="assets/pathology-slide.jpg" alt="Pathology slide">
+The pathology room: a whole-slide H&amp;E image with a magnification ladder, a scale bar in microns, an ellipse annotation reporting an area, and the display-only adjustment panel.</p>
+<p><img src="assets/debrief.jpg" alt="Debrief">
+The debrief room: the discussant with its own avatar and voice, in voice mode, after the case has ended.</p>
+<p><img src="assets/tna-clusters.jpg" alt="Transition network analysis">
+The analytics dashboard: learner clusters, one transition network per cluster, and state distributions over time with a silhouette score.</p>
+<p><img src="assets/oyon-signals.jpg" alt="Oyon live signals">
+The Oyon panel: emotion probabilities, gaze, head pose, body posture, and an rPPG heart-rate estimate with its integration window and signal-quality flags.</p>
+<p><img src="assets/affect-analytics.jpg" alt="Affect analytics">
+Post-session affect: an emotion co-occurrence map, a heat strip across the session, and the arousal-valence plane, with counts beside percentages.</p>
+<p><img src="assets/gaze-analytics.jpg" alt="Gaze analytics">
+Gaze aggregates: per-screen-ninth shares, gaze centroids, and the same shares broken down by room.</p>
+<p><img src="assets/admin-cases.jpg" alt="Case management">
+The admin case list: English, German, Spanish and Italian cases in one course, each with a language flag, a case code, and a live-session count.</p>
+<h2 id="architecture">Architecture</h2>
+<pre><code>rohySimulator/
+├── bench/        vitest benchmarks (3 files)
+├── bin/          rohy-update, the operator CLI
+├── deploy/       bootstrap.sh, local-install.sh, bundle-airgap.sh, preflight.sh,
+│                 rollback.sh, env.example, docker/, nginx/, systemd/
+├── docs/         VitePress site: trainee, educator, admin, operator, integrator,
+│                 security, product, design, tutorials, reference, audits
+├── licenses/     embedded third-party licence texts
+├── migrations/   53 versioned SQL migrations plus MANIFEST.md
+├── OyonR/        in-browser emotion capture package (src, tests, standalone, scripts)
+├── public/       static assets, including avatars/heads/ (28 GLB + manifest.json)
+├── scripts/      18 audit-*.sh, docs-gen/, i18n/, knowledge/, rocketbox-convert/,
+│                 migrate.js, retention-sweep.js, tech-test.sh, smoke.sh, and the
+│                 setup-content / plugin-manifest / vendor generators
+├── server/       Express 5 application: routes/ (24 router modules composed by
+│                 server/routes.js), middleware/ (auth, request id, logger, error
+│                 handler, route timeout), config/, data/, lib/, seeders/,
+│                 services/, shared/, and db.js, dbAdapter.js, migrationRunner.js,
+│                 observability.js, redaction.js, server.js
+├── src/          React 19 client: components/ (22 areas including chat, monitor,
+│                 examination, investigations, orders, treatments, analytics,
+│                 discussion, settings, voice, ecg, pacs, pathology, oyon, lessons),
+│                 help/ (the Help &amp; Support drawer and onboarding tour), plugins/
+│                 (RPS-1 registry plus ecg, pacs, pathology, room3d), notifications/
+│                 (center, routing, 6 surfaces), contexts/, data/, hooks/, i18n/,
+│                 locales/ (7 dirs), services/, storage/, utils/, config/, constants/
+├── tests/        145 server tests, 14 Playwright specs, shared utils
+└── website/      the static public site
+</code></pre>
+<h3>Request flow</h3>
+<p><code>server/server.js</code> boots Express, mounts <code>server/routes.js</code> under <code>/api</code>, and composes 24 router modules from <code>server/routes/</code>. <code>server/middleware/auth.js</code> extracts the JWT, resolves the role rank and the tenant, and refreshes role, status and tenant from the <code>users</code> table on every request. <code>server/middleware/routeTimeout.js</code> bounds each request, with the TTS and LLM proxy routes exempt because they stream. <code>server/redaction.js</code> filters the response before it leaves the process, and <code>server/observability.js</code> writes NDJSON access records carrying the request id.</p>
+<h3>Database and migrations</h3>
+<p>SQLite through the <code>sqlite3</code> async API, wrapped by <code>server/dbAdapter.js</code>. <code>server/migrationRunner.js</code> applies the 53 files in <code>migrations/</code> in order and records them in <code>schema_migrations</code>. <code>migrations/MANIFEST.md</code> states the policy: additive by default, with destructive changes gated behind <code>--allow-destructive</code>.</p>
+<h3>Plugins</h3>
+<p><code>src/plugins/index.js</code> discovers plugins with <code>import.meta.glob(&#39;./*/index.jsx&#39;)</code>, so deleting a plugin directory removes its room and leaves the build working. <code>npm run plugins:gen</code> freezes each <code>manifest.js</code> into <code>server/shared/plugins/manifests.generated.js</code>, which allows the server to read plugin vocabulary without importing from <code>src/</code>. <code>npm run plugins:check</code> runs in <code>prebuild</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Room order</th>
+<th>Declared capabilities</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>room3d</code></td>
+<td>15</td>
+<td><code>case</code>, <code>conversation</code>, <code>drawer</code></td>
+</tr>
+<tr>
+<td><code>ecg</code></td>
+<td>45</td>
+<td><code>persist</code></td>
+</tr>
+<tr>
+<td><code>pathology</code></td>
+<td>50</td>
+<td><code>persist</code>, <code>remote</code></td>
+</tr>
+<tr>
+<td><code>pacs</code></td>
+<td>55</td>
+<td><code>persist</code>, <code>remote</code>, <code>orders</code></td>
+</tr>
+</tbody></table></div>
+<p>A manifest may also declare <code>authoring</code> (a case-editor slot with its own minimum role), <code>settings</code> (operator fields), <code>remote</code> (allowed content path prefixes and content types), <code>catalog</code> (an archive shape plus learner-visible keys), and <code>document.learnerOmit</code> (paths the server strips for roles below reviewer).</p>
+<h2 id="configuration">Configuration</h2>
+<p>From <code>deploy/env.example</code>. The values shown are the ones the template writes.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Template value</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>JWT_SECRET</code></td>
+<td><code>REPLACE_ME_WITH_A_LONG_RANDOM_STRING</code></td>
+<td>Signs every auth token. The server refuses to start without it.</td>
+</tr>
+<tr>
+<td><code>NODE_ENV</code></td>
+<td><code>production</code></td>
+<td>Disables seeders, dev helpers and request-body verbosity.</td>
+</tr>
+<tr>
+<td><code>FRONTEND_URL</code></td>
+<td><code>https://your-deploy-host/rohy</code></td>
+<td>The public URL, added to the CORS allowlist.</td>
+</tr>
+<tr>
+<td><code>ROHY_DB</code></td>
+<td><code>/opt/data/rohy/database.sqlite</code></td>
+<td>Absolute path to the SQLite database.</td>
+</tr>
+<tr>
+<td><code>TRANSFORMERS_CACHE</code></td>
+<td><code>/var/cache/rohy-hf</code></td>
+<td>Where the Kokoro model cache lives.</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td><code>4000</code></td>
+<td>HTTP listener. The server default is 3000.</td>
+</tr>
+<tr>
+<td><code>OYON_ENABLED</code></td>
+<td><code>1</code></td>
+<td>Mounts the Oyon add-on routes.</td>
+</tr>
+<tr>
+<td><code>HTTPS_PORT</code></td>
+<td>commented</td>
+<td>Direct HTTPS listener. Defaults to <code>PORT</code> plus 1000.</td>
+</tr>
+<tr>
+<td><code>TLS_CERT_PATH</code></td>
+<td>commented</td>
+<td>PEM certificate for the optional HTTPS listener.</td>
+</tr>
+<tr>
+<td><code>TLS_KEY_PATH</code></td>
+<td>commented</td>
+<td>PEM key for the optional HTTPS listener.</td>
+</tr>
+<tr>
+<td><code>ROHY_TRUST_PROXY</code></td>
+<td>commented</td>
+<td>Express trust-proxy setting. Default <code>loopback</code>.</td>
+</tr>
+<tr>
+<td><code>ROHY_SHUTDOWN_GRACE_MS</code></td>
+<td>commented</td>
+<td>Graceful-shutdown wait after SIGTERM. Default 15000.</td>
+</tr>
+<tr>
+<td><code>ROHY_ROUTE_TIMEOUT_MS</code></td>
+<td>commented</td>
+<td>Per-request timeout. Default 30000.</td>
+</tr>
+<tr>
+<td><code>ROHY_BACKUP_BEFORE_MIGRATE</code></td>
+<td>commented</td>
+<td>Set to 0 to skip the pre-migration backup.</td>
+</tr>
+<tr>
+<td><code>ROHY_NO_AUTO_SEED</code></td>
+<td>commented</td>
+<td>Set to 1 to suppress first-boot seeding in the request-serving process.</td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_ORIGINS</code></td>
+<td>commented</td>
+<td>Per-plugin content origin, as <code>&lt;pluginId&gt;=&lt;origin&gt;</code> pairs. Operator configuration only.</td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_ORIGIN_TOKENS</code></td>
+<td>commented</td>
+<td>Per-deployment credential presented to that origin. Secret.</td>
+</tr>
+<tr>
+<td><code>ROHY_STARTER_CONTENT_DIR</code></td>
+<td>commented</td>
+<td>Where installed plugin content lives when it sits outside <code>server/plugin-content/</code>.</td>
+</tr>
+<tr>
+<td><code>ROHY_STARTER_CONTENT</code></td>
+<td>commented</td>
+<td>Set to <code>off</code> to refuse the bundled starter content.</td>
+</tr>
+<tr>
+<td><code>ALLOW_DEFAULT_USERS</code></td>
+<td>commented</td>
+<td>Gates the default-user seeder in production. Remove after the first login.</td>
+</tr>
+</tbody></table></div>
+<p><code>server/.env.example</code> is the shorter development template: <code>JWT_SECRET</code>, <code>JWT_EXPIRY=24h</code> and <code>PORT=3000</code> active, with <code>TRANSFORMERS_CACHE</code>, <code>ROHY_KOKORO_IDLE_UNLOAD_MIN</code> and <code>ROHY_PLUGIN_ORIGINS</code> commented.</p>
+<h2 id="testing">Testing</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it runs</th>
+<th>Where the tests live</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm test</code></td>
+<td><code>vitest run</code> over both projects</td>
+<td><code>src/</code> and <code>tests/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:client</code></td>
+<td>the <code>client</code> vitest project (jsdom)</td>
+<td>197 <code>.test.js</code> and <code>.test.jsx</code> files under <code>src/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:server</code></td>
+<td>the <code>server</code> vitest project (node)</td>
+<td>145 <code>.test.js</code> files under <code>tests/server/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:watch</code> / <code>npm run test:ui</code></td>
+<td>vitest in watch mode, with or without the UI</td>
+<td>as above</td>
+</tr>
+<tr>
+<td><code>npm run test:ci</code></td>
+<td>vitest with the JUnit reporter and coverage</td>
+<td>as above</td>
+</tr>
+<tr>
+<td><code>npm run test:e2e</code></td>
+<td><code>playwright test</code></td>
+<td>14 <code>.spec.js</code> files under <code>tests/e2e/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:e2e:tablet</code></td>
+<td>one Playwright spec</td>
+<td><code>tests/e2e/tablet-layout.spec.js</code></td>
+</tr>
+<tr>
+<td><code>npm run test:e2e:ui</code></td>
+<td><code>playwright test --ui</code></td>
+<td><code>tests/e2e/</code></td>
+</tr>
+<tr>
+<td><code>npm run test:e2e:install</code></td>
+<td>installs Chromium with its dependencies</td>
+<td>browser install only</td>
+</tr>
+<tr>
+<td><code>npm run bench</code></td>
+<td><code>vitest bench --run</code></td>
+<td>3 <code>.bench.js</code> files under <code>bench/</code></td>
+</tr>
+<tr>
+<td><code>npm run license:verify</code></td>
+<td>licence sync in strict mode plus the licence contract test</td>
+<td><code>tests/server/license-contract.test.js</code></td>
+</tr>
+</tbody></table></div>
+<p>Shell-level checks: 18 <code>scripts/audit-*.sh</code> scripts, <code>scripts/tech-test.sh</code> for a live deploy, <code>scripts/smoke.sh</code> for liveness, and <code>deploy/preflight.sh</code>.</p>
+<h2 id="documentation">Documentation</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/index.md"><code>docs/index.md</code></a></td>
+<td>VitePress home, one entry per role</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a></td>
+<td>Six install paths, channels, imaging content, first boot, smoke verify</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md"><code>docs/DEPLOY.md</code></a></td>
+<td>Production hardening, reverse proxy, TLS, environment reference</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md"><code>docs/UPDATING.md</code></a></td>
+<td><code>bin/rohy-update</code> and the Docker upgrade path</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATE-STRATEGY.md"><code>docs/UPDATE-STRATEGY.md</code></a></td>
+<td>Design record behind the update tool</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/ADMIN_FIRST_RUN.md"><code>docs/ADMIN_FIRST_RUN.md</code></a></td>
+<td>First administrator session</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/trainee/"><code>docs/trainee/</code></a></td>
+<td>11 pages: rooms, history, examination, investigations, treatments, vitals, voice, debrief, FAQ</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/educator/"><code>docs/educator/</code></a> (12), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/admin/"><code>docs/admin/</code></a> (9), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/operator/"><code>docs/operator/</code></a> (10), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/integrator/"><code>docs/integrator/</code></a> (9)</td>
+<td>Role guides: cohorts and authoring; users, roles and catalogues; install, deploy and recovery; API, embedding and extension</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/security/"><code>docs/security/</code></a> (8), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/product/"><code>docs/product/</code></a> (6), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/design/"><code>docs/design/</code></a> (8), <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/tutorials/"><code>docs/tutorials/</code></a> (6)</td>
+<td>RBAC, audit chain, redaction and retention; module and evidence descriptions; design records; walkthroughs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/reference/"><code>docs/reference/</code></a></td>
+<td>Generated API, CLI, config, data and glossary references. <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/reference/api/"><code>docs/reference/api/</code></a> holds an OpenAPI 3.1 document plus one table page per router area</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md"><code>migrations/MANIFEST.md</code></a></td>
+<td>Migration policy</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/OyonR/README.md"><code>OyonR/README.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/OyonR/INSTALL.md"><code>OyonR/INSTALL.md</code></a></td>
+<td>The emotion-capture package, and embedding it elsewhere</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/NOTICE.md"><code>NOTICE.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a></td>
+<td>Third-party component index; release history, which the Help drawer parses</td>
+</tr>
+</tbody></table></div>
+<p>The generated OpenAPI document lists 293 paths and 371 operations. The same docs site is reached from inside the application through the Help &amp; Support drawer, which links to 23 of these pages by role.</p>
+<h2 id="development">Development</h2>
+<pre><code class="language-bash">npm run dev          # Vite dev server and the Express server together
+npm run client       # Vite only
+npm run server       # Express only, under node --watch
+npm run lint         # ESLint
+npm run build        # docs site, then vite build into dist/ and frontend/
+npm run production   # run the built server with NODE_ENV=production
+</code></pre>
+<p>Further script groups, all defined in <code>package.json</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Scripts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Docs site</td>
+<td><code>docs:dev</code>, <code>docs:build</code>, <code>docs:preview</code>, <code>docs:check</code></td>
+</tr>
+<tr>
+<td>Generated references</td>
+<td><code>docs:gen:api</code>, <code>docs:gen:cli</code>, <code>docs:gen:config</code>, <code>docs:gen:data</code></td>
+</tr>
+<tr>
+<td>Internationalisation</td>
+<td><code>i18n:extract</code>, <code>i18n:check</code>, <code>i18n:pseudo</code>, <code>i18n:status</code>, <code>i18n:xliff:export</code>, <code>i18n:xliff:import</code>, <code>i18n:translate</code></td>
+</tr>
+<tr>
+<td>Plugins and content</td>
+<td><code>plugins:gen</code>, <code>plugins:check</code>, <code>vendor</code>, <code>vendor:check</code>, <code>setup:content</code>, <code>pack:content</code>, <code>starter-content</code></td>
+</tr>
+<tr>
+<td>Licences</td>
+<td><code>license:sync</code>, <code>license:verify</code>, <code>license:latest</code></td>
+</tr>
+<tr>
+<td>Verification</td>
+<td><code>verify:oyon</code>, <code>verify:room3d</code>, <code>oyon:update</code></td>
+</tr>
+<tr>
+<td>Knowledge base</td>
+<td><code>kb</code>, <code>kb:build</code></td>
+</tr>
+</tbody></table></div>
+<p>For a local LLM, point the platform LLM settings at an LM Studio or OpenAI-compatible endpoint; <code>server/routes/proxy-routes.js</code> handles the <code>lmstudio</code> and <code>custom</code> platforms. For local speech, <code>npm run install:piper</code> installs Piper with its voices under <code>server/data/piper/</code>, and the <code>kokoro</code> provider runs in process with its cache at <code>TRANSFORMERS_CACHE</code>.</p>
+<h2 id="roles">Roles</h2>
+<p>From <code>ROLE_RANKS</code> and <code>VALID_ROLES</code> in <code>server/middleware/auth.js</code>. <code>user</code> is an alias for <code>student</code> at rank 1.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Rank</th>
+<th>Guard</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>guest</code></td>
+<td>0</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>student</code></td>
+<td>1</td>
+<td><code>requireStudent</code></td>
+</tr>
+<tr>
+<td><code>reviewer</code></td>
+<td>2</td>
+<td><code>requireReviewer</code></td>
+</tr>
+<tr>
+<td><code>educator</code></td>
+<td>3</td>
+<td><code>requireEducator</code></td>
+</tr>
+<tr>
+<td><code>admin</code></td>
+<td>4</td>
+<td><code>requireAdmin</code></td>
+</tr>
+</tbody></table></div>
+<p><code>requireRole(minRank)</code> answers 401 without a user and 403 below the rank. Plugin manifests declare <code>minRole</code> for the room and a separate <code>authoring.minRole</code> for the case editor; every plugin room declares <code>student</code>, and every authoring slot declares <code>educator</code>.</p>
+<h2 id="author">Author</h2>
+<p>Rohy is written by Mohammed Saqr, Professor of Computer Science at the University of Eastern Finland, whose contact details are recorded in the <code>author</code> field of <code>package.json</code>. Profile links and background are on the project website at <a href="about.html"><code>website/about.html</code></a> and at <a href="https://www.saqr.me">www.saqr.me</a>.</p>
+<h2 id="license">License</h2>
+<p>Carm Research License v1.4. The full text is at <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE"><code>LICENSE</code></a>.</p>
+<p>Use, copying and distribution for non-commercial purposes are granted free of charge, and the licence places academic research and teaching inside that grant whatever the funding source. Commercial use requires a paid licence. Outputs produced by running Rohy on your own data belong to you and may be shared without restriction. Third-party component texts are embedded under <a href="https://github.com/mohsaqr/rohySimulator/blob/main/licenses/"><code>licenses/</code></a> and <a href="https://github.com/mohsaqr/rohySimulator/blob/main/OyonR/licenses/"><code>OyonR/licenses/</code></a>, indexed in <a href="https://github.com/mohsaqr/rohySimulator/blob/main/NOTICE.md"><code>NOTICE.md</code></a>.</p>
+<p>For paid licensing and institutional agreements: <a href="mailto:saqr@saqr.me">saqr@saqr.me</a>.</p>
+        </article>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="index.html">Overview</a>
+                <a href="rooms.html">Rooms</a>
+                <a href="whats-new.html">What's new</a>
+                <a href="help.html">Help</a>
+                <a href="about.html">About the author</a>
+                <a href="index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="https://rohy.lacarm.com/rohy/docs/trainee/" target="_blank" rel="noopener">Trainee guides</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">Migrations</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>
