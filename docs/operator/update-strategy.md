@@ -2,7 +2,7 @@
 
 > **Audience:** maintainers, contributors, future-you. The "why" behind
 > the update tooling. Operators reading this for the first time should
-> start at [Updating](/operator/updating) — that's the manual; this is the
+> start at [Updating](/operator/updating): that is the manual; this is the
 > design doc.
 
 ::: tip Reference
@@ -42,8 +42,8 @@ fleet-managed SaaS category (Tailscale clients, Chrome auto-update).
 2. **Backup before mutation.** Every state-changing operation creates a
    verified, timestamped, restorable snapshot first.
 3. **Atomic deploys.** Either the new version is fully running and verified,
-   or the old version is fully running. Never half-way.
-4. **One-command rollback.** From "this update was bad" to "I'm on the
+   or the old version is fully running, with no partial state in between.
+4. **One-command rollback.** From "this update was bad" to "I am on the
    previous version" in under a minute.
 5. **Forward-compatible migrations.** The previous release can always run
    against the schema produced by the next release, until at least one
@@ -51,7 +51,7 @@ fleet-managed SaaS category (Tailscale clients, Chrome auto-update).
 
 ### Non-goals
 
-1. **Zero-downtime.** Acceptable downtime budget is hours, not seconds.
+1. **Zero-downtime.** The acceptable downtime budget is measured in hours.
 2. **Fleet management.** No multi-site dashboard, no centralized rollout.
 3. **Auto-update.** Operators decide when. No timer, no cron, no surprise.
 4. **Telemetry.** Tool does not phone home about anything.
@@ -130,12 +130,12 @@ Lives in `migrations/MANIFEST.md`, mirrored as the
 [Migrations runbook](/operator/migrations). Summary:
 
 - **Default: additive-only.** Adding tables, columns (with default/null),
-  indexes — always allowed.
+  indexes: always allowed.
 - **Destructive changes** (DROP, RENAME, type narrow, add NOT NULL without
   default): split across **at least three releases** so any release can run
   against any adjacent release's schema.
 - **The CLI enforces the manifest:** `apply` refuses if a pending migration
-  isn't classified, and refuses destructive without `--allow-destructive`
+  is not classified, and refuses destructive without `--allow-destructive`
   + interactive confirmation.
 
 This is the same approach Mastodon uses (see their
@@ -152,31 +152,32 @@ and what Postgres-shop SREs call ["expand and contract"](https://martinfowler.co
   `ROHY_UPDATE_BRANCH`).
 - `apply` does `git fetch + checkout <target>` inside that already-trusted
   clone.
-- `npm ci` is lockfile-strict — exact versions from `package-lock.json`,
+- `npm ci` is lockfile-strict: exact versions from `package-lock.json`,
   no surprise upgrades.
 - If the github remote is compromised, the operator gets compromised code.
 
 ### What v2 (Phase D) will add
 
-- Releases tagged on github (`v0.4.2`, etc.) instead of "always main."
+- Releases tagged on github (for example `v0.4.2`). v1 always tracks
+  `main`; v2 pins to a tag.
 - Each release ships:
-  - `rohySimulator-vX.Y.Z.tar.gz` — full source archive
-  - `*.sha256` — checksum
-  - `*.sig` — detached signature (GPG or sigstore)
-  - `RELEASE_NOTES.md` — human-readable changes + migration notes
-  - `MANIFEST.json` — version metadata, min-supported-from-version
+  - `rohySimulator-vX.Y.Z.tar.gz`: full source archive
+  - `*.sha256`: checksum
+  - `*.sig`: detached signature (GPG or sigstore)
+  - `RELEASE_NOTES.md`: human-readable changes + migration notes
+  - `MANIFEST.json`: version metadata, min-supported-from-version
 - `rohy-update apply` verifies signature + sha256 before checkout.
 - Maintainer publishes their public key once; operators pin it in
   `/etc/rohy/update.conf`.
 
 This blocks the `event-stream` / `xz-utils` / `eslint-scope` class of
 supply-chain attack: a compromise of the github remote OR npm registry
-won't propagate to operators with signature verification on.
+will not propagate to operators with signature verification on.
 
 **Decision deferred to Phase D**: GPG vs sigstore. GPG is more familiar to
 ops audiences; sigstore is keyless (no long-lived private key for
 maintainer to protect). Recommendation: **sigstore + cosign**, with a fallback
-to GPG only if there's a specific operator audience that requires it.
+to GPG only if there is a specific operator audience that requires it.
 
 ---
 
@@ -189,10 +190,10 @@ to GPG only if there's a specific operator audience that requires it.
 | **C** | `bin/rohy-update` v1: check / apply / rollback / list / restore | delivered |
 | **C-followup** | Wire `update.conf` into `bootstrap.sh` so fresh installs include the symlink + a default config | next session |
 | **D** | Github Releases pipeline: tags + signed artifacts + `MANIFEST.json` per release; `rohy-update` verifies | planned |
-| **E** | `docs/UPDATING.md` — operator manual | delivered |
-| **F** | Off-site backup integration in `update.conf` (rclone preset) — optional | documented in `UPDATING.md`, not yet first-class |
-| **G** | In-app release-notes display ("a new version is available — see release notes") | future |
-| **H** | Litestream for continuous DB replication (point-in-time recovery, not just per-deploy) | optional luxury |
+| **E** | `docs/UPDATING.md`: operator manual | delivered |
+| **F** | Off-site backup integration in `update.conf` (rclone preset): optional | documented in `UPDATING.md`; full support is still pending |
+| **G** | In-app release-notes display ("a new version is available: see release notes") | future |
+| **H** | Litestream for continuous DB replication (point-in-time recovery, beyond per-deploy snapshots) | optional luxury |
 
 Done in this session: A, B, C, E.
 
@@ -209,7 +210,7 @@ of `bootstrap.sh` editing; D is 1-2 days of github-actions + signing setup.
 | Disk fills mid-apply | Medium | Pre-flight requires 3× DB size free at backup dir |
 | Migration dry-run passes, real apply fails | Low | Auto-rollback on any failure including post-restart verify; rollback restores DB snapshot |
 | Concurrent `rohy-update` invocations | Low | `flock` on `/var/lock/rohy-update.lock` |
-| Bad release tag on github | Medium | v1: human reviews `rohy-update check` output; v2: signed releases catch tampering, not bugs |
+| Bad release tag on github | Medium | v1: human reviews `rohy-update check` output; v2: signed releases catch tampering, while a separate testing process catches bugs |
 | Operator skips multiple releases | High | `MANIFEST.json` per release will carry `min_supported_from_version`; v1 refuses unknown migrations |
 | Maintainer key compromise (Phase D+) | Catastrophic | sigstore-keyless removes long-lived key; rotation procedure in docs |
 | Operator runs `rollback` after destructive migration | High if not gated | `rollback` reads `destructive` flag from rollback recipe, refuses; `restore-backup` is the explicit alternative |
@@ -218,13 +219,13 @@ of `bootstrap.sh` editing; D is 1-2 days of github-actions + signing setup.
 
 ## Reference implementations consulted
 
-These shaped concrete decisions, not just inspiration:
+These shaped concrete decisions beyond inspiration:
 
-| Project | What we borrowed |
+| Project | What was borrowed |
 |---|---|
 | **[Plausible self-hosted](https://plausible.io/docs/self-hosting)** | The "one upgrade page, three commands" UX shape. UPDATING.md aims for this length and tone. |
 | **[Mastodon admin docs](https://docs.joinmastodon.org/admin/upgrading/)** | The "before you upgrade" framing; migration-notes-per-release pattern in MANIFEST.md. |
-| **[Vaultwarden](https://github.com/dani-garcia/vaultwarden/wiki/Updating-the-vaultwarden-image)** | Single-binary update story — keep the operator surface minimal. |
+| **[Vaultwarden](https://github.com/dani-garcia/vaultwarden/wiki/Updating-the-vaultwarden-image)** | Single-binary update story: keep the operator surface minimal. |
 | **[Discourse upgrade procedure](https://meta.discourse.org/t/upgrade-discourse-to-the-latest-version/3805)** | The "explicit destructive-action acknowledgment" pattern (`--allow-destructive` + filename confirmation). |
 | **[Litestream](https://litestream.io/)** | The model for SQLite continuous backup (Phase H, when ready). |
 | **[Kamal](https://kamal-deploy.org/)** | The transactional-deploy step ordering (snapshot → stop → checkout → build → migrate → start → verify → rollback-on-fail). |
@@ -236,27 +237,28 @@ These shaped concrete decisions, not just inspiration:
 
 ## Things explicitly NOT in this strategy
 
-These have come up in discussions; recording why they're out:
+These have come up in discussions; recording why they are out:
 
-1. **Blue-green deploy** — solves zero-downtime, which isn't a goal.
-   Adds significant complexity (two systemd units, nginx upstream
-   shuffling, SQLite read-only-inactive coordination). Skip.
-2. **Auto-update timer** — operator-driven only. A self-hosted app pushing
+1. **Blue-green deploy**: solves zero-downtime. This project accepts
+   downtime, per the constraints above. Adds significant complexity (two
+   systemd units, nginx upstream shuffling, SQLite read-only-inactive
+   coordination). Skip.
+2. **Auto-update timer**: operator-driven only. A self-hosted app pushing
    updates without consent burns trust faster than the convenience saves
    anyone time.
-3. **Multi-site fleet dashboard** — out of scope per the constraints.
+3. **Multi-site fleet dashboard**: out of scope per the constraints.
    If/when rohy gets used in a coordinated multi-site way, revisit.
-4. **Postgres migration** — SQLite is the right call for the target
+4. **Postgres migration**: SQLite is the right call for the target
    deployment shape. Reconsider only when forced (multi-writer concurrency
-   or replication needs that aren't covered by Litestream).
-5. **Container-image-based updates** (a la Kamal) — deferred. The current
+   or replication needs that are not covered by Litestream).
+5. **Container-image-based updates** (a la Kamal): deferred. The current
    docker path uses `compose` with `image: rohy:latest`; switching to
    immutable-image-per-release is a separate redesign. Note the implication:
-   today's docker users effectively get rolling builds, not signed releases,
-   until Phase D resolves how docker fits in.
-6. **Rolling secret rotation** — JWT_SECRET rotation, API key rotation —
-   these are operationally important but not the same problem as code/schema
-   updates. Separate doc when ready.
+   today's docker users effectively get rolling builds; signed releases
+   arrive once Phase D resolves how docker fits in.
+6. **Rolling secret rotation**: JWT_SECRET rotation and API key rotation
+   are operationally important, but they are a separate problem from
+   code/schema updates. Separate doc when ready.
 
 ---
 
@@ -269,8 +271,8 @@ These terms are also in the canonical [Glossary](/reference/glossary):
 - **Snapshot**: a point-in-time copy of the DB + env + version metadata,
   living under `/var/backups/rohy/`.
 - **Manifest** (two senses):
-  - `migrations/MANIFEST.md` — the migration policy doc.
-  - `<snapshot>/manifest.json` — metadata about a specific snapshot.
+  - `migrations/MANIFEST.md`: the migration policy doc.
+  - `<snapshot>/manifest.json`: metadata about a specific snapshot.
 - **Rollback recipe**: the JSON at `/var/lib/rohy/rollback/<sha>.json`
   recording what an apply did, used to undo it.
 - **Additive migration**: schema change such that previous-release code can

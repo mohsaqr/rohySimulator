@@ -1,6 +1,6 @@
 # Deploying Rohy to production
 
-Once you've installed (see [INSTALL.md](INSTALL.md)), this document
+Once you have installed (see [INSTALL.md](INSTALL.md)), this document
 covers production hardening: reverse proxy, TLS, environment, security
 checklist, deploy verification, and monitoring. For ongoing upgrades
 see [UPDATING.md](UPDATING.md).
@@ -13,12 +13,12 @@ Two ways to get rohy running in production:
 
 | Approach | When to use | Source of truth |
 |---|---|---|
-| **Pulled image** (recommended) | You want a byte-identical deploy across boxes, with the same image other operators are running | `ghcr.io/mohsaqr/rohy:vX.Y.Z` published per tagged release. Each tag is verified by the release workflow's `verify-published-image` job *before* the artifact is announced — boots, answers `/api/health`, passes `tech-test.sh`, serves every Oyon vendor asset. |
-| **Built from source** | You're modifying rohy / running on an arch we don't publish (ARM64 boards beyond the matrix) | `docker compose build` against the local checkout. Use this for `main` HEAD or for forks. |
+| **Pulled image** (recommended) | You want a byte-identical deploy across boxes, with the same image other operators are running | `ghcr.io/mohsaqr/rohy:vX.Y.Z` published per tagged release. Each tag is verified by the release workflow's `verify-published-image` job before the artifact is announced: it boots, answers `/api/health`, passes `tech-test.sh`, and serves every Oyon vendor asset. |
+| **Built from source** | You are modifying rohy, or running on an arch the project does not publish (ARM64 boards beyond the matrix) | `docker compose build` against the local checkout. Use this for `main` HEAD or for forks. |
 
-For production deploys, **prefer pulled images**. The release workflow
-runs every check `tech-test.sh` runs *against the actual published
-artifact* before the tag is finalised — so "tag exists" already means
+For production deploys, pulled images are preferred. The release workflow
+runs every check `tech-test.sh` runs against the actual published
+artifact before the tag is finalised, so "tag exists" already means
 "verified to boot." Building from source on a fresh box adds 10-12 min
 to deploy time and re-walks every install-path failure mode that the
 nightly install-from-scratch workflow already catches.
@@ -35,22 +35,22 @@ services:
     # … rest of service config unchanged
 ```
 
-Pin to an exact tag (not `:latest`) for reproducible deploys. Operators
-who deploy `:latest` get a moving target with every push to `main` once
-we publish more tags.
+Pin to an exact tag for reproducible deploys. Operators who deploy
+`:latest` get a moving target with every push to `main` once the
+project publishes more tags.
 
 ### Scope the compose project name
 
 The compose file does not pin a project name, so Compose derives one from
-the directory holding the file — `deploy/docker/`, giving the project
-**`docker`**. Every resource is namespaced under it: the DB volume is
-`docker_rohy-db`, not `rohy-db`.
+the directory holding the file: `deploy/docker/`, giving the project
+**`docker`**. Every resource is namespaced under it: the DB volume name
+is `docker_rohy-db`, distinct from a bare `rohy-db`.
 
-That name is generic enough to collide. Any *other* compose project you
-run from a directory also called `docker/` shares the namespace, and a
-leftover `docker_rohy-db` volume from an earlier stack will be reused by
-this one — which surfaces as a container that never turns healthy rather
-than as a clear error.
+That name is generic enough to collide. Any *other* compose project run
+from a directory also called `docker/` shares the namespace, and a
+leftover `docker_rohy-db` volume from an earlier stack is reused by
+this one. That surfaces as a container that stays unhealthy, which is a
+harder failure to diagnose than a clear error.
 
 Scope it explicitly:
 
@@ -62,7 +62,7 @@ docker compose -p rohy -f deploy/docker/compose.yml up -d
 
 Do this from the **first** run. Switching the project name later points
 Compose at differently-named volumes, so an existing database appears
-empty — the data is still in the old volume, but nothing is reading it.
+empty: the data stays in the old volume, but nothing reads it.
 To move an existing deploy, stop the stack and copy the volume:
 
 ```bash
@@ -73,7 +73,7 @@ docker run --rm -v docker_rohy-db:/from -v rohy_rohy-db:/to alpine \
 docker compose -p rohy -f deploy/docker/compose.yml up -d
 ```
 
-Check what you actually have with `docker volume ls | grep rohy-db`.
+Confirm the current state with `docker volume ls | grep rohy-db`.
 
 ---
 
@@ -82,17 +82,17 @@ Check what you actually have with `docker volume ls | grep rohy-db`.
 Walk this before any user touches the box:
 
 - [ ] **Strong, unique `JWT_SECRET`** in `/etc/rohy/env` (`openssl rand -hex 32`). Server refuses to start without one.
-- [ ] **HTTPS in front** of Express. Never expose port 4000 directly. nginx, Caddy, or Cloudflare Tunnel are all fine.
+- [ ] **HTTPS in front** of Express. Keep port 4000 off the public network. nginx, Caddy, or Cloudflare Tunnel are all fine.
 - [ ] **`FRONTEND_URL`** set to your public origin so CORS allows only that origin.
-- [ ] **Default seeded users disabled** (default in `NODE_ENV=production` — confirm `ALLOW_DEFAULT_USERS` is *not* set).
-- [ ] **First admin provisioned** with `ROHY_ADMIN_USERNAME` + `ROHY_ADMIN_PASSWORD` before the box is reachable — otherwise the first stranger to hit the signup page claims the instance as admin. See [Getting the first admin](#getting-the-first-admin).
+- [ ] **Default seeded users disabled** (default in `NODE_ENV=production`; confirm `ALLOW_DEFAULT_USERS` is unset).
+- [ ] **First admin provisioned** with `ROHY_ADMIN_USERNAME` + `ROHY_ADMIN_PASSWORD` before the box is reachable. Otherwise the first stranger to hit the signup page claims the instance as admin. See [Getting the first admin](#getting-the-first-admin).
 - [ ] **First admin password rotated** if you used `--admin-bootstrap` or `ALLOW_DEFAULT_USERS`. Default credentials are intentionally short-lived.
 - [ ] **Rate limits reviewed** in Platform Settings → Rate limits.
-- [ ] **LLM API keys scoped** to this app — at minimum, separate from your personal keys. Anthropic / OpenAI / Google all support per-project keys.
+- [ ] **LLM API keys scoped** to this app, separate from personal keys at minimum. Anthropic / OpenAI / Google all support per-project keys.
 - [ ] **Retention sweep cron installed** (see [§ Retention](#retention) below).
 - [ ] **Off-site backup configured** (see [UPDATING.md § Off-site backups](UPDATING.md#off-site-backups)).
-- [ ] **Observability log shipper wired** to NDJSON stdout, or set `ROHY_LOG_LEVEL=warn` if you don't ship logs.
-- [ ] **Migration to Postgres considered** if you expect >50 concurrent users (Stage E8 adapter is ready; see [§ Postgres](#postgres-readiness)).
+- [ ] **Observability log shipper wired** to NDJSON stdout, or set `ROHY_LOG_LEVEL=warn` if logs are not shipped.
+- [ ] **Migration to Postgres considered** if concurrent users exceed 50 (Stage E8 adapter is ready; see [§ Postgres](#postgres-readiness)).
 - [ ] **Deploy verifier wired** into your CI/cron (see [§ Deploy verification](#deploy-verification--live-monitoring)).
 - [ ] **Contract probe armed** if you care about Oyon validator drift (see [§ Contract probe](#oyon-contract-probe-armed-deploy-verification)).
 
@@ -103,7 +103,7 @@ Walk this before any user touches the box:
 ### nginx (default)
 
 `bootstrap.sh --proxy=nginx` writes a tested vhost. The key parts (if
-you're rolling your own):
+you are rolling your own):
 
 ```nginx
 server {
@@ -141,7 +141,7 @@ Reload after edits: `sudo nginx -t && sudo systemctl reload nginx`.
 ### Caddy
 
 `deploy/docker/compose.yml` ships with Caddy. Auto-TLS via Let's
-Encrypt, no cert renewal cron needed. The Caddyfile template:
+Encrypt requires no cert renewal cron. The Caddyfile template:
 
 ```
 {$CADDY_DOMAIN} {
@@ -151,7 +151,7 @@ Encrypt, no cert renewal cron needed. The Caddyfile template:
 }
 ```
 
-For a non-Docker Caddy, the principle is identical — `reverse_proxy
+For a non-Docker Caddy, the principle is identical: `reverse_proxy
 127.0.0.1:4000` with the path-prefix you want.
 
 ### Path-prefix vs root
@@ -209,14 +209,14 @@ Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose):
 | Variable | Default | Effect |
 |---|---|---|
 | `NODE_ENV` | `development` | Set to `production` in real deploys. Disables seeded default users. |
-| `PORT` | `3000` (dev) / `4000` (bootstrap) | Express upstream port. Falls through to next free in dev only. |
-| `FRONTEND_URL` | none — under Docker, derived as `https://$ROHY_HOSTNAME/rohy` | Allowed CORS origin in production. Required if your reverse proxy is on a different host. Under `deploy/docker/`, leave it unset and set `ROHY_HOSTNAME` instead; the entrypoint composes it and logs the result. Set it explicitly only when your proxy serves rohy on a different path or scheme. |
-| `ROHY_HOSTNAME` | `localhost` (Caddy) / unset (app) | Docker compose only. The public hostname Caddy serves and the basis for the derived `FRONTEND_URL`. Setting neither this nor `FRONTEND_URL` makes the container refuse to boot in production rather than guess an origin and fail later with CORS 500s. |
+| `PORT` | `3000` (dev) / `4000` (bootstrap) | Express upstream port. Falls through to the next free port in dev only. |
+| `FRONTEND_URL` | none; under Docker, derived as `https://$ROHY_HOSTNAME/rohy` | Allowed CORS origin in production. Required if your reverse proxy is on a different host. Under `deploy/docker/`, leave it unset and set `ROHY_HOSTNAME` instead; the entrypoint composes it and logs the result. Set it explicitly only when your proxy serves rohy on a different path or scheme. |
+| `ROHY_HOSTNAME` | `localhost` (Caddy) / unset (app) | Docker compose only. The public hostname Caddy serves and the basis for the derived `FRONTEND_URL`. Setting neither this nor `FRONTEND_URL` makes the container refuse to boot in production, catching a missing origin at startup before it can surface as CORS 500s. |
 | `JWT_EXPIRY` | `4h` | Token TTL. Roles/status refresh from `users` on every request anyway. |
 | `ROHY_DB` | platform-default | Override the SQLite file location. Use this for non-default install paths. |
-| `OYON_ENABLED` | `1` | Disable Oyon routes (`0`) — Settings tab shows a friendly panel, binary bundles still ship. |
-| `ALLOW_DEFAULT_USERS` | unset | Set to `1` to keep seeded `admin/admin123` etc. in production (do not use unless you're seeding and immediately rotating). |
-| `ROHY_ADMIN_USERNAME` | unset | With `ROHY_ADMIN_PASSWORD`, provisions the first admin on first boot — the recommended production bootstrap. Applied only while the `users` table is empty. |
+| `OYON_ENABLED` | `1` | Disable Oyon routes (`0`): Settings tab shows a friendly panel, binary bundles still ship. |
+| `ALLOW_DEFAULT_USERS` | unset | Set to `1` to keep seeded accounts such as `admin/admin123` in production (do not use unless you are seeding and immediately rotating). |
+| `ROHY_ADMIN_USERNAME` | unset | With `ROHY_ADMIN_PASSWORD`, provisions the first admin on first boot, the recommended production bootstrap. Applied only while the `users` table is empty. |
 | `ROHY_ADMIN_PASSWORD` | unset | Password for the provisioned admin. Must satisfy the normal policy (8+ chars, upper, lower, digit) or the seeder refuses it and logs why. |
 | `ROHY_ADMIN_EMAIL` | `<username>@rohy.local` | Optional email for the provisioned admin. |
 
@@ -224,7 +224,7 @@ Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose):
 
 | Variable | Default | Effect |
 |---|---|---|
-| `ROHY_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Change to `warn` in production if you're not shipping logs. |
+| `ROHY_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. Change to `warn` in production if logs are not shipped. |
 | `ROHY_LOG_SKIP_PATHS` | `/api/proxy/llm,/health` | Comma-separated paths to exclude from access logging. LLM proxy is excluded by default because the body contains the full prompt. |
 | `ROHY_SLOW_QUERY_MS` | `100` | Log a warning when a SQL query exceeds this. |
 | `ROHY_RETENTION_DAYS` | `90` | Default retention for time-bounded logs (overrideable in Platform Settings). |
@@ -246,7 +246,7 @@ Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose):
 scripts/smoke.sh https://your-host/rohy
 ```
 
-Just liveness — does the service answer, does the SPA shell load.
+Liveness only: does the service answer, does the SPA shell load.
 
 ### Full verify (27 checks)
 
@@ -258,25 +258,25 @@ ROHY_VERBOSE=1  scripts/tech-test.sh ...               # print response bodies o
 
 Sections:
 
-1. **Liveness** — `/api/health`, `/api/ready`, SPA shell
-2. **Frontend bundle** — JS + CSS bundles load with content-hashed filenames
-3. **Oyon API surface** — every Oyon route returns 401 (mounted) or 503 (disabled stub) — never bare 404
-4. **Oyon static assets** — nginx parity for `/oyon/standalone/`
-5. **Auth gating** — protected routes refuse 2xx without a token
-6. **Oyon contract probe** (auth'd, optional — see below)
-7. **Security headers** — CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS
-8. **Response timing** — every check under 5s
+1. **Liveness**: `/api/health`, `/api/ready`, SPA shell
+2. **Frontend bundle**: JS + CSS bundles load with content-hashed filenames
+3. **Oyon API surface**: every Oyon route returns 401 (mounted) or 503 (disabled stub), and no route returns a bare 404
+4. **Oyon static assets**: nginx parity for `/oyon/standalone/`
+5. **Auth gating**: protected routes refuse 2xx without a token
+6. **Oyon contract probe** (authenticated, optional, see below)
+7. **Security headers**: CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, HSTS
+8. **Response timing**: every check completes under 5s
 
 Wired automatically into:
-- **`bin/rohy-update`** — runs after every successful upgrade; failure rolls back
-- **SaqrServer hub deploy** — `POST_VERIFY_rohy` line in `JStats/website/sites.conf`
+- **`bin/rohy-update`**: runs after every successful upgrade; failure rolls back
+- **SaqrServer hub deploy**: `POST_VERIFY_rohy` line in `JStats/website/sites.conf`
 
 ### Oyon contract probe (armed deploy verification)
 
-Without arming, `tech-test.sh` only verifies routes are *mounted* — not
-that the validator actually catches malformed batches. To make every
-deploy POST a deliberately-bad emotion batch and assert the validator
-responds 400 with the correct error message:
+Without arming, `tech-test.sh` verifies that routes are *mounted*; the
+validator's handling of malformed batches stays unchecked. To make every
+deploy POST an intentionally malformed emotion batch and assert the
+validator responds 400 with the correct error message:
 
 ```bash
 # One-time per operator host
@@ -288,23 +288,23 @@ EOF
 chmod 600 ~/.rohy-deploy-creds
 ```
 
-The credentials must belong to a real rohy user — any role works, the
-contract probe doesn't read data, it just needs to pass
+The credentials must belong to a real rohy user. Any role works: the
+contract probe does not read data, it needs only to pass
 `authenticateToken` so the route reaches the validator. A dedicated
 low-privilege account is recommended.
 
-After that, **the wrapper handles the rest automatically** — `bin/rohy-update`
+After that, the wrapper handles the rest automatically: `bin/rohy-update`
 prefers `scripts/post-verify-rohy.sh` (mints a token, runs tech-test.sh
 with `ROHY_TOKEN` set), and the SaqrServer hub deploy points
 `POST_VERIFY_rohy` at the same wrapper. If the creds file is absent,
-the probe silently skips and the deploy still passes on the other 27
+the probe skips quietly and the deploy still passes on the other 27
 checks. Strict no-regression.
 
-What this catches: the May-2026 "label-set drift" bug class — when
+What this catches: the May-2026 "label-set drift" bug class, where
 client and server disagree about which emotions are valid. The probe
 sends a 7-of-8 batch summing to 0.875 and asserts the server returns
-400 + "sum close to 1" in the body. If the validator's tolerance is
-ever silently relaxed, the probe fails the deploy.
+400 with "sum close to 1" in the body. If the validator's tolerance is
+ever relaxed silently, the probe fails the deploy.
 
 ### Live operator dashboard
 
@@ -323,11 +323,11 @@ curl -ksS https://your-host/rohy/api/addons/oyon/admin/health \
 ```
 
 `/api/addons/oyon/admin/health` returns per-endpoint 4xx + 5xx
-rejection counts for the last 5 minutes and last hour. In-memory,
-per-process — lost on restart, which is fine for a "did the last
+rejection counts for the last 5 minutes and last hour. It is in-memory,
+per-process, and lost on restart, which is fine for a "did the last
 deploy break something?" indicator.
 
-Operator gate matches `/admin/live` — educator+ role with the per-role
+Operator gate matches `/admin/live`: educator+ role with the per-role
 view-enabled flag set on the tenant.
 
 **Use cases**:
@@ -400,46 +400,46 @@ The codebase is Postgres-ready in the sense that:
 - No SQLite-specific syntax in route handlers
 - `uuid_generate_v4()` style functions are abstracted
 
-What's needed to actually flip:
+What is needed to flip to Postgres:
 
 1. Provision Postgres (managed: RDS / Cloud SQL / Neon / Supabase, or self-hosted)
 2. Set `ROHY_DB_DRIVER=postgres` and `ROHY_DB_URL=postgresql://...` in env
 3. Run migrations against the new DB (the runner accepts both drivers)
 4. Re-stamp baseline + dump from SQLite → Postgres if you have data to migrate
 
-Worth doing if you expect >50 concurrent users or want to scale the
-read path with read replicas. SQLite is fine for everything below that
-on modern hardware (we hit ~100 sustained req/s on a Raspberry Pi 4
-with WAL mode in `bench/`).
+Worth doing if concurrent users exceed 50 or the read path needs to scale
+with read replicas. SQLite handles everything below that threshold on
+modern hardware: the `bench/` suite measured ~100 sustained req/s on a
+Raspberry Pi 4 with WAL mode.
 
 ---
 
 ## Security
 
-### What's protected by default
+### What is protected by default
 
-- **Secrets redacted** before any response leaves the server (`server/redaction.js` policy at Stage E5). API keys, tokens, password hashes scrubbed.
-- **CSRF**: SPA uses bearer tokens, not cookies, so classic CSRF doesn't apply. The `rohy_session` cookie is for the *standalone* Oyon page only.
+- **Secrets redacted** before any response leaves the server (`server/redaction.js` policy at Stage E5). API keys, tokens, password hashes are scrubbed.
+- **CSRF**: the SPA authenticates every request with a bearer token in the Authorization header, so classic cookie-based CSRF does not apply. The `rohy_session` cookie serves the *standalone* Oyon page only.
 - **CORS** scoped to `FRONTEND_URL`.
 - **Rate limits**: 10 logins / 15min / IP, 5 registrations / hour / IP, 600 req/min/IP general (configurable in Platform Settings).
 - **bcrypt** password hashing, JWT tokens with 4h default TTL.
-- **Audit logging** on sensitive mutations (Stage E4) — `oldValue`, `newValue`, metadata, hash chain.
+- **Audit logging** on sensitive mutations (Stage E4): `oldValue`, `newValue`, metadata, hash chain.
 - **Soft-delete + retention sweep** (Stage E7).
 - **Multi-tenant scoping** (`tenant_id` on 40+ tables, `requireSameTenant()` middleware).
 - **Mass-assignment-resistant inserts** via column allowlists in route handlers.
 
 ### What you should add
 
-- **WAF / rate-limiter at the edge** (Cloudflare, AWS WAF, fail2ban with nginx logs). Express's rate-limiter is per-process; behind a load balancer it's per-instance.
-- **Log shipper** for the NDJSON access log. SIEM, Loki, or just `journalctl --output=cat` piped to S3 daily.
-- **Backup encryption** if you're rsync'ing snapshots off-site (`gpg --symmetric` is fine).
-- **Egress monitoring** if you've granted LLM API keys — set per-provider quotas in their dashboards.
+- **WAF / rate-limiter at the edge** (Cloudflare, AWS WAF, fail2ban with nginx logs). Express's rate-limiter runs per-process; behind a load balancer it applies per-instance.
+- **Log shipper** for the NDJSON access log. SIEM, Loki, or `journalctl --output=cat` piped to S3 daily all work.
+- **Backup encryption** for snapshots rsynced off-site (`gpg --symmetric` is fine).
+- **Egress monitoring** where LLM API keys are granted: set per-provider quotas in their dashboards.
 
-### What we don't do
+### What Rohy does not do
 
-- **No MFA on operator accounts.** Add it via your reverse proxy (Caddy + OIDC, nginx + Authelia) if you need it.
+- **No MFA on operator accounts.** Add it via your reverse proxy (Caddy + OIDC, nginx + Authelia) if needed.
 - **No automatic secret rotation.** `JWT_SECRET` rotation invalidates all sessions; do it during a maintenance window with `bin/rohy-update apply` triggering a restart.
-- **No FIPS / HIPAA compliance attestation.** The codebase is built to pass these in principle but has no formal certification.
+- **No FIPS / HIPAA compliance attestation.** The codebase satisfies these controls in principle but carries no formal certification.
 
 ---
 
@@ -447,8 +447,8 @@ with WAL mode in `bench/`).
 
 ### Getting the first admin
 
-A fresh install has no admin until you make one, and in `NODE_ENV=production`
-the seeder deliberately refuses to create `admin/admin123`. Three ways in, all
+A fresh install has no admin until you make one. In `NODE_ENV=production`
+the seeder refuses on purpose to create `admin/admin123`. Three ways in, all
 of which apply **only while the `users` table is empty**:
 
 | How | When to use it | What happens |
@@ -465,7 +465,7 @@ sqlite3 /var/lib/rohy/database.sqlite \
   "UPDATE users SET role='admin' WHERE username='<their-username>';"
 ```
 
-They must log out and back in — the JWT carries the role, so an existing token
+They must log out and back in: the JWT carries the role, so an existing token
 stays a student token until it is reissued.
 
 ### Roles
@@ -505,9 +505,9 @@ Used by analytics roll-ups to filter by class / group / cohort.
 | Feature | How to disable |
 |---|---|
 | **Oyon (emotion capture)** | `OYON_ENABLED=0` in `/etc/rohy/env`, restart. Settings tab shows friendly disabled panel; binary bundles still ship. |
-| **Local TTS (Piper)** | Don't run `install-piper.sh`; Settings → Voice will hide Piper voices. |
+| **Local TTS (Piper)** | Skip `install-piper.sh`; Settings → Voice hides Piper voices. |
 | **Local TTS (Kokoro)** | Set Voice → Provider to anything else; Kokoro download skips. |
-| **Cloud LLMs** | Don't set the provider's API key in Platform Settings. UI disables that provider. |
+| **Cloud LLMs** | Leave the provider's API key unset in Platform Settings. The UI disables that provider. |
 | **Self-registration** | Set `ALLOW_REGISTRATION=0` in env. Users must be created by an admin. |
 | **Default seeded users** | Default in `NODE_ENV=production`. Re-enable for dev with `ALLOW_DEFAULT_USERS=1`. |
 

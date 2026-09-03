@@ -5,49 +5,47 @@ enabled and a student has consented, Rohy records *aggregated* emotion
 signals during a run and surfaces them to you as analytics. You read these
 in **Settings -> Oyon Learning Analytics** (educator+).
 
-## On-device and aggregated — the caveat first
+## On-device and aggregated
 
 ::: warning
-Emotion inference runs **in the student's browser**. Only aggregated
-ten-second windows ever leave the device — never raw camera frames or facial
-landmarks. The server hard-rejects raw frames. Treat the data as a
-coarse-grained engagement signal a learner agreed to share, not a recording
-of their face.
+Emotion inference runs **in the student's browser**. Aggregated ten-second
+windows are the only thing that leaves the device; raw camera frames and
+facial landmarks stay in the browser, and the server hard-rejects raw frames.
+Treat the data as a coarse-grained engagement signal a learner agreed to
+share.
 :::
 
-There is no Oyon data unless the add-on is enabled for the tenant and the
-student opted in. If the add-on is disabled you will see a clear disabled
-message instead of analytics.
+Oyon data appears once the add-on is enabled for the tenant and the student
+has opted in. A disabled add-on shows a clear disabled message in place of
+analytics.
 
 ## The views
 
 Four views, switched with the pills at the top:
 
-- **Windows** — the raw stream of aggregated ten-second emotion windows.
-- **Students** — per-student rollups.
-- **Cases** — rollups by case.
-- **Sessions** — per-session breakdown; open a session for its detail.
+- **Windows**: the raw stream of aggregated ten-second emotion windows.
+- **Students**: per-student rollups.
+- **Cases**: rollups by case.
+- **Sessions**: per-session breakdown; open a session for its detail.
 
 ## Filtering
 
 You can narrow by date range (**from**/**to**), dominant emotion
 (multi-select), role, case, user and session, and tighten quality with
 **minimum confidence** and **maximum missing-face ratio**. Apply the filters
-to re-query; results are paged. Each window carries a quality verdict so you
-can discard low-confidence or face-not-detected windows rather than reading
-them as real signal.
+to re-query; results are paged. Each window carries a quality verdict, so you
+can discard low-confidence and face-not-detected windows.
 
 ## Reading it responsibly
 
-- This is **aggregated affect over time**, not a per-moment emotional
-  transcript. Use it to spot stretches where a class struggled or
-  disengaged, then look at what they were doing then in
-  [reporting](/educator/reporting).
-- Low confidence or a high missing-face ratio means the signal is unreliable
-  for that window — filter those out before drawing conclusions.
-- It is for formative reflection and debrief, never for grading, ranking or
-  any consequential decision about a student. Consent and the
-  on-device/aggregation boundary are not optional.
+- This is **aggregated affect over time**. It reads at the scale of stretches
+  of a run, so use it to spot where a class struggled or disengaged, then look
+  at what they were doing then in [reporting](/educator/reporting).
+- Low confidence or a high missing-face ratio marks the signal for that window
+  as unreliable. Filter those out before drawing conclusions.
+- Use it for formative reflection and debrief. Keep it out of grading,
+  ranking and any consequential decision about a student. Consent and the
+  on-device aggregation boundary are mandatory.
 
 ## Reference
 

@@ -1,6 +1,6 @@
 # Dynamics analytics, evidence and logs
 
-Rohy analytics are designed to reconstruct the dynamics of a clinical simulation: what changed, when it changed, what the learner did in response, and how patterns unfolded across time. The analytics layer covers event sequences, n-grams and repeated motifs, temporal timelines, room movement, activity frequencies, transition and network structures, course-level progress, learner and session drill-downs, Oyon emotion and gaze summaries, heatmaps, chat records, audit logs, usage logs, exports and operational evidence. Transition Network Analysis is one method in this ecosystem, not the name of the ecosystem.
+Rohy analytics reconstruct the dynamics of a clinical simulation: what changed, when it changed, what the learner did in response, and how patterns unfolded across time. The analytics layer covers event sequences, n-grams and repeated motifs, temporal timelines, room movement, activity frequencies, transition and network structures, course-level progress, learner and session drill-downs, Oyon emotion and gaze summaries, heatmaps, chat records, audit logs, usage logs, exports and operational evidence. Transition Network Analysis is one method inside that layer.
 
 The methodological purpose is to study clinical reasoning as process. In Rohy, a learner gathers information, changes rooms, orders tests, waits, reviews reports, treats, monitors, consults, reacts to alarms and reflects in debrief. The meaning of an action depends on its timing and context. Ordering a test before examination, after examination or after physiological deterioration are analytically different events even when the order name is identical. Rohy analytics preserve those differences by linking events to the session, learner, case, course, room, patient state and time.
 
@@ -38,7 +38,7 @@ Timelines also support cold-case teaching. Without deterioration, the temporal q
 
 ## Transition, network and state dynamics
 
-Transition and network analytics compress many ordered actions into structural views. Nodes represent activity states, and edges represent movement between states. This can reveal dominant pathways, rare branches, repeated loops, self-transitions and bottlenecks. Transition Network Analysis is therefore one powerful view of Rohy's dynamics analytics.
+Transition and network analytics compress many ordered actions into structural views. Nodes represent activity states, and edges represent movement between states. This can reveal dominant pathways, rare branches, repeated loops, self-transitions and bottlenecks. Transition Network Analysis is therefore one structural view of Rohy's dynamics analytics.
 
 The network should remain clinically anchored. A dense network may indicate exploration, confusion or case complexity. A sparse network may indicate efficiency, premature closure or a short session. A highly central state may be a productive hub or an inefficient bottleneck. Edge weights and centrality measures are useful when interpreted with the authored scenario, clinical goal, learner level and debrief record.
 
@@ -50,9 +50,9 @@ Course analytics gives the trace a teaching population. Roster, completion grid,
 
 The scope ladder matters. Whole-class analytics reveal common patterns across the group. Student analytics reveal individual tendencies across attempts. Session analytics reveal the concrete sequence that can be discussed in debrief. A teacher can move from class overview to a student, then from the student to one session, then from the session to its sequence, timeline, reports, treatments, conversation and multimodal traces.
 
-Course analytics also supports longitudinal teaching. Across several cases, a teacher can examine whether students become faster at recognizing deterioration, more selective in ordering, more consistent in reassessment, more reflective in debrief or more appropriate in consultation. These patterns describe development over time rather than isolated performance.
+Course analytics also supports longitudinal teaching. Across several cases, a teacher can examine whether students become faster at recognizing deterioration, more selective in ordering, more consistent in reassessment, more reflective in debrief or more appropriate in consultation. These patterns describe development over time, which is a wider frame than isolated performance.
 
-Completion is interpreted narrowly. In the current model, completion means the learner reached debrief. It marks participation and workflow closure, not competence. This keeps course analytics honest and prevents operational status from silently becoming assessment.
+Completion is interpreted narrowly. In the current model, completion means the learner reached debrief. It marks participation and workflow closure, and it leaves competence unmeasured. This keeps course analytics honest and prevents operational status from becoming assessment.
 
 ## Multimodal analytics and Oyon
 
@@ -78,7 +78,7 @@ Logs are part of Rohy's analytics architecture. They provide provenance, account
 
 Learning-event logs describe learner activity inside the simulation. They are the basis for sequence, timeline, n-gram, transition, frequency and room-path analysis. Chat logs preserve patient and agent conversations, supporting review of history-taking, family interaction, consultation, patient distress and debrief. Conversation logs should be interpreted with role boundaries in mind: a patient, nurse, consultant, family member and discussant all represent different knowledge positions.
 
-Audit logs answer who changed the system. They record security- and governance-relevant actions such as user creation, role edits, account deletion or purge, tenant operations, platform setting changes, force logout, exports and other sensitive mutations. The audit chain gives these records integrity value by supporting tamper detection. This matters when analytics are used for assessment, research or institutional reporting.
+Audit logs answer who changed the system. They record security- and governance-relevant actions such as user creation, role edits, account deletion or purge, tenant operations, platform setting changes, force logout, exports and other sensitive mutations. The audit chain gives these records integrity value by supporting tamper detection, which analytics used for assessment, research or institutional reporting depend on.
 
 Export logs are essential because data often leaves Rohy. A CSV or JSON export may enter an LMS, a statistical package, a grading workflow or a research archive. Rohy records who exported the data, which resource was exported, which filters were applied, what format was used, how many records were included and when the export occurred. This creates provenance for datasets used outside the live platform.
 

@@ -2,18 +2,18 @@
 
 The patient monitor fills the right side of the **Patient** screen. It runs
 the patient's vital signs in real time and raises alarms when a vital goes
-out of range — exactly the signal you act on during the case.
+out of range. That alarm is the signal you act on during the case.
 
 ## Reading the monitor
 
 The monitor shows the patient's vital signs, typically:
 
-- **HR** — heart rate, with an ECG waveform
-- **BP** — blood pressure
-- **SpO2** — oxygen saturation
-- **RR** — respiratory rate
-- **Temp** — temperature
-- **EtCO2** — end-tidal CO2 (when the case uses it)
+- **HR**: heart rate, with an ECG waveform
+- **BP**: blood pressure
+- **SpO2**: oxygen saturation
+- **RR**: respiratory rate
+- **Temp**: temperature
+- **EtCO2**: end-tidal CO2 (when the case uses it)
 
 Which fields are shown can depend on the case and your instructor's
 platform settings, so a given case may not display every one.
@@ -33,8 +33,8 @@ When a vital crosses its threshold, an alarm fires through the simulator's
 central notification system. You will see it as an on-screen alert (and hear
 it, unless alarms are muted). Critical breaches are louder than warnings.
 
-An alarm **latches** — it stays visible while the vital is still out of
-range so you do not miss it, rather than flickering on and off.
+An alarm **latches**: it stays visible for as long as the vital is out of
+range, so it stays in view until you deal with it.
 
 ## Acknowledging an alarm
 
@@ -46,9 +46,9 @@ In the monitor's alarm controls each active alarm has an action:
 3. You can also **snooze** (silence) an alarm for a period, or toggle the
    monitor's overall **mute**.
 
-Acknowledging or snoozing only silences the *alert* — it does not fix the
-patient. The vital is still abnormal until you treat the underlying problem;
-a silenced-but-still-abnormal alarm stays listed so you remember it is
+Acknowledging or snoozing silences the *alert* and leaves the patient as they
+are. The vital stays abnormal until you treat the underlying problem, and a
+silenced-but-still-abnormal alarm stays listed so you remember it is
 outstanding.
 
 ::: tip Acks are per case

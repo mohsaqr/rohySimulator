@@ -1,8 +1,7 @@
 # Authoring a case (wizard)
 
-Build a complete clinical case — patient, presentation, vitals, labs,
-imaging, exam findings, treatments and agents — with the step-by-step case
-wizard.
+The step-by-step case wizard builds a complete clinical case: patient,
+presentation, vitals, labs, imaging, exam findings, treatments and agents.
 
 Open **Settings → Cases**, then create a new case or edit an existing one to
 enter the wizard. You can jump between steps freely using the step strip; the
@@ -12,29 +11,29 @@ draft auto-saves and shows a last-saved time.
 
 The wizard has eleven steps. They are, in order:
 
-1. **Demographics** — patient name, age, gender, weight, height/BMI and the
+1. **Demographics**: patient name, age, gender, weight, height/BMI and the
    identity fields the simulated patient uses.
-2. **Avatar** — the patient's 3D head and its framing. See
+2. **Avatar**: the patient's 3D head and its framing. See
    [Agent personas](/educator/agents) for how avatar precedence works.
-3. **Story** — the case description and the patient's system prompt: who they
+3. **Story**: the case description and the patient's system prompt: who they
    are, their symptoms, history and personality. This is the narrative the
    patient agent speaks from.
-4. **Scenario** — the keyframed vitals/state timeline. You can start from a
+4. **Scenario**: the keyframed vitals/state timeline. You can start from a
    built-in or public template. See [Scenario timelines](/educator/scenarios).
-5. **Vitals** — the patient's starting vitals (HR, SpO₂, RR, temp, BP,
+5. **Vitals**: the patient's starting vitals (HR, SpO₂, RR, temp, BP,
    EtCO₂). When a scenario is set, its first keyframe defines these; the
    wizard flags when manual vitals differ from the scenario's first frame.
-6. **Labs** — the lab results the case exposes when a trainee orders them.
-7. **Radiology** — imaging studies and their findings.
-8. **Exam** — physical examination findings by system.
-9. **Records** — the clinical record: chief complaint, present illness, risk
+6. **Labs**: the lab results the case exposes when a trainee orders them.
+7. **Radiology**: imaging studies and their findings.
+8. **Exam**: physical examination findings by system.
+9. **Records**: the clinical record: chief complaint, present illness, risk
    factors, differential, management plan and structured history. History
    fields written here mirror into the canonical clinical record the runtime
    reads.
-10. **Treatments** — the treatments available for this case and their
+10. **Treatments**: the treatments available for this case and their
     configured effects.
-11. **Agents** — the personas attached to the case (patient, discussant,
-    consultant, etc.). Edit a persona from here to open the
+11. **Agents**: the personas attached to the case, such as the patient, the
+    discussant and a consultant. Edit a persona from here to open the
     [Agent persona editor](/educator/agents).
 
 ::: tip
@@ -47,8 +46,7 @@ imaging, exam and treatments.
 
 The wizard can pre-fill a worked example (a 62-year-old angina presentation)
 across demographics, story, vitals and records. Use it to see how a complete
-case is shaped, then edit it into your own scenario rather than authoring
-from a blank form.
+case is shaped, then edit it into your own scenario.
 
 ## Templates
 
@@ -59,10 +57,10 @@ the timeline; you can then edit keyframes. See
 
 ## After authoring
 
-- Assign the case to a class — see [Assigning cases](/educator/assigning-cases).
+- Assign the case to a class. See [Assigning cases](/educator/assigning-cases).
 - A running session freezes the case at start time, so edits you make to a
-  case do not bleed into a session already in progress
-  ([Glossary — Case snapshot](/reference/glossary)).
+  case stay out of a session already in progress
+  ([Case snapshot in the glossary](/reference/glossary)).
 
 ## Reference
 

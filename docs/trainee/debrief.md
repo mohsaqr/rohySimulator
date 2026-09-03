@@ -4,15 +4,15 @@ The **Consultant** room is where you reflect on the case after it ends. You
 review the transcript, talk through your reasoning with a consultant, and
 look at a summary of what you did.
 
-## Ending vs. leaving
+## Ending the case and leaving the room
 
-These are two different things — knowing the difference matters.
+These are two separate actions.
 
 - **Leaving** the room: clicking **Consultant** in the bottom navigation bar
-  just navigates there. The case is still live, the patient's timeline keeps
+  navigates there. The case stays live, the patient's timeline keeps
   running, and you can navigate straight back to keep working.
 - **Ending** the case: clicking **End & Debrief** on the patient screen
-  deliberately closes the case.
+  closes the case.
 
 ::: danger Ending a case is final
 **End & Debrief** asks you to confirm. Once you confirm:
@@ -22,7 +22,7 @@ These are two different things — knowing the difference matters.
 - you can review the transcript in the debrief but **cannot reopen the
   case**.
 
-Only end the case when you are genuinely finished.
+End the case when you are finished with it.
 :::
 
 ## End the case
@@ -34,9 +34,8 @@ Only end the case when you are genuinely finished.
 ## In the Consultant room
 
 - Click **Start debrief** to begin the reflective conversation with the
-  consultant. (If you reload mid-debrief, it resumes where you were rather
-  than making you start again.)
-- Use **Transcript** to read the full record of the case — the number next
+  consultant. Reloading mid-debrief resumes where you were.
+- Use **Transcript** to read the full record of the case. The number next
   to it is how many messages it holds.
 - Use **Notes** to read or add to the notes you kept during the case; the
   same notes you took in the exam and investigations rooms are here.
@@ -49,11 +48,10 @@ Only end the case when you are genuinely finished.
 
 The debrief is where the learning lands: explain why you asked what you
 asked, why you ordered what you ordered, and what you would do differently.
-Your instructor sees this session — the conversation, your exam, your
-orders, your timing — in their reporting, so treat the debrief as part of
-the assessed work, not an afterthought.
+Your instructor sees this session in their reporting: the conversation, your
+exam, your orders and your timing. The debrief is part of the assessed work.
 
 ## Next steps
 
-- [Getting started](/trainee/getting-started) — run another case
+- [Getting started](/trainee/getting-started): run another case
 - [FAQ & troubleshooting](/trainee/faq)

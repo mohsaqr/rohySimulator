@@ -26,16 +26,16 @@ There are four ways you end up in one:
 4. **Your teacher adds you.** Instructors can enrol people directly from the
    class roster. See [Classes (cohorts) & join codes](/educator/cohorts).
 
-If the code is wrong you get **Could not join — check the code and try
-again**. **That class has been closed** means the code was right and the
-class is gone.
+If the code is wrong you get `Could not join — check the code and try again`.
+**That class has been closed** means the code was right and the class is gone.
 
 ## Seeing the classes you are in
 
 The same **My Profile → Join a class** tab lists **My classes** underneath
 the form: the name of each class you are a live member of, its description,
 and the date you joined. The list refreshes after a successful join. Before
-you have joined anything it reads *"You haven't joined a class yet."*
+you have joined anything it reads `You haven't joined a class yet — enter a
+code above to join one.`
 
 ## How a case relates to a course
 

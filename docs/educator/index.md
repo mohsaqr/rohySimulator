@@ -5,9 +5,9 @@ author cases, design scenarios, and read how your students performed.
 
 ## Start here
 
-- [Classes (cohorts) & join codes](/educator/cohorts) — create a class, invite students
-- [Authoring a case (wizard)](/educator/case-wizard) — build a scenario end to end
-- [Reporting & analytics](/educator/reporting) — the five reporting views
+- [Classes (cohorts) & join codes](/educator/cohorts): create a class, invite students
+- [Authoring a case (wizard)](/educator/case-wizard): build a scenario end to end
+- [Reporting & analytics](/educator/reporting): roster, completion grid, analytics, export and live feed
 
 ## In this section
 
@@ -21,7 +21,7 @@ author cases, design scenarios, and read how your students performed.
 | [Reporting & analytics](/educator/reporting) | Roster, grid, feed, export |
 | [TNA analytics](/educator/tna) | Transition Network Analysis dashboard |
 | [Oyon emotion analytics](/educator/oyon-analytics) | Reading aggregated emotion data |
-| [Classroom policy](/educator/classroom-policy) | Passing score, retakes, debrief — and what is enforced today |
+| [Classroom policy](/educator/classroom-policy) | Passing score, retakes, debrief, and what is enforced today |
 | [FAQ & troubleshooting](/educator/faq) | Common questions and fixes |
 
-> Authored in **Stage 3 (G2)** — milestone **M1**.
+> Authored in **Stage 3 (G2)**, milestone **M1**.

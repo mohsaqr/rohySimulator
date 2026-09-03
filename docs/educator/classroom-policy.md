@@ -8,8 +8,8 @@ These are recorded on the class and travel with it.
 **These policy fields are stored but not yet enforced.** Saving them records
 your intent on the class. They do **not** currently change how a session
 runs, what a student is allowed to do, or how completion is scored in
-reporting. Do not rely on them to gate students. This is a known limitation —
-plan your assessment around it.
+reporting. Do not rely on them to gate students. This is a known limitation.
+Plan your assessment around it.
 :::
 
 ## Where to set it
@@ -32,7 +32,7 @@ A percentage (0–100), or blank for no threshold. **Intended** meaning: the
 score a student needs for a case to count as passed in reports.
 
 **Today:** stored only. Reporting's **Completed** column means "reached the
-debrief" — it does **not** apply this threshold. See
+debrief" and applies no threshold. See
 [Reporting & analytics](/educator/reporting).
 
 ### Allow case retakes
@@ -49,15 +49,14 @@ Off by default. **Intended** meaning: a case counts as complete only after
 the student finishes the post-case discussion.
 
 **Today:** stored only. Completion in reporting is already keyed on reaching
-the debrief screen, but that behaviour is fixed — it is not driven by, and
-does not change with, this flag.
+the debrief screen. That behaviour is fixed and independent of this flag.
 
 ## What it is good for now
 
 - Documenting the class's grading and retake policy in one place for you and
   your co-teachers.
 - Recording learning objectives, course code and term alongside the class.
-- Being ready for when enforcement lands — values you set now will be there.
+- Being ready for when enforcement lands. Values you set now will be there.
 
 It does **not** retroactively change already-completed sessions, and it does
 not change live behaviour. Communicate the policy to students directly until

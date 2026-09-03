@@ -21,7 +21,7 @@ You need:
 - A modern browser. Chrome or Edge are recommended, especially if you plan to
   use [voice mode](/trainee/voice).
 - The site served over **HTTPS** if you want to talk to the patient with your
-  microphone — speech recognition will not start on an insecure origin.
+  microphone. Speech recognition starts only on a secure origin.
 
 ## 1. Sign in
 
@@ -35,7 +35,7 @@ Account** and follow the register form.
 
 ## 2. Pick a case
 
-A **case** is one clinical scenario — a patient with a presentation, labs,
+A **case** is one clinical scenario: a patient with a presentation, labs,
 imaging, exam findings and treatments behind it.
 
 - If your instructor set a **default case**, the simulator loads it
@@ -45,8 +45,7 @@ imaging, exam findings and treatments behind it.
   want. Loading a case returns you to the patient screen with that patient
   ready.
 
-You will not see the diagnosis spoiled in the screen header — that is by
-design. You work it out.
+The screen header withholds the diagnosis. You work it out.
 
 ## 3. Start the session
 
@@ -58,13 +57,13 @@ starts the session.** The chat panel is on the lower-left of the screen.
 2. Press **Enter** or click the send button.
 
 The patient replies, the session begins, and the monitor on the right starts
-running the patient's vitals. From this point everything you do — questions,
-exams, orders, treatments — is part of one **session**.
+running the patient's vitals. From this point everything you do is part of one
+**session**: questions, exams, orders and treatments.
 
 ## 4. Work the case
 
-You now have five **rooms**, switched from the bar along the bottom of the
-screen:
+You now work across **rooms**, switched from the bar along the bottom of the
+screen. Every install carries these:
 
 | Room | What you do there |
 |---|---|
@@ -74,9 +73,10 @@ screen:
 | **Radiology** | Order and read imaging |
 | **Consultant** | Debrief and reflect after you end the case |
 
-See [the rooms](/trainee/rooms) for how moving between them works.
-Order medications from the **Treatments** button that floats above the bottom
-bar on the patient screen.
+The 3D Room, 12-lead ECG, Pathology and PACS rooms join the bar when the case
+includes that material. See [the rooms](/trainee/rooms) for how moving between
+them works. Order medications from the **Treatments** button that floats above
+the bottom bar on the patient screen.
 
 ## 5. End and debrief
 
@@ -98,6 +98,6 @@ case, or your instructor ends it. See the
 
 ## Next steps
 
-- [Taking a history](/trainee/history) — get the most out of the patient chat
-- [The rooms](/trainee/rooms) — the full layout
-- [Vitals & alarms](/trainee/vitals) — read the monitor and handle alarms
+- [Taking a history](/trainee/history): get the most out of the patient chat
+- [The rooms](/trainee/rooms): the full layout
+- [Vitals & alarms](/trainee/vitals): read the monitor and handle alarms

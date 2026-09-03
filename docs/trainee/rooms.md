@@ -3,8 +3,9 @@
 The simulator is organised into **rooms**. They are peers, so none is
 "deeper" than another, and moving between them keeps your work.
 
-Five rooms are part of every install. The others are plugin rooms, and they
-appear when the case includes the material they present.
+The Patient, Examination, Laboratory, Radiology and Consultant rooms are part
+of every install. The others are plugin rooms, and they appear when the case
+includes the material they present.
 
 ## The rooms
 
@@ -46,7 +47,8 @@ with no slides leaves **Pathology** out of the bar.
 So a missing **PACS**, **Pathology** or **12-lead ECG** button means the
 current case has nothing for that room to show. Those three rooms also ship
 only on the `advanced` release channel, so an install on the stock `current`
-channel shows the five core rooms plus the 3D Room.
+channel shows the Patient, Examination, Laboratory, Radiology and Consultant
+rooms plus the 3D Room.
 
 ::: tip A missing room is a case detail
 A room you saw in one case and miss in the next is a property of the case,
@@ -72,11 +74,11 @@ Switching rooms keeps your session running and keeps everything you have
 done. You can go to the Laboratory, come back to the Patient, examine them,
 then check Radiology, in any order and as many times as you like.
 
-::: tip Visiting the Consultant is not "ending"
-Clicking **Consultant** in the bottom bar just navigates there. It does
-**not** end the case. The patient's timeline keeps running and you can
-navigate straight back. Ending the case is a separate, deliberate action:
-**End & Debrief** on the patient screen. See [Debrief](/trainee/debrief).
+::: tip Visiting the Consultant keeps the case open
+Clicking **Consultant** in the bottom bar navigates there and leaves the case
+running. The patient's timeline keeps advancing and you can navigate straight
+back. Ending the case is a separate action: **End & Debrief** on the patient
+screen. See [Debrief](/trainee/debrief).
 :::
 
 ## The results badge

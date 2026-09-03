@@ -116,8 +116,8 @@ The sliders button opens **Brightness**, **Contrast**, **Gamma** and
 **Saturation**, with **Reset to the scanned image** below them. The panel
 states the rule it follows:
 
-> Display only. These change what you see, never the measurements — those
-> come from scanner metadata.
+> `Display only. These change what you see, never the measurements — those
+> come from scanner metadata.`
 
 Every length, area and per-mm² figure is derived from the microns per pixel
 the scanner recorded, so moving these sliders leaves your numbers untouched.

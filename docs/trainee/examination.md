@@ -1,7 +1,7 @@
 # Physical examination
 
-The **Examination** room lets you perform a focused physical exam on a body
-map and see the findings for what you examine.
+The **Examination** room gives you a body map on which to perform a focused
+physical exam and see the findings for what you examine.
 
 ## Open the Examination room
 
@@ -14,8 +14,8 @@ your session or lose your chat.
 The exam is two steps: pick **where**, then pick **how**.
 
 1. **Click a body region** on the map (for example the chest or the
-   abdomen). The map shows a front (anterior) and a back (posterior) view —
-   switch views to reach the region you need.
+   abdomen). The map shows a front (anterior) and a back (posterior) view.
+   Switch views to reach the region you need.
 2. **Choose an examination type** for that region. The available types are:
    - **Inspection**
    - **Palpation**
@@ -30,10 +30,10 @@ Each region-and-type you perform is recorded in the exam log so you can see
 what you have already done. Regions you have examined, and any that returned
 an abnormal finding, are marked on the map.
 
-::: tip Examine deliberately
-Only the regions and types you actually perform are revealed and recorded.
-Examine with a plan driven by the history — a complete, targeted exam is
-part of what the debrief reflects on.
+::: tip Examine with a plan
+Only the regions and types you perform are revealed and recorded. Let the
+history drive the plan. A complete, targeted exam is part of what the debrief
+reflects on.
 :::
 
 ## Notes
@@ -44,8 +44,8 @@ again in the [debrief](/trainee/debrief).
 
 ## Leaving the room
 
-There is no Back button — use the bottom navigation bar to move to any other
-room. Your exam log, findings and notes stay with the session.
+The room has no Back button. Use the bottom navigation bar to move to any
+other room. Your exam log, findings and notes stay with the session.
 
 ## Next steps
 

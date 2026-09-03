@@ -1,7 +1,7 @@
 # Updating rohy
 
-This is the operator manual for keeping a rohy install current. If you're
-just looking at the strategy or how it was designed, see
+This is the operator manual for keeping a rohy install current. For the
+strategy behind it or how it was designed, see
 [`UPDATE-STRATEGY.md`](UPDATE-STRATEGY.md). This document is the page you
 read **before pressing the upgrade button**.
 
@@ -10,7 +10,7 @@ read **before pressing the upgrade button**.
 
 ---
 
-## TL;DR — three commands
+## TL;DR: three commands
 
 ```bash
 sudo rohy-update check       # what would change?
@@ -18,7 +18,7 @@ sudo rohy-update apply       # apply it (auto-backup, auto-rollback on failure)
 sudo rohy-update rollback    # undo the last apply
 ```
 
-That's the entire happy path. Everything below is detail for when something
+That is the entire happy path. Everything below is detail for when something
 needs care.
 
 ---
@@ -58,15 +58,15 @@ EOF
 sudo chmod 644 /etc/rohy/update.conf
 ```
 
-If `ROHY_VERIFY_URL` is empty, the post-deploy verifier is skipped — the
-update succeeds as long as the service comes back up. Setting it gives you
-the strongest signal that the new version actually works.
+If `ROHY_VERIFY_URL` is empty, the post-deploy verifier is skipped, and the
+update succeeds as long as the service comes back up. Setting it gives
+the strongest signal that the new version works correctly.
 
 ### 2b. (Optional) Arm the Oyon contract probe
 
 By default the verifier checks 27 things including liveness, route
-mounting, security headers, and bundle integrity. With one extra step you
-also get a contract probe that POSTs a deliberately-malformed emotion
+mounting, security headers, and bundle integrity. One extra step adds
+a contract probe that POSTs an intentionally malformed emotion
 batch and asserts the server validator catches it (the May-2026
 "label-set drift" bug class). To enable it, drop a credentials file:
 
@@ -80,19 +80,19 @@ EOF
 chmod 600 "$HOME/.rohy-deploy-creds"
 ```
 
-The credentials must belong to a real rohy user — any role works, the
-contract probe doesn't read data, it just needs to pass `authenticateToken`
+The credentials must belong to a real rohy user. Any role works: the
+contract probe does not read data, it needs only to pass `authenticateToken`
 so the route reaches the validator. A dedicated low-privilege account is
 recommended.
 
-If the file is absent, `rohy-update`'s post-verify still runs — the
-contract probe just skips and the deploy passes on the other 27 checks.
+If the file is absent, `rohy-update`'s post-verify still runs. The
+contract probe skips and the deploy passes on the other 27 checks.
 No breaking change.
 
 ### 3. Take a manual baseline backup
 
-Belt-and-braces — every `apply` snapshots automatically, but a manual
-baseline gives you a known-good restore point before you start trusting the
+Belt and braces: every `apply` snapshots automatically, and a manual
+baseline gives a known-good restore point before you start trusting the
 automation:
 
 ```bash
@@ -106,7 +106,7 @@ Backups live at `/var/backups/rohy/<timestamp>-<git-sha>-<label>/`.
 
 ## Two upgrade paths
 
-Pick one — both end at the same place.
+Pick one; both end at the same place.
 
 ### Path A: `bin/rohy-update` (source/systemd installs)
 
@@ -145,7 +145,7 @@ locally until you `docker image prune`.
 
 ---
 
-## The upgrade procedure (Path A — `bin/rohy-update`)
+## The upgrade procedure (Path A: `bin/rohy-update`)
 
 ### Step 1: `rohy-update check`
 
@@ -208,14 +208,14 @@ Total wall time: 30-120 seconds for a typical update, depending on
 
 **You will be asked to confirm.** If running unattended (cron, CI), pass
 `--yes`. If destructive migrations are pending, `--allow-destructive` is
-also required, and you'll be prompted to type the migration filename.
+also required, and you will be prompted to type the migration filename.
 
 ### Step 3: Verify in the browser
 
 The automated verifier covers the API surface. The pill widget, camera
-permission, login flow — those still need a human. Hard-refresh
+permission, and login flow still need a human. Hard-refresh
 `https://your-host/rohy/` in your browser, click around. If anything looks
-broken, **don't wait** — `sudo rohy-update rollback` and report the issue.
+broken, roll back immediately: `sudo rohy-update rollback` and report the issue.
 
 ---
 
@@ -224,7 +224,7 @@ broken, **don't wait** — `sudo rohy-update rollback` and report the issue.
 ### Automatic
 
 If any step in `apply` fails, the tool **already rolled back** before
-exiting non-zero. You'll see:
+exiting non-zero. You will see:
 
 ```
 ✗ post-deploy verify failed
@@ -236,8 +236,8 @@ exiting non-zero. You'll see:
 ```
 
 When you see this, the install is back where it started. The new code is
-checked out (so `git status` looks new) but `git checkout <old-sha>` was
-run before the service restart — you're on the old version.
+checked out (so `git status` looks new), but `git checkout <old-sha>` ran
+before the service restart, so you are on the old version.
 
 ### Manual (after a successful `apply`, you change your mind)
 
@@ -248,10 +248,10 @@ sudo rohy-update rollback
 Reads `/var/lib/rohy/rollback/last`, restores the snapshot taken before the
 last `apply`, checks out the old git sha, restarts. Confirms with you first.
 
-**If the apply included destructive migrations**, `rollback` will refuse and
-print an alternative procedure — you must restore manually because the old
-code can't read the new schema. Use `rohy-update restore-backup
-<snapshot>` and accept that you may have to re-do anything that happened
+**If the apply included destructive migrations**, `rollback` refuses and
+prints an alternative procedure: restore manually, because the old
+code cannot read the new schema. Use `rohy-update restore-backup
+<snapshot>` and accept that you may have to redo anything that happened
 since the apply.
 
 ### Restoring an arbitrary snapshot
@@ -289,7 +289,7 @@ bumps.**
 
 Local snapshots in `/var/backups/rohy/` survive bad updates. They do NOT
 survive disk failure, ransomware, or the building burning down. If your
-install carries data you can't lose, set up an off-site copy.
+install carries data that must not be lost, set up an off-site copy.
 
 Two simple recipes:
 
@@ -301,7 +301,7 @@ sudo crontab -e
 0 3 * * 0 rsync -az --delete /var/backups/rohy/ backup@offsite-host:/srv/rohy-backups/
 ```
 
-### Option B: rclone to S3 / B2 / Google Drive / etc.
+### Option B: rclone to S3, B2, or Google Drive
 
 ```bash
 # one-time setup (interactive, on the rohy host):
@@ -320,7 +320,7 @@ a backend with at-rest encryption and audit logs.
 
 ### "another rohy-update is running (lock /var/lock/rohy-update.lock held)"
 
-A previous run didn't clean up. If you're sure none is running:
+A previous run did not clean up. If you are sure none is running:
 
 ```bash
 sudo ls -la /var/lock/rohy-update.lock     # check ownership
@@ -336,14 +336,14 @@ sudo journalctl -u rohy -n 100 --no-pager
 ```
 
 Common causes:
-- Migration failed at runtime (despite dry-run passing — rare; usually means
-  DB had unexpected state).
-- An env var introduced in the new release isn't set in `/etc/rohy/env`.
+- Migration failed at runtime (despite dry-run passing: rare, and usually means
+  the DB had unexpected state).
+- An env var introduced in the new release is not set in `/etc/rohy/env`.
   Compare against `deploy/env.example`.
 - A native dependency failed to install on this distro / arch.
 
-`rohy-update apply` should have already auto-rolled back. If it didn't (e.g.
-the rollback itself failed), see "Manual recovery" below.
+`rohy-update apply` should already have auto-rolled back. If it did not (for
+example the rollback itself failed), see "Manual recovery" below.
 
 ### "post-deploy verify failed"
 
@@ -355,13 +355,13 @@ sudo journalctl -u rohy -n 100        # service-side errors
 ```
 
 Most often: one specific endpoint is broken in the new release. The tool
-auto-rolled back; you're on the old version. File a bug with the
+auto-rolled back; you are on the old version. File a bug with the
 `tech-test.sh` output included.
 
-### "destructive migrations pending — refusing to apply"
+### "destructive migrations pending. Re-run with --allow-destructive after reading the release notes."
 
 Read the release notes for the target version. Likely you need to step
-through an intermediate version first. If you're sure, re-run with
+through an intermediate version first. If you are sure, re-run with
 `--allow-destructive`. **Take an extra manual snapshot first**:
 
 ```bash
@@ -374,12 +374,12 @@ Then:
 sudo rohy-update apply --allow-destructive
 ```
 
-You'll be prompted to type each destructive migration filename to confirm
+You will be prompted to type each destructive migration filename to confirm
 you read it.
 
 ### "one or more migrations not declared in migrations/MANIFEST.md"
 
-The release shipped a migration without a manifest entry. **Don't apply it.**
+The release shipped a migration without a manifest entry. **Do not apply it.**
 This is a bug in the release. Open an issue or wait for a fix release.
 
 ### Manual recovery (when even rollback fails)
@@ -415,7 +415,7 @@ sudo -u $(stat -c%U .) npm run build
 sudo systemctl start rohy
 ```
 
-If you reach this section, file a detailed bug report — the tool should
+If you reach this section, file a detailed bug report: the tool should
 have handled it. Include `/var/log/rohy-update.log`.
 
 ---
@@ -426,8 +426,8 @@ have handled it. Include `/var/log/rohy-update.log`.
 > from a github remote configured in your local clone. If the remote is
 > compromised, your install is compromised.
 
-Until signed releases ship (planned — see `UPDATE-STRATEGY.md`, Phase D),
-you can verify what you're about to install manually:
+Until signed releases ship (planned; see `UPDATE-STRATEGY.md`, Phase D),
+you can verify what you are about to install manually:
 
 ```bash
 sudo rohy-update check                        # see the target sha
@@ -435,9 +435,9 @@ git -C /opt/repos/rohy log --oneline HEAD..origin/main \
   --stat                                       # see the diff
 ```
 
-If anything looks suspicious — a commit you don't recognize from the
-maintainer, an unexplained binary blob, a sudden `node_modules` change —
-**don't apply**. Open an issue first.
+If anything looks suspicious (a commit you do not recognize from the
+maintainer, an unexplained binary blob, a sudden `node_modules` change),
+stop and open an issue before applying it.
 
 ---
 
@@ -464,15 +464,15 @@ sudo journalctl -u rohy -n 100 --no-pager
 sudo rohy-update list-backups
 ```
 
-Don't include the full DB or `/etc/rohy/env` (it contains secrets).
+Exclude the full DB and `/etc/rohy/env` (it contains secrets).
 
 ---
 
 ## Further reading
 
-- [`UPDATE-STRATEGY.md`](UPDATE-STRATEGY.md) — design rationale, phases
+- [`UPDATE-STRATEGY.md`](UPDATE-STRATEGY.md): design rationale, phases
   beyond v1, references.
-- [`migrations/MANIFEST.md`](../migrations/MANIFEST.md) — migration policy
-  + per-migration metadata.
-- [`README.md`](../README.md) — install paths.
-- [`HANDOFF.md`](../HANDOFF.md) — current development state.
+- [`migrations/MANIFEST.md`](../migrations/MANIFEST.md): migration policy
+  plus per-migration metadata.
+- [`README.md`](../README.md): install paths.
+- [`HANDOFF.md`](../HANDOFF.md): current development state.

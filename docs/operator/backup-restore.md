@@ -13,31 +13,31 @@ recipe* are defined in the [Glossary](/reference/glossary).
 Every restore path below replaces `/opt/data/rohy/database.sqlite`
 with the snapshot's copy. Anything written since that snapshot is
 lost. Take a fresh snapshot first if the current DB has data you
-might still want.
+still want.
 :::
 
 ---
 
 ## How a snapshot is made
 
-`scripts/rohy-backup.sh` does **not** `cp` the live SQLite file (that
-risks a torn read while the server is writing). It runs:
+`scripts/rohy-backup.sh` does **not** `cp` the live SQLite file, because
+that risks a torn read while the server is writing. It runs:
 
 ```bash
 sqlite3 "$ROHY_DB" "VACUUM INTO '<snapshot>/database.sqlite'"
 ```
 
 `VACUUM INTO` produces a **defragmented, transactionally consistent**
-copy even while the server is running — no downtime needed for a
-backup. The snapshot directory then gets:
+copy while the server keeps running. No downtime is needed for a
+backup. The snapshot directory then holds:
 
-- `database.sqlite` — the consistent copy
-- `manifest.json` — `created_at`, `git_sha`, `label`, `db_bytes`
-- `migrations.lst` — the applied-migration list at snapshot time
-- `env` — a copy of the systemd `EnvironmentFile` (contains secrets)
+- `database.sqlite`: the consistent copy
+- `manifest.json`: `created_at`, `git_sha`, `label`, `db_bytes`
+- `migrations.lst`: the applied-migration list at snapshot time
+- `env`: a copy of the systemd `EnvironmentFile` (contains secrets)
 
 Right after writing the copy the script runs `PRAGMA integrity_check`
-on the **snapshot** and refuses to keep it if that fails — a snapshot
+on the **snapshot** and refuses to keep it if that fails. A snapshot
 that exists is a snapshot that verified.
 
 ---
@@ -51,8 +51,8 @@ sudo scripts/rohy-backup.sh --label baseline
 Snapshots land at
 `/var/backups/rohy/<timestamp>-<git-sha>-<label>/`, where the three
 placeholders are filled in per run. Use a meaningful label
-(`pre-import`, `pre-destructive`, `baseline`) — it's how you'll find
-the snapshot later.
+(`pre-import`, `pre-destructive`, `baseline`) so the snapshot is easy
+to find later.
 
 Verify the most recent snapshot is readable without writing a new one:
 
@@ -75,8 +75,8 @@ sudo rohy-update list-backups
 
 ## The automatic pre-upgrade snapshot
 
-You usually do not run `rohy-backup.sh` by hand for upgrades.
-`bin/rohy-update apply` calls it for you as **step 2** of the apply
+Upgrades do not require running `rohy-backup.sh` by hand.
+`bin/rohy-update apply` calls it as **step 2** of the apply
 sequence, before it stops the service or checks out new code:
 
 ```text
@@ -102,7 +102,7 @@ Retention is automatic on every write:
 
 ## Restore drill
 
-Practise this before you need it. On a non-production box, or during a
+Practise this before it is needed. Use a non-production box, or a
 maintenance window:
 
 ### 1. Pick a snapshot
@@ -111,7 +111,7 @@ maintenance window:
 sudo rohy-update list-backups
 ```
 
-Note the `NAME` column of the snapshot you want.
+Note the `NAME` column of the snapshot to restore.
 
 ### 2. Restore it
 
@@ -122,15 +122,15 @@ git sha that went with it:
 sudo rohy-update rollback
 ```
 
-To restore an **arbitrary** snapshot (not just the last apply):
+To restore a snapshot other than the last apply:
 
 ```bash
 sudo rohy-update restore-backup <snapshot-name>
 ```
 
 Replace `<snapshot-name>` with a name from `list-backups`. The tool
-stops the service, copies the snapshot DB over `$ROHY_DB`, optionally
-restores the env file (it asks), and restarts.
+stops the service, copies the snapshot DB over `$ROHY_DB`, offers to
+restore the env file, and restarts.
 
 ### 3. Verify
 
@@ -140,10 +140,10 @@ scripts/smoke.sh https://your-host/rohy
 ```
 
 Then hard-refresh the SPA in a browser and log in. A restore that
-passes `smoke.sh` but fails login is usually an env mismatch — confirm
-the env file restored matches the running code.
+passes `smoke.sh` but fails login usually indicates an env mismatch.
+Confirm the restored env file matches the running code.
 
-### Fully manual restore (when the tool can't help)
+### Fully manual restore (when the tool cannot help)
 
 If `rohy-update` itself is broken, restore by hand:
 
@@ -172,15 +172,15 @@ sudo systemctl start rohy
 Local snapshots survive a bad upgrade. They do **not** survive disk
 failure or ransomware. The two one-line cron recipes (rsync / rclone)
 live in [Updating § Off-site backups](/operator/updating#off-site-backups).
-Encrypt off-site copies if they leave your control — `gpg --symmetric`
-on the tarball is enough; the snapshot's `env` file contains
+Encrypt off-site copies if they leave your control: `gpg --symmetric`
+on the tarball is enough. The snapshot's `env` file contains
 `JWT_SECRET` and any API keys.
 
 ---
 
 ## Related
 
-- [Updating](/operator/updating) — the upgrade flow that snapshots automatically
-- [Migrations runbook](/operator/migrations) — why a destructive migration
+- [Updating](/operator/updating): the upgrade flow that snapshots automatically
+- [Migrations runbook](/operator/migrations): why a destructive migration
   blocks auto-rollback and forces a manual restore
-- [Incident playbooks](/operator/incidents) — wedged-DB and failed-update recovery
+- [Incident playbooks](/operator/incidents): wedged-DB and failed-update recovery

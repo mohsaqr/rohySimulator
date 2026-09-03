@@ -1,16 +1,15 @@
 # Lab & medication editors
 
 Use the catalogue editors to add and curate the lab tests and medications
-trainees can order. There are **two surfaces over the same data** — this
-is deliberate during the catalogue migration, not duplication. Pick the
-right one for the task.
+trainees can order. **Two surfaces sit over the same data** for the duration
+of the catalogue migration. Pick the right one for the task.
 
 ## The two surfaces
 
 | Surface | Where | Who | Scope behavior |
 |---|---|---|---|
-| `/api/master/*` | Legacy settings editors | educator and above | Scope-blind — writes are global to the tenant data set. |
-| `/api/catalogue/*` | Scope-aware catalogue | authenticated users | Scope-aware — students may add to their own scope; search proxies live here. |
+| `/api/master/*` | Legacy settings editors | educator and above | Scope-blind: writes are global to the tenant data set. |
+| `/api/catalogue/*` | Scope-aware catalogue | authenticated users | Scope-aware: students may add to their own scope; search proxies live here. |
 
 Both are reachable from **Settings → Lab Tests** and
 **Settings → Medications**. Endpoints:
@@ -25,18 +24,17 @@ Every catalogue row has a **scope** that decides who can see and edit it:
 platform  →  tenant  →  user  →  session
 ```
 
-- **platform** — visible to all tenants. Granted **only** to admins via
-  the `/promote` path; never assigned by a normal write. Shown as the
-  **Curated** / **Platform** badge.
-- **tenant** — visible to everyone in the tenant. Requires **educator**
+- **platform**: visible to all tenants. Granted **only** to admins via
+  the `/promote` path. Shown as the **Curated** / **Platform** badge.
+- **tenant**: visible to everyone in the tenant. Requires **educator**
   rank or higher in the same tenant. Shown as the **Tenant** badge.
-- **user** — visible only to the creator. The default scope for every
+- **user**: visible only to the creator. The default scope for every
   write by anyone. Shown as the **My** badge.
-- **session** — transient; purged when the session ends.
+- **session**: transient; purged when the session ends.
 
 A write is pinned to **user** scope unless the caller has the rank to
-elevate it. Elevating to **tenant** requires educator+; **platform** is
-never granted by a plain write.
+elevate it. Elevating to **tenant** requires educator+. Reaching **platform**
+requires the `/promote` path.
 
 ## Who can edit a row
 
@@ -55,7 +53,7 @@ greyed/absent edit button on a Curated row is expected for non-admins.
 
 1. Open **Settings → Lab Tests**.
 2. Use **Add Test** to create one, or pick a row to edit.
-3. Set the clinical fields — test code, name, group, specimen type,
+3. Set the clinical fields: test code, name, group, specimen type,
    reference range, critical thresholds, unit, and
    **turnaround minutes** (defaults to the platform default if left
    blank; see [Platform settings](/admin/platform-settings)).
@@ -73,5 +71,5 @@ greyed/absent edit button on a Curated row is expected for non-admins.
 ::: tip Default to narrow scope
 Leave new entries at **user** scope unless the whole tenant needs them.
 Promote to **tenant** only when a class will rely on it, and reserve
-**platform** for genuinely cross-tenant clinical content (admin only).
+**platform** for cross-tenant clinical content (admin only).
 :::

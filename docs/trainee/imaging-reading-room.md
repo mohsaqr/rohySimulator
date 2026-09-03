@@ -31,7 +31,7 @@ filters on description, modality and accession.
 The detail line on a row is its status:
 
 - **Ordered**: the study is ready to read.
-- **Reporting — images not released yet**: the order is still within its
+- `Reporting — images not released yet`: the order is still within its
   turnaround, so the row is dimmed. Wait it out, as you would a lab result.
 - **No images for this study**: the archive holds no material for this
   study. The row is dimmed and carries a warning icon.
@@ -94,7 +94,7 @@ arrived with.
 Edge enhancement, gamma and the window act on the picture you see, while
 the values behind it stay as the scanner recorded them. The cursor readout
 and both measurement tools report those acquired values whatever the panel
-is set to: *Display only — measurements are unaffected*.
+is set to: `Display only — measurements are unaffected`.
 :::
 
 ## Look, and measure
@@ -122,8 +122,8 @@ with the session and come back when you return to the room.
 The **Report** section of the right panel takes two free-text fields:
 **Findings** (*What you see*) and **Impression** (*What it means*). Under
 them the room counts what it observed while you read: **Series opened**,
-**Images reviewed** and **Measurements**, described on screen as *Attached
-automatically — what the room observed, not what the report claims*.
+**Images reviewed** and **Measurements**, described on screen as `Attached
+automatically — what the room observed, not what the report claims.`
 **Copy** puts the whole composed report on your clipboard. Until one of the
 two fields has text in it, an amber line notes that a report needs
 findings, an impression, or both.

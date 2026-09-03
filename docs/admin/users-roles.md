@@ -6,8 +6,8 @@ and requires the **admin** role.
 
 ## The rank model
 
-Access in Rohy is **rank comparison, never string equality**. Every role
-has a numeric rank and a check is always "rank ≥ N":
+Access in Rohy is **rank comparison**. Every role has a numeric rank and
+every check reads "rank ≥ N":
 
 ```text
 guest (0) < student (1) < reviewer (2) < educator (3) < admin (4)
@@ -21,13 +21,13 @@ guest (0) < student (1) < reviewer (2) < educator (3) < admin (4)
 | **educator** | Owns classes and authors cases. Shown in the UI as **Teacher**. |
 | **admin** | Full platform administration. |
 
-`student` and `user` are the same rank — `user` is normalized to
+`student` and `user` are the same rank, and `user` is normalized to
 `student`. The educator role is labelled **Teacher** in the UI; the
 wire/role name is still `educator`.
 
 ::: tip
-You can never grant a role higher than your own. An educator-rank actor
-cannot mint an admin; the API rejects it with 403.
+You can grant a role up to your own and no higher. An educator-rank actor
+asking for an admin gets a 403 from the API.
 :::
 
 The authoritative role list and the middleware that enforces it
@@ -45,11 +45,10 @@ The authoritative role list and the middleware that enforces it
 
 The password must pass the platform password policy or the request is
 rejected with the specific failure listed. A duplicate username or email
-returns a conflict — usernames and emails are unique within a tenant.
+returns a conflict, because usernames and emails are unique within a tenant.
 
-New users are created in **your** tenant. Cross-tenant creation is not
-available from this screen — see
-[Multi-tenant operations](/admin/multi-tenant).
+New users are created in **your** tenant. Cross-tenant creation happens
+elsewhere. See [Multi-tenant operations](/admin/multi-tenant).
 
 ## Batch-create users from CSV
 
@@ -63,7 +62,7 @@ Use this to onboard a whole class at once.
 The result reports **succeeded** and **failed** counts. Each failed row
 carries its own reason (missing field, invalid role, password policy,
 duplicate, or "cannot grant a role higher than your own"). Valid rows
-still import even when others fail — fix the failed rows and re-submit
+still import even when others fail. Fix the failed rows and re-submit
 only those. The batch is recorded in the audit log.
 
 ## Edit, delete, and purge
@@ -71,7 +70,7 @@ only those. The batch is recorded in the audit log.
 - **Edit** a user from the user list to change name, email, or role.
 - **Delete** removes the account. You cannot delete your own account, and
   a user who authored immutable case-version history cannot be deleted
-  (the API returns a conflict) — purge or reassign first.
+  (the API returns a conflict). Purge or reassign first.
 - **Purge** performs a strict erasure: user-authored domain rows are
   soft-deleted, ephemeral rows are physically deleted, log rows are
   anonymized, and the user row is retained but deactivated with PII
@@ -92,5 +91,5 @@ suspected compromise, exam control):
 
 This deactivates the session server-side; the user is signed out on their
 next request. The action is written to the audit log as `FORCE_LOGOUT`
-with your identity and the source IP. Active sessions are tenant-scoped —
-you only see and can terminate sessions in your own tenant.
+with your identity and the source IP. Active sessions are tenant-scoped: you
+see and terminate sessions in your own tenant.

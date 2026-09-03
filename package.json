@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "3.0.0-beta.5",
+  "version": "3.0.0-beta.6",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -47,6 +47,7 @@
     "docs:gen:data": "node scripts/docs-gen/gen-data.mjs",
     "docs:gen:config": "node scripts/docs-gen/gen-config.mjs",
     "docs:check": "bash scripts/docs-gen/check.sh",
+    "website:build": "node website/build-docs.mjs && node website/build-help.mjs",
     "i18n:extract": "node node_modules/i18next-parser/bin/cli.js",
     "i18n:check": "node node_modules/i18next-parser/bin/cli.js --fail-on-update",
     "i18n:pseudo": "node scripts/generate-pseudo-locale.mjs",

@@ -9,12 +9,12 @@ catalogue, place the order, wait for the turnaround, then read the report.
 Click **Laboratory** or **Radiology** in the bottom navigation bar. Each
 room has three columns:
 
-- **Left — catalogue**: the tests or studies you can order, with search and a
-  group/modality filter.
-- **Centre — report viewer**: where an opened report fills the screen, with
+- **Left, the catalogue**: the tests or studies you can order, with search and
+  a group/modality filter.
+- **Centre, the report viewer**: where an opened report fills the screen, with
   a department dashboard and ready/pending/viewed counts when nothing is
   open.
-- **Right — worklist**: every order you have placed, with its status.
+- **Right, the worklist**: every order you have placed, with its status.
 
 ## Place an order
 
@@ -41,14 +41,14 @@ Results are not instant unless the case is set up that way. Each test has a
 turnaround time, shown next to it in the catalogue (for example `15min`).
 The worklist shows each order as:
 
-- **Pending** — a countdown to when the result will be ready.
-- **Ready** — the result is available; click to open it.
-- **Viewed** — you have already opened this result.
+- **Pending**: a countdown to when the result will be ready.
+- **Ready**: the result is available; click to open it.
+- **Viewed**: you have already opened this result.
 
-You do not need to refresh. The worklist updates itself every few seconds,
-and a count badge appears on the **Laboratory** / **Radiology** button in
-the bottom bar when a result is ready and unseen — so you can keep working
-in another room and come back when it lands.
+The worklist updates itself every few seconds, and a count badge appears on
+the **Laboratory** / **Radiology** button in the bottom bar when a result is
+ready and unseen, so you can keep working in another room and come back when
+it lands. A manual refresh is unnecessary.
 
 Some cases or instructor settings allow an **instant** order, which skips
 the wait. If that option is offered it is shown in the room; otherwise the
@@ -60,13 +60,12 @@ configured turnaround applies.
 2. The report opens full-width in the centre column as a hospital-style
    report. Opening it marks the order **Viewed** for the record.
 3. Opened reports stack as pills above the viewer. Click a pill to reopen
-   that report; click its **X** to remove it from the stack (the worklist
-   row stays — click it again to bring the report back).
+   that report; click its **X** to remove it from the stack. The worklist
+   row stays, and clicking it again brings the report back.
 4. Click **Close** or the report's **X** to return to the dashboard.
 
 A viewed result stays viewed for the rest of the session and is part of
-what your instructor reviews — opening a result counts as you having seen
-it.
+what your instructor reviews. Opening a result counts as you having seen it.
 
 ## Notes
 

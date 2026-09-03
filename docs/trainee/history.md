@@ -1,13 +1,13 @@
 # Taking a history
 
 You take the history by chatting with the patient in the **Patient** room.
-The patient is driven by a language model and answers in character — ask the
+The patient is driven by a language model and answers in character. Ask the
 way you would ask a real person.
 
 ## Talk to the patient
 
 1. Go to the **Patient** room (the bottom-bar room you start in).
-2. Type your question in the message box at the bottom of the chat panel —
+2. Type your question in the message box at the bottom of the chat panel,
    for example `What brought you in today?` or
    `Can you describe the pain?`
 3. Press **Enter** or click the send button.
@@ -17,13 +17,13 @@ button. The patient's reply streams in as it is generated.
 
 ::: tip Ask open questions first
 The patient answers what you ask. Open questions ("Tell me about the pain")
-usually surface more than closed ones early on; narrow down as you go, just
-as in a real history.
+usually surface more than closed ones early on. Narrow down as you go, the
+way you would in a real history.
 :::
 
 ## Other people in the room
 
-Some cases include other characters you can speak to — for example a
+Some cases include other characters you can speak to, for example a
 **nurse**, a **relative**, or an on-call **consultant**. When a case has
 them, they appear as extra tabs along the top of the chat panel next to the
 patient.

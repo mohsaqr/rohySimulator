@@ -15,7 +15,7 @@ a refresh, check you are signed in as the same user.
 
 ### I clicked End & Debrief by mistake. Can I reopen the case?
 
-No. Ending a case is final — the timeline stops and chat, exams and orders
+No. Ending a case is final: the timeline stops and chat, exams and orders
 lock. You can still review the transcript in the [debrief](/trainee/debrief),
 but the case cannot be reopened. Start a fresh case to practise again.
 
@@ -29,8 +29,8 @@ dismiss the banner once you have closed the extra tab.
 
 Open **Settings** (top-left of the patient screen) → **Open Settings** →
 **Cases** tab, and open the case you want. Loading a new case ends the
-current session and clears its chat — finish or **End & Debrief** first if
-you want it kept cleanly.
+current session and clears its chat. Finish or **End & Debrief** first if you
+want it kept cleanly.
 
 ## Results
 
@@ -38,18 +38,18 @@ you want it kept cleanly.
 
 Most results have a turnaround time and are not instant. In the
 **Laboratory** or **Radiology** room the worklist shows each order as
-**Pending** with a countdown, then **Ready**. You do not need to refresh —
-the worklist updates itself every few seconds and a count badge appears on
-the room's button in the bottom bar when something is ready. If an order is
-still pending, the result simply is not back yet. If it never becomes ready,
-tell your instructor — the case may not have that result configured.
+**Pending** with a countdown, then **Ready**. The worklist updates itself
+every few seconds, and a count badge appears on the room's button in the
+bottom bar when something is ready, so a refresh is unnecessary. An order that
+still reads **Pending** has a result that is on its way. If an order stays
+pending, tell your instructor: the case may have no result configured for it.
 
 ### I opened a result but it is gone from the centre
 
 Opening a result marks it **Viewed**. Opened reports become pills above the
 viewer; click the pill to reopen it, or click its row again in the worklist
-on the right. Removing a pill with its **X** does not delete the result —
-the worklist row stays.
+on the right. Removing a pill with its **X** closes the report and keeps the
+result: the worklist row stays.
 
 ## Voice and audio
 
@@ -63,7 +63,7 @@ Check, in order:
 2. **Browser and origin.** Speech needs Chrome or Edge over **HTTPS**.
 3. **System volume / output device.** Confirm the browser tab is not muted.
 4. If the simulator shows "No voice configured", the case or patient persona
-   has no voice set — that is an instructor fix; continue in text mode.
+   has no voice set. Your instructor fixes that; continue in text mode.
 
 ### The microphone will not start
 
@@ -75,8 +75,8 @@ closer to it. See [Voice mode](/trainee/voice) for the full table.
 
 ### An alarm keeps going off after I acknowledged it
 
-Acknowledging silences the *alert*, not the cause. The vital is still out of
-range until you treat the underlying problem, and a
+Acknowledging silences the *alert* and leaves the cause in place. The vital
+stays out of range until you treat the underlying problem, and a
 silenced-but-still-abnormal alarm stays listed so you do not forget it. See
 [Vitals & alarms](/trainee/vitals).
 
@@ -97,8 +97,8 @@ note until they arrive. See [Taking a history](/trainee/history).
 ## Still stuck?
 
 If a problem is not listed here, or the simulator is behaving in a way these
-pages do not describe, contact your instructor or platform administrator —
-your session activity is recorded, which helps them investigate.
+pages do not describe, contact your instructor or platform administrator.
+Your session activity is recorded, which helps them investigate.
 
 ## Related pages
 

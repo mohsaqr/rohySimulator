@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.6] — 2026-09-03
+
+### Changed
+
+- **Documentation style pass** over the trainee, educator, admin, operator
+  and product guides plus `INSTALL.md`, `DEPLOY.md`, `UPDATING.md` and the
+  docs home: declarative present tense, one fact per sentence, contractions
+  expanded, em dashes and antithesis removed, room counts replaced by room
+  names. Link targets and code blocks are unchanged in every file; 28
+  headings changed text and none was referenced by an anchor. The
+  `UPDATING.md` troubleshooting heading now quotes the message
+  `bin/rohy-update` emits; two `docs/index.md` frontmatter values are quoted.
+
 ## [3.0.0-beta.5] — 2026-09-03
 
 ### Changed

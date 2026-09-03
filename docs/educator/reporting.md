@@ -1,8 +1,7 @@
 # Reporting & analytics
 
-Every report is scoped to **your own class** — you only ever see the live
-members of a class you own (or, as an admin, any class). All reporting is
-read-only.
+Every report is scoped to **your own class**. You see the live members of a
+class you own, or, as an admin, of any class. All reporting is read-only.
 
 Open a class from **Settings → Classes** and go to the **Reports** tab, or
 use the one-click report shortcuts on each class card. There are five
@@ -12,11 +11,11 @@ reporting views.
 
 A per-student rollup table:
 
-- **Student** — name and username.
-- **Sessions** — number of sessions that student ran.
-- **Attempted** — distinct cases they started.
-- **Completed** — distinct cases where any session reached the debrief.
-- **Last activity** — most recent session activity.
+- **Student**: name and username.
+- **Sessions**: number of sessions that student ran.
+- **Attempted**: distinct cases they started.
+- **Completed**: distinct cases where any session reached the debrief.
+- **Last activity**: most recent session activity.
 
 A case counts as **completed** when the student reached the debrief screen
 (the terminal screen of every run). Click a row to drill into that student.
@@ -33,9 +32,9 @@ so nothing is hidden.
 
 A students x cases matrix. Each cell shows, for that student and case:
 
-- a green check — at least one session reached the debrief (**completed**),
-- an amber dot — **attempted** but not completed,
-- a faint dot — **not attempted**.
+- a green check: at least one session reached the debrief (**completed**),
+- an amber dot: **attempted**, with no session reaching the debrief,
+- a faint dot: **not attempted**.
 
 Hover a cell for the last-activity time. Cases only appear once a class
 member has a session in them.
@@ -48,13 +47,13 @@ re-queries the member-scoped analytics endpoints. It shows a KPI band
 (events, sessions, students, average events per student), engagement charts
 (activity over time, when-they-worked heatmap, action and object-type
 breakdowns) and a behaviour network. The behaviour-network part is
-Transition Network Analysis — see [TNA analytics](/educator/tna) for how to
+Transition Network Analysis. See [TNA analytics](/educator/tna) for how to
 read it.
 
 ## 4. Export
 
 Click **Download CSV** to download a flattened roster x case completion
-report — one row per student-case pair — for grading or LMS import.
+report for grading or LMS import. It carries one row per student-case pair.
 Columns:
 
 `cohort_id, cohort_name, user_id, username, name, case_id, case_name,
@@ -72,16 +71,15 @@ during a busy session.
 
 ## What "completed" and the numbers mean
 
-- **Completed = reached the debrief.** It does not yet mean "passed a
-  threshold". The classroom-policy passing score is stored but not enforced
-  in these reports — see [Classroom policy](/educator/classroom-policy).
-- Reporting reflects the **sessions students actually ran**, not the list of
-  cases you assigned to the class. Assigning a case does not pre-populate the
-  grid; activity does.
+- **Completed = reached the debrief.** It carries no score threshold. The
+  classroom-policy passing score is stored and unenforced in these reports.
+  See [Classroom policy](/educator/classroom-policy).
+- Reporting reflects the **sessions students ran**. Assigning a case leaves
+  the grid empty; activity populates it.
 
 ## Reference
 
-- API: [cohorts reporting endpoints](/reference/api/cohorts) — `.../roster`,
+- API: [cohorts reporting endpoints](/reference/api/cohorts): `.../roster`,
   `.../grid`, `.../student/:userId`, `.../feed`, `.../export`
 - [TNA analytics](/educator/tna) ·
   [Oyon emotion analytics](/educator/oyon-analytics)

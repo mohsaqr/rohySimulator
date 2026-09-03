@@ -39,12 +39,11 @@ left with a stale id is silent.
 Keys are stored in `platform_settings` and redacted in audit logs. The
 exact environment-variable names (`GOOGLE_TTS_API_KEY`, `OPENAI_API_KEY`,
 and related signing material) are listed in the
-[Config &amp; environment reference](/reference/config/). Never commit a
-key, log it, or place it in a support bundle.
+[Config &amp; environment reference](/reference/config/). Keep a key out of
+commits, logs and support bundles.
 
-OpenAI TTS reuses the OpenAI LLM key by default — if you only set an LLM
-key for a different provider, set the OpenAI key explicitly before
-selecting OpenAI TTS.
+OpenAI TTS reuses the OpenAI LLM key by default. If your LLM key belongs to a
+different provider, set the OpenAI key explicitly before selecting OpenAI TTS.
 
 ## Default voice and the boot audit
 
@@ -61,7 +60,7 @@ voice catalogue audit clean
 
 | Log line | Meaning | Fix |
 |---|---|---|
-| `voice catalogue audit clean` | Stored voices match the active provider. This is what you want. | — |
+| `voice catalogue audit clean` | Stored voices match the active provider. This is the healthy state. | None. |
 | `tts_provider unset; skipping voice catalogue audit` | The provider was explicitly cleared. | Pick a provider in **Settings → Platform → Voice**. |
 | `stale case_voice values detected` | A case or persona has a voice id invalid for the active provider. Those rows are silent. | Open each named row and pick a valid voice, or switch back to the provider that had it. |
 

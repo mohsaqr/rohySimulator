@@ -15,9 +15,8 @@ You can also assign cases at creation time: expand **Add details, cases,
 co-teachers & students** in the create form and select cases under
 **Assign cases from the library**.
 
-Only live cases in your own tenant can be assigned. If the request includes a
-case that is not a valid case in your tenant, the whole assignment is
-rejected and nothing is attached.
+Only live cases in your own tenant can be assigned. A request that includes
+any case outside that set is rejected whole, and nothing is attached.
 
 Assignment is **idempotent and revive-aware**: assigning a case that is
 already assigned is a no-op, and re-assigning a case you previously removed
@@ -26,7 +25,7 @@ brings the original link back.
 ## Unassign a case
 
 In the **Settings** tab, under **Assigned cases**, click the **×** next to a
-case and confirm. This is a soft delete of the link only — the case itself,
+case and confirm. This is a soft delete of the link only. The case itself,
 its content, and any sessions students already ran against it are untouched.
 Re-assigning the same case later revives the link.
 
@@ -39,10 +38,10 @@ Re-assigning the same case later revives the link.
   active class memberships. Unassigned live cases are not exposed as normal
   student-startable cases.
 - It does **not** change scoring. Reporting (roster, grid, export) is driven
-  by the sessions your students actually ran, not by the assignment list.
+  by the sessions your students ran.
 - It does **not** snapshot the case. When a student starts a session the case
-  is frozen into that session independently — see
-  [Glossary — Case snapshot](/reference/glossary).
+  is frozen into that session independently. See
+  [Case snapshot in the glossary](/reference/glossary).
 
 ## Reference
 

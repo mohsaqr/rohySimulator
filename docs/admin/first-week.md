@@ -11,16 +11,16 @@ Work top to bottom. Each step says where it lives in the app and what
 
 Open **Settings → Platform → LLM Settings**.
 
-1. Pick a **Provider** — `anthropic`, `openai`, `google`, `lmstudio`, or
-   any OpenAI-compatible endpoint.
+1. Pick a **Provider**. The catalogue in `server/shared/llmCatalogue.js`
+   offers `lmstudio`, `ollama`, `openai`, `anthropic`, `openrouter`, `groq`,
+   `together`, `azure` and `custom` (any OpenAI-compatible endpoint).
 2. Set the **Model** for that provider.
-3. Set **Base URL** only if the provider needs one (LMStudio uses
-   `http://localhost:1234/v1`; leave blank for Anthropic / OpenAI /
-   Google).
+3. Set **Base URL** only if the provider needs one (LM Studio uses
+   `http://localhost:1234/v1`; leave blank for Anthropic and OpenAI).
 4. Paste the **API key**. It is stored in `platform_settings` and redacted
    in audit logs.
 5. Leave **System Prompt Template** empty unless you have a specific
-   reason — any text here is appended to every case persona.
+   reason: any text here is appended to every case persona.
 6. Click **Save**, then **Test connection**. The row turns green when the
    provider responds.
 
@@ -40,14 +40,13 @@ Tail the boot log once. A clean boot prints exactly one line:
 voice catalogue audit clean
 ```
 
-Any other line names a stale row — fix what it names before opening to a
+Any other line names a stale row. Fix what it names before opening to a
 class. The audit reasons are documented in
 [Voice / TTS providers](/admin/voice-providers).
 
 ## 3. Create the admin and educator accounts
 
-The install seeds a first admin. Create the people who will actually run
-classes:
+The install seeds a first admin. Create the people who will run classes:
 
 1. Open **Settings → Users**.
 2. Create one account per teacher with the **educator** role (surfaced in
@@ -64,7 +63,7 @@ Open **Settings → Platform** and review:
 - **LLM Settings** rate limits.
 - **Notifications &amp; Alarms** routing defaults (see
   [Platform settings](/admin/platform-settings)).
-- **User field configuration** — which profile fields are required at
+- **User field configuration**: which profile fields are required at
   sign-up.
 
 ## 5. Review the clinical catalogue
@@ -85,7 +84,7 @@ assembled prompt if anything is off.
 ## 7. Hand off to teachers
 
 Teachers create classes, attach cases, and invite students with join
-codes. That workflow is in the educator guide, not here. Multi-tenant
+codes. That workflow lives in the educator guide. Multi-tenant
 deployments should also read [Multi-tenant operations](/admin/multi-tenant)
 before onboarding a second organization.
 

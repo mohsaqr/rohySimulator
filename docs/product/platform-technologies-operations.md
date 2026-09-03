@@ -8,13 +8,13 @@ The platform is designed for self-hosted clinical-education settings. A site may
 
 The frontend is a React and Vite application organised around workspaces. The learner sees the simulation runtime: patient, rooms, monitor, voice and debrief. Educators see authoring, courses and analytics. Administrators see users, settings, logs and platform configuration. The same application therefore has to support immersive simulation and enterprise administration without confusing the two.
 
-Three.js and React Three Fiber support the avatar layer. GLB heads, morph targets and lipsync connect voice playback to visual patient behaviour. Browser speech input can support voice mode. Client services coordinate voice requests, event logging, runtime state and analytics calls. The frontend is not just a view layer; it is where simulation state, learner interaction and multimodal presentation meet.
+Three.js and React Three Fiber support the avatar layer. GLB heads, morph targets and lipsync connect voice playback to visual patient behaviour. Browser speech input can support voice mode. Client services coordinate voice requests, event logging, runtime state and analytics calls. The frontend goes beyond a view layer: it is where simulation state, learner interaction and multimodal presentation meet.
 
 ## Backend routing and middleware
 
-The backend is a Node and Express application. Bootstrap configures process-level concerns such as CORS, headers, warmup and route mounting. Product behaviour lives in route groups: auth, users, tenants, cases, sessions, orders, analytics, notifications, agents, cohorts, admin routes and Oyon add-on routes. This separation matters because a growing platform needs clear seams. New endpoints should belong to an area router, not be hidden in process bootstrap.
+The backend is a Node and Express application. Bootstrap configures process-level concerns such as CORS, headers, warmup and route mounting. Product behaviour lives in route groups: auth, users, tenants, cases, sessions, orders, analytics, notifications, agents, cohorts, admin routes and Oyon add-on routes. This separation matters because a growing platform needs clear seams. A new endpoint belongs to an area router, and process bootstrap stays free of product behaviour.
 
-Cross-cutting middleware carries the institutional guarantees. Authentication resolves the user. Role middleware enforces rank. Tenant middleware enforces organisational boundaries. Request IDs support log correlation. Redaction protects sensitive response fields. Error handling centralises final response shape. The result is a backend that treats security and observability as infrastructure rather than optional handler code.
+Cross-cutting middleware carries the institutional guarantees. Authentication resolves the user. Role middleware enforces rank. Tenant middleware enforces organisational boundaries. Request IDs support log correlation. Redaction protects sensitive response fields. Error handling centralises final response shape. The result is a backend that treats security and observability as infrastructure, held outside individual handlers.
 
 ## Persistence, snapshots and migrations
 
@@ -22,7 +22,7 @@ Rohy currently uses SQLite because the target deployment is a self-hosted, singl
 
 Persistence stores users, tenants, courses, cases, scenarios, case versions, session snapshots, orders, reports, exam findings, learning events, Oyon aggregate records, audit logs, export records and platform settings. Session snapshots are one of the most important invariants. When a learner starts a case, the relevant authored state is frozen for that session. Later edits do not alter the live run. This protects debrief, analytics and research reproducibility.
 
-Migrations are versioned and checksum-tracked. The migration manifest classifies changes as additive, destructive or unknown. Additive migrations can be applied normally. Destructive migrations require explicit operator acknowledgement. Unknown migrations fail closed. This policy exists because rollback safety is a product requirement. A schema change is not just a developer concern; it affects whether an institution can recover from a bad update.
+Migrations are versioned and checksum-tracked. The migration manifest classifies changes as additive, destructive or unknown. Additive migrations can be applied normally. Destructive migrations require explicit operator acknowledgement. Unknown migrations fail closed. This policy exists because rollback safety is a product requirement. A schema change reaches past the developer: it decides whether an institution can recover from a bad update.
 
 ## AI, voice and avatar providers
 
@@ -36,7 +36,7 @@ The avatar layer depends on stable morph-target and viseme conventions. This is 
 
 Oyon is integrated as a vendored add-on mounted under Rohy's API. Its core technical decision is browser-side inference. Camera capture, face tracking and expression inference run in the user's browser through MediaPipe and ONNX Runtime Web. The browser aggregates windows and sends only aggregate data to the server. Raw frames and landmarks do not leave the device, and server validation rejects raw-media fields.
 
-This architecture serves both privacy and research. It allows Rohy to study aggregate affect and gaze patterns without turning the server into a video store. Consent, tenant enablement, per-tenant retention and role-keyed visibility are part of the product model. When Oyon is disabled or fails to import, the API returns a structured stub rather than a bare 404, so the frontend and operator can present an understandable state.
+This architecture serves both privacy and research. Rohy studies aggregate affect and gaze patterns while the server holds no video. Consent, tenant enablement, per-tenant retention and role-keyed visibility are part of the product model. When Oyon is disabled or fails to import, the API returns a structured stub in place of a bare 404, so the frontend and operator can present an understandable state.
 
 ## Deployment and updates
 
@@ -56,14 +56,14 @@ Deploy verification matters because a server that starts is not necessarily heal
 
 Rohy's security model combines JWT authentication, server-side active-session revocation, live user refresh on every request, rank-based RBAC, tenant middleware, CSRF checks for cookie-authenticated state-changing requests, central redaction and audit logging. A valid token cannot outrank the current user row. A force logout or account change can take effect on the next request. Tenant mismatch should not leak resource existence.
 
-Redaction is centralised in `server/redaction.js`. Secrets, token hashes, API keys, JSON settings, PII and internal fields must be handled by policy rather than ad hoc deletion in routes. This makes privacy review possible. If a new sensitive field is added, the correct response is to register it in the central policy, not to hope every handler remembers to remove it.
+Redaction is centralised in `server/redaction.js`. Secrets, token hashes, API keys, JSON settings, PII and internal fields are handled by that one policy, which keeps them out of individual route handlers. This makes privacy review possible. A new sensitive field is registered in the central policy, so one entry covers every handler at once.
 
 Retention and purge complete the lifecycle. Time-bounded logs can be swept according to configured windows, and Oyon has per-tenant retention. User purge is a separate account-level governance action. These controls matter because Rohy produces educational and research data that should not accumulate indefinitely without policy.
 
 ## Platform tradeoffs
 
-Rohy makes explicit tradeoffs. SQLite keeps deployment simple but is not a multi-writer fleet database. Operator-driven updates preserve institutional control but do not provide surprise automatic upgrades. Browser-side Oyon protects the raw-media boundary but requires browser support and consent. Local LLM and TTS support improves privacy and resilience but may require model setup. Central redaction improves auditability but requires discipline when new fields are added. Path-prefix deployment supports hubs but requires build and proxy alignment.
+Rohy makes explicit tradeoffs. SQLite keeps deployment simple and serves a single writer. Operator-driven updates preserve institutional control and leave every upgrade to the operator's timing. Browser-side Oyon protects the raw-media boundary but requires browser support and consent. Local LLM and TTS support improves privacy and resilience but may require model setup. Central redaction improves auditability but requires discipline when new fields are added. Path-prefix deployment supports hubs but requires build and proxy alignment.
 
-These choices are coherent for the target setting: self-hosted clinical education, simulation research, institutional governance and local operational control. The platform layer is scientifically important because it protects the validity of the data. If identity is unstable, tenant scope leaks, cases mutate mid-session, exports lack provenance or raw sensor data crosses the wrong boundary, the research trace is compromised. Operations are therefore part of Rohy's scientific apparatus, not merely plumbing.
+These choices are coherent for the target setting: self-hosted clinical education, simulation research, institutional governance and local operational control. The platform layer is scientifically important because it protects the validity of the data. If identity is unstable, tenant scope leaks, cases mutate mid-session, exports lack provenance or raw sensor data crosses the wrong boundary, the research trace is compromised. Operations are therefore part of Rohy's scientific apparatus.
 
 Related guides include [Architecture seams](/integrator/architecture), [Adding a TTS / LLM provider](/integrator/providers), [Embedding the avatar kit](/integrator/embedding), [Installing Rohy](/operator/install), [Deploying Rohy to production](/operator/deploy), [Migrations runbook](/operator/migrations), [Update strategy](/operator/update-strategy), [Observability](/operator/observability), [Hardening checklist](/security/hardening), [RBAC and auth model](/security/rbac), [Redaction and PII](/security/redaction), [Oyon and EU AI Act](/security/oyon-ai-act), and [Retention and purges](/operator/retention).
