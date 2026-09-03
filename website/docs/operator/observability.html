@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Observability · Rohy docs</title>
+    <meta name="description" content="What Rohy emits at runtime: the NDJSON access log, slow-query warnings, request-id correlation, and the env knobs that control it.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Observability · Rohy docs">
+    <meta property="og:description" content="What Rohy emits at runtime: the NDJSON access log, slow-query warnings, request-id correlation, and the env knobs that control it.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Operator</span>
+        <h1>Observability</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#ndjson-structured-log">NDJSON structured log</a>
+            <a href="#log-levels">Log levels</a>
+            <a href="#slow-query-log">Slow-query log</a>
+            <a href="#request-id-correlation">Request-id correlation</a>
+            <a href="#a-quick-health-pulse">A quick health pulse</a>
+            <a href="#related">Related</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Running Rohy in Production</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="install.html">Install</a>
+                    <a href="deploy.html">Deploy &amp; harden</a>
+                    <a href="updating.html">Update</a>
+                    <a href="update-strategy.html">Update strategy</a>
+                    <a href="backup-restore.html">Backup &amp; restore</a>
+                    <a href="migrations.html">Migrations runbook</a>
+                    <a href="retention.html">Retention &amp; purges</a>
+                    <a href="observability.html" aria-current="page">Observability</a>
+                    <a href="incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>What Rohy emits at runtime: the NDJSON access log, slow-query
+warnings, request-id correlation, and the env knobs that control it.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Reference</p>
+<p>The <code>ROHY_LOG_*</code> and <code>ROHY_SLOW_QUERY_MS</code> env vars are single-sourced
+in <a href="../reference/config/index.html">Config &amp; env</a>. Terms are locked in the
+<a href="../reference/glossary.html">Glossary</a>.</p>
+</aside>
+<hr>
+<h2 id="ndjson-structured-log">NDJSON structured log</h2>
+<p>Rohy writes one JSON object per line to <strong>stdout</strong> (NDJSON). Each entry
+carries a <code>timestamp</code>, <code>level</code>, <code>event</code>, and event-specific fields:</p>
+<pre><code class="language-json">{&quot;timestamp&quot;:&quot;2026-05-16T03:00:00.000Z&quot;,&quot;level&quot;:&quot;warn&quot;,&quot;event&quot;:&quot;slow_query&quot;,&quot;request_id&quot;:&quot;...&quot;,&quot;operation&quot;:&quot;all&quot;,&quot;duration_ms&quot;:142.5,&quot;threshold_ms&quot;:100,&quot;sql&quot;:&quot;SELECT ... FROM ... WHERE ... = ?&quot;}
+</code></pre>
+<p>On a systemd box this goes to the journal. Read it with:</p>
+<pre><code class="language-bash">sudo journalctl -u rohy -f                 # follow
+sudo journalctl -u rohy --output=cat       # raw NDJSON, pipe to a shipper
+</code></pre>
+<p>In Docker:</p>
+<pre><code class="language-bash">docker compose logs -f rohy
+</code></pre>
+<p>To ship it, pipe <code>journalctl --output=cat</code> to a SIEM, Loki, or S3.
+When logs are not shipped, set <code>ROHY_LOG_LEVEL=warn</code> so the box does
+not spend I/O on <code>info</code>/<code>debug</code> lines nobody reads.</p>
+<hr>
+<h2 id="log-levels">Log levels</h2>
+<p><code>ROHY_LOG_LEVEL</code> controls the floor. Entries below the configured level
+are dropped before serialization, at no extra cost:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Numeric</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>debug</code></td>
+<td>10</td>
+<td>Per-query SQL summaries. Noisy: dev or incident use only.</td>
+</tr>
+<tr>
+<td><code>info</code></td>
+<td>20</td>
+<td>Default. Lifecycle and notable events.</td>
+</tr>
+<tr>
+<td><code>warn</code></td>
+<td>30</td>
+<td>Slow queries, degraded paths. Recommended prod floor if not shipping logs.</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>40</td>
+<td>Failures only.</td>
+</tr>
+</tbody></table></div>
+<p>An unrecognised value falls back to <code>info</code>.</p>
+<hr>
+<h2 id="slow-query-log">Slow-query log</h2>
+<p>Every SQLite query is timed. If a query exceeds the threshold a
+<code>slow_query</code> warning is emitted with the <strong>sanitized</strong> SQL (string and
+numeric literals replaced with <code>?</code>, whitespace collapsed, truncated to
+500 chars, so the log holds no row data), the duration, the
+threshold, the operation, and the <code>request_id</code>.</p>
+<p>Threshold resolution, in order:</p>
+<ol>
+<li><code>ROHY_SLOW_QUERY_MS</code> env var (if a finite number &gt;= 0)</li>
+<li><strong>Platform Settings</strong>: <code>slow_query_ms</code> (then
+<code>observability_slow_query_ms</code>) in <code>platform_settings</code></li>
+<li><strong>Default: 100 ms</strong></li>
+</ol>
+<p>Setting <code>ROHY_SLOW_QUERY_MS</code> pins the threshold and disables the
+Platform-Settings override, since the env var takes precedence. Lower
+it temporarily during a latency investigation, and raise it back
+afterward.</p>
+<hr>
+<h2 id="request-id-correlation">Request-id correlation</h2>
+<p>Every request gets an id (from the inbound <code>X-Request-Id</code> header if it
+matches the expected pattern, otherwise a generated UUID). The id is:</p>
+<ul>
+<li>propagated back on the response so the caller can correlate,</li>
+<li>carried in an async-local context for the life of the request,</li>
+<li>stamped onto every <code>slow_query</code> and per-query debug log line as
+<code>request_id</code>.</li>
+</ul>
+<p>A slow page is therefore one <code>grep</code> away from every SQL statement it ran:</p>
+<pre><code class="language-bash">sudo journalctl -u rohy --output=cat \
+  | grep &#39;&quot;request_id&quot;:&quot;&lt;the-id&gt;&quot;&#39;
+</code></pre>
+<p>Replace <code>&lt;the-id&gt;</code> with the id from the response header or the error the
+user reported.</p>
+<h3 id="paths-excluded-from-access-logging">Paths excluded from access logging</h3>
+<p><code>ROHY_LOG_SKIP_PATHS</code> (default <code>/api/proxy/llm,/health</code>) is a
+comma-separated list of paths excluded from the access log. The LLM
+proxy is excluded by default because the request body contains the full
+prompt. Do not remove it from the skip list without a redaction
+shipper in front. A trailing <code>*</code> matches by prefix; otherwise the path
+matches exactly or as a path segment.</p>
+<hr>
+<h2 id="a-quick-health-pulse">A quick health pulse</h2>
+<p>For &quot;did the last deploy break something,&quot; the in-memory Oyon health
+endpoint gives per-endpoint 4xx/5xx counts for the last 5 min / 1 hour
+without parsing logs:</p>
+<pre><code class="language-bash">curl -ksS https://your-host/rohy/api/addons/oyon/admin/health \
+     -H &quot;Authorization: Bearer $TOKEN&quot; | jq
+</code></pre>
+<p>Detail and the operator-gate rules are in
+<a href="deploy.html#deploy-verification-live-monitoring">Deploy &amp; harden § Live operator dashboard</a>.</p>
+<hr>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="deploy.html#deploy-verification-live-monitoring">Deploy &amp; harden</a>: the deploy verifier and health endpoint</li>
+<li><a href="retention.html">Retention &amp; purges</a>: how the audit/log tables age out</li>
+<li><a href="incidents.html">Incident playbooks</a>: using request-id and slow-query during a latency incident</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

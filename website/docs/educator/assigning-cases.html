@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Assigning cases · Rohy docs</title>
+    <meta name="description" content="Attach cases from the library to a class so it is clear which scenarios belong to that class. Assignment is recorded in the cohort–case link (cohort_cases); it does not copy or …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Assigning cases · Rohy docs">
+    <meta property="og:description" content="Attach cases from the library to a class so it is clear which scenarios belong to that class. Assignment is recorded in the cohort–case link (cohort_cases); it does not copy or …">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Educator</span>
+        <h1>Assigning cases</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#assign-cases-to-a-class">Assign cases to a class</a>
+            <a href="#unassign-a-case">Unassign a case</a>
+            <a href="#what-assignment-does-and-does-not-do">What assignment does and does not do</a>
+            <a href="#reference">Reference</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Teaching with Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="assigning-cases.html" aria-current="page">Assigning cases</a>
+                    <a href="case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="agents.html">Agent personas</a>
+                    <a href="scenarios.html">Scenario timelines</a>
+                    <a href="languages.html">Languages &amp; multilingual cases</a>
+                    <a href="reporting.html">Reporting &amp; analytics</a>
+                    <a href="tna.html">TNA analytics</a>
+                    <a href="oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="classroom-policy.html">Classroom policy</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Attach cases from the library to a class so it is clear which scenarios
+belong to that class. Assignment is recorded in the cohort–case link
+(<code>cohort_cases</code>); it does not copy or lock the case.</p>
+<h2 id="assign-cases-to-a-class">Assign cases to a class</h2>
+<ol>
+<li>Open <strong>Settings → Classes</strong> and open the class.</li>
+<li>Go to the <strong>Settings</strong> tab.</li>
+<li>Under <strong>Assigned cases</strong>, click <strong>Add cases</strong>.</li>
+<li>Pick one or more cases from the library picker and click <strong>Assign</strong>.</li>
+</ol>
+<p>You can also assign cases at creation time: expand <strong>Add details, cases,
+co-teachers &amp; students</strong> in the create form and select cases under
+<strong>Assign cases from the library</strong>.</p>
+<p>Only live cases in your own tenant can be assigned. A request that includes
+any case outside that set is rejected whole, and nothing is attached.</p>
+<p>Assignment is <strong>idempotent and revive-aware</strong>: assigning a case that is
+already assigned is a no-op, and re-assigning a case you previously removed
+brings the original link back.</p>
+<h2 id="unassign-a-case">Unassign a case</h2>
+<p>In the <strong>Settings</strong> tab, under <strong>Assigned cases</strong>, click the <strong>×</strong> next to a
+case and confirm. This is a soft delete of the link only. The case itself,
+its content, and any sessions students already ran against it are untouched.
+Re-assigning the same case later revives the link.</p>
+<h2 id="what-assignment-does-and-does-not-do">What assignment does and does not do</h2>
+<ul>
+<li>It records the case as belonging to the class and shows it under
+<strong>Assigned cases</strong>.</li>
+<li>It <strong>does</strong> control routine student access to course cases. Students see the
+default case in the default course plus live cases assigned through their
+active class memberships. Unassigned live cases are not exposed as normal
+student-startable cases.</li>
+<li>It does <strong>not</strong> change scoring. Reporting (roster, grid, export) is driven
+by the sessions your students ran.</li>
+<li>It does <strong>not</strong> snapshot the case. When a student starts a session the case
+is frozen into that session independently. See
+<a href="../reference/glossary.html">Case snapshot in the glossary</a>.</li>
+</ul>
+<h2 id="reference">Reference</h2>
+<ul>
+<li>API: <a href="../reference/api/cohorts.html"><code>POST /api/cohorts/:id/cases</code>,
+<code>DELETE /api/cohorts/:id/cases/:caseId</code></a></li>
+<li>Build cases: <a href="case-wizard.html">Authoring a case (wizard)</a></li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

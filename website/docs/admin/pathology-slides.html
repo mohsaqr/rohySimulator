@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pathology slides · Rohy docs</title>
+    <meta name="description" content="Whole-slide images are large: a single scanned slide is gigabytes of pyramid tiles. Rohy keeps them outside the application. Slides live on a content origin, and a case refers t…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Pathology slides · Rohy docs">
+    <meta property="og:description" content="Whole-slide images are large: a single scanned slide is gigabytes of pyramid tiles. Rohy keeps them outside the application. Slides live on a content origin, and a case refers t…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Admin</span>
+        <h1>Pathology slides</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#what-an-educator-does">What an educator does</a>
+            <a href="#what-an-admin-configures">What an admin configures</a>
+            <a href="#what-an-operator-provisions">What an operator provisions</a>
+            <a href="#limits">Limits</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Administering Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="first-week.html">First-week checklist</a>
+                    <a href="users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="platform-settings.html">Platform settings</a>
+                    <a href="catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="voice-providers.html">Voice / TTS providers</a>
+                    <a href="pathology-slides.html" aria-current="page">Pathology slides</a>
+                    <a href="multi-tenant.html">Multi-tenant operations</a>
+                    <a href="system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Whole-slide images are large: a single scanned slide is gigabytes of pyramid
+tiles. Rohy keeps them outside the application. Slides live on a <strong>content
+origin</strong>, and a case refers to one by name.</p>
+<p>There are two halves to a slide library, and they are independent. Either can
+exist without the other.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Half</th>
+<th>Where it comes from</th>
+<th>Who changes it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Bundled</strong></td>
+<td>a content bundle deployed to the origin (<code>./deploy.sh pathoyoncontent</code>)</td>
+<td>whoever deploys content</td>
+</tr>
+<tr>
+<td><strong>Managed</strong></td>
+<td>imported from a link, downloaded and tiled by Rohy itself</td>
+<td>an educator, from the case editor</td>
+</tr>
+</tbody></table></div>
+<p>This page covers the managed half.</p>
+<h2 id="what-an-educator-does">What an educator does</h2>
+<p>Settings → Cases → <em>a case</em> → Plugins → <strong>Open editor</strong> → <strong>Add slide from the
+slide library</strong> → <strong>Import from link</strong>.</p>
+<p>Paste a URL to a whole-slide image and press Import. The card then moves through:</p>
+<pre><code>QUEUED         the request is accepted and waiting
+DOWNLOADING    the file is being fetched, digest recorded
+PROBING        its optics and pyramid levels are read
+TILING         Deep Zoom tiles are generated
+READY          it appears in the library like any bundled slide
+</code></pre>
+<p>Two endings are not <code>READY</code>:</p>
+<ul>
+<li><strong>NEEDS CALIBRATION</strong>: the file carried no scanner optics, and Rohy leaves
+them blank. Every measurement a reader makes is scaled by the magnification
+and the micrometres per pixel, so a plausible-looking default would make
+every measurement wrong by an unknown factor. The card offers <strong>Add calibration</strong>; type the two numbers once and
+the slide becomes <code>READY</code>.</li>
+<li><strong>FAILED</strong>: the reason is shown on the card. <strong>Remove</strong> deletes the slide and
+everything derived from it.</li>
+</ul>
+<p>An uncalibrated or failed slide is <strong>withheld</strong> when adding a slide to a
+case. It is visible in the library so its state can be seen and acted on, and a
+case can be built only around a slide whose scale is known.</p>
+<h2 id="what-an-admin-configures">What an admin configures</h2>
+<p>Settings → <strong>Plugins</strong> → Pathology. Nothing imports until two things are true:
+imports are <strong>enabled</strong>, and at least one <strong>host</strong> is allowed. A fresh install
+has neither, and that is the correct state of a server nobody has told where
+slides may come from.</p>
+<h3 id="import-policy">Import policy</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Allow importing slides from a link</td>
+<td><strong>off</strong></td>
+<td>the master switch; off hides the import field entirely</td>
+</tr>
+<tr>
+<td>Hosts slides may be imported from</td>
+<td><strong>none</strong></td>
+<td>Rohy fetches from these and nowhere else</td>
+</tr>
+<tr>
+<td>Largest slide that may be imported</td>
+<td>4 GiB</td>
+<td>enforced on the declared size and again while downloading</td>
+</tr>
+<tr>
+<td>Accepted slide formats</td>
+<td>svs, ndpi, tiff, tif, dzi, zip</td>
+<td>an <em>allow</em> set; a file&#39;s real type comes from reading it</td>
+</tr>
+<tr>
+<td>Require scanner optics</td>
+<td><strong>on</strong></td>
+<td>off sends an uncalibrated slide straight to <code>READY</code></td>
+</tr>
+<tr>
+<td>Keep the original file</td>
+<td><strong>on</strong></td>
+<td>keeps the source so a slide can be re-tiled later</td>
+</tr>
+</tbody></table></div>
+<p><strong>A tenant can only narrow the list.</strong> The hosts you may choose from are set by
+whoever runs the server (<code>ROHY_PLUGIN_IMPORT_ORIGINS</code>). Adding a host outside
+that list is refused, naming the host. Choosing what the <em>server</em> will download
+from is a decision about the machine&#39;s network position, which sits above one
+tenant&#39;s teaching.</p>
+<h3 id="conversion">Conversion</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Magnification to tile at</td>
+<td>10×</td>
+<td>the tiler takes the strongest pyramid level at or below the target and stays within what the scanner captured</td>
+</tr>
+<tr>
+<td>Tile size</td>
+<td>512</td>
+<td>fewer, larger requests than the Deep Zoom default of 256</td>
+</tr>
+<tr>
+<td>Tile overlap</td>
+<td>1</td>
+<td></td>
+</tr>
+<tr>
+<td>JPEG quality</td>
+<td>85</td>
+<td></td>
+</tr>
+<tr>
+<td>How pixels are combined when shrinking</td>
+<td><code>mean</code></td>
+<td><code>median</code> is for masks and erases single-cell detail on H&amp;E</td>
+</tr>
+<tr>
+<td>Preview longest edge</td>
+<td>1024</td>
+<td>the thumbnail on a library card</td>
+</tr>
+<tr>
+<td>Give up on a conversion after</td>
+<td>120 min</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p>Tiling reads a pyramid level the scanner already wrote, which is why it is fast:
+a 2.1 GB slide converts in seconds. A file with <strong>no pyramid</strong> is declined up
+front, because decoding a full-resolution plane would exhaust the server&#39;s
+memory, and a conversion killed part-way leaves tiles that look complete.</p>
+<h3 id="imported-slides">Imported slides</h3>
+<p>The table lists every imported slide, its state, its optics and any failure
+reason, with <strong>Remove</strong>. Removing deletes the row and the files together.</p>
+<h2 id="what-an-operator-provisions">What an operator provisions</h2>
+<p>Three things, all outside the application:</p>
+<ol>
+<li><strong>libvips</strong> on the server: <code>apt install libvips-tools</code>. Without it an import
+fails with <em>&quot;&#39;vips&#39; is not installed on this server&quot;</em>.</li>
+<li><strong>A library directory</strong>, writable by the Rohy service user:
+<code>ROHY_PLUGIN_LIBRARY_DIRS=&quot;pathology=/srv/www/plugin-content/pathology/library&quot;</code>.
+Unset means no imports, and the settings page states that.</li>
+<li><strong>An import allowlist</strong>: <code>ROHY_PLUGIN_IMPORT_ORIGINS=&quot;pathology=https://slides.example.edu&quot;</code>.
+A malformed value is fatal at boot, so a typo stops the server loudly and
+is visible at once.</li>
+</ol>
+<p>Optionally <code>ROHY_PLUGIN_IMPORT_MAX_BYTES</code> caps every tenant&#39;s limit from above.</p>
+<h3 id="the-library-shares-the-bundle39s-origin-and-nothing-else">The library shares the bundle&#39;s origin, and nothing else</h3>
+<p><code>library/</code> sits beside <code>tiles/</code> and <code>gross/</code> on the content origin and is served
+by the same nginx block. It belongs to <strong>Rohy</strong>, and the content bundle leaves
+it alone:</p>
+<ul>
+<li>the content deploy&#39;s <code>rsync --delete</code> must <strong>exclude <code>library/</code></strong>, or a
+content update erases every imported slide;</li>
+<li><code>content-bundle.sh</code> refuses to build a bundle that contains <code>library/</code>.</li>
+</ul>
+<h3 id="checking-it-works">Checking it works</h3>
+<p><code>GET /api/health/plugins</code> reports a <code>library</code> block per plugin. It carries
+counts and bytes alone, with no names or source hosts, so a deploy check runs
+without credentials:</p>
+<pre><code class="language-json">{ &quot;library&quot;: { &quot;assets&quot;: 12, &quot;ready&quot;: 11, &quot;needs_calibration&quot;: 1,
+               &quot;failed&quot;: 0, &quot;bytes&quot;: 1642000000, &quot;queued&quot;: 0, &quot;running&quot;: 0 } }
+</code></pre>
+<p>A deployment with no library directory reports <strong>no <code>library</code> block at all</strong>,
+which keeps &quot;not configured&quot; and &quot;configured and empty&quot; distinguishable.</p>
+<h2 id="limits">Limits</h2>
+<ul>
+<li><strong>One conversion at a time.</strong> Measured on the reference server, one conversion
+peaks around 370 MB; several at once is what turns a comfortable margin into
+an out-of-memory kill. Imports queue.</li>
+<li><strong>Restarting Rohy mid-import</strong> re-runs that import from the beginning at the
+next boot. A slide part-way through tiling looks like a finished one, so
+every interrupted import is redone.</li>
+<li><strong>Multi-file formats</strong> (<code>.mrxs</code>, <code>.vms</code>) are not supported in this release.
+A single file, or a <code>.zip</code> containing one slide.</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

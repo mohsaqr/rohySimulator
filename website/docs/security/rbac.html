@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RBAC &amp; auth model · Rohy docs</title>
+    <meta name="description" content="How Rohy authenticates a request, what a role can do, and how access is revoked. Everything here is enforced in server/middleware/auth.js.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="RBAC &amp; auth model · Rohy docs">
+    <meta property="og:description" content="How Rohy authenticates a request, what a role can do, and how access is revoked. Everything here is enforced in server/middleware/auth.js.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Security</span>
+        <h1>RBAC &amp; auth model</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-rank-model">The rank model</a>
+            <a href="#middleware-enforcement">Middleware enforcement</a>
+            <a href="#requiresametenant">requireSameTenant</a>
+            <a href="#immediate-revocation-via-active_sessions">Immediate revocation via active_sessions</a>
+            <a href="#csrf">CSRF</a>
+            <a href="#verifying-rbac-posture">Verifying RBAC posture</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="rbac.html" aria-current="page">RBAC &amp; auth model</a>
+                    <a href="audit-chain.html">Audit chain</a>
+                    <a href="redaction.html">Redaction &amp; PII</a>
+                    <a href="retention.html">Data retention</a>
+                    <a href="oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="disclaimer.html">Medical-training disclaimer</a>
+                    <a href="hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>How Rohy authenticates a request, what a role can do, and how access is
+revoked. Everything here is enforced in <code>server/middleware/auth.js</code>.</p>
+<h2 id="the-rank-model">The rank model</h2>
+<p>Access is <strong>rank comparison, never string equality</strong>. A check is &quot;rank ≥ N&quot;,
+not &quot;role == name&quot;. The frozen rank table (<code>ROLE_RANKS</code> in
+<code>server/middleware/auth.js</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>Role</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td><code>guest</code></td>
+<td>Unauthenticated / preview; cannot start sessions</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>student</code> (alias <code>user</code>)</td>
+<td>Runs cases; <code>user</code> normalizes to <code>student</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>reviewer</code></td>
+<td>Read-only sessions + analytics; cannot author</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>educator</code></td>
+<td>Authors cases, scenarios, agents, catalogues; owns classes. Surfaced in the UI as <strong>Teacher</strong> — only the label changed, the wire/role name is still <code>educator</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>admin</code></td>
+<td>Full platform administration, user management, audit, purge</td>
+</tr>
+</tbody></table></div>
+<p><code>VALID_ROLES</code> is <code>[&#39;guest&#39;, &#39;student&#39;, &#39;reviewer&#39;, &#39;educator&#39;, &#39;admin&#39;]</code>.
+<code>normalizeRole()</code> maps the legacy <code>user</code> role onto <code>student</code>; an unknown role
+resolves to <code>guest</code> rank (fail-closed).</p>
+<p>See the <a href="../reference/glossary.html">Glossary</a> for the canonical wording of each
+role, and <a href="../reference/config/index.html">Roles &amp; access in the config reference</a> for
+where role-bearing env vars are read.</p>
+<h2 id="middleware-enforcement">Middleware enforcement</h2>
+<p>Routes never compare role strings. They mount one of the convenience
+wrappers, each of which is <code>requireRole(minRank)</code> with a fixed minimum:</p>
+<ul>
+<li><code>requireAuth</code> — authenticated, any rank</li>
+<li><code>requireStudent</code> — rank ≥ 1</li>
+<li><code>requireReviewer</code> — rank ≥ 2</li>
+<li><code>requireEducator</code> — rank ≥ 3</li>
+<li><code>requireAdmin</code> — rank ≥ 4</li>
+</ul>
+<p>In-handler decisions use the predicate <code>hasRoleAtLeast(user, ROLE_RANKS.x)</code>.
+<code>requireRole</code> returns <strong>401</strong> when no authenticated user is present and
+<strong>403</strong> (&quot;Insufficient role&quot;) when the user is authenticated but
+under-ranked. The endpoint-by-endpoint mapping is in the generated
+<a href="../reference/api/index.html">API reference</a>.</p>
+<h3 id="token-extraction-and-validation">Token extraction and validation</h3>
+<p><code>authenticateToken</code> runs a two-stage check:</p>
+<ol>
+<li><strong>JWT signature + expiry</strong> — verified in-memory against <code>JWT_SECRET</code>.
+The server <strong>refuses to start</strong> if <code>JWT_SECRET</code> is unset (it logs a
+FATAL message and calls <code>process.exit(1)</code>). A present-but-malformed
+<code>Authorization</code> header returns <strong>400</strong> with a <code>code</code> (e.g.
+<code>unsupported-scheme</code>, <code>empty-token</code>, <code>whitespace-in-token</code>) so an
+operator can tell a client bug from an unauthenticated request. The
+token may arrive in the <code>Authorization: Bearer</code> header (legacy) or the
+HttpOnly <code>rohy_auth</code> cookie; the header wins when both are present.</li>
+<li><strong>Server-side revocation + live user state</strong> — see below.</li>
+</ol>
+<h3 id="role-and-tenant-refresh-on-every-request">Role and tenant refresh on every request</h3>
+<p>After the JWT verifies, <code>authenticateToken</code> re-reads
+<code>tenant_id, role, status, deleted_at</code> from the <code>users</code> table. If the row is
+missing, soft-deleted (<code>deleted_at</code> set), or <code>status !== &#39;active&#39;</code>, the
+request is rejected <strong>403</strong> (&quot;Invalid or inactive user&quot;). <code>req.user.role</code>
+and <code>req.user.tenant_id</code> are taken from the live row, <strong>not</strong> from the JWT
+payload.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Tip</p>
+<p>This means a demotion, suspension, or tenant reassignment takes effect on
+the user&#39;s <strong>next request</strong> — there is no need to wait for the JWT to
+expire. A still-cryptographically-valid token cannot outrank the live
+<code>users</code> row.</p>
+</aside>
+<h2 id="requiresametenant">requireSameTenant</h2>
+<p>Tenant isolation is enforced by middleware, not ad-hoc <code>WHERE tenant_id=</code>
+in handlers. <code>requireSameTenant(resourceTenantIdGetter)</code> resolves the
+resource&#39;s tenant, compares it numerically to <code>resolveTenant(req)</code> (the
+authenticated user&#39;s <code>tenant_id</code>, defaulting to <code>1</code>), and:</p>
+<ul>
+<li>returns <strong>404</strong> (&quot;Resource not found&quot;) if the resource tenant is <code>null</code>
+(do not leak existence across tenants),</li>
+<li>returns <strong>403</strong> (&quot;Access denied: tenant mismatch&quot;) on a mismatch,</li>
+<li>otherwise calls <code>next()</code>.</li>
+</ul>
+<p>Single-tenant deployments still operate under tenant <code>id=1</code>, so the check is
+always live.</p>
+<h2 id="immediate-revocation-via-active_sessions">Immediate revocation via <code>active_sessions</code></h2>
+<p>JWTs are stateless, so Rohy adds a server-side revocation table. On login,
+<code>recordActiveSession()</code> inserts a row into <code>active_sessions</code> keyed by the
+<strong>SHA-256 hash of the token</strong> (<code>token_hash</code>, <code>UNIQUE</code>), with <code>is_active = 1</code>
+and an <code>expires_at</code> (default <code>+4 hours</code>). The raw token is never stored —
+only its hash.</p>
+<p>On every authenticated request, <code>authenticateToken</code> looks up the token hash:</p>
+<ul>
+<li><strong>Row exists and <code>is_active = 0</code></strong> → <strong>401</strong> &quot;Session revoked&quot;, even though
+the JWT itself is still cryptographically valid.</li>
+<li><strong>Row exists and <code>expires_at</code> is in the past</strong> (parsed as UTC) → <strong>401</strong>
+&quot;Session expired&quot;.</li>
+<li><strong>Row exists and active</strong> → <code>last_activity_at</code> is touched (best-effort,
+non-fatal) and the request proceeds.</li>
+<li><strong>No row</strong> → legacy token issued before this table existed; accepted for
+backward compatibility. The 4 h JWT TTL bounds the worst-case window for
+these, since they have no row to revoke.</li>
+</ul>
+<p>Revocation is a single <code>UPDATE active_sessions SET is_active = 0 WHERE token_hash = ?</code> (<code>revokeActiveSessionByToken</code> / <code>revokeActiveSessionByHash</code>).
+This is what makes logout, admin force-logout, and password change take
+effect <strong>immediately</strong> rather than at token expiry.</p>
+<aside class="callout callout-warning">
+<p class="callout-title">Warning</p>
+<p>The <code>JWT_SECRET</code> value gates every signature check and the audit token
+path. Rotating it invalidates <strong>all</strong> sessions at once — see the
+<a href="hardening.html">Hardening checklist</a>. Treat it as the single most
+sensitive secret in the deployment.</p>
+</aside>
+<h2 id="csrf">CSRF</h2>
+<p>Cookie-authenticated state-changing requests must present a matching
+<code>X-CSRF-Token</code> header (<code>csrfRequired</code> / <code>verifyCsrf</code>). Bearer-header
+requests are exempt because an attacker cannot auto-attach <code>Authorization</code>
+headers cross-site. A failed CSRF check rejects before the handler runs.</p>
+<h2 id="verifying-rbac-posture">Verifying RBAC posture</h2>
+<p><code>bash scripts/audit-rbac.sh</code> boots an isolated server, exercises protected
+routes with and without tokens, and asserts the rank gates hold. Run it as
+part of the deploy verification described in the
+<a href="hardening.html">Hardening checklist</a>.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

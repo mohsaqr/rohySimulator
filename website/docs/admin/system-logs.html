@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>System logs · Rohy docs</title>
+    <meta name="description" content="Use this page to find what happened, who did it, and to prove the record has not been tampered with. All log access requires the admin role and is tenant-scoped: you see your ow…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="System logs · Rohy docs">
+    <meta property="og:description" content="Use this page to find what happened, who did it, and to prove the record has not been tampered with. All log access requires the admin role and is tenant-scoped: you see your ow…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Admin</span>
+        <h1>System logs</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#activity-audit-log">Activity / audit log</a>
+            <a href="#timestamps-and-time-zones">Timestamps and time zones</a>
+            <a href="#where-activity-view-rows-come-from">Where Activity-view rows come from</a>
+            <a href="#chat-log">Chat log</a>
+            <a href="#api-usage-logs">API / usage logs</a>
+            <a href="#exports">Exports</a>
+            <a href="#redaction">Redaction</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Administering Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="first-week.html">First-week checklist</a>
+                    <a href="users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="platform-settings.html">Platform settings</a>
+                    <a href="catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="voice-providers.html">Voice / TTS providers</a>
+                    <a href="pathology-slides.html">Pathology slides</a>
+                    <a href="multi-tenant.html">Multi-tenant operations</a>
+                    <a href="system-logs.html" aria-current="page">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Use this page to find what happened, who did it, and to prove the record
+has not been tampered with. All log access requires the <strong>admin</strong> role and
+is tenant-scoped: you see your own tenant&#39;s records.</p>
+<p>Endpoints are in the <a href="../reference/api/users.html">users API reference</a> (audit)
+and the <a href="../reference/api/analytics.html">analytics API reference</a> (chat).</p>
+<span class="anchor-alias" id="activity--audit-log"></span><h2 id="activity-audit-log">Activity / audit log</h2>
+<p>The audit log records security- and data-relevant actions: user
+create/edit/delete/purge, tenant create and assignment, platform-setting
+changes, force-logout and exports. Each entry carries the actor,
+the action, the resource, before/after values where relevant, the source
+IP, and a timestamp.</p>
+<p>View it under the admin tools (the audit-log view). It is served by the
+<code>/api/admin/audit-log</code> and <code>/api/system-audit-log</code> endpoints. The second
+is an alias for audit scripts and enterprise integrations.</p>
+<h3 id="verify-the-audit-chain">Verify the audit chain</h3>
+<p>The audit log is a tenant-scoped hash chain. To prove it has not been
+altered, run the verify action (<code>/api/admin/audit/verify</code>). It returns:</p>
+<ul>
+<li><strong>ok</strong>: whether the chain is intact.</li>
+<li><strong>lastVerifiedId</strong>: the last row that verified.</li>
+<li><strong>brokenAt</strong>: the first row where the chain breaks, if any.</li>
+</ul>
+<p>A non-<code>ok</code> result with a <code>brokenAt</code> means rows were modified or deleted
+out of band. Treat that as an integrity incident.</p>
+<h2 id="timestamps-and-time-zones">Timestamps and time zones</h2>
+<p><strong>Every timestamp rohy stores is UTC</strong>, in one shape:
+<code>2026-08-29T12:34:56.789Z</code>. Every timestamp rohy <em>shows you</em> is in your own
+browser&#39;s time zone. So the same event legitimately reads as 15:34 for an
+administrator in Helsinki and 14:34 for one in Madrid. The record is identical;
+the rendering follows the reader.</p>
+<p>Exports carry the stored UTC value, so a CSV opened in another country is
+still the same instant.</p>
+<h3 id="if-you-are-looking-at-logs-recorded-before-v2993">If you are looking at logs recorded before v2.9.93</h3>
+<p>Older rows were written in two different shapes. Both were UTC, but one of them
+did not say so, and that had two visible effects:</p>
+<ul>
+<li><strong>Some rows rendered a few hours out.</strong> How many hours depended on the reader&#39;s
+own zone and on whether the date fell inside daylight saving.</li>
+<li><strong>Rows could appear in the wrong order</strong>, including rows a full day apart.</li>
+</ul>
+<p>Both are fixed. The upgrade rewrote the stored values into the single shape as
+a reformat: every instant is the same instant it always was, and no value
+moved. If you had exported a log before upgrading and noticed times that did
+not line up with the chat beside them, re-export it.</p>
+<h3 id="one-column-is-left-as-it-was">One column is left as it was</h3>
+<p>The audit log&#39;s own <code>timestamp</code> is inside its tamper-evident hash. Rewriting
+it, even into a better format, would make every historical row fail
+verification, because the chain treats a reformat and a forgery alike. That is
+the property the chain exists to have. Audit rows therefore keep their original
+text, and the audit view sorts and filters on a derived column. The rendering
+is the same, and the chain still verifies.</p>
+<h3 id="which-clock-recorded-what">Which clock recorded what</h3>
+<p>Two clocks contribute to the record, and rohy is explicit about which:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>The server&#39;s clock</strong></td>
+<td>authoritative for every stored timestamp</td>
+</tr>
+<tr>
+<td><strong>The learner&#39;s device clock</strong></td>
+<td>recorded alongside, in <code>client_time</code>, and excluded from ordering</td>
+</tr>
+</tbody></table></div>
+<p>A browser&#39;s clock cannot be verified, and a device set a few hours wrong used to
+drag a learner&#39;s whole session away from the chat turns beside it, which read
+as an overnight resume. Now the server times the record and keeps the device&#39;s
+claim next to it, so a wrong device clock shows up as a difference between two
+columns.</p>
+<p>The <em>spacing</em> between a learner&#39;s actions is still theirs: each event reports how
+long before it was sent it happened, and the server preserves those gaps exactly.
+Time-on-task and sequence analysis read the gaps, and they are unaffected.</p>
+<h2 id="where-activity-view-rows-come-from">Where Activity-view rows come from</h2>
+<p>The Activity view merges fourteen sources into one feed, each row labelled by
+its <code>component</code> column:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Source</th>
+<th>What it tells you</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>admin</code></td>
+<td><code>system_audit_log</code></td>
+<td>security- and data-relevant actions (hash-chained)</td>
+</tr>
+<tr>
+<td><code>learning</code></td>
+<td><code>learning_events</code></td>
+<td>everything a learner did, including plugin rooms</td>
+</tr>
+<tr>
+<td><code>client</code></td>
+<td><code>client_logs</code></td>
+<td>errors and diagnostics reported by the browser</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td><code>login_logs</code></td>
+<td>logins, failed logins, logouts</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>settings_logs</code></td>
+<td>setting changes, with before/after</td>
+</tr>
+<tr>
+<td><code>chat</code></td>
+<td><code>interactions</code></td>
+<td>raw chat turns</td>
+</tr>
+<tr>
+<td><code>alarm</code></td>
+<td><code>alarm_events</code></td>
+<td>monitor alarms raised and acknowledged</td>
+</tr>
+<tr>
+<td><code>llm</code></td>
+<td><code>llm_request_log</code></td>
+<td>model calls, tokens, cost, latency</td>
+</tr>
+<tr>
+<td><code>tts</code></td>
+<td>usage records</td>
+<td>speech synthesis calls</td>
+</tr>
+<tr>
+<td><code>emotion</code> / <code>oyon</code></td>
+<td><code>emotion_logs</code>, <code>oyon_emotion_records</code></td>
+<td>affect signals, where consented</td>
+</tr>
+<tr>
+<td><code>vitals</code></td>
+<td><code>session_vitals</code></td>
+<td>every monitor sample</td>
+</tr>
+<tr>
+<td><code>scenario</code></td>
+<td><code>scenario_events</code></td>
+<td>scenario beats fired by the engine</td>
+</tr>
+<tr>
+<td><code>plugin</code></td>
+<td><code>plugin_jobs</code></td>
+<td><strong>server-side plugin work</strong>; see below</td>
+</tr>
+</tbody></table></div>
+<h3 id="plugin-activity">Plugin activity</h3>
+<p>A plugin contributes in two distinct ways, and they land in different rows.</p>
+<p><strong>What a learner does in a plugin room</strong>, such as opening a slide, panning and
+submitting a report, arrives as <code>learning</code> rows, exactly like a core room. The
+verbs come from the plugin&#39;s own manifest, so a plugin adds vocabulary while
+rohy stays as it is. To see them, filter on the room.</p>
+<p><strong>What a plugin&#39;s server does</strong>, such as importing and tiling a slide and every
+failure of one, arrives as <code>plugin</code> rows. Before v2.9.93 this half was
+invisible: an import that ran for four minutes left a job record that no log
+view read, so the only trace was the learner&#39;s click that started it. If an
+import has ever seemed to vanish, this is the view that now shows you where it
+went, including the phase it was in and the reason it failed.</p>
+<p>Operational plugin work is recorded <strong>outside</strong> learner activity. An
+administrator importing a slide is doing something other than studying one, and
+counting it as study would corrupt the analytics it was meant to enrich.</p>
+<h2 id="chat-log">Chat log</h2>
+<p>The chat-log feed surfaces patient/agent conversation activity for review.
+It is admin-only and served by <code>/api/chat-log/feed</code>
+(<a href="../reference/api/analytics.html">analytics API reference</a>). Use it to review
+how trainees interacted with the simulated patient and to spot prompt or
+content issues.</p>
+<span class="anchor-alias" id="api--usage-logs"></span><h2 id="api-usage-logs">API / usage logs</h2>
+<p>Rohy keeps usage records for the metered surfaces:</p>
+<ul>
+<li><strong>LLM usage</strong> (<code>llm_usage</code>): per-call model usage.</li>
+<li><strong>TTS usage</strong> (<code>tts_usage</code>): per-call voice synthesis usage.</li>
+</ul>
+<p>These back the analytics views and are anonymized when a user is purged
+(target <code>user_id</code> set to NULL) and finally removed by the retention
+sweep. Operational request logging (NDJSON access log, slow-query,
+request-id correlation) is an operator concern. See the Operator section
+for observability.</p>
+<h2 id="exports">Exports</h2>
+<p>Every export is recorded in <code>export_records</code> with the user who ran it, the
+export type and format, the resource type and ids, record count, file
+name and size, the filters applied, and a timestamp.</p>
+<ul>
+<li>View export history at <code>/api/admin/export-records</code>.</li>
+<li>A new export is registered at <code>/api/admin/export-records</code>
+(<a href="../reference/api/admin.html">users/admin API reference</a>).</li>
+</ul>
+<p>Use the export history to answer &quot;who downloaded what, when, with which
+filters&quot; during an audit.</p>
+<h2 id="redaction">Redaction</h2>
+<p>Anything that leaves the server, log responses and support bundles included,
+passes through <code>server/redaction.js</code>. Credential and scope-controlled PII
+fields are stripped centrally. Keep raw keys and tokens out of an export or
+bundle: a new sensitive field is registered in the redaction policy, and it
+stays in place at the call site. The redaction policy is documented in the
+Security section.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

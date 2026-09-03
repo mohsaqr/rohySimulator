@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Config &amp; environment reference · Rohy docs</title>
+    <meta name="description" content="Every environment variable Rohy reads, scanned from source across server/**, bin/**, and scripts/**, cross-referenced against server/config/validateEnv.js for required-ness and …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Config &amp; environment reference · Rohy docs">
+    <meta property="og:description" content="Every environment variable Rohy reads, scanned from source across server/**, bin/**, and scripts/**, cross-referenced against server/config/validateEnv.js for required-ness and …">
+    <meta property="og:image" content="../../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../../index.html">Overview</a>
+            <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../whats-new.html">What's new</a>
+            <a href="../../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../../help.html">Help</a>
+            <a href="../../../index.html#install" class="optional">Install</a>
+            <a href="../../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Reference</span>
+        <h1>Config &amp; environment reference</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#core-server">Core server</a>
+            <a href="#authsecurity">Auth/security</a>
+            <a href="#database">Database</a>
+            <a href="#observability">Observability</a>
+            <a href="#frontendcors">Frontend/CORS</a>
+            <a href="#llmtts">LLM/TTS</a>
+            <a href="#oyon">Oyon</a>
+            <a href="#retention">Retention</a>
+            <a href="#updatedeploy">Update/deploy</a>
+            <a href="#uncategorized">Uncategorized</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../../product/index.html">Overview</a>
+                    <a href="../../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../../trainee/index.html">Overview</a>
+                    <a href="../../trainee/getting-started.html">Getting started</a>
+                    <a href="../../trainee/rooms.html">The rooms</a>
+                    <a href="../../trainee/history.html">Taking a history</a>
+                    <a href="../../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../../trainee/examination.html">Physical examination</a>
+                    <a href="../../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../../trainee/voice.html">Voice mode</a>
+                    <a href="../../trainee/debrief.html">Debrief</a>
+                    <a href="../../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../../educator/index.html">Overview</a>
+                    <a href="../../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../../educator/agents.html">Agent personas</a>
+                    <a href="../../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../../educator/tna.html">TNA analytics</a>
+                    <a href="../../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../../admin/index.html">Overview</a>
+                    <a href="../../admin/first-week.html">First-week checklist</a>
+                    <a href="../../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../../admin/platform-settings.html">Platform settings</a>
+                    <a href="../../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../../operator/index.html">Overview</a>
+                    <a href="../../operator/install.html">Install</a>
+                    <a href="../../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../../operator/updating.html">Update</a>
+                    <a href="../../operator/update-strategy.html">Update strategy</a>
+                    <a href="../../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../../operator/migrations.html">Migrations runbook</a>
+                    <a href="../../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../../operator/observability.html">Observability</a>
+                    <a href="../../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../../integrator/index.html">Overview</a>
+                    <a href="../../integrator/architecture.html">Architecture seams</a>
+                    <a href="../../integrator/api-auth.html">API authentication</a>
+                    <a href="../../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Reference (generated)</summary>
+                    <a href="../api/index.html">API</a>
+                    <a href="../data/index.html">Data model</a>
+                    <a href="index.html" aria-current="page">Config &amp; env</a>
+                    <a href="../cli/index.html">CLI &amp; ops</a>
+                    <a href="../glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../../tutorials/index.html">Overview</a>
+                    <a href="../../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../../security/index.html">Overview</a>
+                    <a href="../../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../../security/audit-chain.html">Audit chain</a>
+                    <a href="../../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../../security/retention.html">Data retention</a>
+                    <a href="../../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../../audits/index.html">Audits</a>
+                    <a href="../../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../../changelog.html">Changelog</a>
+                    <a href="../../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../../contributing/index.html">Contributing</a>
+                    <a href="../../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../../design/index.html">Design</a>
+                    <a href="../../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../../INSTALL.html">Installing Rohy</a>
+                    <a href="../../license.html">License</a>
+                    <a href="../../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../api/admin.html">admin API</a>
+                    <a href="../api/agents.html">agents API</a>
+                    <a href="../api/analytics.html">analytics API</a>
+                    <a href="../api/auth.html">auth API</a>
+                    <a href="../api/cases.html">cases API</a>
+                    <a href="../api/catalogue.html">catalogue API</a>
+                    <a href="../api/cohorts.html">cohorts API</a>
+                    <a href="../api/health.html">health API</a>
+                    <a href="../api/help.html">help API</a>
+                    <a href="../api/lessons.html">lessons API</a>
+                    <a href="../api/notes.html">notes API</a>
+                    <a href="../api/notification.html">notification API</a>
+                    <a href="../api/orders.html">orders API</a>
+                    <a href="../api/oyon.html">oyon API</a>
+                    <a href="../api/patient-record.html">patient-record API</a>
+                    <a href="../api/plugins.html">plugins API</a>
+                    <a href="../api/proxy.html">proxy API</a>
+                    <a href="../api/registration.html">registration API</a>
+                    <a href="../api/sessions.html">sessions API</a>
+                    <a href="../api/surveys.html">surveys API</a>
+                    <a href="../api/tenants.html">tenants API</a>
+                    <a href="../api/treatments-library.html">treatments-library API</a>
+                    <a href="../api/uploads.html">uploads API</a>
+                    <a href="../api/users.html">users API</a>
+                    <a href="../data/tables.html">Tables</a>
+                    <a href="../index.html">Reference</a>
+                    <a href="../../release-notes/index.html">Release notes</a>
+                    <a href="../../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Every environment variable Rohy reads, scanned <strong>from source</strong> across <code>server/**</code>, <code>bin/**</code>, and <code>scripts/**</code>, cross-referenced against <code>server/config/validateEnv.js</code> for required-ness and recommended-in-production hints.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Regenerate</p>
+<p>This page is generated. Do not hand-edit. Re-run <code>npm run docs:gen:config</code> after changing env usage or the validator.</p>
+</aside>
+<aside class="callout callout-warning">
+<p class="callout-title">Security-sensitive variables</p>
+<p>The following variables carry credentials or signing material. Never commit them, log them, or expose them to the browser. Store them in the operator env file with restricted permissions:</p>
+<ul>
+<li><code>ANTHROPIC_API_KEY</code></li>
+<li><code>GITHUB_TOKEN</code></li>
+<li><code>GOOGLE_API_KEY</code></li>
+<li><code>GOOGLE_TTS_API_KEY</code></li>
+<li><code>JWT_SECRET</code></li>
+<li><code>OPENAI_API_KEY</code></li>
+<li><code>ROHY_ADMIN_PASSWORD</code></li>
+<li><code>ROHY_CONTENT_TOKEN</code></li>
+<li><code>ROHY_PASSWORD</code></li>
+<li><code>ROHY_PLUGIN_ORIGIN_TOKENS</code></li>
+<li><code>ROHY_TOKEN</code></li>
+</ul>
+</aside>
+<h2 id="core-server">Core server</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>HTTPS_PORT</code></td>
+<td>No</td>
+<td>—</td>
+<td>HTTPS listen port (used when TLS cert/key are set).</td>
+<td><code>server/server.js:56</code></td>
+</tr>
+<tr>
+<td><code>NODE_ENV</code></td>
+<td>No</td>
+<td><code>development</code></td>
+<td>Runtime mode; <code>production</code> tightens defaults and enables prod-only validation.</td>
+<td><code>server/logger.js:40</code><br><code>server/logger.js:41</code><br><code>server/middleware/csrf.js:71</code><br><em>+11 more</em></td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td>No</td>
+<td>—</td>
+<td>HTTP listen port.</td>
+<td><code>server/server.js:48</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="authsecurity">Auth/security</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ALLOW_DEFAULT_USERS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Bootstrap-only flag to seed default users on first boot.</td>
+<td><code>server/seeders/users.js:111</code></td>
+</tr>
+<tr>
+<td><code>GITHUB_TOKEN</code></td>
+<td>No</td>
+<td>—</td>
+<td>Fallback credential for <code>npm run setup:content</code> when ROHY_CONTENT_TOKEN is unset. Install-time only; no runtime code reads it. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>scripts/setup-content.mjs:92</code></td>
+</tr>
+<tr>
+<td><code>JWT_EXPIRY</code></td>
+<td>No</td>
+<td><code>7d</code></td>
+<td>Lifetime of issued JWTs.</td>
+<td><code>server/middleware/authTtl.js:42</code></td>
+</tr>
+<tr>
+<td><code>JWT_SECRET</code></td>
+<td>Yes</td>
+<td>—</td>
+<td>Secret used to sign/verify auth + audit tokens. Fatal if unset. <em>Fatal if unset (validateEnv pushes an error).</em> <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/middleware/auth.js:16</code></td>
+</tr>
+<tr>
+<td><code>ROHY_ADMIN_EMAIL</code></td>
+<td>No</td>
+<td>—</td>
+<td>Email for the provisioned first admin. Defaults to &lt;username&gt;@rohy.local.</td>
+<td><code>server/seeders/users.js:58</code></td>
+</tr>
+<tr>
+<td><code>ROHY_ADMIN_NAME</code></td>
+<td>No</td>
+<td>—</td>
+<td>Display name for the provisioned first admin. Defaults to &quot;System Administrator&quot;.</td>
+<td><code>server/seeders/users.js:59</code></td>
+</tr>
+<tr>
+<td><code>ROHY_ADMIN_PASSWORD</code></td>
+<td>No</td>
+<td>—</td>
+<td>Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/seeders/users.js:57</code></td>
+</tr>
+<tr>
+<td><code>ROHY_ADMIN_USERNAME</code></td>
+<td>No</td>
+<td>—</td>
+<td>Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty.</td>
+<td><code>server/seeders/users.js:56</code></td>
+</tr>
+<tr>
+<td><code>ROHY_CONTENT_TOKEN</code></td>
+<td>No</td>
+<td>—</td>
+<td>A GitHub token with read access to the content repository, read by <code>npm run setup:content</code> if set. The content repository is now PUBLIC, so no credential is needed and this variable can be left unset; it remains supported for a deployment that mirrors the archives behind its own private release. Install-time only: nothing at runtime reads it. <code>GITHUB_TOKEN</code> is accepted as a fallback, as is the <code>gh</code> CLI when the machine is logged in. Installing from a local file with <code>--from</code> needs no token at all, because the installer trusts the archive&#39;s SHA-256 rather than the host it came from. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>scripts/setup-content.mjs:92</code></td>
+</tr>
+<tr>
+<td><code>ROHY_DISABLE_AUTH_RATE_LIMIT</code></td>
+<td>No</td>
+<td>—</td>
+<td>Disables the auth-endpoint rate limiter (dev/test).</td>
+<td><code>server/routes/auth-routes.js:80</code><br><code>server/routes/registration-routes.js:38</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_ORIGIN_TOKENS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Comma-separated <code>&lt;pluginId&gt;=&lt;token&gt;</code> credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy&#39;s own server-to-server fetch as <code>Authorization: Bearer &lt;token&gt;</code> — never returned to a browser, never logged, and never the caller&#39;s own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation&#39;s access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/lib/pluginOriginTokens.js:84</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TOKEN</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em> <strong>⚠ secret — see security note above.</strong></td>
+<td><code>scripts/llm-language-smoke.mjs:47</code><br><code>scripts/translate-locales.mjs:77</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TRUST_PROXY</code></td>
+<td>No</td>
+<td><code>loopback</code></td>
+<td>Express <code>trust proxy</code> setting (proxy hop count / IP / preset).</td>
+<td><code>server/server.js:65</code></td>
+</tr>
+<tr>
+<td><code>TLS_CERT_PATH</code></td>
+<td>No</td>
+<td><code>&#39;&#39; (empty string)</code></td>
+<td>Path to TLS certificate; must be paired with <code>TLS_KEY_PATH</code>. <em>Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be.</em></td>
+<td><code>server/routes/help-routes.js:130</code><br><code>server/server.js:57</code></td>
+</tr>
+<tr>
+<td><code>TLS_KEY_PATH</code></td>
+<td>No</td>
+<td><code>&#39;&#39; (empty string)</code></td>
+<td>Path to TLS private key; must be paired with <code>TLS_CERT_PATH</code>. <em>Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be.</em></td>
+<td><code>server/routes/help-routes.js:130</code><br><code>server/server.js:58</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="database">Database</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ROHY_DB</code></td>
+<td>No</td>
+<td>—</td>
+<td>Absolute path to the SQLite database file. <em>Recommended in production (validateEnv warns when unset).</em> <em>Recommended in production (DB otherwise lives inside the repo tree).</em></td>
+<td><code>scripts/import-loinc-mapping.js:108</code><br><code>scripts/migrate.js:10</code><br><code>scripts/nuke-30-tats.js:34</code><br><em>+7 more</em></td>
+</tr>
+<tr>
+<td><code>ROHY_KB_DB</code></td>
+<td>No</td>
+<td>—</td>
+<td>Where the derived knowledge base is written (default <code>data/knowledge.db</code>). Tooling only — the server never reads it. Set it to build a scratch copy without clobbering the real one, which is what the parser tests do. The file itself is gitignored and rebuilt by <code>npm run kb:build</code>; see docs/integrator/knowledge-base.md.</td>
+<td><code>scripts/knowledge/lib.mjs:15</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="observability">Observability</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LOG_FORMAT</code></td>
+<td>No</td>
+<td>—</td>
+<td>Access-log output format.</td>
+<td><code>server/logger.js:38</code><br><code>server/logger.js:39</code></td>
+</tr>
+<tr>
+<td><code>LOG_LEVEL</code></td>
+<td>No</td>
+<td>—</td>
+<td>Server log verbosity.</td>
+<td><code>server/logger.js:27</code></td>
+</tr>
+<tr>
+<td><code>ROHY_LOG_LEVEL</code></td>
+<td>No</td>
+<td><code>info</code></td>
+<td>Server log verbosity (Rohy-prefixed alias).</td>
+<td><code>server/logger.js:27</code><br><code>server/observability.js:17</code></td>
+</tr>
+<tr>
+<td><code>ROHY_LOG_SKIP_PATHS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Comma-separated request paths excluded from access logging.</td>
+<td><code>server/observability.js:46</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PATHOLOGY_CONTENT</code></td>
+<td>No</td>
+<td>—</td>
+<td>Path to a built slide content origin, overriding the sibling <code>../Pathoyon/dist-content</code> that <code>npm run starter-content</code> reads by default. Build-time only — nothing at runtime reads it.</td>
+<td><code>scripts/build-starter-content.mjs:227</code></td>
+</tr>
+<tr>
+<td><code>ROHY_ROUTE_TIMEOUT_MS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Per-route request timeout (ms).</td>
+<td><code>server/middleware/routeTimeout.js:38</code></td>
+</tr>
+<tr>
+<td><code>ROHY_SHUTDOWN_GRACE_MS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Graceful-shutdown drain window (ms).</td>
+<td><code>server/server.js:401</code></td>
+</tr>
+<tr>
+<td><code>ROHY_SLOW_QUERY_MS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Threshold (ms) above which a DB query is logged as slow.</td>
+<td><code>server/observability.js:22</code><br><code>server/observability.js:29</code></td>
+</tr>
+<tr>
+<td><code>VERBOSE</code></td>
+<td>No</td>
+<td>—</td>
+<td>Extra console diagnostics when truthy.</td>
+<td><code>scripts/rocketbox-convert/convert.mjs:135</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="frontendcors">Frontend/CORS</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FRONTEND_URL</code></td>
+<td>No</td>
+<td>—</td>
+<td>Public frontend origin; drives CORS allow-list. <em>Recommended in production (validateEnv warns when unset).</em> <em>Recommended in production (CORS rejects non-localhost origins when unset).</em></td>
+<td><code>server/server.js:77</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_IMPORT_ORIGINS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Comma-separated <code>&lt;pluginId&gt;=&lt;origin&gt;</code> allowlist naming the hosts a plugin may DOWNLOAD from (RPS-1 1.4). The operator&#39;s outer bound: a tenant admin narrows it through the plugin&#39;s own settings and can never widen it, because a tenant admin is not the server operator and naming a host for rohy&#39;s server to fetch from is the SSRF shape proxy-routes.js already closed once. A plugin id may repeat and the origins accumulate. Unset means NO plugin may import from anywhere — the correct default for a server nobody has told where content may come from. Malformed is fatal at boot.</td>
+<td><code>server/lib/pluginImportOrigins.js:86</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_ORIGINS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Comma-separated <code>&lt;pluginId&gt;=&lt;origin&gt;</code> allowlist naming where each RPS-1 plugin&#39;s remote content is fetched from, e.g. <code>pathology=https://slides.example.edu</code>. Unset means no plugin has a remote origin: the plugin serves the bundled starter content if any is installed, and otherwise every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request.</td>
+<td><code>server/lib/pluginRemoteOrigins.js:72</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="llmtts">LLM/TTS</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ANTHROPIC_API_KEY</code></td>
+<td>No</td>
+<td>—</td>
+<td>Anthropic API credential (LLM). <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/routes/proxy-routes.js:388</code></td>
+</tr>
+<tr>
+<td><code>GOOGLE_API_KEY</code></td>
+<td>No</td>
+<td>—</td>
+<td>Google API credential. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/services/googleTts.js:127</code></td>
+</tr>
+<tr>
+<td><code>GOOGLE_TTS_API_KEY</code></td>
+<td>No</td>
+<td>—</td>
+<td>Google Text-to-Speech API credential. <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/routes/admin-routes.js:1719</code><br><code>server/routes/admin-routes.js:1744</code><br><code>server/routes/admin-routes.js:1745</code><br><em>+2 more</em></td>
+</tr>
+<tr>
+<td><code>OPENAI_API_KEY</code></td>
+<td>No</td>
+<td>—</td>
+<td>OpenAI API credential (LLM / TTS). <strong>⚠ secret — see security note above.</strong></td>
+<td><code>server/routes/admin-routes.js:1746</code><br><code>server/routes/admin-routes.js:1747</code><br><code>server/routes/proxy-routes.js:394</code><br><em>+2 more</em></td>
+</tr>
+<tr>
+<td><code>PIPER_BIN</code></td>
+<td>No</td>
+<td>—</td>
+<td>Path to the Piper TTS binary.</td>
+<td><code>server/services/ttsProviders.js:35</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TEST_FAIL_GOOGLE_TTS</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>server/services/googleTts.js:164</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TEST_FAKE_GOOGLE_TTS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Test hook: stub Google TTS instead of calling the API.</td>
+<td><code>server/services/googleTts.js:172</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TEST_FAKE_KOKORO_TTS</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>server/services/kokoroTts.js:244</code></td>
+</tr>
+<tr>
+<td><code>ROHY_TEST_FAKE_OPENAI_TTS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Test hook: stub OpenAI TTS instead of calling the API.</td>
+<td><code>server/services/openaiTts.js:74</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="oyon">Oyon</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>OYON_ENABLED</code></td>
+<td>No</td>
+<td>—</td>
+<td>Mounts the Oyon emotion-capture addon as a live router (vs 503 stub).</td>
+<td><code>server/routes.js:39</code><br><code>server/routes/help-routes.js:129</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="retention">Retention</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>RETENTION_DAYS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Data-retention window in days for the retention sweep.</td>
+<td><code>scripts/retention-sweep.js:42</code></td>
+</tr>
+<tr>
+<td><code>RETENTION_SECONDS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Data-retention window in seconds (overrides days when set).</td>
+<td><code>scripts/retention-sweep.js:40</code></td>
+</tr>
+<tr>
+<td><code>ROHY_RETENTION_DAYS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Data-retention window in days (Rohy-prefixed alias).</td>
+<td><code>scripts/retention-sweep.js:41</code></td>
+</tr>
+<tr>
+<td><code>ROHY_RETENTION_SECONDS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Data-retention window in seconds (Rohy-prefixed alias).</td>
+<td><code>scripts/retention-sweep.js:39</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="updatedeploy">Update/deploy</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ROHY_BACKUP_BEFORE_MIGRATE</code></td>
+<td>No</td>
+<td>—</td>
+<td>Toggles the pre-migration DB snapshot.</td>
+<td><code>server/db.js:521</code></td>
+</tr>
+<tr>
+<td><code>ROHY_NO_AUTO_SEED</code></td>
+<td>No</td>
+<td>—</td>
+<td>Skips automatic seeders on boot.</td>
+<td><code>server/db.js:44</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="uncategorized">Uncategorized</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Purpose</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ROHY_BASE_URL</code></td>
+<td>No</td>
+<td><code>http://localhost:3000</code></td>
+<td><em>see source</em></td>
+<td><code>scripts/llm-language-smoke.mjs:26</code><br><code>scripts/translate-locales.mjs:34</code></td>
+</tr>
+<tr>
+<td><code>ROHY_DISABLE_GENERAL_RATE_LIMIT</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>server/routes.js:92</code></td>
+</tr>
+<tr>
+<td><code>ROHY_I18N_GLOSSARY</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>scripts/i18n/lib.mjs:310</code></td>
+</tr>
+<tr>
+<td><code>ROHY_KOKORO_IDLE_UNLOAD_MIN</code></td>
+<td>No</td>
+<td><code>10</code></td>
+<td>Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup.</td>
+<td><code>server/services/kokoroTts.js:72</code></td>
+</tr>
+<tr>
+<td><code>ROHY_LANGS</code></td>
+<td>No</td>
+<td><code>&#39;&#39; (empty string)</code></td>
+<td><em>see source</em></td>
+<td><code>scripts/llm-language-smoke.mjs:108</code></td>
+</tr>
+<tr>
+<td><code>ROHY_LOCALES_ROOT</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>scripts/i18n/lib.mjs:61</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PACS_CONTENT</code></td>
+<td>No</td>
+<td>—</td>
+<td>Path to a built imaging content origin, overriding the sibling <code>../Radoyon/radoyon/dist-content</code> that <code>npm run starter-content</code> reads by default. Build-time only — nothing at runtime reads it.</td>
+<td><code>scripts/build-starter-content.mjs:226</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PASSWORD</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em> <strong>⚠ secret — see security note above.</strong></td>
+<td><code>scripts/llm-language-smoke.mjs:49</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_IMPORT_MAX_BYTES</code></td>
+<td>No</td>
+<td>—</td>
+<td>Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, <code>ceilingEnv</code>) — today pathology&#39;s <code>imports.maxBytes</code>. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest&#39;s own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value.</td>
+<td><code>server/routes/plugins-routes.js:530</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_LIBRARY_DIRS</code></td>
+<td>No</td>
+<td>—</td>
+<td>Comma-separated <code>&lt;pluginId&gt;=&lt;absolute path&gt;</code> map of the managed library directory each plugin&#39;s server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and &quot;the second plugin needs no host edit&quot; is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot.</td>
+<td><code>server/lib/pluginServerSlot.js:119</code></td>
+</tr>
+<tr>
+<td><code>ROHY_PLUGIN_VIPS_CONCURRENCY</code></td>
+<td>No</td>
+<td>—</td>
+<td>How many threads an image tool (libvips) may use for a plugin conversion job. Defaults to half the machine&#39;s cores, minimum 1. libvips otherwise uses every core: measured on a 4-core server, one unbounded <code>dzsave</code> took 301% CPU for 21 seconds — three of four cores — starving the web server sharing the box, and its peak memory scales with thread count too, so an unbounded tool on a wide machine uses far more RAM than a capacity proof taken on a narrow one. Raise it on a dedicated conversion host.</td>
+<td><code>server/lib/pluginSpawn.js:63</code></td>
+</tr>
+<tr>
+<td><code>ROHY_STARTER_CONTENT</code></td>
+<td>No</td>
+<td><code>&#39;&#39; (empty string)</code></td>
+<td>Set to <code>off</code> to refuse the starter content bundles rohy ships under <code>server/plugin-content/</code>. Those bundles are a licence-audited subset of the plugins&#39; real content origins, served from disk when <code>ROHY_PLUGIN_ORIGINS</code> names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience.</td>
+<td><code>server/routes/health-routes.js:225</code><br><code>server/routes/plugins-routes.js:218</code></td>
+</tr>
+<tr>
+<td><code>ROHY_STARTER_CONTENT_DIR</code></td>
+<td>No</td>
+<td>—</td>
+<td>Where the starter content bundles live, overriding <code>server/plugin-content/</code>. The bundles are gigabytes, generated by <code>npm run setup:content</code> and not part of the source tree, so a container wants them on a mounted volume rather than baked into the image. Set this to the mount point. Unset uses the in-tree directory.</td>
+<td><code>server/routes/health-routes.js:222</code><br><code>server/routes/health-routes.js:223</code><br><code>server/routes/plugins-routes.js:207</code></td>
+</tr>
+<tr>
+<td><code>ROHY_USERNAME</code></td>
+<td>No</td>
+<td>—</td>
+<td><em>see source</em></td>
+<td><code>scripts/llm-language-smoke.mjs:48</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><em>62 variables discovered. Generated by <code>scripts/docs-gen/gen-config.mjs</code> — regenerate with <code>npm run docs:gen:config</code>.</em></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../../index.html">Overview</a>
+                <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../whats-new.html">What's new</a>
+                <a href="../../../help.html">Help</a>
+                <a href="../../../about.html">About the author</a>
+                <a href="../../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../../docs/index.html">Docs home</a>
+                <a href="../../../docs/INSTALL.html">Install</a>
+                <a href="../../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../../docs/UPDATING.html">Updating</a>
+                <a href="../../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../../site.js"></script>
+</body>
+</html>

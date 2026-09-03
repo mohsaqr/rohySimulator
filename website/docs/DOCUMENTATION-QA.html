@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Documentation QA: Stage 6 · Rohy docs</title>
+    <meta name="description" content="Build-excluded report (srcExclude in docs/.vitepress/config.mjs). Not part of the published site. Records the four Stage-6 QA jobs and their outcomes.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Documentation QA: Stage 6 · Rohy docs">
+    <meta property="og:description" content="Build-excluded report (srcExclude in docs/.vitepress/config.mjs). Not part of the published site. Records the four Stage-6 QA jobs and their outcomes.">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Documentation QA: Stage 6</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#q1-generator-drift">Q1 — Generator drift</a>
+            <a href="#q2-dead-link-sweep">Q2 — Dead-link sweep</a>
+            <a href="#q3-accessibility-wcag-22-aa-basics">Q3 — Accessibility (WCAG 2.2 AA basics)</a>
+            <a href="#q4-i18n-readiness">Q4 — i18n readiness</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html" aria-current="page">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Build-excluded report (<code>srcExclude</code> in <code>docs/.vitepress/config.mjs</code>). Not part
+of the published site. Records the four Stage-6 QA jobs and their outcomes.</p>
+<p>Date: 2026-05-16
+Final state: docs site builds clean with <code>ignoreDeadLinks: true</code>; all
+<code>src/help/</code> tests passing (19/19).</p>
+<hr>
+<span class="anchor-alias" id="q1--generator-drift"></span><h2 id="q1-generator-drift">Q1 — Generator drift</h2>
+<p><strong>Generators are deterministic. The drift seen against the committed tree is a
+real, expected content change — NOT a generator non-determinism bug, and NOT
+something to be masked.</strong></p>
+<p>Procedure:</p>
+<ol>
+<li><p>Ran all four generators:
+<code>docs:gen:api</code>, <code>docs:gen:data</code>, <code>docs:gen:config</code>, <code>docs:gen:cli</code>.</p>
+</li>
+<li><p>Ran them a <strong>second</strong> time and byte-compared the two output trees:
+<code>diff -rq</code> reported <strong>identical</strong> output. The generators are deterministic.</p>
+</li>
+<li><p><code>git status --porcelain docs/reference</code> was <strong>not</strong> empty:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>docs/reference/api/help.md</code></td>
+<td><strong>new</strong> — generated <code>help</code> API page</td>
+</tr>
+<tr>
+<td><code>docs/reference/api/index.md</code></td>
+<td>routers 18→19, endpoints 275→277, <code>help</code> row added</td>
+</tr>
+<tr>
+<td><code>docs/reference/api/openapi.json</code></td>
+<td>+70 lines: 2 new <code>/api/help/*</code> operations</td>
+</tr>
+<tr>
+<td><code>docs/reference/config/index.md</code></td>
+<td><code>NODE_ENV</code> default now <code>development</code>; <code>TLS_*</code>/<code>OYON_ENABLED</code> source lists include <code>help-routes.js</code>; <code>routes.js</code> line shift 32→33</td>
+</tr>
+</tbody></table></div>
+</li>
+</ol>
+<p>Root cause: the committed reference docs predate commit <code>6109c82</code>
+(&quot;docs(stage-4): in-app Help &amp; Support system&quot;), which added the tracked file
+<code>server/routes/help-routes.js</code> (2 endpoints) and additional env-var reference
+sites. The generators correctly reflect current source. This is <strong>stale
+committed output</strong>, not a generator defect.</p>
+<p>Verification of determinism: two consecutive full regenerations produced
+byte-identical trees (<code>diff -rq</code> clean). No randomness, timestamps, or
+unordered-map iteration in output (sorts use <code>localeCompare</code>).</p>
+<p>Action taken: none committed (parent owns commits, per Stage-6 rules). The
+generator change below (Q2) is a link-correctness fix, not a drift mask, and is
+itself deterministic.</p>
+<hr>
+<span class="anchor-alias" id="q2--dead-link-sweep"></span><h2 id="q2-dead-link-sweep">Q2 — Dead-link sweep</h2>
+<p>Set <code>ignoreDeadLinks: false</code>, ran <code>DOCS_BASE=/ npm run docs:build</code>.</p>
+<p><strong>Dead links found: 1. Fixed at source: 1.</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>File</th>
+<th>Dead link</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>docs/reference/data/index.md</code></td>
+<td><code>./../../../migrations/MANIFEST</code> (<code>[...](../../../migrations/MANIFEST.md)</code>)</td>
+<td>Markdown link pointing to a repo file <strong>outside</strong> the VitePress root; VitePress resolves it as a missing page</td>
+<td>Source is the generator <code>scripts/docs-gen/gen-data.mjs:382</code>. Changed the markdown link to inline code <code>`migrations/MANIFEST.md`</code> — consistent with every other repo-file reference in the generated docs (all use backticks, never links). Regenerated <code>docs/reference/data/</code>.</td>
+</tr>
+</tbody></table></div>
+<p>This is a link-target correction at the true source (the generator), exactly as
+Q2 requires — <strong>not</strong> a per-link <code>ignoreDeadLinks</code> silencing, and <strong>not</strong> a
+drift mask (the generator output is still deterministic; only the one broken
+link representation changed).</p>
+<p>VitePress collects all dead links in a single render pass and fails at
+<code>renderStart</code> with the complete list; the first build reported exactly this one
+link. After the fix, <code>DOCS_BASE=/ npm run docs:build</code> with
+<code>ignoreDeadLinks: false</code> <strong>passes with zero dead-link/anchor warnings</strong>.</p>
+<p><code>ignoreDeadLinks</code> was then reverted to <code>true</code> (Stage 7 owns flipping it on in
+CI). The explanatory comment above it was left intact.</p>
+<hr>
+<span class="anchor-alias" id="q3--accessibility-wcag-22-aa-basics"></span><h2 id="q3-accessibility-wcag-22-aa-basics">Q3 — Accessibility (WCAG 2.2 AA basics)</h2>
+<p>Audited <code>src/help/HelpCenter.jsx</code> and <code>src/help/OnboardingTour.jsx</code>.</p>
+<h3 id="helpcenterjsx">HelpCenter.jsx</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dialog semantics: <code>role=&quot;dialog&quot;</code> + <code>aria-modal=&quot;true&quot;</code></td>
+<td>PASS (already present)</td>
+</tr>
+<tr>
+<td>Accessible name</td>
+<td>PASS — <code>aria-label=&quot;Help and support&quot;</code></td>
+</tr>
+<tr>
+<td>Close control is a real <code>&lt;button&gt;</code> with accessible name</td>
+<td>PASS — <code>aria-label=&quot;Close help&quot;</code></td>
+</tr>
+<tr>
+<td>Tabs: <code>role=&quot;tablist&quot;</code> + <code>role=&quot;tab&quot;</code> + <code>aria-selected</code></td>
+<td>PASS (already present)</td>
+</tr>
+<tr>
+<td>Tab ↔ panel association (<code>aria-controls</code> / <code>role=&quot;tabpanel&quot;</code> / <code>aria-labelledby</code>)</td>
+<td><strong>FIXED</strong> — added <code>id=&quot;help-tab-&lt;id&gt;&quot;</code> + <code>aria-controls=&quot;help-tabpanel&quot;</code> on each tab; added <code>role=&quot;tabpanel&quot;</code>, <code>id=&quot;help-tabpanel&quot;</code>, <code>aria-labelledby</code> on the content region</td>
+</tr>
+<tr>
+<td>Keyboard dismiss (Escape) — WCAG 2.1.2</td>
+<td><strong>FIXED</strong> — added <code>keydown</code> Escape → <code>onClose()</code> while open (was mouse-only via backdrop / close button)</td>
+</tr>
+<tr>
+<td>Color-only signalling</td>
+<td>PASS — active tab carries <code>aria-selected</code> (programmatic) plus a border, not color alone</td>
+</tr>
+<tr>
+<td>Tabbable controls are real buttons</td>
+<td>PASS — all <code>&lt;button type=&quot;button&quot;&gt;</code>; external links are real <code>&lt;a&gt;</code> with <code>rel=&quot;noopener noreferrer&quot;</code></td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>Decorative lucide SVGs adjacent to text labels; the actionable controls have text or <code>aria-label</code>. Acceptable; not changed (surgical scope).</td>
+</tr>
+</tbody></table></div>
+<h3 id="onboardingtourjsx">OnboardingTour.jsx</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dialog semantics: <code>role=&quot;dialog&quot;</code> + <code>aria-modal=&quot;true&quot;</code></td>
+<td>PASS (already present)</td>
+</tr>
+<tr>
+<td>Accessible name</td>
+<td>PASS — <code>aria-label=&quot;Getting started&quot;</code></td>
+</tr>
+<tr>
+<td>Skip / Next are real buttons</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Keyboard dismiss (Escape) — WCAG 2.1.2</td>
+<td><strong>FIXED</strong> — added <code>keydown</code> Escape → <code>skip()</code> (same action as the Skip button) while open. The &quot;dismissible at any step&quot; claim was previously click-only.</td>
+</tr>
+<tr>
+<td>Color-only signalling</td>
+<td>PASS — step text (&quot;Step N of M&quot;) plus button labels; no color-only state</td>
+</tr>
+</tbody></table></div>
+<h3 id="fixes-applied-surgical-no-redesign">Fixes applied (surgical, no redesign)</h3>
+<ul>
+<li><code>src/help/HelpCenter.jsx</code>: Escape-to-close <code>useEffect</code>; tab/tabpanel ARIA
+association (<code>id</code>/<code>aria-controls</code>/<code>role=&quot;tabpanel&quot;</code>/<code>aria-labelledby</code>).</li>
+<li><code>src/help/OnboardingTour.jsx</code>: Escape-to-dismiss <code>useEffect</code> (delegates to
+the existing <code>skip</code> action).</li>
+</ul>
+<h3 id="test-result">Test result</h3>
+<p><code>npx vitest run src/help/ --project=client</code> → <strong>4 files, 19 tests, all pass</strong>
+after the edits.</p>
+<span class="anchor-alias" id="known-residual-reported-not-silently-fixed--out-of-surgical-scope"></span><h3 id="known-residual-reported-not-silently-fixed-out-of-surgical-scope">Known residual (reported, not silently fixed — out of surgical scope)</h3>
+<ul>
+<li>Neither dialog implements a focus <strong>trap</strong> or initial-focus move. WCAG 2.4.3
+(Focus Order) / 2.1.2 (No Keyboard Trap) are not violated (Escape now exits;
+focus can leave), but a stricter AA modal pattern would move focus into the
+dialog on open and contain Tab within it. Adding a focus-trap is a behavioural
+change beyond &quot;minimal, surgical&quot; and is flagged here for a dedicated task
+rather than bundled into Stage-6 QA.</li>
+</ul>
+<hr>
+<span class="anchor-alias" id="q4--i18n-readiness"></span><h2 id="q4-i18n-readiness">Q4 — i18n readiness</h2>
+<p>English-only at launch is acceptable; this is a readiness assessment, not a
+translation deliverable.</p>
+<h3 id="docs-site-vitepress">Docs site (VitePress)</h3>
+<ul>
+<li><strong>Translation-ready in principle.</strong> VitePress has first-class i18n via the
+<code>locales</code> config key (per-locale <code>lang</code>, <code>label</code>, <code>link</code>, theme strings).</li>
+<li>Currently single-locale: <code>docs/.vitepress/config.mjs</code> sets <code>lang: &#39;en-US&#39;</code>
+with <strong>no <code>locales</code> map</strong>. Adding locales is additive and non-breaking.</li>
+<li><strong>Blockers for a future locale:</strong><ol>
+<li><strong><code>docs/reference/**</code> is machine-generated</strong> from source code by
+<code>scripts/docs-gen/*.mjs</code>. These pages (API tables, env-var purposes, CLI
+help, schema docs) embed English prose strings hard-coded in the generator
+<code>.push(...)</code> calls. A localized reference section would require either (a)
+a translation layer over generator output, or (b) accepting that the
+reference section stays English while only hand-authored guides translate.
+Recommended: keep generated reference English-only; translate guides only.</li>
+<li><strong>Hand-authored guide content</strong> is plain Markdown — fully translatable by
+duplicating into <code>docs/&lt;locale&gt;/</code> per the VitePress directory convention.</li>
+<li><strong>Source-derived English</strong> (env-var &quot;Purpose&quot; text, route descriptions)
+lives in code comments / route definitions, not a string catalogue. Not a
+docs-site concern but means generated docs can never be auto-translated
+without translating the source annotations.</li>
+</ol>
+</li>
+</ul>
+<h3 id="in-app-strings-help-components">In-app strings (Help components)</h3>
+<ul>
+<li><strong>Not currently externalized.</strong> No i18n library in <code>package.json</code>
+(<code>react-i18next</code>, <code>i18next</code>, <code>react-intl</code>, <code>lingui</code> — none present). UI copy
+in <code>HelpCenter.jsx</code> / <code>OnboardingTour.jsx</code> / <code>helpContent.js</code> is hard-coded
+English JSX literals.</li>
+<li><strong>Externalizable, but work is required.</strong> Strings are short, static, and
+centralizable; <code>helpContent.js</code> already centralizes article titles/groups
+(a good seam). A future locale needs: an i18n provider, extraction of literal
+strings to a message catalogue, and locale-aware <code>docsUrl()</code> so in-app help
+links target the localized docs path.</li>
+<li><strong>Concrete blockers to a future app locale:</strong><ol>
+<li>No i18n runtime or message catalogue exists — must be introduced.</li>
+<li>Hard-coded JSX string literals throughout (tab labels, headings,
+&quot;Loading…&quot;, error fallbacks, notification titles/messages).</li>
+<li><code>docsUrl(a.path)</code> builds links to the English docs tree; a locale switch
+must also switch the docs base path.</li>
+<li>Release-notes / diagnostics content comes from server APIs
+(<code>/api/help/release-notes</code>, <code>/api/help/diagnostics</code>) — server-side text
+(CHANGELOG parsing, section names) would also need localization or an
+explicit &quot;untranslated technical content&quot; policy.</li>
+</ol>
+</li>
+</ul>
+<h3 id="summary">Summary</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Translation-ready today</th>
+<th>Effort to add a locale</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VitePress docs site (config)</td>
+<td>Yes (config supports <code>locales</code>)</td>
+<td>Low — additive config</td>
+</tr>
+<tr>
+<td>Hand-authored guides</td>
+<td>Yes (Markdown)</td>
+<td>Medium — translate + mirror dirs</td>
+</tr>
+<tr>
+<td>Generated reference docs</td>
+<td>No (English baked into generators/source)</td>
+<td>High — recommend keep English</td>
+</tr>
+<tr>
+<td>In-app Help components</td>
+<td>No (no i18n runtime, literal strings)</td>
+<td>Medium — add i18n lib + extract</td>
+</tr>
+</tbody></table></div>
+<p>No regressions introduced for the English launch. The above is a forward-looking
+gap list, not a launch blocker.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dynamics analytics, evidence and logs · Rohy docs</title>
+    <meta name="description" content="Rohy analytics reconstruct the dynamics of a clinical simulation: what changed, when it changed, what the learner did in response, and how patterns unfolded across time. The ana…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Dynamics analytics, evidence and logs · Rohy docs">
+    <meta property="og:description" content="Rohy analytics reconstruct the dynamics of a clinical simulation: what changed, when it changed, what the learner did in response, and how patterns unfolded across time. The ana…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Product</span>
+        <h1>Dynamics analytics, evidence and logs</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#event-traces-and-clinical-context">Event traces and clinical context</a>
+            <a href="#sequence-analytics">Sequence analytics</a>
+            <a href="#n-grams-and-motifs">N-grams and motifs</a>
+            <a href="#timelines-and-temporal-analysis">Timelines and temporal analysis</a>
+            <a href="#transition-network-and-state-dynamics">Transition, network and state dynamics</a>
+            <a href="#course-learner-and-session-analytics">Course, learner and session analytics</a>
+            <a href="#multimodal-analytics-and-oyon">Multimodal analytics and Oyon</a>
+            <a href="#heatmaps-and-visual-analytics">Heatmaps and visual analytics</a>
+            <a href="#logs-as-analytical-and-governance-evidence">Logs as analytical and governance evidence</a>
+            <a href="#exports-and-external-analysis">Exports and external analysis</a>
+            <a href="#scientific-value">Scientific value</a>
+            <a href="#responsible-use">Responsible use</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group" open>
+                    <summary>Rohy product architecture</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="analytics.html" aria-current="page">Analytics, evidence &amp; research traces</a>
+                    <a href="clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy analytics reconstruct the dynamics of a clinical simulation: what changed, when it changed, what the learner did in response, and how patterns unfolded across time. The analytics layer covers event sequences, n-grams and repeated motifs, temporal timelines, room movement, activity frequencies, transition and network structures, course-level progress, learner and session drill-downs, Oyon emotion and gaze summaries, heatmaps, chat records, audit logs, usage logs, exports and operational evidence. Transition Network Analysis is one method inside that layer.</p>
+<p>The methodological purpose is to study clinical reasoning as process. In Rohy, a learner gathers information, changes rooms, orders tests, waits, reviews reports, treats, monitors, consults, reacts to alarms and reflects in debrief. The meaning of an action depends on its timing and context. Ordering a test before examination, after examination or after physiological deterioration are analytically different events even when the order name is identical. Rohy analytics preserve those differences by linking events to the session, learner, case, course, room, patient state and time.</p>
+<h2 id="event-traces-and-clinical-context">Event traces and clinical context</h2>
+<p>Rohy records navigation, conversation, physical examination, order placement, report viewing, treatment, monitoring, alarm response, agent interaction and debrief activity as timestamped clinical events. Each event is linked to the actor, session, case, room, course frame and, where available, patient state, so the record preserves both the action and the clinical context in which it occurred.</p>
+<p>This structure matters because a count alone is weak evidence. A laboratory order can be counted, but counting does not explain whether the order was targeted, premature, delayed, redundant or clinically necessary. Its meaning depends on what the learner knew, what they had examined, whether the monitor was deteriorating, whether previous results were ready, whether the report was viewed and what action followed. Rohy analytics are therefore relational: the action is interpreted through its links to time, room, case, course, physiology and subsequent behaviour.</p>
+<p>Room context is central to this design. Movement among Patient, Examination, Laboratory, Radiology and Consultant rooms is part of the reasoning process. Consulting before any examination, consulting after reviewing imaging, and consulting during debrief are different behaviours. A learner who remains in the Patient room while results become ready behaves differently from one who cycles repeatedly between monitor and investigations. Room-aware traces make those differences visible.</p>
+<h2 id="sequence-analytics">Sequence analytics</h2>
+<p>Sequence analytics represents the learner&#39;s session as an ordered path. A sequence may show history-taking, movement to Laboratory, broad test ordering, return to Patient, alarm acknowledgement and oxygen administration. Another sequence may show history, focused examination, targeted radiology, report viewing, consultation and treatment. These paths express different clinical strategies.</p>
+<p>Sequences are useful at several levels. At session level, they support debrief because the teacher and learner can reconstruct the encounter in order. At student level, they reveal recurring habits across cases. At class level, they show whether learners converge on a shared workflow or diverge into many strategies. At research level, they provide the raw material for sequence mining, process mining, transition modelling and temporal comparison.</p>
+<p>Sequence analysis is also suitable for non-emergency cases. In cold cases, timing pressure may be reduced, but diagnostic order still matters. A teacher may want to know whether students gather history before broad testing, whether they overuse imaging, whether they inspect records before asking the patient, or whether they return to reassess after new information appears.</p>
+<h2 id="n-grams-and-motifs">N-grams and motifs</h2>
+<p>N-grams describe short repeated subsequences inside longer clinical activity. Two-event patterns can show immediate tendencies such as alarm-to-treatment, history-to-lab, report-to-consultation or treatment-to-monitoring. Three- and four-event patterns can reveal more meaningful reasoning fragments, such as history-to-exam-to-targeted-test, monitor-to-oxygen-to-reassessment, or radiology-to-consultant-to-treatment.</p>
+<p>These motifs are useful because they capture local routines that broad metrics miss. A learner may have a reasonable total number of actions but repeatedly follow an inefficient micro-pattern. A class may show a strong motif of broad laboratory ordering before examination. Another class may show repeated reassessment after treatment. N-gram analysis helps teachers and researchers identify these habits without flattening the full session into a single score.</p>
+<p>Motifs can also be compared across cases. In emergency cases, useful motifs may involve rapid recognition, intervention and reassessment. In diagnostic cold cases, useful motifs may involve hypothesis-driven information gathering, selective investigation and reflective synthesis. The same analytical machinery supports both because the educator controls the scenario pressure.</p>
+<h2 id="timelines-and-temporal-analysis">Timelines and temporal analysis</h2>
+<p>Timelines show when actions occurred relative to the start of the case, scenario phases, alarm onsets, result readiness, treatment administration and debrief. They make pace visible. A learner may perform the right actions too slowly for an emergency case. Another may act quickly but before enough information is available. Timelines make delay, acceleration, repetition and omission available for review.</p>
+<p>Temporal analysis is especially important in time-critical scenarios. The interval between desaturation and oxygen, between alarm and acknowledgement, between report readiness and report viewing, or between deterioration and consultation can become educationally meaningful. Rohy can support these analyses because the clinical environment and event stream share a temporal frame.</p>
+<p>Timelines also support cold-case teaching. Without deterioration, the temporal question may shift from emergency response to reasoning organisation. How long did the learner spend in history? Did they sequence examination before investigations? Did they revisit earlier information after results appeared? Did debrief occur after a complete review or after an early closure? These are still temporal questions.</p>
+<h2 id="transition-network-and-state-dynamics">Transition, network and state dynamics</h2>
+<p>Transition and network analytics compress many ordered actions into structural views. Nodes represent activity states, and edges represent movement between states. This can reveal dominant pathways, rare branches, repeated loops, self-transitions and bottlenecks. Transition Network Analysis is therefore one structural view of Rohy&#39;s dynamics analytics.</p>
+<p>The network should remain clinically anchored. A dense network may indicate exploration, confusion or case complexity. A sparse network may indicate efficiency, premature closure or a short session. A highly central state may be a productive hub or an inefficient bottleneck. Edge weights and centrality measures are useful when interpreted with the authored scenario, clinical goal, learner level and debrief record.</p>
+<p>Network views become stronger when paired with sequences and timelines. A transition network may show that many learners move from monitoring to laboratory ordering. The timeline can show whether this happens before or after deterioration. The n-gram view can show whether it is part of a repeated motif. The session trace can show the concrete clinical context. Rohy supports this movement among representations.</p>
+<h2 id="course-learner-and-session-analytics">Course, learner and session analytics</h2>
+<p>Course analytics gives the trace a teaching population. Roster, completion grid, live feed, export and course-scoped analytics answer practical questions: who is enrolled, who attempted the case, who reached debrief, who has no activity, when students worked and which sessions require review. These are operational views, but they also define the sampling frame for research.</p>
+<p>The scope ladder matters. Whole-class analytics reveal common patterns across the group. Student analytics reveal individual tendencies across attempts. Session analytics reveal the concrete sequence that can be discussed in debrief. A teacher can move from class overview to a student, then from the student to one session, then from the session to its sequence, timeline, reports, treatments, conversation and multimodal traces.</p>
+<p>Course analytics also supports longitudinal teaching. Across several cases, a teacher can examine whether students become faster at recognizing deterioration, more selective in ordering, more consistent in reassessment, more reflective in debrief or more appropriate in consultation. These patterns describe development over time, which is a wider frame than isolated performance.</p>
+<p>Completion is interpreted narrowly. In the current model, completion means the learner reached debrief. It marks participation and workflow closure, and it leaves competence unmeasured. This keeps course analytics honest and prevents operational status from becoming assessment.</p>
+<h2 id="multimodal-analytics-and-oyon">Multimodal analytics and Oyon</h2>
+<p>Oyon adds optional multimodal dynamics. It runs browser-side inference using MediaPipe and ONNX Runtime Web, aggregates signals into windows and sends aggregate data to Rohy when enabled and consented. Stored windows can include dominant expression estimates, class probabilities, valence, arousal, confidence, entropy, missing-face ratio, quality metadata and gaze area of interest.</p>
+<p>These signals can be visualised as timelines, distributions, transitions and heatmaps. Emotion heatmaps can show where affective signals concentrate across time, session phases, rooms or cases. Gaze summaries can be related to monitor use, report viewing or avatar interaction. Valence and arousal timelines can be compared with alarms, deterioration, treatment or debrief moments. These views support hypotheses for reflection and research; they are not direct readings of a learner&#39;s inner state.</p>
+<p>Quality indicators are essential. Confidence, missing-face ratio, valid-frame count and entropy help distinguish usable signal from weak capture. A responsible analysis defines quality thresholds before drawing conclusions. Low-confidence windows may still reveal something about capture conditions, but they should not be treated as affective evidence.</p>
+<p>Oyon also contributes to simulation fidelity. When enabled, the patient or discussant can maintain eye contact, follow face position and glance at the monitor during alarms. This connects multimodal sensing to interaction while preserving the browser-side processing boundary.</p>
+<h2 id="heatmaps-and-visual-analytics">Heatmaps and visual analytics</h2>
+<p>Heatmaps in Rohy should be understood broadly as density views. They can show emotion intensity across time, activity concentration across hours, room use across sessions, gaze distribution across areas of interest, or class activity across cases. The value of a heatmap is that it helps locate patterns that deserve closer inspection.</p>
+<p>A heatmap may suggest that arousal increases around alarms, that learners spend long periods in Laboratory, that a class clusters activity late in the session, or that gaze shifts toward the monitor during deterioration. The next step is always interpretive: inspect the underlying events, session context, case design and debrief. Heatmaps guide attention; they do not explain the simulation on their own.</p>
+<p>Rohy therefore treats dashboards as navigation surfaces for evidence. A completion grid shows where to inspect. A timeline shows when to inspect. An n-gram view shows which motifs to inspect. A transition network shows pathway structure. An emotion heatmap shows phases that may warrant closer review. Logs show provenance and accountability. The analytical work happens by moving among these layers.</p>
+<h2 id="logs-as-analytical-and-governance-evidence">Logs as analytical and governance evidence</h2>
+<p>Logs are part of Rohy&#39;s analytics architecture. They provide provenance, accountability and operational context for the learning traces. Rohy records several kinds of logs, each with a different purpose: learning-event logs, chat logs, audit logs, export records, LLM and TTS usage logs, system logs and request logs.</p>
+<p>Learning-event logs describe learner activity inside the simulation. They are the basis for sequence, timeline, n-gram, transition, frequency and room-path analysis. Chat logs preserve patient and agent conversations, supporting review of history-taking, family interaction, consultation, patient distress and debrief. Conversation logs should be interpreted with role boundaries in mind: a patient, nurse, consultant, family member and discussant all represent different knowledge positions.</p>
+<p>Audit logs answer who changed the system. They record security- and governance-relevant actions such as user creation, role edits, account deletion or purge, tenant operations, platform setting changes, force logout, exports and other sensitive mutations. The audit chain gives these records integrity value by supporting tamper detection, which analytics used for assessment, research or institutional reporting depend on.</p>
+<p>Export logs are essential because data often leaves Rohy. A CSV or JSON export may enter an LMS, a statistical package, a grading workflow or a research archive. Rohy records who exported the data, which resource was exported, which filters were applied, what format was used, how many records were included and when the export occurred. This creates provenance for datasets used outside the live platform.</p>
+<p>Usage logs support operational analytics. LLM and TTS calls have cost, latency and provider implications. Tracking provider use helps administrators understand whether a course is consuming expected resources, whether a local voice engine is working, whether cloud usage is rising, or whether model behaviour changed after a settings update. These records help separate learner behaviour from infrastructure effects.</p>
+<p>System and request logs support reliability. Structured NDJSON logs, request IDs and slow-query warnings allow operators to connect a user-reported problem to server behaviour. A slow analytics page can be traced through request IDs and database warnings. A malformed Oyon batch can be identified through validator rejection counts. These operational traces protect the reliability of the analytics pipeline.</p>
+<p>The redaction layer is part of log interpretation. Logs and support bundles must not become channels for secrets or unnecessary personal data. Rohy centralises redaction so that API keys, token material, password hashes, PII and sensitive JSON fields are handled consistently. This is especially important when analytics, audit or operational records are exported or reviewed outside the runtime.</p>
+<h2 id="exports-and-external-analysis">Exports and external analysis</h2>
+<p>Rohy supports export because serious educational research often continues outside the platform. Researchers may use R, Python, SPSS, process-mining tools, network-analysis packages or qualitative-analysis workflows. Teachers may need CSV completion data for LMS import or local grading. Administrators may need audit records for compliance review.</p>
+<p>Exported data should be treated as scoped evidence. A course export is filtered by class membership, case activity and authorization. A session export carries authored case context, learner actions, timing and available records. A chat export carries conversation text that may require careful handling. The export log records the provenance of that movement so later analysis can account for how the dataset was produced.</p>
+<p>For methodological work, exported traces can support sequence mining, n-gram analysis, transition networks, temporal plots, process models, frequency analysis, multimodal alignment and qualitative coding. Rohy does not force one analytical method. It preserves structure so researchers can select methods appropriate to their question.</p>
+<h2 id="scientific-value">Scientific value</h2>
+<p>Rohy&#39;s analytics layer supports research on the dynamics of clinical reasoning. It can describe information-seeking, diagnostic sequencing, investigation timing, treatment response, alarm behaviour, consultation, debrief, multimodal engagement and course-level variation. It supports emergency scenarios where deterioration and response time matter, and cold cases where diagnostic strategy and completeness may be the focus.</p>
+<p>The strength of the analytics model is that different representations can be combined. A session can be inspected as a timeline, a sequence, a transition network, an n-gram profile, a room path, an emotion heatmap, a report-viewing history, a treatment record, a chat transcript, a usage record and a debrief conversation. Each representation gives a partial view. Together they support richer interpretation of how the learner worked through the simulated clinical problem.</p>
+<p>The logs make this scientific value defensible. They provide provenance: which case was assigned, who ran the session, what was exported, which settings changed, what provider calls occurred and whether operational errors affected the run. Research on simulation data needs this context. Without logs, an analyst may see a behavioural pattern but miss the administrative or technical condition that produced it.</p>
+<h2 id="responsible-use">Responsible use</h2>
+<p>The responsible analytics model is human-centred. Begin with the authored case and teaching objective. Inspect the timeline and sequence. Consider the clinical state and available information. Use network, n-gram, frequency and heatmap views as complementary lenses. Treat Oyon as aggregate contextual signal. Review logs for provenance and operational context. Bring the evidence into debrief and research interpretation with explicit attention to uncertainty, data quality and educational purpose.</p>
+<p>Related guides include <a href="../educator/reporting.html">Reporting and analytics</a>, <a href="../educator/tna.html">TNA analytics</a>, <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>, <a href="../admin/system-logs.html">System logs</a>, <a href="../security/rbac.html">RBAC and auth model</a>, and <a href="../security/redaction.html">Redaction and PII</a>.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

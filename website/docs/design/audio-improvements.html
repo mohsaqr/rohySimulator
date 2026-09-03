@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Audio Improvement: Per-Provider Default Voices (Plan v3) · Rohy docs</title>
+    <meta name="description" content="SUPERSEDED (2026-07-09): see docs/design/voice-2.0-plan.md. The owner reversed the §4 rejection of provider-follows-voice (&quot;I want voice 2.0&quot;): a voice now plays on its own engi…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Audio Improvement: Per-Provider Default Voices (Plan v3) · Rohy docs">
+    <meta property="og:description" content="SUPERSEDED (2026-07-09): see docs/design/voice-2.0-plan.md. The owner reversed the §4 rejection of provider-follows-voice (&quot;I want voice 2.0&quot;): a voice now plays on its own engi…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Design</span>
+        <h1>Audio Improvement: Per-Provider Default Voices (Plan v3)</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-the-issue-what-the-user-hit">1. The issue (what the user hit)</a>
+            <a href="#2-history-why-the-system-is-the-way-it-is-the-saga">2. History — why the system is the way it is (the &quot;saga&quot;)</a>
+            <a href="#3-problems-with-the-current-post-may-design">3. Problems with the current (post-May) design</a>
+            <a href="#4-options-considered-and-rejected">4. Options considered and rejected</a>
+            <a href="#5-chosen-design-owner-approved-direction">5. Chosen design (owner-approved direction)</a>
+            <a href="#6-existing-infrastructure-corrected-status-v2">6. Existing infrastructure — corrected status [v2]</a>
+            <a href="#7-implementation-plan">7. Implementation plan</a>
+            <a href="#8-risks">8. Risks</a>
+            <a href="#9-acceptance-criteria">9. Acceptance criteria</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="audio-improvements.html" aria-current="page">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="index.html">Design</a>
+                    <a href="plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p><strong>SUPERSEDED (2026-07-09): see <code>docs/design/voice-2.0-plan.md</code>.</strong> The owner reversed the
+§4 rejection of provider-follows-voice (&quot;I want voice 2.0&quot;): a voice now
+plays on its own engine whenever that engine is usable; the platform
+<code>tts_provider</code> is demoted to a default, not a router. This document
+remains the authoritative spec for the parts Voice 2.0 inherits verbatim —
+the per-provider default-voice safety net (§5–6), truth clause, headers,
+toasts, boot audit, race fix, and test rewrites — but its core routing
+rule (single active provider, everything else invalid) is retired.</p>
+</blockquote>
+<p><strong>Status:</strong> PROPOSAL v3 — revised after TWO adversarial audits.</p>
+<ul>
+<li>v1 audit (<code>docs/design/voice-defaults-plan.md</code>, Codex session
+<code>019f485e-addf-7ce1-8d06-12e5975a61f9</code>): &quot;reject as written, directionally
+right&quot; — five required amendments, all incorporated and marked <strong>[v2]</strong>.</li>
+<li>v2 audit (Codex session <code>019f486c-d9f2-7a33-998d-4a04937239a7</code>): nominal
+&quot;reject as written&quot;, but 4 of 6 High findings verify that the plan&#39;s targets
+are real, still-present gaps in the code (nothing is implemented yet — by
+design, implementation is on hold pending owner approval). The two genuine
+plan defects are fixed and marked <strong>[v3]</strong>: the migration carry-over
+conflict rule (§6) no longer silently prefers the female legacy value.
+The audit also POSITIVELY cleared: retiring <code>PERSONA_DEFAULT_VOICE_KEYS</code>
+from <code>/platform-settings/avatars</code> is safe (AvatarsSettingsTab ignores them,
+tests assert absence), and the global tenant scope is coherent with the
+schema.</li>
+<li>Third review (independent implementation-readiness read, 2026-07-09):
+verdict &quot;sound, would implement&quot;. Its refinements are folded in and marked
+<strong>[v3]</strong>: tolerant PUT validation on catalogue-check errors (§7.1.1),
+headers-before-provider-branch + CORS exposure check (§7.1.3), seeding
+logic in one place with retirement-only SQL (§6.5), toast dedup scope
+pinned (§7.2.4), editor plumbing made explicit (§7.2.5), and staged
+server-first sequencing (§7 intro). Owner also considered and REJECTED a
+provider-follows-voice alternative (derive provider from voice-id shape,
+allow mixed engines) — single active provider stands.
+<strong>Date:</strong> 2026-07-09
+<strong>Author:</strong> Claude (session: voice-routing review → multilingual Google voices → provider-switch UX)
+<strong>Scope:</strong> TTS voice resolution when the stored voice is missing or invalid for the active provider.</li>
+</ul>
+<hr>
+<h2 id="1-the-issue-what-the-user-hit">1. The issue (what the user hit)</h2>
+<p>A case (or persona) stores a voice id from provider A (e.g. Kokoro&#39;s <code>af_bella</code>).
+An admin switches the platform TTS engine to provider B (e.g. Google).
+Result today: <strong>the patient goes mute</strong> in front of the student, with an error
+toast — and the toast text is misleading (&quot;No voice configured&quot; when a voice
+IS configured, just from the wrong provider).</p>
+<p>The owner&#39;s verdict: <em>&quot;failing loudly is not a good option&quot;</em> — a mute patient
+mid-class is itself a failure, arguably worse for the learner than a
+wrong-sounding voice. The requested design: <strong>one default voice per provider
+(the 3–4 main ones), used for all personas</strong> whenever the stored voice can&#39;t
+play on the active engine. Never mute.</p>
+<span class="anchor-alias" id="2-history--why-the-system-is-the-way-it-is-the-saga"></span><h2 id="2-history-why-the-system-is-the-way-it-is-the-saga">2. History — why the system is the way it is (the &quot;saga&quot;)</h2>
+<p>Chronology reconstructed from code comments and git history:</p>
+<ol>
+<li><strong>Original design (pre-2026-05):</strong> multi-tier fallback. Per-character
+<code>tts_provider</code> fields, per-gender demographic voice slots
+(<code>voice_&lt;provider&gt;_&lt;gender&gt;</code>), per-provider persona defaults
+(<code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code>), and hardcoded
+<code>PROVIDER_FALLBACK_VOICE</code> constants.</li>
+<li><strong>The failure mode:</strong> admins changed a voice (or the provider) and <em>heard
+no change</em> — some hidden tier silently substituted something else. The
+persona dropdown showed voice X while the runtime played voice Y. Root
+causes: per-character provider fields leaking stale engines into the
+runtime, and silent fallbacks masking dead configs. Documented in
+<code>src/utils/voiceResolver.js</code> header as &quot;three weeks of &#39;I changed it and
+nothing happened&#39;&quot;.</li>
+<li><strong>2026-05-12/13 remediation (the pendulum swing):</strong> resolution collapsed
+to ONE tier — <code>case_voice</code> (case override → persona template) or nothing.
+All fallbacks deleted. Provider reads from <code>platform_settings.tts_provider</code>
+only; the main <code>/api/tts</code> route ignores body provider. Invalid/missing
+voice ⇒ mute + toast. Guards added since: client-side id-shape validator
+(<code>isVoiceValidForProvider</code>), server-side catalogue check (400
+<code>invalid_voice</code>, no substitution), boot-time stale-voice audit
+(<code>server/healthChecks/voiceCatalogueAudit.js</code>), DiagnosticBar live wire
+capture (last 12 literal <code>/api/tts</code> payloads + replay).</li>
+<li><strong>2026-07-09 (this session):</strong> Google catalogue extended to de/it/fi/sv
+(16 verified Chirp 3 HD voices); pickers grouped by language; runtime
+language↔voice mismatch toast; CI contract that every registry language
+has ≥1 female + ≥1 male Google voice. Commit <code>a110774</code> on <code>lang_dev</code>.</li>
+</ol>
+<p><strong>The lesson that must survive any change:</strong> the saga was not caused by
+fallbacks per se — it was caused by fallbacks that <em>lied</em> (UI showed one
+thing, runtime played another, and nothing admitted the substitution).</p>
+<h2 id="3-problems-with-the-current-post-may-design">3. Problems with the current (post-May) design</h2>
+<p>All four were <strong>CONFIRMED by the v1 audit</strong> with file:line evidence.</p>
+<p>P1. <strong>Mute patient on provider switch.</strong> Every stored voice from the old
+    provider is orphaned; each persona/case must be manually re-picked before
+    voice mode works again. Students hit this before admins do.
+    (Confirmed: <code>proxy-routes.js:1000/:1178</code>, <code>ChatInterface.jsx:1069/:1077</code>.)
+P2. <strong>Misleading error.</strong> The <code>tier: &#39;invalid&#39;</code> path reuses the
+    <code>no_voice_configured_case</code> toast; the admin is told nothing is configured
+    when the real problem is a provider mismatch.
+    (Confirmed: <code>ChatInterface.jsx:1077</code>, <code>locales/en/chat.json:42</code>.)
+P3. <strong>Doc/code mismatch — masked template.</strong> The comment above
+    <code>resolveSpeakerVoice</code> claims an invalid case voice makes &quot;the caller fall
+    back to the template.&quot; It does not: <code>mergePatientVoiceConfig</code> merges
+    case-over-template BEFORE validation, so an invalid case-level voice masks
+    a valid template voice and the result is mute.
+    (Confirmed: <code>ChatInterface.jsx:195/:1019</code>; DiagnosticBar merges the same
+    way at <code>DiagnosticBar.jsx:284</code>.)
+P4. <strong>No default tier at all.</strong> A fresh persona with no voice set is also
+    mute (by design today), which conflates &quot;never configured&quot; with
+    &quot;misconfigured&quot;. (Confirmed: <code>voiceResolver.js:110</code>.)</p>
+<h2 id="4-options-considered-and-rejected">4. Options considered and rejected</h2>
+<ul>
+<li><strong>Auto-route by voice-id shape</strong> (send <code>af_bella</code> to Kokoro even when the
+platform says Google): REJECTED. Re-legalises mixed engines — the exact
+ambiguity that caused the saga. Also: silent cost leaks (one case billing
+Google under a &quot;free Kokoro&quot; setting), per-case coupling to key validity,
+regex becomes a load-bearing router.</li>
+<li><strong>Guided bulk re-map on provider switch</strong> (admin confirms a suggested
+mapping, DB rows rewritten): REJECTED by owner. Bulk writes need undo;
+still manual; owner wants zero-intervention behaviour.</li>
+<li><strong>Computed gender+language-matched substitute</strong> (algorithmic nearest
+voice): SUPERSEDED by owner&#39;s simpler ask. A matching algorithm is a black
+box; an explicit default table is inspectable. Rejected in favour of §5.</li>
+</ul>
+<h2 id="5-chosen-design-owner-approved-direction">5. Chosen design (owner-approved direction)</h2>
+<p><strong>One default voice per provider, set in platform settings, applied to all
+personas</strong> whenever <code>case_voice</code> is missing OR invalid for the active
+provider. Never mute. Every substitution is visible.</p>
+<p>Key properties:</p>
+<ul>
+<li><strong>Deterministic &amp; inspectable:</strong> the fallback is a literal setting an admin
+can read in one place — not computed, not hidden in code.</li>
+<li><strong>Non-destructive:</strong> stored <code>case_voice</code> values are never rewritten. Switch
+back to Kokoro and <code>af_bella</code> plays again. The substitution is resolved at
+play time, not persisted.</li>
+<li><strong>Truth clause (anti-saga invariant):</strong> any surface that shows a voice must
+show the substitution when one applies. The editor dropdowns read e.g.
+&quot;af_bella — unavailable on google → default: Chirp3 HD-Aoede&quot;; the
+DiagnosticBar wire capture shows both the requested and the substituted
+voice (see §7.2.6 — this requires a wire-model extension); the boot audit
+names stale rows as &quot;will play the provider default &lt;X&gt;&quot; and audits the
+defaults themselves (§7.1.5).</li>
+<li><strong>One default for ALL personas</strong> (owner&#39;s explicit simplification). Known
+trade-off, flagged and accepted: a male patient may fall back to a
+female-sounding default (or vice versa). Mitigations: neutral-leaning
+seeds; the substitution label makes it visible; admins can change the
+default. Per-gender granularity can be added later as a settings-UI change
+(the resolver signature in §7.2.1 takes an opaque <code>defaultVoice</code> string, so
+a future per-gender lookup changes only the callers&#39; lookup, not the tiers).</li>
+</ul>
+<h3 id="seeded-defaults-all-already-in-catalogues">Seeded defaults (all already in catalogues)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Seed default</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>kokoro</td>
+<td><code>af_bella</code></td>
+<td>existing de-facto patient default</td>
+</tr>
+<tr>
+<td>google</td>
+<td><code>en-US-Chirp3-HD-Aoede</code></td>
+<td>best tier, female-neutral, free tier</td>
+</tr>
+<tr>
+<td>openai</td>
+<td><code>alloy</code></td>
+<td>OpenAI&#39;s explicitly neutral voice</td>
+</tr>
+<tr>
+<td>piper</td>
+<td><em>(none seeded)</em></td>
+<td>voices are locally installed; can&#39;t assume any file exists. UI lets admin pick from installed list; until set, piper keeps today&#39;s loud-fail behaviour.</td>
+</tr>
+</tbody></table></div>
+<span class="anchor-alias" id="v2-tenant-scope--explicit-decision"></span><h3 id="v2-tenant-scope-explicit-decision"><strong>[v2] Tenant scope — explicit decision</strong></h3>
+<p>Defaults are <strong>GLOBAL (platform-wide), by declaration.</strong> <code>platform_settings</code>
+has no <code>tenant_id</code> column (<code>migrations/0001_initial.sql:174</code>), and the engine
+selector itself (<code>tts_provider</code>) is already a global setting read through the
+same helpers (<code>server/routes/_helpers.js:1075</code>). A per-tenant default with a
+global engine would be incoherent: the engine decision the default serves is
+global. If tenant-scoped voice policy is ever needed, it must arrive together
+with a tenant-scoped <code>tts_provider</code> as one design — out of scope here. The
+settings UI copy will say &quot;platform-wide&quot; explicitly so no admin assumes
+tenant isolation.</p>
+<span class="anchor-alias" id="6-existing-infrastructure--corrected-status-v2"></span><h2 id="6-existing-infrastructure-corrected-status-v2">6. Existing infrastructure — corrected status <strong>[v2]</strong></h2>
+<p>The v1 claim that <code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code> was &quot;dormant / no-op
+endpoints only&quot; was <strong>wrong</strong> and is corrected here: those keys are <strong>live</strong>
+today — <code>GET/PUT /platform-settings/avatars</code> reads and writes them
+(<code>admin-routes.js:1638/:1685</code>). What IS true: the resolver ignores them (the
+2026-05-12 comment at <code>AvatarsSettingsTab.jsx:28</code> calls editing them &quot;a no-op
+trap&quot;) and the Avatars tab no longer renders fields for them, so the only way
+to set them today is a hand-crafted PUT.</p>
+<p><strong>Decision (endorsed by v1 audit): option (b) — new keys
+<code>tts_default_voice_&lt;provider&gt;</code></strong>, one per provider, owned by
+<code>/platform-settings/voice</code>. The old gendered keys are retired in the same
+change (see migration below) rather than left as a second, semantically
+different defaults family.</p>
+<span class="anchor-alias" id="v2-migration--compatibility-path-for-the-old-keys"></span><h3 id="v2-migration-compatibility-path-for-the-old-keys"><strong>[v2] Migration &amp; compatibility path for the old keys</strong></h3>
+<p>New migration <code>migrations/00XX_tts_default_voices.sql</code> + boot seeding:</p>
+<ol>
+<li><strong>Carry-over (unambiguous only) [v3]:</strong> for each provider <code>p</code>, if
+<code>tts_default_voice_p</code> is absent and legacy <code>default_voice_p_female</code> /
+<code>default_voice_p_male</code> rows exist and are non-empty:<ul>
+<li>exactly ONE legacy row set, or both set to the SAME value → copy it into
+<code>tts_default_voice_p</code> (preserves a deliberate admin choice that survived
+the May removal);</li>
+<li>both set and they DIFFER → do NOT silently pick either. Fall through to
+the §5 seed and emit a boot-audit warning naming the provider and both
+legacy values (<code>tts_default_conflict</code>), so the admin resolves the
+conflict explicitly in the Voice tab. Rationale (v2 audit finding):
+&quot;female wins&quot; was an arbitrary tiebreak that could silently preserve
+the wrong user-authored value.</li>
+</ul>
+</li>
+<li><strong>Seed:</strong> for each provider still missing a value after carry-over, insert
+the §5 seed (INSERT-if-absent; never overwrite). Piper not seeded.</li>
+<li><strong>Retire:</strong> delete <code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code> rows and remove
+<code>PERSONA_DEFAULT_VOICE_KEYS</code> from the <code>/platform-settings/avatars</code>
+endpoints (<code>admin-routes.js:1439/:1636/:1685</code>), so exactly ONE defaults
+family exists. The avatars endpoints keep their flat
+avatar/rate/pitch keys unchanged.</li>
+<li>Migration is registered in <code>migrations/MANIFEST.md</code>; steps 1–2 run as
+idempotent boot logic (like other platform-setting seeds) so fresh
+installs and docker images behave identically.</li>
+<li><strong>[v3] Single source of truth for steps 1–2:</strong> the carry-over, seeding,
+and <code>tts_default_conflict</code> detection live ONLY in the idempotent boot
+seeder — the natural home of the boot-audit warning. The SQL migration
+file handles step 3 (retirement: DELETE the legacy
+<code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code> rows) and nothing else. Duplicating
+carry-over logic in both SQL and boot code invites drift between the
+two implementations (third-review finding).</li>
+</ol>
+<h2 id="7-implementation-plan">7. Implementation plan</h2>
+<p><strong>[v3] Sequencing (third-review recommendation):</strong> land in three
+self-contained stages, each with its tests green before the next starts —
+(1) server: keys, boot seeding, <code>/tts</code> fallback + headers, boot audit;
+(2) client resolver + its five consumers (the riskiest chunk — a stable
+server contract underneath de-risks it); (3) settings UI + editors +
+i18n + remaining test rewrites.</p>
+<h3 id="71-server">7.1 Server</h3>
+<ol>
+<li><strong>Settings keys:</strong> <code>tts_default_voice_&lt;provider&gt;</code> for
+<code>kokoro|google|openai|piper</code> — <strong>four scalar keys, one per provider</strong>
+(the v1 text that implied a single <code>tts_default_voice</code> scalar is
+corrected; there is no single scalar anywhere in the design <strong>[v2]</strong>).
+Extend GET/PUT <code>/platform-settings/voice</code>:<ul>
+<li>GET returns all four raw keys (<code>tts_default_voice_kokoro</code>, …) AND a
+convenience field <code>tts_default_voice</code> = the value for the currently
+active <code>tts_provider</code> (derived, never stored) for client consumption.</li>
+<li>PUT accepts the four raw keys; validation = the same catalogue check
+the <code>/tts</code> route uses (<code>resolveTtsVoice(provider, voice)</code>), NOT a shape
+regex — a typo&#39;d default cannot be saved. Clearing (empty string) is
+allowed and restores loud-fail for that provider.</li>
+<li><strong>[v3] Tolerant validation on catalogue-check ERRORS:</strong> hard-400 only
+when the voice is definitively NOT in the provider&#39;s catalogue. If the
+catalogue check itself errors (e.g. the kokoro-js dynamic import is
+unavailable on a Google-only deployment, or piper&#39;s filesystem check
+fails), ACCEPT the save and return a <code>warnings</code> field naming the
+unverifiable key — otherwise an admin cannot save a kokoro default on
+a box where kokoro is not installed. &quot;Not found&quot; rejects;
+&quot;couldn&#39;t check&quot; warns.</li>
+</ul>
+</li>
+<li><strong>Seeding + migration:</strong> per §6 (carry-over → seed → retire).</li>
+<li><strong><code>/api/tts</code> fallback tier:</strong> in <code>handleTtsSynthesis</code>, when
+<code>resolveTtsVoice(provider, requestedVoice)</code> fails, look up
+<code>tts_default_voice_&lt;provider&gt;</code>; if set AND itself valid per
+<code>resolveTtsVoice</code>, synthesize with it and expose the substitution:<ul>
+<li>response header <code>X-Rohy-Voice-Substituted: &lt;default&gt;</code> plus
+<code>X-Rohy-Voice-Requested: &lt;requestedVoice&gt;</code>, set <strong>before</strong>
+<code>flushHeaders()</code> on the PCM-stream path and before <code>res.end(wav)</code> on
+the WAV path (v1 risk R6). <strong>[v3] Set them in <code>handleTtsSynthesis</code>
+immediately after resolution, BEFORE dispatching to any provider
+branch</strong> — both the kokoro streaming path and <code>pipePcmStream</code>
+(proxy-routes.js:1070) flush headers internally. <strong>[v3] CORS check:</strong>
+if the API is ever served cross-origin, the two headers must be added
+to <code>Access-Control-Expose-Headers</code> or <code>response.headers.get()</code> on the
+client silently returns null; verify at implementation time (same-origin
+today, so likely a no-op, but the dedicated header test must read the
+headers through fetch, not supertest internals, to prove exposure),</li>
+<li>warn-level log <code>{ requested_voice, substituted_voice, provider, reason }</code>,</li>
+<li>usage/cost recorded with the voice actually synthesized (provider is
+unchanged either way, so <code>recordTtsUsage</code>/<code>recordUsage</code> semantics hold).
+If no default is configured or the default itself fails validation:
+today&#39;s 400 <code>invalid_voice</code> stands (piper&#39;s shipped state).
+The 400 body gains <code>reason: &#39;no_default_configured&#39;</code> vs the current
+generic text so clients can distinguish.</li>
+</ul>
+</li>
+<li><strong><code>/tts/preview</code> is exempt</strong> from substitution — an admin auditioning a
+specific voice must hear THAT voice or an error, never a stand-in.</li>
+<li><strong>Boot audit (<code>voiceCatalogueAudit.js</code>) — two extensions [v2]:</strong>
+a. It also audits the four <code>tts_default_voice_*</code> rows: each default is
+   validated against ITS OWN provider&#39;s catalogue (not just the active
+   one), so a stale default (e.g. a removed Google voice) is named at
+   boot even before that provider is activated.
+b. The stale-<code>case_voice</code> warning message changes from &quot;returns 400 until
+   re-picked&quot; to &quot;will play provider default &quot;&lt;X&gt;&quot; until re-picked&quot;
+   when a valid default exists for the active provider.</li>
+</ol>
+<h3 id="72-client">7.2 Client</h3>
+<ol>
+<li><strong><code>resolveVoice()</code> — new tiers AND richer return shape [v2].</strong>
+New input: <code>defaultVoice</code> (string|null — the active provider&#39;s default,
+from voiceSettings). New chain:<ul>
+<li><code>case_voice</code> valid → <code>tier:&#39;override&#39;</code></li>
+<li>case set but invalid, template <code>case_voice</code> valid → template file,
+<code>tier:&#39;template&#39;</code> (fixes P3 — code finally matches its own docs; the
+validation-aware fallback happens INSIDE the resolver, so
+<code>mergePatientVoiceConfig</code> at every callsite is passed unmerged
+case+template configs or the resolver gains the template as a separate
+argument — implementation detail: <code>resolveVoice({ voice, templateVoice, voiceSettings, defaultVoice, isValid })</code>, replacing the pre-merge at
+callsites so DiagnosticBar and ChatInterface cannot diverge)</li>
+<li>neither valid/set, <code>defaultVoice</code> valid → <code>tier:&#39;default&#39;</code></li>
+<li>else <code>file:null, tier:&#39;none&#39;|&#39;invalid&#39;</code> (loud path, unchanged).
+<strong>Return shape gains truth-clause metadata:</strong> <code>requestedFile</code> (what the
+config asked for, null if nothing configured), <code>file</code> (what will play),
+<code>substituted: boolean</code>, <code>substitutionReason: &#39;provider_mismatch&#39;|&#39;not_configured&#39;|null</code>. Every consumer renders from
+this one shape — no surface computes its own story.
+The one-tier header comment in <code>voiceResolver.js</code> is rewritten to
+describe the new chain honestly, including WHY each tier exists and the
+truth-clause obligation on consumers.</li>
+</ul>
+</li>
+<li><strong>All <code>resolveVoice()</code> consumers updated — five, enumerated [v2]:</strong>
+<code>ChatInterface.jsx</code> (patient chat + alarm-speech paths),
+<code>useDiscussionEngine.js</code> (discussion room — missed by v1),
+<code>DiagnosticBar.jsx</code>, <code>CaseAvatarVoicePicker.jsx</code>,
+<code>AgentPersonaEditor.jsx</code>. A repo-wide grep for <code>resolveVoice(</code> is part of
+the implementation checklist; any future consumer found during
+implementation joins this list in the PR description.</li>
+<li><strong><code>voiceSettings</code> payload:</strong> GET <code>/platform-settings/voice</code> (already the
+source of the client&#39;s <code>voiceSettings</code> context) adds
+<code>tts_default_voice</code> (active provider&#39;s default, derived) and the four raw
+keys for the settings tab.</li>
+<li><strong>ChatInterface:</strong><ul>
+<li><code>tier:&#39;default&#39;</code> → ONE-TIME info toast per (requested→default) pair:
+&quot;Playing platform default voice &lt;X&gt; — the configured voice &lt;Y&gt; is not
+available on &lt;provider&gt;.&quot; Info styling, speech proceeds.
+<strong>[v3] Dedup scope pinned:</strong> a module-level Set keyed by the
+<code>(requestedVoice, playedVoice, provider)</code> triple, page lifetime — a
+re-render or repeated utterance never re-toasts, but a genuine
+mid-session provider flip (new triple) surfaces again.</li>
+<li><code>tier:&#39;invalid&#39;</code> with no default → its own honest message (P2 fix):
+&quot;The configured voice &lt;Y&gt; belongs to a different TTS provider than the
+active one (&lt;provider&gt;). Re-pick it in the case editor or Agent
+Personas.&quot; Distinct key from <code>no_voice_configured_case</code>.</li>
+<li><strong>First-render race [v2]:</strong> <code>resolveSpeakerVoice</code> depends on
+<code>voiceSettings</code>, which loads async on mount (<code>ChatInterface.jsx:331</code>).
+Fix: the mount-time fetch stores its promise; the voice-mode send path
+<code>await</code>s that promise (already-resolved after first load, so zero cost
+in the steady state) before opening a speech session. A send fired
+before settings arrive waits the few ms instead of taking the mute
+path. Covered by a regression test with a delayed settings mock.</li>
+</ul>
+</li>
+<li><strong>Editors (Case picker + Persona editor):</strong> when <code>substituted</code> is true
+for the currently-saved value, render the substitution line under the
+dropdown (amber, mirrors the existing stale-avatar warning pattern):
+&quot;«af_bella» is not available on google — the platform default
+«Chirp3 HD-Aoede» will play. Pick a google voice to override.&quot;
+<strong>[v3] Hidden plumbing made explicit:</strong> neither editor currently consumes
+<code>/platform-settings/voice</code> at all — rendering these labels requires
+fetching (or receiving via context) the four <code>tts_default_voice_*</code> keys
+plus the active provider. Budget this wiring; it is not free.</li>
+<li><strong><code>voiceService.ttsFetch()</code> wire-model extension [v2]:</strong> wire entries gain
+<code>substitutedVoice</code> and <code>requestedVoice</code>, read from the
+<code>X-Rohy-Voice-Substituted</code> / <code>X-Rohy-Voice-Requested</code> response headers on
+BOTH the streaming and WAV paths (headers are readable on the fetch
+<code>Response</code> before the body is consumed). Without this the DiagnosticBar
+physically cannot display the substitution — v1&#39;s fatal gap. The
+<code>rohy:tts-request</code> CustomEvent and ring buffer carry the new fields;
+DiagnosticBar renders &quot;requested X → played Y&quot; on any entry where they
+differ, and its own static resolver line uses the §7.2.1 shape.</li>
+<li><strong>VoiceSettingsTab:</strong> a &quot;Default voice (platform-wide)&quot; section — one
+catalogue-populated select per provider (via <code>/tts/voices?provider=</code>),
+each with the existing TestVoiceButton (which uses <code>/tts/preview</code> and is
+therefore substitution-exempt, §7.1.4). <strong>[v2]</strong> <code>save()</code> builds its
+payload from an explicit field list (<code>VoiceSettingsTab.jsx:118</code>) — the
+four new keys are added to state, payload, AND a round-trip test that
+asserts a saved default survives GET-after-PUT (v1&#39;s silent-drop trap).</li>
+</ol>
+<h3 id="73-i18n">7.3 i18n</h3>
+<p>New keys (en + de/it/fi/sv + pseudo-locale regen):</p>
+<ul>
+<li>settings: section heading, per-provider default labels, &quot;platform-wide&quot;
+scope note;</li>
+<li>editors: substitution warning line;</li>
+<li>chat: <code>voice_default_substituted</code> info toast, <code>voice_wrong_provider</code>
+honest error (P2);</li>
+<li>all following the existing namespace conventions (chat.json,
+authoring_case.json, authoring_persona.json, authoring_config.json).</li>
+</ul>
+<h3 id="74-tests">7.4 Tests</h3>
+<p><strong>[v2] Contract-rewrite list (from the v1 audit — each consciously rewritten
+from &quot;rejects loudly&quot; to &quot;no <em>invisible</em> fallback&quot;, asserting the
+header/toast/label instead of the 400/mute):</strong></p>
+<ul>
+<li><code>tests/server/tts-route.test.js</code></li>
+<li><code>tests/server/tts-gender-provider-matrix.test.js</code></li>
+<li><code>src/utils/voiceResolver.test.js</code></li>
+<li><code>src/utils/voiceResolutionMatrix.test.js</code></li>
+<li><code>src/utils/inheritOverrideAuditMatrix.test.js</code></li>
+<li><code>src/hooks/useDiscussionEngine.test.js</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.test.jsx</code></li>
+<li><code>src/components/debug/DiagnosticBar.test.jsx</code></li>
+<li><code>tests/server/healthChecks/voiceCatalogueAudit.test.js</code></li>
+</ul>
+<p><strong>[v2] Blind-spot hardening (tests that would falsely pass today):</strong></p>
+<ul>
+<li><code>AgentPersonaEditor.test.jsx</code> mocks <code>resolveVoice</code> to a fixed file — add an
+unmocked case exercising the real resolver with an invalid saved voice.</li>
+<li><code>ChatInterface.test.jsx</code> only proves the override path — add default-tier
+and wrong-provider-toast cases, plus the delayed-settings race test.</li>
+<li><code>VoiceSettingsTab.test.jsx</code> — add the save/GET round-trip for the four new
+keys (the silent-drop trap).</li>
+<li><code>AvatarsSettingsTab.test.jsx</code> — assert the retired gendered keys are gone
+from its endpoints&#39; accepted set.</li>
+</ul>
+<p><strong>New coverage:</strong></p>
+<ul>
+<li>Route: invalid voice + default set → 200, audio bytes, BOTH substitution
+headers present (WAV and PCM-stream paths separately — header-before-flush
+is the R6 risk); invalid voice + no default → 400 with
+<code>reason:&#39;no_default_configured&#39;</code>; PUT with an invalid default → 400;
+preview route never substitutes.</li>
+<li>Migration/seeding: fresh DB gets the three seeds; legacy gendered value is
+carried over in preference to the seed; existing new-key values never
+overwritten; legacy rows deleted after carry-over.</li>
+<li>Resolver: full tier matrix — override / template-after-invalid-case (P3
+regression) / default / invalid-no-default / nothing-configured — plus the
+truth metadata (<code>requestedFile</code>, <code>substituted</code>, <code>substitutionReason</code>) on
+every branch.</li>
+<li>Wire capture: mocked fetch with substitution headers → ring-buffer entry
+carries <code>requestedVoice</code>/<code>substitutedVoice</code>; DiagnosticBar renders both.</li>
+<li>Boot audit: flags an invalid <code>tts_default_voice_google</code> even when the
+active provider is kokoro; stale-row message names the default when set.</li>
+<li>Existing invariants keep passing: language-coverage contract, per-language
+tier ordering, googleTts service contracts.</li>
+</ul>
+<h3 id="75-explicitly-out-of-scope">7.5 Explicitly out of scope</h3>
+<ul>
+<li>No auto-routing by voice-id shape. <code>tts_provider</code> stays the single engine
+authority; main <code>/tts</code> keeps ignoring body provider.</li>
+<li>No rewriting of stored <code>case_voice</code> values on cases/personas (the only DB
+writes are in <code>platform_settings</code>: the new default keys + retirement of
+the legacy gendered default keys, §6).</li>
+<li>No per-language or per-gender default keys (language matching remains a
+warning, not a routing input) — revisit only if the single default proves
+insufficient; §5 notes the resolver signature already permits it.</li>
+<li>No per-tenant defaults (§5 tenant-scope declaration).</li>
+</ul>
+<h2 id="8-risks">8. Risks</h2>
+<p>R1. <strong>Gender mismatch by design</strong> (single default for all personas) — owner
+    accepted; substitution labels + info toast make it visible everywhere.
+R2. <strong>Reduced pressure to fix stale configs</strong> — mute forced action; a working
+    default may let stale rows rot. Counterweights: boot audit (now covering
+    defaults too), editor amber warnings, chat info toast, DiagnosticBar
+    requested→played display.
+R3. <strong>Legacy-key retirement breaks an unknown consumer</strong> — mitigated: v1
+    audit + repo grep found only the avatars endpoints and comments; the
+    migration test asserts the endpoints reject the retired keys so any
+    hidden client fails loudly in CI, not silently in prod.
+R4. <strong>Contract-rewrite scope</strong> — nine test files change meaning; each rewrite
+    must assert the <em>new</em> truth obligation (header/label/toast), never just
+    delete the old assertion (checklist in §7.4).
+R5. <strong>Cost attribution</strong> — substituted synthesis records the voice actually
+    used; provider (the billing axis) is unchanged by substitution.
+R6. <strong>Streaming header timing</strong> — substitution headers must be set before
+    <code>flushHeaders()</code> on the PCM path; dedicated test on both paths.
+R7. <strong>[v2] Race on first send</strong> — closed by awaiting the settings promise
+    (§7.2.4) with a regression test; residual risk is a failed settings
+    fetch, which falls through to the existing loud path (never a wrong
+    voice).</p>
+<h2 id="9-acceptance-criteria">9. Acceptance criteria</h2>
+<ol>
+<li>Kokoro-configured case + platform switched to Google ⇒ patient speaks
+(Google default), student unaffected; admin sees info toast in chat, amber
+note in both editors, warn line in server log, and requested→played in the
+DiagnosticBar wire history.</li>
+<li>Switch back to Kokoro ⇒ original <code>af_bella</code> plays; no case/persona row was
+rewritten.</li>
+<li>Fresh install, persona with no voice at all ⇒ speaks with provider default
+(<code>tier:&#39;default&#39;</code>, <code>substitutionReason:&#39;not_configured&#39;</code>).</li>
+<li>Discussion room (useDiscussionEngine) behaves identically to patient chat
+under substitution — same tiers, same visibility.</li>
+<li>Admin can set/clear each provider&#39;s default in Settings → Voice, audition
+it (preview plays the literal voice, never a substitute), and the values
+survive a save/reload round-trip.</li>
+<li>Piper with no default configured behaves exactly as today (loud 400).</li>
+<li>No surface anywhere shows a voice name that differs from what plays
+without also showing the substitution — the truth clause holds, verified
+end-to-end by the wire-capture test.</li>
+</ol>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

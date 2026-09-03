@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Data model reference · Rohy docs</title>
+    <meta name="description" content="Generated file — do not edit by hand. Produced by scripts/docs-gen/gen-data.mjs from server/db.js, migrations/0001_initial.sql (the bootstrap schema) and all migrations/*.sql. R…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Data model reference · Rohy docs">
+    <meta property="og:description" content="Generated file — do not edit by hand. Produced by scripts/docs-gen/gen-data.mjs from server/db.js, migrations/0001_initial.sql (the bootstrap schema) and all migrations/*.sql. R…">
+    <meta property="og:image" content="../../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../../index.html">Overview</a>
+            <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../whats-new.html">What's new</a>
+            <a href="../../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../../help.html">Help</a>
+            <a href="../../../index.html#install" class="optional">Install</a>
+            <a href="../../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Reference</span>
+        <h1>Data model reference</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#cross-cutting-conventions">Cross-cutting conventions</a>
+            <a href="#migration-policy">Migration policy</a>
+            <a href="#tables-by-concern">Tables by concern</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../../product/index.html">Overview</a>
+                    <a href="../../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../../trainee/index.html">Overview</a>
+                    <a href="../../trainee/getting-started.html">Getting started</a>
+                    <a href="../../trainee/rooms.html">The rooms</a>
+                    <a href="../../trainee/history.html">Taking a history</a>
+                    <a href="../../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../../trainee/examination.html">Physical examination</a>
+                    <a href="../../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../../trainee/voice.html">Voice mode</a>
+                    <a href="../../trainee/debrief.html">Debrief</a>
+                    <a href="../../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../../educator/index.html">Overview</a>
+                    <a href="../../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../../educator/agents.html">Agent personas</a>
+                    <a href="../../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../../educator/tna.html">TNA analytics</a>
+                    <a href="../../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../../admin/index.html">Overview</a>
+                    <a href="../../admin/first-week.html">First-week checklist</a>
+                    <a href="../../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../../admin/platform-settings.html">Platform settings</a>
+                    <a href="../../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../../operator/index.html">Overview</a>
+                    <a href="../../operator/install.html">Install</a>
+                    <a href="../../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../../operator/updating.html">Update</a>
+                    <a href="../../operator/update-strategy.html">Update strategy</a>
+                    <a href="../../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../../operator/migrations.html">Migrations runbook</a>
+                    <a href="../../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../../operator/observability.html">Observability</a>
+                    <a href="../../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../../integrator/index.html">Overview</a>
+                    <a href="../../integrator/architecture.html">Architecture seams</a>
+                    <a href="../../integrator/api-auth.html">API authentication</a>
+                    <a href="../../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Reference (generated)</summary>
+                    <a href="../api/index.html">API</a>
+                    <a href="index.html" aria-current="page">Data model</a>
+                    <a href="../config/index.html">Config &amp; env</a>
+                    <a href="../cli/index.html">CLI &amp; ops</a>
+                    <a href="../glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../../tutorials/index.html">Overview</a>
+                    <a href="../../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../../security/index.html">Overview</a>
+                    <a href="../../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../../security/audit-chain.html">Audit chain</a>
+                    <a href="../../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../../security/retention.html">Data retention</a>
+                    <a href="../../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../../audits/index.html">Audits</a>
+                    <a href="../../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../../changelog.html">Changelog</a>
+                    <a href="../../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../../contributing/index.html">Contributing</a>
+                    <a href="../../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../../design/index.html">Design</a>
+                    <a href="../../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../../INSTALL.html">Installing Rohy</a>
+                    <a href="../../license.html">License</a>
+                    <a href="../../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../api/admin.html">admin API</a>
+                    <a href="../api/agents.html">agents API</a>
+                    <a href="../api/analytics.html">analytics API</a>
+                    <a href="../api/auth.html">auth API</a>
+                    <a href="../api/cases.html">cases API</a>
+                    <a href="../api/catalogue.html">catalogue API</a>
+                    <a href="../api/cohorts.html">cohorts API</a>
+                    <a href="../api/health.html">health API</a>
+                    <a href="../api/help.html">help API</a>
+                    <a href="../api/lessons.html">lessons API</a>
+                    <a href="../api/notes.html">notes API</a>
+                    <a href="../api/notification.html">notification API</a>
+                    <a href="../api/orders.html">orders API</a>
+                    <a href="../api/oyon.html">oyon API</a>
+                    <a href="../api/patient-record.html">patient-record API</a>
+                    <a href="../api/plugins.html">plugins API</a>
+                    <a href="../api/proxy.html">proxy API</a>
+                    <a href="../api/registration.html">registration API</a>
+                    <a href="../api/sessions.html">sessions API</a>
+                    <a href="../api/surveys.html">surveys API</a>
+                    <a href="../api/tenants.html">tenants API</a>
+                    <a href="../api/treatments-library.html">treatments-library API</a>
+                    <a href="../api/uploads.html">uploads API</a>
+                    <a href="../api/users.html">users API</a>
+                    <a href="tables.html">Tables</a>
+                    <a href="../index.html">Reference</a>
+                    <a href="../../release-notes/index.html">Release notes</a>
+                    <a href="../../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p><strong>Generated file — do not edit by hand.</strong> Produced by <code>scripts/docs-gen/gen-data.mjs</code> from <code>server/db.js</code>, <code>migrations/0001_initial.sql</code> (the bootstrap schema) and all <code>migrations/*.sql</code>. Regenerate with <code>npm run docs:gen:data</code>.</p>
+</blockquote>
+<p><strong>95 tables</strong> in the durable data model.</p>
+<blockquote>
+<p>Note: <code>server/db.js</code> no longer holds inline <code>CREATE TABLE</code> DDL — it delegates to the migration runner. The canonical bootstrap schema is <code>migrations/0001_initial.sql</code>, treated here as the base schema. SQLite rebuild-scaffold tables (<code>*_new</code>/<code>*_old</code>) are intentionally excluded.</p>
+</blockquote>
+<p>See <a href="tables.html">tables.md</a> for the per-table column reference.</p>
+<h2 id="cross-cutting-conventions">Cross-cutting conventions</h2>
+<p>These columns recur across many tables and carry platform-wide semantics (see <code>CLAUDE.md</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Convention</th>
+<th>Column(s)</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Soft-delete</td>
+<td><code>deleted_at</code></td>
+<td>Row is logically deleted when non-NULL. Most reads imply <code>deleted_at IS NULL</code>; physical purge is done by the retention sweep cron.</td>
+</tr>
+<tr>
+<td>Tenant scoping</td>
+<td><code>tenant_id</code></td>
+<td>Multi-tenant isolation. Enforced by <code>requireSameTenant()</code> middleware, not ad-hoc <code>WHERE</code> clauses.</td>
+</tr>
+<tr>
+<td>Audit / ownership</td>
+<td><code>created_by</code>, <code>created_at</code>, <code>updated_at</code></td>
+<td>Who authored the row and when; basis for ownership-based authz.</td>
+</tr>
+<tr>
+<td>Snapshot binding</td>
+<td><code>*_snapshot</code></td>
+<td>Frozen copy taken at session start so later admin edits do not bleed into a live session.</td>
+</tr>
+</tbody></table></div>
+<h2 id="migration-policy">Migration policy</h2>
+<p>Schema evolves only through versioned <code>migrations/*.sql</code>. Each migration is classified <strong>additive</strong> (previous-version code still runs) or <strong>destructive</strong> in <code>migrations/MANIFEST.md</code>, which <code>bin/rohy-update</code> reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.</p>
+<p>Parsed <strong>52 migration files</strong> beyond the base schema (<code>0001_initial.sql</code>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Migration</th>
+<th>Class</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0001_initial.sql</code></td>
+<td>additive</td>
+<td>Initial schema bootstrap.</td>
+</tr>
+<tr>
+<td><code>0002_alarm_config_user_cascade.sql</code></td>
+<td>additive</td>
+<td>Foreign key cascade addition.</td>
+</tr>
+<tr>
+<td><code>0003_role_hierarchy.sql</code></td>
+<td>additive</td>
+<td>New role rows + index.</td>
+</tr>
+<tr>
+<td><code>0004_tenants.sql</code></td>
+<td>additive</td>
+<td>Multi-tenant introduction.</td>
+</tr>
+<tr>
+<td><code>0005_retention.sql</code></td>
+<td>additive</td>
+<td>Retention policy table.</td>
+</tr>
+<tr>
+<td><code>0006_tts_pitch_semitones.sql</code></td>
+<td>additive</td>
+<td>New column with default.</td>
+</tr>
+<tr>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+<td>additive</td>
+<td>Catalogue table seed.</td>
+</tr>
+<tr>
+<td><code>0008_audit_hash_chain.sql</code></td>
+<td>additive</td>
+<td>Hash chain columns.</td>
+</tr>
+<tr>
+<td><code>0009_client_logs.sql</code></td>
+<td>additive</td>
+<td>New table.</td>
+</tr>
+<tr>
+<td><code>0010_usage_budget.sql</code></td>
+<td>additive</td>
+<td>Budget tracking columns.</td>
+</tr>
+<tr>
+<td><code>0011_oyon_addon.sql</code></td>
+<td>additive</td>
+<td>Oyon emotion-record tables.</td>
+</tr>
+<tr>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+<td>additive</td>
+<td>Runtime config columns.</td>
+</tr>
+<tr>
+<td><code>0013_oyon_settings_default_interval.sql</code></td>
+<td>additive</td>
+<td>Default change only.</td>
+</tr>
+<tr>
+<td><code>0014_oyon_records_nullable_user.sql</code></td>
+<td>additive</td>
+<td>Table rebuild — preserves all columns; widens NOT NULL to NULL. Old code still reads the same shape.</td>
+</tr>
+<tr>
+<td><code>0015_oyon_settings_safer_default.sql</code></td>
+<td>additive</td>
+<td>Default change only.</td>
+</tr>
+<tr>
+<td><code>0016_oyon_records_unique_record_id.sql</code></td>
+<td>additive</td>
+<td>Partial unique index.</td>
+</tr>
+<tr>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+<td>additive</td>
+<td>New columns with defaults.</td>
+</tr>
+<tr>
+<td><code>0018_learning_events_vitals.sql</code></td>
+<td>additive</td>
+<td>New columns.</td>
+</tr>
+<tr>
+<td><code>0019_oyon_lower_min_valid_frames.sql</code></td>
+<td>additive</td>
+<td>Default change only — backfills legacy 6 → 3 so analytics stop dropping windows on normal blinks.</td>
+</tr>
+<tr>
+<td><code>0020_clear_orus_patient_template_default.sql</code></td>
+<td>additive</td>
+<td>Data fixup — removes the stale <code>en-US-Chirp3-HD-Orus</code> <code>case_voice</code> override from <code>is_default=1</code> patient templates. Targeted: only matches that exact value, so admin-picked voices are preserved. Idempotent (zero-row no-op on already-clean installs).</td>
+</tr>
+<tr>
+<td><code>0021_learning_events_room.sql</code></td>
+<td>additive</td>
+<td>New <code>room</code> column on learning_events + partial index. Pairs with the RoomNavigator: every event carries the active in-session room (&#39;chat&#39;, &#39;examination&#39;, &#39;lab&#39;, &#39;radiology&#39;, &#39;consultant&#39;). Pre-migration rows + pre-room events stay NULL.</td>
+</tr>
+<tr>
+<td><code>0022_voice_surface_collapse.sql</code></td>
+<td>destructive</td>
+<td>Reclassified from <code>additive</code> (2026-05-14 audit): the migration deletes rows from <code>platform_settings</code> and <code>cases</code> and overwrites <code>cases.config</code> / <code>agent_templates.config</code> for shipped cases. Predicate-based DELETE on user-authored tables without an FK guard is destructive per the policy above, even when the author believes &quot;no operator has those rows.&quot; Operators on a version that already applied this migration are unaffected (data is gone); operators upgrading past it now go through the <code>--allow-destructive</code> gate. Concretely: (a) Deletes zombie <code>voice_*</code>/<code>piper_voice_*</code>/<code>default_voice_*</code> settings rows from platform_settings. (b) Strips <code>tts_provider</code>/<code>tts_rate</code>/<code>tts_pitch</code> from <code>cases.config.voice</code> and <code>tts_provider</code> from <code>agent_templates.config.voice</code>. (c) Clears non-Kokoro <code>case_voice</code> values. (d) Overwrites Kokoro voices on shipped cases 1–6. (e) Removes ~55 test-fixture cases by name pattern with no <code>WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE case_id = cases.id)</code> guard.</td>
+</tr>
+<tr>
+<td><code>0023_clamp_turnaround_to_5min.sql</code></td>
+<td>additive</td>
+<td>Data-only normalisation. Clamps <code>case_investigations.turnaround_minutes</code> to the 1–5 minute band the sim uses after the turnaround cleanup (kills 30 / 60 / 240 / 2880 / 10080 minute waits seeded before the clamp). Schema unchanged — old code can still read these rows; only the column values move. Authors who deliberately need a longer wait can re-set via the case wizard.</td>
+</tr>
+<tr>
+<td><code>0024_agent_arrives_at.sql</code></td>
+<td>additive</td>
+<td>New nullable <code>arrives_at</code> column on <code>agent_session_state</code>. Anchors the paged → present timer on the server clock so the wait survives refreshes / room hops; pairs with the 1–3 minute clamp in the page handler. Old code that doesn&#39;t read this column keeps working — null on every row at migration time.</td>
+</tr>
+<tr>
+<td><code>0025_cohorts.sql</code></td>
+<td>additive</td>
+<td>Two new tables for teacher-owned cohorts: <code>cohorts</code> (teacher-owned class with optional join_code) + <code>cohort_members</code> (student membership). Partial unique indexes (live join_code, live cohort_id+user_id) plus owner/tenant/lookup indexes. Strictly additive — nothing on existing tables changes; pre-migration code never touches these tables. No endpoints/UI yet (Phase 2 = schema only).</td>
+</tr>
+<tr>
+<td><code>0026_base_class_backfill.sql</code></td>
+<td>additive</td>
+<td>Data backfill — per tenant with sessions, seeds one &quot;Base Class&quot; cohort (owned by that tenant&#39;s lowest-id admin, else educator) and enrolls every distinct user with a live session, so pre-feature activity is visible in the teacher dashboard out of the box. Only INSERTs into cohorts/cohort_members; no schema change; NOT EXISTS guards + 0025 partial-uniques make it re-run-safe. Tenants with sessions but no admin/educator are skipped (NOT NULL owner FK).</td>
+</tr>
+<tr>
+<td><code>0027_cohort_entity.sql</code></td>
+<td>additive</td>
+<td>Fleshes out the cohort entity. Adds 4 nullable <code>cohorts</code> columns (<code>description TEXT</code>, <code>starts_at DATETIME</code>, <code>ends_at DATETIME</code>, <code>settings JSON</code>), adds <code>cohort_members.member_role TEXT NOT NULL DEFAULT &#39;student&#39;</code> (DEFAULT classifies the ~10 Base Class rows as students with no data step; allowed set &#39;student&#39;\</td>
+</tr>
+<tr>
+<td><code>0028_oyon_records_gaze_engagement.sql</code></td>
+<td>additive</td>
+<td>Oyon v2: two nullable JSON columns on <code>oyon_emotion_records</code> — <code>gaze_json</code> (zone shares, AOI dwell, centroid stats; aggregates only, never a raw point stream) and <code>engagement_json</code> (eye-openness/blink/on-task aggregates). The v1 ingest silently dropped these window blocks; the v2 Analyze dashboards need them server-side. Nullable ADD COLUMNs only — pre-migration code never selects them.</td>
+</tr>
+<tr>
+<td><code>0029_oyon_records_room.sql</code></td>
+<td>additive</td>
+<td>Oyon v2: nullable <code>room TEXT</code> on <code>oyon_emotion_records</code> — the simulator room active when the window was captured (stamped client-side by the capture widget). Feeds the per-room gaze breakdown in Settings → Oyon Learning Analytics → Gaze. Single nullable ADD COLUMN.</td>
+</tr>
+<tr>
+<td><code>0030_cohort_case_windows.sql</code></td>
+<td>additive</td>
+<td>Adds per-assignment date windows (<code>cohort_cases.available_from/until</code>, nullable = open) and enrollment lifecycle (<code>cohort_members.status</code> TEXT NOT NULL DEFAULT &#39;active&#39;, <code>enrolled_from/until</code> nullable) for enforced, date-scoped, class-centric case access, plus two partial live indexes for the enforcement JOIN. Strictly additive: every add is nullable or defaulted, nothing dropped/renamed/narrowed. Existing rows get open windows + <code>active</code> status, and the enforcement that reads these columns is gated behind the platform flag <code>enforce_cohort_case_access</code> (default OFF) — so applying this migration changes no behaviour until an admin opts in. <code>status</code> allowed set &#39;active&#39;\</td>
+</tr>
+<tr>
+<td><code>0031_basic_course_default.sql</code></td>
+<td>additive</td>
+<td>Data backfill — per tenant with a staff user, seeds one &quot;Basic course&quot; default class (owned by the tenant&#39;s lowest-id admin, else educator), assigns the tenant default case (<code>cases.is_default=1</code>) to it with open windows, and enrols every non-deleted user. This is the safety net for enforced case access: with the flag on, every user still has ≥ 1 case (the default) so nobody is locked out. Only INSERTs into cohorts/cohort_cases/cohort_members; no schema change; NOT EXISTS guards + 0025/0027 partial-uniques make it re-run-safe. Tenants with no admin/educator are skipped (NOT NULL owner FK). New users are enrolled post-migration by <code>ensureBasicCourseMembership()</code> on register/login.</td>
+</tr>
+<tr>
+<td><code>0032_lessons.sql</code></td>
+<td>additive</td>
+<td>Lessons (lectures + sections + progress) and surveys, bound to cohorts. Eight new tables (<code>lessons</code>, <code>lesson_sections</code>, <code>lesson_progress</code>, <code>surveys</code>, <code>cohort_surveys</code>, <code>survey_questions</code>, <code>survey_responses</code>, <code>survey_answers</code>) for the ported LAILA/chatoyon lesson authoring + survey feature. INTEGER PK autoincrement; INTEGER <code>cohort_id</code>/<code>tenant_id</code>/user FKs, non-cascading (soft-delete via <code>deleted_at</code>, matching 0025). Strictly additive: brand-new tables only, nothing existing altered. The source&#39;s <code>chatbot</code> section type is omitted (deferred).</td>
+</tr>
+<tr>
+<td><code>0033_cohort_auto_enroll.sql</code></td>
+<td>additive</td>
+<td>New defaulted <code>cohorts.auto_enroll INTEGER NOT NULL DEFAULT 0</code> flag + a data step setting it to 1 on the existing &quot;Basic course&quot; rows. Cohorts with <code>auto_enroll = 1</code> are the ones every tenant user is enrolled into on register/login (<code>ensureAutoEnrollMemberships</code>), replacing the hardcoded name match so the per-case dedicated courses (boot seed) get the same treatment. Existing teacher-made cohorts keep 0 = pre-migration behaviour; old code never reads the column.</td>
+</tr>
+<tr>
+<td><code>0034_voice2_provider_follows_voice.sql</code></td>
+<td>additive</td>
+<td>Voice 2.0 settings retirement (data-only, no schema change, re-run-safe). Carries an unambiguous legacy <code>default_voice_kokoro_*</code> value into <code>tts_default_voice_en</code>, then DELETEs the retired rows: <code>tts_provider</code> (the engine is now derived per voice by exact catalogue membership — docs/design/voice-2.0-plan.md), the gendered <code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code> family, and any recreated <code>voice_&lt;provider&gt;_&lt;gender&gt;</code> slot rows (gender-suffix GLOBs on purpose — a bare <code>voice_%</code> would hit <code>voice_mode_enabled</code>). Case/persona <code>case_voice</code> values untouched. The new keys (<code>tts_default_voice_&lt;lang&gt;</code>, <code>tts_provider_enabled_&lt;p&gt;</code>) are seeded idempotently by boot code, not here.</td>
+</tr>
+<tr>
+<td><code>0035_case_code.sql</code></td>
+<td>additive</td>
+<td>Visible language-bearing case identifier: new nullable <code>cases.case_code TEXT</code> + partial unique index, backfilled as <code>&lt;LANG&gt;-&lt;zero-padded id&gt;</code> (numeric part = the untouched integer PK, so unique by construction). Also pins the now-immutable case language: <code>config.case_language</code> is normalized to a concrete registry code (absent/empty/unknown → <code>&#39;en&#39;</code>; a case never &quot;follows the student&#39;s UI language&quot; anymore). Malformed-JSON configs are left untouched and coded <code>EN-…</code>. Rows inserted after migrations (fresh-DB seeders) are stamped by the <code>ensureCaseCodes()</code> boot sweep.</td>
+</tr>
+<tr>
+<td><code>0036_user_onboarding_settings.sql</code></td>
+<td>additive</td>
+<td>Per-user onboarding/first-run prefs: one nullable <code>user_preferences.onboarding_settings JSON</code> column (<code>first_run_done</code>, <code>voice_mode</code>, <code>oyon_consent</code>). NULL = never onboarded, so every existing user sees the new first-run screen once (deliberate — it surfaces the previously silent emotion-capture consent). Single nullable ADD COLUMN; pre-migration code never selects it.</td>
+</tr>
+<tr>
+<td><code>0037_registration_invites.sql</code></td>
+<td>additive</td>
+<td>Registration invites: <code>registration_invites</code> (one plaintext <code>token</code> that serves as BOTH a <code>/register?invite=…</code> link and a typeable code — the platform cannot send email, so an invite is a copy-paste artifact like <code>cohorts.join_code</code>; carries role, optional auto-enrol <code>cohort_id</code>, <code>max_uses</code>/<code>uses</code>, <code>expires_at</code>, optional <code>email_pattern</code> that beats the global domain allowlist, and revocation) plus <code>registration_invite_uses</code> (the redemption ledger, kept separate so a revoked invite still shows who it admitted). Two new tables; nothing on existing tables changes and behaviour is unchanged until an admin mints an invite.</td>
+</tr>
+<tr>
+<td><code>0038_registration_requests.sql</code></td>
+<td>additive</td>
+<td>The registration approval queue — the storage <code>approval</code> mode never had. <code>approval</code> was selectable and advertised by the public probe, but <code>/auth/register</code> had no branch for it, so it behaved exactly like <code>open</code>: everyone in, unreviewed, with a token. New <code>registration_requests</code> table (username/email/hashed password + pending/approved/rejected + who decided and when). Deliberately NOT <code>users.status=&#39;pending&#39;</code>: that column has a CHECK constraint SQLite cannot ALTER, so adding a state means rebuilding the most FK-referenced table in the schema — and a pending applicant is not a user, so keeping them out of <code>users</code> preserves the invariant that a row in <code>users</code> is someone who may sign in. Partial unique indexes on live rows only, so a rejected applicant may re-apply but two simultaneous requests for one username cannot both land. One new table; behaviour unchanged until an admin selects <code>approval</code>.</td>
+</tr>
+<tr>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+<td>additive</td>
+<td>Storage for Oyon 3&#39;s new signal modalities. Enabling any of them produces three event shapes, all mishandled before this migration. (1) Blocks riding on the emotion window — every <code>*_window_share</code> setting defaults TRUE, so <code>facial</code>/<code>posture</code>/<code>heart_rate</code>/<code>respiration</code>/<code>illumination</code> arrive as extra keys on the ordinary emotion window and were silently dropped for want of a column, exactly the defect 0028 records about v1 dropping <code>gaze</code>/<code>engagement</code>. Fixed with six nullable <code>ADD COLUMN</code>s on <code>oyon_emotion_records</code> (<code>facial_json</code>, <code>posture_json</code>, <code>heart_rate_json</code>, <code>respiration_json</code>, <code>illumination_json</code>, <code>capture_quality_json</code>); pre-migration rows read NULL, no existing query changes meaning, and the only visible effect is extra keys on <code>SELECT r.*</code> which EmotionWindow&#39;s open index signature already tolerates. (2) Standalone modality-only windows (<code>facial_only</code>/<code>posture_only</code>/<code>heart_rate_only</code>, emitted when <code>*_window_share</code> is false and on stop/flush) carry no emotion data and keep <code>valid_frames</code> INSIDE the modality block, so the top-level bind was NULL into <code>valid_frames NOT NULL</code> — the insert threw and the whole batch 500&#39;d, losing the emotion windows travelling with it. (3) Host-bounded episodes (typing, voice, interaction, discourse, ai_assist) do not share the camera&#39;s fixed cadence and cannot use the <code>(session, window_start, window_end)</code> identity at all. Shapes 2 and 3 go to a new <code>oyon_signal_windows</code> table rather than a <code>modality</code> column on <code>oyon_emotion_records</code>: a column would require auditing every existing query for <code>WHERE modality = &#39;emotion&#39;</code>, whereas a separate table makes the isolation structural — legacy SQL cannot address the new rows. No CHECK on <code>modality</code>/<code>capture_mode</code> (SQLite cannot ALTER a CHECK and upstream may add modalities — see 0038); both are validated in app code against Oyon&#39;s exported <code>OYON_MODALITIES</code>/<code>OYON_WINDOW_KINDS</code>. Dedup key includes <code>modality</code> because a <code>facial_only</code> window shares window bounds with its sibling emotion window. One new table plus six nullable columns; behaviour is unchanged until the new capture flags are enabled.</td>
+</tr>
+<tr>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+<td>additive</td>
+<td>Tenant control over Oyon 3&#39;s signal modalities. These signals were ALREADY CAPTURING: the <code>&lt;oyon-app&gt;</code> element&#39;s own <code>DEFAULT_SETTINGS</code> (standalone/app/src/lib/settingsStore.ts) enables gaze/eye/facial/posture/respiration/heart-rate — the OPPOSITE of the library&#39;s <code>OYON_DEFAULT_SETTINGS</code>, which has them all off — and since Rohy mounts the element, the element&#39;s defaults are what run. <code>elementSettings()</code> forwarded only seven numeric/model keys, so Rohy had NO WAY TO TURN ANY SIGNAL OFF. This migration closes that gap: it grants an administrator authority over signals already running, so the defaults preserve observed behaviour rather than changing it — with one deliberate exception. <code>posture_tracking_enabled</code> defaults to 0 unlike the element, because the MediaPipe PoseLandmarker model is vendored in NO Oyon asset path (not <code>OyonR/scripts/download-models.sh</code>, not <code>npx oyon download-models</code>, not <code>host-check.js</code>, not <code>scripts/verify-oyon-install.mjs</code>) and the element&#39;s <code>resolveAssetPaths()</code> has no pose entry — it redirects the tasks wasm, face landmarker, webgazer mesh, ONNX runtime and emotion weights to <code>asset-base</code>, but not the pose model. With posture on, the library falls back to <code>poseLandmarkerUrlForModel()</code> and the browser fetches <code>pose_landmarker_lite.task</code> from storage.googleapis.com, violating Rohy&#39;s contract that air-gapped deploys never touch a CDN. Vendoring the model alone does not fix it: nothing in the element can be pointed at a vendored copy without patching <code>runtime.ts</code> and rebuilding the prebuilt <code>dist-element</code> bundle, so off is the honest default until upstream adds pose to <code>resolveAssetPaths</code>. An admin who accepts the CDN fetch can still enable it. Ten defaulted <code>ADD COLUMN</code>s on <code>oyon_settings</code>; existing rows take the defaults and pre-migration code never selects them. <code>PUT /settings</code> merges these by KEY PRESENCE, not full replace, so a save from one settings section cannot zero a flag another section owns.</td>
+</tr>
+<tr>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+<td>additive</td>
+<td>Consent v2 + the host-driven signal modalities. Phase 4 adds typing (keystroke timing), interaction (page-wide pointer/click/scroll/selection/focus), discourse (per-sentence speech acts over message text) and ai_assist (suggestion cycles). These are new CATEGORIES of personal data, not more camera-derived affect, so they cannot ride on <code>oyon-consent-v1</code>, which describes only the camera. Two halves, both required: (1) tenants move from &#39;oyon-consent-v1&#39; to &#39;oyon-consent-v2&#39;, but ONLY rows still on the untouched v1 default — an admin who set a custom consent version keeps it. (2) Per-USER acceptance becomes versioned via a new <code>oyon_emotion_consents.accepted_version</code>: before this, consent was a bare boolean, so nothing recorded WHICH contract a learner agreed to and a version bump would silently re-label their old consent as covering data they were never asked about. NULL reads as v1 (the only contract that existed when such a row was written), never as the tenant&#39;s current version. The gate is enforced SERVER-SIDE ON INGEST, not merely as a client prompt: windows for a v2-only modality are dropped (not 400&#39;d, so a mixed batch still stores its camera windows) when the session&#39;s accepted version predates v2, and the count is reported as <code>signals_consent_blocked</code> so a client can tell its prompt is stale. A client that names no version records v1 and therefore cannot grant itself v2. Four new tenant flags (typing/interaction/discourse/ai_assist) default on so they are ready the moment a learner accepts v2 — the consent gate, not the flags, keeps them dormant. <code>voice</code> is deliberately absent: it gates microphone HARDWARE and Rohy&#39;s VoiceService already owns the mic. One new column, four new flag columns, one guarded UPDATE; camera modalities are unaffected and keep working under v1.</td>
+</tr>
+<tr>
+<td><code>0042_agent_wait_instant_default.sql</code></td>
+<td>additive</td>
+<td>Agent arrival is instant by default. <code>case_agents.response_time_min/max</code> (minutes) were never honoured as written: the page handler computed <code>Math.max(60, Math.min(180, configuredMinSec || 60))</code>, so 0 — falsy — was rewritten to one minute and then floored there again, and <code>configuredMaxSec || 180</code> turned a configured max of 0 into three minutes. Every value collapsed into a random 60–180s band, meaning the setting that asks for NO wait produced the WIDEST wait in the system, and the seeded consultant&#39;s 2/5 cost 2–3 minutes of every training session. Since no stored value ever produced the behaviour it described, these columns hold no author intent — they are seed artifacts — so zeroing them discards nothing that worked. Two halves so fresh and upgraded installs match: (1) zero every <code>case_agents</code> wait window; (2) <code>json_set</code> the seeded consultant template&#39;s <code>config.response_time</code> from {2,5} to {0,0}, because <code>POST /cases/:id/agents/defaults</code> copies that config into new rows and the delay would otherwise crawl back one new case at a time. The template update is guarded on the exact 2/5 pair, so a value an admin typed deliberately survives — after this release the number is honoured literally. <code>availability_type</code> is untouched: an on-call consultant must still be paged, only the wait after paging goes. Schema-additive and idempotent; it is a deliberate behaviour change, documented in docs/design/agent-behaviour-model.md.</td>
+</tr>
+<tr>
+<td><code>0043_reset_stamped_zero_lab_turnaround.sql</code></td>
+<td>additive</td>
+<td>Resets <code>case_investigations.turnaround_minutes = 0</code> rows to NULL (&quot;follow the case default&quot;), preparing for the explicit-0-is-instant contract (bug report 2.9.15 #4). Until this release the resolver silently discarded a per-test 0, so no 0 in the table ever produced instant behaviour; worse, the order-labs endpoint materialized config/default labs stamped with the order-time RESOLVED turnaround, so a single student&#39;s &quot;Order instantly&quot; click wrote 0 into the shared case row. Honouring those 0s literally would make such tests instant for every future learner. Stamped and authored 0s are indistinguishable and neither ever worked, so NULL is the truthful reset; an educator re-picks Immediate in the editor and from this release it sticks. Data-only, idempotent, no schema change.</td>
+</tr>
+<tr>
+<td><code>0044_cohorts_is_default.sql</code></td>
+<td>additive</td>
+<td>The default course becomes a flag, not a name. Until now the tenant default course (&quot;Basic course&quot;, 0031) was found by its literal English name — the boot seeder&#39;s NOT EXISTS guard, the default-case/language-case links, everything matched <code>name = &#39;Basic course&#39;</code> — so the name was a functional identifier: it could not be localised, and because <code>PATCH /cohorts/:id</code> allows a rename, renaming it made the next boot see &quot;no Basic course&quot; and create a SECOND default (latent duplicate bug); the Cases browser also rendered the raw English string in every UI language. New defaulted <code>cohorts.is_default INTEGER NOT NULL DEFAULT 0</code>, a data step flagging the existing default (the lowest-id live &#39;Basic course&#39; per tenant, in case a tenant somehow holds two), and a partial unique index <code>idx_cohorts_default_live ON cohorts(tenant_id) WHERE is_default = 1 AND deleted_at IS NULL</code> so at most one LIVE default exists per tenant (soft-deleted defaults keep their flag as history; the boot seeder recreates a live one). Seeders and lookups now read the flag; the name is display-only, so admins may rename it and the client translates the untouched seeded literal. Existing rows read 0 and pre-migration code never selects the column.</td>
+</tr>
+<tr>
+<td><code>0045_scenarios_language.sql</code></td>
+<td>additive</td>
+<td>A scenario carries the language it is written in. Names, descriptions and timeline step labels are student-visible prose and the repository is now authored in six UI languages, but nothing recorded which language a scenario was in — an Italian pilot&#39;s rows sat beside English ones with no way to filter or match them to a case&#39;s <code>config.case_language</code>. New <code>scenarios.language TEXT NOT NULL DEFAULT &#39;en&#39;</code> holds a registry code from <code>server/shared/languages.js</code>; POST/PUT /scenarios validate it (400 <code>invalid_language</code>), GET /scenarios accepts <code>?language=xx</code>, and the seeded built-ins are stamped &#39;en&#39;. Backfill is the default &#39;en&#39; because every pre-existing row was English or unlabelled — an author corrects the rare non-English row from the editor&#39;s new language select. One defaulted ADD COLUMN plus a <code>(tenant_id, language)</code> index; existing rows read &#39;en&#39; and pre-migration code never selects the column.</td>
+</tr>
+<tr>
+<td><code>0046_treatment_effects_scope.sql</code></td>
+<td>additive</td>
+<td>The treatment catalogue students order from (<code>treatment_effects</code>) becomes a scoped, editable library with the same three-tier ownership as the drug/lab catalogue: <code>scope TEXT NOT NULL DEFAULT &#39;platform&#39;</code> (&#39;platform&#39; = every seeded row, visible to all tenants, admin-editable; &#39;tenant&#39; = visible to <code>tenant_id</code> only, editable by that tenant&#39;s educator+), <code>tenant_id INTEGER NOT NULL DEFAULT 1</code>, <code>created_by INTEGER REFERENCES users(id)</code>, <code>updated_at DATETIME</code>, plus <code>idx_treatment_effects_scope ON (tenant_id, scope, is_active)</code> for the visibility predicate every read now uses (<code>scope=&#39;platform&#39; OR (scope=&#39;tenant&#39; AND tenant_id=?)</code>). Backs the new Settings → Libraries → Treatments editor and POST/PUT/DELETE <code>/treatment-effects</code>. Strictly additive: defaulted/nullable ADD COLUMNs only; the seeder&#39;s <code>INSERT … ON CONFLICT (treatment_name, route)</code> and every pre-migration query keep working. DELIBERATELY KEPT: the 0001 table-level <code>UNIQUE(treatment_name, route)</code> — SQLite cannot ALTER it and relaxing it to (tenant_id, name, route) means rebuilding a table <code>active_treatments.effect_id</code> references, deferred to a destructive multi-release window. Consequence: tenant rows need names distinct from every other tenant&#39;s and the platform&#39;s; the API answers a readable 409 (<code>code: &#39;duplicate_treatment&#39;</code>) instead of leaking the constraint.</td>
+</tr>
+<tr>
+<td><code>0047_cohorts_default_backfill_renamed.sql</code></td>
+<td>additive</td>
+<td>Closes the upgrade-path gap in 0044: that data step flagged the default course by its literal name (<code>&#39;Basic course&#39;</code>), so a tenant whose admin had RENAMED the default before upgrading came out of 0044 with <code>is_default = 0</code> everywhere, and the boot seeder (<code>ensureBasicCourses</code>, keyed on <code>is_default</code>) then created a duplicate &#39;Basic course&#39; beside the renamed one — the exact duplicate 0044 set out to prevent. The renamed course is still identifiable because 0033 stamped <code>auto_enroll = 1</code> on the seeded default and a rename does not clear it, so this migration sets <code>is_default = 1</code> on the lowest-id live <code>auto_enroll = 1</code> cohort in every tenant that has NO live default, and touches nothing in tenants that already have one. Data-only UPDATE, no schema change; idempotent (second run finds every tenant already flagged); the 0044 partial unique index makes a second live default impossible.</td>
+</tr>
+<tr>
+<td><code>0048_plugin_settings.sql</code></td>
+<td>additive</td>
+<td>Per-tenant plugin settings, closing the §14.4 gap in the plugin standard (&quot;no per-tenant enable/disable&quot;, which named <code>oyon_settings</code> as the pattern to copy). New <code>plugin_settings(tenant_id, plugin_id, settings TEXT NOT NULL DEFAULT &#39;{}&#39;, updated_at, updated_by)</code> with <code>UNIQUE(tenant_id, plugin_id)</code>. Copies oyon_settings&#39; row shape but NOT its column-per-knob layout: a column per setting means a migration per plugin, and RPS-1&#39;s claim is that a plugin is added by declaring rather than by editing the host. Values are a flat JSON map of dotted keys (<code>{&quot;imports.enabled&quot;: true}</code>) whose meaning comes from the manifest&#39;s <code>settings</code> schema, validated at <code>plugins:gen</code> time by <code>server/shared/pluginSettings.js</code>; flat rather than nested because <code>PUT /api/plugins/:id/settings</code> is a key-presence merge and &quot;which keys did the caller send&quot; is unambiguous only on a flat map. A tenant with NO row is not an error — it runs on the manifest defaults, which is why every declared field must carry one. Strictly additive: one new table, referenced by nothing pre-existing.</td>
+</tr>
+<tr>
+<td><code>0049_plugin_jobs_assets.sql</code></td>
+<td>additive</td>
+<td>The plugin job queue and managed asset library (RPS-1 1.4), the write half of the slot 0048 opened. <code>plugin_jobs(id, tenant_id, plugin_id, kind, state, phase, progress, payload, result, error, attempts, cancel_requested, asset_id, …)</code> is a PERSISTED queue because tiling a whole-slide image is minutes of CPU on a multi-gigabyte file: an in-memory job vanishes on deploy and leaves a half-written directory with no record anything was asked for, whereas a row lets a restart resume, an admin see a queue, and a job that died mid-phase be told apart from one never started. <code>plugin_assets(id, tenant_id, plugin_id, label, state, source_url, source_sha256, native_objective, native_mpp_x/y, tiled_objective, …)</code> is the library. Job <code>phase</code> and asset <code>state</code> are deliberately separate columns answering different questions with different lifetimes — phase is where a RUNNING job is and is meaningless once it ends; state is what the library holds and survives every job, including retention sweeping the job row. <code>needs_calibration</code> is a first-class state, not an error: OpenSlide exposes objective/mpp only for vendors that wrote them, and a slide with UNKNOWN optics is not a slide with DEFAULT optics — every measurement would be wrong by an unknown factor, so the author supplies the numbers once instead of the host guessing 40x/0.25. Strictly additive: two new tables, referenced by nothing pre-existing.</td>
+</tr>
+<tr>
+<td><code>0050_utc_iso_timestamps.sql</code></td>
+<td>additive</td>
+<td>One time contract across every log surface (RPS-1 §17). Two shapes had been accumulating in the same columns: anything a browser wrote arrived as <code>2026-08-29T12:34:56.789Z</code>, anything falling through to sqlite&#39;s <code>DEFAULT CURRENT_TIMESTAMP</code> was written as <code>2026-08-29 12:34:56</code> — also UTC, but with a space, no zone marker and no milliseconds. sqlite&#39;s own date functions read the two identically (<code>julianday(iso) - julianday(space)</code> is exactly 0), so every <code>julianday()</code>/<code>date()</code> filter was always correct; two things were not. <strong>Ordering</strong>: these columns have TEXT storage, so <code>ORDER BY &lt;ts&gt;</code> is a string sort and <code>&#39; &#39;</code> (0x20) sorts before <code>&#39;T&#39;</code> (0x54) — a row a full day later sorted first. Measured on the development database, 2169 of 3119 <code>learning_events</code> rows sat in the wrong position; after this migration, 0. <strong>Browser parsing</strong>: <code>new Date(&#39;2026-08-29 12:34:56&#39;)</code> is not an ISO string, so V8 parses it as LOCAL time and every server-stamped row rendered at the viewer&#39;s UTC offset — three hours out in Europe/Helsinki, different per viewer, different across a DST boundary. This migration rewrites the legacy shape in place across learning_events, interactions, login_logs, settings_logs, client_logs, llm_request_log, event_log, sessions, session_vitals, patient_record_events, investigation_orders, treatment_orders, alarm_events, scenario_events, emotion_logs, oyon_emotion_records, oyon_signal_windows, plugin_jobs and plugin_assets. Purely a reformat — <code>strftime(&#39;%Y-%m-%dT%H:%M:%fZ&#39;, v)</code> returns the same instant sqlite already read out of <code>v</code>, verified by <code>SUM(julianday(timestamp))</code> being byte-identical before and after. Each statement is guarded twice: it skips rows already conforming (a GLOB) and rows sqlite cannot parse (the rewritten value IS NOT NULL), so an unexpected value is left alone rather than nulled. Duration columns (<code>response_time_ms</code>, <code>time_elapsed</code>) are deliberately untouched. Adds <code>learning_events.client_time TEXT</code> — the browser&#39;s own reading, kept beside the server&#39;s rather than instead of it, which turns clock skew from an invisible corruption into a measurable per-event quantity. <strong><code>system_audit_log</code> is deliberately absent</strong>: its <code>timestamp</code> is inside the tamper-evident hash (<code>canonicalRow()</code> emits it as <code>ts</code>), so rewriting it would make all 509 historical rows fail verification — the chain cannot tell a reformat from a forgery, and that is the property it exists to have. It instead gains <code>ts_utc</code>, a VIRTUAL generated column over <code>timestamp</code> plus <code>idx_system_audit_log_ts_utc(tenant_id, ts_utc DESC)</code>; a virtual column stores no bytes and is not one of canonicalRow&#39;s LOGICAL_FIELDS, verified by <code>scripts/verify-audit-chain.js</code> producing identical output with and without it. Order and date-filter that table by <code>ts_utc</code>, never by <code>timestamp</code>. Strictly additive: in-place value reformats, one nullable ADD COLUMN, one generated column, one index.</td>
+</tr>
+<tr>
+<td><code>0051_utc_iso_domain_timestamps.sql</code></td>
+<td>additive</td>
+<td>Finishes what 0050 started, on the DOMAIN tables. 0050 fixed the log surface and, for the order tables, the rows that existed at that moment — but not their WRITERS, and it never touched <code>users.last_login</code> at all. Two live consequences. <strong>Last Active was wrong for everyone</strong>: <code>users.last_login</code> was written with <code>CURRENT_TIMESTAMP</code>, whose &quot;YYYY-MM-DD HH:MM:SS&quot; shape carries no zone marker although it is UTC, so <code>Date.parse</code> in <code>usersUi.js</code> read it as LOCAL and the Users tab was stale by exactly the viewer&#39;s UTC offset — reported from the field as &quot;3 hours behind&quot;, and reproduced here at UTC+3 to the second. <strong>The order tables ended up holding both shapes at once</strong>, which is strictly worse than uniformly legacy: <code>ORDER BY available_at</code> is a string sort, so every legacy row sorts before every ISO row whatever the actual instants were, and <code>OrdersDrawer</code>&#39;s <code>available_at + &#39;Z&#39;</code> — correct while all rows were legacy — produced <code>...ZZ</code> and an Invalid Date for every row 0050 had normalised, breaking the worklist countdown on exactly the orders that predated the fix. This migration normalises <code>users.last_login</code>, <code>users.locked_until</code>, <code>investigation_orders.{ordered_at,available_at,viewed_at}</code> and <code>treatment_orders.{ordered_at,administered_at,completed_at,discontinued_at}</code>, and the writers are fixed in the same release (<code>sqlNowPlus()</code> in <code>server/shared/time.js</code>; every INSERT/UPDATE in auth-routes and orders-routes now names its time column). Same double guard as 0050 — a GLOB skips rows already conforming, so re-running is free, and <code>strftime(...) IS NOT NULL</code> leaves anything unparseable exactly as it is rather than nulling it. Purely a reformat: sqlite reads both shapes as the same instant, so <code>julianday()</code> over any of these columns is unchanged, and the SQL comparisons (<code>datetime(io.available_at) &lt;= datetime(&#39;now&#39;)</code>) were always format-agnostic and stay correct. Soft-delete <code>deleted_at</code> columns are deliberately excluded — only ever tested <code>IS NULL</code>, never rendered or sorted.</td>
+</tr>
+<tr>
+<td><code>0052_utc_iso_identity_timestamps.sql</code></td>
+<td>additive</td>
+<td>The last naive WRITERS on the identity and session tables (RPS-1 §17). 0050 normalised the log surface and 0051 the domain tables, but three writers kept re-arming the trap immediately afterwards. <strong><code>sessions.start_time</code></strong>: the session INSERT named no time column, so <code>DEFAULT CURRENT_TIMESTAMP</code> wrote the legacy naive shape back into a column 0050 had just normalised, and <code>PUT /sessions/:id/end</code> computed the stored <code>duration</code> with <code>new Date(session.start_time)</code> — which V8 parses as LOCAL time for that shape, so on a UTC+3 host a 15-second session was persisted as 3h00m15s and every debrief, cohort report and time-on-task figure downstream inherited the host&#39;s offset. <strong><code>users.created_at</code></strong>: five INSERTs (auth-routes register, users-routes create/batch/import, registration-routes approve) plus the first-boot seeder all omitted the column, so this table held 0051&#39;s conforming <code>last_login</code> beside a legacy <code>created_at</code>. <strong><code>oyon_settings.updated_at</code></strong>: written as a bare <code>CURRENT_TIMESTAMP</code> by <code>PUT /addons/oyon/settings</code> and returned to the admin UI as-is. All three writers are fixed in the same release (<code>SQL_NOW</code> from <code>server/shared/time.js</code> named explicitly on each INSERT/UPDATE, <code>timeMs()</code> for the duration arithmetic, and the session dedup window switched from <code>datetime(&#39;now&#39;,&#39;-30 seconds&#39;)</code> to <code>sqlNowPlus()</code> so its string comparison stays valid against an ISO column); this migration brings the stored rows in line, on <code>sessions.{start_time,end_time,updated_at}</code>, <code>users.created_at</code> and <code>oyon_settings.{created_at,updated_at}</code>. Same double guard as 0050/0051 — a GLOB skips rows already conforming so re-running is free, and <code>strftime(...) IS NOT NULL</code> leaves anything unparseable exactly as it is rather than nulling it. Purely a reformat: sqlite reads both shapes as the same instant, so every <code>julianday()</code>/<code>date()</code> comparison is unchanged. DELIBERATELY EXCLUDED: <code>users.updated_at</code>, because ~10 UPDATEs in users-routes still write it naively and converting the rows first would manufacture the mixed-shape column this migration exists to remove; <code>sessions.duration</code>, because it is a duration in seconds, not an instant, and the inflation in historical rows is unrecoverable after the fact (inventing a corrected number would be worse than a visibly wrong one — new sessions are correct from this release); <code>system_audit_log.timestamp</code> (hash chain, 0050&#39;s <code>ts_utc</code> still stands) and <code>*.deleted_at</code> (only ever tested <code>IS NULL</code>).</td>
+</tr>
+<tr>
+<td><code>0053_interactions_source.sql</code></td>
+<td>additive</td>
+<td>Where a patient-conversation turn came from. <code>interactions</code> is the session&#39;s one patient thread and is now written from two surfaces — the chat room (<code>typed</code> / <code>voice</code>) and a plugin room such as the 3D bedside (<code>room3d</code>) — so without a marker the educator&#39;s transcript and every analytics query over <code>interactions</code> treat a spoken bedside question and a typed one as the same thing. One nullable <code>ADD COLUMN source TEXT</code>; rows written before this release read NULL (&quot;unknown&quot;) rather than being relabelled, and pre-migration code never selects it. Validated on ingest to <code>^[a-z][a-z0-9_]{0,63}$</code>, the plugin-id shape.</td>
+</tr>
+</tbody></table></div>
+<h2 id="tables-by-concern">Tables by concern</h2>
+<span class="anchor-alias" id="auth--users"></span><h3 id="auth-users">Auth &amp; users</h3>
+<p><code>active_sessions</code>, <code>login_logs</code>, <code>user_preferences</code>, <code>users</code></p>
+<h3 id="tenants">Tenants</h3>
+<p><code>tenants</code></p>
+<span class="anchor-alias" id="cases--scenarios"></span><h3 id="cases-scenarios">Cases &amp; scenarios</h3>
+<p><code>case_versions</code>, <code>cases</code>, <code>clinical_pathways</code>, <code>diagnoses</code>, <code>patient_information</code>, <code>patient_record_documents</code>, <code>patient_record_events</code>, <code>scenario_events</code>, <code>scenario_templates</code>, <code>scenario_timeline_points</code>, <code>scenarios</code></p>
+<h3 id="sessions">Sessions</h3>
+<p><code>clinical_notes</code>, <code>interactions</code>, <code>session_notes</code>, <code>session_settings</code>, <code>session_vitals</code>, <code>sessions</code></p>
+<span class="anchor-alias" id="investigations--labs"></span><h3 id="investigations-labs">Investigations &amp; labs</h3>
+<p><code>body_map_coordinates</code>, <code>body_regions</code>, <code>case_investigations</code>, <code>custom_lab_group_items</code>, <code>custom_lab_groups</code>, <code>exam_techniques</code>, <code>investigation_orders</code>, <code>investigation_parameters</code>, <code>investigation_templates</code>, <code>investigation_views</code>, <code>lab_definitions</code>, <code>lab_panels</code>, <code>lab_reference_ranges</code>, <code>lab_tests</code>, <code>panel_tests</code>, <code>physical_exam_findings</code>, <code>region_default_findings</code>, <code>region_exam_types</code>, <code>region_special_tests</code>, <code>vital_sign_definitions</code>, <code>vital_sign_history</code></p>
+<span class="anchor-alias" id="treatments--medications"></span><h3 id="treatments-medications">Treatments &amp; medications</h3>
+<p><code>active_treatments</code>, <code>case_treatments</code>, <code>custom_drug_group_items</code>, <code>custom_drug_groups</code>, <code>data_sources</code>, <code>medication_doses</code>, <code>medications</code>, <code>search_aliases</code>, <code>treatment_effects</code>, <code>treatment_orders</code></p>
+<h3 id="agents">Agents</h3>
+<p><code>agent_conversations</code>, <code>agent_session_state</code>, <code>agent_templates</code>, <code>case_agents</code>, <code>team_communications_log</code></p>
+<h3 id="cohorts">Cohorts</h3>
+<p><code>cohort_cases</code>, <code>cohort_members</code>, <code>cohorts</code></p>
+<span class="anchor-alias" id="analytics--events"></span><h3 id="analytics-events">Analytics &amp; events</h3>
+<p><code>emotion_logs</code>, <code>event_log</code>, <code>export_records</code>, <code>learning_events</code>, <code>questionnaire_responses</code></p>
+<span class="anchor-alias" id="llm--tts-usage"></span><h3 id="llm-tts-usage">LLM &amp; TTS usage</h3>
+<p><code>llm_model_pricing</code>, <code>llm_request_log</code>, <code>llm_usage</code>, <code>tts_usage</code>, <code>usage_budget</code></p>
+<h3 id="oyon-emotion-add-on">Oyon (emotion add-on)</h3>
+<p><code>oyon_emotion_consents</code>, <code>oyon_emotion_records</code>, <code>oyon_settings</code>, <code>oyon_signal_windows</code></p>
+<h3 id="alarms">Alarms</h3>
+<p><code>alarm_config</code>, <code>alarm_events</code></p>
+<span class="anchor-alias" id="observability--audit"></span><h3 id="observability-audit">Observability &amp; audit</h3>
+<p><code>client_logs</code>, <code>settings_logs</code>, <code>system_audit_log</code></p>
+<span class="anchor-alias" id="platform--retention"></span><h3 id="platform-retention">Platform &amp; retention</h3>
+<p><code>platform_settings</code></p>
+<h3 id="other">Other</h3>
+<p><code>cohort_surveys</code>, <code>lesson_progress</code>, <code>lesson_sections</code>, <code>lessons</code>, <code>plugin_assets</code>, <code>plugin_jobs</code>, <code>plugin_settings</code>, <code>registration_invite_uses</code>, <code>registration_invites</code>, <code>registration_requests</code>, <code>survey_answers</code>, <code>survey_questions</code>, <code>survey_responses</code>, <code>surveys</code></p>
+<hr>
+<p><em>Regenerate: <code>npm run docs:gen:data</code></em></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../../index.html">Overview</a>
+                <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../whats-new.html">What's new</a>
+                <a href="../../../help.html">Help</a>
+                <a href="../../../about.html">About the author</a>
+                <a href="../../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../../docs/index.html">Docs home</a>
+                <a href="../../../docs/INSTALL.html">Install</a>
+                <a href="../../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../../docs/UPDATING.html">Updating</a>
+                <a href="../../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../../site.js"></script>
+</body>
+</html>

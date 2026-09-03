@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Oyon Integration Playbook · Rohy docs</title>
+    <meta name="description" content="The how-to-replicate companion to OYON_INTEGRATION_POLICY.md (boundaries) and OYONR_INTEGRATION_NOTE.md (history). This doc walks through what was built, file by file, and ends …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Oyon Integration Playbook · Rohy docs">
+    <meta property="og:description" content="The how-to-replicate companion to OYON_INTEGRATION_POLICY.md (boundaries) and OYONR_INTEGRATION_NOTE.md (history). This doc walks through what was built, file by file, and ends …">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Oyon Integration Playbook</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#0-the-integration-architecture-one-minute">0. The integration architecture (one minute)</a>
+            <a href="#1-the-pill-live-emotion-widget">1. The pill (live emotion widget)</a>
+            <a href="#2-the-logs-server-persistence-viewer">2. The logs (server persistence + viewer)</a>
+            <a href="#3-the-custom-settings-per-tenant-runtime-config">3. The custom settings (per-tenant runtime config)</a>
+            <a href="#4-cross-cutting-concerns">4. Cross-cutting concerns</a>
+            <a href="#5-deploy-making-the-integration-self-bootstrapping">5. Deploy: making the integration self-bootstrapping</a>
+            <a href="#6-the-generalized-checklist">6. The generalized checklist</a>
+            <a href="#7-reading-order-for-the-curious">7. Reading order for the curious</a>
+            <a href="#appendix-naming-conventions-used-in-this-integration">Appendix: Naming conventions used in this integration</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html" aria-current="page">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p>The how-to-replicate companion to <code>OYON_INTEGRATION_POLICY.md</code> (boundaries) and
+<code>OYONR_INTEGRATION_NOTE.md</code> (history). This doc walks through what was built,
+file by file, and ends with a generalized checklist so the same pattern can be
+applied to the next third-party JS library you ingest.</p>
+</blockquote>
+<p><strong>Scope.</strong> Three concrete integration surfaces, in order of visibility:</p>
+<ol>
+<li><strong>The pill</strong> — the live emotion widget that runs in the chat sidebar.</li>
+<li><strong>The logs</strong> — server-side persistence of windowed emotion records, plus the admin viewer that surfaces them.</li>
+<li><strong>The custom settings</strong> — per-tenant runtime configuration (model profile, sample interval, aggregation knobs) editable from the admin UI.</li>
+</ol>
+<p>Each section follows the same shape: <em>what it is → where it lives → how it works → what was non-obvious → the general principle to take away.</em></p>
+<hr>
+<h2 id="0-the-integration-architecture-one-minute">0. The integration architecture (one minute)</h2>
+<pre><code>┌────────────────────────────────────────────────────────────────────┐
+│  Vendored upstream library                                         │
+│  OyonR/                                                            │
+│    src/core/EmotionRuntime.js     ← ONNX + MediaPipe orchestrator  │
+│    standalone/                    ← demo HTML/JS that proves the   │
+│                                     library works in isolation     │
+│    standalone/vendor/             ← MediaPipe + ONNX wasm bundles  │
+│                                     (gitignored, fetched at install│
+│                                      via OyonR/scripts/download-   │
+│                                      models.sh)                    │
+│    standalone/models/             ← *.onnx weights (gitignored)    │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │ npm dep: &quot;oyon&quot;: &quot;file:./OyonR&quot;
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  Adapter layer (Rohy ↔ Oyon glue)                                  │
+│  scripts/update-oyonr.sh        ← rsync upstream → OyonR/          │
+│                                   (excludes /standalone/vendor)    │
+│  scripts/oyon-overlay/          ← full-file overlays of the few   │
+│                                   upstream files Rohy patches      │
+│  scripts/apply-oyon-patches.mjs ← idempotent applicator, runs      │
+│                                   after every npm run oyon:update  │
+└─────────────────────────────────┬──────────────────────────────────┘
+                                  │
+                                  ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  Application layer (Rohy proper)                                   │
+│  Server                                                            │
+│    server/routes/oyon-routes.js          ← /api/addons/oyon/*      │
+│    migrations/0011..0017_oyon_*.sql      ← additive schema only    │
+│    server/security-headers.js            ← COOP + COEP for SAB     │
+│  Client                                                            │
+│    src/components/oyon/OyonCaptureWidget.jsx   ← the pill          │
+│    src/components/oyon/modelProfiles.js        ← model registry    │
+│    src/components/oyon/clientLogger.js         ← [oyon] tag        │
+│    src/components/settings/OyonSettingsTab.jsx          ← admin UI │
+│    src/components/settings/OyonLearningAnalyticsTab.jsx ← viewer   │
+│  Build / deploy                                                    │
+│    package.json postinstall              ← auto-fetch binaries     │
+│    deploy/docker/Dockerfile              ← explicit RUN download   │
+│    deploy/docker/Caddyfile               ← /oyon/* /standalone/*   │
+└────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>The key idea: <strong>vendored upstream stays untouched</strong>, <strong>a thin adapter layer exists for the inevitable patches</strong>, <strong>the application talks to the library through one and only one entry point</strong> (<code>import { EmotionRuntime } from &#39;oyon&#39;</code>), and <strong>deploy is fully self-contained</strong> (postinstall + Dockerfile RUN handle the binaries that are too large to git-track).</p>
+<p>For the ownership boundaries, see <code>OYON_INTEGRATION_POLICY.md</code>. The summary: Oyon failures must never propagate; if Oyon&#39;s env flag is off, schema mis-migrated, model assets missing, or a route throws, <strong>Rohy keeps running</strong>.</p>
+<hr>
+<h2 id="1-the-pill-live-emotion-widget">1. The pill (live emotion widget)</h2>
+<h3 id="what-it-is">What it is</h3>
+<p>A small badge that mounts in the chat sidebar showing the patient&#39;s (camera-derived) dominant emotion in real time. Updates ~3 Hz under normal load, with a confidence bar and a 4-letter label like <code>HAPPY</code> / <code>SAD</code> / <code>ANGER</code> / <code>NEUT</code>.</p>
+<h3 id="where-it-lives">Where it lives</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/components/oyon/OyonCaptureWidget.jsx</code></td>
+<td>The component itself + the <code>CaptureSession</code> lifecycle wrapper</td>
+</tr>
+<tr>
+<td><code>src/components/oyon/clientLogger.js</code></td>
+<td><code>oyonClientLog(&#39;debug&#39;|&#39;info&#39;|&#39;warn&#39;|&#39;error&#39;, ...)</code> — single source of structured client logging</td>
+</tr>
+<tr>
+<td><code>src/components/oyon/modelProfiles.js</code></td>
+<td>Model registry (HSE / MobileViT / MBF) — the <em>only</em> file that knows model identifiers</td>
+</tr>
+<tr>
+<td><code>OyonR/src/core/EmotionRuntime.js</code></td>
+<td>The vendored runtime; orchestrates ONNX + MediaPipe + smoothing</td>
+</tr>
+</tbody></table></div>
+<h3 id="how-it-works">How it works</h3>
+<pre><code>mount
+  └─→ fetch /api/addons/oyon/config            (tenant&#39;s runtime config)
+        └─→ new CaptureSession({ runtimeConfig })
+              └─→ preloadModels()              (downloads ~40 MB ONNX into the browser)
+                    └─→ new EmotionRuntime({ ... })
+                          └─→ runtime.start()
+                                ├─→ emits &#39;sample&#39; every sample_interval_ms (~333 ms)
+                                │     └─→ React state setEmotion(topLabel(probabilities))
+                                │           └─→ pill re-renders with the new label
+                                └─→ emits &#39;window&#39; every aggregate_window_ms (~10 s)
+                                      └─→ POST /api/addons/oyon/emotion-records
+unmount
+  └─→ session.stop()
+        └─→ runtime.dispose()                  (releases ONNX + MediaPipe + nulls refs)
+</code></pre>
+<p><code>OyonCaptureWidget.jsx:137-216</code> is where the React side glues this together. The component is intentionally small (~250 LOC); all heavy lifting is in <code>CaptureSession</code> (a non-React class declared at the top of the same file) and in the vendored <code>EmotionRuntime</code>.</p>
+<h3 id="non-obvious-bits">Non-obvious bits</h3>
+<ul>
+<li><strong>Tenant config arrives BEFORE runtime init.</strong> The widget fetches <code>/api/addons/oyon/config.runtime</code> first, then constructs <code>EmotionRuntime</code> with the saved model profile, sample interval, window length, smoothing, hold, and switch confidence. Earlier code only forwarded <code>model + sample_interval_ms</code>; the result was that captured windows silently diverged from the admin&#39;s saved knobs. Forward the <em>full</em> runtime config or you create a phantom-config bug.</li>
+<li><strong>Pill cadence comes from <code>sample</code> events, not <code>window</code> events.</strong> Earlier code read <code>p.dominant</code> from the sample — a field the runtime never emits. The displayed word only updated when a 10 s <code>window</code> event arrived. Fix: derive the pill label from <code>topLabel(p.probabilities)</code> per <code>sample</code>. <strong>Lesson: when one displayed field lags but its neighbours update fluidly, suspect the fields come from different event streams, not different cadences.</strong></li>
+<li><strong><code>stop()</code> ≠ <code>dispose()</code>.</strong> <code>EmotionRuntime.stop()</code> keeps ONNX + MediaPipe alive so a restart is cheap. <code>dispose()</code> actually frees the WebGPU/WASM resources. The widget calls <code>dispose()</code> in its unmount path so repeated session/case switches don&#39;t accumulate GPU memory. <strong>General rule: when a vendor library distinguishes pause from teardown, every consumer of the pause path must consider whether it should actually be calling teardown.</strong></li>
+<li><strong>Consent is opt-in.</strong> <code>localStorage[&#39;oyon.defaultConsent&#39;]</code> gates the <code>POST /consent</code> call. Capture still runs locally without consent (the user sees the live preview / live pill), but nothing is persisted. Earlier code blindly POSTed <code>consent_granted: true</code> because &quot;Rohy auth implies consent&quot; — that&#39;s a category error: auth ≠ consent.</li>
+<li><strong>Live changes to settings re-key the widget.</strong> When the admin changes a runtime knob in <code>OyonSettingsTab</code>, that tab dispatches a <code>oyon:setting-changed</code> window event. The widget listens for this (and for cross-tab <code>storage</code> events) and re-fetches <code>/config.runtime</code>, which triggers a clean re-init via React&#39;s effect dependency array. This is the canonical single-source-of-truth pattern in this integration.</li>
+</ul>
+<h3 id="general-principle">General principle</h3>
+<blockquote>
+<p><strong>The &quot;integration entry point&quot; should be one file, and that file should be the only place in your application that knows about the vendor library&#39;s class names.</strong> For Oyon that file is <code>OyonCaptureWidget.jsx</code> — <code>import { EmotionRuntime } from &#39;oyon&#39;</code> appears nowhere else. If you need to swap <code>EmotionRuntime</code> for <code>EmotionRuntime2</code>, you change one line. If you have ten components each instantiating the runtime, you&#39;ve already lost.</p>
+</blockquote>
+<hr>
+<span class="anchor-alias" id="2-the-logs-server-persistence--viewer"></span><h2 id="2-the-logs-server-persistence-viewer">2. The logs (server persistence + viewer)</h2>
+<h3 id="what-it-is-1">What it is</h3>
+<p>Every <code>window</code> event the runtime emits is POSTed to the server, persisted in <code>oyon_emotion_records</code>, and surfaced in two places:</p>
+<ol>
+<li><strong>The Chat Log tab</strong> (admin-only, <code>src/components/analytics/ChatLogTable.jsx</code>) — Oyon emotion records appear inline alongside chat messages and LLM/TTS events with <code>source: oyon</code>.</li>
+<li><strong>The dedicated Oyon Learning Analytics tab</strong> (<code>src/components/settings/OyonLearningAnalyticsTab.jsx</code>) — emotion-only timeline, with consent records and per-window aggregates.</li>
+</ol>
+<h3 id="where-it-lives-1">Where it lives</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>migrations/0011_oyon_addon.sql</code></td>
+<td>Initial schema: <code>oyon_settings</code>, <code>oyon_emotion_consents</code>, <code>oyon_emotion_records</code>. Additive only.</td>
+</tr>
+<tr>
+<td><code>migrations/0014_oyon_records_nullable_user.sql</code></td>
+<td>Schema follow-up.</td>
+</tr>
+<tr>
+<td><code>migrations/0016_oyon_records_unique_record_id.sql</code></td>
+<td>Partial unique index for idempotency (see below).</td>
+</tr>
+<tr>
+<td><code>migrations/0017_oyon_records_window_metadata.sql</code></td>
+<td>Adds <code>window_ms</code>, <code>min_valid_frames</code>, <code>smoothing_alpha</code>, <code>min_hold_ms</code>, <code>min_switch_confidence</code> snapshot columns.</td>
+</tr>
+<tr>
+<td><code>server/routes/oyon-routes.js</code></td>
+<td><code>POST /api/addons/oyon/emotion-records</code> and <code>POST /api/addons/oyon/consent</code>.</td>
+</tr>
+<tr>
+<td><code>src/components/analytics/ChatLogTable.jsx</code></td>
+<td>Unified Chat Log feed; reads <code>/api/chat-log/feed</code> which UNIONs Oyon emotion records into the timeline.</td>
+</tr>
+<tr>
+<td><code>src/components/settings/OyonLearningAnalyticsTab.jsx</code></td>
+<td>Dedicated Oyon-only viewer.</td>
+</tr>
+</tbody></table></div>
+<h3 id="how-it-works-1">How it works</h3>
+<p><strong>The write path:</strong></p>
+<pre><code>client                                              server
+  CaptureSession (10 s window expires)
+    aggregator emits &#39;window&#39; event
+      └─→ POST /api/addons/oyon/emotion-records
+          { session_id, window_start, window_end,
+            dominant_emotion, probabilities, settings_snapshot }
+                                                    │
+                                                    ▼
+                                           insertEmotionRecord()
+                                             ├─ derive record_id =
+                                             │    sha1(tenant|session|
+                                             │         window_start|window_end)
+                                             ├─ INSERT ... ON CONFLICT DO NOTHING
+                                             │    (partial unique index from 0016)
+                                             └─ return { ok, inserted, skipped }
+</code></pre>
+<p><strong>The read path</strong> — UNION through the existing chat-log feed at <code>server/routes/analytics-routes.js:/chat-log/feed</code>. Oyon emotion records share the same row shape as every other source:</p>
+<pre><code class="language-sql">SELECT &#39;oyon&#39; AS source, recorded_at AS ts, user_id, username,
+       session_id, NULL AS role, dominant_emotion AS content,
+       NULL AS model, NULL AS tokens_in, NULL AS tokens_out,
+       NULL AS latency_ms
+FROM oyon_emotion_records
+WHERE tenant_id = ?
+</code></pre>
+<p>The viewer doesn&#39;t know or care that this row came from Oyon vs. an LLM call vs. a chat message — it just renders the <code>source</code> chip with the right colour.</p>
+<h3 id="non-obvious-bits-1">Non-obvious bits</h3>
+<ul>
+<li><strong>Server-derived <code>record_id</code> killed the silent-replay bug.</strong> The first idempotency fix added a partial unique index + <code>ON CONFLICT DO NOTHING</code> and a happy-path test — but the runtime/widget never set <code>record_id</code>, so the index was dormant for every real window. Fix: derive <code>record_id = sha1(tenant|session|window_start|window_end)</code> server-side. Replays from the runtime now collapse automatically; no client change required. <strong>General principle: when adding an index/constraint, check the <em>producer</em> of the constrained field actually populates it, not just that the constraint mechanically engages.</strong></li>
+<li><strong><code>consent_version</code> is server-authoritative.</strong> The client may send a <code>consent_version</code> field, but the server ignores it and stamps the version from <code>oyon_settings.consent_version</code>. This prevents a stale tab from recording &quot;consent granted under v3&quot; when the deployment has moved to v4 with a more restrictive scope.</li>
+<li><strong>Ownership check is <code>req.user.id === session.user_id</code>.</strong> Educators/admins can read any session in their tenant (per Rohy&#39;s <code>canReadAcrossUsers</code> rule), but they cannot <em>write</em> consent or emotion records on behalf of students. Read paths and write paths use different authorization rules; do not blindly reuse one for the other.</li>
+<li><strong>Vitals + emotions ride along the same trinity.</strong> Every Oyon record is keyed on <code>(tenant_id, session_id, user_id)</code> — the same trinity the server enforces on <code>learning_events</code> (see <code>PLAN_LOGGING.md</code>). This means an admin filtering the activity feed by <code>user_id=42</code> sees that user&#39;s emotion records appear alongside their clinical actions, with no extra JOIN.</li>
+<li><strong>Express 5 auto-propagates async throws.</strong> <code>oyon-routes.js</code> leans on this with one error-handler <code>router.use((err, ...))</code> that translates <code>no such table</code> into 503 and everything else into 500. No per-route try/catch noise. Other route files are migrating to the same pattern.</li>
+</ul>
+<h3 id="general-principle-1">General principle</h3>
+<blockquote>
+<p><strong>Persistence layer for an integration should look like every other persistence layer in your app.</strong> If your existing logs are keyed on <code>(tenant_id, session_id, user_id)</code> and joined with <code>users</code>/<code>cases</code> for display, the integration&#39;s table should be the same shape and the integration&#39;s read endpoint should produce the same row shape (<code>source</code>, <code>ts</code>, <code>user_id</code>, <code>username</code>, …) as the other feeds. The viewer then UNIONs them transparently. Don&#39;t invent a separate <code>OyonAnalyticsView</code> with its own column conventions when the existing log infrastructure can carry the rows for free.</p>
+</blockquote>
+<hr>
+<h2 id="3-the-custom-settings-per-tenant-runtime-config">3. The custom settings (per-tenant runtime config)</h2>
+<h3 id="what-it-is-2">What it is</h3>
+<p>An admin-only tab in Settings → Oyon → Capture Engine, exposing one model dropdown plus six numeric knobs (sample interval, window length, min valid frames, smoothing α, min hold, switch confidence). Saving the form persists into <code>oyon_settings</code> and broadcasts a <code>oyon:setting-changed</code> event so any open widget re-initialises with the new values.</p>
+<h3 id="where-it-lives-2">Where it lives</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>migrations/0012_oyon_settings_runtime.sql</code></td>
+<td>Adds the seven runtime columns to <code>oyon_settings</code>.</td>
+</tr>
+<tr>
+<td><code>migrations/0013_oyon_settings_default_interval.sql</code></td>
+<td>Bumps existing rows from <code>sample_interval_ms = 1000</code> → <code>333</code>.</td>
+</tr>
+<tr>
+<td><code>migrations/0015_oyon_settings_safer_default.sql</code></td>
+<td>Schema-level <code>DEFAULT</code> follow-up so fresh tenants don&#39;t regress.</td>
+</tr>
+<tr>
+<td><code>server/routes/oyon-routes.js</code></td>
+<td><code>GET /settings</code>, <code>PUT /settings</code> (admin-only), <code>GET /config</code> (returns a <code>runtime</code> block).</td>
+</tr>
+<tr>
+<td><code>src/components/settings/OyonSettingsTab.jsx</code></td>
+<td>The admin form.</td>
+</tr>
+<tr>
+<td><code>src/components/oyon/modelProfiles.js</code></td>
+<td>Single source of truth for the model registry.</td>
+</tr>
+</tbody></table></div>
+<h3 id="how-it-works-2">How it works</h3>
+<pre><code>admin opens Settings → Oyon                          server
+  GET /api/addons/oyon/settings
+      └─→ ensureSettings(tenantId)                   ──── ► returns full row,
+                                                            DEFAULTs from
+                                                            DEFAULT_RUNTIME
+                                                            constant
+admin edits &quot;sample_interval_ms&quot; → 500
+admin clicks Save
+  PUT /api/addons/oyon/settings { sample_interval_ms: 500, … }
+      └─→ clamp + validate + UPDATE oyon_settings
+admin form dispatches `oyon:setting-changed`
+  └─→ any open OyonCaptureWidget refetches /config and re-inits
+</code></pre>
+<h3 id="non-obvious-bits-2">Non-obvious bits</h3>
+<ul>
+<li><strong><code>ensureSettings</code> must INSERT every field from a single source-of-truth constant.</strong> Earlier code relied on column-level <code>DEFAULT</code> to fill in missing values. When migration 0013 patched existing rows but column DEFAULT still pointed at the old value, fresh tenants kept getting the laggy default. Fix: <code>INSERT INTO oyon_settings (...) VALUES (?, ?, ?, ...)</code> from the <code>DEFAULT_RUNTIME</code> constant explicitly. <strong>General principle: column DEFAULTs are fragile across migrations. Either INSERT every field explicitly from a single source-of-truth constant, or update the column DEFAULT in the same migration that updates the rows.</strong></li>
+<li><strong>The model registry has exactly one home.</strong> <code>src/components/oyon/modelProfiles.js</code> is imported by both the miniature widget and the admin dropdown. Earlier the miniature hardcoded <code>HSE_EMOTION_MTL_CONFIG</code>, the standalone defaulted to <code>&#39;hse-emotion-mtl&#39;</code>, and the admin had no dropdown — three sources, zero coordination. <strong>General principle: when N surfaces need to choose from the same set, the set is one module. Importing it everywhere is fine; defining it everywhere is not.</strong></li>
+<li><strong>Per-tenant config requires a migration even when &quot;additive&quot; feels enough.</strong> Adding a runtime knob means: column in 0012, default-bump in 0013 if you change semantics, schema DEFAULT update in 0015 if 0013 only patched rows. Schema migrations to <code>oyon_settings</code> are <em>additive only</em> (per the integration policy) — never <code>DROP COLUMN</code> or <code>RENAME COLUMN</code> because Rohy can roll back to an older app version against a newer DB.</li>
+<li><strong>The standalone demo locks its own dropdown.</strong> When Oyon&#39;s standalone demo runs <em>inside</em> Rohy (<code>?source=rohy</code>), <code>applyRohyTenantConfig()</code> overrides the demo&#39;s local model dropdown and disables it. This prevents an operator from drifting the model in the embedded demo while the tenant has chosen something else.</li>
+</ul>
+<h3 id="general-principle-2">General principle</h3>
+<blockquote>
+<p><strong>Custom settings are infrastructure, not configuration.</strong> Treat the settings table as the contract between every consumer of the integration. If three surfaces (miniature, standalone, admin) need to know the model, the table is the source. If a setting can drift between surfaces, you have a bug latent in the design — not a UX papercut.</p>
+</blockquote>
+<hr>
+<h2 id="4-cross-cutting-concerns">4. Cross-cutting concerns</h2>
+<p>These don&#39;t belong to any one of the three pieces, but every integration of this shape eventually faces them.</p>
+<span class="anchor-alias" id="41-cross-origin-isolation-coop--coep"></span><h3 id="41-cross-origin-isolation-coop-coep">4.1 Cross-origin isolation (COOP + COEP)</h3>
+<p>Oyon&#39;s emotion model runs on multi-threaded WASM via ONNX Runtime. Multi-threaded WASM needs <code>SharedArrayBuffer</code>. <code>SharedArrayBuffer</code> is gated behind <code>crossOriginIsolated</code>, which requires both:</p>
+<ul>
+<li><code>Cross-Origin-Opener-Policy: same-origin</code></li>
+<li><code>Cross-Origin-Embedder-Policy: credentialless</code></li>
+</ul>
+<p>Both are set in <code>server/security-headers.js:91-92</code> (production) and <code>vite.config.js:20-21</code> (dev). Without these, ONNX silently falls back to single-threaded WASM — 5–10× slower, no fatal error. Verify with this in DevTools console:</p>
+<pre><code class="language-js">crossOriginIsolated &amp;&amp; typeof SharedArrayBuffer !== &#39;undefined&#39;
+</code></pre>
+<p><code>COEP: credentialless</code> is the safer choice over <code>require-corp</code> because it strips credentials from cross-origin subresources instead of demanding every cross-origin asset ship a CORP header. Third-party fonts/images that don&#39;t ship CORP would break the page under <code>require-corp</code>.</p>
+<h3 id="42-csrf-for-the-standalone-demo">4.2 CSRF for the standalone demo</h3>
+<p>The Oyon standalone demo lives at <code>/standalone/</code> and POSTs to Rohy endpoints with <code>credentials: &#39;include&#39;</code>. Rohy enforces double-submit CSRF for cookie-auth routes — meaning the request needs a <code>rohy_csrf</code> cookie copied into an <code>X-CSRF-Token</code> header. Earlier the standalone forgot this, and consent / emotion-records POSTs silently 403&#39;d. Fix: a <code>rohyFetch</code> helper in <code>OyonR/standalone/standalone-demo.js</code> (overlaid via <code>scripts/oyon-overlay/</code>) reads the cookie and adds the header for every non-GET. <strong>General principle: if your host enforces CSRF, every embedded surface that POSTs needs to honour it, even when &quot;we control both ends.&quot;</strong></p>
+<h3 id="43-idempotency-at-the-persistence-boundary">4.3 Idempotency at the persistence boundary</h3>
+<p>Already covered in §2: <code>record_id = sha1(tenant|session|window_start|window_end)</code>. The general shape:</p>
+<blockquote>
+<p><strong>Server-derived stable record IDs beat client-supplied ones for replay safety.</strong> Client cooperation is fragile (it forgets, retries differ, intermediaries strip). For any &quot;windowed observation&quot; ingestion — whether emotions, vitals, telemetry pings, IoT readings — a hash of the natural identity (tenant + producer + window bounds) gives natural per-window identity that replays automatically collapse. No client change required.</p>
+</blockquote>
+<h3 id="44-single-source-of-truth-recurring-theme">4.4 Single source of truth (recurring theme)</h3>
+<p>Three places this pattern shows up in the Oyon integration:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What it owns</th>
+<th>Why one source matters</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>modelProfiles.js</code></td>
+<td>Model registry</td>
+<td>Three surfaces (miniature, standalone, admin) need to agree on what models exist</td>
+</tr>
+<tr>
+<td><code>oyon_settings</code> table</td>
+<td>Runtime config</td>
+<td>The widget, the standalone demo, and the admin form all read from <code>/config</code></td>
+</tr>
+<tr>
+<td><code>DEFAULT_RUNTIME</code> constant in <code>oyon-routes.js</code></td>
+<td>Default values</td>
+<td><code>ensureSettings</code> and the admin form-reset both pull from here</td>
+</tr>
+</tbody></table></div>
+<p><strong>General principle: every time you find yourself thinking &quot;I&#39;ll add the same value in two places, it&#39;s just easier&quot;, you are committing to a future bug. The first time the two places drift, you&#39;ll have a customer report you can&#39;t reproduce because <em>your</em> dev env happens to have the same value in both places.</strong></p>
+<h3 id="45-structured-logging-on-both-sides">4.5 Structured logging on both sides</h3>
+<p>Server: <code>oyonLog.info / debug / warn</code> everywhere (built on the existing <code>logger(&#39;oyon-addon&#39;)</code> factory). Client: <code>oyonClientLog(&#39;debug&#39;, message, fields)</code> in <code>src/components/oyon/clientLogger.js</code>, prefixes every line with <code>[oyon]</code>. Worth the 30 lines of log-call boilerplate because:</p>
+<pre><code class="language-bash"># Reconstruct a full session from server side
+journalctl -u rohy | grep &#39;&quot;component&quot;:&quot;oyon-addon&quot;&#39;
+
+# Reconstruct from the browser
+# DevTools → Console → filter &quot;[oyon]&quot;
+</code></pre>
+<p>Both sides cover: config load → consent → preload → start → batch persist → stop. <strong>General principle: a structured log on each side of the wire is non-optional for any integration that fails in interesting ways. Especially when the failure mode is &quot;appears to work, just slowly&quot; or &quot;appears to work, just doesn&#39;t persist&quot;.</strong></p>
+<h3 id="46-failure-isolation">4.6 Failure isolation</h3>
+<p>Per <code>OYON_INTEGRATION_POLICY.md</code>:</p>
+<blockquote>
+<p>If any layer of Oyon breaks — env flag off, schema mis-migrated, model assets missing, route throws, transport rejected — Rohy continues to run.</p>
+</blockquote>
+<p>Mechanisms:</p>
+<ul>
+<li><code>OYON_ENABLED</code> env flag: when unset, <code>oyon-routes.js</code> registers stubs that 404 without crashing.</li>
+<li>Migration runner is idempotent: missing tables produce 503, not 500.</li>
+<li>Widget mount path is wrapped in an error boundary (<code>src/components/oyon/OyonCaptureWidget.jsx</code> returns null on construct error).</li>
+<li>Standalone demo is fully separate; its absence at <code>/standalone/</code> doesn&#39;t affect the SPA.</li>
+</ul>
+<p><strong>General principle: an integration that can take the host down is a worse integration than one that can be missing entirely. Plan the failure modes first, the success path second.</strong></p>
+<hr>
+<h2 id="5-deploy-making-the-integration-self-bootstrapping">5. Deploy: making the integration self-bootstrapping</h2>
+<h3 id="51-the-bundle-problem">5.1 The bundle problem</h3>
+<p>OyonR ships ~93 MB of MediaPipe + ONNX wasm bundles + emotion model weights in <code>OyonR/standalone/{vendor,models}/</code>. Carrying these in git history doubles the repo checkout size for everyone forever.</p>
+<p>Decision: <strong>gitignore them, fetch on install.</strong></p>
+<pre><code>.gitignore (rohy root):
+  OyonR/standalone/vendor/
+  OyonR/standalone/models/
+  OyonR/node_modules/
+
+OyonR/scripts/download-models.sh
+  ↓ idempotent — skips files already present (checks size &gt; 0)
+  ↓ uses curl
+  ↓ downloads to OyonR/standalone/{vendor,models}/
+</code></pre>
+<h3 id="52-the-install-hook">5.2 The install hook</h3>
+<p><code>package.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;scripts&quot;: {
+    &quot;postinstall&quot;: &quot;bash OyonR/scripts/download-models.sh 2&gt;/dev/null || echo &#39;[oyon] model bundles not downloaded — run: npm run setup:oyon (needs curl + network)&#39;&quot;,
+    &quot;setup:oyon&quot;: &quot;bash OyonR/scripts/download-models.sh&quot;
+  }
+}
+</code></pre>
+<p>The <code>|| echo</code> fallback is deliberate: if you&#39;re behind a corporate proxy or your CI has no network, <code>npm install</code> should still succeed. The explicit <code>npm run setup:oyon</code> (no fallback) gives a real error code when you re-run it manually.</p>
+<span class="anchor-alias" id="53-belt--suspenders-in-deploy-paths"></span><h3 id="53-belt-suspenders-in-deploy-paths">5.3 Belt + suspenders in deploy paths</h3>
+<p><code>deploy/docker/Dockerfile</code> builder stage adds <code>curl</code> to apt-get and <strong>explicitly re-runs</strong> the download right after <code>npm install</code>:</p>
+<pre><code class="language-dockerfile">RUN npm install --prefer-offline --no-audit --no-fund \
+ &amp;&amp; bash OyonR/scripts/download-models.sh
+</code></pre>
+<p>Idempotency means the second run is a no-op when postinstall already worked. The benefit is <strong>loud failure</strong>: a missing download fails the docker build instead of shipping a runtime image with no face/emotion assets.</p>
+<p><code>deploy/local-install.sh</code> and <code>deploy/bootstrap.sh</code> do the same thing for non-Docker paths.</p>
+<h3 id="54-reverse-proxy-paths">5.4 Reverse-proxy paths</h3>
+<p><code>deploy/docker/Caddyfile</code> carries explicit handlers for the three Oyon URL families that don&#39;t honour Rohy&#39;s <code>/rohy/</code> SPA base:</p>
+<pre><code class="language-caddyfile">handle /oyon/*       { reverse_proxy rohy:4000 }
+handle /standalone/* { reverse_proxy rohy:4000 }
+handle /api/addons/oyon* { reverse_proxy rohy:4000 }
+</code></pre>
+<p><strong>General principle: if your host SPA uses a non-root base (<code>/rohy/</code>), embedded surfaces with absolute URLs (<code>/standalone/vendor/foo.wasm</code>) will 404 unless your reverse proxy explicitly routes them. Audit every absolute URL the integration uses; either rewrite them through the SPA base, or add explicit handlers.</strong></p>
+<hr>
+<h2 id="6-the-generalized-checklist">6. The generalized checklist</h2>
+<p>When you add the next library — emotion classifier, voice biometric, eye tracker, gesture recognizer, anything substantial — work through this list in order. The Oyon integration spent multiple sessions discovering each of these the hard way; the cost of doing them up front is much smaller.</p>
+<h3 id="architecture">Architecture</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>One vendored copy.</strong> Decide the path (e.g. <code>LibName/</code>) and the package.json reference (<code>&quot;libname&quot;: &quot;file:./LibName&quot;</code>). Never have multiple copies in different places.</li>
+<li><input disabled="" type="checkbox"> <strong>One adapter layer.</strong> A single directory (<code>scripts/libname-overlay/</code>) holds full-file overlays of the upstream files you need to patch. An idempotent applicator script (<code>scripts/apply-libname-patches.mjs</code>) runs after every upstream sync.</li>
+<li><input disabled="" type="checkbox"> <strong>One application entry point.</strong> Exactly one host file imports from the vendored package. Everything else imports from your wrapper.</li>
+<li><input disabled="" type="checkbox"> <strong>One integration policy doc.</strong> Short. States the boundary, the failure-isolation rule, and the &quot;additive-only&quot; schema rule.</li>
+</ul>
+<h3 id="vendored-binary-assets">Vendored binary assets</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>gitignore them</strong> if they&#39;re &gt; ~10 MB total.</li>
+<li><input disabled="" type="checkbox"> <strong>Idempotent download script</strong> in the vendored tree (<code>LibName/scripts/download-models.sh</code>). Skip files already present.</li>
+<li><input disabled="" type="checkbox"> <strong>postinstall hook</strong> in root <code>package.json</code> that runs the script. Tolerant fallback so partial installs don&#39;t break.</li>
+<li><input disabled="" type="checkbox"> <strong>Explicit re-run in every deploy path</strong> (Dockerfile, bootstrap, local-install). Not tolerant — fail loud on missing assets.</li>
+<li><input disabled="" type="checkbox"> <strong>README mentions the bootstrap step</strong> plus the manual retry command (<code>npm run setup:libname</code>).</li>
+</ul>
+<h3 id="schema">Schema</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Additive-only migrations.</strong> Never <code>DROP COLUMN</code> or <code>RENAME COLUMN</code> in an integration table — Rohy can roll back to an older app version against a newer DB.</li>
+<li><input disabled="" type="checkbox"> <strong>Per-tenant config table</strong> with a single source-of-truth constant (<code>DEFAULT_LIBNAME_RUNTIME</code>) that <code>ensureSettings</code> INSERTs from explicitly. Don&#39;t rely on column-level DEFAULTs across migrations.</li>
+<li><input disabled="" type="checkbox"> <strong>Persistence rows share the same trinity</strong> as your existing logs (<code>tenant_id</code>, <code>session_id</code>, <code>user_id</code> or whatever the canonical authority columns are in your app).</li>
+<li><input disabled="" type="checkbox"> <strong>Server-derived record IDs</strong> for any windowed/repeated event ingestion. <code>sha1(tenant|session|window_bounds)</code> makes replays idempotent without client cooperation.</li>
+<li><input disabled="" type="checkbox"> <strong>Partial unique index</strong> matching the server-derived ID + <code>ON CONFLICT DO NOTHING</code> insert.</li>
+</ul>
+<h3 id="server-route-surface">Server route surface</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>All routes under one prefix</strong> (<code>/api/addons/libname/*</code>). Mountable / unmountable as a unit.</li>
+<li><input disabled="" type="checkbox"> <strong>Single error handler</strong> at the bottom of the route file. Express 5 auto-propagates async throws — let it.</li>
+<li><input disabled="" type="checkbox"> <strong>Read vs. write authorization split.</strong> Educators/admins typically can READ across users in their tenant; they typically CANNOT WRITE on behalf of users. Don&#39;t reuse the read rule for the write rule.</li>
+<li><input disabled="" type="checkbox"> <strong>Server-authoritative for security-relevant fields.</strong> <code>consent_version</code>, audit timestamps, anything that could be replayed should not trust the client.</li>
+</ul>
+<h3 id="client-widget">Client widget</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Single React entry point</strong> (<code>LibNameWidget.jsx</code>) that imports from the vendored package.</li>
+<li><input disabled="" type="checkbox"> <strong>Fetch tenant config BEFORE construct.</strong> Pass the full config to the runtime — not just two convenient fields.</li>
+<li><input disabled="" type="checkbox"> <strong>Forward live config changes.</strong> The settings tab dispatches a <code>libname:setting-changed</code> window event; the widget listens and re-inits.</li>
+<li><input disabled="" type="checkbox"> <strong><code>dispose()</code> distinct from <code>stop()</code></strong> if the runtime is resource-heavy. Every consumer that previously called <code>stop()</code> needs to be audited for whether it should now call <code>dispose()</code>.</li>
+<li><input disabled="" type="checkbox"> <strong>Structured client logger</strong> (<code>libnameClientLog</code>). Tagged with <code>[libname]</code> so <code>console</code> filtering works.</li>
+<li><input disabled="" type="checkbox"> <strong>Consent gating</strong> for any data persistence. Local rendering is fine; server POST requires explicit opt-in.</li>
+</ul>
+<h3 id="settings-ui">Settings UI</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Single source of truth for any registry</strong> (model list, voice list, profile list). Imported by every consumer; never re-defined.</li>
+<li><input disabled="" type="checkbox"> <strong>Form save dispatches the live-update event.</strong></li>
+<li><input disabled="" type="checkbox"> <strong>Cross-tab synchronisation</strong> via the <code>storage</code> event for any localStorage-backed settings.</li>
+</ul>
+<span class="anchor-alias" id="cross-origin--security"></span><h3 id="cross-origin-security">Cross-origin / security</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>COOP + COEP</strong> if the library uses <code>SharedArrayBuffer</code> (multi-threaded WASM, WebGPU, Atomics). Verify with <code>crossOriginIsolated</code> in DevTools.</li>
+<li><input disabled="" type="checkbox"> <strong>CSRF token forwarding</strong> for any embedded surface that POSTs back to the host. <code>credentials: &#39;include&#39;</code> alone is not enough if the host enforces double-submit CSRF.</li>
+<li><input disabled="" type="checkbox"> <strong>No hardcoded secrets</strong> in the vendored tree. API keys come from tenant config, not environment vars in the bundled JS.</li>
+</ul>
+<h3 id="failure-isolation">Failure isolation</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Env flag off → integration silently 404s; host keeps running.</strong></li>
+<li><input disabled="" type="checkbox"> <strong>Missing tables → 503, not 500.</strong></li>
+<li><input disabled="" type="checkbox"> <strong>Widget construct errors → return null, not propagate.</strong></li>
+<li><input disabled="" type="checkbox"> <strong>Standalone demo absence → SPA still loads.</strong></li>
+</ul>
+<h3 id="observability">Observability</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Server-side <code>logger(&#39;libname-addon&#39;)</code> everywhere</strong> (config load → consent → start → batch persist → stop).</li>
+<li><input disabled="" type="checkbox"> <strong>Client <code>[libname]</code>-tagged structured logs</strong> at the same lifecycle points.</li>
+<li><input disabled="" type="checkbox"> <strong>Persisted records visible in the existing log viewers</strong> — don&#39;t build a separate viewer when you can UNION into the existing chat/activity feed with a <code>source: libname</code> chip.</li>
+</ul>
+<h3 id="reverse-proxy">Reverse proxy</h3>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Audit every absolute URL</strong> the library uses (<code>/static/</code>, <code>/vendor/</code>, <code>/api/</code>).</li>
+<li><input disabled="" type="checkbox"> <strong>Add explicit handlers</strong> for those paths in your reverse proxy if your SPA uses a non-root base.</li>
+<li><input disabled="" type="checkbox"> <strong>Document the URL families</strong> in the proxy config with a comment so the next operator knows why those handlers exist.</li>
+</ul>
+<hr>
+<h2 id="7-reading-order-for-the-curious">7. Reading order for the curious</h2>
+<p>If you&#39;ve never opened the Oyon integration before, this is the order that pays off:</p>
+<ol>
+<li><code>OYON_INTEGRATION_POLICY.md</code> — boundaries (5 min)</li>
+<li><code>migrations/0011_oyon_addon.sql</code> through <code>0017_oyon_records_window_metadata.sql</code> — schema (10 min)</li>
+<li><code>server/routes/oyon-routes.js</code> — API surface (15 min)</li>
+<li><code>src/components/oyon/OyonCaptureWidget.jsx</code> — the widget (15 min)</li>
+<li><code>OyonR/src/core/EmotionRuntime.js</code> — the vendored runtime (read once, never patch directly) (20 min)</li>
+<li>This doc — pattern to apply elsewhere (you&#39;re here)</li>
+</ol>
+<p>Total: under two hours to grok the full integration.</p>
+<hr>
+<h2 id="appendix-naming-conventions-used-in-this-integration">Appendix: Naming conventions used in this integration</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Example</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>OYON_*</code> constant</td>
+<td><code>OYON_ENABLED</code>, <code>OYON_DEFAULT_CONSENT_VERSION</code></td>
+<td>Greppable; never collides with <code>ROHY_*</code></td>
+</tr>
+<tr>
+<td><code>oyon_*</code> SQL identifier</td>
+<td><code>oyon_settings</code>, <code>oyon_emotion_records</code></td>
+<td>Same — namespace by prefix</td>
+</tr>
+<tr>
+<td><code>oyon-routes.js</code>, <code>oyon-overlay/</code></td>
+<td>hyphen-case for paths</td>
+<td>Matches the rest of the codebase</td>
+</tr>
+<tr>
+<td><code>OyonCaptureWidget.jsx</code></td>
+<td>PascalCase for React components</td>
+<td>Matches React convention</td>
+</tr>
+<tr>
+<td><code>oyonClientLog</code> / <code>oyonLog</code></td>
+<td>camelCase for functions</td>
+<td>Matches JS convention; same prefix as identifiers</td>
+</tr>
+<tr>
+<td><code>[oyon]</code> log tag</td>
+<td>brackets in the string</td>
+<td>One grep target across server + client</td>
+</tr>
+</tbody></table></div>
+<p>The whole point of these conventions: a fresh contributor running <code>grep -r oyon</code> at the repo root sees exactly the surface area of the integration. If you ever find a piece of the integration that doesn&#39;t show up in that grep, the convention has been violated and the boundary will eventually leak.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

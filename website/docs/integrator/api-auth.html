@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>API authentication · Rohy docs</title>
+    <meta name="description" content="Every /api/* endpoint except the public health probes and the login/register pair requires an authenticated request. This page is the contract for getting and using a token. End…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="API authentication · Rohy docs">
+    <meta property="og:description" content="Every /api/* endpoint except the public health probes and the login/register pair requires an authenticated request. This page is the contract for getting and using a token. End…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Integrator</span>
+        <h1>API authentication</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#two-token-transports">Two token transports</a>
+            <a href="#csrf-cookie-auth-path-only">CSRF (cookie-auth path only)</a>
+            <a href="#server-side-revocation-active_sessions">Server-side revocation (active_sessions)</a>
+            <a href="#roles">Roles</a>
+            <a href="#worked-example-login-then-an-authenticated-call">Worked example: login then an authenticated call</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Building on Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="architecture.html">Architecture seams</a>
+                    <a href="api-auth.html" aria-current="page">API authentication</a>
+                    <a href="embedding.html">Embedding the avatar kit</a>
+                    <a href="providers.html">Adding a TTS/LLM provider</a>
+                    <a href="knowledge-base.html">Knowledge base</a>
+                    <a href="contributing.html">Contributing &amp; tests</a>
+                    <a href="vendored-packages.html">Vendored packages</a>
+                    <a href="i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Every <code>/api/*</code> endpoint except the public health probes and the
+login/register pair requires an authenticated request. This page is the
+contract for getting and using a token. Endpoint shapes are in the generated
+<a href="../reference/api/auth.html">auth reference</a>; roles are in the
+<a href="../reference/glossary.html">glossary</a>.</p>
+<h2 id="two-token-transports">Two token transports</h2>
+<p><code>authenticateToken</code> (in <code>server/middleware/auth.js</code>) accepts the JWT from
+<strong>either</strong>:</p>
+<ul>
+<li>the <code>Authorization: Bearer &lt;token&gt;</code> header (legacy / programmatic
+clients), <strong>or</strong></li>
+<li>the <code>rohy_auth</code> <strong>HttpOnly cookie</strong> (preferred for browsers).</li>
+</ul>
+<p>When both are present the <strong>header wins</strong> — this covers the migration window
+where a tab might briefly hold a localStorage token while the cookie is not
+yet set. A present-but-malformed <code>Authorization</code> header is treated as a
+client bug: it returns <strong>400</strong> with a <code>code</code> (<code>no-scheme-separator</code>,
+<code>unsupported-scheme</code>, <code>empty-token</code>, <code>whitespace-in-token</code>) rather than
+silently falling through to 401.</p>
+<p><code>/api/auth/login</code> returns the JWT in the JSON body <strong>and</strong> sets two cookies:</p>
+<ul>
+<li><code>rohy_auth</code> — HttpOnly, the JWT. Browser JS cannot read it.</li>
+<li><code>rohy_csrf</code> — <strong>not</strong> HttpOnly, a CSRF token. Browser JS reads it.</li>
+</ul>
+<h2 id="csrf-cookie-auth-path-only">CSRF (cookie-auth path only)</h2>
+<p>Because the auth cookie is auto-attached cross-site, cookie-authenticated
+<strong>state-changing</strong> requests (<code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code>) must carry
+an <code>X-CSRF-Token</code> header whose value equals the <code>rohy_csrf</code> cookie
+(double-submit pattern, timing-safe compared server-side). Mismatch → 403.</p>
+<p>CSRF is <strong>not</strong> enforced when:</p>
+<ul>
+<li>the request authed via the <strong>Bearer header</strong> (a cross-site attacker cannot
+auto-attach an <code>Authorization</code> header), or</li>
+<li>the method is a read (<code>GET</code> / <code>HEAD</code>), or</li>
+<li>the path is login/register (no session yet).</li>
+</ul>
+<p>So a server-to-server client using the Bearer header never needs the CSRF
+header. A browser client using cookies must echo it on every mutation.</p>
+<h2 id="server-side-revocation-active_sessions">Server-side revocation (<code>active_sessions</code>)</h2>
+<p>A valid JWT signature is <strong>not</strong> sufficient. After verifying the signature
+and expiry, <code>authenticateToken</code> looks up the token&#39;s SHA-256 hash in
+<code>active_sessions</code>:</p>
+<ul>
+<li>Row exists and <code>is_active = 0</code> → <strong>401 Session revoked</strong> (logout, admin
+force-logout, or password change), even though the JWT is still
+cryptographically valid.</li>
+<li>Row exists and <code>expires_at</code> is past → <strong>401 Session expired</strong>.</li>
+<li>No row at all → accepted (legacy token issued before this check landed;
+bounded by the 4h JWT TTL).</li>
+</ul>
+<p>The default JWT TTL is 4h (<code>JWT_EXPIRY</code> env var overrides it, e.g. <code>7d</code> for
+a kiosk). Logout revokes the exact session via the stashed token hash;
+admins revoke others via the active-sessions admin endpoints.</p>
+<h2 id="roles">Roles</h2>
+<p>Authorization is rank comparison, never string equality:</p>
+<pre><code class="language-text">guest(0) &lt; student(1) &lt; reviewer(2) &lt; educator(3) &lt; admin(4)
+</code></pre>
+<p>The wire role <code>educator</code> is surfaced in the UI as <strong>Teacher</strong>; only the
+label changed. The role <code>user</code> is normalized to <code>student</code> (same rank).</p>
+<h2 id="worked-example-login-then-an-authenticated-call">Worked example: login then an authenticated call</h2>
+<span class="anchor-alias" id="bearer-header-programmatic--no-csrf-needed"></span><h3 id="bearer-header-programmatic-no-csrf-needed">Bearer header (programmatic — no CSRF needed)</h3>
+<pre><code class="language-bash"># 1. Log in. Capture the token from the JSON body.
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&quot;username&quot;:&quot;admin&quot;,&quot;password&quot;:&quot;your-password&quot;}&#39; \
+  | node -pe &#39;JSON.parse(require(&quot;fs&quot;).readFileSync(0)).token&#39;)
+
+# 2. Use it. GET needs no CSRF header regardless of transport.
+curl -s http://localhost:3000/api/auth/profile \
+  -H &quot;Authorization: Bearer $TOKEN&quot;
+
+# 3. A state-changing call over Bearer also needs no CSRF header.
+curl -s -X POST http://localhost:3000/api/settings/log \
+  -H &quot;Authorization: Bearer $TOKEN&quot; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&quot;event&quot;:&quot;docs-smoke-test&quot;}&#39;
+</code></pre>
+<span class="anchor-alias" id="cookie--csrf-browser-style"></span><h3 id="cookie-csrf-browser-style">Cookie + CSRF (browser-style)</h3>
+<pre><code class="language-bash"># 1. Log in, persisting both cookies to a jar.
+curl -s -c cookies.txt -X POST http://localhost:3000/api/auth/login \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&quot;username&quot;:&quot;admin&quot;,&quot;password&quot;:&quot;your-password&quot;}&#39; &gt; /dev/null
+
+# 2. Read the (non-HttpOnly) CSRF cookie value out of the jar.
+CSRF=$(awk &#39;$6==&quot;rohy_csrf&quot;{print $7}&#39; cookies.txt)
+
+# 3. State-changing call: send the cookie jar AND the matching header.
+curl -s -b cookies.txt -X POST http://localhost:3000/api/settings/log \
+  -H &quot;X-CSRF-Token: $CSRF&quot; \
+  -H &#39;Content-Type: application/json&#39; \
+  -d &#39;{&quot;event&quot;:&quot;docs-smoke-test&quot;}&#39;
+
+# 4. Log out — this flips is_active=0 on the active_sessions row, so the
+#    token is dead even before its 4h TTL.
+curl -s -b cookies.txt -X POST http://localhost:3000/api/auth/logout \
+  -H &quot;X-CSRF-Token: $CSRF&quot;
+</code></pre>
+<aside class="callout callout-warning">
+<p class="callout-title">Warning</p>
+<p>Replace <code>http://localhost:3000</code> with your deployment origin and use real
+credentials. The <code>rohy_auth</code> cookie is HttpOnly by design — a browser
+client never reads it; it only ever reads <code>rohy_csrf</code> to populate the
+<code>X-CSRF-Token</code> header.</p>
+</aside>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

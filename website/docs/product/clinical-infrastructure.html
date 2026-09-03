@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Clinical simulation infrastructure · Rohy docs</title>
+    <meta name="description" content="Rohy&amp;#39;s clinical infrastructure is the runtime environment that turns an authored case into an encounter. It is the part of the platform the learner experiences directly: the…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Clinical simulation infrastructure · Rohy docs">
+    <meta property="og:description" content="Rohy&amp;#39;s clinical infrastructure is the runtime environment that turns an authored case into an encounter. It is the part of the platform the learner experiences directly: the…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Product</span>
+        <h1>Clinical simulation infrastructure</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-room-workspace">The room workspace</a>
+            <a href="#monitor-physiology-and-time">Monitor physiology and time</a>
+            <a href="#alarm-infrastructure">Alarm infrastructure</a>
+            <a href="#physical-examination">Physical examination</a>
+            <a href="#laboratory-and-radiology">Laboratory and Radiology</a>
+            <a href="#treatments-and-consequences">Treatments and consequences</a>
+            <a href="#records-memory-and-distributed-information">Records, memory and distributed information</a>
+            <a href="#debrief-as-a-terminal-clinical-state">Debrief as a terminal clinical state</a>
+            <a href="#why-the-distinctions-matter">Why the distinctions matter</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group" open>
+                    <summary>Rohy product architecture</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="clinical-infrastructure.html" aria-current="page">Clinical simulation infrastructure</a>
+                    <a href="case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy&#39;s clinical infrastructure is the runtime environment that turns an authored case into an encounter. It is the part of the platform the learner experiences directly: the patient room, the examination surface, the investigation worklists, the monitor, treatments, records, alarms and debrief. The infrastructure makes clinical reasoning observable. It gives learners tools, delays, signals and consequences, then records how they move through them.</p>
+<p>Rohy presents an AI virtual patient the learner can talk to by text or by voice. An animated three-dimensional avatar lip-syncs the patient&#39;s spoken replies, blinks and holds eye contact, and the patient answers from the case&#39;s own history and personality, speaking in lay language, rating pain on a zero-to-ten scale and staying within what a real patient would know. Around the patient sits a small care team the learner can also address: a bedside nurse who is present, a senior consultant who is on-call and can be paged, and a family member who holds collateral history.</p>
+<p>Examination happens on a body map. The learner opens an anterior or posterior view, chooses a region and then chooses how to examine it: inspection, palpation, percussion, auscultation or a named special test. The platform then reveals the finding the case author prepared for that combination, playing real heart and lung sounds for auscultation. Examined and abnormal regions are marked on the figure, findings can be exported, and free-text notes travel with the session.</p>
+<p>Laboratory and Radiology work as searchable catalogues. The learner searches or browses, places an order and waits out the test&#39;s configured turnaround; a ready badge appears when the report arrives, opening it marks it viewed, and it stays available for the rest of the session. Treatments are ordered and then administered in two steps: the learner sets a medication&#39;s dose, route and frequency, or a fluid rate, or an oxygen or nursing measure, gives it, and its effect moves the vitals over the following minutes along an onset, peak and decline curve. Contraindicated and high-alert orders raise warnings, and an active treatment can be discontinued.</p>
+<p>The patient monitor carries the case&#39;s physiology in real time: heart rate, oxygen saturation, blood pressure, respiratory rate, temperature and end-tidal carbon dioxide, with live ECG, pleth and respiration waveforms and a rhythm that can be normal sinus, atrial fibrillation, ventricular tachycardia, ventricular fibrillation or asystole. A scenario timeline can move the patient toward deterioration or recovery, treatment effects layer on top, and the case configuration is frozen at session start so a running encounter keeps the case it began with. When a vital crosses its threshold an alarm fires and latches; acknowledging or snoozing it silences the notification while the physiology carries on until it is treated or the scenario changes, and every firing and acknowledgement is timestamped.</p>
+<p>The session is organised into peer rooms the learner can move among freely: Patient, Examination, Laboratory, Radiology and Consultant. Plugin rooms join them when the case carries the material they present. The Consultant room is available for reflection and help while the case is live. The End and Debrief action stops the timeline, locks orders, exams and chat, and opens the reflective debrief with a separate discussant tutor alongside the transcript, notes and a case summary. Throughout, every action the learner takes is recorded and stamped with the room it happened in, feeding a Transition Network Analysis dashboard that reconstructs the path through the case.</p>
+<h2 id="the-room-workspace">The room workspace</h2>
+<p>Rohy organises the session into peer rooms: Patient, Examination, Laboratory, Radiology and Consultant, joined by the plugin rooms a case enables. Each is a peer of the others, and the set has no fixed pathway. A learner can move among them as a clinician might move among information sources and tasks. The Patient room holds the interview, monitor, treatment controls and the End and Debrief action. The Examination room exposes the body map and structured findings. Laboratory and Radiology provide catalogues, orders, worklists and reports. The Consultant room becomes the reflective debrief space once the case ends.</p>
+<p>This room model matters because clinical reasoning loops and doubles back. A learner may gather history, examine, return to the patient, order labs, review imaging, treat, monitor and consult in different orders. Rohy preserves those movements so the session can be interpreted later. Ready-result badges allow the learner to keep working while waiting for investigations, and room-stamped events allow analytics to distinguish where actions occurred.</p>
+<h2 id="monitor-physiology-and-time">Monitor physiology and time</h2>
+<p>The patient monitor gives the case a temporal and physiological spine. It displays live vital signs such as heart rate, blood pressure, oxygen saturation, respiratory rate, temperature and end-tidal carbon dioxide where the case uses them. The ECG waveform and rhythm express the authored state of the patient, and the scenario timeline can move the patient toward deterioration or recovery.</p>
+<p>The monitor creates pressure. A case can deteriorate while the learner hesitates. A treatment can improve or fail to improve a vital sign over time. An instructor-pinned state can remain stable across other engine ticks. Because vital state is connected to session activity, educators can discuss both what the learner did and when they did it relative to physiological change.</p>
+<p>This is also why session snapshots matter. When a session starts, the relevant case configuration is frozen for that run. Later authoring edits leave the live encounter as it was. The learner&#39;s monitor, orders and findings remain tied to the case as it existed at start time, which preserves educational fairness and research interpretability.</p>
+<h2 id="alarm-infrastructure">Alarm infrastructure</h2>
+<p>Alarms are part of the clinical signal and part of the evidence trail. When a vital crosses a threshold, Rohy can surface an alert visually and, where enabled, audibly. The alarm latches while the abnormal condition remains relevant. The learner can acknowledge or snooze the alert, but that action only affects the notification. The patient&#39;s physiology remains abnormal until the learner addresses the underlying problem or the scenario changes.</p>
+<p>This separation is pedagogically important. In real clinical work, silencing a monitor is not treatment. Rohy records alarm firing, acknowledgement and response timing so debrief can address recognition, prioritisation and action. Per-case acknowledgement state prevents an alarm silenced in one patient from remaining silent in another, which is essential for simulation integrity.</p>
+<h2 id="physical-examination">Physical examination</h2>
+<p>The Examination room makes physical examination explicit. The learner chooses where to examine and how to examine it. A chest inspection, abdominal palpation, posterior auscultation or neurological special test is an action that reveals only the finding configured for that region and technique. The platform therefore treats examination as inquiry, and withholds a finding until the learner asks for it.</p>
+<p>This design rewards clinical focus. A finding stays hidden until the learner examines its region. A learner who performs a broad but unfocused examination leaves a different trace from one who conducts a targeted exam after a specific history cue. Notes taken in the room travel with the session and become available in debrief, supporting qualitative interpretation alongside event data.</p>
+<p>Technically, the exam surface combines React room components, body-map region metadata, case-configured findings and session-scoped persistence. Idempotent recording prevents retries from creating duplicate findings, while abnormal and examined markings help the learner keep track of what has been done.</p>
+<h2 id="laboratory-and-radiology">Laboratory and Radiology</h2>
+<p>Laboratory and Radiology are full rooms with catalogues, orders and worklists. The learner searches or browses a catalogue, places orders, waits for configured turnaround, opens ready reports and marks them viewed by reading them. Reports can remain available through the session so the learner can revisit evidence while reasoning evolves.</p>
+<p>The delay is educational. It forces learners to continue caring for the patient while information is pending. It also makes order timing meaningful. A troponin ordered before the history, after a focused exam or after an alarm represents different reasoning. A CT report viewed before treatment changes what the learner can reasonably know. Rohy&#39;s worklists and viewed states make those differences explicit.</p>
+<p>Laboratory and Radiology also connect authoring to runtime. Educators define what each case can reveal. Some results may be normal, some abnormal, some critical and some available only once ordered. The platform records orders and report views so analytics can reconstruct both what information existed in the case and what information the learner reached.</p>
+<h2 id="treatments-and-consequences">Treatments and consequences</h2>
+<p>The Treatments panel models intervention as an explicit clinical action. A learner may order a medication, fluid, oxygen mode or manoeuvre, but the patient should not respond until the treatment is administered. Once administered, the effect can alter vital signs over time according to authored or catalogue-defined behaviour. Treatments can also carry contraindication and high-alert warnings, which are shown to the learner as part of the educational scenario.</p>
+<p>The treatment model is important because it links decision and consequence. A learner can choose an intervention, administer it, observe the monitor, discontinue it and later explain the reasoning. Debrief can ask whether the intervention was appropriate, timely, monitored and reconsidered. Analytics can place the treatment in sequence with history, examination, investigations and alarms.</p>
+<h2 id="records-memory-and-distributed-information">Records, memory and distributed information</h2>
+<p>Rohy cases can include records and memory surfaces so not all knowledge has to be spoken by the patient. Existing clinical context, medication history, allergies, social history, family history, session memory and learner notes can be surfaced through the appropriate controls. This supports realistic information distribution. The patient may not know every result. A family member may know collateral history. A consultant may have a different context boundary. A record may contain information the learner must decide to inspect.</p>
+<p>Both realism and research depend on this. If every fact is volunteered immediately, reasoning collapses into passive reception. If records, agents and findings are distributed, the learner&#39;s strategy becomes visible: what they looked for, what they missed, what they used and what they ignored.</p>
+<h2 id="debrief-as-a-terminal-clinical-state">Debrief as a terminal clinical state</h2>
+<p>The Consultant room has two meanings. During an active case, visiting it is navigation. The case continues. End and Debrief is a separate action. It stops the live case, locks further clinical actions and opens the reflective phase. This gives completion a stable meaning and protects the integrity of the session trace.</p>
+<p>Debrief brings together transcript, notes, summary and a discussant persona. The discussant is separate from the patient because reflection is a different educational role. Debrief helps the learner explain reasoning, reconsider decisions and connect their actions to the case trajectory, and it leaves mechanical judgement out. From a data perspective, debrief closes the loop between quantitative trace and qualitative explanation.</p>
+<h2 id="why-the-distinctions-matter">Why the distinctions matter</h2>
+<p>The clinical infrastructure is built around small, educationally decisive distinctions. Ordering stands apart from viewing, viewing from understanding, acknowledging from treating, navigating from ending, asking from examining, and a treatment order from an administered intervention. These boundaries make the learner&#39;s path interpretable. They also make the system scientifically useful, because the platform can connect behaviour, timing, room context, physiological state and debrief evidence without flattening them into a single undifferentiated activity log.</p>
+<p>Related guides include <a href="../trainee/rooms.html">The rooms</a>, <a href="../trainee/examination.html">Physical examination</a>, <a href="../trainee/investigations.html">Ordering labs and imaging</a>, <a href="../trainee/treatments.html">Treatments and medications</a>, <a href="../trainee/vitals.html">Vitals and alarms</a>, <a href="../trainee/debrief.html">Debrief</a>, and <a href="analytics.html">Analytics, evidence and research traces</a>.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

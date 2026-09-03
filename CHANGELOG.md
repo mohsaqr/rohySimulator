@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.7] — 2026-09-03
+
+### Added
+
+- **Every document rendered into the public website** (`website/build-docs.mjs`,
+  `website/docs/**`): 135 pages built from `docs/`, `CHANGELOG.md` and
+  `LICENSE` in the site shell, with a sidebar parsed from the VitePress
+  config, callouts for `:::` containers, escaped placeholder tokens, anchor
+  aliases for both slug spellings, generated indexes for directories without
+  an `index.md`, GitHub links for paths outside the rendered set, and a build
+  that fails on any missing link target. Output is byte-identical across
+  runs. `npm run website:build` runs it together with the help page
+  generator, which now shares the same shell template.
+- The site gains a `Docs` nav item; the footer, the rooms guide links and the
+  install links point at the rendered pages. Page titles use `Name · Rohy`.
+
 ## [3.0.0-beta.6] — 2026-09-03
 
 ### Changed

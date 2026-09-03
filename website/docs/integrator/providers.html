@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Adding a TTS / LLM provider · Rohy docs</title>
+    <meta name="description" content="Rohy already ships four TTS providers (Kokoro, Piper, OpenAI, Google) behind POST /api/tts, and several LLM providers behind POST /api/proxy/llm. This page describes the real co…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Adding a TTS / LLM provider · Rohy docs">
+    <meta property="og:description" content="Rohy already ships four TTS providers (Kokoro, Piper, OpenAI, Google) behind POST /api/tts, and several LLM providers behind POST /api/proxy/llm. This page describes the real co…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Integrator</span>
+        <h1>Adding a TTS / LLM provider</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-tts-provider-contract">The TTS provider contract</a>
+            <a href="#register-in-proxy-routesjs">Register in proxy-routes.js</a>
+            <a href="#llm-providers">LLM providers</a>
+            <a href="#ui-surface">UI surface</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Building on Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="architecture.html">Architecture seams</a>
+                    <a href="api-auth.html">API authentication</a>
+                    <a href="embedding.html">Embedding the avatar kit</a>
+                    <a href="providers.html" aria-current="page">Adding a TTS/LLM provider</a>
+                    <a href="knowledge-base.html">Knowledge base</a>
+                    <a href="contributing.html">Contributing &amp; tests</a>
+                    <a href="vendored-packages.html">Vendored packages</a>
+                    <a href="i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy already ships four TTS providers (Kokoro, Piper, OpenAI, Google) behind
+<code>POST /api/tts</code>, and several LLM providers behind <code>POST /api/proxy/llm</code>.
+This page describes the real contract for adding another, using
+<code>server/services/kokoroTts.js</code> as the reference TTS implementation.</p>
+<p>The endpoint shapes are in the generated <a href="../reference/api/index.html">API reference</a>;
+TTS terminology is in the <a href="../reference/glossary.html">glossary</a>.</p>
+<h2 id="the-tts-provider-contract">The TTS provider contract</h2>
+<p>A provider is a module under <code>server/services/</code> that exposes async functions.
+Mirror <code>kokoroTts.js</code>. Two shapes matter, and <code>proxy-routes.js</code> dynamically
+<code>import()</code>s your module on demand:</p>
+<h3 id="1-a-non-streaming-wav-synthesizer">1. A non-streaming WAV synthesizer</h3>
+<p>Returns a single <code>Buffer</code> containing a complete WAV (header + PCM):</p>
+<pre><code class="language-js">import { buildWavHeader, float32ToInt16Buffer } from &#39;./wav.js&#39;;
+
+export async function synthesizeMyproviderWav({ text, voice, speed }) {
+  // ... call your engine ...
+  const pcm = float32ToInt16Buffer(audioFloat32);   // int16 LE
+  return Buffer.concat([buildWavHeader(pcm.length, sampleRate), pcm]);
+}
+</code></pre>
+<h3 id="2-an-async-iterator-streaming-synthesizer">2. An async-iterator streaming synthesizer</h3>
+<p>This is the load-bearing part. Yield <strong>per-sentence</strong> chunks so the client
+can start playing sentence one while the rest synthesize. Each yielded
+object is exactly <code>{ sampleRate: number, pcm: Buffer }</code> where <code>pcm</code> is
+int16 little-endian:</p>
+<pre><code class="language-js">export async function* synthesizeMyproviderStream({ text, voice, speed }) {
+  for await (const chunk of myEngine.stream(text, { voice, speed })) {
+    yield {
+      sampleRate: chunk.sampling_rate,
+      pcm: float32ToInt16Buffer(chunk.audio),
+    };
+  }
+}
+</code></pre>
+<p>The route layer feeds this generator into the PCM stream pipe that emits the
+<code>application/x-rohy-pcm-stream</code> response. Kokoro&#39;s own implementation is the
+worked example — note it builds and explicitly <code>close()</code>s the splitter
+itself, because the upstream library&#39;s string overload never closes its
+internal splitter and the iterator would await forever (dropped last
+sentence + hung &quot;fails to end&quot;). If your engine has the same shape, close
+your stream deterministically.</p>
+<h3 id="3-a-voice-list-function-and-a-voice-validator">3. A voice-list function and a voice validator</h3>
+<pre><code class="language-js">export function listMyproviderVoices() {
+  return [{
+    filename: &#39;mv_amy&#39;,
+    displayName: &#39;Amy&#39;,
+    language: &#39;en&#39;,
+    gender: &#39;female&#39;,          // MUST be lowercase
+    traits: &#39;&#39;,
+    sampleRate: 24000,
+  }];
+}
+
+export async function isMyproviderVoice(name) {
+  return typeof name === &#39;string&#39; &amp;&amp; /* known? */ true;
+}
+</code></pre>
+<aside class="callout callout-danger">
+<p class="callout-title">Important</p>
+<p><code>gender</code> <strong>must be lowercase</strong>. Every other provider emits lowercase and
+<code>proxy-routes.js</code> compares against lowercase. Kokoro shipped Title-Case
+(<code>&quot;Female&quot;</code>) and every voice silently fell through the gender check and
+re-routed to a hardcoded <code>af_bella</code> / <code>am_michael</code> pair until it was
+normalized in <code>listKokoroVoices</code>. Do not repeat this.</p>
+</aside>
+<span class="anchor-alias" id="singleton--failure-containment-for-local-model-providers"></span><h3 id="singleton-failure-containment-for-local-model-providers">Singleton + failure containment (for local-model providers)</h3>
+<p><code>kokoroTts.js</code> lazy-loads a ~330 MB model once and reuses the instance.
+Copy its failure model: a fatal load error (truncated ONNX, OOM, missing
+files) sets a &quot;disabled until restart&quot; flag so every subsequent request
+rejects fast instead of re-triggering an 80 MB re-download — and so an
+ORT-WASM crash on a corrupt model can&#39;t take the whole Node process down.
+Transient errors do not set the flag (next call retries). Expose a
+<code>xDisabledReason()</code> hook so a healthcheck can surface it. Cloud providers
+skip this and just need an API-key / quota error path.</p>
+<h2 id="register-in-proxy-routesjs">Register in <code>proxy-routes.js</code></h2>
+<p><code>server/routes/proxy-routes.js</code> is the dispatch point. Steps:</p>
+<ol>
+<li>Add your provider id to <code>VOICE_TTS_PROVIDERS</code>
+(currently <code>[&#39;piper&#39;, &#39;kokoro&#39;, &#39;openai&#39;, &#39;google&#39;, &#39;browser&#39;]</code>).</li>
+<li>In <code>resolveTtsVoice(provider, requestedVoice)</code>, add a <code>case</code> that
+<code>import()</code>s your <code>isMyproviderVoice</code> and returns
+<code>{ ok: false, reason }</code> on a miss. There is <strong>no hardcoded fallback
+voice</strong> — an unknown voice is surfaced to the admin, not silently
+swapped, so a persona authored under another provider is visible.</li>
+<li>In <code>handleTtsSynthesis</code>, add an <code>if (ttsProvider === &#39;myprovider&#39;)</code>
+branch that dynamically imports your module, honors the same
+<code>rate</code> → <code>speed</code> clamp window the other providers use (keep cases
+portable across providers), and either pipes
+<code>synthesizeMyproviderStream(...)</code> when the client asks for streaming
+(<code>?stream=1</code> or <code>Accept: application/x-rohy-pcm-stream</code>) or returns
+<code>synthesizeMyproviderWav(...)</code> as <code>audio/wav</code> with <code>Cache-Control: no-store</code>.</li>
+</ol>
+<p>Provider selection rules already enforced by the route — don&#39;t reinvent:</p>
+<ul>
+<li>The runtime <code>POST /api/tts</code> route ignores any <code>provider</code> in the body or
+query. The active provider is <strong>always</strong> <code>platform_settings.tts_provider</code>
+(default <code>kokoro</code>). This is the path every patient/discussant voice uses.</li>
+<li><code>POST /api/tts/preview</code> (admin-only) is the <strong>only</strong> path that honors a
+<code>provider</code> override on the body/query, so admins can audition a voice
+without flipping the platform setting.</li>
+<li>Budget enforcement (<code>enforceBudget</code> / <code>recordUsage</code> keyed
+<code>tts-&lt;provider&gt;</code>) and the per-user usage row run <strong>before</strong> synthesis. A
+429 with a budget-exceeded body is returned if over budget. Keep your
+branch after these calls.</li>
+</ul>
+<h2 id="llm-providers">LLM providers</h2>
+<p>LLM dispatch is also in <code>proxy-routes.js</code>, under <code>POST /api/proxy/llm</code>. The
+contract differs from TTS: it resolves provider/model/endpoint/key with a
+strict <strong>agent &gt; session &gt; platform</strong> precedence, emits SSE deltas on the
+streaming branch, and records token usage + cost against
+<code>llm_model_pricing</code>. To add a vendor, extend the <code>provider === &#39;...&#39;</code>
+request-builder branch (it already special-cases <code>anthropic</code> vs the
+OpenAI-compatible shape) and add a pricing row. Reuse the existing
+precedence resolution and budget calls rather than parallel logic.</p>
+<h2 id="ui-surface">UI surface</h2>
+<p>Add a tab/section under <code>src/components/settings/VoiceSettingsTab.jsx</code> so an
+admin can select and preview the new provider. The preview button calls
+<code>POST /api/tts/preview</code> with the <code>provider</code> override; it does <strong>not</strong> touch
+the runtime path.</p>
+<aside class="callout callout-warning">
+<p class="callout-title">Warning</p>
+<p>Voice resolution, lipsync morphs, and the discussant voice path are covered
+by the 2026-05-06 regression lock (per-case patient voice leaking into the
+discussant). Adding a provider must not loosen it — run the e2e suite. See
+<a href="contributing.html">Contributing &amp; tests</a>.</p>
+</aside>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

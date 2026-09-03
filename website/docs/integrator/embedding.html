@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Embedding the avatar kit · Rohy docs</title>
+    <meta name="description" content="The talking-avatars kit is a self-contained, lift-and-drop kit for putting a lipsynced talking head into a third-party app. It now lives as a standalone workspace-sibling repo a…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Embedding the avatar kit · Rohy docs">
+    <meta property="og:description" content="The talking-avatars kit is a self-contained, lift-and-drop kit for putting a lipsynced talking head into a third-party app. It now lives as a standalone workspace-sibling repo a…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Integrator</span>
+        <h1>Embedding the avatar kit</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#what-the-kit-contains">What the kit contains</a>
+            <a href="#peer-requirements-you-provide-these-in-your-bundler">Peer requirements (you provide these in your bundler)</a>
+            <a href="#the-non-negotiable-invariant-viseme-order">The non-negotiable invariant: viseme order</a>
+            <a href="#react-integration">React integration</a>
+            <a href="#framework-free-smoke-test">Framework-free smoke test</a>
+            <a href="#server-side">Server side</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Building on Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="architecture.html">Architecture seams</a>
+                    <a href="api-auth.html">API authentication</a>
+                    <a href="embedding.html" aria-current="page">Embedding the avatar kit</a>
+                    <a href="providers.html">Adding a TTS/LLM provider</a>
+                    <a href="knowledge-base.html">Knowledge base</a>
+                    <a href="contributing.html">Contributing &amp; tests</a>
+                    <a href="vendored-packages.html">Vendored packages</a>
+                    <a href="i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>The talking-avatars kit is a self-contained, lift-and-drop kit for putting a
+lipsynced talking head into a third-party app. It now lives as a <strong>standalone
+workspace-sibling repo</strong> at <code>../talking-avatars/</code> (relocated out of this repo&#39;s
+<code>kits/</code>), and carries its own <code>SKILL.md</code> (a Claude Code skill) and <code>LEARNINGS.md</code>.
+It is <strong>meant to be copied into your project, not installed as an npm package</strong> —
+there is no published package and <code>package.json</code> is marked <code>private</code>. The
+<code>package.json</code> <code>peerDependencies</code> / <code>optionalDependencies</code> lists exist to tell
+you what to add to <em>your</em> install list.</p>
+<h2 id="what-the-kit-contains">What the kit contains</h2>
+<pre><code class="language-text">talking-avatars/   (workspace sibling — ../talking-avatars/)
+  SKILL.md     Claude Code skill — integration guide + gotchas
+  LEARNINGS.md Distilled production lessons
+  client/      React + three.js front-end pieces
+  server/      Drop-in Express TTS route + provider services
+  glbs/        Sample avatar GLBs
+  examples/    standalone.html — framework-free end-to-end demo
+  pipeline/    Avatar conversion pipeline (own package.json)
+</code></pre>
+<p>The export map in <code>package.json</code> is the public surface:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Import</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>./client/PatientAvatar</code></td>
+<td>The React component — loads a GLB, drives morph targets every frame</td>
+</tr>
+<tr>
+<td><code>./client/VoiceContext</code></td>
+<td>React context wiring playback + speaking state</td>
+</tr>
+<tr>
+<td><code>./client/voiceService</code></td>
+<td>Calls <code>/api/tts</code>, decodes audio, feeds the lipsync analyser</td>
+</tr>
+<tr>
+<td><code>./client/visemes</code></td>
+<td><code>VISEME_KEYS</code> — the canonical 15-viseme Oculus order</td>
+</tr>
+<tr>
+<td><code>./client/resolveAvatar</code></td>
+<td>Maps an avatar id to a GLB URL</td>
+</tr>
+<tr>
+<td><code>./client/avatarFraming</code></td>
+<td>Camera framing helper</td>
+</tr>
+<tr>
+<td><code>./client/config</code></td>
+<td><code>baseUrl</code> for API calls</td>
+</tr>
+<tr>
+<td><code>./client/authService</code></td>
+<td>Token plumbing for the kit&#39;s API calls</td>
+</tr>
+<tr>
+<td><code>./server/ttsRoute</code></td>
+<td>Express router exposing <code>POST /tts</code></td>
+</tr>
+<tr>
+<td><code>./server/kokoroTts</code>, <code>./server/googleTts</code>, <code>./server/wav</code></td>
+<td>Provider services + WAV helper</td>
+</tr>
+</tbody></table></div>
+<h2 id="peer-requirements-you-provide-these-in-your-bundler">Peer requirements (you provide these in your bundler)</h2>
+<p><code>react &gt;=18 &lt;20</code>, <code>react-dom &gt;=18 &lt;20</code>, <code>three</code>, <code>@react-three/fiber</code>,
+<code>@react-three/drei</code>, <code>wawa-lipsync</code>. Node <code>&gt;=20</code>.</p>
+<p>Optional, only if you also run the kit&#39;s server side: <code>kokoro-js</code> +
+<code>@huggingface/transformers</code> (Kokoro provider), <code>express &gt;=4</code>
+(<code>server/ttsRoute.js</code> as-is).</p>
+<h2 id="the-non-negotiable-invariant-viseme-order">The non-negotiable invariant: viseme order</h2>
+<p><code>client/visemes.js</code> exports <code>VISEME_KEYS</code> — the <strong>canonical 15-viseme
+Oculus order</strong>:</p>
+<pre><code class="language-text">viseme_sil  viseme_PP  viseme_FF  viseme_TH  viseme_DD
+viseme_kk   viseme_CH   viseme_SS  viseme_nn  viseme_RR
+viseme_aa   viseme_E    viseme_I   viseme_O   viseme_U
+</code></pre>
+<p><code>PatientAvatar</code> clones the GLB scene (so multiple avatars sharing a URL
+don&#39;t fight over morph state) and mutates <code>morphTargetInfluences</code> in place
+each frame against this order. The <code>wawa-lipsync</code> rig and every cross-platform
+avatar depend on this exact order — do not reorder it. (The wider Rohy app
+uses the 17-morph Oculus set documented in the platform&#39;s avatar notes; the
+kit&#39;s lip rig is the 15-viseme subset.)</p>
+<h2 id="react-integration">React integration</h2>
+<pre><code class="language-jsx">import { PatientAvatar } from &#39;talking-avatars-kit/client/PatientAvatar&#39;;
+import { VoiceContext } from &#39;talking-avatars-kit/client/VoiceContext&#39;;
+
+function Scene() {
+  return (
+    &lt;VoiceContext&gt;
+      &lt;PatientAvatar url=&quot;/avatars/heads/avatarsdk.glb&quot; /&gt;
+    &lt;/VoiceContext&gt;
+  );
+}
+</code></pre>
+<p><code>PatientAvatar</code> renders its own <code>@react-three/fiber</code> <code>Canvas</code>. <code>VoiceContext</code>
+owns the speaking/listening state and the call into <code>voiceService</code>, which
+POSTs to your <code>/api/tts</code> (same origin by default; override via
+<code>client/config.js</code> <code>baseUrl</code>).</p>
+<h2 id="framework-free-smoke-test">Framework-free smoke test</h2>
+<p><code>examples/standalone.html</code> exercises the whole pipeline with <strong>no React</strong> —
+it loads three.js + <code>wawa-lipsync</code> from a CDN import map, loads a GLB, calls
+<code>/api/tts</code>, and drives morph targets from the FFT analyser. Run the kit&#39;s
+<code>server/ttsRoute.js</code> on the same origin first, or set the API base field in
+the page. Use it to verify a host environment before wiring the React
+components.</p>
+<h2 id="server-side">Server side</h2>
+<p><code>server/ttsRoute.js</code> is a drop-in Express router exposing <code>POST /tts</code>. It
+dispatches to the bundled Kokoro (local, free) or Google (cloud, needs a
+key) providers. The request/response contract matches the platform&#39;s
+<code>/api/tts</code> — see <a href="providers.html">Adding a TTS/LLM provider</a> for the
+synthesis contract and <a href="api-auth.html">API authentication</a> if you
+gate the route. Audio comes back as <code>audio/wav</code>, or as a chunked
+<code>application/x-rohy-pcm-stream</code> when the client requests streaming.</p>
+<aside class="callout callout-warning">
+<p class="callout-title">Warning</p>
+<p>The kit ships sample GLBs under <code>glbs/</code>. Substitute your own licensed heads;
+keep the morph-target dictionary names matching <code>VISEME_KEYS</code> or lipsync
+silently no-ops (the per-key index lookup just skips missing morphs).</p>
+</aside>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

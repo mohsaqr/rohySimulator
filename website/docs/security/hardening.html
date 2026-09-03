@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hardening checklist · Rohy docs</title>
+    <meta name="description" content="Production hardening beyond the install and deploy steps. This page is for the security reviewer signing off a deployment; the operator-facing deploy procedure is the canonical …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Hardening checklist · Rohy docs">
+    <meta property="og:description" content="Production hardening beyond the install and deploy steps. This page is for the security reviewer signing off a deployment; the operator-facing deploy procedure is the canonical …">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Security</span>
+        <h1>Hardening checklist</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#secrets">Secrets</a>
+            <a href="#transport-reverse-proxy">Transport &amp; reverse proxy</a>
+            <a href="#identity-access">Identity &amp; access</a>
+            <a href="#data-lifecycle">Data lifecycle</a>
+            <a href="#optional-features">Optional features</a>
+            <a href="#deploy-verifiers">Deploy verifiers</a>
+            <a href="#what-rohy-does-not-do">What Rohy does not do</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="rbac.html">RBAC &amp; auth model</a>
+                    <a href="audit-chain.html">Audit chain</a>
+                    <a href="redaction.html">Redaction &amp; PII</a>
+                    <a href="retention.html">Data retention</a>
+                    <a href="oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="disclaimer.html">Medical-training disclaimer</a>
+                    <a href="hardening.html" aria-current="page">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Production hardening <strong>beyond</strong> the install and deploy steps. This page is
+for the security reviewer signing off a deployment; the operator-facing
+deploy procedure is the canonical source for the commands themselves.</p>
+<h2 id="secrets">Secrets</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <strong><code>JWT_SECRET</code> is strong and unique.</strong> Generate with
+<code>openssl rand -hex 32</code>. The server <strong>refuses to start</strong> without it
+(<code>server/middleware/auth.js</code> logs FATAL and exits). It signs and verifies
+every auth token. See <code>JWT_SECRET</code> in the
+<a href="../reference/config/index.html">config reference</a>.</li>
+</ul>
+<aside class="callout callout-danger">
+<p class="callout-title">Important</p>
+<p>Rotating <code>JWT_SECRET</code> invalidates <strong>every</strong> session at once — all tokens
+become unverifiable. Rotate only during a maintenance window with a server
+restart. There is no automatic secret rotation.</p>
+</aside>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>LLM / TTS API keys are scoped to this deployment.</strong> The
+secret-bearing env vars — <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>,
+<code>GOOGLE_API_KEY</code>, <code>GOOGLE_TTS_API_KEY</code> (full list and source locations in
+the <a href="../reference/config/index.html">config reference</a>) — should be per-project keys,
+separate from personal keys, with provider-side quotas set. These values
+are backstopped by the <a href="redaction.html">redaction</a> secret-key
+pattern so they are never echoed in a response, but quota and scope are
+still the operator&#39;s responsibility.</li>
+<li><input disabled="" type="checkbox"> <strong>No secrets in client-reachable config.</strong> Confirm any new
+secret-bearing field is registered in <code>server/redaction.js</code> (see
+<a href="redaction.html">Redaction &amp; PII</a>) before it can appear in a
+response.</li>
+</ul>
+<span class="anchor-alias" id="transport--reverse-proxy"></span><h2 id="transport-reverse-proxy">Transport &amp; reverse proxy</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>TLS terminates in front of Express.</strong> Never expose the Node port
+directly. nginx, Caddy, or a tunnel are all acceptable; Caddy and
+certbot/Let&#39;s Encrypt automate renewal.</li>
+<li><input disabled="" type="checkbox"> <strong><code>FRONTEND_URL</code> is set to the exact public origin</strong> so CORS allows
+only that origin (<code>FRONTEND_URL</code> in the
+<a href="../reference/config/index.html">config reference</a>; CORS rejects non-localhost
+origins when unset).</li>
+<li><input disabled="" type="checkbox"> <strong>SPA base matches the mount path.</strong> A bundle built with one base
+served at another 404s every asset — keep <code>--base</code> and the proxy path
+consistent.</li>
+<li><input disabled="" type="checkbox"> <strong>Security headers present</strong> — CSP, <code>X-Content-Type-Options</code>,
+<code>X-Frame-Options</code>, <code>Referrer-Policy</code>, HSTS. Verified by the deploy
+verifier below.</li>
+</ul>
+<span class="anchor-alias" id="identity--access"></span><h2 id="identity-access">Identity &amp; access</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Default seeded users are disabled.</strong> This is the default under
+<code>NODE_ENV=production</code>; confirm <code>ALLOW_DEFAULT_USERS</code> is <strong>not</strong> set.</li>
+<li><input disabled="" type="checkbox"> <strong>First admin password rotated</strong> if a bootstrap credential was used.</li>
+<li><input disabled="" type="checkbox"> <strong>Role/tenant model understood</strong> — access is rank comparison and the
+live <code>users</code> row is re-read every request, so demotion/suspension is
+immediate; logout/force-logout revokes via <code>active_sessions</code>
+immediately. See <a href="rbac.html">RBAC &amp; auth model</a>.</li>
+<li><input disabled="" type="checkbox"> <strong>MFA added at the edge if required.</strong> Rohy does not provide MFA on
+operator accounts; add it via the reverse proxy (e.g. OIDC / Authelia).</li>
+</ul>
+<h2 id="data-lifecycle">Data lifecycle</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Retention sweep cron installed</strong> and the window set deliberately
+(default 90 days). The sweep is a physical <code>DELETE</code> — see
+<a href="retention.html">Data retention</a>.</li>
+<li><input disabled="" type="checkbox"> <strong>Per-tenant Oyon retention reviewed</strong> if Oyon is enabled
+(Settings → Oyon).</li>
+<li><input disabled="" type="checkbox"> <strong>Off-site, ideally encrypted, backups configured</strong> before enabling
+the retention cron, since the sweep also truncates <code>system_audit_log</code>.</li>
+<li><input disabled="" type="checkbox"> <strong>Audit-chain verification has an owner.</strong> Decide who runs
+<code>verifyAuditChain</code> / <code>bash scripts/audit-auditlog.sh</code> and how a
+non-<code>ok</code> result is escalated (it is a tamper indicator, not a
+data-quality bug). See <a href="audit-chain.html">Audit chain</a>.</li>
+</ul>
+<h2 id="optional-features">Optional features</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Oyon governance sign-off obtained</strong> if <code>OYON_ENABLED=1</code>, including
+EU AI Act Art. 5 review. Disable with <code>OYON_ENABLED=0</code>
+(<a href="../reference/config/index.html">config reference</a>). See
+<a href="oyon-ai-act.html">Oyon &amp; EU AI Act</a>.</li>
+<li><input disabled="" type="checkbox"> <strong>Medical-training scope communicated</strong> — only synthetic data, no
+real patients. See the
+<a href="disclaimer.html">Medical-training disclaimer</a>.</li>
+</ul>
+<h2 id="deploy-verifiers">Deploy verifiers</h2>
+<p>Boot-an-isolated-server audit scripts assert the contracts in this guide.
+Wire the relevant ones into CI / cron:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Verifier</th>
+<th>Asserts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bash scripts/audit-rbac.sh</code></td>
+<td>Rank gates, protected-route refusal</td>
+</tr>
+<tr>
+<td><code>bash scripts/audit-auth.sh</code></td>
+<td>Token extraction, malformed-header handling</td>
+</tr>
+<tr>
+<td><code>bash scripts/audit-redaction.sh</code></td>
+<td>Response data-classification contract</td>
+</tr>
+<tr>
+<td><code>bash scripts/audit-auditlog.sh</code></td>
+<td>Audit-log surface + chain</td>
+</tr>
+<tr>
+<td><code>bash scripts/audit-retention.sh</code></td>
+<td>Retention window + sweep behavior</td>
+</tr>
+<tr>
+<td><code>bash scripts/audit-tenant.sh</code></td>
+<td>Cross-tenant access denial</td>
+</tr>
+<tr>
+<td><code>scripts/tech-test.sh https://your-host</code></td>
+<td>27-check live-deploy verifier (liveness, bundle, Oyon mount, auth gating, security headers, timing); <strong>arm the Oyon contract probe</strong> with credentials so every deploy POSTs a malformed emotion batch and asserts a 400 — see <a href="oyon-ai-act.html">Oyon &amp; EU AI Act</a></td>
+</tr>
+</tbody></table></div>
+<aside class="callout callout-tip">
+<p class="callout-title">Tip</p>
+<p>The Oyon contract probe credentials can be any real low-privilege user —
+the probe only needs to pass <code>authenticateToken</code> so the request reaches the
+validator; it reads no data. If the creds file is absent, the probe
+silently skips and the deploy still passes the other checks.</p>
+</aside>
+<h2 id="what-rohy-does-not-do">What Rohy does not do</h2>
+<p>State these explicitly when attesting a deployment:</p>
+<ul>
+<li><strong>No MFA</strong> on operator accounts (add at the edge).</li>
+<li><strong>No automatic secret rotation</strong> (<code>JWT_SECRET</code> rotation is a manual,
+session-invalidating, maintenance-window operation).</li>
+<li><strong>No FIPS / HIPAA / medical-device certification.</strong> The codebase is
+built to support these postures but holds no formal attestation. See the
+<a href="disclaimer.html">Medical-training disclaimer</a>.</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

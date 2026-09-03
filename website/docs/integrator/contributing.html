@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contributing &amp; tests · Rohy docs</title>
+    <meta name="description" content="What you must satisfy before a change lands. This is the developer-facing companion to the docs style guide for prose; the rules below are about code.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Contributing &amp; tests · Rohy docs">
+    <meta property="og:description" content="What you must satisfy before a change lands. This is the developer-facing companion to the docs style guide for prose; the rules below are about code.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Integrator</span>
+        <h1>Contributing &amp; tests</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#esm-only">ESM only</a>
+            <a href="#vitest-is-split-into-two-projects">Vitest is split into two projects</a>
+            <a href="#the-coverage-ratchet-is-real-raise-never-lower">The coverage ratchet is real — raise, never lower</a>
+            <a href="#lint-zero-errors">Lint: zero errors</a>
+            <a href="#build-sanity">Build sanity</a>
+            <a href="#before-you-commit-checklist">Before you commit (checklist)</a>
+            <a href="#never-commit-session-artifacts">Never commit session artifacts</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Building on Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="architecture.html">Architecture seams</a>
+                    <a href="api-auth.html">API authentication</a>
+                    <a href="embedding.html">Embedding the avatar kit</a>
+                    <a href="providers.html">Adding a TTS/LLM provider</a>
+                    <a href="knowledge-base.html">Knowledge base</a>
+                    <a href="contributing.html" aria-current="page">Contributing &amp; tests</a>
+                    <a href="vendored-packages.html">Vendored packages</a>
+                    <a href="i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>What you must satisfy before a change lands. This is the developer-facing
+companion to the <a href="../reference/glossary.html">docs style guide</a> for prose; the
+rules below are about code.</p>
+<h2 id="esm-only">ESM only</h2>
+<p>The repo is <code>&quot;type&quot;: &quot;module&quot;</code>. Use <code>import</code> / <code>export</code> everywhere. The few
+<code>.cjs</code> files (e.g. <code>scripts/seed-acute-cases.cjs</code>) are intentional
+CommonJS for scripts that need it — don&#39;t add new ones without a reason.</p>
+<h2 id="vitest-is-split-into-two-projects">Vitest is split into two projects</h2>
+<p><code>vitest.config.js</code> defines two named projects with different environments:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Environment</th>
+<th>Picks up</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>client</code></td>
+<td><code>jsdom</code> (can mount React)</td>
+<td><code>src/**/*.test.{js,jsx}</code>, <code>tests/client/**/*.test.{js,jsx}</code></td>
+</tr>
+<tr>
+<td><code>server</code></td>
+<td><code>node</code> (sqlite file / spawns Express)</td>
+<td><code>tests/server/**/*.test.{js,jsx}</code></td>
+</tr>
+</tbody></table></div>
+<p>Running a single test <strong>requires <code>--project</code></strong> so the right environment
+loads:</p>
+<pre><code class="language-bash">npx vitest run src/utils/voiceResolver.test.js --project=client
+npx vitest run tests/server/auth-routes.test.js --project=server
+npx vitest run -t &quot;voice resolver&quot;            # filter by test name
+</code></pre>
+<p>Whole-suite commands:</p>
+<pre><code class="language-bash">npm test              # both projects
+npm run test:client   # client only
+npm run test:server   # server only
+npm run test:ci       # JUnit XML + v8 coverage (ratchet gates apply)
+npm run bench         # vitest bench mode (bench/**, runs in the node project)
+</code></pre>
+<p>A server test that boots a real Express via <code>startTestServer()</code> in
+<code>beforeAll</code> gets a 30s <code>hookTimeout</code> (parallel sqlite-migration boots are
+slow on CI) — don&#39;t lower it to mask a genuinely stuck hook.</p>
+<span class="anchor-alias" id="the-coverage-ratchet-is-real--raise-never-lower"></span><h2 id="the-coverage-ratchet-is-real-raise-never-lower">The coverage ratchet is real — raise, never lower</h2>
+<p><code>npm run test:ci</code> enforces v8 coverage floors. The current floors:</p>
+<pre><code class="language-text">statements: 45
+branches:   39
+functions:  37
+lines:      47
+</code></pre>
+<p>The rule: <strong>raise these as tests land, never lower them.</strong> If you remove
+tested code and the percentage drops, add tests — do not edit the
+thresholds down. The single documented exception was a one-time downward
+adjustment on 2026-05-12 (a lint cleanup deleted ~150 lines of
+loaded-but-dead boilerplate that v8 had counted as &quot;covered&quot;); the climb
+back up is by adding tests. Treat any new downward edit as a red flag in
+review.</p>
+<p>To see current actuals, run <code>npm run test:ci</code> and read the <strong>All files</strong>
+row of the v8 coverage table. Touching coverage-counted code without tests
+should fail the gate.</p>
+<h2 id="lint-zero-errors">Lint: zero errors</h2>
+<pre><code class="language-bash">npm run lint            # ESLint flat config (eslint.config.js)
+</code></pre>
+<p>Zero-error policy. There are 7 pre-existing tracked warnings — don&#39;t add
+more, and don&#39;t &quot;fix&quot; them by widening rule disables.</p>
+<h2 id="build-sanity">Build sanity</h2>
+<pre><code class="language-bash">npm run build           # vite build --base=/rohy/ → dist/ → frontend/
+</code></pre>
+<p><code>dynajs</code> (a <code>file:</code> sibling dependency) must be built before <code>npm run build</code>
+here. The other <code>file:</code> dependency, <code>oyon</code>, is the in-repo <code>OyonR/</code>
+workspace.</p>
+<h2 id="before-you-commit-checklist">Before you commit (checklist)</h2>
+<ol>
+<li><strong>Touched server SQL or a migration?</strong> Confirm <code>migrations/MANIFEST.md</code>
+has a row for any new migration and the type (<code>additive</code> /
+<code>destructive</code>) is honest. A migration without a manifest row makes
+<code>bin/rohy-update</code> fail closed. Default to <strong>additive-only</strong>.</li>
+<li><strong>Touched response shapes carrying secrets/PII?</strong> Register the field in
+<code>server/redaction.js</code> — see <a href="architecture.html">Architecture seams</a>.</li>
+<li><strong>Touched voice resolution, lipsync morphs, or the discussant voice
+path?</strong> The 2026-05-06 regression lock is non-negotiable — run the e2e
+suite (<code>npm run test:e2e</code>).</li>
+<li><strong>Added a notification / alarm / toast / banner?</strong> It must go through
+<code>src/notifications/</code>, not a parallel path — register a producer + a
+routing rule.</li>
+<li><strong>Touched coverage-counted code?</strong> Run <code>npm run test:ci</code> and confirm the
+ratchet still passes.</li>
+<li><strong>Lint</strong> is clean (<code>npm run lint</code>).</li>
+</ol>
+<h2 id="never-commit-session-artifacts">Never commit session artifacts</h2>
+<p><code>HANDOFF.md</code>, <code>LEARNINGS.md</code>, <code>CHANGES.md</code>, <code>CLAUDE.md</code>, <code>AGENT-NOTE-*.md</code>
+are local-only working files — never <code>git add</code> them. Likewise the VitePress
+build output (<code>docs/.vitepress/cache|dist|.temp</code> are git-ignored). Commit
+messages carry <strong>no <code>Co-Authored-By: Claude</code> line</strong>, per project policy.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

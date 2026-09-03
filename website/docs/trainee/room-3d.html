@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The 3D Room · Rohy docs</title>
+    <meta name="description" content="The 3D Room puts you at the patient&amp;#39;s bedside. The case&amp;#39;s patient lies in bed in a three-dimensional room with the live monitor beside them, and you can speak to them ou…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="The 3D Room · Rohy docs">
+    <meta property="og:description" content="The 3D Room puts you at the patient&amp;#39;s bedside. The case&amp;#39;s patient lies in bed in a three-dimensional room with the live monitor beside them, and you can speak to them ou…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Trainee</span>
+        <h1>The 3D Room</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-room-is-drawn-over-the-patient-room">The room is drawn over the Patient room</a>
+            <a href="#one-patient-conversation">One patient conversation</a>
+            <a href="#speaking-to-the-patient">Speaking to the patient</a>
+            <a href="#examining-the-patient">Examining the patient</a>
+            <a href="#the-body-map">The body map</a>
+            <a href="#moving-the-camera">Moving the camera</a>
+            <a href="#the-chart-and-the-iv-pole">The chart and the IV pole</a>
+            <a href="#leaving-the-room">Leaving the room</a>
+            <a href="#next-steps">Next steps</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Using the Simulator</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="getting-started.html">Getting started</a>
+                    <a href="rooms.html">The rooms</a>
+                    <a href="history.html">Taking a history</a>
+                    <a href="room-3d.html" aria-current="page">The 3D Room</a>
+                    <a href="examination.html">Physical examination</a>
+                    <a href="investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="ecg.html">12-lead ECG</a>
+                    <a href="pathology.html">Reading a pathology slide</a>
+                    <a href="imaging-reading-room.html">The PACS reading room</a>
+                    <a href="treatments.html">Treatments &amp; medications</a>
+                    <a href="vitals.html">Vitals &amp; alarms</a>
+                    <a href="voice.html">Voice mode</a>
+                    <a href="debrief.html">Debrief</a>
+                    <a href="courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>The <strong>3D Room</strong> puts you at the patient&#39;s bedside. The case&#39;s patient lies
+in bed in a three-dimensional room with the live monitor beside them, and
+you can speak to them out loud, examine them by clicking their body, and
+open their chart from the bedside table.</p>
+<p>The bottom-bar button is labelled <strong>3D Room · at the bedside</strong>, and it sits
+second in the navigation bar, between <strong>Patient</strong> and <strong>Examination</strong>.</p>
+<h2 id="the-room-is-drawn-over-the-patient-room">The room is drawn over the Patient room</h2>
+<p>The 3D Room is an overlay. When you open it, the Patient screen stays
+mounted underneath and keeps working:</p>
+<ul>
+<li>The patient monitor keeps running the physiology, so vitals, rhythms and
+alarms carry on while you are at the bedside.</li>
+<li>The chat conversation stays live. The monitor you see in the 3D Room
+mirrors the same heart rate, rhythm and ECG waveform as the monitor on the
+Patient screen.</li>
+</ul>
+<h2 id="one-patient-conversation">One patient conversation</h2>
+<p>There is a single conversation with the patient, shared between the Patient
+room and the 3D Room:</p>
+<ul>
+<li>A question you type in the Patient room is answered here, and the answer
+appears as a caption over the bed.</li>
+<li>A question you speak here is sent through the same handler the chat uses,
+so it lands in the chat transcript your educator reviews, stamped as
+coming from the 3D Room.</li>
+</ul>
+<p>Only one turn runs at a time. While the patient is thinking, the microphone
+is disabled until the answer arrives.</p>
+<h2 id="speaking-to-the-patient">Speaking to the patient</h2>
+<ol>
+<li>The microphone sits at the centre of the bottom of the room, above the
+navigation bar.</li>
+<li>Click it to start listening, or press the <strong>Space</strong> bar, which toggles
+the same microphone. Space is ignored while your focus is in a text
+field, on a button or link, or while the body map overlay is open.</li>
+<li>Speak your question. Your words appear live in the caption band under
+<strong>YOU</strong> as they are recognised.</li>
+<li>The patient&#39;s answer appears in the same caption band under their name,
+and is spoken aloud when the case has a voice configured and voice mode
+is enabled on the platform.</li>
+</ol>
+<p>Tapping the microphone while the patient is mid-sentence cuts them off, so
+you can interrupt the way you would at a bedside.</p>
+<p>A <strong>Voice</strong> pill at the bottom left mutes and unmutes the patient&#39;s voice.
+Clicking it while the patient is speaking stops that sentence. It reads
+<strong>Speaking</strong> with a pulsing dot while a line is being spoken.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Captions carry both speakers</p>
+<p>One caption band shows whoever is speaking: your live transcript while the
+microphone is open, then the patient&#39;s answer once they reply. It holds up
+to three lines.</p>
+</aside>
+<h2 id="examining-the-patient">Examining the patient</h2>
+<ol>
+<li><strong>Click a region of the patient&#39;s body.</strong> A radial examination wheel
+opens over that region.</li>
+<li><strong>Pick a technique</strong> from the wheel. The wedges are <strong>Inspect</strong>,
+<strong>Palpate</strong>, <strong>Percuss</strong>, <strong>Auscultate</strong> and <strong>Special</strong>, and only the
+techniques the case model defines for that region are offered.</li>
+<li><strong>Special</strong> opens a sub-ring of the named special tests for that region.</li>
+<li>The finding opens in a chart docked at the left of the room. The
+navigation wheel moves across to the right side while the chart is up,
+and returns when you close it.</li>
+</ol>
+<p>The chart is the same finding display as the <a href="examination.html">Examination
+room</a>, so auscultation keeps its clickable listening
+sites, per-point audio, play and pause, and volume. The square icon in the
+chart header expands it to a full-screen reading surface, and <strong>Escape</strong>
+leaves full screen or closes the chart.</p>
+<p>Exams performed here are recorded exactly like exams performed in the
+Examination room: the same finding, the same exam log, and the same entry in
+the case summary your educator reads.</p>
+<p>An abnormal finding makes the patient wince, tints the region, and prompts a
+spoken line.</p>
+<h2 id="the-body-map">The body map</h2>
+<p>The 3D patient lies supine, so the back is out of reach from the bedside.
+Click the <strong>Body map</strong> pill at the bottom left to open the full Examination
+room manikin over the room, with its front and back views, technique
+selector, findings and exam log. <strong>Escape</strong> or the close button returns you
+to the bed.</p>
+<h2 id="moving-the-camera">Moving the camera</h2>
+<p>The navigation wheel sits at the left of the room:</p>
+<ol>
+<li>Click the hub in the middle of the wheel to open it. Hovering over the
+wheel opens it too.</li>
+<li>Pick a camera view: <strong>Overview</strong> (whole room), <strong>Patient</strong> (bedside
+close-up), <strong>Airway</strong> (head and airway), <strong>Monitor</strong> (vitals screen) or
+<strong>Equipment</strong> (the oxygen and IV side). Number keys <strong>1</strong> to <strong>5</strong> select
+the same five views in that order.</li>
+<li>The four arrows around the hub step the camera around the bed: up moves
+toward the head, down toward the foot, and left and right walk around the
+bed. An arrow adjusts the view you are already in and leaves the wheel
+open, so you can keep nudging.</li>
+</ol>
+<p>Beside the camera views the wheel carries three destinations: <strong>Examine</strong>
+opens the examination wheel, <strong>Records</strong> opens the Records drawer, and
+<strong>Body map</strong> opens the manikin.</p>
+<p>The wheel can be dragged by its hub, and the monitor panel can be dragged by
+its header. Both stay where you put them, clamped inside the room.</p>
+<h2 id="the-chart-and-the-iv-pole">The chart and the IV pole</h2>
+<p>Two objects in the room open the orders drawer:</p>
+<ul>
+<li>The <strong>chart</strong> on the bedside table opens the drawer on its <strong>Records</strong>
+tab.</li>
+<li>The <strong>IV pole</strong> and the <strong>oxygen</strong> station open the drawer on its
+<strong>Treatments</strong> tab.</li>
+</ul>
+<p>These are the same drawers you use from the other rooms. See
+<a href="investigations.html">Ordering labs &amp; imaging</a> and
+<a href="treatments.html">Treatments &amp; medications</a>.</p>
+<h2 id="leaving-the-room">Leaving the room</h2>
+<p>Use the bottom navigation bar to move to any other room. Your conversation,
+your exam log and your findings stay with the session, and the case timeline
+keeps running.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="rooms.html">The rooms</a></li>
+<li><a href="examination.html">Physical examination</a></li>
+<li><a href="voice.html">Voice mode</a></li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

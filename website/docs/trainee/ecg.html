@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>12-lead ECG · Rohy docs</title>
+    <meta name="description" content="The 12-lead ECG room is a reading workstation. It puts one recording on calibrated paper and gives you the tools a reader reaches for: gain and paper speed, a filter chain, a ma…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="12-lead ECG · Rohy docs">
+    <meta property="og:description" content="The 12-lead ECG room is a reading workstation. It puts one recording on calibrated paper and gives you the tools a reader reaches for: gain and paper speed, a filter chain, a ma…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Trainee</span>
+        <h1>12-lead ECG</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#when-the-room-appears">When the room appears</a>
+            <a href="#what-the-case-gives-you">What the case gives you</a>
+            <a href="#reading-the-paper">Reading the paper</a>
+            <a href="#cart-settings">Cart settings</a>
+            <a href="#filters">Filters</a>
+            <a href="#the-lead-map">The lead map</a>
+            <a href="#taking-a-measurement">Taking a measurement</a>
+            <a href="#the-measure-tab">The Measure tab</a>
+            <a href="#the-systematic-read-tab">The Systematic read tab</a>
+            <a href="#the-notes-tab">The Notes tab</a>
+            <a href="#what-is-kept-and-what-you-see">What is kept, and what you see</a>
+            <a href="#next-steps">Next steps</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Using the Simulator</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="getting-started.html">Getting started</a>
+                    <a href="rooms.html">The rooms</a>
+                    <a href="history.html">Taking a history</a>
+                    <a href="room-3d.html">The 3D Room</a>
+                    <a href="examination.html">Physical examination</a>
+                    <a href="investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="ecg.html" aria-current="page">12-lead ECG</a>
+                    <a href="pathology.html">Reading a pathology slide</a>
+                    <a href="imaging-reading-room.html">The PACS reading room</a>
+                    <a href="treatments.html">Treatments &amp; medications</a>
+                    <a href="vitals.html">Vitals &amp; alarms</a>
+                    <a href="voice.html">Voice mode</a>
+                    <a href="debrief.html">Debrief</a>
+                    <a href="courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>The <strong>12-lead ECG</strong> room is a reading workstation. It puts one recording on
+calibrated paper and gives you the tools a reader reaches for: gain and paper
+speed, a filter chain, a magnifier, lead isolation, and calipers that span an
+interval and keep the reading.</p>
+<p>This is a different thing from the rhythm waveform on the bedside monitor.
+The monitor on the <a href="vitals.html">Patient screen</a> runs a live single-lead
+trace off the current heart rate and rhythm; this room holds a fixed
+twelve-lead recording that you measure and report on.</p>
+<h2 id="when-the-room-appears">When the room appears</h2>
+<p>Look for <strong>12-lead ECG</strong> with the subtitle <strong>interpretation</strong> in the bottom
+navigation bar. It appears when the platform runs the <code>advanced</code> release
+channel (the <code>current</code> channel is the pre-plugin build and carries no ECG
+room, see <a href="../operator/install.html#which-channel">Install</a> under &quot;Which channel&quot;) and when the case you
+are in supplies a readable recording. A case carrying no recording leaves the
+button out of the bar.</p>
+<h2 id="what-the-case-gives-you">What the case gives you</h2>
+<p>The room opens the recording the case author attached, built in the <strong>ECG
+case studio</strong> on the educator side. A recording arrives either as a signal
+(twelve leads of sample data, generated by the case or uploaded as encoded
+samples) or as an uploaded sheet (a PNG, JPEG, WebP or PDF of a printed
+tracing, opened in a simpler viewer where an image carries zoom, <strong>Rotate</strong>
+and <strong>Fit</strong>). A signal gets calibrated paper, filters and calipers, which is
+what the rest of this page describes.</p>
+<h2 id="reading-the-paper">Reading the paper</h2>
+<p>Above the sheet, a meta strip states the settings the tracing is drawn under:
+paper speed in mm/s, gain in mm/mV, sample rate in Hz, the filter band, and
+the view percentage once you zoom. The sheet itself is the conventional
+layout: three rows of four leads
+(I, aVR, V1, V4 / II, aVL, V2, V5 / III, aVF, V3, V6) with a full-width
+rhythm strip below, drawn from the recording&#39;s rhythm lead. Each row opens
+with a calibration pulse of 1 mV lasting 200 ms, so you can check the gain
+against the grid before measuring. The printed grid is 1 mm minor squares
+inside 5 mm major squares, toggled by <strong>Grid</strong> in the cart panel. Two view
+buttons sit at the top of the workspace: <strong>12-lead</strong> for the full 3 × 4 sheet
+with its rhythm strip, and <strong>Lead focus</strong> for one lead as a single full-width
+strip, opening on lead II.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Zoom keeps millimetres honest</p>
+<p>The zoom stepper moves through <strong>Fit</strong>, 150%, 250% and 400%, scaling the
+rendered sheet, so a caliper reading stays the same at any magnification.
+<strong>Lens</strong> adds a circular magnifier that follows your pointer at 2×, 3× or 4×,
+enlarging the grid along with the trace so the ruler magnifies too.</p>
+</aside>
+<h2 id="cart-settings">Cart settings</h2>
+<p>Click <strong>Cart</strong> to open the recording settings. <strong>Gain mm/mV</strong> offers <strong>5</strong>
+(half standard, for a tracing that clips), <strong>10</strong> (standard) and <strong>20</strong>
+(double standard, for low voltage). <strong>Speed mm/s</strong> offers <strong>12.5</strong> (half
+standard, more beats with less detail), <strong>25</strong> (standard) and <strong>50</strong> (double
+standard, for separating close deflections). A recording opens at 10 mm/mV
+and 25 mm/s.</p>
+<h2 id="filters">Filters</h2>
+<p><strong>Filter</strong> selects the chain the samples pass through before they are drawn.
+The chain is applied to the signal, so a wave measured through a filter gives
+the number that filter produces. A recording opens on <strong>Diagnostic</strong>.</p>
+<ul>
+<li><strong>Raw</strong> is unfiltered as acquired.</li>
+<li><strong>Diagnostic</strong> is 0.05–150 Hz, the band a 12-lead is reported from.</li>
+<li><strong>Monitor</strong> is 0.5–40 Hz, steadier, and able to create ST change.</li>
+<li><strong>50 Hz</strong> and <strong>60 Hz</strong> are the diagnostic band plus a mains notch at that
+frequency.</li>
+</ul>
+<aside class="callout callout-warning">
+<p class="callout-title">Monitor filtering changes what you may conclude</p>
+<p>The 40 Hz roof shrinks R waves, and the 0.5 Hz high-pass steadies the
+baseline in a way that can manufacture ST depression. Use <strong>Monitor</strong> to
+settle a noisy trace, and report from <strong>Diagnostic</strong>.</p>
+</aside>
+<h2 id="the-lead-map">The lead map</h2>
+<p>Click <strong>Lead map</strong> in the toolbar (the button carries the current lead) to
+open the selector beside the paper. <strong>Chest electrodes</strong> places V1 to V6 as
+dots on a patient figure at their landmarks, with the limb electrodes marked
+(RA, LA, LL, and RL as ground). <strong>Frontal plane</strong> places I, II, III, aVR, aVL
+and aVF on the hexaxial circle at their angles: I at 0°, II at +60°, III at
++120°, aVF at +90°, aVL at -30°, aVR at -150°.</p>
+<p>Selecting a lead focuses it and prints its origin and territory under the
+figures. The territories are:</p>
+<ul>
+<li><strong>Lateral wall</strong>: I, aVL, V5, V6</li>
+<li><strong>Inferior wall</strong>: II, III, aVF</li>
+<li><strong>Septum</strong>: V1, V2</li>
+<li><strong>Anterior wall</strong>: V3, V4</li>
+<li><strong>Cavity / outflow</strong>: aVR</li>
+</ul>
+<p>Contiguity is the reason the grouping matters: ST change in two leads of one
+territory carries meaning that the same change scattered across territories
+lacks. <strong>Isolate</strong> dims every lead but the one under your pointer, which
+helps when a neighbouring trace crowds the one you are reading.</p>
+<h2 id="taking-a-measurement">Taking a measurement</h2>
+<ol>
+<li>Pick a caliper mode: <strong>Interval</strong> (time between two points), <strong>Amplitude</strong>
+(height between two points) or <strong>Rate</strong> (one RR span read as beats per
+minute).</li>
+<li>Click one point on the paper, then the second. The span appears with its
+reading printed above it.</li>
+<li>Drag either leg to walk it onto the exact onset; the reading follows.</li>
+<li>Read the detail line under the sheet: milliseconds, millivolts, paper
+millimetres, and the implied rate.</li>
+</ol>
+<p>Every completed span is kept in the <strong>Measure</strong> tab with the lead it was
+taken on and the gain, speed and filter it was taken through. <strong>Clear
+calipers</strong> lifts the legs off the paper and leaves the recorded measurement
+in place. Two cart settings shape caliper behaviour: <strong>Caliper snap</strong>
+(<strong>Free</strong>, <strong>½ mm</strong> or <strong>1 mm</strong>, since a paper reading is a count of small
+squares) and <strong>March</strong>, which repeats the measured span along the sheet so
+you can walk out a rhythm or follow a P wave through a QRS.</p>
+<h2 id="the-measure-tab">The Measure tab</h2>
+<p>Each kept span becomes a row showing its value, its width in large squares,
+and the lead it came from. Name it from the row&#39;s label list: <strong>RR</strong>, <strong>PR</strong>,
+<strong>QRS</strong>, <strong>QT</strong>, <strong>P duration</strong>, <strong>ST level</strong>, <strong>Amplitude</strong> or <strong>Other</strong>.
+Naming is what makes a range apply: 400 ms is a normal QT and a fast RR. A named interval then carries a verdict of <strong>short</strong>, <strong>normal</strong> or
+<strong>long</strong> against the conventional adult range: RR 600 to 1000 ms, PR 120 to
+200 ms, QRS 70 to 110 ms, QT 350 to 450 ms, P duration 60 to 120 ms.</p>
+<p>When the record holds both a QT and an RR, the panel derives a corrected QT
+from the most recent of each and shows <strong>Bazett</strong> and <strong>Fridericia</strong> side by
+side with the heart rate it used. <strong>Discard</strong> removes a row.</p>
+<h2 id="the-systematic-read-tab">The Systematic read tab</h2>
+<p>Fill the read as you work, in the order rate, rhythm, axis, intervals,
+morphology:</p>
+<ol>
+<li><strong>Rate</strong> in bpm and <strong>Rhythm</strong> from the rhythm list.</li>
+<li><strong>Frontal QRS axis</strong>, then <strong>PR</strong>, <strong>QRS</strong> and <strong>QT</strong> in ms.</li>
+<li><strong>Findings</strong>, as checkboxes in four groups: Rate and rhythm, Conduction,
+ST segment and T wave, and Chambers and voltage.</li>
+<li><strong>ECG statement</strong>, free text for what the tracing shows.</li>
+</ol>
+<p>Describe the tracing here; what the findings mean for this patient is settled
+with the rest of the case.</p>
+<h2 id="the-notes-tab">The Notes tab</h2>
+<p>Write what you see as you see it. A note can be anchored to the lead you are
+focused on and can carry the last caliper reading, so the trail stays
+readable later. Notes hold up to 2000 characters, take Ctrl+Enter or
+Cmd+Enter to submit, and stay editable. A lead with notes attached shows a
+count badge on the lead map.</p>
+<h2 id="what-is-kept-and-what-you-see">What is kept, and what you see</h2>
+<p>The room holds the <code>persist</code> capability, so your systematic read, your
+measurements and your notes are saved to the case as you work. The side
+rail&#39;s footer says as much: &quot;Recorded to the case as you work. This ECG is
+one part of the picture.&quot;</p>
+<p>The case document served to you is the learner projection: the author&#39;s
+rubric, which holds the expected findings, stays on the educator side and is
+stripped from what reaches this room. The room shows no score and asks for
+no diagnosis, and your read travels with the session into the
+<a href="debrief.html">debrief</a>, where your instructor reviews it.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="vitals.html">Vitals &amp; alarms</a></li>
+<li><a href="investigations.html">Ordering labs &amp; imaging</a></li>
+<li><a href="debrief.html">Debrief</a></li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Incident playbooks · Rohy docs</title>
+    <meta name="description" content="Short, do-this-now procedures for the four incidents an operator most often hits. Each ends with how to confirm recovery.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Incident playbooks · Rohy docs">
+    <meta property="og:description" content="Short, do-this-now procedures for the four incidents an operator most often hits. Each ends with how to confirm recovery.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Operator</span>
+        <h1>Incident playbooks</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-wedged-local-db-will-not-open-sqlite_busy-corrupt-wal">1. Wedged local DB (will not open / SQLITE_BUSY / corrupt WAL)</a>
+            <a href="#2-failed-update-rollback">2. Failed update + rollback</a>
+            <a href="#3-tts-provider-outage">3. TTS provider outage</a>
+            <a href="#4-high-latency">4. High latency</a>
+            <a href="#related">Related</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Running Rohy in Production</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="install.html">Install</a>
+                    <a href="deploy.html">Deploy &amp; harden</a>
+                    <a href="updating.html">Update</a>
+                    <a href="update-strategy.html">Update strategy</a>
+                    <a href="backup-restore.html">Backup &amp; restore</a>
+                    <a href="migrations.html">Migrations runbook</a>
+                    <a href="retention.html">Retention &amp; purges</a>
+                    <a href="observability.html">Observability</a>
+                    <a href="incidents.html" aria-current="page">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Short, do-this-now procedures for the four incidents an operator
+most often hits. Each ends with how to confirm recovery.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Reference</p>
+<p>Commands, flags and env vars referenced here are single-sourced in
+<a href="../reference/cli/index.html">CLI &amp; ops</a> and <a href="../reference/config/index.html">Config &amp; env</a>.
+Terms are locked in the <a href="../reference/glossary.html">Glossary</a>.</p>
+</aside>
+<aside class="callout callout-danger">
+<p class="callout-title">Snapshot before you mutate</p>
+<p>Every recovery below that touches the DB can lose data. If the current
+DB is salvageable at all, take a snapshot first:
+<code>sudo scripts/rohy-backup.sh --label pre-incident</code>.</p>
+</aside>
+<hr>
+<span class="anchor-alias" id="1-wedged-local-db-will-not-open--sqlite_busy--corrupt-wal"></span><h2 id="1-wedged-local-db-will-not-open-sqlite_busy-corrupt-wal">1. Wedged local DB (will not open / SQLITE_BUSY / corrupt WAL)</h2>
+<p><strong>Symptom:</strong> service will not start, the journal shows SQLite
+open/lock/WAL errors, or <code>PRAGMA integrity_check</code> fails.</p>
+<pre><code class="language-bash"># 1. Stop the service so nothing is touching the files
+sudo systemctl stop rohy
+
+# 2. Snapshot whatever is there (best effort — may fail if truly corrupt)
+sudo scripts/rohy-backup.sh --label pre-incident || true
+
+# 3. Try just clearing the side files (a stale WAL/SHM is the common case)
+sudo rm -f /opt/data/rohy/database.sqlite-shm /opt/data/rohy/database.sqlite-wal
+
+# 4. Start; SQLite replays/repairs on open
+sudo systemctl start rohy
+</code></pre>
+<p>If it still will not open, the DB file itself is damaged. Restore the
+most recent good snapshot:</p>
+<pre><code class="language-bash">sudo rohy-update list-backups
+sudo rohy-update restore-backup &lt;snapshot-name&gt;
+</code></pre>
+<p>For a <strong>dev box</strong> the documented reset is: stop the server, delete
+<code>server/database.sqlite{,-shm,-wal}</code>, restart. Migrations and seeders
+re-run automatically. Do not do this on a box with real data: it is a
+data-loss reset.</p>
+<p><strong>Recovered when:</strong> <code>sudo systemctl status rohy</code> is active and
+<code>scripts/smoke.sh https://your-host/rohy</code> passes. Full drill in
+<a href="backup-restore.html#restore-drill">Backup &amp; restore</a>.</p>
+<hr>
+<span class="anchor-alias" id="2-failed-update--rollback"></span><h2 id="2-failed-update-rollback">2. Failed update + rollback</h2>
+<p><strong>Symptom:</strong> <code>rohy-update apply</code> exited non-zero.</p>
+<p>In almost all cases the tool has already rolled back: it restores the
+snapshot, checks out the old sha, and restarts before exiting. Look for:</p>
+<pre><code class="language-text">! auto-rollback to &lt;old-sha&gt;
+✓ DB restored from /var/backups/rohy/...
+! rolled back to &lt;old-sha&gt; (was attempting update).
+</code></pre>
+<p>If that appears, the box is already on the old version. Confirm:</p>
+<pre><code class="language-bash">sudo systemctl status rohy
+git -C /opt/repos/rohy log -1 --oneline
+</code></pre>
+<p>If the apply got stuck mid-way (<code>MANUAL RECOVERY REQUIRED</code> in the
+output, or the rollback itself failed), follow the manual recovery
+sequence in
+<a href="updating.html#manual-recovery-when-even-rollback-fails">Updating § Manual recovery</a>:
+stop service, restore snapshot DB + env, <code>git checkout</code> the
+<code>from_sha</code> from <code>/var/lib/rohy/rollback/last</code>, <code>npm ci &amp;&amp; npm run build</code>, start.</p>
+<aside class="callout callout-danger">
+<p class="callout-title">Destructive migration in the failed apply</p>
+<p>If the failed apply included a <strong>destructive</strong> migration,
+<code>rohy-update rollback</code> refuses, because old code cannot read the new
+schema. <code>restore-backup</code> the pre-apply snapshot and accept
+losing anything written since. See
+<a href="migrations.html#applying-when-destructive-migrations-are-pending">Migrations runbook</a>.</p>
+</aside>
+<p><strong>Recovered when:</strong> service is active, <code>rohy-update check</code> shows the
+intended sha, and the SPA loads and login works in a
+browser. Then file a bug with <code>/var/log/rohy-update.log</code> attached.</p>
+<hr>
+<h2 id="3-tts-provider-outage">3. TTS provider outage</h2>
+<p><strong>Symptom:</strong> patient voice silent, or 5xx from <code>/api/tts</code>; trainees
+report no audio.</p>
+<p>Rohy has four TTS providers (Google, OpenAI, Kokoro, Piper). An outage
+is usually confined to one provider.</p>
+<ol>
+<li><p><strong>Identify which.</strong> Check the journal for the failing provider:</p>
+<pre><code class="language-bash">sudo journalctl -u rohy -n 100 --no-pager | grep -i tts
+</code></pre>
+</li>
+<li><p><strong>Fail over to a local provider.</strong> In <strong>Settings → Voice → Provider</strong>
+switch from the cloud provider (Google/OpenAI) to <strong>Kokoro</strong> (in-process
+ONNX, no network) or <strong>Piper</strong> if installed. This takes effect for new
+utterances immediately, with no restart.</p>
+</li>
+<li><p><strong>If it is a cloud key/quota problem</strong>, the provider&#39;s own dashboard
+shows it (rate limit or billing). The simulator keeps running on the
+local provider in the meantime.</p>
+</li>
+<li><p><strong>Kokoro not warmed</strong> (cold-start stutter on first request after a
+restart) is expected and self-heals: it warms at boot, and settles
+within a few seconds.</p>
+</li>
+</ol>
+<p>Changing the platform voice provider does not retroactively
+change a running session bound to a per-case voice. That is the voice
+precedence resolver behaving as intended.</p>
+<p><strong>Recovered when:</strong> a fresh session produces patient audio with the
+selected provider and <code>journalctl</code> shows no new TTS errors.</p>
+<hr>
+<h2 id="4-high-latency">4. High latency</h2>
+<p><strong>Symptom:</strong> pages slow, trainees report lag.</p>
+<ol>
+<li><p><strong>Find the slow queries.</strong> They are already logged as <code>slow_query</code>
+warnings (default threshold 100 ms):</p>
+<pre><code class="language-bash">sudo journalctl -u rohy --output=cat | grep &#39;&quot;event&quot;:&quot;slow_query&quot;&#39; | tail -20
+</code></pre>
+</li>
+<li><p><strong>Correlate a specific slow request.</strong> Take the <code>request_id</code> from a
+user-reported error or a slow log line and pull everything it did:</p>
+<pre><code class="language-bash">sudo journalctl -u rohy --output=cat | grep &#39;&quot;request_id&quot;:&quot;&lt;the-id&gt;&quot;&#39;
+</code></pre>
+<p>Temporarily set <code>ROHY_LOG_LEVEL=debug</code> to get per-query SQL
+summaries, then revert it; debug is noisy. See
+<a href="observability.html">Observability</a> for the full field list.</p>
+</li>
+<li><p><strong>Check the obvious resource walls:</strong></p>
+<ul>
+<li>Disk near full (<code>df -h</code>): SQLite degrades hard when the filesystem
+is full, and the pre-flight needs 3× DB size free for the next upgrade.</li>
+<li>Retention did not run: unbounded log tables make scans slow. Confirm
+the cron from <a href="retention.html">Retention &amp; purges</a> is installed
+and check its log.</li>
+<li>Edge: no WAF or rate-limiter. Express&#39;s limiter is per-process; a
+burst can saturate one box. Add an edge limiter.</li>
+</ul>
+</li>
+<li><p><strong>Scale decision.</strong> Sustained load above what SQLite handles (~50+
+concurrent users) is the documented trigger to evaluate the
+Postgres-readiness path in
+<a href="deploy.html#postgres-readiness">Deploy &amp; harden § Postgres readiness</a>.
+SQLite with WAL handles well below that threshold on modest hardware.</p>
+</li>
+</ol>
+<p><strong>Recovered when:</strong> <code>slow_query</code> warnings drop back to baseline and page
+latency is acceptable in a browser.</p>
+<hr>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="backup-restore.html">Backup &amp; restore</a>: the restore drill the wedged-DB and failed-update playbooks lean on</li>
+<li><a href="updating.html">Updating</a>: auto/manual rollback detail</li>
+<li><a href="migrations.html">Migrations runbook</a>: destructive-migration recovery</li>
+<li><a href="observability.html">Observability</a>: request-id and slow-query mechanics</li>
+<li><a href="retention.html">Retention &amp; purges</a>: the cron whose absence causes slow scans</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

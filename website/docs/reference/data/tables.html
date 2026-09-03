@@ -1,0 +1,9059 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tables · Rohy docs</title>
+    <meta name="description" content="Generated file — do not edit by hand. Regenerate with npm run docs:gen:data. One section per table; columns in declaration order.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Tables · Rohy docs">
+    <meta property="og:description" content="Generated file — do not edit by hand. Regenerate with npm run docs:gen:data. One section per table; columns in declaration order.">
+    <meta property="og:image" content="../../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../../index.html">Overview</a>
+            <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../whats-new.html">What's new</a>
+            <a href="../../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../../help.html">Help</a>
+            <a href="../../../index.html#install" class="optional">Install</a>
+            <a href="../../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Reference</span>
+        <h1>Tables</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#active_sessions">active_sessions</a>
+            <a href="#active_treatments">active_treatments</a>
+            <a href="#agent_conversations">agent_conversations</a>
+            <a href="#agent_session_state">agent_session_state</a>
+            <a href="#agent_templates">agent_templates</a>
+            <a href="#alarm_config">alarm_config</a>
+            <a href="#alarm_events">alarm_events</a>
+            <a href="#body_map_coordinates">body_map_coordinates</a>
+            <a href="#body_regions">body_regions</a>
+            <a href="#case_agents">case_agents</a>
+            <a href="#case_investigations">case_investigations</a>
+            <a href="#case_treatments">case_treatments</a>
+            <a href="#case_versions">case_versions</a>
+            <a href="#cases">cases</a>
+            <a href="#client_logs">client_logs</a>
+            <a href="#clinical_notes">clinical_notes</a>
+            <a href="#clinical_pathways">clinical_pathways</a>
+            <a href="#cohort_cases">cohort_cases</a>
+            <a href="#cohort_members">cohort_members</a>
+            <a href="#cohort_surveys">cohort_surveys</a>
+            <a href="#cohorts">cohorts</a>
+            <a href="#custom_drug_group_items">custom_drug_group_items</a>
+            <a href="#custom_drug_groups">custom_drug_groups</a>
+            <a href="#custom_lab_group_items">custom_lab_group_items</a>
+            <a href="#custom_lab_groups">custom_lab_groups</a>
+            <a href="#data_sources">data_sources</a>
+            <a href="#diagnoses">diagnoses</a>
+            <a href="#emotion_logs">emotion_logs</a>
+            <a href="#event_log">event_log</a>
+            <a href="#exam_techniques">exam_techniques</a>
+            <a href="#export_records">export_records</a>
+            <a href="#interactions">interactions</a>
+            <a href="#investigation_orders">investigation_orders</a>
+            <a href="#investigation_parameters">investigation_parameters</a>
+            <a href="#investigation_templates">investigation_templates</a>
+            <a href="#investigation_views">investigation_views</a>
+            <a href="#lab_definitions">lab_definitions</a>
+            <a href="#lab_panels">lab_panels</a>
+            <a href="#lab_reference_ranges">lab_reference_ranges</a>
+            <a href="#lab_tests">lab_tests</a>
+            <a href="#learning_events">learning_events</a>
+            <a href="#lesson_progress">lesson_progress</a>
+            <a href="#lesson_sections">lesson_sections</a>
+            <a href="#lessons">lessons</a>
+            <a href="#llm_model_pricing">llm_model_pricing</a>
+            <a href="#llm_request_log">llm_request_log</a>
+            <a href="#llm_usage">llm_usage</a>
+            <a href="#login_logs">login_logs</a>
+            <a href="#medication_doses">medication_doses</a>
+            <a href="#medications">medications</a>
+            <a href="#oyon_emotion_consents">oyon_emotion_consents</a>
+            <a href="#oyon_emotion_records">oyon_emotion_records</a>
+            <a href="#oyon_settings">oyon_settings</a>
+            <a href="#oyon_signal_windows">oyon_signal_windows</a>
+            <a href="#panel_tests">panel_tests</a>
+            <a href="#patient_information">patient_information</a>
+            <a href="#patient_record_documents">patient_record_documents</a>
+            <a href="#patient_record_events">patient_record_events</a>
+            <a href="#physical_exam_findings">physical_exam_findings</a>
+            <a href="#platform_settings">platform_settings</a>
+            <a href="#plugin_assets">plugin_assets</a>
+            <a href="#plugin_jobs">plugin_jobs</a>
+            <a href="#plugin_settings">plugin_settings</a>
+            <a href="#questionnaire_responses">questionnaire_responses</a>
+            <a href="#region_default_findings">region_default_findings</a>
+            <a href="#region_exam_types">region_exam_types</a>
+            <a href="#region_special_tests">region_special_tests</a>
+            <a href="#registration_invite_uses">registration_invite_uses</a>
+            <a href="#registration_invites">registration_invites</a>
+            <a href="#registration_requests">registration_requests</a>
+            <a href="#scenario_events">scenario_events</a>
+            <a href="#scenario_templates">scenario_templates</a>
+            <a href="#scenario_timeline_points">scenario_timeline_points</a>
+            <a href="#scenarios">scenarios</a>
+            <a href="#search_aliases">search_aliases</a>
+            <a href="#session_notes">session_notes</a>
+            <a href="#session_settings">session_settings</a>
+            <a href="#session_vitals">session_vitals</a>
+            <a href="#sessions">sessions</a>
+            <a href="#settings_logs">settings_logs</a>
+            <a href="#survey_answers">survey_answers</a>
+            <a href="#survey_questions">survey_questions</a>
+            <a href="#survey_responses">survey_responses</a>
+            <a href="#surveys">surveys</a>
+            <a href="#system_audit_log">system_audit_log</a>
+            <a href="#team_communications_log">team_communications_log</a>
+            <a href="#tenants">tenants</a>
+            <a href="#treatment_effects">treatment_effects</a>
+            <a href="#treatment_orders">treatment_orders</a>
+            <a href="#tts_usage">tts_usage</a>
+            <a href="#usage_budget">usage_budget</a>
+            <a href="#user_preferences">user_preferences</a>
+            <a href="#users">users</a>
+            <a href="#vital_sign_definitions">vital_sign_definitions</a>
+            <a href="#vital_sign_history">vital_sign_history</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../../product/index.html">Overview</a>
+                    <a href="../../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../../trainee/index.html">Overview</a>
+                    <a href="../../trainee/getting-started.html">Getting started</a>
+                    <a href="../../trainee/rooms.html">The rooms</a>
+                    <a href="../../trainee/history.html">Taking a history</a>
+                    <a href="../../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../../trainee/examination.html">Physical examination</a>
+                    <a href="../../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../../trainee/voice.html">Voice mode</a>
+                    <a href="../../trainee/debrief.html">Debrief</a>
+                    <a href="../../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../../educator/index.html">Overview</a>
+                    <a href="../../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../../educator/agents.html">Agent personas</a>
+                    <a href="../../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../../educator/tna.html">TNA analytics</a>
+                    <a href="../../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../../admin/index.html">Overview</a>
+                    <a href="../../admin/first-week.html">First-week checklist</a>
+                    <a href="../../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../../admin/platform-settings.html">Platform settings</a>
+                    <a href="../../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../../operator/index.html">Overview</a>
+                    <a href="../../operator/install.html">Install</a>
+                    <a href="../../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../../operator/updating.html">Update</a>
+                    <a href="../../operator/update-strategy.html">Update strategy</a>
+                    <a href="../../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../../operator/migrations.html">Migrations runbook</a>
+                    <a href="../../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../../operator/observability.html">Observability</a>
+                    <a href="../../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../../integrator/index.html">Overview</a>
+                    <a href="../../integrator/architecture.html">Architecture seams</a>
+                    <a href="../../integrator/api-auth.html">API authentication</a>
+                    <a href="../../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../api/index.html">API</a>
+                    <a href="index.html">Data model</a>
+                    <a href="../config/index.html">Config &amp; env</a>
+                    <a href="../cli/index.html">CLI &amp; ops</a>
+                    <a href="../glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../../tutorials/index.html">Overview</a>
+                    <a href="../../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../../security/index.html">Overview</a>
+                    <a href="../../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../../security/audit-chain.html">Audit chain</a>
+                    <a href="../../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../../security/retention.html">Data retention</a>
+                    <a href="../../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../../audits/index.html">Audits</a>
+                    <a href="../../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../../changelog.html">Changelog</a>
+                    <a href="../../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../../contributing/index.html">Contributing</a>
+                    <a href="../../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../../design/index.html">Design</a>
+                    <a href="../../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../../INSTALL.html">Installing Rohy</a>
+                    <a href="../../license.html">License</a>
+                    <a href="../../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../api/admin.html">admin API</a>
+                    <a href="../api/agents.html">agents API</a>
+                    <a href="../api/analytics.html">analytics API</a>
+                    <a href="../api/auth.html">auth API</a>
+                    <a href="../api/cases.html">cases API</a>
+                    <a href="../api/catalogue.html">catalogue API</a>
+                    <a href="../api/cohorts.html">cohorts API</a>
+                    <a href="../api/health.html">health API</a>
+                    <a href="../api/help.html">help API</a>
+                    <a href="../api/lessons.html">lessons API</a>
+                    <a href="../api/notes.html">notes API</a>
+                    <a href="../api/notification.html">notification API</a>
+                    <a href="../api/orders.html">orders API</a>
+                    <a href="../api/oyon.html">oyon API</a>
+                    <a href="../api/patient-record.html">patient-record API</a>
+                    <a href="../api/plugins.html">plugins API</a>
+                    <a href="../api/proxy.html">proxy API</a>
+                    <a href="../api/registration.html">registration API</a>
+                    <a href="../api/sessions.html">sessions API</a>
+                    <a href="../api/surveys.html">surveys API</a>
+                    <a href="../api/tenants.html">tenants API</a>
+                    <a href="../api/treatments-library.html">treatments-library API</a>
+                    <a href="../api/uploads.html">uploads API</a>
+                    <a href="../api/users.html">users API</a>
+                    <a href="tables.html" aria-current="page">Tables</a>
+                    <a href="../index.html">Reference</a>
+                    <a href="../../release-notes/index.html">Release notes</a>
+                    <a href="../../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p><strong>Generated file — do not edit by hand.</strong> Regenerate with <code>npm run docs:gen:data</code>. One section per table; columns in declaration order.</p>
+</blockquote>
+<p><strong>95 tables.</strong></p>
+<h2 id="active_sessions"><code>active_sessions</code></h2>
+<p>Stores active sessions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>token_hash</code></td>
+<td>TEXT</td>
+<td>UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>login_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>last_activity_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ip_address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="active_treatments"><code>active_treatments</code></h2>
+<p>Stores active treatments records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_order_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>effect_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>started_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td>TEXT</td>
+<td>CHECK(phase IN (&#39;onset&#39;, &#39;peak&#39;, &#39;decline&#39;, &#39;expired&#39;)) DEFAULT &#39;onset&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>current_effect_strength</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_multiplier</code></td>
+<td>REAL</td>
+<td>DEFAULT 1.0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_hr_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_bp_sys_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_bp_dia_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_rr_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_spo2_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_temp_effect</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_etco2_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_continuous</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="agent_conversations"><code>agent_conversations</code></h2>
+<p>Stores agent conversations records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>agent_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="agent_session_state"><code>agent_session_state</code></h2>
+<p>Stores agent session state records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>agent_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;absent&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>paged_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>arrived_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>departed_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>arrives_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0024_agent_arrives_at.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="agent_templates"><code>agent_templates</code></h2>
+<p>Stores agent templates records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>agent_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>role_title</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>avatar_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>system_prompt</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>context_filter</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;full&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>communication_style</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_default</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_model</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_api_key</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_endpoint</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_config</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_temperature</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_max_tokens</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0005_retention.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="alarm_config"><code>alarm_config</code></h2>
+<p>Stores alarm config records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_sign</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>high_threshold</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>low_threshold</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="alarm_events"><code>alarm_events</code></h2>
+<p>Stores alarm events records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_sign</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>threshold_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>threshold_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>actual_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>triggered_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>acknowledged_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="body_map_coordinates"><code>body_map_coordinates</code></h2>
+<p>Stores body map coordinates records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>gender</code></td>
+<td>TEXT</td>
+<td>CHECK(gender IN (&#39;male&#39;, &#39;female&#39;, &#39;unisex&#39;)) DEFAULT &#39;unisex&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>view</code></td>
+<td>TEXT</td>
+<td>CHECK(view IN (&#39;anterior&#39;, &#39;posterior&#39;)) NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>polygon_points</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>color_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>hover_color</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>selected_color</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_clickable</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>z_index</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="body_regions"><code>body_regions</code></h2>
+<p>Stores body regions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>anatomical_view</code></td>
+<td>TEXT</td>
+<td>CHECK(anatomical_view IN (&#39;anterior&#39;, &#39;posterior&#39;, &#39;both&#39;, &#39;special&#39;)) DEFAULT &#39;both&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>parent_region_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="case_agents"><code>case_agents</code></h2>
+<p>Stores case agents records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>agent_template_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name_override</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>system_prompt_override</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>availability_type</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;present&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>available_from_minute</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>auto_arrive_minute</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>depart_at_minute</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>response_time_min</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>response_time_max</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>config_override</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="case_investigations"><code>case_investigations</code></h2>
+<p>Stores case investigations records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>result_data</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>image_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>turnaround_minutes</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 30</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_group</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>gender_category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_samples</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_abnormal</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>current_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>min_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>max_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0005_retention.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="case_treatments"><code>case_treatments</code></h2>
+<p>Stores case treatments records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(treatment_type IN (&#39;medication&#39;, &#39;iv_fluid&#39;, &#39;oxygen&#39;, &#39;nursing&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_available</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_expected</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_contraindicated</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>points_if_ordered</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>feedback_if_ordered</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>feedback_if_missed</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>custom_effect_override</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="case_versions"><code>case_versions</code></h2>
+<p>Stores case versions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>snapshot (config_snapshot)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>version_number</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>changed_by</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>change_timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>change_type</code></td>
+<td>TEXT</td>
+<td>CHECK(change_type IN (&#39;created&#39;, &#39;updated&#39;, &#39;restored&#39;, &#39;published&#39;, &#39;unpublished&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>changes_description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>config_snapshot</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>previous_version_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="cases"><code>cases</code></h2>
+<p>Stores cases records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>system_prompt</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>patient_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>patient_gender</code></td>
+<td>TEXT</td>
+<td>CHECK(patient_gender IN (&#39;Male&#39;, &#39;Female&#39;, &#39;Other&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>patient_age</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>chief_complaint</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>difficulty_level</code></td>
+<td>TEXT</td>
+<td>CHECK(difficulty_level IN (&#39;beginner&#39;, &#39;intermediate&#39;, &#39;advanced&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>estimated_duration_minutes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>learning_objectives</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_available</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_default</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_published</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>published_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>scenario</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>last_modified_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>case_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0035_case_code.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="client_logs"><code>client_logs</code></h2>
+<p>Stores client logs records.</p>
+<p><strong>Introduced by:</strong> migration <code>0009_client_logs.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>request_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(level IN (&#39;debug&#39;,&#39;info&#39;,&#39;warn&#39;,&#39;error&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>component</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>msg</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>fields_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ts</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>received_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="clinical_notes"><code>clinical_notes</code></h2>
+<p>Stores clinical notes records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>note_type</code></td>
+<td>TEXT</td>
+<td>CHECK(note_type IN (&#39;subjective&#39;, &#39;objective&#39;, &#39;assessment&#39;, &#39;plan&#39;, &#39;general&#39;)) DEFAULT &#39;general&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="clinical_pathways"><code>clinical_pathways</code></h2>
+<p>Stores clinical pathways records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>pathway_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>condition_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_hours</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="cohort_cases"><code>cohort_cases</code></h2>
+<p>Stores cohort cases records.</p>
+<p><strong>Introduced by:</strong> migration <code>0027_cohort_entity.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cases(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>available_from</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0030_cohort_case_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>available_until</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0030_cohort_case_windows.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="cohort_members"><code>cohort_members</code></h2>
+<p>Stores cohort members records.</p>
+<p><strong>Introduced by:</strong> migration <code>0025_cohorts.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>joined_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>member_role</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;student&#39;</td>
+<td><code>0027_cohort_entity.sql</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;active&#39;</td>
+<td><code>0030_cohort_case_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>enrolled_from</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0030_cohort_case_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>enrolled_until</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0030_cohort_case_windows.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="cohort_surveys"><code>cohort_surveys</code></h2>
+<p>Stores cohort surveys records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>survey_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES surveys(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>order_index</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>added_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="cohorts"><code>cohorts</code></h2>
+<p>Stores cohorts records.</p>
+<p><strong>Introduced by:</strong> migration <code>0025_cohorts.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>owner_user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>join_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0027_cohort_entity.sql</code></td>
+</tr>
+<tr>
+<td><code>starts_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0027_cohort_entity.sql</code></td>
+</tr>
+<tr>
+<td><code>ends_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0027_cohort_entity.sql</code></td>
+</tr>
+<tr>
+<td><code>settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td><code>0027_cohort_entity.sql</code></td>
+</tr>
+<tr>
+<td><code>auto_enroll</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td><code>0033_cohort_auto_enroll.sql</code></td>
+</tr>
+<tr>
+<td><code>is_default</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td><code>0044_cohorts_is_default.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="custom_drug_group_items"><code>custom_drug_group_items</code></h2>
+<p>Stores custom drug group items records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>group_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES custom_drug_groups(id) ON DELETE CASCADE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES medications(id) ON DELETE CASCADE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="custom_drug_groups"><code>custom_drug_groups</code></h2>
+<p>Stores custom drug groups records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;platform&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="custom_lab_group_items"><code>custom_lab_group_items</code></h2>
+<p>Stores custom lab group items records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>group_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES custom_lab_groups(id) ON DELETE CASCADE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>lab_test_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES lab_tests(id) ON DELETE CASCADE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="custom_lab_groups"><code>custom_lab_groups</code></h2>
+<p>Stores custom lab groups records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;platform&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="data_sources"><code>data_sources</code></h2>
+<p>Stores data sources records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_key</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_url</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>release_version</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>license</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rows_imported</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>checksum_sha256</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>imported_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>imported_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="diagnoses"><code>diagnoses</code></h2>
+<p>Stores diagnoses records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>icd_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>body_system</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>severity</code></td>
+<td>TEXT</td>
+<td>CHECK(severity IN (&#39;mild&#39;, &#39;moderate&#39;, &#39;severe&#39;, &#39;critical&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>typical_findings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>differential_diagnoses</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>workup_recommendations</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_guidelines</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="emotion_logs"><code>emotion_logs</code></h2>
+<p>Stores emotion logs records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>emotion</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="event_log"><code>event_log</code></h2>
+<p>Stores event log records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_sign</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>old_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>new_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="exam_techniques"><code>exam_techniques</code></h2>
+<p>Stores exam techniques records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>technique_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>icon</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="export_records"><code>export_records</code></h2>
+<p>Stores export records records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>export_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>export_format</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resource_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resource_ids</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>record_count</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_size_bytes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_hash</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>exported_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>filters_applied</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="interactions"><code>interactions</code></h2>
+<p>Stores interactions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td>TEXT</td>
+<td>CHECK(role IN (&#39;user&#39;, &#39;assistant&#39;, &#39;system&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0053_interactions_source.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="investigation_orders"><code>investigation_orders</code></h2>
+<p>Stores investigation orders records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ordered_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>available_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>viewed_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="investigation_parameters"><code>investigation_parameters</code></h2>
+<p>Stores investigation parameters records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>parameter_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_range_min</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_range_max</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="investigation_templates"><code>investigation_templates</code></h2>
+<p>Stores investigation templates records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>template_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_type</code></td>
+<td>TEXT</td>
+<td>CHECK(investigation_type IN (&#39;lab&#39;, &#39;radiology&#39;, &#39;procedure&#39;, &#39;other&#39;)) NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>turnaround_minutes</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 30</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>preparation_instructions</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>contraindications</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cost</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_stat_available</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="investigation_views"><code>investigation_views</code></h2>
+<p>Stores investigation views records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>view_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="lab_definitions"><code>lab_definitions</code></h2>
+<p>Stores lab definitions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_group</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>CHECK(category IN (&#39;Male&#39;, &#39;Female&#39;, &#39;Both&#39;)) DEFAULT &#39;Both&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>min_value</code></td>
+<td>REAL</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>max_value</code></td>
+<td>REAL</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_samples</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>clinical_significance</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>turnaround_minutes</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 30</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cost</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0005_retention.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="lab_panels"><code>lab_panels</code></h2>
+<p>Stores lab panels records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>panel_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>panel_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>clinical_indication</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_stat_available</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="lab_reference_ranges"><code>lab_reference_ranges</code></h2>
+<p>Stores lab reference ranges records.</p>
+<p><strong>Introduced by:</strong> migration <code>0007_drug_lab_catalogue.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>lab_test_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES lab_tests(id) ON DELETE CASCADE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>population</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(population IN (&#39;adult&#39;, &#39;pediatric&#39;, &#39;neonatal&#39;, &#39;pregnancy&#39;, &#39;geriatric&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>sex</code></td>
+<td>TEXT</td>
+<td>CHECK(sex IN (&#39;M&#39;, &#39;F&#39;, &#39;all&#39;) OR sex IS NULL)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>age_min_years</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>age_max_years</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>range_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>range_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_citation</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>data_source_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES data_sources(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="lab_tests"><code>lab_tests</code></h2>
+<p>Stores lab tests records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_code</code></td>
+<td>TEXT</td>
+<td>UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_group</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>CHECK(category IN (&#39;General&#39;, &#39;Male&#39;, &#39;Female&#39;)) DEFAULT &#39;General&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>specimen_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>min_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>max_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_samples</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>clinical_significance</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>turnaround_minutes</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 30</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cost</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_stat_available</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_curated</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>data_source_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES data_sources(id)</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;platform&#39;</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>external_source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>loinc_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>ucum_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="learning_events"><code>learning_events</code></h2>
+<p>Stores learning events records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>object_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>object_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>parent_component</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>message_role</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>CHECK(category IN (&#39;SESSION&#39;, &#39;NAVIGATION&#39;, &#39;CLINICAL&#39;, &#39;COMMUNICATION&#39;, &#39;MONITORING&#39;, &#39;CONFIGURATION&#39;, &#39;ASSESSMENT&#39;, &#39;ERROR&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_hr</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_spo2</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_bp_sys</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_bp_dia</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_rr</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_temp</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_etco2</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>vital_rhythm</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0018_learning_events_vitals.sql</code></td>
+</tr>
+<tr>
+<td><code>room</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0021_learning_events_room.sql</code></td>
+</tr>
+<tr>
+<td><code>client_time</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0050_utc_iso_timestamps.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="lesson_progress"><code>lesson_progress</code></h2>
+<p>Stores lesson progress records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>lesson_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES lessons(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_completed</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>completed_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>time_spent</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="lesson_sections"><code>lesson_sections</code></h2>
+<p>Stores lesson sections records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>lesson_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES lessons(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;text&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>file_size</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>order_index</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="lessons"><code>lessons</code></h2>
+<p>Stores lessons records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;text&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>video_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>order_index</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_published</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_free</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>available_from</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>available_until</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="llm_model_pricing"><code>llm_model_pricing</code></h2>
+<p>Stores llm model pricing records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>input_cost_per_1k</code></td>
+<td>REAL</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>output_cost_per_1k</code></td>
+<td>REAL</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="llm_request_log"><code>llm_request_log</code></h2>
+<p>Stores llm request log records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>prompt_tokens</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>completion_tokens</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>total_tokens</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>estimated_cost</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>CHECK(status IN (&#39;success&#39;, &#39;error&#39;, &#39;rate_limited&#39;)) DEFAULT &#39;success&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>error_message</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>request_timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>response_time_ms</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="llm_usage"><code>llm_usage</code></h2>
+<p>Stores llm usage records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td>DATE</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>prompt_tokens</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>completion_tokens</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>total_tokens</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>estimated_cost</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>request_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="login_logs"><code>login_logs</code></h2>
+<p>Stores login logs records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>TEXT</td>
+<td>CHECK(action IN (&#39;login&#39;, &#39;logout&#39;, &#39;failed_login&#39;)) NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ip_address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="medication_doses"><code>medication_doses</code></h2>
+<p>Stores medication doses records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_description</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>frequency</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>indication</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_default</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="medications"><code>medications</code></h2>
+<p>Stores medications records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_code</code></td>
+<td>TEXT</td>
+<td>UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>generic_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>brand_names</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>drug_class</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td>TEXT</td>
+<td>CHECK(route IN (&#39;oral&#39;, &#39;iv&#39;, &#39;im&#39;, &#39;sc&#39;, &#39;topical&#39;, &#39;inhaled&#39;, &#39;sublingual&#39;, &#39;rectal&#39;, &#39;other&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>typical_dose</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>frequency</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>max_daily_dose</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>onset_minutes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>half_life_hours</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>indications</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>contraindications</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>side_effects</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>interactions</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitoring_parameters</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>pregnancy_category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_controlled</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_high_alert</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0005_retention.sql</code></td>
+</tr>
+<tr>
+<td><code>is_curated</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>data_source_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES data_sources(id)</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;platform&#39;</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>external_source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>external_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>rxcui</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>ndc_primary</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>atc_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>openfda_setid</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>boxed_warning</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="oyon_emotion_consents"><code>oyon_emotion_consents</code></h2>
+<p>Stores oyon emotion consents records.</p>
+<p><strong>Introduced by:</strong> migration <code>0011_oyon_addon.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_granted</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_version</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_page</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>accepted_version</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="oyon_emotion_records"><code>oyon_emotion_records</code></h2>
+<p>Stores oyon emotion records records.</p>
+<p><strong>Introduced by:</strong> migration <code>0011_oyon_addon.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code> · <code>snapshot (student_name_snapshot, student_role_snapshot, case_title_snapshot, case_category_snapshot, course_title_snapshot, cohort_title_snapshot)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>record_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>course_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_name_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_role_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_category_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>course_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>attempt_number</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>started_from_page</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_start</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_end</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dominant_emotion</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>emotion_probabilities_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>valence</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>arousal</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>confidence</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>entropy</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>valid_frames</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>missing_face_ratio</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>quality_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model_version</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>capture_mode</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK (capture_mode IN (&#39;local-browser&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>capture_status</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;captured&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_consent_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>admin_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>educator_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_version</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_recorded_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>expected_samples</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>valence_std</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>valence_min</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>valence_max</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>arousal_std</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>arousal_min</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>arousal_max</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>confidence_std</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>entropy_std</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>stability_score</code></td>
+<td>REAL</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>label_switch_count</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>model_profile</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>settings_hash</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>settings_snapshot_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>dynamics_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0017_oyon_records_window_metadata.sql</code></td>
+</tr>
+<tr>
+<td><code>gaze_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0028_oyon_records_gaze_engagement.sql</code></td>
+</tr>
+<tr>
+<td><code>engagement_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0028_oyon_records_gaze_engagement.sql</code></td>
+</tr>
+<tr>
+<td><code>room</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0029_oyon_records_room.sql</code></td>
+</tr>
+<tr>
+<td><code>facial_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>posture_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>heart_rate_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>respiration_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>illumination_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+<tr>
+<td><code>capture_quality_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0039_oyon_signal_windows.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="oyon_settings"><code>oyon_settings</code></h2>
+<p>Stores oyon settings records.</p>
+<p><strong>Introduced by:</strong> migration <code>0011_oyon_addon.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>emotion_capture_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>admin_emotion_view_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>educator_emotion_view_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_emotion_view_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>retention_days</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_version</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;oyon-consent-v1&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model_profile</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;hse-emotion-mtl&#39;</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>sample_interval_ms</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1000</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>window_ms</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 10000</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>min_valid_frames</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 6</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>smoothing_alpha</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 0.28</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>min_hold_ms</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 3000</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>min_switch_confidence</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 0.5</td>
+<td><code>0012_oyon_settings_runtime.sql</code></td>
+</tr>
+<tr>
+<td><code>facial_signals_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>heart_rate_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>respiration_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>illumination_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>eye_tracking_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>gaze_tracking_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>enable_dynamics</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>posture_tracking_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>signal_window_share</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0040_oyon_signal_settings.sql</code></td>
+</tr>
+<tr>
+<td><code>typing_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+</tr>
+<tr>
+<td><code>interaction_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+</tr>
+<tr>
+<td><code>discourse_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+</tr>
+<tr>
+<td><code>ai_assist_enabled</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0041_oyon_consent_v2_signals.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="oyon_signal_windows"><code>oyon_signal_windows</code></h2>
+<p>Stores oyon signal windows records.</p>
+<p><strong>Introduced by:</strong> migration <code>0039_oyon_signal_windows.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code> · <code>snapshot (student_role_snapshot, case_title_snapshot, case_category_snapshot, course_title_snapshot, cohort_title_snapshot)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>record_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>course_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>mirroring</code></td>
+<td>oyon</td>
+<td>_emotion_records so the new dashboards -- can name a row without joining back to mutable tables. student_name_snapshot TEXT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_role_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_category_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>course_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_title_snapshot</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>attempt_number</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>started_from_page</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>room</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_kind</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;interval&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_start</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_end</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>verbatim</code></td>
+<td>(untyped)</td>
+<td>. Shape is owned by Oyon&#39;s aggregator for that -- modality and varies per modality by design</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>so</code></td>
+<td>it</td>
+<td>stays JSON rather than -- being projected into per-modality columns. payload_json TEXT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dynamics_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model_profile</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>settings_hash</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>settings_snapshot_json</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>capture_mode</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;local-browser&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>capture_status</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;captured&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resolved</code></td>
+<td>at</td>
+<td>-- write time from the tenant&#39;s oyon_settings. student_consent_enabled INTEGER NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>admin_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>educator_can_view</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_version</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>consent_recorded_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>and</code></td>
+<td>pinning</td>
+<td>them per row -- lets a later analysis tell which engine produced a signal. oyon_version TEXT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>contract_version</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>schema_version</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="panel_tests"><code>panel_tests</code></h2>
+<p>Stores panel tests records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>panel_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>lab_test_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>preset_type</code></td>
+<td>TEXT</td>
+<td>CHECK(preset_type IN (&#39;normal&#39;, &#39;low&#39;, &#39;high&#39;, &#39;critical_low&#39;, &#39;critical_high&#39;, &#39;custom&#39;)) DEFAULT &#39;normal&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>value_multiplier</code></td>
+<td>REAL</td>
+<td>DEFAULT 1.0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>custom_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="patient_information"><code>patient_information</code></h2>
+<p>Stores patient information records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>date_of_birth</code></td>
+<td>DATE</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>gender</code></td>
+<td>TEXT</td>
+<td>CHECK(gender IN (&#39;Male&#39;, &#39;Female&#39;, &#39;Other&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>blood_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>weight_kg</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>height_cm</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>chief_complaint</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>history_of_present_illness</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>past_medical_history</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>surgical_history</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medications_list</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>allergies</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>social_history</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>family_history</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>review_of_systems</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="patient_record_documents"><code>patient_record_documents</code></h2>
+<p>Stores patient record documents records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>record_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>patient_info</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>current_state</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>events_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>document</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="patient_record_events"><code>patient_record_events</code></h2>
+<p>Stores patient record events records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>record_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>event_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>verb</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(verb IN (&#39;OBTAINED&#39;, &#39;EXAMINED&#39;, &#39;ELICITED&#39;, &#39;NOTED&#39;, &#39;ORDERED&#39;, &#39;ADMINISTERED&#39;, &#39;CHANGED&#39;, &#39;EXPRESSED&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>time_elapsed</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>item</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>finding</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>abnormal</code></td>
+<td>BOOLEAN</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>details</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="physical_exam_findings"><code>physical_exam_findings</code></h2>
+<p>Stores physical exam findings records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>body_region</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>exam_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>finding</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_abnormal</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>audio_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>audio_played</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="platform_settings"><code>platform_settings</code></h2>
+<p>Stores platform settings records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>setting_key</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>setting_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="plugin_assets"><code>plugin_assets</code></h2>
+<p>Stores plugin assets records.</p>
+<p><strong>Introduced by:</strong> migration <code>0049_plugin_jobs_assets.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>TEXT</td>
+<td>PRIMARY KEY</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>plugin_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;importing&#39; CHECK (state IN (&#39;importing&#39;, &#39;ready&#39;, &#39;needs_calibration&#39;, &#39;failed&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>and</code></td>
+<td>a</td>
+<td>digest is the only answer that survives the -- source host going away. source_url TEXT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_sha256</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source_bytes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>because</code></td>
+<td>a</td>
+<td>slide -- scanned at 40x and archived at 10x has both</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>native_mpp_x</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>native_mpp_y</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tiled_objective</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>height</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>disk_bytes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="plugin_jobs"><code>plugin_jobs</code></h2>
+<p>Stores plugin jobs records.</p>
+<p><strong>Introduced by:</strong> migration <code>0049_plugin_jobs_assets.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>TEXT</td>
+<td>PRIMARY KEY</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>generated</code></td>
+<td>by</td>
+<td>the host tenant_id INTEGER NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>plugin_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>e</code></td>
+<td>(untyped)</td>
+<td>.g. &#39;import_slide&#39; -- queued → running → done | failed | cancelled. A job found &#39;running&#39; at boot -- is a job whose process died; the runner requeues or fails it explicitly -- rather than leaving a row that claims work is in progress forever. state TEXT NOT NULL DEFAULT &#39;queued&#39; CHECK (state IN (&#39;queued&#39;, &#39;running&#39;, &#39;done&#39;, &#39;failed&#39;, &#39;cancelled&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>advisory</code></td>
+<td>only</td>
+<td>CHECK (progress BETWEEN 0 AND 100)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;{}&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>attempts</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>and</code></td>
+<td>(untyped)</td>
+<td>-- a phase boundary is the one place the on-disk state is known. cancel_requested INTEGER NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>asset_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>if</code></td>
+<td>any</td>
+<td>created_by INTEGER REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>started_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>finished_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="plugin_settings"><code>plugin_settings</code></h2>
+<p>Stores plugin settings records.</p>
+<p><strong>Introduced by:</strong> migration <code>0048_plugin_settings.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>plugin_id</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>which</code></td>
+<td>drops</td>
+<td>keys the manifest no -- longer declares and falls back to the default for a value the schema now -- rejects. That is what a plugin upgrade looks like from here. settings TEXT NOT NULL DEFAULT &#39;{}&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>NOT NULL DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="questionnaire_responses"><code>questionnaire_responses</code></h2>
+<p>Stores questionnaire responses records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>submitted_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>responses</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="region_default_findings"><code>region_default_findings</code></h2>
+<p>Stores region default findings records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>technique_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>finding_text</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_normal</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="region_exam_types"><code>region_exam_types</code></h2>
+<p>Stores region exam types records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>technique_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_primary</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="region_special_tests"><code>region_special_tests</code></h2>
+<p>Stores region special tests records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>region_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>test_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>technique</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>positive_finding</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>negative_finding</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>clinical_significance</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="registration_invite_uses"><code>registration_invite_uses</code></h2>
+<p>Stores registration invite uses records.</p>
+<p><strong>Introduced by:</strong> migration <code>0037_registration_invites.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>invite_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES registration_invites(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>used_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ip_address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="registration_invites"><code>registration_invites</code></h2>
+<p>Stores registration invites records.</p>
+<p><strong>Introduced by:</strong> migration <code>0037_registration_invites.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>token</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;student&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES cohorts(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>never</code></td>
+<td>shown</td>
+<td>publicly created_by INTEGER NOT NULL REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>revoked_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>revoked_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="registration_requests"><code>registration_requests</code></h2>
+<p>Stores registration requests records.</p>
+<p><strong>Introduced by:</strong> migration <code>0038_registration_requests.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>password_hash</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>requested_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ip_address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>decided_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>decided_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>decision_note</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>shown</code></td>
+<td>to</td>
+<td>nobody but admins user_id INTEGER REFERENCES users(id) -- the account created on approval</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="scenario_events"><code>scenario_events</code></h2>
+<p>Stores scenario events records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>event_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>scheduled_minutes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_changes</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_triggered</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>triggered_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>acknowledged_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>acknowledged_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="scenario_templates"><code>scenario_templates</code></h2>
+<p>Stores scenario templates records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>template_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>difficulty_level</code></td>
+<td>TEXT</td>
+<td>CHECK(difficulty_level IN (&#39;beginner&#39;, &#39;intermediate&#39;, &#39;advanced&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>clinical_condition</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>learning_objectives</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_public</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="scenario_timeline_points"><code>scenario_timeline_points</code></h2>
+<p>Stores scenario timeline points records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>scenario_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>sequence_order</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>time_minutes</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>hr</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>spo2</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rr</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_sys</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_dia</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>temp</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>etco2</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cardiac_rhythm</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>st_elevation</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>pvc_present</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>wide_qrs</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>t_inversion</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>noise_level</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>additional_params</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="scenarios"><code>scenarios</code></h2>
+<p>Stores scenarios records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_by, created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timeline</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_public</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0005_retention.sql</code></td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;en&#39;</td>
+<td><code>0045_scenarios_language.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="search_aliases"><code>search_aliases</code></h2>
+<p>Stores search aliases records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alias_term</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alias_type</code></td>
+<td>TEXT</td>
+<td>CHECK(alias_type IN (&#39;lab&#39;, &#39;medication&#39;, &#39;investigation&#39;, &#39;panel&#39;, &#39;diagnosis&#39;)) NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>target_ids</code></td>
+<td>JSON</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="session_notes"><code>session_notes</code></h2>
+<p>Stores session notes records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>note_text</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="session_settings"><code>session_settings</code></h2>
+<p>Stores session settings records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>snapshot (settings_snapshot)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_provider</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_model</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_base_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_hr</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_rhythm</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_spo2</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_bp_sys</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_bp_dia</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_rr</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_temp</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>settings_snapshot</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="session_vitals"><code>session_vitals</code></h2>
+<p>Stores session vitals records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>elapsed_ms</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>hr</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rhythm</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>spo2</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_sys</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_dia</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rr</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>temp</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>etco2</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="sessions"><code>sessions</code></h2>
+<p>Stores sessions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (updated_at)</code> · <code>snapshot (case_snapshot)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>student_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>start_time</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>end_time</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>CHECK(status IN (&#39;active&#39;, &#39;paused&#39;, &#39;completed&#39;, &#39;abandoned&#39;)) DEFAULT &#39;active&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_version</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>exam_findings_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>investigation_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>message_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>performance_score</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>instructor_notes</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>monitor_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>llm_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_snapshot</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="settings_logs"><code>settings_logs</code></h2>
+<p>Stores settings logs records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>case_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>setting_type</code></td>
+<td>TEXT</td>
+<td>CHECK(setting_type IN (&#39;llm&#39;, &#39;monitor&#39;, &#39;case_load&#39;)) NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>setting_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>old_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>new_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>settings_json</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="survey_answers"><code>survey_answers</code></h2>
+<p>Stores survey answers records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>response_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES survey_responses(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>question_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES survey_questions(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>answer_value</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="survey_questions"><code>survey_questions</code></h2>
+<p>Stores survey questions records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>survey_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES surveys(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>question_text</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>question_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_required</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>order_index</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="survey_responses"><code>survey_responses</code></h2>
+<p>Stores survey responses records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>survey_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES surveys(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>cohort_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;standalone&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>context_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>completed_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="surveys"><code>surveys</code></h2>
+<p>Stores surveys records.</p>
+<p><strong>Introduced by:</strong> migration <code>0032_lessons.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_by_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL REFERENCES users(id)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_published</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_anonymous</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="system_audit_log"><code>system_audit_log</code></h2>
+<p>Stores system audit log records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resource_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resource_id</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>resource_name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>old_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>new_value</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ip_address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>CHECK(status IN (&#39;success&#39;, &#39;failure&#39;, &#39;warning&#39;)) DEFAULT &#39;success&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>error_message</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>ts_utc</code></td>
+<td>TEXT</td>
+<td>GENERATED ALWAYS AS (strftime(&#39;%Y-%m-%dT%H:%M:%fZ&#39;, timestamp)) VIRTUAL</td>
+<td><code>0050_utc_iso_timestamps.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="team_communications_log"><code>team_communications_log</code></h2>
+<p>Stores team communications log records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>agent_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>key_points</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="tenants"><code>tenants</code></h2>
+<p>Stores tenants records.</p>
+<p><strong>Introduced by:</strong> migration <code>0004_tenants.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>audit (created_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>slug</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_default</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="treatment_effects"><code>treatment_effects</code></h2>
+<p>Stores treatment effects records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_by, created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(treatment_type IN (&#39;medication&#39;, &#39;iv_fluid&#39;, &#39;oxygen&#39;, &#39;nursing&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>onset_minutes</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 5</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>peak_minutes</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 15</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>REAL</td>
+<td>NOT NULL DEFAULT 60</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>hr_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_sys_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bp_dia_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rr_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>spo2_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>temp_effect</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>etco2_effect</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_dependent</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>base_dose</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>base_dose_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>max_effect_multiplier</code></td>
+<td>REAL</td>
+<td>DEFAULT 2.0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rxcui</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>data_source_id</code></td>
+<td>INTEGER</td>
+<td>REFERENCES data_sources(id)</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>pk_source</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>pk_evidence_url</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td><code>0007_drug_lab_catalogue.sql</code></td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>TEXT</td>
+<td>NOT NULL DEFAULT &#39;platform&#39;</td>
+<td><code>0046_treatment_effects_scope.sql</code></td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0046_treatment_effects_scope.sql</code></td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td>INTEGER</td>
+<td>REFERENCES users(id)</td>
+<td><code>0046_treatment_effects_scope.sql</code></td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td><code>0046_treatment_effects_scope.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="treatment_orders"><code>treatment_orders</code></h2>
+<p>Stores treatment orders records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_type</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(treatment_type IN (&#39;medication&#39;, &#39;iv_fluid&#39;, &#39;oxygen&#39;, &#39;nursing&#39;))</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>medication_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>treatment_item</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dose_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>route</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>frequency</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rate</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rate_value</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>rate_unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>duration_minutes</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>urgency</code></td>
+<td>TEXT</td>
+<td>CHECK(urgency IN (&#39;stat&#39;, &#39;routine&#39;, &#39;prn&#39;)) DEFAULT &#39;routine&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_high_alert</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ordered_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>administered_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>completed_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>discontinued_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>CHECK(status IN (&#39;ordered&#39;, &#39;administered&#39;, &#39;in_progress&#39;, &#39;completed&#39;, &#39;discontinued&#39;, &#39;held&#39;)) DEFAULT &#39;ordered&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>feedback</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>points_awarded</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="tts_usage"><code>tts_usage</code></h2>
+<p>Stores tts usage records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td>DATE</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>char_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>request_count</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>estimated_cost</code></td>
+<td>REAL</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="usage_budget"><code>usage_budget</code></h2>
+<p>Stores usage budget records.</p>
+<p><strong>Introduced by:</strong> migration <code>0010_usage_budget.sql</code></p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>metric</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_start</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>window_end</code></td>
+<td>DATETIME</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>used</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 0</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="user_preferences"><code>user_preferences</code></h2>
+<p>Stores user preferences records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>theme</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;dark&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;en&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>notification_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>dashboard_layout</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>default_llm_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>default_monitor_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>accessibility_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+<tr>
+<td><code>onboarding_settings</code></td>
+<td>JSON</td>
+<td>—</td>
+<td><code>0036_user_onboarding_settings.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="users"><code>users</code></h2>
+<p>Stores users records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>soft-delete</code> · <code>tenant-scoped</code> · <code>audit (created_at, updated_at)</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td>TEXT</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>password_hash</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>TEXT</td>
+<td>NOT NULL UNIQUE</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td>TEXT</td>
+<td>NOT NULL CHECK(role IN (&#39;admin&#39;, &#39;user&#39;)) DEFAULT &#39;user&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>department</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>TEXT</td>
+<td>CHECK(status IN (&#39;active&#39;, &#39;inactive&#39;, &#39;suspended&#39;)) DEFAULT &#39;active&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>last_login</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>failed_login_attempts</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>locked_until</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>deleted_at</code></td>
+<td>DATETIME</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>institution</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>address</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>phone</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alternative_email</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>education</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>grade</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="vital_sign_definitions"><code>vital_sign_definitions</code></h2>
+<p>Stores vital sign definitions records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_id</code></td>
+<td>TEXT</td>
+<td>UNIQUE NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>abbreviation</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_min</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>normal_max</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>critical_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alarm_low</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alarm_high</code></td>
+<td>REAL</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>decimal_places</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>display_order</code></td>
+<td>INTEGER</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>color_code</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 1</td>
+<td>—</td>
+</tr>
+</tbody></table></div>
+<h2 id="vital_sign_history"><code>vital_sign_history</code></h2>
+<p>Stores vital sign history records.</p>
+<p><strong>Introduced by:</strong> base schema (<code>migrations/0001_initial.sql</code>)</p>
+<p><strong>Cross-cutting:</strong> <code>tenant-scoped</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Constraints</th>
+<th>Added by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>INTEGER</td>
+<td>PRIMARY KEY AUTOINCREMENT</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>vital_sign</code></td>
+<td>TEXT</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>REAL</td>
+<td>NOT NULL</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>is_alarm_triggered</code></td>
+<td>BOOLEAN</td>
+<td>DEFAULT 0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>alarm_type</code></td>
+<td>TEXT</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>recorded_at</code></td>
+<td>DATETIME</td>
+<td>DEFAULT CURRENT_TIMESTAMP</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>TEXT</td>
+<td>DEFAULT &#39;system&#39;</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tenant_id</code></td>
+<td>INTEGER</td>
+<td>NOT NULL DEFAULT 1</td>
+<td><code>0004_tenants.sql</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><em>Regenerate: <code>npm run docs:gen:data</code></em></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../../index.html">Overview</a>
+                <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../whats-new.html">What's new</a>
+                <a href="../../../help.html">Help</a>
+                <a href="../../../about.html">About the author</a>
+                <a href="../../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../../docs/index.html">Docs home</a>
+                <a href="../../../docs/INSTALL.html">Install</a>
+                <a href="../../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../../docs/UPDATING.html">Updating</a>
+                <a href="../../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../../site.js"></script>
+</body>
+</html>

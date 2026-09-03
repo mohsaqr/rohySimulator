@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reading a pathology slide · Rohy docs</title>
+    <meta name="description" content="The Pathology room is a whole-slide viewer. You open a scanned slide, move around it at the magnification you choose, measure and mark what you find, and write a report on it.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Reading a pathology slide · Rohy docs">
+    <meta property="og:description" content="The Pathology room is a whole-slide viewer. You open a scanned slide, move around it at the magnification you choose, measure and mark what you find, and write a report on it.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Trainee</span>
+        <h1>Reading a pathology slide</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#when-the-room-appears">When the room appears</a>
+            <a href="#opening-a-slide-and-moving-around-it">Opening a slide and moving around it</a>
+            <a href="#keyboard-shortcuts">Keyboard shortcuts</a>
+            <a href="#marking-and-measuring">Marking and measuring</a>
+            <a href="#brightness-contrast-gamma-and-saturation">Brightness, contrast, gamma and saturation</a>
+            <a href="#writing-the-report">Writing the report</a>
+            <a href="#when-the-room-is-empty">When the room is empty</a>
+            <a href="#next-steps">Next steps</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Using the Simulator</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="getting-started.html">Getting started</a>
+                    <a href="rooms.html">The rooms</a>
+                    <a href="history.html">Taking a history</a>
+                    <a href="room-3d.html">The 3D Room</a>
+                    <a href="examination.html">Physical examination</a>
+                    <a href="investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="ecg.html">12-lead ECG</a>
+                    <a href="pathology.html" aria-current="page">Reading a pathology slide</a>
+                    <a href="imaging-reading-room.html">The PACS reading room</a>
+                    <a href="treatments.html">Treatments &amp; medications</a>
+                    <a href="vitals.html">Vitals &amp; alarms</a>
+                    <a href="voice.html">Voice mode</a>
+                    <a href="debrief.html">Debrief</a>
+                    <a href="courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>The <strong>Pathology</strong> room is a whole-slide viewer. You open a scanned slide,
+move around it at the magnification you choose, measure and mark what you
+find, and write a report on it.</p>
+<h2 id="when-the-room-appears">When the room appears</h2>
+<p><strong>Pathology</strong> sits in the bottom navigation bar with the subtitle <strong>slides</strong>,
+after the other rooms. It appears when two conditions hold: your Rohy install
+runs the <code>advanced</code> release channel, and the case carries material you can
+open, meaning a slide with a loadable source and scanner optics, or a gross
+specimen photograph. For a case with neither, the room stays out of the bar.</p>
+<p>A case carrying both kinds gets a tab strip at the top: <strong>Microscopy</strong> for
+the scanned slides and <strong>Gross</strong> for specimen photography, each with a count.
+The <strong>Gross</strong> tab lists the specimen parts down the left, shows the enlarged
+plate with a contact sheet below it, and gives that part&#39;s description,
+dimensions and weight on the right; a plate&#39;s scale bar comes from the width
+it declares. The rest of this page is <strong>Microscopy</strong>.</p>
+<h2 id="opening-a-slide-and-moving-around-it">Opening a slide and moving around it</h2>
+<p>The case&#39;s slides are listed down the left with their labels and stains.
+Click one to open it; the first opens by itself when you enter the room.</p>
+<p>Drag to pan, scroll to zoom. <code>V</code> is the plain <strong>Navigate</strong> mode with no
+drawing, and a thumbnail navigator at the bottom right shows where you are on
+the whole slide (<code>N</code> hides and shows it). The magnification group carries the
+objective ladder <strong>1x</strong>, <strong>2x</strong>, <strong>4x</strong>, <strong>10x</strong>, <strong>20x</strong> and <strong>40x</strong>, with
+the current power read out beside it. <code>0</code> fits the whole slide, <code>[</code> and <code>]</code>
+rotate, and <code>H</code> mirrors the view. <code>B</code> bookmarks the field you are looking at;
+bookmarks appear under <strong>Bookmarked fields</strong> below the slide list, labelled
+with their magnification, and clicking one returns you to that view.</p>
+<p>Badges across the top left report the current objective (or <strong>no
+calibration</strong> when the slide carries no scanner optics), a <strong>scale bar</strong> in
+µm or mm, the <strong>field</strong> area of tissue on screen, the <strong>x</strong> and <strong>y</strong> of the
+centre of the view, and any rotation or flip in force.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Greyed-out magnifications</p>
+<p>A power the archive cannot resolve is disabled, and its tooltip says
+<code>Nx is beyond this archive — it would be interpolated, not resolved</code>. A slide
+tiled at 10x holds 10x of detail, so 40x would be an enlargement of those
+same pixels. Push past the scanned resolution by hand and the badge adds the
+word <strong>interpolated</strong>.</p>
+</aside>
+<h2 id="keyboard-shortcuts">Keyboard shortcuts</h2>
+<p>Press <code>?</code> for the shortcut sheet. It lists these bindings. <code>Mod</code> is Cmd on
+macOS and Ctrl elsewhere.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Keys</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Navigate</td>
+<td>Arrow keys</td>
+<td>Pan left, right, up, down</td>
+</tr>
+<tr>
+<td>Navigate</td>
+<td>Shift + arrows</td>
+<td>Pan a whole field in that direction</td>
+</tr>
+<tr>
+<td>Navigate</td>
+<td><code>0</code></td>
+<td>Fit the whole slide</td>
+</tr>
+<tr>
+<td>Navigate</td>
+<td><code>[</code> / <code>]</code> / <code>H</code></td>
+<td>Rotate 90 degrees left / right, flip</td>
+</tr>
+<tr>
+<td>Navigate</td>
+<td><code>N</code> / <code>B</code></td>
+<td>Show or hide the navigator / bookmark this field</td>
+</tr>
+<tr>
+<td>Magnify</td>
+<td><code>1</code> <code>2</code> <code>3</code> <code>4</code> <code>5</code> <code>6</code></td>
+<td>Go to 1x, 2x, 4x, 10x, 20x, 40x</td>
+</tr>
+<tr>
+<td>Magnify</td>
+<td><code>=</code> / <code>-</code></td>
+<td>Next objective up / down</td>
+</tr>
+<tr>
+<td>Draw</td>
+<td><code>V</code> / <code>S</code></td>
+<td>Navigate with no drawing / Select and edit</td>
+</tr>
+<tr>
+<td>Draw</td>
+<td><code>M</code> / <code>A</code> / <code>T</code></td>
+<td>Measure a distance / Arrow / Drop a marker</td>
+</tr>
+<tr>
+<td>Draw</td>
+<td><code>R</code> / <code>E</code> / <code>P</code></td>
+<td>Rectangle / Ellipse / Polygon</td>
+</tr>
+<tr>
+<td>Draw</td>
+<td><code>D</code> / <code>F</code> / <code>C</code></td>
+<td>Freehand / Free-form path / Counting frame</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>Mod</code> + <code>Z</code> / <code>Mod</code> + <code>Shift</code> + <code>Z</code> or <code>Mod</code> + <code>Y</code></td>
+<td>Undo / Redo</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>Delete</code>, <code>Backspace</code></td>
+<td>Delete the selection</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>Esc</code></td>
+<td>Cancel drawing, then deselect, then close this sheet</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>Enter</code></td>
+<td>Finish a polygon</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>Space</code> / <code>Shift</code> + <code>Space</code></td>
+<td>Add one to / take one off the count</td>
+</tr>
+<tr>
+<td>Edit</td>
+<td><code>?</code></td>
+<td>Show the shortcut sheet</td>
+</tr>
+</tbody></table></div>
+<p>Shortcuts are ignored while you are typing in a text box, so a report can
+contain the letter <code>r</code> and leave your tools alone.</p>
+<h2 id="marking-and-measuring">Marking and measuring</h2>
+<p>Rectangle, ellipse, arrow and the ruler are drawn by dragging. A polygon is
+clicked out vertex by vertex and closed with <code>Enter</code> or a double-click.
+Freehand and the free-form path are drawn by dragging along the shape. A
+marker and a counting frame are placed with one click, and those two tools
+stay selected so you can place a run of them; the others hand back to
+<strong>Select</strong> once the shape is down.</p>
+<p>Measurements come from the scanner&#39;s own metadata, so shapes report in
+physical units:</p>
+<ul>
+<li>Lengths in µm, switching to mm past 1,000 µm; areas in µm², switching to
+mm² past 1 mm².</li>
+<li>The ruler measures a straight distance. The free-form path measures along
+the curve you drew, which is what a depth of invasion or a distance to a
+margin asks for.</li>
+<li>A counting frame is placed at a fixed area, chosen from <strong>1 mm²</strong>,
+<strong>2 mm²</strong> or <strong>3 mm²</strong> while that tool is active. Count into it with
+<code>Space</code> and <code>Shift</code> + <code>Space</code>, or with the plus and minus buttons on the
+selected frame, and it reports a figure per mm². When the markers you
+dropped inside the frame disagree with the counter, the panel says so.</li>
+</ul>
+<p>The <strong>class</strong> button names what your next shape is called: <strong>Tumour</strong>,
+<strong>Stroma</strong>, <strong>Necrosis</strong>, <strong>Normal</strong>, <strong>Inflammation</strong>, <strong>Vessel</strong>,
+<strong>Mitosis</strong>, <strong>Artefact</strong>, or <strong>Unclassified</strong>. Each has its own colour, and
+every shape is drawn with its class name attached. The <strong>Marks</strong> tab lists
+every shape with its measurements: select a row to add a note, change its
+classification or adjust a counting frame, and use the target button to jump
+the view to that shape or the bin button to delete it. A footer totals the
+annotated <strong>Area by class</strong>. On the slide itself, <code>S</code> selects a shape,
+dragging moves it, dragging a handle reshapes it, and a badge beside it
+deletes it. The toolbar&#39;s file group takes a <strong>snapshot</strong> of the field as a
+PNG with the scale bar included, <strong>exports</strong> annotations as QuPath-readable
+GeoJSON, <strong>imports</strong> a GeoJSON file, and <strong>clears</strong> the slide&#39;s marks.</p>
+<h2 id="brightness-contrast-gamma-and-saturation">Brightness, contrast, gamma and saturation</h2>
+<p>The sliders button opens <strong>Brightness</strong>, <strong>Contrast</strong>, <strong>Gamma</strong> and
+<strong>Saturation</strong>, with <strong>Reset to the scanned image</strong> below them. The panel
+states the rule it follows:</p>
+<blockquote>
+<p><code>Display only. These change what you see, never the measurements — those come from scanner metadata.</code></p>
+</blockquote>
+<p>Every length, area and per-mm² figure is derived from the microns per pixel
+the scanner recorded, so moving these sliders leaves your numbers untouched.
+The filter is applied to the tissue underneath your marks, which keeps the
+marks legible at any setting.</p>
+<h2 id="writing-the-report">Writing the report</h2>
+<p>The <strong>Report</strong> tab on the right holds the case task and your reports. The
+task brief sits at the top with its prompt and instructions; when the case
+offers hints, a <strong>Hint</strong> button reveals them one at a time and records each
+request, and under exam conditions the hints are absent.</p>
+<ol>
+<li>Click <strong>Add report</strong> for a blank one.</li>
+<li>Give it a <strong>Title</strong> and write the body: what you examined, what you found,
+and your conclusion.</li>
+<li>With measurements on the slide, <strong>Insert N measurements</strong> appends them to
+what you have already written.</li>
+<li><strong>Save draft</strong> keeps the report open and editable.</li>
+<li><strong>Submit report</strong> locks and time-stamps it, and it is then shown as a
+record marked <strong>Submitted</strong>.</li>
+</ol>
+<p>Submit tells you when something is missing: a report with no title, an empty
+body, or one already submitted says so when you press the button. After you
+submit, the report shows <strong>How this slide was read</strong>: how many key findings
+you reached, how many of the critical ones, how much of the slide you
+screened, the highest power you used, and your time on it. Any key finding
+you passed over is listed with the reason.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Your work is saved with the session</p>
+<p>Annotations and reports are stored against your session as you go, per slide.
+Leaving the room and coming back, or reloading the page, brings them with
+you, and your instructor sees them in the session record.</p>
+</aside>
+<p>Cases also carry an answer key: the expected findings, the regions of
+interest and the dwell thresholds behind that read feedback. The key is
+stripped from every copy of the case sent to a learner, so it is absent from
+the room and from the page&#39;s data. Your instructor holds it.</p>
+<h2 id="when-the-room-is-empty">When the room is empty</h2>
+<p><strong>No pathology material is attached to this case</strong> means the case document
+carries nothing to open, and <strong>No slides in this case</strong> or <strong>No gross
+specimen has been photographed for this case</strong> means that half of it is
+empty. A slide that stays blank, or a badge reading <strong>no calibration</strong>,
+points at the slide library, which is configured outside the viewer: slides
+live on a content origin an administrator installs, and a slide with unknown
+optics is held back from cases so that measurements taken on it cannot be
+wrong by an unknown factor. Report an empty or blank room to your instructor,
+who has <a href="../admin/pathology-slides.html">Pathology slides</a> for that side.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="rooms.html">The rooms</a></li>
+<li><a href="investigations.html">Ordering labs &amp; imaging</a></li>
+<li><a href="debrief.html">Debrief</a></li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

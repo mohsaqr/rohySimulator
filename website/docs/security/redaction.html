@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Redaction &amp; PII · Rohy docs</title>
+    <meta name="description" content="Rohy has one place that decides which response fields are stripped, masked, or hidden before any payload leaves the server: server/redaction.js. There is no second redaction pat…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Redaction &amp; PII · Rohy docs">
+    <meta property="og:description" content="Rohy has one place that decides which response fields are stripped, masked, or hidden before any payload leaves the server: server/redaction.js. There is no second redaction pat…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Security</span>
+        <h1>Redaction &amp; PII</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#why-a-single-policy">Why a single policy</a>
+            <a href="#field-classes-and-actions">Field classes and actions</a>
+            <a href="#classification-gates-pii-internal">Classification gates (pii / internal)</a>
+            <a href="#why-call-sites-must-not-delete-fields-ad-hoc">Why call sites must not delete fields ad hoc</a>
+            <a href="#registering-a-new-sensitive-field">Registering a new sensitive field</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="rbac.html">RBAC &amp; auth model</a>
+                    <a href="audit-chain.html">Audit chain</a>
+                    <a href="redaction.html" aria-current="page">Redaction &amp; PII</a>
+                    <a href="retention.html">Data retention</a>
+                    <a href="oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="disclaimer.html">Medical-training disclaimer</a>
+                    <a href="hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy has <strong>one</strong> place that decides which response fields are stripped,
+masked, or hidden before any payload leaves the server:
+<code>server/redaction.js</code>. There is no second redaction path, and call sites
+must not <code>delete obj.foo</code> ad hoc.</p>
+<h2 id="why-a-single-policy">Why a single policy</h2>
+<p>Sensitive data leaks happen when redaction is scattered: one handler
+remembers to strip <code>apiKey</code>, another forgets, a third strips it under a
+different name. Centralizing the rule in <code>RESPONSE_REDACTION_POLICY</code> means:</p>
+<ul>
+<li>The set of protected fields is auditable in one file.</li>
+<li>Every reader (<code>redactRow</code>, <code>redactRows</code>,
+<code>redactPlatformSettingRow(s)</code>, <code>redactAuditPayload</code>) applies the <strong>same</strong>
+rule, including nested JSON columns.</li>
+<li>Adding a sensitive field anywhere in the schema is a one-line policy
+edit, not a hunt through every route handler.</li>
+</ul>
+<p>This is also a documented product constraint: the support/diagnostics
+bundle and any new response shape carrying secrets/PII must pass through
+<code>server/redaction.js</code> (see <a href="../contributing.html">Contributing</a> and the
+<a href="../reference/glossary.html">Glossary</a> entry for <em>Redaction</em>).</p>
+<h2 id="field-classes-and-actions">Field classes and actions</h2>
+<p>Each policy entry has a <code>class</code> and an <code>action</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Meaning</th>
+<th>Actions used</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>secret</code></td>
+<td>Credentials and tokens</td>
+<td><code>redact</code> (replace value with <code>[redacted]</code> when truthy) or <code>hide</code> (drop the key entirely)</td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td>JSON-bearing columns that may <em>contain</em> secrets</td>
+<td><code>redact-json</code> (parse, recursively scrub any nested key matching the secret pattern, re-serialize)</td>
+</tr>
+<tr>
+<td><code>pii</code></td>
+<td>Personally identifying fields</td>
+<td><code>mask-email-domain</code> (keep local-part, replace domain with <code>[redacted]</code>) or <code>redact</code></td>
+</tr>
+<tr>
+<td><code>internal</code></td>
+<td>Internal bookkeeping not for clients</td>
+<td><code>redact</code> or <code>hide</code></td>
+</tr>
+</tbody></table></div>
+<p>Concrete entries (from <code>RESPONSE_REDACTION_POLICY</code>):</p>
+<ul>
+<li><strong>Secrets</strong> — <code>apiKey</code>, <code>api_key</code>, <code>llm_api_key</code> are <code>redact</code>;
+<code>password_hash</code>, <code>refresh_token</code>, <code>token_hash</code>, <code>token</code> are <code>hide</code>
+(the key is removed, not just blanked).</li>
+<li><strong>JSON columns</strong> — <code>llm_settings</code>, <code>default_llm_settings</code>,
+<code>notification_settings</code>, <code>default_monitor_settings</code>, <code>monitor_settings</code>,
+<code>settings_snapshot</code>, <code>settings_json</code>, <code>old_value</code>, <code>new_value</code>,
+<code>metadata</code> are recursively scrubbed.</li>
+<li><strong>PII</strong> — <code>email</code>, <code>user_email</code>, <code>alternative_email</code> are
+<code>mask-email-domain</code>; <code>phone</code>, <code>address</code>, <code>name</code>, <code>student_name</code>,
+<code>education</code>, <code>grade</code> are <code>redact</code>.</li>
+<li><strong>Internal</strong> — <code>updated_by</code>, <code>created_by</code> are <code>redact</code>; <code>role_rank</code> is
+<code>hide</code>.</li>
+</ul>
+<p>In addition to the explicit policy, any key matching the secret-key pattern
+<code>/(^|[_-])(api[_-]?key|key|secret|token)$|password/i</code> is redacted even
+without an explicit entry (defense-in-depth). <code>setting_key</code> is explicitly
+exempted so platform-setting <em>names</em> are not mangled. Keys in the
+<code>PII_COLUMNS</code> set without an explicit policy default to <code>pii</code> / <code>redact</code>.</p>
+<span class="anchor-alias" id="classification-gates-pii--internal"></span><h2 id="classification-gates-pii-internal">Classification gates (<code>pii</code> / <code>internal</code>)</h2>
+<p><code>redactRow(row, classification)</code> accepts a <code>classification</code> object. By
+default both <code>pii</code> and <code>internal</code> are <code>&#39;allow&#39;</code> — i.e. an authorized,
+same-tenant reader can see PII and internal fields. A caller that passes
+<code>{ pii: &#39;deny&#39; }</code> (or anything other than <code>&#39;allow&#39;</code>) forces the masking
+action for that class. This is how a less-privileged or cross-context
+reader gets a redacted view from the <strong>same</strong> policy, rather than each
+handler reimplementing &quot;should this caller see emails&quot;.</p>
+<p>Platform settings get a dedicated path: <code>redactPlatformSettingRow</code> redacts
+the whole <code>setting_value</code> when the <code>setting_key</code> matches the secret pattern,
+otherwise scrubs it as JSON. Audit payloads use <code>redactAuditPayload</code>, which
+is <code>redactJsonColumn</code> applied to <code>old_value</code>/<code>new_value</code>/<code>metadata</code> so a
+secret captured in an audit diff is never returned (see
+<a href="audit-chain.html">Audit chain</a>).</p>
+<h2 id="why-call-sites-must-not-delete-fields-ad-hoc">Why call sites must not delete fields ad hoc</h2>
+<aside class="callout callout-danger">
+<p class="callout-title">Important</p>
+<p>Do <strong>not</strong> add <code>delete row.someField</code> in a route handler. An ad-hoc delete:</p>
+<ul>
+<li>is invisible to anyone auditing <code>server/redaction.js</code>,</li>
+<li>does not cover the field when it appears nested inside a JSON column,</li>
+<li>does not cover the field on other endpoints that return the same row,</li>
+<li>silently rots when the field is renamed.</li>
+</ul>
+<p>Every redaction decision must be expressed as a policy entry so the single
+file remains the complete, verifiable list of what is protected.</p>
+</aside>
+<h2 id="registering-a-new-sensitive-field">Registering a new sensitive field</h2>
+<p>When you add a column or response field that carries a secret, PII, or
+internal data:</p>
+<ol>
+<li>Add an entry to <code>RESPONSE_REDACTION_POLICY</code> in <code>server/redaction.js</code>
+with the correct <code>class</code> and <code>action</code>. Use <code>hide</code> for things that
+should never appear in any response (token hashes, password hashes);
+use <code>redact</code>/<code>mask-email-domain</code> for fields a privileged reader may
+still need in a blanked form.</li>
+<li>If the value can also appear <strong>inside</strong> a JSON column (e.g. nested in
+<code>settings_json</code>), confirm its key matches the secret-key pattern or add
+handling — <code>redactJsonColumn</code> recurses but only auto-scrubs keys that
+match the pattern.</li>
+<li>Ensure the reading endpoint actually calls <code>redactRow</code> / <code>redactRows</code>
+(or the platform-setting / audit variant) rather than returning raw
+rows.</li>
+<li>Verify with <code>bash scripts/audit-redaction.sh</code> against a running server
+— it asserts the data-classification contract end to end (see the
+<a href="hardening.html">Hardening checklist</a>).</li>
+</ol>
+<p>Cross-reference the secret-bearing environment variables in the
+<a href="../reference/config/index.html">config reference</a>; those values must never be echoed
+into a response either, which is what the secret-key pattern backstops.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

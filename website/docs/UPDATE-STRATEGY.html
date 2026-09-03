@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Update strategy for rohy · Rohy docs</title>
+    <meta name="description" content="Audience: maintainers, contributors, future-you. The &quot;why&quot; behind the update tooling. Operators reading this for the first time should start at UPDATING.md — that&amp;#39;s the manu…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Update strategy for rohy · Rohy docs">
+    <meta property="og:description" content="Audience: maintainers, contributors, future-you. The &quot;why&quot; behind the update tooling. Operators reading this for the first time should start at UPDATING.md — that&amp;#39;s the manu…">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Update strategy for rohy</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#constraints-that-shaped-this-design">Constraints that shaped this design</a>
+            <a href="#goals-and-non-goals">Goals and non-goals</a>
+            <a href="#subsystem-architecture">Subsystem architecture</a>
+            <a href="#the-four-pillars-and-how-each-is-delivered">The four pillars and how each is delivered</a>
+            <a href="#migration-safety-policy">Migration safety policy</a>
+            <a href="#trust-and-supply-chain">Trust and supply-chain</a>
+            <a href="#phased-roadmap">Phased roadmap</a>
+            <a href="#risk-register">Risk register</a>
+            <a href="#reference-implementations-consulted">Reference implementations consulted</a>
+            <a href="#things-explicitly-not-in-this-strategy">Things explicitly NOT in this strategy</a>
+            <a href="#glossary">Glossary</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html" aria-current="page">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p><strong>Audience:</strong> maintainers, contributors, future-you. The &quot;why&quot; behind
+the update tooling. Operators reading this for the first time should
+start at <a href="UPDATING.html"><code>UPDATING.md</code></a> — that&#39;s the manual; this is the
+design doc.</p>
+</blockquote>
+<hr>
+<h2 id="constraints-that-shaped-this-design">Constraints that shaped this design</h2>
+<p>These came from the project owner explicitly and shape every other choice
+below. If you disagree with one, the rest of the strategy needs revisiting.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Constraint</th>
+<th>Implication</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Downtime of 1-2 hours per update is acceptable</td>
+<td>No blue-green, no nginx retry magic, no canary. Standard restart is fine.</td>
+</tr>
+<tr>
+<td>Backup is essential</td>
+<td>Backup-before-everything, integrity-checked, retained per policy. Non-negotiable.</td>
+</tr>
+<tr>
+<td>Single-instance deploy per site</td>
+<td>No multi-writer DB concerns. SQLite stays.</td>
+</tr>
+<tr>
+<td>No fleet operated by maintainer</td>
+<td>No central control plane, no auto-update push. Operators pull.</td>
+</tr>
+<tr>
+<td>But many third parties may self-host</td>
+<td>Update tool must be operator-friendly: explicit, reversible, well-documented. Releases must be verifiable.</td>
+</tr>
+</tbody></table></div>
+<p>This puts rohy in the <strong>single-operator self-hosted app</strong> category alongside
+Mastodon, Plausible, Vaultwarden, Sentry self-hosted. Not in the
+fleet-managed SaaS category (Tailscale clients, Chrome auto-update).</p>
+<hr>
+<h2 id="goals-and-non-goals">Goals and non-goals</h2>
+<h3 id="goals">Goals</h3>
+<ol>
+<li><strong>Operator confidence.</strong> They press one command, the tool handles the
+rest, and they trust it because they understand it.</li>
+<li><strong>Backup before mutation.</strong> Every state-changing operation creates a
+verified, timestamped, restorable snapshot first.</li>
+<li><strong>Atomic deploys.</strong> Either the new version is fully running and verified,
+or the old version is fully running. Never half-way.</li>
+<li><strong>One-command rollback.</strong> From &quot;this update was bad&quot; to &quot;I&#39;m on the
+previous version&quot; in under a minute.</li>
+<li><strong>Forward-compatible migrations.</strong> The previous release can always run
+against the schema produced by the next release, until at least one
+release later.</li>
+</ol>
+<h3 id="non-goals">Non-goals</h3>
+<ol>
+<li><strong>Zero-downtime.</strong> Acceptable downtime budget is hours, not seconds.</li>
+<li><strong>Fleet management.</strong> No multi-site dashboard, no centralized rollout.</li>
+<li><strong>Auto-update.</strong> Operators decide when. No timer, no cron, no surprise.</li>
+<li><strong>Telemetry.</strong> Tool does not phone home about anything.</li>
+<li><strong>Operating-system management.</strong> Updating Node, Python, system packages
+is the host&#39;s distro responsibility.</li>
+</ol>
+<hr>
+<h2 id="subsystem-architecture">Subsystem architecture</h2>
+<p>Five subsystems, each with a single responsibility:</p>
+<pre><code>   ┌─────────────────────────────────────────────────────────────────┐
+   │                                                                 │
+   │   bin/rohy-update         ← operator-facing CLI                 │
+   │   ┌──────────────┐                                              │
+   │   │ check        │  → reads git, MANIFEST.md                    │
+   │   │ apply        │  → orchestrates everything below             │
+   │   │ rollback     │  → reads /var/lib/rohy/rollback/last         │
+   │   │ list/restore │  → reads $ROHY_BACKUP_DIR                    │
+   │   └──────────────┘                                              │
+   │         │                                                       │
+   │         ↓                                                       │
+   │   ┌──────────────────────────────────────────────────────┐      │
+   │   │  scripts/rohy-backup.sh    ← backup automation       │      │
+   │   │  - sqlite VACUUM INTO                                │      │
+   │   │  - integrity_check                                   │      │
+   │   │  - manifest.json + env + migrations.lst              │      │
+   │   │  - retention sweep                                   │      │
+   │   └──────────────────────────────────────────────────────┘      │
+   │                                                                 │
+   │   ┌──────────────────────────────────────────────────────┐      │
+   │   │  migrations/MANIFEST.md   ← migration policy         │      │
+   │   │  - per-migration: additive | destructive | unknown   │      │
+   │   │  - destructive multi-release procedure documented    │      │
+   │   └──────────────────────────────────────────────────────┘      │
+   │                                                                 │
+   │   ┌──────────────────────────────────────────────────────┐      │
+   │   │  scripts/tech-test.sh     ← post-deploy verifier     │      │
+   │   │  - readiness wait (60s)                              │      │
+   │   │  - liveness, API surface, auth, security headers     │      │
+   │   │  - non-zero exit fails the apply                     │      │
+   │   └──────────────────────────────────────────────────────┘      │
+   │                                                                 │
+   │   ┌──────────────────────────────────────────────────────┐      │
+   │   │  docs/UPDATING.md         ← operator manual          │      │
+   │   │  - the page third parties actually read              │      │
+   │   └──────────────────────────────────────────────────────┘      │
+   │                                                                 │
+   └─────────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>Each subsystem is independently usable. Operators can run
+<code>scripts/rohy-backup.sh</code> ad-hoc without <code>rohy-update</code>. Maintainers can
+classify migrations in <code>MANIFEST.md</code> without changing the CLI.
+<code>tech-test.sh</code> runs standalone (and already does, as the deploy.sh
+<code>POST_VERIFY</code> hook on the SaqrServer hub).</p>
+<hr>
+<h2 id="the-four-pillars-and-how-each-is-delivered">The four pillars and how each is delivered</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Pillar</th>
+<th>Mechanism</th>
+<th>Subsystem</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Atomicity</strong></td>
+<td>Transactional steps; any failure rolls back automatically; lockfile prevents concurrent runs</td>
+<td><code>rohy-update apply</code></td>
+</tr>
+<tr>
+<td><strong>Backup</strong></td>
+<td><code>sqlite3 VACUUM INTO</code> consistent snapshot + manifest + integrity check</td>
+<td><code>scripts/rohy-backup.sh</code></td>
+</tr>
+<tr>
+<td><strong>Reversibility</strong></td>
+<td>Per-apply rollback recipe (<code>/var/lib/rohy/rollback/&lt;sha&gt;.json</code>) recording from-sha + snapshot path</td>
+<td><code>rohy-update apply</code> writes; <code>rollback</code> reads</td>
+</tr>
+<tr>
+<td><strong>Verifiability</strong></td>
+<td>Migration dry-run before real apply; <code>tech-test.sh</code> after restart; auto-rollback on either failure</td>
+<td><code>migrate.js --dry-run</code> + <code>tech-test.sh</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="migration-safety-policy">Migration safety policy</h2>
+<p>Lives in <code>migrations/MANIFEST.md</code>. Summary:</p>
+<ul>
+<li><strong>Default: additive-only.</strong> Adding tables, columns (with default/null),
+indexes — always allowed.</li>
+<li><strong>Destructive changes</strong> (DROP, RENAME, type narrow, add NOT NULL without
+default): split across <strong>at least three releases</strong> so any release can run
+against any adjacent release&#39;s schema.</li>
+<li><strong>The CLI enforces the manifest:</strong> <code>apply</code> refuses if a pending migration
+isn&#39;t classified, and refuses destructive without <code>--allow-destructive</code><ul>
+<li>interactive confirmation.</li>
+</ul>
+</li>
+</ul>
+<p>This is the same approach Mastodon uses (see their
+<a href="https://github.com/mastodon/mastodon/blob/main/CHANGELOG.md">v4 destructive migration notes</a>)
+and what Postgres-shop SREs call <a href="https://martinfowler.com/bliki/ParallelChange.html">&quot;expand and contract&quot;</a>.</p>
+<hr>
+<h2 id="trust-and-supply-chain">Trust and supply-chain</h2>
+<h3 id="what-v1-does">What v1 does</h3>
+<ul>
+<li>Operator&#39;s local repo tracks <code>origin/main</code> (or pinned ref via
+<code>ROHY_UPDATE_BRANCH</code>).</li>
+<li><code>apply</code> does <code>git fetch + checkout &lt;target&gt;</code> inside that already-trusted
+clone.</li>
+<li><code>npm ci</code> is lockfile-strict — exact versions from <code>package-lock.json</code>,
+no surprise upgrades.</li>
+<li>If the github remote is compromised, the operator gets compromised code.</li>
+</ul>
+<h3 id="what-v2-phase-d-will-add">What v2 (Phase D) will add</h3>
+<ul>
+<li>Releases tagged on github (<code>v0.4.2</code>, etc.) instead of &quot;always main.&quot;</li>
+<li>Each release ships:<ul>
+<li><code>rohySimulator-vX.Y.Z.tar.gz</code> — full source archive</li>
+<li><code>*.sha256</code> — checksum</li>
+<li><code>*.sig</code> — detached signature (GPG or sigstore)</li>
+<li><code>RELEASE_NOTES.md</code> — human-readable changes + migration notes</li>
+<li><code>MANIFEST.json</code> — version metadata, min-supported-from-version</li>
+</ul>
+</li>
+<li><code>rohy-update apply</code> verifies signature + sha256 before checkout.</li>
+<li>Maintainer publishes their public key once; operators pin it in
+<code>/etc/rohy/update.conf</code>.</li>
+</ul>
+<p>This blocks the <code>event-stream</code> / <code>xz-utils</code> / <code>eslint-scope</code> class of
+supply-chain attack: a compromise of the github remote OR npm registry
+won&#39;t propagate to operators with signature verification on.</p>
+<p><strong>Decision deferred to Phase D</strong>: GPG vs sigstore. GPG is more familiar to
+ops audiences; sigstore is keyless (no long-lived private key for
+maintainer to protect). Recommendation: <strong>sigstore + cosign</strong>, with a fallback
+to GPG only if there&#39;s a specific operator audience that requires it.</p>
+<hr>
+<h2 id="phased-roadmap">Phased roadmap</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Status (2026-05-10)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>A</strong></td>
+<td><code>scripts/rohy-backup.sh</code> + retention</td>
+<td>✅ delivered</td>
+</tr>
+<tr>
+<td><strong>B</strong></td>
+<td><code>migrations/MANIFEST.md</code> policy + classification</td>
+<td>✅ delivered (all 18 existing migrations classified)</td>
+</tr>
+<tr>
+<td><strong>C</strong></td>
+<td><code>bin/rohy-update</code> v1: check / apply / rollback / list / restore</td>
+<td>✅ delivered</td>
+</tr>
+<tr>
+<td><strong>C-followup</strong></td>
+<td>Wire <code>update.conf</code> into <code>bootstrap.sh</code> so fresh installs include the symlink + a default config</td>
+<td>⏳ next session</td>
+</tr>
+<tr>
+<td><strong>D</strong></td>
+<td>Github Releases pipeline: tags + signed artifacts + <code>MANIFEST.json</code> per release; <code>rohy-update</code> verifies</td>
+<td>⏳ planned</td>
+</tr>
+<tr>
+<td><strong>E</strong></td>
+<td><code>docs/UPDATING.md</code> — operator manual</td>
+<td>✅ delivered</td>
+</tr>
+<tr>
+<td><strong>F</strong></td>
+<td>Off-site backup integration in <code>update.conf</code> (rclone preset) — optional</td>
+<td>⏳ documented in <code>UPDATING.md</code>, not yet first-class</td>
+</tr>
+<tr>
+<td><strong>G</strong></td>
+<td>In-app release-notes display (&quot;a new version is available — see release notes&quot;)</td>
+<td>⏳ future</td>
+</tr>
+<tr>
+<td><strong>H</strong></td>
+<td>Litestream for continuous DB replication (point-in-time recovery, not just per-deploy)</td>
+<td>⏳ optional luxury</td>
+</tr>
+</tbody></table></div>
+<p>Done in this session: A, B, C, E.</p>
+<p>Recommended next: C-followup + D, in that order. C-followup is half a day
+of <code>bootstrap.sh</code> editing; D is 1-2 days of github-actions + signing setup.</p>
+<hr>
+<h2 id="risk-register">Risk register</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Operator runs <code>apply</code> on a sick install</td>
+<td>Medium</td>
+<td>Pre-flight checks <code>is-active --quiet</code>; refuses if not</td>
+</tr>
+<tr>
+<td>Disk fills mid-apply</td>
+<td>Medium</td>
+<td>Pre-flight requires 3× DB size free at backup dir</td>
+</tr>
+<tr>
+<td>Migration dry-run passes, real apply fails</td>
+<td>Low</td>
+<td>Auto-rollback on any failure including post-restart verify; rollback restores DB snapshot</td>
+</tr>
+<tr>
+<td>Concurrent <code>rohy-update</code> invocations</td>
+<td>Low</td>
+<td><code>flock</code> on <code>/var/lock/rohy-update.lock</code></td>
+</tr>
+<tr>
+<td>Bad release tag on github</td>
+<td>Medium</td>
+<td>v1: human reviews <code>rohy-update check</code> output; v2: signed releases catch tampering, not bugs</td>
+</tr>
+<tr>
+<td>Operator skips multiple releases</td>
+<td>High</td>
+<td><code>MANIFEST.json</code> per release will carry <code>min_supported_from_version</code>; v1 refuses unknown migrations</td>
+</tr>
+<tr>
+<td>Maintainer key compromise (Phase D+)</td>
+<td>Catastrophic</td>
+<td>sigstore-keyless removes long-lived key; rotation procedure in docs</td>
+</tr>
+<tr>
+<td>Operator runs <code>rollback</code> after destructive migration</td>
+<td>High if not gated</td>
+<td><code>rollback</code> reads <code>destructive</code> flag from rollback recipe, refuses; <code>restore-backup</code> is the explicit alternative</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="reference-implementations-consulted">Reference implementations consulted</h2>
+<p>These shaped concrete decisions, not just inspiration:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Project</th>
+<th>What we borrowed</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong><a href="https://plausible.io/docs/self-hosting">Plausible self-hosted</a></strong></td>
+<td>The &quot;one upgrade page, three commands&quot; UX shape. UPDATING.md aims for this length and tone.</td>
+</tr>
+<tr>
+<td><strong><a href="https://docs.joinmastodon.org/admin/upgrading/">Mastodon admin docs</a></strong></td>
+<td>The &quot;before you upgrade&quot; framing; migration-notes-per-release pattern in MANIFEST.md.</td>
+</tr>
+<tr>
+<td><strong><a href="https://github.com/dani-garcia/vaultwarden/wiki/Updating-the-vaultwarden-image">Vaultwarden</a></strong></td>
+<td>Single-binary update story — keep the operator surface minimal.</td>
+</tr>
+<tr>
+<td><strong><a href="https://meta.discourse.org/t/upgrade-discourse-to-the-latest-version/3805">Discourse upgrade procedure</a></strong></td>
+<td>The &quot;explicit destructive-action acknowledgment&quot; pattern (<code>--allow-destructive</code> + filename confirmation).</td>
+</tr>
+<tr>
+<td><strong><a href="https://litestream.io/">Litestream</a></strong></td>
+<td>The model for SQLite continuous backup (Phase H, when ready).</td>
+</tr>
+<tr>
+<td><strong><a href="https://kamal-deploy.org/">Kamal</a></strong></td>
+<td>The transactional-deploy step ordering (snapshot → stop → checkout → build → migrate → start → verify → rollback-on-fail).</td>
+</tr>
+<tr>
+<td><strong><a href="https://www.sigstore.dev/how-it-works">Sigstore</a></strong></td>
+<td>The keyless signing pattern for Phase D. Used by Kubernetes, npm provenance.</td>
+</tr>
+<tr>
+<td><strong><a href="https://theupdateframework.io/specification/latest/">The Update Framework (TUF), §3</a></strong></td>
+<td>Threat model framing for Phase D risk register.</td>
+</tr>
+<tr>
+<td><strong><a href="https://github.com/getsentry/self-hosted/blob/master/install.sh">Sentry self-hosted install.sh</a></strong></td>
+<td>Reference for &quot;what a real-world install/upgrade script for a multi-component app looks like.&quot;</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="things-explicitly-not-in-this-strategy">Things explicitly NOT in this strategy</h2>
+<p>These have come up in discussions; recording why they&#39;re out:</p>
+<ol>
+<li><strong>Blue-green deploy</strong> — solves zero-downtime, which isn&#39;t a goal.
+Adds significant complexity (two systemd units, nginx upstream
+shuffling, SQLite read-only-inactive coordination). Skip.</li>
+<li><strong>Auto-update timer</strong> — operator-driven only. A self-hosted app pushing
+updates without consent burns trust faster than the convenience saves
+anyone time.</li>
+<li><strong>Multi-site fleet dashboard</strong> — out of scope per the constraints.
+If/when rohy gets used in a coordinated multi-site way, revisit.</li>
+<li><strong>Postgres migration</strong> — SQLite is the right call for the target
+deployment shape. Reconsider only when forced (multi-writer concurrency
+or replication needs that aren&#39;t covered by Litestream).</li>
+<li><strong>Container-image-based updates</strong> (a la Kamal) — deferred. The current
+docker path uses <code>compose</code> with <code>image: rohy:latest</code>; switching to
+immutable-image-per-release is a separate redesign. Note the implication:
+today&#39;s docker users effectively get rolling builds, not signed releases,
+until Phase D resolves how docker fits in.</li>
+<li><strong>Rolling secret rotation</strong> — JWT_SECRET rotation, API key rotation —
+these are operationally important but not the same problem as code/schema
+updates. Separate doc when ready.</li>
+</ol>
+<hr>
+<h2 id="glossary">Glossary</h2>
+<ul>
+<li><strong>Apply</strong>: a state-changing run of <code>rohy-update apply</code>, going from one
+git sha to another, with associated migrations.</li>
+<li><strong>Snapshot</strong>: a point-in-time copy of the DB + env + version metadata,
+living under <code>/var/backups/rohy/</code>.</li>
+<li><strong>Manifest</strong> (two senses):<ul>
+<li><code>migrations/MANIFEST.md</code> — the migration policy doc.</li>
+<li><code>&lt;snapshot&gt;/manifest.json</code> — metadata about a specific snapshot.</li>
+</ul>
+</li>
+<li><strong>Rollback recipe</strong>: the JSON at <code>/var/lib/rohy/rollback/&lt;sha&gt;.json</code>
+recording what an apply did, used to undo it.</li>
+<li><strong>Additive migration</strong>: schema change such that previous-release code can
+still run unchanged.</li>
+<li><strong>Destructive migration</strong>: schema change that breaks previous-release code.</li>
+<li><strong>Forward-compatible</strong>: a migration is forward-compatible if both the
+previous AND the next release can read its post-state.</li>
+</ul>
+<hr>
+<p><em>Last updated: 2026-05-10. Phase A/B/C/E delivered. Next priority: C-followup
+(bootstrap integration) and D (signed releases).</em></p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

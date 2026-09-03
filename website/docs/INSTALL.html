@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Installing Rohy · Rohy docs</title>
+    <meta name="description" content="This document covers putting Rohy on a machine: local dev, single classroom box, multi-user systemd install, Docker, and air-gapped sites. Once installed, see DEPLOY.md for prod…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Installing Rohy · Rohy docs">
+    <meta property="og:description" content="This document covers putting Rohy on a machine: local dev, single classroom box, multi-user systemd install, Docker, and air-gapped sites. Once installed, see DEPLOY.md for prod…">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Installing Rohy</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#choose-a-path">Choose a path</a>
+            <a href="#prerequisites">Prerequisites</a>
+            <a href="#published-release-recommended">Published release (recommended)</a>
+            <a href="#local-development">Local development</a>
+            <a href="#imaging-content">Imaging content</a>
+            <a href="#single-machine-local-install">Single-machine local install</a>
+            <a href="#linux-systemd-bootstrap">Linux + systemd (bootstrap)</a>
+            <a href="#docker">Docker</a>
+            <a href="#air-gapped-target">Air-gapped target</a>
+            <a href="#first-boot">First boot</a>
+            <a href="#smoke-verify">Smoke verify</a>
+            <a href="#what-is-installed-where">What is installed where</a>
+            <a href="#troubleshooting-install">Troubleshooting install</a>
+            <a href="#next">Next</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html" aria-current="page">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>This document covers <strong>putting Rohy on a machine</strong>: local dev, single
+classroom box, multi-user systemd install, Docker, and air-gapped
+sites. Once installed, see <a href="DEPLOY.html">DEPLOY.md</a> for production
+hardening (TLS, reverse proxy, env, security checklist) and
+<a href="UPDATING.html">UPDATING.md</a> for ongoing upgrades.</p>
+<hr>
+<h2 id="choose-a-path">Choose a path</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Path</th>
+<th>What you get</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Pre-built release</strong> (fastest)</td>
+<td><a href="#published-release-recommended">§ Published release</a></td>
+<td><code>docker pull ghcr.io/mohsaqr/rohy:latest</code>: image already built, models baked in</td>
+</tr>
+<tr>
+<td><strong>Local dev</strong> (your laptop)</td>
+<td><a href="#local-development">§ Local development</a></td>
+<td><code>npm run dev</code>: Vite + Express, hot reload, default seeded users</td>
+</tr>
+<tr>
+<td><strong>Single machine</strong> (lab / classroom)</td>
+<td><a href="#single-machine-local-install">§ Local install</a></td>
+<td><code>bash deploy/local-install.sh</code>: runs as your user, no root needed</td>
+</tr>
+<tr>
+<td><strong>Linux + systemd</strong> (multi-user prod)</td>
+<td><a href="#linux--systemd-bootstrap">§ Linux + systemd</a></td>
+<td><code>sudo deploy/bootstrap.sh</code>: systemd unit, nginx vhost, env file</td>
+</tr>
+<tr>
+<td><strong>Docker (build from source)</strong></td>
+<td><a href="#docker">§ Docker</a></td>
+<td><code>docker compose -f deploy/docker/compose.yml up -d --build</code>: Caddy auto-TLS, persistent volumes</td>
+</tr>
+<tr>
+<td><strong>Air-gapped</strong> (no internet on target)</td>
+<td><a href="#air-gapped-target">§ Air-gap</a></td>
+<td>One signed tarball, sha256-verified, platform-stamped</td>
+</tr>
+</tbody></table></div>
+<p>After any path → <a href="#imaging-content">§ Imaging content</a> (advanced channel only),
+then <a href="#first-boot">§ First boot</a> and <a href="#smoke-verify">§ Smoke verify</a>.</p>
+<h3 id="which-channel">Which channel</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>tag</th>
+<th>what it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>current</code></td>
+<td>the stable, <strong>pre-plugin</strong> build: no PACS, Pathology or ECG rooms</td>
+</tr>
+<tr>
+<td><code>advanced</code></td>
+<td>those rooms included; needs imaging content installed (below)</td>
+</tr>
+</tbody></table></div>
+<p>Take <code>current</code> if you do not teach imaging. There is nothing to install and
+nothing below applies to you.</p>
+<hr>
+<h2 id="prerequisites">Prerequisites</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Versions known to work</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Node.js</strong></td>
+<td>22.x (LTS)</td>
+<td>Express 5 + Vite 7 require ≥20. Rohy targets 22</td>
+</tr>
+<tr>
+<td><strong>npm</strong></td>
+<td>10.x</td>
+<td>Bundled with Node 22</td>
+</tr>
+<tr>
+<td><strong>SQLite</strong></td>
+<td>3.x</td>
+<td>System binary needed for the air-gap install path; the dev install uses bundled <code>sqlite3</code> npm package</td>
+</tr>
+<tr>
+<td><strong>curl</strong></td>
+<td>any</td>
+<td>Required for the post-install Oyon model download (~93 MB from jsDelivr); skip with no internet → see air-gap path</td>
+</tr>
+<tr>
+<td><strong>Python 3</strong></td>
+<td>3.10+</td>
+<td>Optional, only for <code>post-verify-rohy.sh</code> JSON parsing</td>
+</tr>
+<tr>
+<td><strong>OS</strong></td>
+<td>macOS arm64, Linux x86_64, Linux arm64</td>
+<td>Native binaries are platform-locked; cross-builds need Docker (see <a href="#air-gapped-target">§ Air-gap</a>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="the-dynajs-sibling-clone-it-before-npm-install">The <code>dynajs</code> sibling: clone it before <code>npm install</code></h3>
+<p><code>package.json</code> declares <code>dynajs</code> as <code>file:../dynajs</code>, so it must be cloned
+<strong>beside</strong> the rohy checkout, outside it:</p>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git rohy
+git clone https://github.com/mohsaqr/dynajs.git dynajs     # sibling, not nested
+cd dynajs &amp;&amp; npm install &amp;&amp; cd ../rohy
+</code></pre>
+<p>Get this wrong and <code>npm install</code> does not fail. It resolves the dependency to
+an empty stub, and the build breaks later somewhere unrelated. That risk is
+why this item leads the prerequisites.</p>
+<hr>
+<h3 id="the-3d-sibling-the-3d-patient-room-also-beside-the-checkout">The <code>3D</code> sibling: the 3D patient room, also beside the checkout</h3>
+<p><code>package.json</code> also declares <code>rohy-3d-patient-room</code> as <code>file:../3D</code>. It is a
+plain ES-module package (no build step), so a clone is enough:</p>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/3D.git 3D                # sibling, not nested
+</code></pre>
+<p><code>deploy/preflight.sh</code> checks for it (step 9), and <code>npm run build</code> refuses to
+start without it (<code>scripts/verify-room3d-install.mjs</code>).</p>
+<hr>
+<h2 id="published-release-recommended">Published release (recommended)</h2>
+<p>If a release has been tagged, pulling the pre-built image is the fastest
+install. Every tag publishes three artifacts:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Artifact</th>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ghcr.io/mohsaqr/rohy:&lt;tag&gt;</code></td>
+<td>Multi-arch Docker image (amd64 + arm64), models baked in</td>
+<td>GitHub Container Registry</td>
+</tr>
+<tr>
+<td><code>rohy-airgap-source-&lt;sha&gt;-linux-amd64-&lt;date&gt;.tar.gz</code></td>
+<td>Self-contained source tarball (~1.8 GB), zero-network install</td>
+<td>GitHub Releases</td>
+</tr>
+<tr>
+<td><code>rohy-airgap-docker-&lt;sha&gt;-linux-amd64-&lt;date&gt;.tar.gz</code></td>
+<td><code>docker save</code>&#39;d image tarball for air-gapped sites with Docker</td>
+<td>GitHub Releases</td>
+</tr>
+</tbody></table></div>
+<p>Each has a <code>.sha256</code> sidecar for integrity verification.</p>
+<h3 id="docker-pull-smallest-simplest">Docker pull (smallest, simplest)</h3>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git rohy   # for compose + Caddyfile
+cd rohy
+cp deploy/docker/.env.example deploy/docker/.env
+# edit deploy/docker/.env — at minimum CADDY_DOMAIN and JWT_SECRET
+
+# Pull the published image instead of building
+sed -i.bak &#39;s|build:.*|image: ghcr.io/mohsaqr/rohy:latest|&#39; deploy/docker/compose.yml
+docker compose -f deploy/docker/compose.yml up -d
+</code></pre>
+<p>This skips the ~10-minute local build entirely. Models, vendor wasm, and
+all dependencies are already inside the image.</p>
+<h3 id="air-gap-tarball-zero-network-target">Air-gap tarball (zero-network target)</h3>
+<pre><code class="language-bash"># On a host that CAN reach the internet (this is the only network step):
+TAG=v0.1.0   # the release you want
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-source-*-linux-amd64-*.tar.gz
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-source-*-linux-amd64-*.tar.gz.sha256
+
+# Transfer both files to the offline target host, then:
+sha256sum -c rohy-airgap-source-*-linux-amd64-*.tar.gz.sha256
+tar xzf rohy-airgap-source-*-linux-amd64-*.tar.gz
+cd rohy-airgap-*
+sudo ./airgap-install.sh --frontend-url=https://your-host
+sudo systemctl start rohy
+</code></pre>
+<p>The target needs <code>node 22</code>, <code>sqlite3</code>, and a reverse proxy (<code>nginx</code> or
+<code>caddy</code>) already installed. Nothing else fetches from the network.</p>
+<h3 id="air-gapped-docker-target-has-docker-but-no-internet">Air-gapped Docker (target has Docker but no internet)</h3>
+<pre><code class="language-bash"># On a connected host:
+curl -LO https://github.com/mohsaqr/rohySimulator/releases/download/$TAG/rohy-airgap-docker-*-linux-amd64-*.tar.gz
+
+# Transfer to the offline target, then:
+docker load &lt; rohy-airgap-docker-*-linux-amd64-*.tar.gz
+docker compose -f deploy/docker/compose.yml up -d
+</code></pre>
+<hr>
+<h2 id="local-development">Local development</h2>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git
+cd rohySimulator
+npm install                                    # also fetches Oyon models (~93 MB)
+cp server/.env.example server/.env
+# edit server/.env — at minimum set JWT_SECRET (server refuses to start without it)
+npm run dev
+</code></pre>
+<ul>
+<li><strong>Frontend</strong>: <a href="http://localhost:5173">http://localhost:5173</a></li>
+<li><strong>Backend API</strong>: <a href="http://localhost:3000">http://localhost:3000</a></li>
+<li><strong>Default seeded users</strong>: <code>admin</code> / <code>admin123</code>, <code>student</code> / <code>student123</code>
+→ refused in production unless <code>ALLOW_DEFAULT_USERS=1</code>. Change them before any real user touches the box.</li>
+</ul>
+<p>If <code>npm install</code> ran without <code>curl</code> or network, Oyon does not work until you re-fetch:</p>
+<pre><code class="language-bash">npm run setup:oyon          # idempotent — only fetches missing files
+</code></pre>
+<hr>
+<h2 id="imaging-content">Imaging content</h2>
+<p><strong>Advanced channel only.</strong> The PACS and Pathology rooms read gigabytes of
+pixels: DICOM series and Deep Zoom tile pyramids, far too large to
+live in the repository or the image. They are published separately and
+installed with one command:</p>
+<pre><code class="language-bash">npm run setup:content
+</code></pre>
+<p>That fetches 741 MB of imaging (48 studies) and 35 MB of cardiac pathology
+(27 slides), verifies both by SHA-256, and installs them under
+<code>server/plugin-content/</code>, which rohy serves from its own disk. It is
+idempotent: re-running after an upgrade is a no-op unless the content version
+changed.</p>
+<p>The imaging is de-identified in the DICOM headers, and the pixels of every
+ultrasound and angiographic study have been reviewed by hand for identifiers
+burned into the image itself: text no header operation can reach. Where any
+were found they are masked. Clinical and technical annotation (view, stage,
+heart rate, ECG, depth, probe) is left intact because it carries no identity
+and you need it to read the study.</p>
+<p><strong>This is a required step.</strong> The default case orders four imaging
+studies, so a learner on the advanced channel reaches the PACS room on the
+first case they open. Without content that room is empty.</p>
+<h3 id="installing-from-a-file-no-credentials-at-all">Installing from a file: no credentials at all</h3>
+<p>The installer verifies each archive against the SHA-256 recorded in
+<code>scripts/content-sources.json</code>. The host the bytes came from plays no part
+in that check.
+So the transport is interchangeable and needs no token: a download, a shared
+folder, a university mirror, a stick carried into an offline site.</p>
+<pre><code class="language-bash">npm run setup:content -- --from /path/to/downloaded/folder
+npm run setup:content -- --only pathology      # slides without the 741 MB
+</code></pre>
+<p>Point <code>--from</code> at a directory holding the <code>.tar.gz</code> files, or straight at one
+of them. A truncated transfer, the wrong archive, and the HTML error page some
+services hand out in place of a file are all refused here, before anything is
+written, so a bad download cannot damage a working installation.</p>
+<p>This is the simplest route for a new site, and the only one that works behind a
+firewall that cannot reach GitHub.</p>
+<h3 id="installing-from-the-published-release">Installing from the published release</h3>
+<pre><code class="language-bash">npm run setup:content
+</code></pre>
+<p>The archives are public: no token, no account, nothing to configure. The
+installer resolves them from <code>scripts/content-sources.json</code> and refuses
+anything whose SHA-256 does not match.</p>
+<h3 id="if-you-serve-your-own-archive">If you serve your own archive</h3>
+<p>A site with its own licensed imaging points rohy at it and installs
+nothing:</p>
+<pre><code>ROHY_PLUGIN_ORIGINS=pacs=https://slides.example.edu
+ROHY_PLUGIN_ORIGIN_TOKENS=pacs=…       # if that origin is closed
+</code></pre>
+<p>A configured origin always wins over installed content. To run the advanced
+channel with <strong>no</strong> imaging at all, set <code>ROHY_STARTER_CONTENT=off</code>. The rooms
+then report honestly that no content is configured, which is the right state
+for a deployment that must show only its own material.</p>
+<h3 id="known-gaps">Known gaps</h3>
+<p>The Docker image and the air-gap tarballs do <strong>not</strong> yet carry imaging content.
+On those paths, run <code>npm run setup:content</code> inside the container or on the host
+after installing.</p>
+<hr>
+<h2 id="single-machine-local-install">Single-machine local install</h2>
+<p>For a classroom or lab box where one person owns the machine and there is
+no shared <code>systemd</code> unit. Runs as your user, no root needed.</p>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git
+cd rohySimulator
+bash deploy/local-install.sh --port 4000
+</code></pre>
+<p><code>local-install.sh</code> will:</p>
+<ul>
+<li>Install npm dependencies (<code>npm ci</code>)</li>
+<li>Generate a <code>server/.env</code> with a random <code>JWT_SECRET</code> if none exists</li>
+<li>Run a production build (<code>npm run build</code>)</li>
+<li>Print the start command: typically <code>NODE_ENV=production node server/server.js</code></li>
+</ul>
+<p>Disable Oyon at install time with <code>--no-oyon</code> (sets <code>OYON_ENABLED=0</code> in
+the generated env). Toggle later by editing <code>server/.env</code>.</p>
+<hr>
+<span class="anchor-alias" id="linux--systemd-bootstrap"></span><h2 id="linux-systemd-bootstrap">Linux + systemd (bootstrap)</h2>
+<p>The packaged path for a real multi-user deploy on a Linux box. Creates a
+dedicated user, installs to <code>/opt/repos/rohy</code>, writes
+<code>/etc/rohy/env</code>, drops a <code>/etc/systemd/system/rohy.service</code>, configures
+nginx (or Caddy) with the right reverse-proxy rules, and runs migrations.</p>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git /tmp/rohy-bootstrap
+cd /tmp/rohy-bootstrap
+sudo deploy/bootstrap.sh \
+    --frontend-url=https://your-host/rohy \
+    --admin-bootstrap
+</code></pre>
+<p>Common flags:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--frontend-url=URL</code></td>
+<td>required</td>
+<td>Public URL (must end with <code>/rohy</code> if behind a path-prefixed reverse proxy)</td>
+</tr>
+<tr>
+<td><code>--user=NAME</code></td>
+<td><code>rohy</code></td>
+<td>OS user the service runs as</td>
+</tr>
+<tr>
+<td><code>--repo-dir=PATH</code></td>
+<td><code>/opt/repos/rohy</code></td>
+<td>Where the source lives</td>
+</tr>
+<tr>
+<td><code>--db-path=PATH</code></td>
+<td><code>/opt/data/rohy/database.sqlite</code></td>
+<td>SQLite file (survives <code>rohy-update</code> rebuilds)</td>
+</tr>
+<tr>
+<td><code>--proxy=nginx|caddy|none</code></td>
+<td><code>nginx</code></td>
+<td>Which reverse proxy to configure (or none)</td>
+</tr>
+<tr>
+<td><code>--port=N</code></td>
+<td><code>4000</code></td>
+<td>Express upstream port (proxied by nginx/Caddy)</td>
+</tr>
+<tr>
+<td><code>--admin-bootstrap</code></td>
+<td>off</td>
+<td>Print a one-time admin credentials prompt at the end</td>
+</tr>
+<tr>
+<td><code>--no-oyon</code></td>
+<td>off</td>
+<td>Set <code>OYON_ENABLED=0</code> in <code>/etc/rohy/env</code></td>
+</tr>
+</tbody></table></div>
+<p>Re-running <code>bootstrap.sh</code> is <strong>idempotent</strong>: it detects existing
+state and skips what is already done. It is safe to use as an upgrade tool
+too, though <a href="UPDATING.html"><code>bin/rohy-update</code></a> is the operator path for that.</p>
+<p>After install:</p>
+<pre><code class="language-bash">sudo systemctl status rohy             # confirm running
+sudo journalctl -u rohy -f             # live logs
+</code></pre>
+<hr>
+<h2 id="docker">Docker</h2>
+<p>For ad-hoc deploys, ephemeral test environments, or operators who
+prefer to avoid systemd. Caddy reverse-proxies with auto-TLS via Let&#39;s
+Encrypt. Persistent volumes hold the SQLite DB and Oyon model bundles.</p>
+<pre><code class="language-bash">cd deploy/docker
+cp .env.example .env
+# edit .env — at minimum CADDY_DOMAIN and JWT_SECRET
+docker compose up -d --build
+</code></pre>
+<p>Compose file: <code>deploy/docker/compose.yml</code>. Two services:</p>
+<ul>
+<li><code>rohy</code>: node 22 + sqlite3, builds from the repo, exposes 4000</li>
+<li><code>caddy</code>: reverse proxy with <code>Caddyfile</code> template</li>
+</ul>
+<p>Persistent volumes:</p>
+<ul>
+<li><code>./data:/opt/data/rohy</code>: SQLite DB lives here</li>
+<li><code>./oyon-cache:/opt/repos/rohy/OyonR/standalone/vendor</code>: wasm/mjs vendor cache</li>
+</ul>
+<p><code>OYON_ENABLED=1</code> is the compose default. Disable with <code>OYON_ENABLED=0</code>
+in <code>.env</code>.</p>
+<hr>
+<h2 id="air-gapped-target">Air-gapped target</h2>
+<p>For sites with <strong>no internet on the target host</strong>: clinical labs,
+secured networks, or restricted egress. One signed tarball carries
+everything bundled.</p>
+<h3 id="build-host-must-match-target39s-osarch">Build host (must match target&#39;s OS+arch)</h3>
+<pre><code class="language-bash">git clone https://github.com/mohsaqr/rohySimulator.git
+cd rohySimulator
+npm install                                                    # fetches Oyon models
+bash server/scripts/install-piper.sh                           # optional, +326 MB
+deploy/bundle-airgap.sh --mode=source --with-hf-cache          # optional Kokoro pre-warm
+
+# → dist/airgap/rohy-airgap-source-&lt;sha&gt;-&lt;platform&gt;-&lt;date&gt;.tar.gz   (~1.8 GB)
+# → dist/airgap/rohy-airgap-source-&lt;sha&gt;-&lt;platform&gt;-&lt;date&gt;.tar.gz.sha256
+</code></pre>
+<p>Common bundler flags:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--mode=source|docker|both</code></td>
+<td>Source tarball (needs node + sqlite3 on target), <code>docker save</code>d image (needs only docker), or both</td>
+</tr>
+<tr>
+<td><code>--with-hf-cache</code></td>
+<td>Bundle <code>$TRANSFORMERS_CACHE</code> so Kokoro TTS works offline on first request</td>
+</tr>
+<tr>
+<td><code>--with-dynajs</code></td>
+<td>Bundle the <code>../dynajs</code> sibling clone if <code>package.json</code> uses <code>file:../dynajs</code></td>
+</tr>
+<tr>
+<td><code>--with-3d</code></td>
+<td>Bundle the <code>../3D</code> sibling clone (the 3D patient room) if <code>package.json</code> uses <code>file:../3D</code></td>
+</tr>
+<tr>
+<td><code>--no-piper</code> / <code>--with-piper</code></td>
+<td>Exclude/require the Piper venv (auto-detected; saves ~326 MB if excluded)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Cross-platform note</strong>: bundles are platform-stamped because they
+contain native binaries (<code>node_sqlite3.node</code>, <code>onnxruntime.so</code>/<code>.dylib</code>,
+<code>Darwin/FBX2glTF</code>). To build a Linux-x86_64 bundle from a Mac:</p>
+<pre><code class="language-bash">docker run --rm -v &quot;$PWD:/work&quot; -w /work --platform=linux/amd64 \
+    node:22-bookworm bash -c &quot;
+        apt-get update &amp;&amp; apt-get install -y rsync python3-venv sqlite3 &amp;&amp; \
+        npm install &amp;&amp; bash OyonR/scripts/download-models.sh &amp;&amp; \
+        deploy/bundle-airgap.sh --mode=source
+    &quot;
+</code></pre>
+<p>Or use <code>--mode=docker</code>: Docker images are Linux regardless of build
+host, and the target needs only Docker.</p>
+<h3 id="publish">Publish</h3>
+<p>The bundler prints all three:</p>
+<pre><code class="language-bash">gh release create v$(git rev-parse --short HEAD) \
+    dist/airgap/*.tar.gz dist/airgap/*.sha256
+huggingface-cli upload &lt;user&gt;/rohy-airgap dist/airgap/ .
+rclone copy dist/airgap/ r2:rohy-airgap/
+</code></pre>
+<h3 id="target-host-last-network-step-is-the-download">Target host (last network step is the download)</h3>
+<pre><code class="language-bash">curl -L -o rohy.tar.gz &lt;release-url&gt;
+curl -L -o rohy.tar.gz.sha256 &lt;release-url&gt;.sha256
+sha256sum -c rohy.tar.gz.sha256                                # verify integrity
+tar xzf rohy.tar.gz &amp;&amp; cd rohy-airgap-*
+sudo ./airgap-install.sh \
+    --user=rohy \
+    --repo-dir=/opt/rohy \
+    --frontend-url=https://your-host/rohy \
+    --proxy=nginx                                              # nginx | caddy | none
+sudo systemctl start rohy
+</code></pre>
+<p><code>airgap-install.sh</code> refuses to install on a mismatched platform so a
+darwin-arm64 bundle cannot get unpacked onto linux-x86_64 by accident.</p>
+<hr>
+<h2 id="first-boot">First boot</h2>
+<p>Whichever path you used:</p>
+<ol>
+<li><strong>Migrations + seeders auto-run</strong> on first start (see
+<code>migrations/MANIFEST.md</code> for the additive-only policy).</li>
+<li><strong>First registered user becomes admin</strong> if zero users exist. After
+that, registrations default to <code>student</code>.</li>
+<li><strong>Default seeded users</strong> are present in dev (<code>admin/admin123</code>,
+<code>student/student123</code>) but <strong>refused in production</strong> unless
+<code>ALLOW_DEFAULT_USERS=1</code>. Change them before exposing the box.</li>
+</ol>
+<p>On systemd boxes:</p>
+<pre><code class="language-bash">sudo systemctl status rohy
+sudo journalctl -u rohy -n 50              # last 50 log lines
+</code></pre>
+<p>In Docker:</p>
+<pre><code class="language-bash">docker compose logs -f rohy
+</code></pre>
+<hr>
+<h2 id="smoke-verify">Smoke verify</h2>
+<p>End-to-end check from the operator host. Run this after every install
+or upgrade:</p>
+<pre><code class="language-bash">scripts/smoke.sh https://your-host/rohy
+</code></pre>
+<p>Light liveness probe: confirms the service answers and the SPA shell
+loads. If smoke passes but something else feels off, run the heavier
+verifier:</p>
+<pre><code class="language-bash">scripts/tech-test.sh https://your-host/rohy
+</code></pre>
+<p>27 checks: liveness, frontend bundle integrity, Oyon API surface, nginx
+parity, auth gating, security headers, response timing. Used as the
+deploy verifier in the SaqrServer hub flow and by <code>bin/rohy-update</code> as
+its post-deploy step.</p>
+<p>For a self-signed LAN cert: <code>ROHY_INSECURE=1 scripts/tech-test.sh ...</code>.</p>
+<p>To go beyond &quot;is it up?&quot; and confirm the Oyon validator runs
+correctly, set up the contract probe. See <a href="DEPLOY.html#deploy-verification--live-monitoring">DEPLOY.md § Deploy
+verification</a>.</p>
+<hr>
+<h2 id="what-is-installed-where">What is installed where</h2>
+<p>After a <code>bootstrap.sh</code> install:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Owner</th>
+<th>What is there</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/opt/repos/rohy/</code></td>
+<td><code>rohy</code> user</td>
+<td>Source tree (git clone). <code>bin/rohy-update</code> reads from here.</td>
+</tr>
+<tr>
+<td><code>/opt/data/rohy/database.sqlite</code></td>
+<td><code>rohy</code> user</td>
+<td>SQLite DB. Persists across upgrades.</td>
+</tr>
+<tr>
+<td><code>/etc/rohy/env</code></td>
+<td><code>root</code></td>
+<td>systemd <code>EnvironmentFile</code>. Edit to change <code>OYON_ENABLED</code>, <code>JWT_SECRET</code>, and related variables.</td>
+</tr>
+<tr>
+<td><code>/etc/rohy/update.conf</code></td>
+<td><code>root</code></td>
+<td><code>bin/rohy-update</code> config (optional; defaults work).</td>
+</tr>
+<tr>
+<td><code>/etc/systemd/system/rohy.service</code></td>
+<td><code>root</code></td>
+<td>systemd unit.</td>
+</tr>
+<tr>
+<td><code>/etc/nginx/sites-available/rohy</code></td>
+<td><code>root</code></td>
+<td>nginx vhost (or Caddyfile equivalent).</td>
+</tr>
+<tr>
+<td><code>/var/backups/rohy/</code></td>
+<td><code>rohy</code> user</td>
+<td>Snapshot dir for <code>rohy-backup.sh</code> and <code>rohy-update</code>.</td>
+</tr>
+<tr>
+<td><code>/var/log/journal/</code></td>
+<td><code>root</code></td>
+<td>NDJSON logs via systemd-journald. <code>journalctl -u rohy</code>.</td>
+</tr>
+</tbody></table></div>
+<p>After Docker:</p>
+<ul>
+<li>Everything is in <code>deploy/docker/</code> plus the volumes <code>./data</code> and <code>./oyon-cache</code>.</li>
+</ul>
+<hr>
+<h2 id="troubleshooting-install">Troubleshooting install</h2>
+<p><strong><code>JWT_SECRET</code> missing → server refuses to start.</strong> Required, no default. Generate one:</p>
+<pre><code class="language-bash">openssl rand -hex 32
+</code></pre>
+<p><strong>Oyon download failed during <code>npm install</code>.</strong> Re-run <code>npm run setup:oyon</code>. Idempotent. Needs internet access to <code>cdn.jsdelivr.net</code>.</p>
+<p><strong>Native module mismatch (<code>Error: ELF header invalid</code>).</strong> Cross-platform bundle. Rebuild on the target&#39;s OS+arch, or use <code>--mode=docker</code>.</p>
+<p><strong><code>bootstrap.sh</code> fails at <code>npm ci</code>.</strong> Likely a Node version mismatch. Confirm <code>node --version</code> is 22.x. The script prints <code>WARN</code> if the detected version is outside the supported range.</p>
+<p><strong>Port 4000 already in use.</strong> Change with <code>--port=N</code> (bootstrap) or <code>PORT=N</code> (env). Express falls through to the next free port automatically in dev but not in production.</p>
+<p><strong>nginx 502 immediately after install.</strong> Express needs ~3-6s to finish migrations + seed checks. Wait, then <code>sudo systemctl status rohy</code>. If still 502 after 30s, check <code>journalctl -u rohy</code>: most often the cause is a missing env var.</p>
+<p><strong>Oyon disabled but Settings tab still loads.</strong> Expected. Disabled mode shows a friendly panel in place of 404s. Re-enable: <code>OYON_ENABLED=1</code> in <code>/etc/rohy/env</code>, then <code>sudo systemctl restart rohy</code>.</p>
+<hr>
+<h2 id="next">Next</h2>
+<ul>
+<li><strong>Got the binary running, now configure it?</strong> → <a href="ADMIN_FIRST_RUN.html">ADMIN_FIRST_RUN.md</a>: LLM provider, TTS provider + voice slots, default personas, diagnostic bar, smoke session.</li>
+<li><strong>Going to production?</strong> → <a href="DEPLOY.html">DEPLOY.md</a>: TLS, reverse proxy, security checklist, env reference, monitoring.</li>
+<li><strong>Already running, want to upgrade?</strong> → <a href="UPDATING.html">UPDATING.md</a>: <code>rohy-update</code>, rollback, off-site backups.</li>
+<li><strong>Embedding Oyon into another app?</strong> → <a href="https://github.com/mohsaqr/rohySimulator/blob/main/OyonR/INSTALL.md"><code>OyonR/INSTALL.md</code></a>.</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

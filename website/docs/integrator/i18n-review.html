@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Translation review (XLIFF) · Rohy docs</title>
+    <meta name="description" content="How UI strings travel from the English catalogues to a native reviewer and back — without touching the shape of src/locales/&lt;lang&gt;/*.json and without a spreadsheet. This is the …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Translation review (XLIFF) · Rohy docs">
+    <meta property="og:description" content="How UI strings travel from the English catalogues to a native reviewer and back — without touching the shape of src/locales/&lt;lang&gt;/*.json and without a spreadsheet. This is the …">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Integrator</span>
+        <h1>Translation review (XLIFF)</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-pieces">The pieces</a>
+            <a href="#the-four-steps">The four steps</a>
+            <a href="#phase-2-not-built">Phase 2 (not built)</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Building on Rohy</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="architecture.html">Architecture seams</a>
+                    <a href="api-auth.html">API authentication</a>
+                    <a href="embedding.html">Embedding the avatar kit</a>
+                    <a href="providers.html">Adding a TTS/LLM provider</a>
+                    <a href="knowledge-base.html">Knowledge base</a>
+                    <a href="contributing.html">Contributing &amp; tests</a>
+                    <a href="vendored-packages.html">Vendored packages</a>
+                    <a href="i18n-review.html" aria-current="page">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>How UI strings travel from the English catalogues to a native reviewer and
+back — without touching the shape of <code>src/locales/&lt;lang&gt;/*.json</code> and without
+a spreadsheet. This is the maintainer + reviewer companion to
+<a href="../educator/languages.html">Languages &amp; multilingual cases</a>.</p>
+<h2 id="the-pieces">The pieces</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Role</th>
+<th>Committed?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/locales/en/&lt;ns&gt;.json</code></td>
+<td>Canonical English, one flat <code>key → string</code> per namespace</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>src/locales/&lt;lang&gt;/&lt;ns&gt;.json</code></td>
+<td>Target catalogues, same shape (unchanged by this pipeline&#39;s data model)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>src/locales/.status/&lt;lang&gt;.json</code></td>
+<td>Per-string review status (see below)</td>
+<td><strong>yes</strong></td>
+</tr>
+<tr>
+<td><code>src/locales/.en-hashes.json</code></td>
+<td>Delta sidecar of <code>npm run i18n:translate</code> (machine translation)</td>
+<td>no (gitignored)</td>
+</tr>
+<tr>
+<td><code>i18n/xliff/&lt;lang&gt;/rohy-&lt;lang&gt;-&lt;YYYYMMDD&gt;.xlf</code></td>
+<td>Hand-off files for reviewers</td>
+<td>no (gitignored — transient)</td>
+</tr>
+<tr>
+<td><code>scripts/i18n-glossary.json</code></td>
+<td>Pinned clinical renderings per language</td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+<h3 id="the-status-model">The status model</h3>
+<p><code>src/locales/.status/&lt;lang&gt;.json</code> is a sorted, 2-space JSON object keyed by
+<code>&lt;namespace&gt;.&lt;key&gt;</code>:</p>
+<pre><code class="language-json">&quot;orders.give_dose&quot;: {
+  &quot;src&quot;: &quot;f914c04d377f&quot;,
+  &quot;state&quot;: &quot;reviewed&quot;,
+  &quot;reviewed_at&quot;: &quot;2026-08-16T09:12:00.000Z&quot;,
+  &quot;reviewer&quot;: &quot;M. Rossi&quot;,
+  &quot;risk&quot;: &quot;clinical&quot;
+}
+</code></pre>
+<ul>
+<li><code>src</code> — <code>sha256(english value)[:12]</code>, the same hash <code>translate-locales.mjs</code>
+records. When English changes, the stored hash no longer matches and the
+string is <strong>stale</strong> regardless of its state.</li>
+<li><code>state</code> — <code>machine</code> (LLM-translated, never seen by a human), <code>reviewed</code>
+(a native reviewer accepted or rewrote it), <code>approved</code> (signed off), <code>new</code>
+(reserved; not written by the tools today).</li>
+<li><code>risk</code> — <code>clinical</code> for the namespaces where a wrong word can change a
+dose or a diagnosis (<code>orders</code>, <code>treatments</code>, <code>monitor</code>, <code>investigations</code>,
+<code>examination</code>, <code>patient</code>, <code>chat</code>, <code>authoring_meds</code>, <code>authoring_labs</code>,
+<code>authoring_exam</code>, <code>authoring_radiology</code>, <code>authoring_scenarios</code>), <code>low</code> for
+the rest. Per-key overrides in the file survive regeneration.</li>
+</ul>
+<p>The initial bootstrap marked every existing translation <code>machine</code> — that is
+honest: they were produced by <code>i18n:translate</code> and no human has signed them.</p>
+<p>Every script accepts <code>--root=&lt;dir&gt;</code> (or <code>ROHY_LOCALES_ROOT</code>) to operate on
+another locale tree; the tests use it so they never write the real
+catalogues.</p>
+<h2 id="the-four-steps">The four steps</h2>
+<h3 id="1-english-changes-developer">1. English changes (developer)</h3>
+<p>Add or edit strings in code, then <code>npm run i18n:extract</code> / <code>npm run i18n:pseudo</code> / <code>npm run i18n:translate</code> as usual. Machine translations land
+in the target JSON; nothing else changes.</p>
+<span class="anchor-alias" id="2-see-what-needs-a-human--npm-run-i18nstatus"></span><h3 id="2-see-what-needs-a-human-npm-run-i18nstatus">2. See what needs a human — <code>npm run i18n:status</code></h3>
+<pre><code class="language-bash">npm run i18n:status                # every language, one table each
+npm run i18n:status -- it de       # subset
+npm run i18n:status -- --json      # machine-readable
+npm run i18n:status -- --check     # exit 1 if any CLINICAL key is new or stale
+npm run i18n:status -- --bootstrap # add missing status entries as `machine` (idempotent)
+</code></pre>
+<p>Per key the report says:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>new</code></td>
+<td>In English, missing from the target</td>
+</tr>
+<tr>
+<td><code>stale</code></td>
+<td>Target exists but English changed since it was last translated/reviewed (<code>src</code> mismatch)</td>
+</tr>
+<tr>
+<td><code>machine</code></td>
+<td>Up to date, machine-translated, not yet reviewed (also: a key with no status entry yet)</td>
+</tr>
+<tr>
+<td><code>reviewed</code> / <code>approved</code></td>
+<td>Up to date and signed by a human</td>
+</tr>
+<tr>
+<td><code>removed</code></td>
+<td>A status entry whose key no longer exists in English — reported here, pruned by the next export/import</td>
+</tr>
+</tbody></table></div>
+<p><code>--check</code> is an <strong>opt-in release gate</strong>: it fails while any clinical string
+is <code>new</code> or <code>stale</code>. It is deliberately not part of <code>npm run i18n:check</code>
+(which stays the &quot;every <code>t()</code> has a catalogue entry&quot; gate); wire it into a
+release checklist or CI job when a language is declared clinically
+reviewed.</p>
+<span class="anchor-alias" id="3-export-an-xliff-for-the-reviewer--npm-run-i18nxliffexport"></span><h3 id="3-export-an-xliff-for-the-reviewer-npm-run-i18nxliffexport">3. Export an XLIFF for the reviewer — <code>npm run i18n:xliff:export</code></h3>
+<pre><code class="language-bash">npm run i18n:xliff:export -- it                          # everything not yet reviewed/approved
+npm run i18n:xliff:export -- it --only=new,stale         # narrower
+npm run i18n:xliff:export -- it --ns=orders,treatments   # some namespaces
+npm run i18n:xliff:export -- it --out=/tmp/it.xlf --date=20260816
+</code></pre>
+<p>Writes <code>i18n/xliff/&lt;lang&gt;/rohy-&lt;lang&gt;-&lt;YYYYMMDD&gt;.xlf</code> — XLIFF 1.2, one
+<code>&lt;file original=&quot;&lt;ns&gt;.json&quot;&gt;</code> per namespace, one <code>&lt;trans-unit&gt;</code> per key.
+<code>--only</code> defaults to <code>new,stale,machine</code>, so an export is <strong>incremental by
+construction</strong>: reviewers only see what nobody has signed. Every unit carries
+<code>&lt;note from=&quot;rohy&quot;&gt;risk=…; icu=…; src=…&lt;/note&gt;</code> and, for ICU messages, an
+<code>icu-args=</code> note listing the placeholders that must survive. The
+<code>&lt;header&gt;</code> repeats the pinned glossary for the language.</p>
+<p>Status → XLIFF target state:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Status class</th>
+<th><code>&lt;target state&gt;</code></th>
+<th><code>approved</code></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>new</code></td>
+<td><code>new</code> (empty target)</td>
+<td><code>no</code></td>
+</tr>
+<tr>
+<td><code>stale</code></td>
+<td><code>needs-review-translation</code> (existing target shown)</td>
+<td><code>no</code></td>
+</tr>
+<tr>
+<td><code>machine</code></td>
+<td><code>needs-review-translation</code></td>
+<td><code>no</code></td>
+</tr>
+<tr>
+<td><code>reviewed</code></td>
+<td><code>translated</code></td>
+<td><code>no</code></td>
+</tr>
+<tr>
+<td><code>approved</code></td>
+<td><code>signed-off</code></td>
+<td><code>yes</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>For the reviewer:</strong> open the <code>.xlf</code> in any CAT tool (or an editor). Fill
+empty targets, correct the ones marked <code>needs-review-translation</code>, and set
+the state to <code>translated</code> when you are satisfied or <code>signed-off</code> when it is
+final. Do not touch <code>&lt;source&gt;</code>, the <code>id</code>/<code>resname</code>, or the <code>&lt;note from=&quot;rohy&quot;&gt;</code>
+lines. Keep every <code>{placeholder}</code> and every ICU keyword (<code>plural</code>, <code>one</code>,
+<code>other</code>, <code>#</code>, <code>select</code>) exactly as in the source — the importer rejects a
+unit that drops or renames one.</p>
+<span class="anchor-alias" id="4-import-the-reviewed-file--npm-run-i18nxliffimport"></span><h3 id="4-import-the-reviewed-file-npm-run-i18nxliffimport">4. Import the reviewed file — <code>npm run i18n:xliff:import</code></h3>
+<pre><code class="language-bash">npm run i18n:xliff:import -- i18n/xliff/it/rohy-it-20260816.xlf --reviewer=&quot;M. Rossi&quot;
+npm run i18n:xliff:import -- file.xlf --dry-run              # validate + report, write nothing
+npm run i18n:xliff:import -- file.xlf --allow-missing-note   # see &quot;Provenance notes&quot; below
+</code></pre>
+<p>The file is treated as <strong>untrusted input</strong> — it usually comes back over
+e-mail or a shared drive. Before anything is read from the locale tree the
+importer checks:</p>
+<ul>
+<li><code>target-language</code> is a language from the registry
+(<code>server/shared/languages.js</code>, minus the English source) in canonical shape
+(<code>xx</code> or <code>xx-XX</code>). <code>x/../en</code>, <code>xx</code>, <code>en</code>, absolute paths — anything else —
+is rejected with exit 2 and the reason on stderr.</li>
+<li>Every <code>&lt;file original=&quot;…&quot;&gt;</code> is <code>&lt;ns&gt;.json</code> (<code>[a-z_]+</code>) and that namespace
+exists under <code>&lt;root&gt;/en/</code>.</li>
+<li>The resolved catalogue path sits under <code>&lt;root&gt;/&lt;lang&gt;/</code> (re-checked on
+every write), and <code>--root</code> itself points at a tree that has an <code>en/</code>
+folder.</li>
+</ul>
+<p>For every unit the importer:</p>
+<ol>
+<li>Locates <code>&lt;ns&gt;.&lt;key&gt;</code>; skips (with a message) keys that left English,
+units with no provenance note (below), or whose <code>src=</code> hash no longer
+matches — the English moved on, re-export.</li>
+<li>Validates: target non-empty (unless still <code>new</code>), <code>{braces}</code> balanced,
+ICU compiles, ICU argument set equals the English one, and every glossary
+term present in the English is rendered as pinned — a <strong>failure</strong> on
+<code>clinical</code> keys, a warning on <code>low</code> ones. Rendering checks tolerate
+inflection at the end of a word (paziente/pazienti,
+somministrare/somministrato).</li>
+<li>Writes the value into <code>src/locales/&lt;lang&gt;/&lt;ns&gt;.json</code> (sorted keys,
+2-space, trailing newline — the file&#39;s existing convention) and updates
+the status entry (<code>translated → reviewed</code>, <code>signed-off</code>/<code>approved=&quot;yes&quot; → approved</code>, <code>needs-review-translation</code> with changed text → <code>reviewed</code>,
+unchanged → keep), <code>reviewed_at</code>, <code>reviewer</code>, <code>src</code>.</li>
+</ol>
+<p>It prints a per-namespace table (imported / updated / skipped / violations /
+warnings) and <strong>exits 1 on any hard violation without writing anything</strong> —
+fix the XLIFF and re-run (exit 2 = the file itself is malformed or unsafe;
+also nothing written). Then run <code>npm test</code> (the locale-integrity suite
+re-checks ICU/key parity) and commit the JSON + <code>.status</code> diff together.</p>
+<h4 id="provenance-notes-and---allow-missing-note">Provenance notes and <code>--allow-missing-note</code></h4>
+<p>The <code>&lt;note from=&quot;rohy&quot;&gt;… src=…&lt;/note&gt;</code> line the export writes on every unit
+is the only proof of <em>which</em> English the reviewer was looking at: its <code>src=</code>
+hash is what stale detection compares against, and it is what makes an
+<code>approved=&quot;yes&quot;</code> trustworthy. Some CAT tools drop notes on save. A unit that
+comes back <strong>without</strong> the rohy note (or with a note that lost <code>src=</code>) is
+therefore:</p>
+<ul>
+<li><strong>Skipped by default</strong> — <code>SKIP &lt;ns&gt;.&lt;key&gt;: no provenance note … re-export</code>.
+Re-export, let the reviewer re-apply their edits in a tool that keeps
+notes, and import that.</li>
+<li><strong>Imported only with <code>--allow-missing-note</code></strong>, and then conservatively:
+the value is validated like any other, the current English hash is
+stamped as <code>src</code>, and the state is <strong>capped at <code>reviewed</code></strong> — a
+<code>signed-off</code> / <code>approved=&quot;yes&quot;</code> unit lands as <code>reviewed</code>, never <code>approved</code>
+(<code>WARN &lt;ns&gt;.&lt;key&gt;: no provenance note — imported as reviewed, not approved</code>). Approval has to be re-asserted on a fresh export that carries
+the note. Use the flag deliberately, for a file you know was produced from
+the current English.</li>
+</ul>
+<h2 id="phase-2-not-built">Phase 2 (not built)</h2>
+<p>ICU messages are exported as plain text: reviewers see
+<code>{count, plural, one {# patient} other {# patients}}</code> verbatim and the
+importer only guards it. A later phase can split plural/select branches into
+XLIFF <code>&lt;group&gt;</code>s or use XLIFF 2.0 inline markup so tools present them as
+segments; the status model already carries what that needs (<code>src</code>, <code>risk</code>,
+per-key state), and <code>review/approval</code> workflows, a <code>stale</code> flag persisted
+in the file, and per-key clinical risk classification are the intended
+next fields.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Users, courses and management · Rohy docs</title>
+    <meta name="description" content="Rohy&amp;#39;s management layer is what turns a simulation engine into a teaching platform. It defines who the learners are, who can teach, who can administer, which courses exist, …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Users, courses and management · Rohy docs">
+    <meta property="og:description" content="Rohy&amp;#39;s management layer is what turns a simulation engine into a teaching platform. It defines who the learners are, who can teach, who can administer, which courses exist, …">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Product</span>
+        <h1>Users, courses and management</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#identity-and-roles">Identity and roles</a>
+            <a href="#tenants-as-institutional-boundaries">Tenants as institutional boundaries</a>
+            <a href="#courses-classes-and-enrollment">Courses, classes and enrollment</a>
+            <a href="#assignment-and-access">Assignment and access</a>
+            <a href="#reporting-as-management">Reporting as management</a>
+            <a href="#policy-metadata-and-current-limits">Policy metadata and current limits</a>
+            <a href="#governance-and-scientific-value">Governance and scientific value</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group" open>
+                    <summary>Rohy product architecture</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="users-courses-management.html" aria-current="page">Users, courses &amp; management</a>
+                    <a href="platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy&#39;s management layer is what turns a simulation engine into a teaching platform. It defines who the learners are, who can teach, who can administer, which courses exist, which students belong to them, which cases are assigned, what students can access and how activity becomes interpretable at class level. Without this layer, Rohy would still run cases, but it would not reliably support institutional teaching.</p>
+<p>Management is also part of the research apparatus. A learning trace is only meaningful when the learner identity, course membership, assignment context and access rules are known. A transition network from an undefined population is weak evidence. A completion grid without enrollment context is only a table. Rohy therefore treats users, roles, tenants, courses and access policy as core product capabilities.</p>
+<h2 id="identity-and-roles">Identity and roles</h2>
+<p>Every meaningful action in Rohy is tied to a user. The user record anchors sessions, learning events, class membership, exports, audit logs and administrative actions. Administrators can create users individually, import them in batches, edit roles, delete accounts, purge or anonymise data where appropriate and force logout active sessions when needed.</p>
+<p>Roles are rank-based: each role carries a numeric rank and every check reads &quot;rank ≥ N&quot;. A student can run cases. A reviewer can inspect more information. An educator, displayed as Teacher in the UI, can author cases and manage classes. An admin can administer the platform. Rank comparison allows permissions to evolve while equality checks on role strings stay out of the code, and it keeps a lower-ranked user from granting a role higher than their own.</p>
+<p>This role model is operationally useful because it supports delegation. Teachers can run courses without being platform administrators. Administrators can manage identity and governance without authoring every case. Students receive the narrowest access needed for their learning task.</p>
+<h2 id="tenants-as-institutional-boundaries">Tenants as institutional boundaries</h2>
+<p>A tenant is the organisational boundary inside a deployment. Users, sessions, courses, catalogue rows and logs are tenant-scoped. Tenant isolation is enforced through middleware, which covers every route from one place. Cross-tenant leakage would damage both privacy and research validity, so the boundary sits above individual handlers.</p>
+<p>In a single-tenant deployment, this boundary is still active. In a multi-tenant deployment, it becomes the line between organisations. An admin is tenant-local. A teacher sees classes in their own tenant. Active sessions and logs are scoped. Catalogue rows may be user, tenant or platform scoped depending on governance. Moving a user between tenants leaves the content they authored where it was, which makes tenant reassignment a planned administrative operation.</p>
+<h2 id="courses-classes-and-enrollment">Courses, classes and enrollment</h2>
+<p>In the UI, the teacher works with classes. In the API and some internal references, the same concept is called a cohort. A class is the teaching unit: it has an owner, may have co-teachers, contains students, can carry dates and course metadata, can generate a join code, can hold assigned cases and becomes the scope for roster, completion, analytics, feed and export.</p>
+<p>Enrollment can happen in several ways. A teacher can add one student by username or email. A teacher can add students in bulk. A teacher can add co-teachers. Students can self-enrol with a join code. Re-adding a removed member revives the original membership, so the history stays in one row. Co-teacher promotion updates that same row, leaving the user&#39;s rank and record intact.</p>
+<p>Join codes lower operational friction. A code allows students to attach themselves to the correct class after authentication. Codes can be copied, rotated or disabled. Anyone holding the code can join, which makes a code a convenience and leaves it short of a secret credential. If a code leaks, the teacher should rotate or disable it.</p>
+<h2 id="assignment-and-access">Assignment and access</h2>
+<p>Case assignment links a case to a class. It does not copy the case and it does not freeze the case. A session snapshot is created only when a learner starts a run. Assignment defines curricular intent: these are the cases this class should work on.</p>
+<p>The current student access model follows that intent. Students see the default case in the default course and the live cases assigned through their active class memberships. Unassigned live cases are not exposed as ordinary student-startable cases, and direct unassigned access is blocked at the runtime and API boundary. This protects course design. Students should not browse the entire case library when a teacher has assigned a specific learning sequence.</p>
+<p>Assignment remains separate from scoring. Reports reflect the sessions students ran. Unassigning a case removes the live class link and leaves the case and its historical sessions in place. This separation allows teachers to change course structure while the record of what already happened stays intact.</p>
+<h2 id="reporting-as-management">Reporting as management</h2>
+<p>Roster, completion grid, live feed and export are management analytics. The roster shows who is enrolled and what activity exists for each student. The completion grid shows which students attempted or completed which cases. The live feed shows current class activity. Export moves the course record into external grading, LMS or research workflows.</p>
+<p>These views are intentionally practical. They help a teacher run a class, identify non-participation, prepare debrief and document progress. They are not replacements for deeper analytics, but they provide the operational frame that deeper analytics require. Before interpreting a transition network or Oyon pattern, a teacher needs to know who was assigned, who attempted, who completed and when activity occurred.</p>
+<p>Exports are governance events. Once data leaves Rohy, it enters another institutional context. Rohy therefore records export history, applies authentication and scope checks, neutralises spreadsheet-formula risks and relies on central redaction policies where sensitive fields may appear.</p>
+<h2 id="policy-metadata-and-current-limits">Policy metadata and current limits</h2>
+<p>Classes can store policy metadata such as passing score, retake intent, debrief requirement, course code, term and learning objectives. These fields document teaching intent and prepare the platform for future enforcement, but they should not be mistaken for fully enforced runtime gates unless the relevant feature explicitly implements enforcement.</p>
+<p>This distinction is important. Completion currently means reaching debrief. A stored passing threshold does not automatically grade a learner. A stored retake policy does not necessarily block another attempt. Rohy should be read honestly: it records policy intent now and may enforce more of it later, but teachers must communicate assessment rules directly until enforcement exists.</p>
+<h2 id="governance-and-scientific-value">Governance and scientific value</h2>
+<p>The management layer protects trust. Role checks prevent over-granting. Tenant boundaries protect organisations. Join-code rotation protects enrollment. Student access policy protects curricular design. Soft deletion and purge workflows support lifecycle governance. Audit logs and export records support accountability.</p>
+<p>For research, the same layer protects interpretation. It tells the researcher which learners belonged to which class, which cases were assigned, which attempts reached debrief and which data were exported. It makes it possible to compare learners under a shared assignment, with unrelated activity kept apart. In that sense, management is the structure that makes educational data meaningful.</p>
+<p>Related guides include <a href="../admin/users-roles.html">Users and roles</a>, <a href="../admin/multi-tenant.html">Multi-tenant operations</a>, <a href="../educator/cohorts.html">Classes and join codes</a>, <a href="../educator/assigning-cases.html">Assigning cases</a>, <a href="../educator/classroom-policy.html">Classroom policy</a>, <a href="../educator/reporting.html">Reporting and analytics</a>, and <a href="analytics.html">Analytics, evidence and research traces</a>.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

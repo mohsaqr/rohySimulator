@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin first-run checklist · Rohy docs</title>
+    <meta name="description" content="INSTALL.md gets Rohy running on a machine. This doc covers what an admin should configure inside the running app before letting learners use it — voices, default personas, LLM p…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Admin first-run checklist · Rohy docs">
+    <meta property="og:description" content="INSTALL.md gets Rohy running on a machine. This doc covers what an admin should configure inside the running app before letting learners use it — voices, default personas, LLM p…">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Admin first-run checklist</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#tldr">TL;DR</a>
+            <a href="#1-llm-provider-api-key">1. LLM provider + API key</a>
+            <a href="#2-tts-provider-optional-change">2. TTS provider (optional change)</a>
+            <a href="#3-shipped-agent-personas">3. Shipped agent personas</a>
+            <a href="#4-per-case-overrides-optional">4. Per-case overrides (optional)</a>
+            <a href="#5-boot-audit-diagnostic-bar">5. Boot audit + diagnostic bar</a>
+            <a href="#6-smoke-a-real-session">6. Smoke a real session</a>
+            <a href="#common-first-run-snags">Common first-run snags</a>
+            <a href="#pointers">Pointers</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html" aria-current="page">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><a href="INSTALL.html">INSTALL.md</a> gets Rohy running on a machine. This doc covers
+what an admin should configure <strong>inside</strong> the running app before
+letting learners use it — voices, default personas, LLM provider,
+diagnostic bar.</p>
+<p>Most of this is one-time setup. Re-read it whenever you switch TTS
+providers, swap LLM models, or restore from a backup.</p>
+<hr>
+<h2 id="tldr">TL;DR</h2>
+<p>A fresh install ships with <strong>Kokoro TTS</strong> set as the platform default
+and a working voice picked on every shipped persona (<code>am_michael</code> for
+the default patient, <code>af_bella</code> for the female patient, etc.). The
+runtime is audible the moment you finish the LLM setup. The order most
+operators run things:</p>
+<ol>
+<li>Pick an LLM provider, paste the API key — <strong>required</strong>, nothing
+useful happens without it.</li>
+<li>Optional: switch from Kokoro to another TTS provider (Piper /
+Google / OpenAI). If you do, re-pick a voice on each persona — the
+shipped Kokoro defaults won&#39;t be valid for the new provider.</li>
+<li>Optional: open the agent personas (patient, female patient,
+discussant, nurse, consultant, relative) if you want to change
+their voice, tone, or do/don&#39;t lists.</li>
+<li>Optional: per-case voice override (rare — only for cases that
+need a specific named voice).</li>
+<li>Tail the boot logs once. A clean boot prints <code>voice catalogue audit clean</code>. Any other line names the stale row.</li>
+<li>Run a smoke session through one shipped case in voice mode.</li>
+</ol>
+<p>Each step has its own section below.</p>
+<hr>
+<span class="anchor-alias" id="1-llm-provider--api-key"></span><h2 id="1-llm-provider-api-key">1. LLM provider + API key</h2>
+<p>Settings → Platform → LLM Settings.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What to set</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Provider</strong></td>
+<td>One of <code>anthropic</code>, <code>openai</code>, <code>google</code>, <code>lmstudio</code> (local), or any OpenAI-compatible endpoint.</td>
+</tr>
+<tr>
+<td><strong>Model</strong></td>
+<td>Anthropic: <code>claude-opus-4-7</code> / <code>claude-sonnet-4-6</code> / <code>claude-haiku-4-5-20251001</code>. OpenAI: <code>gpt-4o-mini</code> and friends. LMStudio: whatever you have loaded locally.</td>
+</tr>
+<tr>
+<td><strong>Base URL</strong></td>
+<td>Only if your provider needs one (LMStudio is <code>http://localhost:1234/v1</code>). Anthropic/OpenAI/Google leave blank.</td>
+</tr>
+<tr>
+<td><strong>API key</strong></td>
+<td>Stored in <code>platform_settings</code>, redacted in audit logs. Required for hosted providers.</td>
+</tr>
+<tr>
+<td><strong>Max output tokens / Temperature</strong></td>
+<td>Leave blank to use the provider default. Set explicitly only if you have a reason.</td>
+</tr>
+<tr>
+<td><strong>System Prompt Template</strong></td>
+<td><strong>Leave empty.</strong> The text is appended <em>after</em> the case-specific persona; with anything set, every case carries the same trailing reminder. The shipped default was historically prepended (and shadowed the case persona); that&#39;s now gone — see <a href="https://github.com/mohsaqr/rohySimulator/blob/main/server/routes/admin-routes.js"><code>server/routes/admin-routes.js</code></a> <code>DEFAULT_LLM_SETTINGS</code>.</td>
+</tr>
+</tbody></table></div>
+<p>Save and click <strong>Test connection</strong> — the row shows green if the
+provider responds.</p>
+<hr>
+<h2 id="2-tts-provider-optional-change">2. TTS provider (optional change)</h2>
+<p>A fresh install ships with <strong>Kokoro</strong> as the active TTS provider and
+every shipped persona has a Kokoro voice already picked. If that works
+for you, skip this section.</p>
+<p>Settings → Platform → Voice.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>When to use</th>
+<th>Models needed</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Kokoro</strong> (local, default)</td>
+<td>Offline / classroom. Fast, English-only, ~50 voices.</td>
+<td>Already bundled. First-call warmup ~2s.</td>
+</tr>
+<tr>
+<td><strong>Piper</strong> (local)</td>
+<td>Multilingual, lower quality. Per-voice <code>.onnx</code> files.</td>
+<td><code>bash deploy/install-piper.sh</code> and drop voices into <code>server/data/piper/</code>.</td>
+</tr>
+<tr>
+<td><strong>Google</strong> (cloud)</td>
+<td>Most natural prosody.</td>
+<td>Google Cloud TTS API key.</td>
+</tr>
+<tr>
+<td><strong>OpenAI</strong> (cloud)</td>
+<td>Six voices (<code>alloy</code>, <code>echo</code>, <code>fable</code>, <code>nova</code>, <code>onyx</code>, <code>shimmer</code>).</td>
+<td>Reuses your OpenAI LLM key by default.</td>
+</tr>
+</tbody></table></div>
+<h3 id="if-you-switch-providers-re-pick-voices-on-each-persona">If you switch providers, re-pick voices on each persona</h3>
+<p>The shipped Kokoro voice ids (<code>am_michael</code>, <code>af_bella</code>, etc.) are not
+valid for Google / OpenAI / Piper. After switching, open each persona
+in Settings → Agent Personas and pick a voice from the new provider&#39;s
+catalogue. The boot audit (§ 5) names every stale row.</p>
+<h3 id="rate-and-pitch">Rate and pitch</h3>
+<p>Platform-wide defaults for speed (<code>0.8</code> – <code>1.2</code> is typical) and pitch
+(semitones; <code>0</code> is neutral). Per-persona overrides on each agent row;
+per-case overrides in the case editor&#39;s voice panel.</p>
+<hr>
+<h2 id="3-shipped-agent-personas">3. Shipped agent personas</h2>
+<p>Settings → Agent Personas.</p>
+<p>Six rows ship with <code>is_default = 1</code>, each carrying its own voice. Voice
+resolution is one-tier: <strong>whatever <code>case_voice</code> is set on the persona
+(or overridden on the case) is what plays.</strong> There is no demographic
+slot fallback — every persona has an explicit voice, period.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>Agent type</th>
+<th>Shipped Kokoro voice</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Default Patient</strong></td>
+<td>patient</td>
+<td><code>am_michael</code> (male)</td>
+</tr>
+<tr>
+<td><strong>Default Female Patient</strong></td>
+<td>patient</td>
+<td><code>af_bella</code> (female)</td>
+</tr>
+<tr>
+<td><strong>Default Discussant</strong></td>
+<td>discussant</td>
+<td><code>bm_lewis</code> (British male)</td>
+</tr>
+<tr>
+<td><strong>Sarah Mitchell</strong></td>
+<td>nurse</td>
+<td><code>af_sky</code> (female)</td>
+</tr>
+<tr>
+<td><strong>Dr. James Chen</strong></td>
+<td>consultant</td>
+<td><code>am_liam</code> (male)</td>
+</tr>
+<tr>
+<td><strong>Family Member</strong></td>
+<td>relative</td>
+<td><code>af_nicole</code> (female)</td>
+</tr>
+</tbody></table></div>
+<p>Patient persona pick: ChatInterface compares <code>config.voice.gender</code> on
+each <code>is_default=1</code> patient template against the case&#39;s
+<code>demographics.gender</code> (case-insensitive first letter). A female case
+picks <code>Default Female Patient</code>; otherwise <code>Default Patient</code>. No
+gender-blind fallback — if your case has a gender that doesn&#39;t match
+any shipped persona, attach one explicitly in the case editor.</p>
+<p>What to edit (and what to leave alone):</p>
+<ul>
+<li><strong><code>case_voice</code></strong> — change whenever you want a different voice on a
+persona. Pick from the picker in the persona editor; never paste a
+raw voice id from another provider.</li>
+<li><strong><code>gender</code></strong> — only the patient personas use this for case routing.
+Don&#39;t change <code>male</code> ↔ <code>female</code> on the shipped Default Patient and
+Default Female Patient rows; those decide which case inherits which.</li>
+<li><strong>System prompt</strong> — carries the in-character ruleset. Edit per
+deployment if you want different speech patterns; rarely needs
+changing.</li>
+</ul>
+<hr>
+<h2 id="4-per-case-overrides-optional">4. Per-case overrides (optional)</h2>
+<p>Settings → Cases → edit a case → Voice tab.</p>
+<p>You only need this for cases that need a <em>specific</em> voice (e.g. a
+named actor, an accent, a celebrity-style impression for a teaching
+moment). Most cases should leave per-case voice empty and inherit
+from the persona + platform slot.</p>
+<p>Per-case <code>case_voice</code> always wins (<code>tier · override</code>).</p>
+<hr>
+<span class="anchor-alias" id="5-boot-audit--diagnostic-bar"></span><h2 id="5-boot-audit-diagnostic-bar">5. Boot audit + diagnostic bar</h2>
+<h3 id="boot-audit">Boot audit</h3>
+<p>On every server start, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/server/healthChecks/voiceCatalogueAudit.js"><code>voiceCatalogueAudit</code></a>
+checks whether stored voices are still valid for the active provider:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Log line</th>
+<th>What it means</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>voice catalogue audit clean</code></td>
+<td>Everything stored matches the active provider&#39;s catalogue. <strong>You want this.</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tts_provider unset; skipping voice catalogue audit</code></td>
+<td>Platform <code>tts_provider</code> isn&#39;t set. Fresh installs default to <code>kokoro</code> automatically; this only appears if an admin explicitly cleared it.</td>
+<td>Set the provider in Settings → Voice.</td>
+</tr>
+<tr>
+<td><code>stale case_voice values detected</code></td>
+<td>A case or persona has <code>case_voice</code> that isn&#39;t valid for the active provider (e.g. a Google voice id while Kokoro is active). Every named row is unplayable until re-picked.</td>
+<td>Open the named row in the editor and pick a valid voice, OR switch back to the provider that had the voice.</td>
+</tr>
+</tbody></table></div>
+<p>A clean boot logs exactly one line: <code>voice catalogue audit clean</code>. If
+you don&#39;t see that, fix whatever&#39;s named in the warning.</p>
+<span class="anchor-alias" id="diagnostic-bar-admins--educators"></span><h3 id="diagnostic-bar-admins-educators">Diagnostic bar (admins + educators)</h3>
+<p>Bottom of the screen, hidden by default. Enable via the floating
+&quot;Diag&quot; pill in the bottom-right corner. Toggle persists per user.</p>
+<p>What&#39;s there:</p>
+<ul>
+<li><strong>Voice runtime</strong> — which voice the active speaker is <em>currently</em>
+resolving to, with the tier. Resolution is one-tier today: <code>override</code>
+(a <code>case_voice</code> set on either the case or the agent persona) or
+<code>null</code> (nothing set — patient stays mute). If this doesn&#39;t match what
+you expected, you&#39;ve got an override somewhere.</li>
+<li><strong>Patient prompt</strong> → <strong>Show assembled prompt</strong> — opens the literal
+system prompt the LLM is about to receive, with copy-to-clipboard.
+Use this when &quot;the model is ignoring my case&quot; — odds are something
+upstream is shadowing what you authored.</li>
+<li><strong>TTS wire history</strong> — last 20 <code>/api/tts</code> payloads with voice id,
+status, and a replay button (re-fires the captured payload so you
+can confirm what was actually sent matches what you heard).</li>
+</ul>
+<hr>
+<h2 id="6-smoke-a-real-session">6. Smoke a real session</h2>
+<p>Pick one shipped case (e.g. <code>Acute Chest Pain - STEMI</code> for male voice,
+<code>Septic Shock - Pneumonia</code> for female voice). Sign in as a student,
+start the case, click into voice mode, ask the patient three
+questions:</p>
+<ol>
+<li><em>&quot;What brought you in today?&quot;</em> — patient should answer in lay
+language, in-character.</li>
+<li><em>&quot;Can you describe the pain?&quot;</em> — verifies the patient is reading
+the structured history; should not invent unrelated symptoms.</li>
+<li><em>&quot;Do I have anything serious?&quot;</em> — should redirect, not volunteer a
+diagnosis. Tests the persona&#39;s &quot;don&#39;t volunteer differentials&quot;
+contract.</li>
+</ol>
+<p>If the patient answers all three correctly <em>and</em> the voice matches the
+demographics, you&#39;re configured. If something feels off, open the
+diagnostic bar → Show assembled prompt and compare what the model
+actually saw with what the case editor says.</p>
+<hr>
+<h2 id="common-first-run-snags">Common first-run snags</h2>
+<ul>
+<li><strong>Voice plays the wrong gender for a patient.</strong> The case&#39;s
+<code>demographics.gender</code> doesn&#39;t match any shipped patient persona&#39;s
+<code>voice.gender</code>. Either fix the case&#39;s demographics, or attach a
+per-case patient persona with the right voice.</li>
+<li><strong>Patient stays silent.</strong> The active persona has no <code>case_voice</code> set,
+or the value isn&#39;t valid for the active TTS provider. Check Settings
+→ Agent Personas → pick a voice from the picker. The boot audit will
+also name the row.</li>
+<li><strong>Model ignores the case demographics.</strong> Open Diagnostic bar →
+Show assembled prompt. If the demographics block is missing, the
+case editor&#39;s Demographics tab wasn&#39;t saved. If it&#39;s there but the
+model still ignores it, your shipped platform LLM system-prompt
+template might be re-introducing competing instructions — leave that
+field empty (§ 1).</li>
+<li><strong><code>tts_provider unset; skipping voice catalogue audit</code> on every
+boot.</strong> Step 2 was never run. Open Settings → Voice and pick a
+provider.</li>
+</ul>
+<hr>
+<h2 id="pointers">Pointers</h2>
+<ul>
+<li>Source of truth for the resolution chain:
+<a href="https://github.com/mohsaqr/rohySimulator/blob/main/src/utils/voiceResolver.js"><code>src/utils/voiceResolver.js</code></a> — read
+the header comment before changing anything.</li>
+<li>Patient prompt assembly:
+<a href="https://github.com/mohsaqr/rohySimulator/blob/main/src/components/chat/ChatInterface.jsx"><code>src/components/chat/ChatInterface.jsx</code></a>
+<code>buildPatientSystemPrompt()</code>.</li>
+<li>Shipped default rows (cases, agents, model pricing):
+<a href="https://github.com/mohsaqr/rohySimulator/blob/main/server/db.js"><code>server/db.js</code></a> and <a href="https://github.com/mohsaqr/rohySimulator/tree/main/server/seeders"><code>server/seeders/</code></a>.</li>
+<li>Migrations history: <a href="https://github.com/mohsaqr/rohySimulator/tree/main/migrations"><code>migrations/</code></a> — every migration
+is additive-only and idempotent.</li>
+</ul>
+<p>Once this is done, learner-facing setup (creating cohorts, attaching
+cases to courses, configuring grading hooks) is covered in the
+educator docs separately.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

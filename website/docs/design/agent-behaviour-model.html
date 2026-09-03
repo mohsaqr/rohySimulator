@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Supporting-agent behaviour model · Rohy docs</title>
+    <meta name="description" content="Status: design proposal. Sections 1–3 describe what rohy does today; sections 4 onward are unbuilt and specified here so they can be argued with before they are written.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Supporting-agent behaviour model · Rohy docs">
+    <meta property="og:description" content="Status: design proposal. Sections 1–3 describe what rohy does today; sections 4 onward are unbuilt and specified here so they can be argued with before they are written.">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Design</span>
+        <h1>Supporting-agent behaviour model</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-four-axes-not-three-patterns">1. Four axes, not three patterns</a>
+            <a href="#2-what-is-already-built">2. What is already built</a>
+            <a href="#3-scenario-2-helpful-nurse-is-already-authorable">3. Scenario 2 (helpful nurse) is already authorable</a>
+            <a href="#4-the-missing-primitive-briefed-knowledge">4. The missing primitive: briefed knowledge</a>
+            <a href="#5-stance">5. Stance</a>
+            <a href="#6-initiative-and-why-the-distractor-does-not-work-without-it">6. Initiative — and why the distractor does not work without it</a>
+            <a href="#7-the-learner-role-gap">7. The learner-role gap</a>
+            <a href="#8-scenarios-mapped-onto-the-axes">8. Scenarios mapped onto the axes</a>
+            <a href="#9-appendix-the-arrival-delay-incident">9. Appendix: the arrival-delay incident</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="agent-behaviour-model.html" aria-current="page">Supporting-agent behaviour model</a>
+                    <a href="audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="index.html">Design</a>
+                    <a href="plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><strong>Status:</strong> design proposal. Sections 1–3 describe what rohy does today;
+sections 4 onward are unbuilt and specified here so they can be argued
+with before they are written.</p>
+<p>A rohy case has one main virtual agent — the patient — and may have any
+number of <em>supporting</em> agents: a bedside nurse, an on-call consultant, a
+family member, a debrief tutor. This document is about the supporting
+ones: what makes them pedagogically different from each other, which of
+those differences rohy can currently express, and what has to be built
+for the rest.</p>
+<hr>
+<h2 id="1-four-axes-not-three-patterns">1. Four axes, not three patterns</h2>
+<p>The scenarios people propose (&quot;an unaware nurse who arrives late&quot;, &quot;a
+helpful nurse who is already there&quot;, &quot;an anxious relative who gets in
+the way&quot;) read like three kinds of agent. They are not. They are points
+in a space with four independent axes, and treating them as named
+presets is what makes the space feel small.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Axis</th>
+<th>The question it answers</th>
+<th>Today</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Availability</strong></td>
+<td><em>When</em> can the learner reach them?</td>
+<td>✅ built</td>
+</tr>
+<tr>
+<td><strong>Knowledge</strong></td>
+<td><em>What</em> do they know?</td>
+<td>⚠️ static tier only</td>
+</tr>
+<tr>
+<td><strong>Stance</strong></td>
+<td>What do they <em>do</em> with what they know?</td>
+<td>❌ absent</td>
+</tr>
+<tr>
+<td><strong>Initiative</strong></td>
+<td>Do they speak <em>unprompted</em>?</td>
+<td>❌ absent</td>
+</tr>
+</tbody></table></div>
+<p>The axes are worth naming because they compose. A delayed agent who
+arrives holding a <em>wrong</em> preconception is availability + stance, and it
+is arguably a sharper instrument than any of the three named scenarios:
+the learner must both hand off well <em>and</em> hold their ground against a
+confident colleague who is wrong. Nobody proposes that scenario when
+thinking in presets. It falls out of the grid for free.</p>
+<hr>
+<h2 id="2-what-is-already-built">2. What is already built</h2>
+<span class="anchor-alias" id="availability--complete"></span><h3 id="availability-complete">Availability — complete</h3>
+<p><code>case_agents</code> carries the whole vocabulary, and
+<code>AgentService.isAgentAvailable()</code> / <code>getAgentDisplayStatus()</code> enforce it:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>availability_type</code></td>
+<td><code>present</code> (in the room) · <code>on-call</code> (must be paged) · <code>absent</code> (not in this case)</td>
+</tr>
+<tr>
+<td><code>available_from_minute</code></td>
+<td>Not reachable until N minutes into the session</td>
+</tr>
+<tr>
+<td><code>depart_at_minute</code></td>
+<td>Leaves at minute N</td>
+</tr>
+<tr>
+<td><code>response_time_min</code>/<code>max</code></td>
+<td>Minutes between paging and arrival (0 = instant)</td>
+</tr>
+</tbody></table></div>
+<p>Paging goes through <code>POST /sessions/:id/agents/:type/page</code>, which stamps
+a server-anchored <code>arrives_at</code> so a refresh or a room switch cannot
+strand the countdown.</p>
+<p><strong>Arrival is instant by default</strong> as of migration 0042. Every seeded
+persona ships <code>response_time 0/0</code>, and a delay is something a case
+author opts into. See §7 for the history — the previous default made
+&quot;instant&quot; literally unreachable, and it is worth reading before anyone
+proposes reintroducing a floor.</p>
+<span class="anchor-alias" id="knowledge--half-built"></span><h3 id="knowledge-half-built">Knowledge — half built</h3>
+<p><code>agent_templates.context_filter</code> picks how much of the case file the
+agent is given: <code>full</code> · <code>history</code> · <code>vitals</code> · <code>minimal</code>. A second
+control, <code>memory_access</code>, gates the patient-record narrative by verb
+(<code>OBTAINED</code>, <code>EXAMINED</code>, <code>ELICITED</code>, <code>ORDERED</code>, …).</p>
+<p>Both are chosen by the <strong>author</strong>, and both read from the <strong>case
+record</strong>. That distinction is the whole of §4.</p>
+<span class="anchor-alias" id="stance-and-initiative--absent"></span><h3 id="stance-and-initiative-absent">Stance and initiative — absent</h3>
+<p>No agent has a disposition beyond whatever its <code>system_prompt</code> says in
+prose, and no agent ever speaks without being spoken to. Every turn is
+reactive.</p>
+<hr>
+<h2 id="3-scenario-2-helpful-nurse-is-already-authorable">3. Scenario 2 (helpful nurse) is already authorable</h2>
+<p>Set the nurse to <code>availability_type: &#39;present&#39;</code>, <code>context_filter: &#39;full&#39;</code>, <code>response_time 0/0</code>. That is the seeded Sarah Mitchell, today,
+with no code change. If the goal is an entry-level case where an
+experienced nurse orients the learner, that is an authoring exercise —
+write the persona, attach it, publish.</p>
+<p>Worth stating plainly so nobody budgets engineering for it.</p>
+<hr>
+<h2 id="4-the-missing-primitive-briefed-knowledge">4. The missing primitive: <code>briefed</code> knowledge</h2>
+<p>Everything interesting about a <em>delayed, unaware</em> agent depends on one
+thing that does not exist.</p>
+<p>Today an agent&#39;s situational knowledge comes from
+<code>buildDebriefingContext()</code>, which assembles the case record filtered by
+the author&#39;s <code>context_filter</code> tier. So a nurse configured as &quot;arrives at
+minute 5, knows nothing&quot; still arrives knowing whatever the author let
+her know. The handoff the learner performs is theatre: they can say
+&quot;she&#39;s crashing, help&quot; and receive a fully briefed, competent colleague.
+Nothing reads what they said. Nothing can be wrong because of what they
+left out.</p>
+<h3 id="proposal">Proposal</h3>
+<p>Add a <strong>knowledge source</strong> alongside the existing tier:</p>
+<pre><code>knowledge_source:  &#39;case&#39;      -- today&#39;s behaviour: read the record
+                 | &#39;briefed&#39;   -- read ONLY the learner&#39;s handoff
+                 | &#39;hybrid&#39;    -- role-plausible baseline + handoff
+</code></pre>
+<ul>
+<li><strong><code>case</code></strong> — unchanged. The default. Existing agents keep working.</li>
+<li><strong><code>briefed</code></strong> — the agent&#39;s context block is assembled from the
+learner&#39;s own turns in this conversation, plus a role-plausible
+baseline of what anyone in that role would know on walking in (the
+patient exists, they are in a bed, their name and age). Nothing else.
+Vitals, history, orders, results: absent unless the learner said them.</li>
+<li><strong><code>hybrid</code></strong> — for the doctor called to a ward: knows the ward and
+that a patient deteriorated, not the specifics.</li>
+</ul>
+<p><code>context_filter</code> keeps its current meaning and applies <em>after</em> the
+source: it bounds what a <code>case</code>-sourced agent may see, and is inert for
+a <code>briefed</code> one.</p>
+<h3 id="why-this-is-the-load-bearing-item">Why this is the load-bearing item</h3>
+<p>It is where the pedagogy lives. An agent acting on an incomplete handoff
+and <strong>visibly getting it wrong</strong> — asking for the allergy the learner
+never mentioned, drawing the wrong conclusion from a vital they were not
+given — teaches more than any post-hoc rubric, and it does so in the
+moment, from the learner&#39;s own omission. It is also the natural input to
+a handoff-quality measure in the debrief, which is the assessment payload
+the &quot;unaware agent&quot; scenario is really after.</p>
+<h3 id="shape">Shape</h3>
+<ul>
+<li>Migration: <code>agent_templates.knowledge_source TEXT DEFAULT &#39;case&#39;</code>
+(nullable, additive; NULL reads as <code>&#39;case&#39;</code>).</li>
+<li><code>buildDebriefingContext()</code> branches on the source before it touches
+the record.</li>
+<li>A new prompt block making the ignorance explicit and non-negotiable,
+because a model handed a thin context will cheerfully invent a rich
+one. It must sit next to <code>roleAnchor()</code> and be as blunt: <em>you know
+only what appears below; if you were not told something, you do not
+know it; ask rather than assume.</em></li>
+<li>The handoff transcript needs marking as such, so the assembler can
+tell &quot;what the learner told this agent&quot; from the whole conversation.</li>
+</ul>
+<p><strong>Estimated effort:</strong> medium. The migration and branch are small; the
+prompt engineering to stop a model back-filling plausible clinical
+detail is the real work, and it needs evaluation against a small model
+(voice mode uses one) before it can be trusted.</p>
+<hr>
+<h2 id="5-stance">5. Stance</h2>
+<p>Once knowledge is separable from behaviour, stance is a small addition:</p>
+<pre><code>stance:  &#39;supportive&#39;   -- helps, defers, answers straight
+       | &#39;neutral&#39;      -- answers what is asked, volunteers nothing
+       | &#39;obstructive&#39;  -- emotionally demanding, derails, needs managing
+       | &#39;misleading&#39;   -- confidently offers a WRONG reading
+</code></pre>
+<p><code>misleading</code> earns its own value rather than being left to prose,
+because it needs a structured input — <em>which</em> wrong interpretation, so
+the case author controls the error rather than the model improvising
+one. Something like <code>config.misleading_claim</code>, seeded per case.</p>
+<p>Two guardrails, both non-optional:</p>
+<ol>
+<li>A misleading agent must be <strong>visibly labelled to the educator</strong> in
+the case editor and in analytics. A learner who is graded down for
+following bad advice they had no way to identify as bad is being
+punished for the simulation&#39;s design.</li>
+<li>The debrief must know. <code>misleading</code> agents belong in the debrief
+context unconditionally, so the tutor can name what happened.</li>
+</ol>
+<p><strong>Estimated effort:</strong> small, <em>after</em> §4. On its own it is prose in a
+system prompt and not worth a schema change.</p>
+<hr>
+<span class="anchor-alias" id="6-initiative--and-why-the-distractor-does-not-work-without-it"></span><h2 id="6-initiative-and-why-the-distractor-does-not-work-without-it">6. Initiative — and why the distractor does not work without it</h2>
+<p>Every agent is strictly turn-based. There is no path by which an agent
+emits a message the learner did not solicit. A family member who only
+speaks when spoken to cannot distract anybody; ignoring them is free,
+which is the opposite of the intended lesson.</p>
+<p>Related: <code>case_agents.auto_arrive_minute</code> is stored, is editable through
+the API, and <strong>is read by no runtime code</strong>. It is the natural hook for
+this and is currently dead.</p>
+<p>Making it real needs three things rohy does not have:</p>
+<ul>
+<li>A scheduler that can decide an agent should speak now (timer-based to
+start: &quot;interject every N minutes while present&quot;).</li>
+<li>A delivery path for unsolicited agent messages into a room the learner
+may not be looking at — this is a notification-router question, not a
+chat question, and the existing six-surface notification centre is the
+right owner.</li>
+<li>Cross-agent state effects, for &quot;each intervention raises the patient&#39;s
+anxiety&quot;. Nothing today lets one agent&#39;s turn alter another agent&#39;s
+state.</li>
+</ul>
+<p><strong>Estimated effort:</strong> large, and the largest genuine unknown is not the
+scheduler but the interruption UX. An agent that talks over a learner
+mid-consultation is a very easy thing to make infuriating rather than
+instructive. Prototype the interruption before building the scheduler.</p>
+<hr>
+<h2 id="7-the-learner-role-gap">7. The learner-role gap</h2>
+<p>One proposed scenario — <em>nurse student pages a doctor, and cannot order
+labs or perform exams themselves</em> — needs something that does not exist
+anywhere in rohy: <strong>the learner&#39;s in-simulation role</strong>.</p>
+<p><code>users.role</code> is a platform permission (<code>guest</code> 0, <code>student</code> 1,
+<code>reviewer</code> 2, <code>educator</code> 3, <code>admin</code> 4). It governs who may edit a case,
+not who the learner is playing. Nothing gates the lab, radiology, or
+examination rooms on a clinical role, because until now every learner
+has been the physician.</p>
+<p>This is the largest item in the whole set, and it is the one that
+changes what rohy <em>is</em> — from a physician simulator to a
+multi-professional one. Sketch:</p>
+<ul>
+<li><code>cases.learner_role TEXT DEFAULT &#39;physician&#39;</code> (<code>physician</code> · <code>nurse</code> ·
+<code>paramedic</code> · <code>student_observer</code>).</li>
+<li>A capability map per role — who may order, examine, prescribe,
+discharge — enforced <strong>server-side</strong> on the order/exam/radiology
+routes, not merely hidden in the UI.</li>
+<li>The affected rooms render a scoped state, not a 403. &quot;You need a
+doctor&#39;s order for this&quot; is the teaching moment; a permission error is
+a bug report.</li>
+<li><code>roleAnchor()</code> already tells the agent who <em>it</em> is; it must also learn
+who the <em>learner</em> is, or a nurse-student case has consultants
+addressing them as &quot;doctor&quot;.</li>
+</ul>
+<p><strong>Estimated effort:</strong> large. Budget it as its own project. It should not
+ride along as a rider on a nurse persona, and it is worth doing on its
+own merits regardless of which agent scenarios ship.</p>
+<hr>
+<h2 id="8-scenarios-mapped-onto-the-axes">8. Scenarios mapped onto the axes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Availability</th>
+<th>Knowledge</th>
+<th>Stance</th>
+<th>Initiative</th>
+<th>Blocked on</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1A · unaware nurse called in</td>
+<td><code>on-call</code>, delay N</td>
+<td><strong><code>briefed</code></strong></td>
+<td>supportive</td>
+<td>—</td>
+<td>§4</td>
+</tr>
+<tr>
+<td>1B · unaware doctor, nurse learner</td>
+<td><code>on-call</code>, delay N</td>
+<td><strong><code>briefed</code></strong></td>
+<td>supportive</td>
+<td>—</td>
+<td>§4 + §7</td>
+</tr>
+<tr>
+<td>2 · helpful bedside nurse</td>
+<td><code>present</code>, instant</td>
+<td><code>case</code>/<code>full</code></td>
+<td>supportive</td>
+<td>—</td>
+<td><strong>nothing — authorable today</strong></td>
+</tr>
+<tr>
+<td>3 · anxious family member</td>
+<td><code>present</code>, instant</td>
+<td><code>case</code>/<code>history</code></td>
+<td><strong>obstructive</strong></td>
+<td><strong>proactive</strong></td>
+<td>§5 + §6</td>
+</tr>
+<tr>
+<td>— · wrong-headed colleague</td>
+<td>any</td>
+<td><code>case</code></td>
+<td><strong>misleading</strong></td>
+<td>—</td>
+<td>§5</td>
+</tr>
+</tbody></table></div>
+<p>Suggested order: <strong>§4 first</strong> — it unblocks both 1A and 1B, it is the
+one with real pedagogical content, and it is medium rather than large.
+§5 is cheap once §4 lands. §7 is a project. §6 is a project with a UX
+risk that should be prototyped before it is scheduled.</p>
+<hr>
+<h2 id="9-appendix-the-arrival-delay-incident">9. Appendix: the arrival-delay incident</h2>
+<p>Recorded because it is the reason §2 says &quot;instant by default&quot;, and
+because the failure mode is a general one worth recognising again.</p>
+<p>Before v2.9.19 the page handler computed:</p>
+<pre><code class="language-js">minSec = Math.max(60, Math.min(180, configuredMinSec || 60));
+maxSec = Math.max(minSec, Math.min(180, configuredMaxSec || 180));
+</code></pre>
+<p>Both lines are wrong in the same way. <code>configuredMinSec || 60</code> treats a
+configured <strong>0 as absent</strong>, because 0 is falsy — so an author asking for
+&quot;instant&quot; was silently given one minute; and <code>Math.max(60, …)</code> floors it
+there again even if the first defect were repaired. The ceiling line
+turns a configured max of 0 into 180 by the same mechanism.</p>
+<p>The net effect is worth stating precisely, because it is funnier and
+worse than a plain &quot;the delay was too long&quot;: <strong><code>0/0</code> — the setting that
+asks for no wait at all — produced a uniform random 60–180 second wait,
+the widest band the system could generate.</strong> Configuring instant was
+strictly worse than configuring 1–2 minutes. The seeded consultant&#39;s
+<code>2/5</code> produced 120–180s, so every default case spent up to three minutes
+of a training session on a progress bar.</p>
+<p>Compounding it, on the client <code>currentAgent</code> was read from the <code>agents</code>
+array — fetched once per session, never written again — while the paging
+flow updated a separate <code>agentStates</code> map. So <code>agentStatus</code>, which gates
+the countdown, the Call button <em>and</em> the composer&#39;s <code>disabled</code>, never
+moved. Pressing &quot;Call Dr. Chen&quot; changed nothing on screen; pressing it
+again re-stamped the ETA and pushed the arrival further away; and when
+the agent did arrive the tab dot went green next to a chat box that
+still refused input. The only escape was leaving the room and returning,
+which remounted the component and refetched the list.</p>
+<p>Three things generalise:</p>
+<ul>
+<li><strong><code>||</code> is not a default operator for numeric settings.</strong> It is a
+falsy-check, and <code>0</code> is the value most likely to be meaningful and
+most likely to be swallowed. Use <code>??</code>, or an explicit <code>=== undefined</code>.</li>
+<li><strong>A clamp that cannot be configured away is not a clamp, it is a
+policy</strong> — and it should be justified where it is written. The comment
+above this code claimed a nurse configured for &quot;instant&quot; would be
+honoured. It never was. Nobody checked the comment against the code.</li>
+<li><strong>Two copies of the same state will diverge.</strong> The fix was not to keep
+<code>agents</code> fresh but to stop reading status from it at all: one live
+overlay, one source of truth. There had also been a second, unused
+client-side <code>calculateWaitTime()</code> returning <em>minutes</em> where the server
+returns <em>seconds</em>, with its own passing unit tests — green tests
+around dead code, while the live path was broken.</li>
+</ul>
+<p>The endpoint now has coverage in <code>tests/server/agent-page-wait.test.js</code>
+and the client contract in
+<code>src/components/chat/ChatInterface.paging.test.jsx</code>. Both were confirmed
+to fail against the pre-fix code before being committed.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

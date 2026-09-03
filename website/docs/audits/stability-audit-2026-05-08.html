@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stability Audit - 2026-05-08 · Rohy docs</title>
+    <meta name="description" content="Scope: stability only. This audit covers whether the app boots, builds, serves the production UI, passes automated runtime checks, and behaves as expected across critical user/A…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Stability Audit - 2026-05-08 · Rohy docs">
+    <meta property="og:description" content="Scope: stability only. This audit covers whether the app boots, builds, serves the production UI, passes automated runtime checks, and behaves as expected across critical user/A…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Audits</span>
+        <h1>Stability Audit - 2026-05-08</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#verification-run">Verification Run</a>
+            <a href="#findings">Findings</a>
+            <a href="#positive-stability-signals">Positive Stability Signals</a>
+            <a href="#recommended-fix-order">Recommended Fix Order</a>
+            <a href="#commands-run">Commands Run</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="index.html">Audits</a>
+                    <a href="stability-audit-2026-05-08.html" aria-current="page">Stability Audit - 2026-05-08</a>
+                    <a href="stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Scope: stability only. This audit covers whether the app boots, builds, serves the production UI, passes automated runtime checks, and behaves as expected across critical user/API flows. It intentionally does not cover feature completeness, design quality, security depth, clinical correctness, or code style except where those items directly affect runtime stability.</p>
+<p>Repository state at audit time:</p>
+<ul>
+<li>Existing uncommitted changes were present before the audit in <code>server/routes/analytics-routes.js</code>, <code>src/components/analytics/tna/tnaUtils.js</code>, <code>src/components/analytics/tna/tnaUtils.test.js</code>, <code>tests/server/analytics-tna.test.js</code>, and <code>src/components/analytics/tna/tnaREquivalence.test.js</code>.</li>
+<li><code>docs/</code> was missing in the checkout even though <code>README.md</code> references it, so this report creates <code>docs/audits/</code>.</li>
+</ul>
+<h2 id="verification-run">Verification Run</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Check</th>
+<th align="right">Result</th>
+<th>Stability signal</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm run build</code></td>
+<td align="right">Pass</td>
+<td>Vite can compile the client bundle and copy it to <code>frontend/</code>. Bundle warnings remain.</td>
+</tr>
+<tr>
+<td><code>npm run lint</code></td>
+<td align="right">Fail</td>
+<td>952 errors and 44 warnings. The lint gate is not usable as a stability guard in current state.</td>
+</tr>
+<tr>
+<td><code>npm test</code></td>
+<td align="right">Fail</td>
+<td>First full run: 1149 passed, 109 skipped, 3 failed. Isolated rerun narrowed persistent failure to <code>tests/server/sql-injection-guard.test.js</code>.</td>
+</tr>
+<tr>
+<td><code>npx vitest run --project=server tests/server/catalogue-0007.test.js tests/server/db-direct-access.test.js tests/server/sql-injection-guard.test.js</code></td>
+<td align="right">Fail</td>
+<td>20 passed, 1 failed. The catalogue/db-adapter timeouts were contention-sensitive; SQL guard failure persisted.</td>
+</tr>
+<tr>
+<td><code>npm run test:e2e</code></td>
+<td align="right">Fail</td>
+<td>41 passed, 20 failed, 14 skipped, 16 did not run. Several browser UI failures share one root cause: the local e2e run served a <code>/rohy/</code> production build directly from Express instead of using the CI/e2e <code>--base=/</code> build path.</td>
+</tr>
+</tbody></table></div>
+<h2 id="findings">Findings</h2>
+<h3 id="stab-001---direct-expresse2e-serving-cannot-load-rohy-build-assets-without-the-deploy-proxy">STAB-001 - Direct Express/e2e serving cannot load <code>/rohy/</code> build assets without the deploy proxy</h3>
+<p>Severity: High</p>
+<p>Evidence:</p>
+<ul>
+<li><code>npm run build</code> uses <code>vite build --base=/rohy/</code>.</li>
+<li><code>vite.config.js</code> also sets production <code>base</code> to <code>/rohy/</code>.</li>
+<li>The documented deploy path expects the app to live at <code>/rohy/</code> behind a reverse proxy:<ul>
+<li><code>deploy/nginx/rohy.conf.example</code> proxies <code>location /rohy/</code> to <code>http://127.0.0.1:4000/</code>; the trailing slash strips <code>/rohy/</code> before Express sees the request.</li>
+<li><code>deploy/docker/Caddyfile</code> uses <code>handle_path /rohy/*</code>, which also strips <code>/rohy/</code> before proxying to the Node app.</li>
+<li><code>deploy/env.example</code> documents <code>FRONTEND_URL=https://your-deploy-host/rohy</code>.</li>
+</ul>
+</li>
+<li>The local Playwright run did not include that proxy layer. It started Express directly at <code>/</code>, using the frontend generated by <code>npm run build</code>.</li>
+<li>Playwright repeatedly logged 404s for <code>/rohy/assets/index-DK7as_3s.js</code> and <code>/rohy/assets/index-DrMoNJoy.css</code>.</li>
+<li>UI e2e canary/auth/multi-tab/scenario tests then timed out waiting for app chrome that never rendered.</li>
+<li><code>.github/workflows/ci.yml</code> explicitly handles this by building the SPA for e2e with <code>npx vite build --base=/</code>, then copying <code>dist/</code> to <code>frontend/</code>.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>A documented nginx/Caddy deploy at <code>/rohy/</code> should not have this specific asset 404, because the reverse proxy strips the prefix.</li>
+<li>Directly serving the <code>npm run build</code> output from Express at <code>/</code> will 404 JS/CSS assets and produce a blank/non-functional UI.</li>
+<li>Local e2e must mirror the CI build step (<code>npx vite build --base=/</code>) or use a proxy that mirrors production. Otherwise many browser behavior failures are test-harness artifacts rather than app behavior failures.</li>
+<li>The existing <code>scripts/smoke.sh</code> only checks <code>/</code> returns 200, so it would not catch broken JS/CSS asset loading.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>Production deploys should use the documented <code>/rohy/</code> reverse proxy path.</li>
+<li>Local/direct Express e2e should build with <code>--base=/</code>, as CI already does.</li>
+<li>Smoke checks should verify at least one built JS/CSS asset from <code>index.html</code>, not only that <code>/</code> returns 200.</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>Implemented after audit: <code>scripts/smoke.sh</code> now fetches frontend HTML and verifies the first referenced JS and CSS asset return 200, resolving absolute <code>/rohy/...</code> URLs against the deploy origin.</li>
+</ul>
+<h3 id="stab-002---e2e-cookie-refreshlogout-flows-fail-with-csrfauth-behavior">STAB-002 - E2E cookie refresh/logout flows fail with CSRF/auth behavior</h3>
+<p>Severity: High</p>
+<p>Evidence:</p>
+<ul>
+<li><code>tests/e2e/cookie-auth.spec.js</code> failed:<ul>
+<li>cookie-auth POST with matching <code>X-CSRF-Token</code> should succeed and rotate <code>rohy_auth</code>.</li>
+<li>logout should clear both cookies.</li>
+</ul>
+</li>
+<li>Server logs showed <code>/api/auth/refresh</code> and <code>/api/auth/logout</code> returning 403 with <code>&quot;CSRF token missing&quot;</code> during those flows.</li>
+<li>Logs also showed <code>active_sessions.token_hash</code> unique constraint warnings on repeated logins.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>Session refresh and logout reliability are core stability paths. If the browser cannot refresh or logout reliably, users can be forced into invalid session states or stale cookies.</li>
+<li>The unique constraint warning suggests repeated login/refresh paths may not be idempotent enough under test-like or repeated browser conditions.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>Cookie-auth refresh/logout should consistently accept a valid matching CSRF token and clear/rotate cookies as documented by the tests.</li>
+<li>Repeated logins should not emit persistence warnings for duplicate active-session token hashes.</li>
+</ul>
+<h3 id="stab-003---current-analytics-route-change-trips-the-sql-static-guard">STAB-003 - Current analytics route change trips the SQL static guard</h3>
+<p>Severity: High</p>
+<p>Evidence:</p>
+<ul>
+<li>Isolated server test rerun failed only <code>tests/server/sql-injection-guard.test.js</code>.</li>
+<li>Reported location: <code>server/routes/analytics-routes.js:1603</code>.</li>
+<li>The flagged code is <code>where: \</code>WHERE ${clauses.join(&#39; AND &#39;)}`,<code>inside</code>buildLearningEventWhere()`.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>The failing test blocks the test gate.</li>
+<li>The helper appears to build clauses from server-controlled column names and placeholder predicates, but the guard cannot prove that. Until rewritten or explicitly allowlisted, every full test run fails.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>The route should preserve tenant/date/user/case filtering while satisfying the static guard, either by avoiding this interpolation pattern or by adding a narrow allowlist with justification if the interpolation is genuinely server-controlled.</li>
+</ul>
+<h3 id="stab-004---browser-e2e-suite-is-vulnerable-to-auth-rate-limit-interference">STAB-004 - Browser e2e suite is vulnerable to auth rate-limit interference</h3>
+<p>Severity: Medium</p>
+<p>Evidence:</p>
+<ul>
+<li><code>tests/e2e/rbac.spec.js</code> and <code>tests/e2e/tenant.spec.js</code> failed because login returned 429.</li>
+<li>Error text: <code>&quot;Too many authentication attempts. Please try again in 15 minutes.&quot;</code></li>
+<li>The suite runs with one shared e2e server and many specs create/login users through the same local client path.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>The e2e suite can fail because the test harness trips production-like login limits, not because the target behavior is broken.</li>
+<li>This reduces confidence in stability regressions because later specs can be poisoned by earlier auth attempts.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>E2E should isolate or relax auth rate limits under <code>NODE_ENV=test</code>, or use test-specific IP/user buckets, so unrelated specs do not cascade into 429 failures.</li>
+</ul>
+<h3 id="stab-005---scenario-snapshot-ui-check-failed-to-read-hr-in-the-invalid-local-e2e-serving-mode">STAB-005 - Scenario snapshot UI check failed to read HR in the invalid local e2e serving mode</h3>
+<p>Severity: Medium</p>
+<p>Evidence:</p>
+<ul>
+<li><code>tests/e2e/scenario-engine.spec.js</code> failed in &quot;snapshot binding - running session keeps scenario A even after admin PUTs scenario B&quot;.</li>
+<li><code>readHR(page)</code> returned <code>null</code> until the 15s poll timed out.</li>
+<li>This test also ran during the invalid direct-serving asset failure pattern, so the failure may be downstream of STAB-001 rather than a scenario-engine defect.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>Until STAB-001 is fixed and this test is rerun, browser-level confidence in monitor rendering and snapshot scenario playback is incomplete.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>The monitor should render an HR value and converge according to the session snapshot, independent of later admin case edits.</li>
+</ul>
+<h3 id="stab-006---tts-e2e-request-timed-out">STAB-006 - TTS e2e request timed out</h3>
+<p>Severity: Medium</p>
+<p>Evidence:</p>
+<ul>
+<li><code>tests/e2e/voice-runtime.spec.js</code> failed: <code>POST /api/tts with no pitch</code> timed out after 10s.</li>
+<li>The request used provider <code>piper</code> and voice <code>en_US-amy-medium.onnx</code>.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>Voice runtime has a stability risk when local TTS is slow, missing, or blocked. A 10s API timeout at the e2e layer means the route did not return a quick success or a controlled fallback/error.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li><code>/api/tts</code> should either complete within the route/test budget or return a controlled error when the selected local voice/provider is unavailable.</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>Related default-provider mismatch fixed after audit under STAB-010. Explicit Piper selections still depend on a local Piper install and should keep returning controlled errors when unavailable.</li>
+</ul>
+<h3 id="stab-010---fresh-installs-defaulted-tts-to-piper-even-though-common-deploy-paths-do-not-install-piper">STAB-010 - Fresh installs defaulted TTS to Piper even though common deploy paths do not install Piper</h3>
+<p>Severity: Medium</p>
+<p>Evidence:</p>
+<ul>
+<li><code>deploy/local-install.sh</code> defaults to <code>--skip-piper</code> and states that Kokoro/Google/OpenAI providers work without Piper.</li>
+<li><code>deploy/docker/compose.yml</code> defaults <code>INCLUDE_PIPER=0</code>.</li>
+<li><code>server/routes/proxy-routes.js</code> fell back to <code>piper</code> when <code>tts_provider</code> was unset for both <code>/api/tts/voices</code> and <code>/api/tts</code>.</li>
+<li><code>src/components/settings/VoiceSettingsTab.jsx</code>, <code>src/utils/voiceResolver.js</code>, and persona/case voice editors also treated an unset provider as Piper.</li>
+<li>Piper has no baked-in voice fallback because its voices are host-dependent <code>.onnx</code> files, so a clean install can resolve to provider <code>piper</code> with no usable voice.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>A newly installed app could present or use Piper as the implicit TTS engine while the deploy path intentionally did not provision the Piper binary or <code>.onnx</code> voices.</li>
+<li>Voice preview/runtime paths could end up with no resolved voice or controlled Piper installation errors before an admin ever chose Piper.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>An unset TTS provider should resolve to a provider available in the default install path. Piper should remain available only when explicitly selected or installed/configured by an admin.</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>Implemented after audit: the server, voice settings UI, shared voice resolver, and persona/case editor fallbacks now default to <code>kokoro</code>. Explicit <code>piper</code> settings still route to Piper.</li>
+</ul>
+<h3 id="stab-011---docker-caddy-deploy-had-invalid-tls-and-tts-subpath-routing-defaults">STAB-011 - Docker Caddy deploy had invalid TLS and TTS subpath routing defaults</h3>
+<p>Severity: High</p>
+<p>Evidence:</p>
+<ul>
+<li><code>deploy/docker/Caddyfile</code> used <code>auto_https {$ROHY_AUTO_HTTPS:on}</code>, but Caddy only accepts specific <code>auto_https</code> values such as <code>off</code>, <code>disable_redirects</code>, <code>disable_certs</code>, or <code>ignore_loaded_certs</code>.</li>
+<li>The compose default is <code>ROHY_TLS_MODE=internal</code>, but <code>tls internal</code> was commented out in the Caddyfile.</li>
+<li>The <code>/rohy/api/tts*</code> block used <code>handle_path</code>, which strips the whole matched path prefix before proxying. That can send <code>/rohy/api/tts/voices</code> to the backend as <code>/voices</code> instead of <code>/api/tts/voices</code>.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>Docker/Caddy deploys can fail at proxy startup or break the whole <code>/api/tts/*</code> route family even when the Node app is healthy.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>The default Docker/Caddy path should start with internal TLS and proxy <code>/rohy/api/tts/*</code> to the backend as <code>/api/tts/*</code>.</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>Implemented after audit: removed the invalid <code>auto_https</code> env interpolation, enabled <code>tls internal</code> for the default internal-TLS deploy, and changed the TTS block to <code>handle /rohy/api/tts*</code> with <code>uri strip_prefix /rohy</code>.</li>
+</ul>
+<h3 id="stab-012---frontend_url-path-leaked-into-production-cors-origin-allowlist">STAB-012 - FRONTEND_URL path leaked into production CORS origin allowlist</h3>
+<p>Severity: High</p>
+<p>Evidence:</p>
+<ul>
+<li><code>FRONTEND_URL</code> is documented and configured as a full app URL such as <code>https://your-deploy-host/rohy</code>.</li>
+<li>Browser <code>Origin</code> headers contain only the origin, for example <code>https://your-deploy-host</code>, never the <code>/rohy</code> path.</li>
+<li><code>server/cors-config.js</code> previously inserted <code>FRONTEND_URL</code> directly into the allowlist, so pathful deploy URLs could reject legitimate browser requests.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>Production browser requests can receive CORS 403s even when they come from the correct host.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>CORS should compare browser <code>Origin</code> against <code>new URL(FRONTEND_URL).origin</code>.</li>
+</ul>
+<p>Status:</p>
+<ul>
+<li>Implemented after audit: <code>buildAllowedOrigins()</code> now normalizes <code>FRONTEND_URL</code> to its origin, with a regression test in <code>tests/server/cors-config.test.js</code>.</li>
+</ul>
+<h3 id="stab-007---full-test-run-has-contention-sensitive-timeouts">STAB-007 - Full test run has contention-sensitive timeouts</h3>
+<p>Severity: Medium</p>
+<p>Evidence:</p>
+<ul>
+<li>The first full <code>npm test</code> run reported timeouts in:<ul>
+<li><code>tests/server/catalogue-0007.test.js</code></li>
+<li><code>tests/server/db-direct-access.test.js</code></li>
+</ul>
+</li>
+<li>Both passed in the isolated rerun.</li>
+<li>The full run was executed concurrently with lint/build during this audit, so local resource contention likely contributed.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>The suite is sensitive to machine load. This can hide real regressions behind timeout noise and make CI/local results hard to compare.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>Long filesystem/DB/static-analysis tests should have enough timeout headroom or run in a less contended project configuration.</li>
+</ul>
+<h3 id="stab-008---build-passes-but-produces-large-chunks">STAB-008 - Build passes but produces large chunks</h3>
+<p>Severity: Low</p>
+<p>Evidence:</p>
+<ul>
+<li><code>npm run build</code> passed.</li>
+<li>Vite warned that chunks exceed 500 kB:<ul>
+<li><code>PatientAvatar-DHo_vLki.js</code>: 964.67 kB raw, 260.49 kB gzip.</li>
+<li><code>index-DK7as_3s.js</code>: 1,303.23 kB raw, 348.16 kB gzip.</li>
+</ul>
+</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>This is not a functional failure, but large bundles raise first-load latency and increase the blast radius of any asset-serving issue.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>Consider lazy-loading heavy 3D/avatar paths so core auth and dashboard screens can load with less JS.</li>
+</ul>
+<h3 id="stab-009---lint-gate-is-too-noisy-to-serve-as-a-stability-signal">STAB-009 - Lint gate is too noisy to serve as a stability signal</h3>
+<p>Severity: Low</p>
+<p>Evidence:</p>
+<ul>
+<li><code>npm run lint</code> failed with 952 errors and 44 warnings.</li>
+<li>Categories included missing Node globals in server/scripts, many unused imports after route splits, React purity/ref warnings, and stale test issues.</li>
+</ul>
+<p>Impact:</p>
+<ul>
+<li>A broken lint gate cannot protect stability. It also makes it easy for new stability-relevant lint findings to be lost in existing noise.</li>
+</ul>
+<p>Expected behavior:</p>
+<ul>
+<li>Either scope lint to files/configurations it can evaluate correctly or fix the backlog until lint can run green.</li>
+</ul>
+<h2 id="positive-stability-signals">Positive Stability Signals</h2>
+<ul>
+<li>The production build itself completes.</li>
+<li>Server startup, migrations, default seeding, and HTTP listener startup completed during Playwright boot.</li>
+<li>API-heavy e2e flows passed for case lifecycle basics: session creation, snapshot storage, vitals persistence, lab ordering, exam-finding idempotency, end-session idempotency, debrief voice payload shape, and clinical notes.</li>
+<li>Health/readiness endpoints are present and separate cheap liveness from DB-backed readiness.</li>
+<li>Graceful shutdown handling is implemented for SIGTERM/SIGINT with HTTP listener draining and DB close.</li>
+</ul>
+<h2 id="recommended-fix-order">Recommended Fix Order</h2>
+<ol>
+<li>Rerun browser e2e with the CI build path: <code>npx vite build --base=/ &amp;&amp; rm -rf frontend &amp;&amp; mkdir -p frontend &amp;&amp; cp -r dist/* frontend/</code>, then <code>npm run test:e2e</code>.</li>
+<li>Done: add an asset-aware smoke check so deploy verification catches JS/CSS 404s, not just an <code>index.html</code> 200.</li>
+<li>Fix or justify STAB-003 so the server test gate can pass again.</li>
+<li>Fix STAB-002 cookie refresh/logout instability and the active-session duplicate warning.</li>
+<li>Isolate e2e rate limits under test mode, then rerun RBAC/tenant specs.</li>
+<li>Done: change the unset TTS provider fallback from Piper to Kokoro so default deploy paths do not point at a missing Piper install.</li>
+<li>Done: fix Docker Caddy internal TLS and <code>/rohy/api/tts*</code> routing defaults.</li>
+<li>Done: normalize <code>FRONTEND_URL</code> to origin for production CORS allowlisting.</li>
+<li>Recheck scenario monitor and TTS failures after the browser asset issue and auth test interference are resolved.</li>
+</ol>
+<h2 id="commands-run">Commands Run</h2>
+<pre><code class="language-bash">npm run lint
+npm test
+npm run build
+npx vitest run --project=server tests/server/catalogue-0007.test.js tests/server/db-direct-access.test.js tests/server/sql-injection-guard.test.js
+npm run test:e2e
+</code></pre>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

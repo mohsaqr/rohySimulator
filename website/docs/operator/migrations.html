@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Migrations runbook · Rohy docs</title>
+    <meta name="description" content="How to inspect and apply schema migrations safely, what &quot;additive&quot; vs &quot;destructive&quot; means in practice, and why the migrations/MANIFEST.md contract is load-bearing for your rollb…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Migrations runbook · Rohy docs">
+    <meta property="og:description" content="How to inspect and apply schema migrations safely, what &quot;additive&quot; vs &quot;destructive&quot; means in practice, and why the migrations/MANIFEST.md contract is load-bearing for your rollb…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Operator</span>
+        <h1>Migrations runbook</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#how-migrations-run">How migrations run</a>
+            <a href="#inspect-status">Inspect: status</a>
+            <a href="#dry-run">Dry-run</a>
+            <a href="#additive-vs-destructive">Additive vs destructive</a>
+            <a href="#the-manifest-contract">The MANIFEST contract</a>
+            <a href="#applying-when-destructive-migrations-are-pending">Applying when destructive migrations are pending</a>
+            <a href="#related">Related</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Running Rohy in Production</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="install.html">Install</a>
+                    <a href="deploy.html">Deploy &amp; harden</a>
+                    <a href="updating.html">Update</a>
+                    <a href="update-strategy.html">Update strategy</a>
+                    <a href="backup-restore.html">Backup &amp; restore</a>
+                    <a href="migrations.html" aria-current="page">Migrations runbook</a>
+                    <a href="retention.html">Retention &amp; purges</a>
+                    <a href="observability.html">Observability</a>
+                    <a href="incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>How to inspect and apply schema migrations safely, what &quot;additive&quot; vs
+&quot;destructive&quot; means in practice, and why the <code>migrations/MANIFEST.md</code>
+contract is load-bearing for your rollback story.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Reference</p>
+<p><code>migrate.js</code> invocation and <code>rohy-update</code> flags are single-sourced in
+<a href="../reference/cli/index.html">CLI &amp; ops</a>. <em>Additive migration</em>, <em>destructive
+migration</em> and <em>forward-compatible</em> are defined in the
+<a href="../reference/glossary.html">Glossary</a>.</p>
+</aside>
+<hr>
+<h2 id="how-migrations-run">How migrations run</h2>
+<p>Migrations are versioned SQL files in <code>migrations/</code> (<code>0001_initial.sql</code>,
+<code>0002_...</code>, ...). The runner (<code>server/migrationRunner.js</code>) tracks applied
+versions in the <code>schema_migrations</code> table by <strong>version + checksum</strong>.</p>
+<p>Three things to know:</p>
+<ul>
+<li><strong>Auto-run on boot.</strong> The server applies any pending migration on
+start-up. A normal upgrade requires no manual migrate step: <code>npm run production</code> / <code>systemctl start rohy</code> does it.</li>
+<li><strong>Checksum-pinned.</strong> If a file&#39;s contents change after it was applied,
+the runner aborts with <code>Migration checksum mismatch</code>, catching the
+drift immediately. A migration that has shipped stays as it is; a
+correction goes into a new migration.</li>
+<li><strong>Baseline stamping.</strong> On a DB that already has the core tables but an
+empty <code>schema_migrations</code>, the runner stamps <code>0001</code> as applied instead
+of re-running it, so pre-existing installs are not re-bootstrapped.</li>
+</ul>
+<hr>
+<h2 id="inspect-status">Inspect: status</h2>
+<p>The update tool surfaces pending migrations as part of its read-only
+check:</p>
+<pre><code class="language-bash">sudo rohy-update check
+</code></pre>
+<p>The <code>━━ migrations ━━</code> block lists pending files and classifies them
+from <code>migrations/MANIFEST.md</code> as <strong>additive</strong>, <strong>destructive</strong>, or
+<strong>unknown</strong>.</p>
+<hr>
+<h2 id="dry-run">Dry-run</h2>
+<p>Before any real apply, a dry-run confirms the pending set parses and
+would apply cleanly without touching the DB:</p>
+<pre><code class="language-bash">node scripts/migrate.js --dry-run
+</code></pre>
+<p><code>--dry-run</code> discovers pending migrations, prints what would run (and any
+baseline stamp), and makes zero writes. <code>bin/rohy-update apply</code> runs
+this automatically as step 6, so a dry-run failure aborts the apply
+before the real migration and the DB stays untouched.</p>
+<p>Apply for real (rarely needed by hand; the server does it on boot):</p>
+<pre><code class="language-bash">node scripts/migrate.js
+</code></pre>
+<p><code>ROHY_DB=/path/to/database.sqlite</code> overrides the target DB if it is
+not at the default location.</p>
+<hr>
+<h2 id="additive-vs-destructive">Additive vs destructive</h2>
+<p>The policy in <code>migrations/MANIFEST.md</code> classifies every migration. The
+distinction is about whether the previous release&#39;s code can still run
+against the new schema.</p>
+<p><strong>Additive</strong> (always allowed, marked <code>additive</code>):</p>
+<ul>
+<li><code>CREATE TABLE</code> for a new table</li>
+<li><code>ALTER TABLE ... ADD COLUMN</code> (with a default or NULL allowed)</li>
+<li><code>CREATE INDEX</code> / <code>CREATE UNIQUE INDEX</code> / partial indexes</li>
+<li><code>CREATE TRIGGER</code> that leaves existing read/write semantics unchanged</li>
+<li>Default-value changes that leave existing rows untouched</li>
+<li>A table rebuild that <strong>preserves all column names + types</strong>
+(SQLite&#39;s only way to widen a column / drop NOT NULL): mechanically
+destructive, semantically additive</li>
+</ul>
+<p><strong>Destructive</strong> (forbidden in a single release, marked <code>destructive</code>):</p>
+<ul>
+<li><code>DROP TABLE</code>, <code>DROP COLUMN</code> (or a rebuild that omits a column)</li>
+<li><code>RENAME COLUMN</code> to a different name</li>
+<li>Type narrowing, or removing a CHECK constraint</li>
+<li>Adding a NOT NULL column without a default</li>
+<li>Adding a unique index where duplicates already exist</li>
+<li><code>DELETE</code> / <code>UPDATE</code> that destroys existing user data without a guard
+predicate (e.g. no <code>WHERE NOT EXISTS (SELECT 1 FROM &lt;ref&gt; WHERE ...)</code>)</li>
+</ul>
+<p>A real example from the manifest: <code>0022_voice_surface_collapse.sql</code> was
+reclassified from <code>additive</code> to <code>destructive</code> in the 2026-05-14 audit
+because it does predicate-based <code>DELETE</code>s on user-authored tables
+(<code>platform_settings</code>, <code>cases</code>) without an FK guard. Operators who
+already applied it are unaffected; operators upgrading past it now
+go through the <code>--allow-destructive</code> gate.</p>
+<h3 id="how-a-destructive-change-ships-anyway">How a destructive change ships anyway</h3>
+<p>It is split across <strong>at least three releases</strong>: expand and contract.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Release</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>N</td>
+<td>Add the new column/table/index. Start dual-writing. Reads still hit the old.</td>
+</tr>
+<tr>
+<td>N+1</td>
+<td>Backfill into the new shape. Switch reads to the new. Keep dual-writing.</td>
+</tr>
+<tr>
+<td>N+2</td>
+<td>Stop writing the old. Mark old column deprecated in the manifest.</td>
+</tr>
+<tr>
+<td>N+3 (&gt;= 30 days later)</td>
+<td>Drop the old. Mark the migration <code>destructive</code> here.</td>
+</tr>
+</tbody></table></div>
+<p>At every step the previous release still runs without crashing.
+Rollback is safe up to N+2; past N+3, restoring the destructive change
+requires a pre-N+3 backup
+(see <a href="backup-restore.html">Backup &amp; restore</a>).</p>
+<hr>
+<h2 id="the-manifest-contract">The MANIFEST contract</h2>
+<p><code>migrations/MANIFEST.md</code> is not documentation: it is a policy file
+the update tool reads. Before applying, <code>bin/rohy-update</code>:</p>
+<ol>
+<li>Reads the manifest at the <strong>target</strong> git sha.</li>
+<li>For each pending migration, reads its <code>Type</code> column.</li>
+<li><code>additive</code>: applies after the transactional dry-run.</li>
+<li><code>destructive</code>: refuses unless <code>--allow-destructive</code> is passed <strong>and</strong>
+the migration filename is typed to confirm.</li>
+<li><code>unknown</code> (migration not in the manifest): refuses to apply at
+all. It fails closed.</li>
+</ol>
+<p>Adding a migration therefore also requires adding its manifest row in
+the same commit. A release that ships a migration without a manifest
+row makes <code>rohy-update</code> refuse the whole upgrade with:</p>
+<pre><code class="language-text">one or more migrations not declared in migrations/MANIFEST.md. Refusing to apply.
+</code></pre>
+<p>That is a bug in the release. Do not hand-edit the manifest to work
+around it; wait for a fix release.</p>
+<hr>
+<h2 id="applying-when-destructive-migrations-are-pending">Applying when destructive migrations are pending</h2>
+<p>If <code>check</code> reports destructive migrations:</p>
+<ol>
+<li><p><strong>Read the release notes.</strong> Major bumps often require stepping
+through an intermediate version first: skipping one breaks the
+forward-compat invariant.</p>
+</li>
+<li><p><strong>Take an extra manual snapshot:</strong></p>
+<pre><code class="language-bash">sudo scripts/rohy-backup.sh --label pre-destructive
+</code></pre>
+</li>
+<li><p><strong>Apply with the explicit gate:</strong></p>
+<pre><code class="language-bash">sudo rohy-update apply --allow-destructive
+</code></pre>
+<p>Each destructive migration&#39;s filename must be typed to confirm.</p>
+</li>
+</ol>
+<aside class="callout callout-danger">
+<p class="callout-title">Rollback is not automatic after a destructive apply</p>
+<p>Once a destructive migration has run, old code cannot read the new
+schema, so <code>rohy-update rollback</code> refuses. Recovery is a manual
+<code>restore-backup</code> of the pre-destructive snapshot, which means losing
+anything written since. This is exactly why step 2 above is mandatory.</p>
+</aside>
+<hr>
+<h2 id="related">Related</h2>
+<ul>
+<li><a href="updating.html">Updating</a>: the full upgrade flow and the <code>--allow-destructive</code> gate</li>
+<li><a href="update-strategy.html">Update strategy</a>: why expand-and-contract was chosen</li>
+<li><a href="backup-restore.html">Backup &amp; restore</a>: the snapshot you need before a destructive apply</li>
+<li><a href="incidents.html">Incident playbooks</a>: recovering from a failed migration</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

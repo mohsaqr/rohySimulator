@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stability Handoff - 2026-05-08 · Rohy docs</title>
+    <meta name="description" content="Scope: stability only. This handoff summarizes the audit findings, fixes applied, verification status, and remaining work. Main audit document: docs/audits/stability-audit-2026-…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Stability Handoff - 2026-05-08 · Rohy docs">
+    <meta property="og:description" content="Scope: stability only. This handoff summarizes the audit findings, fixes applied, verification status, and remaining work. Main audit document: docs/audits/stability-audit-2026-…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Audits</span>
+        <h1>Stability Handoff - 2026-05-08</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#current-state">Current State</a>
+            <a href="#changes-made-in-this-handoff-window">Changes Made In This Handoff Window</a>
+            <a href="#verification-completed">Verification Completed</a>
+            <a href="#known-remaining-stability-findings">Known Remaining Stability Findings</a>
+            <a href="#worktree-notes">Worktree Notes</a>
+            <a href="#recommended-next-order">Recommended Next Order</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="index.html">Audits</a>
+                    <a href="stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="stability-handoff-2026-05-08.html" aria-current="page">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Scope: stability only. This handoff summarizes the audit findings, fixes applied, verification status, and remaining work. Main audit document: <code>docs/audits/stability-audit-2026-05-08.md</code>.</p>
+<h2 id="current-state">Current State</h2>
+<ul>
+<li>Production build passes with the documented <code>/rohy/</code> base.</li>
+<li>Deploy smoke coverage was improved to catch frontend asset 404s, not just HTML 200s.</li>
+<li>Fresh/unconfigured TTS now defaults to Kokoro instead of Piper, matching the default deploy paths that do not install Piper.</li>
+<li>Explicit Piper settings still route to Piper and still require a Piper binary plus <code>.onnx</code> voices.</li>
+<li>Relevant Docker/Caddy deploy issues from <code>/Users/mohammedsaqr/Downloads/AGENT-NOTE-SQLITE-V6-UPGRADE-2026-05-08.md</code> were applied: internal TLS default, TTS subpath routing, and CORS origin normalization.</li>
+<li>The sqlite3 v6 Docker base-image item from that note was not applied because this checkout still declares <code>sqlite3: ^5.1.7</code>.</li>
+<li>Relevant low-risk cleanup from <code>/Users/mohammedsaqr/.gemini/tmp/rohysimulator/memory/AGENT-NOTE-VOICE-DEPLOY-2026-05-08.md</code> was applied: frontend voice/avatar demographic slot logic now uses one shared helper.</li>
+<li>Full stability gate is not green yet. Remaining blockers are documented below.</li>
+</ul>
+<h2 id="changes-made-in-this-handoff-window">Changes Made In This Handoff Window</h2>
+<h3 id="asset-aware-deploy-smoke">Asset-aware deploy smoke</h3>
+<p>File changed:</p>
+<ul>
+<li><code>scripts/smoke.sh</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li>Keeps <code>/api/health</code> and <code>/api/ready</code> checks.</li>
+<li>Fetches frontend HTML.</li>
+<li>Extracts the first built JS and CSS asset references from <code>index.html</code>.</li>
+<li>Resolves relative assets against <code>BASE_URL</code>.</li>
+<li>Resolves absolute <code>/...</code> assets against the deploy origin.</li>
+<li>Fails smoke if referenced frontend assets return non-200.</li>
+</ul>
+<p>Why:</p>
+<ul>
+<li>A direct Express run with a <code>/rohy/</code> build can return HTML 200 while JS/CSS 404 and the app is blank.</li>
+<li>The documented nginx/Caddy deploy strips <code>/rohy/</code> before Express, so local/direct test runs must either build with <code>--base=/</code> or use the deploy proxy shape.</li>
+</ul>
+<h3 id="tts-default-provider-stability">TTS default provider stability</h3>
+<p>Files changed:</p>
+<ul>
+<li><code>server/routes/proxy-routes.js</code></li>
+<li><code>src/utils/voiceResolver.js</code></li>
+<li><code>src/components/settings/VoiceSettingsTab.jsx</code></li>
+<li><code>src/components/settings/AgentPersonaEditor.jsx</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.jsx</code></li>
+<li><code>src/utils/voiceResolver.test.js</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.test.jsx</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li>Added server <code>DEFAULT_TTS_PROVIDER = &#39;kokoro&#39;</code>.</li>
+<li><code>/api/tts/voices</code> now uses Kokoro when <code>tts_provider</code> is unset.</li>
+<li><code>/api/tts</code> now uses Kokoro when <code>tts_provider</code> is unset and no request override is provided.</li>
+<li>Client voice resolution now defaults to Kokoro.</li>
+<li>Voice settings and persona/case editor UI now present Kokoro as the default/fallback path ahead of Piper.</li>
+<li>Tests were updated to lock the new contract.</li>
+</ul>
+<p>Why:</p>
+<ul>
+<li><code>deploy/local-install.sh</code> skips Piper by default.</li>
+<li>Docker compose defaults <code>INCLUDE_PIPER=0</code>.</li>
+<li>Piper has no built-in voice fallback because it depends on host-installed <code>.onnx</code> files.</li>
+<li>The previous implicit Piper default could point a fresh install at a missing engine.</li>
+</ul>
+<h3 id="audit-documentation">Audit documentation</h3>
+<p>Files changed:</p>
+<ul>
+<li><code>docs/audits/stability-audit-2026-05-08.md</code></li>
+<li><code>docs/audits/stability-handoff-2026-05-08.md</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li>Added STAB-010 for the Piper default mismatch.</li>
+<li>Added STAB-011 for Docker Caddy TLS and TTS subpath routing.</li>
+<li>Added STAB-012 for <code>FRONTEND_URL</code> CORS origin normalization.</li>
+<li>Marked the smoke-check and TTS default fixes as implemented.</li>
+</ul>
+<h3 id="docker-caddy-deploy-fixes">Docker Caddy deploy fixes</h3>
+<p>Files changed:</p>
+<ul>
+<li><code>deploy/docker/Caddyfile</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li>Removed invalid <code>auto_https {$ROHY_AUTO_HTTPS:on}</code> interpolation.</li>
+<li>Enabled <code>tls internal</code>, matching the compose default <code>ROHY_TLS_MODE=internal</code>.</li>
+<li>Changed <code>/rohy/api/tts*</code> from <code>handle_path</code> to <code>handle</code> plus <code>uri strip_prefix /rohy</code>.</li>
+</ul>
+<p>Why:</p>
+<ul>
+<li>Caddy does not accept <code>on</code> as an <code>auto_https</code> value.</li>
+<li>The default Docker deploy says internal TLS but did not activate Caddy&#39;s internal CA.</li>
+<li><code>handle_path /rohy/api/tts*</code> strips too much path and can route backend TTS calls as <code>/voices</code> instead of <code>/api/tts/voices</code>.</li>
+</ul>
+<p>Skipped from the downloaded note:</p>
+<ul>
+<li><code>deploy/docker/Dockerfile</code> <code>bookworm-slim</code> to <code>trixie-slim</code> was not changed because this checkout still uses <code>sqlite3@5.1.7</code>, not <code>sqlite3@6</code>.</li>
+</ul>
+<h3 id="cors-origin-normalization">CORS origin normalization</h3>
+<p>Files changed:</p>
+<ul>
+<li><code>server/cors-config.js</code></li>
+<li><code>tests/server/cors-config.test.js</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li><code>buildAllowedOrigins()</code> now converts <code>FRONTEND_URL</code> to <code>new URL(FRONTEND_URL).origin</code>.</li>
+<li>Added a regression test for a pathful <code>FRONTEND_URL</code> such as <code>https://rohy.example.com/rohy</code>.</li>
+</ul>
+<p>Why:</p>
+<ul>
+<li>Browser <code>Origin</code> headers do not include path components, but <code>FRONTEND_URL</code> is documented as the full <code>/rohy</code> app URL.</li>
+</ul>
+<h3 id="voiceavatar-demographic-helper">Voice/avatar demographic helper</h3>
+<p>Files changed:</p>
+<ul>
+<li><code>src/utils/demographics.js</code></li>
+<li><code>src/utils/resolveAvatar.js</code></li>
+<li><code>src/utils/voiceResolver.js</code></li>
+<li><code>src/utils/voiceCatalogue.js</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.jsx</code></li>
+<li><code>src/components/chat/ChatInterface.jsx</code></li>
+</ul>
+<p>What changed:</p>
+<ul>
+<li>Added one shared frontend helper for female detection and demographic slot derivation.</li>
+<li>Routed voice resolution, avatar resolution, voice catalogue filtering, the case voice picker, and chat TTS slot selection through that helper.</li>
+</ul>
+<p>Why:</p>
+<ul>
+<li>The voice deploy note flagged duplicated demographic bucketing as a drift risk. The logic was equivalent today, so this is a low-risk consolidation rather than a behavior change.</li>
+</ul>
+<p>Skipped from the voice deploy note:</p>
+<ul>
+<li>Adding a backend endpoint for fallback voices was skipped because it is a larger API contract change.</li>
+<li>Mirroring stale avatar warnings into every editor was skipped because it is UI surface work, not a current stability failure.</li>
+</ul>
+<h2 id="verification-completed">Verification Completed</h2>
+<p>Passed:</p>
+<pre><code class="language-bash">bash -n scripts/smoke.sh
+npx vitest run --project=client src/utils/voiceResolver.test.js src/components/settings/VoiceSettingsTab.test.jsx src/components/settings/AgentPersonaEditor.test.jsx src/components/settings/CaseAvatarVoicePicker.test.jsx
+npx vitest run --project=server tests/server/services/voiceFallbacks.test.js tests/server/audio/provider-smoke.test.js
+npx vitest run --project=server tests/server/cors-config.test.js
+npx vitest run --project=server tests/server/tts-route.test.js
+npx vitest run --project=client src/utils/voiceResolver.test.js src/utils/avatarResolutionMatrix.test.js src/utils/voiceCatalogue.test.js src/components/settings/CaseAvatarVoicePicker.test.jsx src/components/chat/ChatInterface.test.jsx src/components/chat/ChatInterface.behavior.test.jsx
+npm run build
+</code></pre>
+<p>Smoke behavior checked manually:</p>
+<ul>
+<li>Direct Express serving of <code>/rohy/</code> production build failed smoke because JS/CSS assets returned 404.</li>
+<li>Rebuilding with <code>npx vite build --base=/</code> and copying <code>dist/</code> to <code>frontend/</code> made direct Express smoke pass.</li>
+<li>Normal <code>npm run build</code> was rerun afterward to restore the standard <code>/rohy/</code> deploy artifact.</li>
+</ul>
+<p>Build caveat:</p>
+<ul>
+<li><code>npm run build</code> passes but still emits existing large chunk warnings for the main bundle and <code>PatientAvatar</code>.</li>
+</ul>
+<p>Not verified locally:</p>
+<ul>
+<li>Caddyfile syntax/runtime was not validated with <code>caddy validate</code> because <code>caddy</code> is not installed in this environment.</li>
+</ul>
+<h2 id="known-remaining-stability-findings">Known Remaining Stability Findings</h2>
+<h3 id="stab-002---cookie-auth-csrflogout-instability">STAB-002 - Cookie auth CSRF/logout instability</h3>
+<p>Status: open.</p>
+<p>Evidence from audit:</p>
+<ul>
+<li>E2E cookie refresh/logout tests saw 403 <code>&quot;CSRF token missing&quot;</code>.</li>
+<li>Logs also showed <code>active_sessions.token_hash</code> unique constraint warnings on repeated logins.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Reproduce with <code>tests/e2e/cookie-auth.spec.js</code>.</li>
+<li>Inspect refresh/logout CSRF token source and cookie clearing behavior.</li>
+<li>Make repeated login/session writes idempotent or de-duplicate token hashes.</li>
+</ul>
+<h3 id="stab-003---sql-static-guard-failure">STAB-003 - SQL static guard failure</h3>
+<p>Status: open.</p>
+<p>Evidence from audit:</p>
+<ul>
+<li><code>tests/server/sql-injection-guard.test.js</code> fails on <code>server/routes/analytics-routes.js:1603</code>.</li>
+<li>The flagged pattern is <code>where: \</code>WHERE ${clauses.join(&#39; AND &#39;)}`<code>in</code>buildLearningEventWhere()`.</li>
+</ul>
+<p>Important:</p>
+<ul>
+<li><code>server/routes/analytics-routes.js</code> already had uncommitted user changes before this stability work. Do not revert those changes.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Rewrite the helper so the guard can prove the query shape is safe, or add a narrow allowlist only if the interpolated clauses are server-controlled placeholders.</li>
+</ul>
+<h3 id="stab-004---e2e-auth-rate-limit-interference">STAB-004 - E2E auth rate-limit interference</h3>
+<p>Status: open.</p>
+<p>Evidence from audit:</p>
+<ul>
+<li>RBAC/tenant e2e specs failed with 429 auth rate limits.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Under <code>NODE_ENV=test</code>, isolate auth rate-limit buckets or relax limits for Playwright runs.</li>
+<li>Rerun RBAC and tenant specs after the change.</li>
+</ul>
+<h3 id="stab-005---scenario-hr-read-failed-under-invalid-asset-serving-mode">STAB-005 - Scenario HR read failed under invalid asset serving mode</h3>
+<p>Status: needs rerun.</p>
+<p>Evidence from audit:</p>
+<ul>
+<li><code>readHR(page)</code> returned <code>null</code> during a local e2e run that also had frontend asset 404s.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Rerun with the CI build shape:</li>
+</ul>
+<pre><code class="language-bash">npx vite build --base=/
+rm -rf frontend
+mkdir -p frontend
+cp -r dist/* frontend/
+npm run test:e2e
+</code></pre>
+<h3 id="stab-006---explicit-piper-tts-request-timed-out">STAB-006 - Explicit Piper TTS request timed out</h3>
+<p>Status: partially mitigated.</p>
+<p>What changed:</p>
+<ul>
+<li>Unset provider now defaults to Kokoro.</li>
+</ul>
+<p>Still open:</p>
+<ul>
+<li>Explicit Piper requests still depend on local Piper install and voice files.</li>
+<li>E2E path that explicitly sets <code>tts_provider=&#39;piper&#39;</code> should be revisited to ensure missing/slow Piper returns a controlled response inside the test budget.</li>
+</ul>
+<h3 id="stab-007---full-test-run-contention-sensitive-timeouts">STAB-007 - Full test run contention-sensitive timeouts</h3>
+<p>Status: open.</p>
+<p>Evidence:</p>
+<ul>
+<li><code>tests/server/catalogue-0007.test.js</code> and <code>tests/server/db-direct-access.test.js</code> timed out in full run but passed isolated.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Rerun full test without concurrent lint/build.</li>
+<li>If still flaky, increase timeout or split slow DB/static-analysis tests into a less contended project.</li>
+</ul>
+<h3 id="stab-009---lint-gate-too-noisy">STAB-009 - Lint gate too noisy</h3>
+<p>Status: open.</p>
+<p>Evidence:</p>
+<ul>
+<li><code>npm run lint</code> failed with 952 errors and 44 warnings during audit.</li>
+</ul>
+<p>Next step:</p>
+<ul>
+<li>Either scope lint configs correctly for server/scripts/tests or burn down the backlog until lint can protect stability again.</li>
+</ul>
+<h2 id="worktree-notes">Worktree Notes</h2>
+<p>Uncommitted changes that were present before this stability work and should not be reverted:</p>
+<ul>
+<li><code>server/routes/analytics-routes.js</code></li>
+<li><code>src/components/analytics/tna/tnaUtils.js</code></li>
+<li><code>src/components/analytics/tna/tnaUtils.test.js</code></li>
+<li><code>tests/server/analytics-tna.test.js</code></li>
+<li><code>src/components/analytics/tna/tnaREquivalence.test.js</code></li>
+</ul>
+<p>Changes from this stability work:</p>
+<ul>
+<li><code>deploy/docker/Caddyfile</code></li>
+<li><code>scripts/smoke.sh</code></li>
+<li><code>server/cors-config.js</code></li>
+<li><code>server/routes/proxy-routes.js</code></li>
+<li><code>src/components/chat/ChatInterface.jsx</code></li>
+<li><code>src/components/settings/AgentPersonaEditor.jsx</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.jsx</code></li>
+<li><code>src/components/settings/CaseAvatarVoicePicker.test.jsx</code></li>
+<li><code>src/components/settings/VoiceSettingsTab.jsx</code></li>
+<li><code>src/utils/demographics.js</code></li>
+<li><code>src/utils/resolveAvatar.js</code></li>
+<li><code>src/utils/voiceCatalogue.js</code></li>
+<li><code>src/utils/voiceResolver.js</code></li>
+<li><code>src/utils/voiceResolver.test.js</code></li>
+<li><code>tests/server/cors-config.test.js</code></li>
+<li><code>docs/audits/stability-audit-2026-05-08.md</code></li>
+<li><code>docs/audits/stability-handoff-2026-05-08.md</code></li>
+</ul>
+<h2 id="recommended-next-order">Recommended Next Order</h2>
+<ol>
+<li>Fix STAB-003 so server test gate can go green despite the analytics route change.</li>
+<li>Fix STAB-002 cookie refresh/logout and repeated-login session warning.</li>
+<li>Isolate e2e auth rate limits under test mode.</li>
+<li>Rerun browser e2e with <code>--base=/</code> build shape.</li>
+<li>Recheck explicit Piper e2e behavior and decide whether the test should install Piper, skip if missing, or assert a controlled 503.</li>
+</ol>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

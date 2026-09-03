@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voice 2.0: The Voice Owns Its Engine (Plan v1.1) · Rohy docs</title>
+    <meta name="description" content="Status: ✅ IMPLEMENTED (2026-07-10), then AMENDED same day to v1.4 — SOVEREIGN CASE VOICES (owner: &quot;I want the case sound to be reigning supreme&quot;). v1.4 supersedes this document&amp;…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Voice 2.0: The Voice Owns Its Engine (Plan v1.1) · Rohy docs">
+    <meta property="og:description" content="Status: ✅ IMPLEMENTED (2026-07-10), then AMENDED same day to v1.4 — SOVEREIGN CASE VOICES (owner: &quot;I want the case sound to be reigning supreme&quot;). v1.4 supersedes this document&amp;…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Design</span>
+        <h1>Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-the-pivot-what-changes-vs-plan-v3">1. The pivot — what changes vs. Plan v3</a>
+            <a href="#2-design-principle">2. Design principle</a>
+            <a href="#3-why-this-does-not-resurrect-the-saga">3. Why this does not resurrect the saga</a>
+            <a href="#4-behaviour-matrix-the-contract">4. Behaviour matrix (the contract)</a>
+            <a href="#5-server-design">5. Server design</a>
+            <a href="#6-client-design">6. Client design</a>
+            <a href="#7-cross-cutting">7. Cross-cutting</a>
+            <a href="#8-risks-v339s-r1r7-still-apply-to-the-fallback-tier">8. Risks (v3&amp;#39;s R1–R7 still apply to the fallback tier)</a>
+            <a href="#9-acceptance-criteria">9. Acceptance criteria</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="index.html">Design</a>
+                    <a href="plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="voice-2.0-plan.html" aria-current="page">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><strong>Status:</strong> ✅ IMPLEMENTED (2026-07-10), then AMENDED same day to <strong>v1.4 —
+SOVEREIGN CASE VOICES</strong> (owner: &quot;I want the case sound to be reigning
+supreme&quot;). v1.4 supersedes this document&#39;s fallback/substitution sections:</p>
+<ul>
+<li><strong>A configured voice is LITERAL.</strong> If a case or persona names a voice, it
+plays on its own derived engine or the request fails with an honest error
+— no template stand-in, no default stand-in, no runtime retry onto
+another voice. The X-Rohy-Voice-* substitution headers and the server
+fallback tier described below were implemented and then REMOVED by v1.4.</li>
+<li><strong>Per-language defaults (<code>tts_default_voice_&lt;lang&gt;</code>) serve ONLY speakers
+with no voice configured at all</strong> (client resolver tier &#39;default&#39;,
+announced via toast/editor note). Never cross-language, as before.</li>
+<li><strong>Rate/pitch freeze at authoring time:</strong> picking a case voice pins the
+current platform rate/pitch into the case config, so later platform
+slider changes never alter an authored case.</li>
+<li><strong>Engine-off impact modal:</strong> disabling an engine in Settings → Voice
+first shows the blast radius (GET /api/tts/voice-usage — every
+case/persona voiced on that engine, by name) with Disable-anyway/Cancel,
+because those voices will FAIL, not substitute.</li>
+<li>Cases also gained their own dialogue language (config.case_language →
+useCaseLanguageSync), which selects the default-voice row for
+unconfigured speakers and drives the LLM/STT language.</li>
+</ul>
+<p>See CHANGES.md (2026-07-10 entries) for the file-by-file record. Original
+proposal text below, kept as design rationale — read it with the v1.4
+amendments above in mind.</p>
+<p>Supersedes <code>docs/design/audio-improvements.md</code> (Plan v3) as the primary design. Carries v3&#39;s
+truth clause and instrumentation forward; replaces v3&#39;s core routing rule
+AND (v1.1) v3&#39;s settings model.</p>
+<ul>
+<li><strong>Codex adversarial audit (2026-07-09):</strong> nominal &quot;reject&quot;, all findings
+folded in as <strong>[v1.2]</strong>: complete <code>tts_provider</code> reader/writer table
+(§5.4 — High 1+2: server.js:274 boot seed, admin GET/PUT, five client
+hydration sites); disjointness contract lands as the first stage-1
+commit (Medium 2). Audit POSITIVELY cleared: <code>if_sara</code> ships in the
+installed kokoro-js (<code>node_modules/kokoro-js/voices/if_sara.bin</code>), and
+no <code>window.speechSynthesis</code> consumer exists — the <code>browser</code> provider is
+confirmed vestigial.</li>
+<li><strong>[v1.3] Owner clarification (2026-07-09):</strong> the app is UNSHIPPED — no
+old clients exist, deployments update wholesale. All cross-version
+compatibility shims removed (the v1.2 stage-3 deferral of the key
+retirement, the served compatibility field, the R11 rollout windows);
+stages are PR ordering inside one release. The non-breaking obligation
+concentrates on the DB: idempotent migration + seeding, stored
+<code>case_voice</code> values keep working, zero manual steps on update (§5.4).
+<strong>Date:</strong> 2026-07-09 (v1.1 — four owner directives; v1.2 — Codex audit
+fixes; v1.3 — unshipped-app simplification)
+<strong>Owner directives, in the owner&#39;s words:</strong></li>
+</ul>
+<ol>
+<li><em>&quot;If the case has local models, and they are installed, why would they
+fail? They are free. And if one has Google configured, why can&#39;t they
+just choose it?&quot;</em> → provider-follows-voice routing (§4, §5.3).</li>
+<li><em>&quot;Why do we have platform voice?&quot;</em> → the platform engine setting
+(<code>tts_provider</code>) is <strong>retired entirely</strong> — no default-engine concept
+survives (§5.4).</li>
+<li><em>&quot;I want defaults of kokoro, if paid ones fail&quot;</em> + <em>&quot;Configured voice
+providers, not a dropdown list&quot;</em> → platform default voice(s) seeded
+from free local engines (Kokoro first), used whenever a paid engine
+fails — including at runtime, mid-class (§5.5); Settings → Voice shows
+providers as a configured-status list with on/off toggles, no selector
+(§6.4).</li>
+<li><em>&quot;I am worried about the fail of paid ones, what if it is german?&quot;</em> →
+the default is <strong>per-language</strong> and substitution <strong>never crosses a
+language boundary</strong>. Kokoro has no German/Finnish/Swedish; an English
+voice reading German text is garbled audio, worse than an honest error.
+A German case falls back to a German default voice (local Piper
+recommended) or fails loudly — never to <code>af_bella</code> (§5.5).</li>
+</ol>
+<hr>
+<span class="anchor-alias" id="1-the-pivot--what-changes-vs-plan-v3"></span><h2 id="1-the-pivot-what-changes-vs-plan-v3">1. The pivot — what changes vs. Plan v3</h2>
+<p>Plan v3 (<code>docs/design/audio-improvements.md</code>) kept the May-2026 rule — one platform-wide
+engine, everything else invalid — and softened its failure mode with four
+per-provider default voices. Voice 2.0 rejects the premise:</p>
+<ul>
+<li>A Kokoro voice on an installed Kokoro is <strong>free and playable</strong>. Refusing
+to play <code>af_bella</code> because a dropdown says &quot;google&quot; is an artificial
+failure.</li>
+<li>A Google voice on a keyed deployment is <strong>deliberately chosen and
+payable</strong>. Forcing the whole platform onto Google to let one persona use
+a Chirp voice is an artificial restriction.</li>
+</ul>
+<p><strong>Voice 2.0 rule: a voice plays on its own engine whenever that engine is
+usable. There is no platform engine. There is one platform default voice —
+a free local one — that plays whenever anything else can&#39;t.</strong></p>
+<p>v1.1 note: v1 of this plan kept <code>tts_provider</code> as a demoted &quot;default
+engine&quot; selecting among four per-provider default voices. The owner&#39;s
+&quot;why do we have platform voice?&quot; exposed that as re-importing the concept
+2.0 deletes. v1.1 replaces <code>tts_provider</code> + four per-<strong>provider</strong> defaults
+with per-<strong>language</strong> defaults (<code>tts_default_voice_&lt;lang&gt;</code>, one per
+registry language) — keyed by what the case actually needs (its language),
+not by a dead engine concept. §4 of v3 records
+the owner <em>rejecting</em> provider-follows-voice; that rejection was reversed
+by the owner on 2026-07-09 (&quot;I want voice 2.0&quot;). This plan answers the
+objections behind the original rejection head-on — §3.</p>
+<h2 id="2-design-principle">2. Design principle</h2>
+<blockquote>
+<p><strong>The voice owns its engine; the platform owns the wallet and the
+safety net.</strong></p>
+</blockquote>
+<ul>
+<li><strong>Routing</strong> is derived from the voice id itself, by exact catalogue
+membership — never stored, never regex-in-production, never stale.</li>
+<li><strong>Policy</strong> (cost control) is explicit: per-provider enable toggles.
+Local engines are free; cloud engines are badged and can be switched
+off platform-wide with one click.</li>
+<li><strong>Safety net:</strong> one platform default voice <strong>per registry language</strong>,
+seeded from free local engines where one exists (Kokoro <code>af_bella</code> for
+en, <code>if_sara</code> for it), plays whenever the configured voice can&#39;t —
+including when a paid API fails mid-session. Substitution never crosses
+a language boundary: a language with no configured default fails loudly
+rather than playing garbled cross-language audio.</li>
+<li><strong>Truth clause</strong> (unchanged from v3): any surface that shows a voice
+shows the engine it will play on, and any substitution is visible
+everywhere — headers, toast, editor labels, DiagnosticBar, boot audit.</li>
+</ul>
+<h2 id="3-why-this-does-not-resurrect-the-saga">3. Why this does not resurrect the saga</h2>
+<p>The 2026-05 collapse (migration <code>0022_voice_surface_collapse.sql</code>, resolver
+header) blamed &quot;too many places a voice/provider could be set&quot;. Autopsy of
+the actual root causes, and how Voice 2.0 addresses each:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Saga root cause</th>
+<th>Voice 2.0 answer</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Per-case/persona <code>tts_provider</code> <strong>stored separately</strong> from the voice id → the two went stale independently; old merge logic leaked dead engines</td>
+<td><strong>No provider is stored anywhere, ever</strong> — not per-case, not per-persona, and now not even at platform level. The engine is <em>derived</em> from the voice id at synthesis time by exact catalogue lookup. A value derived from the id cannot disagree with the id. Migration 0022&#39;s field-stripping stays in force.</td>
+</tr>
+<tr>
+<td><strong>Silent substitution</strong> — UI showed voice X, runtime played fallback Y, nothing admitted it</td>
+<td>The runtime plays <strong>exactly what the UI shows</strong> in every healthy state. The unhealthy state (engine unusable or paid API down) uses v3&#39;s fully-instrumented substitution: <code>X-Rohy-Voice-Substituted</code> / <code>X-Rohy-Voice-Requested</code> headers, one-time toast, amber editor labels, requested→played in DiagnosticBar, boot audit.</td>
+</tr>
+<tr>
+<td><strong>Regex as load-bearing router</strong> (v1-audit objection to auto-routing)</td>
+<td>The router is <strong>exact catalogue membership</strong> — the same per-provider validators <code>/api/tts</code> already uses for rejection (<code>resolveTtsVoice</code>, proxy-routes.js:1000). The id-shape regexes in <code>voiceResolver.js</code> remain a client-side pre-flight <em>hint</em> only. A CI contract asserts the catalogues are pairwise disjoint (§7.4).</td>
+</tr>
+<tr>
+<td><strong>Cost leak</strong> — a case bills Google while the admin believes the platform is free</td>
+<td>Made explicit instead of impossible: per-provider <strong>enable toggles</strong> (§5.2); pickers badge every voice <code>free · local</code> / <code>paid · API</code>; per-provider usage rollups already exist (<code>tts_usage</code>, cost table at proxy-routes.js:972). No key ⇒ engine unusable ⇒ Google voices can&#39;t be picked or played.</td>
+</tr>
+<tr>
+<td><strong>Multiple disagreeing validators</strong></td>
+<td>One derivation function on the server (§5.1), reused by <code>/api/tts</code>, <code>/tts/voices</code>, the boot audit, and the settings PUT. The client consumes its <em>output</em> via the settings payload.</td>
+</tr>
+<tr>
+<td><strong>&quot;I changed it and nothing happened&quot;</strong> could recur as: admin flips the engine dropdown, nothing audibly changes (because voices keep their own engines)</td>
+<td><strong>There is no engine dropdown to flip.</strong> The setting that invited the stale mental model is gone (§5.4). The only voice-wide knob is &quot;Default voice&quot;, whose copy says exactly when it plays.</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-behaviour-matrix-the-contract">4. Behaviour matrix (the contract)</h2>
+<p>&quot;Usable&quot; = installed/keyed AND enabled (§5.2). &quot;Default voice&quot; = the
+<strong>language-matched</strong> <code>tts_default_voice_&lt;lang&gt;</code> (§5.5): the language is
+derived from the requested voice id (or the body <code>language</code> field when the
+voice&#39;s language is underivable), and substitution never crosses it.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>af_bella</code> (kokoro) stored, kokoro installed</td>
+<td><strong>Plays on Kokoro.</strong> No toast, no substitution. The owner&#39;s headline case.</td>
+</tr>
+<tr>
+<td><code>en-US-Chirp3-HD-Aoede</code> (google) stored, google keyed+enabled</td>
+<td><strong>Plays on Google.</strong> Usage/cost recorded under google. Other personas in the same session keep their Kokoro voices.</td>
+</tr>
+<tr>
+<td>google voice stored, google key removed or google disabled</td>
+<td>Language-matched default plays; full visibility (headers, toast, amber label, boot audit).</td>
+</tr>
+<tr>
+<td>en google/openai voice, engine usable, <strong>API fails at request time</strong> (quota, network, 5xx)</td>
+<td><strong>Runtime fallback: en default (<code>af_bella</code>) plays</strong> — same visibility chain, <code>substitutionReason:&#39;provider_error&#39;</code>. The class never stops. (§5.3 step 4.)</td>
+</tr>
+<tr>
+<td><strong><code>de-DE-…</code> google voice, google fails</strong> (the owner&#39;s German worry)</td>
+<td>de default plays (e.g. installed Piper <code>de_DE-thorsten</code>) with full visibility. <strong>Never <code>af_bella</code></strong> — an English voice reading German text is garbled audio, not a fallback.</td>
+</tr>
+<tr>
+<td><code>de-DE-…</code> google voice fails, NO de default configured</td>
+<td>Loud fail with an honest, language-aware message: &quot;Google TTS failed and no German default voice is configured — install a Piper German voice or set one in Settings → Voice.&quot; Mute-with-truth beats nonsense audio.</td>
+</tr>
+<tr>
+<td>kokoro voice stored, kokoro not installed / failed to load</td>
+<td>Language-matched default plays (if playable on this box — §5.5 caveat) else today&#39;s loud fail.</td>
+</tr>
+<tr>
+<td>voice in no catalogue (typo, removed voice)</td>
+<td>Language from body <code>language</code> field → that default + visibility; none configured → loud 400 with <code>reason</code>.</td>
+</tr>
+<tr>
+<td>nothing configured on persona/case</td>
+<td>Case-language default, <code>substitutionReason:&#39;not_configured&#39;</code> (fixes v3&#39;s P4).</td>
+</tr>
+<tr>
+<td>any voice via <code>/tts/preview</code></td>
+<td>Literal voice or error — preview never substitutes, never falls back. An admin auditioning a voice must hear THAT voice.</td>
+</tr>
+</tbody></table></div>
+<h2 id="5-server-design">5. Server design</h2>
+<span class="anchor-alias" id="51-engine-derivation--one-function-exact-membership"></span><h3 id="51-engine-derivation-one-function-exact-membership">5.1 Engine derivation — one function, exact membership</h3>
+<p>New <code>deriveVoiceProvider(voiceId)</code> in the TTS route layer (beside
+<code>resolveTtsVoice</code>): checks the id against each provider&#39;s exact catalogue —
+kokoro voice list, google list, openai list, piper installed <code>.onnx</code> files.
+Returns <code>{ provider }</code> or <code>{ provider: null }</code> (unknown id).</p>
+<ul>
+<li><strong>Disjointness is a tested invariant</strong>, not an assumption: kokoro
+<code>[abf][bfm]_name</code>, google <code>xx-XX-…</code>, openai closed lowercase list, piper
+<code>*.onnx</code>. CI contract in §7.4. (A hypothetical <code>af_bella.onnx</code> piper file
+stays disjoint from kokoro&#39;s <code>af_bella</code> — the suffix is part of the id.)</li>
+<li><strong>Tolerant on catalogue-check errors</strong> (same stance as v3 §7.1.1): if a
+catalogue can&#39;t be checked (kokoro dynamic import fails on a box without
+it), that provider is unusable anyway — derivation falls through to the
+fallback tier, with the id-shape regex used only to <em>name</em> the likely
+provider in the log/toast message.</li>
+<li>Ordering: local catalogues first (cheap, no network); order is irrelevant
+for correctness given disjointness.</li>
+</ul>
+<span class="anchor-alias" id="52-provider-usability--policy"></span><h3 id="52-provider-usability-policy">5.2 Provider usability + policy</h3>
+<p>Two orthogonal facts per provider, both surfaced to the client:</p>
+<ol>
+<li><strong>Capability</strong> (probed, not stored):<ul>
+<li>kokoro — model loads (<code>loadKokoro()</code> succeeds, not <code>KOKORO_DISABLED</code>);
+probe result cached process-lifetime (R10)</li>
+<li>piper — <code>PIPER_BIN</code> exists and ≥1 <code>.onnx</code> installed</li>
+<li>google — key present (<code>platform_settings.google_tts_api_key</code> or env
+<code>GOOGLE_TTS_API_KEY</code>; the <code>*_key_set</code> booleans already exist,
+admin-routes.js:1486)</li>
+<li>openai — key present (env <code>OPENAI_API_KEY</code>, <code>openai_tts_api_key</code>, or
+platform LLM key when the LLM is OpenAI — openaiTts.js:51)</li>
+</ul>
+</li>
+<li><strong>Policy</strong> (stored): new keys <code>tts_provider_enabled_&lt;p&gt;</code> for
+<code>kokoro|google|openai|piper</code>, flat scalars. <strong>Seed: enabled (<code>1</code>)</strong> —
+capability already gates cloud engines (no key ⇒ unusable), so the
+toggle&#39;s job is the deliberate &quot;we&#39;re keyed for LLM work but voice must
+stay free&quot; case. Global scope (v3&#39;s tenant declaration stands).</li>
+</ol>
+<p>GET <code>/platform-settings/voice</code> gains
+<code>providers: [{ id, capable, enabled, usable, reason }]</code> (usable = capable ∧
+enabled; <code>reason</code> human-readable: &quot;no API key&quot;, &quot;model failed to load&quot;,
+&quot;disabled in settings&quot;). This one payload drives pickers, resolver
+validity, and editor labels — the client never re-probes.</p>
+<h3 id="53-apitts-routing-the-core-change">5.3 <code>/api/tts</code> routing (the core change)</h3>
+<p>In <code>handleTtsSynthesis</code> (proxy-routes.js:1125), main route:</p>
+<ol>
+<li><code>deriveVoiceProvider(requestedVoice)</code> → provider found and usable →
+validate via existing <code>resolveTtsVoice</code>, synthesize <strong>on that engine</strong>.
+Existing synthesis branches are already parameterized by provider — the
+change is <em>which</em> provider is selected, not how synthesis works.</li>
+<li>Provider missing/unusable → <strong>fallback tier:</strong> resolve the request&#39;s
+language — <code>voiceLanguage(requestedVoice)</code> (ported to
+<code>server/shared/</code> beside the language registry; it already derives
+<code>de</code> from <code>de-DE-…</code>, etc.), with the new optional body field
+<code>language</code> as the tiebreak when the voice&#39;s language is underivable
+(openai multilingual voices, unknown ids; clients already know the
+case language and start sending it in stage 2; absent ⇒ <code>en</code>). Then
+play <code>tts_default_voice_&lt;lang&gt;</code>, itself routed by derivation (it&#39;s
+just a voice). <strong>Never substitute across languages.</strong> Substitution
+headers <code>X-Rohy-Voice-Substituted</code> / <code>X-Rohy-Voice-Requested</code> set
+<strong>before any provider branch</strong> (v3 §7.1.3/R6); warn log; usage
+recorded for what actually played.</li>
+<li>No default configured for that language, or the default itself
+unplayable → today&#39;s loud 400, body gains <code>reason: &#39;no_default_for_language&#39; | &#39;default_unplayable&#39;</code> plus the language,
+so the client toast can say exactly what to fix.</li>
+<li><strong>Runtime fallback (new in v1.1, owner directive):</strong> when the chosen
+engine is a <strong>paid API</strong> (google/openai) and synthesis fails at request
+time, retry once with the <strong>language-matched</strong> default voice (same
+lookup as step 2) instead of erroring:<ul>
+<li><strong>WAV path:</strong> the error is caught before any bytes are written (both
+catch blocks already check <code>res.headersSent</code>) — substitute and
+synthesize the default voice, headers + <code>provider_error</code> reason.</li>
+<li><strong>Streaming path:</strong> currently <code>pipePcmStream</code> flushes headers before
+the first upstream chunk exists, so a failure can&#39;t change course.
+Fix: <strong>first-chunk pre-flight</strong> — pull the first item from the
+provider&#39;s async iterator BEFORE flushing headers; on throw, swap to
+the default voice&#39;s stream. After the first chunk is flushed, a
+mid-stream failure ends the stream as today (can&#39;t unsay audio).</li>
+<li>Retry is <strong>once, to the default voice only</strong> — no provider-hopping
+chains. If the default also fails, the existing error path stands.</li>
+<li>The optimistic usage row for the failed paid call stays (Google/OpenAI
+bill on submission — comment at proxy-routes.js:1198); the fallback
+synthesis records its own $0 row.</li>
+</ul>
+</li>
+<li>Body <code>provider</code> stays ignored on the main route: the server derives the
+engine; the client cannot force one. <code>/tts/preview</code> keeps its explicit
+admin-only override (proxy-routes.js:1121) and is exempt from ALL
+fallback (§4 last row).</li>
+</ol>
+<span class="anchor-alias" id="54-tts_provider-is-retired--complete-site-checklist"></span><h3 id="54-tts_provider-is-retired-complete-site-checklist">5.4 <code>tts_provider</code> is retired — complete site checklist</h3>
+<p>No default-engine concept survives. <strong>[v1.3] Owner clarification: the app
+has not shipped — there are no old clients in the wild, and deployments
+update server+client wholesale.</strong> So no cross-version compatibility shims
+are needed; the three stages (§7.2) are PR ordering inside ONE release
+that lands together before any deploy. What the Codex audit&#39;s blast-radius
+list (High 1+2) remains as is a <strong>completeness checklist</strong> — every one of
+these sites must be migrated or the release ships dead code / broken
+hydration:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Site</th>
+<th>Role</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>proxy-routes.js:1145</code> (main route provider resolution)</td>
+<td>routing</td>
+<td>replaced by derivation</td>
+</tr>
+<tr>
+<td><code>proxy-routes.js:897</code> (<code>/tts/voices</code> no-arg fallback)</td>
+<td>catalogue listing</td>
+<td>replaced by all-providers response</td>
+</tr>
+<tr>
+<td><code>healthChecks/voiceCatalogueAudit.js:97</code></td>
+<td>audit&#39;s &quot;active provider&quot;</td>
+<td>becomes per-voice derivation</td>
+</tr>
+<tr>
+<td><code>server.js:274</code> (boot seeding of the key)</td>
+<td>seeding</td>
+<td>removed; seeder now seeds <code>tts_default_voice_&lt;lang&gt;</code> + <code>tts_provider_enabled_&lt;p&gt;</code> instead</td>
+</tr>
+<tr>
+<td><code>admin-routes.js:1462/:1534</code> (voice settings GET/PUT)</td>
+<td>settings contract</td>
+<td>key dropped from both; new keys added</td>
+</tr>
+<tr>
+<td>Client readers: <code>VoiceSettingsTab.jsx:63/121/177</code>, <code>AgentPersonaEditor.jsx:157/573/665</code>, <code>CaseAvatarVoicePicker.jsx:115</code>, <code>ChatInterface.jsx:1022</code>, <code>DiagnosticBar.jsx:362</code></td>
+<td>UI hydration</td>
+<td>rewritten to providers payload + derivation</td>
+</tr>
+</tbody></table></div>
+<p><strong>Non-breaking guarantee (owner directive):</strong> existing <em>databases</em> are the
+one deployed surface. The migration + boot seeder must be idempotent on
+any current instance: stored <code>case_voice</code> values keep playing (better than
+before — that&#39;s the feature), legacy settings rows are carried
+over/retired automatically, and a DB from before this change boots into a
+fully working state with zero manual steps. <code>tts_rate</code> / <code>tts_pitch</code> are
+independent keys and stay. UI: no engine dropdown anywhere (owner
+directive — §6.4).</p>
+<p>The <code>browser</code> entry in <code>VOICE_TTS_PROVIDERS</code> appears vestigial: no
+<code>window.speechSynthesis</code> call exists anywhere in <code>src/</code> (only
+SpeechRecognition, for STT). Stage-1 checklist item: confirm by grep +
+manual check, then drop <code>browser</code> from the provider list. If a real
+consumer surfaces, it stays out of scope and unchanged.</p>
+<h3 id="55-per-language-default-voices">5.5 Per-language default voices</h3>
+<p>One key per registry language: <strong><code>tts_default_voice_&lt;lang&gt;</code></strong> for every
+language in <code>server/shared/languages.js</code> (today en/de/it/fi/sv), owned by
+<code>/platform-settings/voice</code>. Rationale (owner&#39;s German worry): the fallback
+must speak the case&#39;s language or not speak at all — Kokoro has NO
+de/fi/sv, so a language-blind <code>af_bella</code> fallback would read German text
+as English-shaped noise. Keys follow the registry: adding a language later
+adds a row automatically, unseeded.</p>
+<ul>
+<li><p><strong>Seeds — only what a free local engine can actually SYNTHESIZE:</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Seed</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>en</td>
+<td><code>af_bella</code> (kokoro)</td>
+<td>owner-directed; free, local</td>
+</tr>
+<tr>
+<td>it, de, fi, sv</td>
+<td><em>(none)</em></td>
+<td><strong>[implementation correction]</strong> kokoro-js&#39;s runtime voice map is English-only (28 a/b-prefix voices) — the Italian <code>if_sara.bin</code> ships in the package but the model does NOT expose it, so the planned it seed was dropped (verified against a live model load, 2026-07-10). Can&#39;t assume Piper files either. Boot audit + settings row warn loudly (below); recommended fix is installing the Piper voice (<code>it_IT-riccardo</code>, <code>de_DE-thorsten</code>, <code>fi_FI-harri</code>, <code>sv_SE-nst</code> are the standard free ones) and picking it.</td>
+</tr>
+</tbody></table></div>
+<p>Seeding is INSERT-if-absent in the idempotent boot seeder (v3 §6.5
+home); never overwrites an admin&#39;s value. No computed &quot;first installed
+voice&quot; magic — stored values are always literal and inspectable.</p>
+</li>
+<li><p><strong>Unseeded-language visibility:</strong> for every registry language with no
+playable default, the boot audit emits <code>no_default_for_language</code>
+(&quot;German cases have no fallback — a Google outage mutes them; install a
+Piper de_DE voice or set a default in Settings → Voice&quot;) and the
+settings row shows the same warning inline with the installed-Piper
+suggestion when one is detected. Loud and actionable, never silent.</p>
+</li>
+<li><p><strong>Carry-over:</strong> if legacy <code>default_voice_kokoro_female</code> /
+<code>default_voice_kokoro_male</code> rows exist (live keys per v3 §6): exactly
+one set, or both equal → carry into <code>tts_default_voice_en</code> instead of
+the seed; both set and different → seed + <code>tts_default_conflict</code>
+boot-audit warning (v3&#39;s rule; only the en seed can inherit a kokoro
+legacy value).</p>
+</li>
+<li><p><strong>Migration SQL</strong> (one file, ships with STAGE 3 per §5.4): DELETE legacy
+<code>default_voice_&lt;provider&gt;_&lt;gender&gt;</code> rows, DELETE <code>tts_provider</code>, and
+remove <code>PERSONA_DEFAULT_VOICE_KEYS</code> from the avatars endpoints
+(admin-routes.js:1439/:1636/:1685) — v3 §6 retirement, unchanged in
+spirit. Registered in <code>migrations/MANIFEST.md</code>. (Carry-over/seeding of
+the new keys is stage-1 boot-seeder logic and does not wait for this.)</p>
+</li>
+<li><p><strong>PUT validation:</strong> each default must be in SOME usable provider&#39;s
+catalogue AND speak its row&#39;s language (<code>voiceMatchesLanguage</code>; a
+definite mismatch rejects, <code>null</code>/unknown passes — same tolerance
+stance as v3 §7.1.1: &quot;not found&quot; rejects, &quot;couldn&#39;t check&quot; warns).
+Clearing (empty string) is allowed and restores loud-fail for that
+language. The settings UI nudges toward <strong>local</strong> voices: picking a
+paid voice as a safety net shows an inline hint (&quot;a local voice makes
+the fallback immune to API outages&quot;) but is not blocked.</p>
+</li>
+<li><p><strong>Caveat (R13):</strong> on a box without Kokoro, even the seeded en default is
+unplayable — boot audit flags it (<code>default_unplayable</code>) and the settings
+row warns; behaviour is today&#39;s loud fail until the admin picks a
+playable default.</p>
+</li>
+<li><p><strong>Boot audit</strong> (v3 §7.1.5 adapted): audits every default against its own
+derived engine&#39;s catalogue, capability, and language match;
+stale-<code>case_voice</code> warnings say &quot;will play default &quot;&lt;X&gt;&quot; until
+re-picked&quot; when a playable language-matched default exists, else &quot;has NO
+fallback (no &lt;lang&gt; default)&quot;.</p>
+</li>
+</ul>
+<span class="anchor-alias" id="56-ttsvoices--the-multi-engine-catalogue"></span><h3 id="56-ttsvoices-the-multi-engine-catalogue">5.6 <code>/tts/voices</code> — the multi-engine catalogue</h3>
+<p>Today it returns one provider&#39;s list (<code>?provider=</code> or platform setting,
+proxy-routes.js:897). Change: <strong>default response becomes all providers</strong> —
+<code>{ providers: [{ id, usable, reason, voices: [...] }] }</code>, unusable ones
+included with empty <code>voices</code> and their <code>reason</code> so pickers render a
+disabled group instead of a mystery absence. The single-provider
+<code>?provider=</code> form stays for the settings tab&#39;s per-provider needs. (The
+no-arg form&#39;s platform-setting fallback dies with <code>tts_provider</code>; grep for
+consumers is a stage-1 checklist item.)</p>
+<h2 id="6-client-design">6. Client design</h2>
+<span class="anchor-alias" id="61-resolvevoice--validity-becomes-playable-on-any-usable-engine"></span><h3 id="61-resolvevoice-validity-becomes-playable-on-any-usable-engine">6.1 <code>resolveVoice()</code> — validity becomes &quot;playable on any usable engine&quot;</h3>
+<p>Same richer return shape as v3 §7.2.1 (<code>requestedFile</code>, <code>file</code>,
+<code>substituted</code>, <code>substitutionReason</code>, <code>tier</code>), same template-tier fix for P3
+(case invalid → template considered — validation inside the resolver, not
+pre-merged at callsites). Changes vs v3:</p>
+<ul>
+<li><code>provider</code> in the result = the <strong>derived</strong> engine of the resolved voice
+(from the settings payload&#39;s catalogue data), not a platform setting.
+Callers send voice-only payloads to <code>/api/tts</code> as today; the field is
+for display truth.</li>
+<li>Validity = &quot;belongs to a usable provider&quot; (usability from
+<code>voiceSettings.providers</code>, §5.2). <code>isVoiceValidForProvider</code> regexes stay
+as offline fallback pre-settings-load; the v3 §7.2.4 await-settings race
+fix applies verbatim.</li>
+<li>New tier: <code>tier:&#39;default&#39;</code> resolves to the <strong>case-language</strong> default
+(<code>tts_default_voice_&lt;lang&gt;</code> from the settings payload; the resolver
+gains a <code>language</code> input — callers already know the case language from
+the existing mismatch-warning work). No language-matched default →
+<code>tier:&#39;invalid&#39;</code> loud path with a language-aware message.</li>
+<li>Voice-mode sends add <code>language</code> to the <code>/api/tts</code> body (§5.3 step 2&#39;s
+tiebreak for multilingual/unknown voice ids).</li>
+<li><code>substitutionReason</code> gains <code>&#39;provider_error&#39;</code> — set client-side only from
+the wire capture (the server decides runtime fallback; the client learns
+it from the response headers, §6.3).</li>
+</ul>
+<p>Consumers (six + checklist grep): <code>ChatInterface.jsx</code>,
+<code>useDiscussionEngine.js</code>, <code>DiagnosticBar.jsx</code>, <code>CaseAvatarVoicePicker.jsx</code>,
+<code>AgentPersonaEditor.jsx</code>, test matrices.</p>
+<span class="anchor-alias" id="62-pickers--the-just-choose-it-experience"></span><h3 id="62-pickers-the-just-choose-it-experience">6.2 Pickers — the &quot;just choose it&quot; experience</h3>
+<p><code>CaseAvatarVoicePicker</code> and <code>AgentPersonaEditor</code> consume the all-providers
+<code>/tts/voices</code> response:</p>
+<ul>
+<li>Voices grouped <strong>Provider → Language</strong>, engine badges: <code>Kokoro · free, on this server</code>, <code>Google · paid API</code>, etc.</li>
+<li>Unusable providers render as a disabled group with the <code>reason</code> line
+(&quot;Google — add an API key in Settings → Voice to enable&quot;) —
+discoverable, not hidden.</li>
+<li>Picking a voice from any usable engine is a complete, valid choice. No
+platform change needed, no mute risk.</li>
+<li>The v3 amber substitution label appears only when the <em>saved</em> value&#39;s
+engine is currently unusable: &quot;«en-US-Chirp3-HD-Aoede» can&#39;t play here
+(no Google API key) — the default voice «af_bella» will play.&quot;</li>
+<li>TestVoiceButton per row uses <code>/tts/preview</code> with the voice&#39;s derived
+provider — auditioning a Google voice works regardless of what other
+personas use.</li>
+</ul>
+<span class="anchor-alias" id="63-chat--wire-truth--inherited-from-v3-one-addition"></span><h3 id="63-chat-wire-truth-inherited-from-v3-one-addition">6.3 Chat + wire truth — inherited from v3, one addition</h3>
+<p>Unchanged from <code>docs/design/audio-improvements.md</code>: one-time substitution info toast keyed
+by <code>(requested, played, provider)</code> triple; honest error copy (P2);
+<code>voiceService.ttsFetch()</code> wire-model extension reading both substitution
+headers on streaming and WAV paths; DiagnosticBar requested→played
+rendering. Additions:</p>
+<ul>
+<li>DiagnosticBar shows the <strong>derived engine per request</strong> (<code>af_bella → kokoro</code>), so mixed-engine sessions are legible at a glance.</li>
+<li>Runtime-fallback events (<code>provider_error</code>) get their own toast copy:
+&quot;Google TTS is unavailable right now — playing the default voice
+af_bella.&quot; Same dedup triple.</li>
+</ul>
+<span class="anchor-alias" id="64-voicesettingstab--configured-providers-not-a-dropdown"></span><h3 id="64-voicesettingstab-configured-providers-not-a-dropdown">6.4 VoiceSettingsTab — configured providers, not a dropdown</h3>
+<p>Owner directive. The tab becomes:</p>
+<ol>
+<li><strong>&quot;Configured voice providers&quot;</strong> — a status LIST (cards/rows), one per
+provider, no selector:<ul>
+<li>name + badge (<code>free · local</code> / <code>paid · API</code>),</li>
+<li>capability line (&quot;installed&quot;, &quot;API key set&quot;, or the blocking reason
+with a link to fix it: key field, install hint),</li>
+<li>enable toggle (<code>tts_provider_enabled_&lt;p&gt;</code>),</li>
+<li>the existing key fields (google/openai) live inside their provider&#39;s
+card.</li>
+</ul>
+</li>
+<li><strong>&quot;Default voices&quot;</strong> — one row per registry language (en/de/it/fi/sv),
+each a catalogue-populated select filtered to voices that speak that
+language (all usable engines, grouped, badged) + TestVoiceButton
+(preview-exempt). Copy: &quot;Plays for &lt;language&gt; cases when the configured
+voice can&#39;t play on this server (missing engine, missing key, or a paid
+service outage). Platform-wide.&quot; Unconfigured rows show the §5.5
+warning + installed-Piper suggestion; inline hint favours local voices.</li>
+<li>Rate/pitch controls unchanged.</li>
+<li><code>save()</code> builds its payload from the explicit field list
+(VoiceSettingsTab.jsx:118) — new keys added to state, payload, AND the
+GET-after-PUT round-trip test (v3&#39;s silent-drop trap).</li>
+</ol>
+<p>The engine dropdown is deleted, and with it the &quot;browser&quot; option (§5.4).</p>
+<h2 id="7-cross-cutting">7. Cross-cutting</h2>
+<h3 id="71-i18n">7.1 i18n</h3>
+<p>v3 §7.3 keys, plus: engine badges, disabled-group reasons, enable-toggle
+labels, provider-card status lines, default-voice copy + local-voice hint,
+<code>provider_error</code> toast. en + de/it/fi/sv + pseudo-locale regen; existing
+namespaces (chat.json, authoring_case.json, authoring_persona.json,
+authoring_config.json).</p>
+<h3 id="72-sequencing-three-stages-tests-green-between">7.2 Sequencing (three stages, tests green between)</h3>
+<p><strong>[v1.3]</strong> The app is unshipped: the stages below are PR/commit ordering
+inside ONE release (each with its tests green), not deployment phases —
+nothing deploys between them, so no compatibility shims exist anywhere.
+The whole release lands together; the only backward-compat surface is the
+DB (§5.4 non-breaking guarantee).</p>
+<ol>
+<li><strong>Server:</strong> disjointness contract + <code>deriveVoiceProvider</code> land as the
+FIRST commit (the invariant exists before anything routes on it —
+Codex Medium 2), then usability probe + enabled keys, <code>/api/tts</code>
+re-route + fallback tier + runtime fallback (first-chunk pre-flight) +
+headers, <code>/tts/voices</code> all-providers shape, <code>tts_default_voice_&lt;lang&gt;</code>
+seeding/carry-over, boot audit, and the retirement migration (delete
+<code>tts_provider</code> + legacy gendered keys, §5.4 table server rows).</li>
+<li><strong>Client resolver + consumers:</strong> §6.1 shape, six consumers, race fix,
+toasts, wire-model extension, <code>language</code> body field on sends.</li>
+<li><strong>UI + i18n:</strong> pickers, VoiceSettingsTab rebuild, editor labels
+(§5.4 table client rows), translations, remaining test rewrites.</li>
+</ol>
+<h3 id="73-explicitly-out-of-scope">7.3 Explicitly out of scope</h3>
+<ul>
+<li>No stored provider fields anywhere (migration 0022&#39;s strip is permanent).</li>
+<li>No qualified voice-id format (<code>kokoro:af_bella</code>) — derivation makes it
+redundant.</li>
+<li>No provider-hopping fallback chains — one retry, to the language-matched
+default voice.</li>
+<li>No per-tenant policy and no per-gender defaults — as v3. (Per-LANGUAGE
+defaults are now IN scope — §5.5, owner&#39;s German directive. Language
+remains a warning for <em>configured</em> voices; it becomes a hard boundary
+only for <em>substitution</em>.)</li>
+<li>No client-side (<code>browser</code>) TTS revival.</li>
+</ul>
+<h3 id="74-tests">7.4 Tests</h3>
+<p>All of v3 §7.4 (nine contract rewrites — each rewritten to assert the new
+truth obligation, never just deleting the old assertion — blind-spot
+hardening, new coverage), adapted to one default voice, plus 2.0-specific:</p>
+<ul>
+<li><strong>Catalogue disjointness contract:</strong> no id resolves to two providers.
+The invariant the router stands on.</li>
+<li>Route matrix over §4: kokoro voice + kokoro usable → 200 on kokoro
+(assert via branch spy/log), NO substitution headers; google voice + no
+key → default voice + headers; disabled = unusable; unknown id →
+fallback or honest 400 with <code>reason</code>.</li>
+<li><strong>Runtime fallback:</strong> mocked google 500/timeout on WAV path → 200, kokoro
+default audio, both headers, <code>provider_error</code>; same on streaming path
+with the failure at first chunk (pre-flight) → default stream; failure
+AFTER first chunk → stream ends, no substitution (can&#39;t unsay audio);
+default-also-fails → original error semantics.</li>
+<li><strong>Language boundary (the German matrix):</strong> failing <code>de-DE-…</code> voice + de
+default set → de default plays, headers present; de default NOT set →
+400 <code>no_default_for_language</code> with <code>language:&#39;de&#39;</code> — asserts <code>af_bella</code>
+is NEVER synthesized for a de request; underivable voice language
+(openai <code>alloy</code>) + body <code>language:&#39;de&#39;</code> → de lookup; body language
+absent → en lookup (legacy-client path); PUT rejects a definite
+language-mismatched default (en voice on the de row), accepts unknowns.</li>
+<li>Usage attribution: failed-paid-call row kept + $0 fallback row; mixed
+engines in one session record under each engine actually used.</li>
+<li>Seeding: fresh DB → <code>af_bella</code>; legacy kokoro gendered value carried
+over; conflict → seed + <code>tts_default_conflict</code>; admin value never
+overwritten; legacy rows + <code>tts_provider</code> deleted.</li>
+<li><code>/tts/voices</code> all-providers shape: usable/unusable groups, reasons,
+<code>?provider=</code> back-compat.</li>
+<li>Picker: non-default-engine voice pickable, saves, round-trips, no warning
+while usable; warning appears when its engine is disabled.</li>
+<li>Resolver: full tier matrix incl. <code>tier:&#39;default&#39;</code> to the single default;
+validity via providers payload; regex fallback pre-settings.</li>
+<li>VoiceSettingsTab: no dropdown rendered; provider cards show
+capability/toggle; default-voice save/GET round-trip.</li>
+</ul>
+<h2 id="8-risks-v339s-r1r7-still-apply-to-the-fallback-tier">8. Risks (v3&#39;s R1–R7 still apply to the fallback tier)</h2>
+<p>R8. <strong>Catalogue collision breaks derivation</strong> — CI disjointness contract
+    turns it into a build failure, not a runtime bug.
+R9. <strong>Cost surprise via mixed engines</strong> — educator picks Google voices
+    while the admin thinks voice is free. Mitigations: enable toggles,
+    paid badges, per-provider usage rollups. Residual risk accepted by
+    owner (this <em>is</em> the feature).
+R10. <strong>Kokoro cold-load latency</strong> on the first fallback utterance (google
+    outage → af_bella needs the model loaded). The capability probe must
+    not force a full model load on every settings GET (cache
+    process-lifetime); optionally warm the default voice&#39;s engine at boot
+    since it IS the safety net — stage-1 decision.
+R11. <strong>[v1.3] Rollout-window risks are void</strong> — the app is unshipped;
+    server and client land as one release, so Codex High 2 (stale client
+    hydration) and Medium 1 (missing <code>language</code> field on legacy sends)
+    have no window to occur in. What survives of them: the §5.4 site
+    checklist (every listed reader must be rewritten in-release, enforced
+    by a repo-wide grep for <code>tts_provider</code> returning zero hits outside
+    migrations/history at release end) and the <code>language</code>-absent server
+    default (⇒ <code>en</code>) as a defensive path for direct API callers.
+R12. <strong>Runtime fallback masks a dying paid account</strong> — quota exhaustion now
+    sounds like a voice change instead of an outage. Counterweights: warn
+    log per event, <code>provider_error</code> toast names the failing provider, boot
+    audit + provider card show key status; usage dashboard shows the paid
+    engine flatlining.
+R13. <strong>Default unplayable on kokoro-less boxes</strong> — seeded <code>af_bella</code> can&#39;t
+    play on a google-only deployment; loud fail persists there until the
+    admin picks a playable default. Boot audit + settings warning name it
+    explicitly (§5.5). Accepted: no silent computed defaults.
+R14. <strong>Unseeded languages (de/fi/sv) keep the mute-on-outage risk</strong> until
+    an admin installs a Piper voice or sets a default — the exact scenario
+    the owner raised can still occur on an unconfigured deployment.
+    Accepted trade-off vs playing cross-language garble; mitigations: the
+    <code>no_default_for_language</code> boot audit fires from day one on every
+    deployment with German content, the settings row shows the fix, and
+    deployment docs gain a &quot;multilingual = install Piper voices&quot; step.
+    The residual failure is honest (named language, named remedy), not
+    silent.</p>
+<h2 id="9-acceptance-criteria">9. Acceptance criteria</h2>
+<ol>
+<li><strong>The owner&#39;s sentence holds:</strong> a case with <code>af_bella</code> on a box with
+Kokoro installed plays <code>af_bella</code> — no toasts, no substitutions, no
+admin action, regardless of any other setting.</li>
+<li>A persona saved with a Google Chirp voice plays it whenever a Google key
+is configured and Google is enabled, while other personas keep their
+free Kokoro voices in the same session; the usage panel shows the split.</li>
+<li><strong>Paid failure never mutes an English case:</strong> kill the Google key
+mid-session (or mock a Google 500) ⇒ the patient&#39;s next utterance plays
+<code>af_bella</code>, with toast, headers, amber editor label, warn log, and
+requested→played in the DiagnosticBar. Restore the key ⇒ the Chirp
+voice returns. No DB row changed at any point.</li>
+<li><strong>Paid failure never garbles a German case:</strong> same outage on a
+<code>de-DE-…</code> case ⇒ the configured German default (e.g. Piper thorsten)
+plays with the same visibility; with no German default configured, the
+student sees the honest language-aware error — <code>af_bella</code> is never
+heard reading German. The boot audit had already named this gap at
+startup.</li>
+<li>Fresh install, English persona with no voice ⇒ speaks with <code>af_bella</code>
+(<code>tier:&#39;default&#39;</code>, <code>&#39;not_configured&#39;</code>); Italian case likewise gets
+<code>if_sara</code>.</li>
+<li>Settings → Voice shows provider status cards with toggles — <strong>no engine
+dropdown exists anywhere in the app</strong> — plus one Default-voice row per
+registry language whose values survive save/reload; unconfigured
+language rows carry the visible warning.</li>
+<li>Preview always plays the literal requested voice or errors.</li>
+<li>Discussion room behaves identically to patient chat under every row of
+the §4 matrix.</li>
+<li>No provider value is stored in any case/persona row; deleting the new
+settings rows returns the platform to loud-fail-only behaviour.</li>
+<li>The truth clause holds end-to-end: no surface shows a voice or engine
+that differs from what plays without also showing the substitution
+(wire-capture test, v3 AC7).</li>
+</ol>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Platform technologies and operations · Rohy docs</title>
+    <meta name="description" content="Rohy&amp;#39;s platform layer is the engineering foundation that makes the clinical simulation usable in real institutions. It connects the React application, Node and Express backe…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Platform technologies and operations · Rohy docs">
+    <meta property="og:description" content="Rohy&amp;#39;s platform layer is the engineering foundation that makes the clinical simulation usable in real institutions. It connects the React application, Node and Express backe…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Product</span>
+        <h1>Platform technologies and operations</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#frontend-and-runtime-architecture">Frontend and runtime architecture</a>
+            <a href="#backend-routing-and-middleware">Backend routing and middleware</a>
+            <a href="#persistence-snapshots-and-migrations">Persistence, snapshots and migrations</a>
+            <a href="#ai-voice-and-avatar-providers">AI, voice and avatar providers</a>
+            <a href="#oyon-as-a-browser-side-add-on">Oyon as a browser-side add-on</a>
+            <a href="#deployment-and-updates">Deployment and updates</a>
+            <a href="#observability-audit-and-verification">Observability, audit and verification</a>
+            <a href="#security-redaction-and-data-lifecycle">Security, redaction and data lifecycle</a>
+            <a href="#platform-tradeoffs">Platform tradeoffs</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group" open>
+                    <summary>Rohy product architecture</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="platform-technologies-operations.html" aria-current="page">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Rohy&#39;s platform layer is the engineering foundation that makes the clinical simulation usable in real institutions. It connects the React application, Node and Express backend, SQLite persistence, provider routing, Oyon browser inference, deployment tooling, migration policy, observability, security and data lifecycle. These are not background details. They determine whether the simulator can be trusted, maintained, audited and studied.</p>
+<p>The platform is designed for self-hosted clinical-education settings. A site may run in local development, on a classroom machine, under systemd, in Docker, from a published image or in an air-gapped environment. The architecture therefore favours explicit configuration, local-first options, controlled updates and strong operational evidence over hidden managed-service assumptions.</p>
+<h2 id="frontend-and-runtime-architecture">Frontend and runtime architecture</h2>
+<p>The frontend is a React and Vite application organised around workspaces. The learner sees the simulation runtime: patient, rooms, monitor, voice and debrief. Educators see authoring, courses and analytics. Administrators see users, settings, logs and platform configuration. The same application therefore has to support immersive simulation and enterprise administration without confusing the two.</p>
+<p>Three.js and React Three Fiber support the avatar layer. GLB heads, morph targets and lipsync connect voice playback to visual patient behaviour. Browser speech input can support voice mode. Client services coordinate voice requests, event logging, runtime state and analytics calls. The frontend goes beyond a view layer: it is where simulation state, learner interaction and multimodal presentation meet.</p>
+<h2 id="backend-routing-and-middleware">Backend routing and middleware</h2>
+<p>The backend is a Node and Express application. Bootstrap configures process-level concerns such as CORS, headers, warmup and route mounting. Product behaviour lives in route groups: auth, users, tenants, cases, sessions, orders, analytics, notifications, agents, cohorts, admin routes and Oyon add-on routes. This separation matters because a growing platform needs clear seams. A new endpoint belongs to an area router, and process bootstrap stays free of product behaviour.</p>
+<p>Cross-cutting middleware carries the institutional guarantees. Authentication resolves the user. Role middleware enforces rank. Tenant middleware enforces organisational boundaries. Request IDs support log correlation. Redaction protects sensitive response fields. Error handling centralises final response shape. The result is a backend that treats security and observability as infrastructure, held outside individual handlers.</p>
+<h2 id="persistence-snapshots-and-migrations">Persistence, snapshots and migrations</h2>
+<p>Rohy currently uses SQLite because the target deployment is a self-hosted, single-instance application. SQLite is simple, durable and appropriate for a classroom or institutional host where one application instance owns the database. The platform still includes portability helpers so future database evolution is not blocked by careless SQL patterns.</p>
+<p>Persistence stores users, tenants, courses, cases, scenarios, case versions, session snapshots, orders, reports, exam findings, learning events, Oyon aggregate records, audit logs, export records and platform settings. Session snapshots are one of the most important invariants. When a learner starts a case, the relevant authored state is frozen for that session. Later edits do not alter the live run. This protects debrief, analytics and research reproducibility.</p>
+<p>Migrations are versioned and checksum-tracked. The migration manifest classifies changes as additive, destructive or unknown. Additive migrations can be applied normally. Destructive migrations require explicit operator acknowledgement. Unknown migrations fail closed. This policy exists because rollback safety is a product requirement. A schema change reaches past the developer: it decides whether an institution can recover from a bad update.</p>
+<h2 id="ai-voice-and-avatar-providers">AI, voice and avatar providers</h2>
+<p>Rohy uses server-side provider routing for LLM and TTS calls. The client does not send trusted API keys. Patient, agent and discussant model settings are resolved on the server through platform and persona configuration. Usage and cost can be recorded centrally. This allows different personas to use different models while preserving governance over secrets, budgets and provider behaviour.</p>
+<p>The TTS stack supports local and cloud options. Kokoro and Piper support local voice generation. OpenAI and Google support cloud TTS. Runtime voice requests use the active provider, while admin preview can audition providers without changing runtime settings. Streaming PCM support allows the client to start playback before an entire response is complete, which is important for voice-mode realism.</p>
+<p>The avatar layer depends on stable morph-target and viseme conventions. This is why the embedding kit documents its invariants. If a head asset does not match the expected morph targets, lipsync degrades silently. In Rohy, voice, avatar and model routing are therefore part of the same product surface: the learner experiences them as one patient or agent.</p>
+<h2 id="oyon-as-a-browser-side-add-on">Oyon as a browser-side add-on</h2>
+<p>Oyon is integrated as a vendored add-on mounted under Rohy&#39;s API. Its core technical decision is browser-side inference. Camera capture, face tracking and expression inference run in the user&#39;s browser through MediaPipe and ONNX Runtime Web. The browser aggregates windows and sends only aggregate data to the server. Raw frames and landmarks do not leave the device, and server validation rejects raw-media fields.</p>
+<p>This architecture serves both privacy and research. Rohy studies aggregate affect and gaze patterns while the server holds no video. Consent, tenant enablement, per-tenant retention and role-keyed visibility are part of the product model. When Oyon is disabled or fails to import, the API returns a structured stub in place of a bare 404, so the frontend and operator can present an understandable state.</p>
+<h2 id="deployment-and-updates">Deployment and updates</h2>
+<p>Rohy supports multiple deployment paths because institutions differ. A developer may run Vite and Express locally. A classroom may use a single-machine install. A production site may use systemd behind nginx or Docker behind Caddy. A restricted environment may use an air-gapped bundle. Published images support reproducible deploys when a tagged artifact exists.</p>
+<p>Production deployment has a few non-negotiable ideas. The Node port should sit behind a reverse proxy and TLS. <code>JWT_SECRET</code> must be strong and present. <code>FRONTEND_URL</code> must match the public origin for CORS. Default seeded users should not remain active in production. Oyon models must be present if Oyon is enabled. The SPA base path must match the reverse proxy path, especially when serving under <code>/rohy</code>.</p>
+<p>Updates are operator-driven. The update tooling is built around backup before mutation, migration dry-run, controlled apply, post-deploy verification and rollback where safe. The design accepts ordinary maintenance downtime but does not accept silent half-upgrades. Destructive migration gates, rollback recipes and backup snapshots reflect that priority.</p>
+<h2 id="observability-audit-and-verification">Observability, audit and verification</h2>
+<p>Rohy emits NDJSON logs with request IDs, levels and event-specific fields. Slow-query warnings include sanitized SQL summaries so operators can investigate latency without leaking row data. Access logging can skip sensitive prompt-bearing paths. Oyon exposes health and rejection counters. System audit logs, export records and usage logs create governance evidence.</p>
+<p>Deploy verification matters because a server that starts is not necessarily healthy. The verifier can check health endpoints, the SPA shell, bundled assets, Oyon mount behaviour, auth gating, security headers, response timing and, when armed, Oyon validation contracts. This turns deployment from hope into evidence.</p>
+<h2 id="security-redaction-and-data-lifecycle">Security, redaction and data lifecycle</h2>
+<p>Rohy&#39;s security model combines JWT authentication, server-side active-session revocation, live user refresh on every request, rank-based RBAC, tenant middleware, CSRF checks for cookie-authenticated state-changing requests, central redaction and audit logging. A valid token cannot outrank the current user row. A force logout or account change can take effect on the next request. Tenant mismatch should not leak resource existence.</p>
+<p>Redaction is centralised in <code>server/redaction.js</code>. Secrets, token hashes, API keys, JSON settings, PII and internal fields are handled by that one policy, which keeps them out of individual route handlers. This makes privacy review possible. A new sensitive field is registered in the central policy, so one entry covers every handler at once.</p>
+<p>Retention and purge complete the lifecycle. Time-bounded logs can be swept according to configured windows, and Oyon has per-tenant retention. User purge is a separate account-level governance action. These controls matter because Rohy produces educational and research data that should not accumulate indefinitely without policy.</p>
+<h2 id="platform-tradeoffs">Platform tradeoffs</h2>
+<p>Rohy makes explicit tradeoffs. SQLite keeps deployment simple and serves a single writer. Operator-driven updates preserve institutional control and leave every upgrade to the operator&#39;s timing. Browser-side Oyon protects the raw-media boundary but requires browser support and consent. Local LLM and TTS support improves privacy and resilience but may require model setup. Central redaction improves auditability but requires discipline when new fields are added. Path-prefix deployment supports hubs but requires build and proxy alignment.</p>
+<p>These choices are coherent for the target setting: self-hosted clinical education, simulation research, institutional governance and local operational control. The platform layer is scientifically important because it protects the validity of the data. If identity is unstable, tenant scope leaks, cases mutate mid-session, exports lack provenance or raw sensor data crosses the wrong boundary, the research trace is compromised. Operations are therefore part of Rohy&#39;s scientific apparatus.</p>
+<p>Related guides include <a href="../integrator/architecture.html">Architecture seams</a>, <a href="../integrator/providers.html">Adding a TTS / LLM provider</a>, <a href="../integrator/embedding.html">Embedding the avatar kit</a>, <a href="../operator/install.html">Installing Rohy</a>, <a href="../operator/deploy.html">Deploying Rohy to production</a>, <a href="../operator/migrations.html">Migrations runbook</a>, <a href="../operator/update-strategy.html">Update strategy</a>, <a href="../operator/observability.html">Observability</a>, <a href="../security/hardening.html">Hardening checklist</a>, <a href="../security/rbac.html">RBAC and auth model</a>, <a href="../security/redaction.html">Redaction and PII</a>, <a href="../security/oyon-ai-act.html">Oyon and EU AI Act</a>, and <a href="../operator/retention.html">Retention and purges</a>.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -3,12 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>The rooms — Rohy</title>
+    <title>The rooms · Rohy</title>
     <meta name="description" content="Every room in the Rohy clinical simulation: Patient, 3D Room, Examination, Laboratory, Radiology and diagnostics with a DICOM reading room and a 12-lead ECG workstation, Pathology, and the Consultant room with the post-case debrief.">
     <meta name="theme-color" content="#09090b">
 
-    <meta property="og:title" content="The rooms — Rohy">
-    <meta property="og:description" content="A specialised room for each task, and one running case: Patient, 3D Room, Examination, Laboratory, Radiology, 12-lead ECG, Pathology, PACS, Consultant.">
+    <meta property="og:title" content="The rooms · Rohy">
+    <meta property="og:description" content="Each task has its own room inside one running case: Patient, 3D Room, Examination, Laboratory, Radiology, 12-lead ECG, Pathology, PACS, Consultant.">
     <meta property="og:image" content="assets/room-3d.jpg">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
@@ -31,6 +31,7 @@
             <a href="index.html">Overview</a>
             <a href="rooms.html" aria-current="page">Rooms</a>
             <a href="whats-new.html">What's new</a>
+            <a href="docs/index.html">Docs</a>
             <a href="help.html">Help</a>
             <a href="index.html#install" class="optional">Install</a>
             <a href="about.html">About the author</a>
@@ -45,7 +46,7 @@
 <section class="hero compact" id="top">
     <div class="wrap hero-inner">
         <span class="eyebrow accent">The clinical workspace</span>
-        <h1>A specialised room for each task. <span class="accent">One running case.</span></h1>
+        <h1>Each task has its own room inside <span class="accent">one running case.</span></h1>
         <p class="sub">
             Rohy organises the encounter into peer rooms. The core rooms are Patient,
             Examination, Laboratory, Radiology and Consultant. Plugin rooms appear
@@ -97,7 +98,7 @@
                     <li><strong>Alarms.</strong> A threshold crossing latches a banner with Snooze and Acknowledge. Both are timestamped, and the physiology continues until it is treated.</li>
                     <li><strong>Treatments, Records and Memory.</strong> The Treatments panel orders and then administers medications, fluids, oxygen and manoeuvres. The Records drawer holds the chart, medication history, allergies and social history. Memory holds what the patient has already been told.</li>
                     <li><strong>The care team.</strong> The bedside nurse, the family member and the paged consultant join the same transcript, each with its own knowledge scope.</li>
-                    <li><strong>End &amp; Debrief.</strong> The deliberate action that stops the timeline, locks orders, exams and chat, and opens the debrief.</li>
+                    <li><strong>End &amp; Debrief.</strong> The action that stops the timeline, locks orders, exams and chat, and opens the debrief.</li>
                 </ul>
             </div>
             <figure class="pillar-shot">
@@ -178,11 +179,11 @@
                 <h2>Deciding what to order is part of the diagnostic work.</h2>
                 <p>
                     The Laboratory presents a complete catalogue, so the learner decides what to
-                    request. The catalogue holds over 200 tests in more than 30 groups: haematology,
+                    request. The catalogue holds over 200 tests in more than 30 groups, among them haematology,
                     metabolic and renal testing, liver function, coagulation, thyroid and other
                     endocrine investigations, blood gases, cardiac markers, inflammatory markers,
                     iron studies, lipids, diabetes, urinalysis, toxicology, drug levels, body fluids,
-                    cerebrospinal fluid, autoimmune markers and more. Reference ranges vary by sex
+                    cerebrospinal fluid and autoimmune markers. Reference ranges vary by sex
                     where that is clinically appropriate.
                 </p>
                 <ul class="pillar-list">
@@ -317,7 +318,7 @@
                 <p>
                     The Consultant room has two roles. During a live case, visiting it is
                     navigation: the timeline continues and the learner can return. End &amp;
-                    Debrief is a separate, deliberate action that stops the timeline, locks orders,
+                    Debrief is a separate action that stops the timeline, locks orders,
                     examinations and chat, and opens the reflective phase with the transcript, the
                     learner's notes, a case summary and an AI discussant.
                 </p>
@@ -342,7 +343,7 @@
     <div class="wrap">
         <div class="single reveal">
             <span class="eyebrow accent">Between rooms</span>
-            <h2>Navigation keeps the session; ending it is a separate act.</h2>
+            <h2>Moving between rooms keeps the session running.</h2>
             <p class="lead">
                 A navigation bar runs along the bottom of every in-session surface. The current
                 room is highlighted with its own accent colour. Rooms can be visited in any order,
@@ -389,16 +390,16 @@
                 role. These are the learner-facing pages for the rooms above.
             </p>
             <ul class="link-list two" aria-label="Trainee guides">
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/history" target="_blank" rel="noopener">Taking a history <span class="host">Patient room</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/room-3d" target="_blank" rel="noopener">The 3D Room <span class="host">3D Room</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/examination" target="_blank" rel="noopener">Physical examination <span class="host">Examination</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/investigations" target="_blank" rel="noopener">Ordering labs &amp; imaging <span class="host">Laboratory & Radiology</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/ecg" target="_blank" rel="noopener">The ECG workstation <span class="host">12-lead ECG</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/pathology" target="_blank" rel="noopener">Reading a pathology slide <span class="host">Pathology</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/imaging-reading-room" target="_blank" rel="noopener">The PACS reading room <span class="host">PACS</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/debrief" target="_blank" rel="noopener">Debrief <span class="host">Consultant</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/rooms" target="_blank" rel="noopener">The rooms <span class="host">All rooms</span></a></li>
-                    <li><a href="https://rohy.lacarm.com/rohy/docs/trainee/courses" target="_blank" rel="noopener">Courses, lessons &amp; surveys <span class="host">Courses</span></a></li>
+                    <li><a href="docs/trainee/history.html">Taking a history <span class="host">Patient room</span></a></li>
+                    <li><a href="docs/trainee/room-3d.html">The 3D Room <span class="host">3D Room</span></a></li>
+                    <li><a href="docs/trainee/examination.html">Physical examination <span class="host">Examination</span></a></li>
+                    <li><a href="docs/trainee/investigations.html">Ordering labs &amp; imaging <span class="host">Laboratory & Radiology</span></a></li>
+                    <li><a href="docs/trainee/ecg.html">The ECG workstation <span class="host">12-lead ECG</span></a></li>
+                    <li><a href="docs/trainee/pathology.html">Reading a pathology slide <span class="host">Pathology</span></a></li>
+                    <li><a href="docs/trainee/imaging-reading-room.html">The PACS reading room <span class="host">PACS</span></a></li>
+                    <li><a href="docs/trainee/debrief.html">Debrief <span class="host">Consultant</span></a></li>
+                    <li><a href="docs/trainee/rooms.html">The rooms <span class="host">All rooms</span></a></li>
+                    <li><a href="docs/trainee/courses.html">Courses, lessons &amp; surveys <span class="host">Courses</span></a></li>
             </ul>
         </div>
     </div>
@@ -435,19 +436,20 @@
                 <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+                <a href="docs/license.html">License</a>
             </div>
             <div class="footer-col">
                 <h4>Docs</h4>
-                <a href="https://rohy.lacarm.com/rohy/docs/trainee/" target="_blank" rel="noopener">Trainee guides</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">Migrations</a>
+                <a href="docs/index.html">Docs home</a>
+                <a href="docs/INSTALL.html">Install</a>
+                <a href="docs/DEPLOY.html">Deploy</a>
+                <a href="docs/UPDATING.html">Updating</a>
+                <a href="docs/trainee/index.html">Trainee guides</a>
+                <a href="docs/reference/index.html">Reference</a>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© 2026 Mohammed Saqr · <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>© 2026 Mohammed Saqr · <a href="docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
             <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
         </div>
     </div>

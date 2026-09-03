@@ -1,0 +1,1606 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RPS-1: the Rohy Plugin Standard · Rohy docs</title>
+    <meta name="description" content="Status: 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · Spec version: 1.5 · Last reviewed: 2026-08-29">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="RPS-1: the Rohy Plugin Standard · Rohy docs">
+    <meta property="og:description" content="Status: 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · Spec version: 1.5 · Last reviewed: 2026-08-29">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Design</span>
+        <h1>RPS-1: the Rohy Plugin Standard</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-scope-and-non-goals">1. Scope and non-goals</a>
+            <a href="#2-the-six-slots">2. The six slots</a>
+            <a href="#3-anatomy">3. Anatomy</a>
+            <a href="#4-normative-rules">4. Normative rules</a>
+            <a href="#5-collision-detection-is-not-ownership">5. Collision detection is not ownership</a>
+            <a href="#6-host-context">6. Host context</a>
+            <a href="#7-events">7. Events</a>
+            <a href="#7a-remote-content-added-in-12">7a. Remote content (added in 1.2)</a>
+            <a href="#8-persistence">8. Persistence</a>
+            <a href="#9-availability-and-lifecycle">9. Availability and lifecycle</a>
+            <a href="#10-discovery-and-the-drift-gate">10. Discovery and the drift gate</a>
+            <a href="#11-authoring-added-in-11">11. Authoring (added in 1.1)</a>
+            <a href="#11a-the-document-13">11a. The document (1.3)</a>
+            <a href="#11b-the-server-slot-14">11b. The server slot (1.4)</a>
+            <a href="#11c-settings-14">11c. Settings (1.4)</a>
+            <a href="#12-adding-a-plugin">12. Adding a plugin</a>
+            <a href="#13-conformance-checklist">13. Conformance checklist</a>
+            <a href="#14-not-built-yet">14. Not built yet</a>
+            <a href="#15-reference-implementation">15. Reference implementation</a>
+            <a href="#16-vendored-packages-14">16. Vendored packages (1.4)</a>
+            <a href="#17-time-15">17. Time (1.5)</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="index.html">Design</a>
+                    <a href="plugin-standard.html" aria-current="page">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><strong>Status:</strong> 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · <strong>Spec version:</strong> 1.5 · <strong>Last reviewed:</strong> 2026-08-29</p>
+<blockquote>
+<p><strong>Reading this document.</strong> 1.3 was specified before it was built — the same
+discipline as 1.1 and 1.2 — and landed in rohy v2.9.72–v2.9.74. The
+<em>(1.3, proposed)</em> markers came off in the commits that implemented each part.</p>
+</blockquote>
+<p>A plugin is a folder that <strong>imports nothing from rohy</strong>, declares itself in a
+manifest, receives a host context, gets a room, and emits events into
+<code>learning_events</code> — where the existing analytics pick them up for free.</p>
+<p>The standard was extracted, not invented. Two things already worked and were
+generalised: the vendored <code>rohy-pathology</code> package, whose services arrive as
+props so the folder stays droppable; and that package&#39;s own workstation
+registry, which proved the peaceful-exclusion rule empirically.</p>
+<hr>
+<h2 id="1-scope-and-non-goals">1. Scope and non-goals</h2>
+<p>RPS-1 defines <strong>how a first-party, build-time module attaches to rohy</strong> — its
+room, its analytics vocabulary, its state, and the services it may use.</p>
+<p><strong>It is not a security boundary.</strong> Plugins are ordinary same-origin bundled
+JavaScript with full access to <code>window</code>, <code>fetch</code>, <code>localStorage</code> and any host
+module they choose to import. Capabilities are an <strong>API-shape contract</strong> that
+keeps cooperative code honest and makes intent reviewable; they do not contain
+hostile code. Loading untrusted third-party plugins is out of scope and would
+require a sandbox this standard does not describe.</p>
+<hr>
+<h2 id="2-the-six-slots">2. The six slots</h2>
+<p>Everything rohy used to hardcode about a room is now one of six slots.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Slot</th>
+<th>Replaces</th>
+<th>Declared in</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>room</strong></td>
+<td>a hand-written <code>ROOM_DEFS</code> entry + <code>ROOM_KEYS</code> literal</td>
+<td>manifest</td>
+</tr>
+<tr>
+<td><strong>vocabulary</strong></td>
+<td>a <code>...PLUGIN_VERBS</code> spread in <code>eventLogger.js</code></td>
+<td>manifest</td>
+</tr>
+<tr>
+<td><strong>states</strong></td>
+<td>a <code>...PLUGIN_VERB_FALLBACKS</code> spread in <code>clinicalStates.js</code></td>
+<td>manifest</td>
+</tr>
+<tr>
+<td><strong>capabilities</strong></td>
+<td>props hand-picked at the mount site in <code>App.jsx</code></td>
+<td>manifest + host grant</td>
+</tr>
+<tr>
+<td><strong>data</strong></td>
+<td><code>caseSnapshot?.config?.&lt;name&gt;</code></td>
+<td><code>caseConfig[manifest.id]</code></td>
+</tr>
+<tr>
+<td><strong>authoring</strong> <em>(1.1, optional)</em></td>
+<td>nothing — there was no way to ship an editor</td>
+<td>manifest + descriptor</td>
+</tr>
+<tr>
+<td><strong>document</strong> <em>(1.3)</em></td>
+<td>hand-pasting a plugin&#39;s export into <code>config</code></td>
+<td>descriptor (<code>validate</code>, <code>summarize</code>) + host case store</td>
+</tr>
+</tbody></table></div>
+<p><strong>One id.</strong> The manifest <code>id</code> is the room key, the verb namespace, the
+case-config key, the storage namespace and the API mount path. Four identities
+that must agree eventually stop agreeing.</p>
+<hr>
+<h2 id="3-anatomy">3. Anatomy</h2>
+<pre><code>src/plugins/&lt;id&gt;/
+  manifest.js     pure JS, no React. Node imports it, so it can be frozen for the server.
+  index.jsx       the descriptor: component + gate + prop adapter.
+</code></pre>
+<p>Both files MUST exist. The generator and the runtime use the same predicate; a
+folder with only one of them is not a plugin.</p>
+<h3 id="31-manifest">3.1 Manifest</h3>
+<pre><code class="language-js">export const manifest = {
+    id: &#39;ecg&#39;,                        // lower_snake_case, === room.key, not a core room
+    version: &#39;0.1.0&#39;,
+    room: {
+        key: &#39;ecg&#39;,
+        labelKey: &#39;room_ecg&#39;,         // i18n key
+        subKey: &#39;room_ecg_sub&#39;,
+        icon: &#39;Scan&#39;,                 // from the host allowlist
+        accent: &#39;teal&#39;,               // from the host allowlist
+        order: 45,                    // position among rooms
+    },
+    vocabulary: {
+        verbs: { OPENED_STRIP: { severity: &#39;INFO&#39;, category: &#39;CLINICAL&#39; } },
+        objectTypes: { STRIP: &#39;ecg_strip&#39; },
+        components: { VIEWER: &#39;EcgViewer&#39; },
+    },
+    states: {
+        verbFallbacks:   { OPENED_STRIP: &#39;assessing&#39; },   // REQUIRED for every verb
+        objectOverrides: { ecg_strip: &#39;assessing&#39; },      // own object types only
+        interpretations: { &#39;OPENED_STRIP:ecg_strip&#39;: &#39;assessing&#39; },  // own vocabulary only
+    },
+    capabilities: [&#39;persist&#39;],
+    minRole: &#39;student&#39;,
+    authoring: {                      // optional; see §11
+        labelKey: &#39;room_ecg_author&#39;,
+        minRole: &#39;educator&#39;,          // REQUIRED when authoring is declared
+    },
+};
+</code></pre>
+<h3 id="32-descriptor">3.2 Descriptor</h3>
+<pre><code class="language-jsx">export default {
+    manifest,
+    component: EcgRoom,                        // rendered when currentRoom === id
+    available: (ctx) =&gt; ctx.data != null,      // the gate
+    props: (ctx, persist) =&gt; ({ strips: ctx.data }),   // adapter
+
+    authorComponent: EcgAuthor,                          // optional; see §11
+    authorProps: (ctx, draft) =&gt; ({ value: draft.value, onChange: draft.save }),
+
+    // 1.3 — the document contract (§11a). REQUIRED when `authoring` is
+    // declared; `summarize` is optional.
+    validate: (doc) =&gt; [/* { level: &#39;error&#39;|&#39;warning&#39;, message } */],
+    summarize: (doc) =&gt; ({ count: doc?.strips?.length ?? 0, labelKey: &#39;ecg_strips_count&#39; }),
+};
+</code></pre>
+<p><code>props()</code> is what lets a <strong>package keep its own prop vocabulary</strong>.
+Pathology wants <code>pathologyCase</code> / <code>initialAnnotations</code>; the host only knows
+<code>ctx.data</code> and a store. The adapter bridges them and lives <em>outside</em> the
+package&#39;s source. <em>If plugging something in requires editing it, it is not
+plug-and-play.</em></p>
+<blockquote>
+<p><strong>1.3 note — the boundary is a test, and the location is upstream.</strong>
+<code>src/components/pathology/</code> is a byte-identical copy of
+<code>~/Documents/Github/Pathoyon/pathoyon/src</code> (re-vendored at v2.9.69).
+Edit the package upstream and re-vendor; never in rohy. Rohy&#39;s ESLint ignores
+the folder (as it does <code>OyonR/</code>), and rohy&#39;s own gate on it is
+<code>portability.test.js</code>: every import is a file inside the folder or a declared
+peer dependency, and rohy&#39;s services arrive as props (<code>eventLogger</code>, <code>t</code>, the
+persistence callback).</p>
+</blockquote>
+<hr>
+<h2 id="4-normative-rules">4. Normative rules</h2>
+<p>A manifest violating any of these is rejected at <code>plugins:gen</code> time, before any
+code runs. Each rule exists because the failure it prevents surfaces somewhere
+far from its cause.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Rule</th>
+<th>What it prevents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R1</td>
+<td><code>id</code> is <code>lower_snake_case</code></td>
+<td>it becomes a room key and a URL segment</td>
+</tr>
+<tr>
+<td>R2</td>
+<td><code>room.key === id</code></td>
+<td>four identities drifting apart</td>
+</tr>
+<tr>
+<td>R3</td>
+<td><code>id</code> is not a core room key (<code>chat</code>, <code>examination</code>, <code>lab</code>, <code>radiology</code>, <code>consultant</code>)</td>
+<td>a duplicate navigator tab and a plugin that can never mount — core rooms match earlier in the render chain</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>every verb declares <code>severity</code> and <code>category</code></td>
+<td>an emit-time throw</td>
+</tr>
+<tr>
+<td>R5</td>
+<td><code>severity ∈ {DEBUG, INFO, ACTION, IMPORTANT, CRITICAL}</code> and <code>category ∈ {SESSION, NAVIGATION, CLINICAL, COMMUNICATION, MONITORING, CONFIGURATION, ASSESSMENT, ERROR}</code></td>
+<td>these are CHECK constraints on <code>learning_events</code>. Anything else is valid JS and is then <strong>silently dropped by sqlite at INSERT</strong></td>
+</tr>
+<tr>
+<td>R6</td>
+<td>every verb has a <code>verbFallback</code></td>
+<td>an unmapped verb falls through to a literal <code>${verb}_${objectType}</code> bucket and silently pollutes every TNA model</td>
+</tr>
+<tr>
+<td>R7</td>
+<td><code>verbFallback</code> values are real clinical states</td>
+<td>same</td>
+</tr>
+<tr>
+<td>R8</td>
+<td><code>objectOverrides</code> keys are object types the plugin declares</td>
+<td>claiming a core type</td>
+</tr>
+<tr>
+<td>R9</td>
+<td><code>interpretations</code> keys involve the plugin&#39;s own verb or own object type</td>
+<td><strong>the subtle one, see §5</strong></td>
+</tr>
+<tr>
+<td>R10</td>
+<td><code>capabilities</code> are known names</td>
+<td>a silently ungranted capability</td>
+</tr>
+<tr>
+<td>R11</td>
+<td>no key collides with rohy&#39;s or another plugin&#39;s</td>
+<td>a silent overwrite that changes what existing rows mean</td>
+</tr>
+<tr>
+<td>R12</td>
+<td><code>minRole</code> / <code>authoring.minRole</code> are real rohy roles</td>
+<td>a typo that silently reads as <code>guest</code> and opens the surface to everyone</td>
+</tr>
+<tr>
+<td>R13</td>
+<td>if <code>authoring</code> is declared it MUST carry <code>labelKey</code> and <code>minRole</code></td>
+<td>an unlabelled entry, and an editor inheriting a learner-level gate</td>
+</tr>
+<tr>
+<td>R14</td>
+<td><code>authoring.minRole</code> is at least as strong as <code>minRole</code></td>
+<td>editing a case being easier to reach than reading it</td>
+</tr>
+<tr>
+<td>R15</td>
+<td><code>authoring</code> and <code>authorComponent</code> appear together or not at all</td>
+<td>a manifest entry routing to nothing, or a component nothing can reach and no <code>minRole</code> gates</td>
+</tr>
+<tr>
+<td>R16</td>
+<td><code>remote</code> and the <code>remote</code> capability appear together or not at all</td>
+<td>a manifest describing a proxy it never requested, or a proxy mounted onto nothing</td>
+</tr>
+<tr>
+<td>R17</td>
+<td><code>remote.origin</code> is <strong>forbidden</strong></td>
+<td>a manifest choosing which host rohy&#39;s server will talk to. See §7a</td>
+</tr>
+<tr>
+<td>R18</td>
+<td><code>remote.paths</code> are literal <code>/lower-kebab</code> prefixes and <code>remote.contentTypes</code> is a non-empty list of bare <code>type/subtype</code></td>
+<td>an unbounded proxy — an open relay onto the configured origin — and an image proxy that will happily relay <code>text/html</code> from it</td>
+</tr>
+<tr>
+<td>R19 <em>(1.3)</em></td>
+<td>if <code>authoring</code> is declared the descriptor MUST export <code>validate(doc)</code></td>
+<td>an editor whose output the host cannot judge — material every learner is assessed against, shipped unreviewable. See §11a</td>
+</tr>
+<tr>
+<td>R20 <em>(1.3)</em></td>
+<td><code>available(ctx)</code> judges the <strong>document</strong>, never the key&#39;s presence</td>
+<td>a saved-but-empty document lighting a room onto nothing — the exact failure <code>available()</code> exists to prevent</td>
+</tr>
+<tr>
+<td>R21 <em>(1.4)</em></td>
+<td>every <code>settings</code> field declares a <code>default</code>, and that default <strong>passes the field&#39;s own constraints</strong></td>
+<td>a schema that fails OPEN — a tenant which never opened the settings page running on a value the page itself refuses to save</td>
+</tr>
+<tr>
+<td>R22 <em>(1.4)</em></td>
+<td>every <code>settings</code> field key is <code>&#39;&lt;group&gt;.&lt;field&gt;&#39;</code> naming a <strong>declared</strong> group, and every field declares <code>labelKey</code></td>
+<td>a field stored correctly and rendered nowhere, or a blank row</td>
+</tr>
+<tr>
+<td>R23 <em>(1.4)</em></td>
+<td>a numeric <code>settings</code> field declares integer <code>min</code> and <code>max</code>; <code>ceilingEnv</code> is a <code>ROHY_</code>-prefixed name on a numeric field only</td>
+<td>an unbounded number reaching whatever consumes it, and a ceiling with nothing to bound</td>
+</tr>
+<tr>
+<td>R24 <em>(1.4)</em></td>
+<td>a server module&#39;s own tables are prefixed <code>plugin_&lt;id&gt;_</code> (plus the shared <code>plugin_settings</code> / <code>plugin_jobs</code> / <code>plugin_assets</code>)</td>
+<td>a plugin reaching into <code>users</code> or <code>cases</code> because that was easier than asking the host. Pinned by a contract test, not a runtime SQL guard — a regex that must understand joins and CTEs rejects legitimate queries in the hot path</td>
+</tr>
+<tr>
+<td>R25 <em>(1.4)</em></td>
+<td>a server module reaches the network only through <code>ctx.download</code> and runs binaries only through <code>ctx.runBinary</code></td>
+<td>a plugin re-implementing an origin allowlist, a byte cap or a shell-free exec, and eventually re-implementing one of them wrong</td>
+</tr>
+<tr>
+<td>R26 <em>(1.4)</em></td>
+<td>a server module writes only inside <code>ctx.libraryDir</code>, and treats its absence as &quot;this surface is unavailable&quot;</td>
+<td>a plugin writing into the image, and a deployment with no provisioned disk failing at first import instead of declining up front</td>
+</tr>
+<tr>
+<td>R31 <em>(1.5)</em></td>
+<td>a server module takes every instant from <code>ctx.now()</code> — never <code>new Date()</code>, never <code>CURRENT_TIMESTAMP</code></td>
+<td>a second timestamp shape in a column the host orders by. rohy has already paid for having two; see §17</td>
+</tr>
+<tr>
+<td>R32 <em>(1.5)</em></td>
+<td>a server module <code>INSERT</code>ing into a shared plugin table <strong>names its time column</strong></td>
+<td>sqlite&#39;s <code>DEFAULT CURRENT_TIMESTAMP</code> supplying the legacy shape, silently, in a statement that otherwise looks correct</td>
+</tr>
+</tbody></table></div>
+<p>Roles: <code>guest student reviewer educator admin</code> (mirrors <code>ROLE_RANKS</code> in
+<code>server/middleware/auth.js</code>; a contract test asserts the copies agree).</p>
+<p>Clinical states: <code>assessing examining investigating treating communicating documenting monitoring regulating reflecting navigating</code>.
+Capabilities: <code>llm uploads notify persist remote</code>.
+Icons: <code>Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap</code>.
+Accents: <code>fuchsia teal indigo</code>.</p>
+<p>Icon and accent are <strong>strings resolved against host allowlists</strong> — a manifest is
+server-importable data, so it cannot carry a React component, and Tailwind only
+emits a class it can see written out as a literal.</p>
+<hr>
+<h2 id="5-collision-detection-is-not-ownership">5. Collision detection is not ownership</h2>
+<p><code>mergeNamespace()</code> throws on any duplicate key — plugin-vs-rohy and
+plugin-vs-plugin alike. That catches a plugin <strong>overwriting</strong> something.</p>
+<p>It is structurally blind to a plugin <strong>claiming an unclaimed key that
+semantically belongs to core.</strong> <code>DEFAULT_INTERPRETATIONS</code> has no
+<code>ORDERED_LAB:lab_test</code> row, so a plugin adding one collides with nothing — and
+silently reclassifies a core clinical event across every TNA model, because
+explicit interpretations outrank both object and verb defaults.</p>
+<p>Hence R8/R9: <strong>a plugin may only make claims about its own vocabulary.</strong></p>
+<hr>
+<h2 id="6-host-context">6. Host context</h2>
+<pre><code class="language-js">ctx = {
+    pluginId,
+    session: { id, caseId, userId, role, language, examMode },
+    data,            // caseConfig[manifest.id] — the plugin&#39;s case material
+    eventLogger,     // see the caveat below
+    capabilities,    // only what the host actually granted
+    store,           // present iff &#39;persist&#39; was requested
+    t, navigate,
+}
+</code></pre>
+<p><strong>Capabilities are narrowed adapters the host builds, never host singletons.</strong>
+The worked example: rohy&#39;s <code>LLMService</code> exposes <code>sendMessage</code>/<code>streamMessage</code>,
+both bound to the patient conversation — handing it to a plugin for grading
+would write grading prompts into the case transcript. The plugin wants
+<code>{ complete({system, prompt}) }</code>. So <code>llm</code> is granted in that shape or not at
+all, and a plugin that requested it MUST degrade rather than crash.</p>
+<p>A capability the manifest requests but the host does not grant is <strong>absent</strong>,
+not a broken stub. Check before calling.</p>
+<blockquote>
+<p><strong>Known weakness.</strong> <code>ctx.eventLogger</code> is currently the whole <code>EventLogger</code>
+singleton, which exposes <code>setContext()</code> and unrestricted <code>log()</code>. A plugin can
+therefore change the global session/room context or emit another plugin&#39;s
+verbs. The narrowed <code>log()</code> adapter that would fix this — fixing
+<code>{pluginId, sessionId, room, allowedVerbs}</code> — is <strong>not built</strong>. Until it is,
+plugins are expected to wrap the logger themselves, as the pathology package
+does with <code>createPathologyLogger()</code>.</p>
+</blockquote>
+<hr>
+<h2 id="7-events">7. Events</h2>
+<p>Plugin rows land in <code>learning_events</code> with <code>room = &#39;&lt;id&gt;&#39;</code>, interleaved with
+every other event by timestamp. That is the entire point: a slide read and a lab
+order sit in one sequence, so TNA can show the transition between them. No new
+table, no ETL.</p>
+<p>The manifest&#39;s <code>states</code> block feeds <code>clinicalStates.js</code>, so plugin verbs resolve
+to clinical states instead of a literal bucket.</p>
+<p>The server validates every verb against one registry
+(<code>server/shared/learningVerbs.js</code>), on <strong>both</strong> <code>POST /learning-events</code> and
+<code>POST /learning-events/batch</code>.</p>
+<hr>
+<h2 id="7a-remote-content-added-in-12">7a. Remote content <em>(added in 1.2)</em></h2>
+<p>A plugin whose material is too large to ship inside rohy declares the <code>remote</code>
+capability. A whole-slide pyramid is gigabytes; putting it in the Docker image,
+the backups and the air-gap bundle is not a packaging inconvenience, it is a
+different product.</p>
+<pre><code class="language-js">capabilities: [&#39;persist&#39;, &#39;remote&#39;],
+remote: {
+    paths: [&#39;/tiles&#39;, &#39;/gross&#39;],
+    contentTypes: [&#39;application/xml&#39;, &#39;text/xml&#39;, &#39;image/jpeg&#39;, &#39;image/png&#39;, &#39;image/webp&#39;],
+},
+</code></pre>
+<p>A case then addresses the content with a <code>remote:</code> reference:</p>
+<pre><code class="language-json">{ &quot;slides&quot;: [{ &quot;id&quot;: &quot;s1&quot;, &quot;dzi&quot;: &quot;remote:tiles/case42/slide1.dzi&quot; }] }
+</code></pre>
+<p>and the browser receives <code>/api/plugins/pathology/tiles/case42/slide1.dzi</code> — same
+origin, so the CSP never has to hear about the slide host.</p>
+<h3 id="a-case-author-picks-a-path-an-operator-picks-a-host">A case author picks a path; an operator picks a host</h3>
+<p>The origin is absent from the manifest <strong>and</strong> from the case, by rule (R17). It
+comes from one place only:</p>
+<pre><code>ROHY_PLUGIN_ORIGINS=&quot;pathology=https://slides.example.edu&quot;
+</code></pre>
+<p>This is the load-bearing decision of the whole feature and it is not
+hypothetical caution: <code>proxy-routes.js</code> accepts a client-supplied <code>endpoint</code> and
+then deliberately ignores it, because honouring it was an SSRF and API-key
+exfiltration hole. A plugin proxy is the same risk with a friendlier name.
+Anyone who can edit a case can choose a <em>path</em>; only someone who can edit the
+server&#39;s environment can choose a <em>host</em>.</p>
+<p>It also makes cases portable. A case that named <code>https://slides.example.edu</code>
+would pin one deployment&#39;s infrastructure into content meant to move between
+them; a <code>remote:</code> reference runs unchanged against a university&#39;s slide server
+and a laptop&#39;s.</p>
+<h3 id="why-proxy-instead-of-widening-the-csp">Why proxy instead of widening the CSP</h3>
+<p>Naming the slide host in <code>img-src</code> is one line in <code>server/security-headers.js</code>
+and it is the wrong line. It puts a third-party origin inside the page&#39;s trust
+boundary for every case and every tenant, permanently, and it moves the decision
+about what rohy may load from the server to the browser. Proxying keeps the CSP
+at <code>&#39;self&#39;</code>, keeps upstream reachability a server-side fact, and makes <em>who may
+read which slide</em> a question rohy can answer.</p>
+<h3 id="what-the-proxy-refuses">What the proxy refuses</h3>
+<p><code>GET /api/plugins/:pluginId/*</code> is authenticated, <code>minRole</code>-gated (the first
+place <code>minRole</code> is actually enforced), and read-only. It refuses:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>any origin not in <code>ROHY_PLUGIN_ORIGINS</code></td>
+<td>503 rather than a guess</td>
+</tr>
+<tr>
+<td><strong>redirects</strong> — <code>redirect: &#39;manual&#39;</code>, 3xx → 502</td>
+<td>fetch&#39;s default is <code>follow</code>; with it, the slide host could hand rohy the cloud metadata endpoint and rohy would fetch it with the server&#39;s own network position</td>
+</tr>
+<tr>
+<td>a path outside the declared prefixes</td>
+<td>403, <strong>before the upstream is contacted</strong> — a check applied to the response would already have fetched the secret</td>
+</tr>
+<tr>
+<td>traversal, in both spellings</td>
+<td><code>%2e%2e/</code> is normalised away by the router and caught by the prefix check; <code>..%2f</code> survives as one segment containing a separator and is caught by the segment check. Dropping either leaves one spelling live</td>
+</tr>
+<tr>
+<td>a content type the manifest did not declare</td>
+<td>relaying <code>text/html</code> would serve attacker-controlled markup from rohy&#39;s own origin</td>
+</tr>
+<tr>
+<td>a body over 32 MB, or 15 s of silence</td>
+<td>what a compromised or simply broken upstream can push through rohy before anyone notices</td>
+</tr>
+<tr>
+<td>any method but GET</td>
+<td>a proxy that can POST is a confused deputy holding rohy&#39;s network position</td>
+</tr>
+</tbody></table></div>
+<p>Client cookies, <code>Authorization</code> and query strings are not forwarded upstream;
+upstream <code>Set-Cookie</code> is not returned. The two sides share a path and nothing
+else. Responses are <code>Cache-Control: private, max-age=86400</code> — private because
+they passed a per-user check, long because tile immutability is what keeps a
+deep-zoom pan off the network at all.</p>
+<p>The route is exempt from <code>generalLimiter</code> and carries its own limiter at
+2000/min keyed by <strong>(tenant, user)</strong>. <code>generalLimiter</code> is 600/min keyed by IP,
+and a teaching lab is a room of students behind one NAT address: one learner
+reading a slide would otherwise spend the whole building&#39;s budget.</p>
+<h3 id="what-it-is-not">What it is not</h3>
+<p>It is not a general fetch capability, an upload path, or a way to reach a
+service that needs credentials — there is no upstream-authentication design yet.
+It is a read-only relay of declared paths from one operator-configured host.</p>
+<hr>
+<h3 id="7a1-operating-a-content-origin-13">7a.1 Operating a content origin <em>(1.3)</em></h3>
+<p>Declaring <code>remote</code> says <em>where in the case</em> bulk content is addressed; this
+says how the content actually gets to a server, repeatably. The contract has
+three declarative parts and no bespoke steps:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Owner</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>The bundle</strong></td>
+<td>the plugin</td>
+<td>a script (<code>scripts/content-bundle.sh</code> in Pathoyon) emits a directory whose <strong>top-level entries are exactly <code>remote.paths</code></strong> plus <code>content.json</code> — <code>{ plugin, version, paths, fileCount, files[{path, bytes, sha256}] }</code>. Nothing else may be present; symlinks are refused; originals are never bundled.</td>
+</tr>
+<tr>
+<td><strong>The origin</strong></td>
+<td>the deploy hub</td>
+<td><code>KIND=plugin-content</code>: build the bundle, <code>rsync --delete</code> it to <code>DEST</code>, install the origin&#39;s nginx block idempotently (<code>nginx -t</code>, reload, restore on failure). The block serves only the declared prefixes + <code>/content.json</code>; everything else is 404; LAN-bound — the app relays server-side, so no DNS or tunnel entry exists.</td>
+</tr>
+<tr>
+<td><strong>The wiring</strong></td>
+<td>the app operator</td>
+<td><code>ROHY_PLUGIN_ORIGINS=&lt;id&gt;=&lt;origin&gt;</code> in the app&#39;s env. <code>GET /api/health/plugins</code> probes every configured origin&#39;s <code>content.json</code> and reports <code>reachable</code>, <code>content_version</code> and a plugin-id mismatch; <code>deploy/preflight.sh</code> checks it before a restart and <code>scripts/tech-test.sh</code> (the deploy hub&#39;s <code>POST_VERIFY</code>) fails the deploy on 503.</td>
+</tr>
+</tbody></table></div>
+<p><strong>The catalog.</strong> An editor needs a library to pick from. The bundle ships it as
+<code>&lt;origin&gt;/catalog.json</code> — the plugin&#39;s asset catalog (<code>version: 1</code>, <code>assets[]</code>
+in the package&#39;s own catalog schema) with <strong>every URL a <code>remote:</code> reference</strong>.
+The host relays it to authoring roles only (<code>GET /api/plugins/&lt;id&gt;/catalog</code>,
+gated on <code>authoring.minRole</code>, JSON only, size-capped, rejected if any URL is
+not <code>remote:</code>), and the host&#39;s asset service hands it to the editor with
+references <em>resolved</em> — editors load thumbnails as plain <code>&lt;img src&gt;</code> — while
+the adapter <em>un-resolves</em> the document on every change, so the case never
+stores a host address (<code>resolveRemoteRefs</code> / <code>unresolveRemoteRefs</code> round-trip
+exactly). <code>/api/health/plugins</code> reports <code>has_catalog</code>.</p>
+<p>Adding a second plugin&#39;s content is one bundle script, one <code>sites.conf</code>
+block, one nginx file and one <code>id=origin</code> entry — the same shape every time.
+Routine content updates touch only the origin (<code>./deploy.sh &lt;plugin&gt;content</code>);
+the app is not redeployed.</p>
+<h3 id="7a2-the-managed-library-14">7a.2 The managed library <em>(1.4)</em></h3>
+<p>§7a.1 describes content an operator <strong>deploys</strong>. A host can also <strong>produce</strong>
+content: pathology imports a slide from a link, tiles it, and puts the result on
+the same origin. The two halves share an origin and nothing else.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>Owner</th>
+<th>Written by</th>
+<th>Lifecycle</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>the bundle&#39;s prefixes (<code>/tiles</code>, <code>/gross</code>)</td>
+<td>the plugin</td>
+<td><code>./deploy.sh &lt;plugin&gt;content</code>, <code>rsync --delete</code></td>
+<td>replaced wholesale per content version</td>
+</tr>
+<tr>
+<td><code>/library</code></td>
+<td><strong>the host</strong></td>
+<td>the plugin&#39;s server module, as the rohy service user</td>
+<td>per asset; removed only by an explicit act</td>
+</tr>
+</tbody></table></div>
+<p>Three rules make that division safe, and each exists because the failure it
+prevents is silent:</p>
+<ol>
+<li><strong>The content deploy&#39;s rsync excludes <code>library/</code>.</strong> <code>--delete</code> against a
+bundle that does not contain it would erase every imported slide.</li>
+<li><strong>The bundle script refuses to contain <code>library/</code>.</strong> Checked on the
+<em>allowlist</em> rather than the output directory, because the output is rebuilt
+from scratch each run — a guard looking for a stray directory there is
+unreachable code that reads like protection.</li>
+<li><strong>A case addresses a managed slide exactly as a bundled one</strong>:
+<code>remote:library/&lt;assetId&gt;/slide.dzi</code>. The same case runs against a
+university&#39;s origin and a local one, unchanged.</li>
+</ol>
+<p><strong>The two halves fail independently.</strong> <code>GET /api/plugins/&lt;id&gt;/catalog</code> merges
+them and returns whichever it has; when the bundle is missing it <em>names</em> that in
+the response (<code>bundleUnavailable</code>) so an editor can say which half is absent
+rather than showing a short list as if it were complete. Only having neither is
+a <code>503</code>. Before this was true, a deployment that imported its own slides and
+shipped no content bundle had an invisible library — slides on disk, rows in the
+database, and an editor told the plugin had no catalog.</p>
+<p>Only <code>ready</code> assets are offered to an author. One still importing, failed, or
+awaiting calibration is real but not usable, and a case built around a slide
+whose scale is unknown produces measurements that are wrong by an unknown
+factor.</p>
+<hr>
+<h2 id="8-persistence">8. Persistence</h2>
+<p>A plugin persists nothing. It hands the host its whole document on every
+mutation and the host decides where that lives — which is why a change callback
+should pass the full document rather than a patch: no change log to replay.</p>
+<p><code>ctx.store</code> is async, localStorage-backed, namespaced
+<code>rohy_plugin:&lt;pluginId&gt;:&lt;sessionId&gt;:&lt;name&gt;</code>, registered in
+<code>src/storage/registry.js</code> with a <code>session</code> lifetime. It is the only module
+touching the backing store and every method is already async, so swapping the
+bodies for <code>apiFetch(&#39;/api/plugins/...&#39;)</code> needs no change at any call site.</p>
+<blockquote>
+<p><strong>Ordering trap.</strong> A plugin that seeds internal state from an <code>initial*</code> prop
+typically seeds it <strong>once</strong> and ignores later changes (otherwise a parent
+re-render discards work in progress). <code>PluginRoom</code> therefore renders nothing
+until the store load settles — mounting first would seed the plugin empty and
+silently drop everything saved last session.</p>
+</blockquote>
+<blockquote>
+<p><strong>Do not persist what you cannot restore.</strong> If a plugin has no <code>initial*</code> prop
+for a piece of state, saving it is worse than not saving it: the value becomes
+unreadable <em>and</em> the next mutation after a remount overwrites it with an empty
+one. Pathology&#39;s report drafts are currently in exactly this position and are
+deliberately not persisted.</p>
+</blockquote>
+<hr>
+<h2 id="9-availability-and-lifecycle">9. Availability and lifecycle</h2>
+<p>A plugin gates itself. <code>available(ctx)</code> returning false leaves it out of
+navigation with a reason in <code>registry.diagnostics()</code>; a gate that <strong>throws</strong> is
+treated as unavailable rather than taking rohy down.</p>
+<p>A declined plugin does not mount at all — otherwise it would render its own
+empty state, which is the thing <code>available()</code> exists to prevent. Every
+<code>RoomNavigator</code> mount receives the resolved list, and a learner sitting in a
+room that becomes unavailable (case switch, restored view blob) is returned to
+<code>chat</code>.</p>
+<hr>
+<h2 id="10-discovery-and-the-drift-gate">10. Discovery and the drift gate</h2>
+<p>Two consumers must agree on one manifest:</p>
+<ul>
+<li><strong>runtime</strong> — <code>import.meta.glob(&#39;./*/index.jsx&#39;)</code>, resolved by Vite at build
+time against whatever directories exist. This is what preserves the
+peaceful-exclusion rule under a bundler: delete <code>src/plugins/&lt;id&gt;/</code> and rohy
+still builds and boots, minus that room. A static import list would turn the
+same deletion into a build failure.</li>
+<li><strong>server</strong> — <code>server/shared/plugins/manifests.generated.js</code>, frozen by
+<code>npm run plugins:gen</code>.</li>
+</ul>
+<pre><code class="language-bash">npm run plugins:gen      # regenerate after any manifest change
+npm run plugins:check    # drift gate — runs in prebuild
+</code></pre>
+<p>Runtime registration additionally cross-checks the frozen snapshot and throws if
+a descriptor&#39;s id or vocabulary has drifted, so a plugin cannot mount
+client-side while the server rejects everything it emits.</p>
+<blockquote>
+<p><strong>Note.</strong> An earlier version of this document justified generation with &quot;the
+Docker runtime stage copies <code>server/</code> but not <code>src/</code>&quot;. That is false for the
+actual image: <code>deploy/docker/Dockerfile:156</code> copies <code>src/</code> into the runtime
+stage, and <code>analytics-routes.js:3</code> already imports from <code>src/</code>. (The same
+stale claim appears in <code>CLAUDE.md</code>.) Generation is kept because it gives a
+drift gate and keeps the ingest path off the <code>src/</code> layout — a deliberate
+trade, not a deployment constraint.</p>
+</blockquote>
+<hr>
+<hr>
+<h2 id="11-authoring-added-in-11">11. Authoring <em>(added in 1.1)</em></h2>
+<p>A room is where a learner <strong>uses</strong> a plugin&#39;s material. An authoring surface is
+where someone <strong>makes</strong> it. Before 1.1 there was no slot for the second, so a
+plugin shipping an editor — pathology&#39;s <code>CaseAuthor</code> — had nowhere to mount.</p>
+<h3 id="why-it-is-a-slot-and-not-a-mode-of-the-room">Why it is a slot and not a mode of the room</h3>
+<p><strong>The two gates are opposite.</strong> <code>available(ctx)</code> declines a case with no
+material, which is exactly the case an editor exists to create. Folding
+authoring into the room would make the editor unreachable precisely when it is
+needed.</p>
+<p>They also differ in audience, in lifetime, and in what they write:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>room</th>
+<th>authoring</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>gate</td>
+<td><code>available(ctx)</code> — has this case material?</td>
+<td>role only; a blank case is the normal starting point</td>
+</tr>
+<tr>
+<td>audience</td>
+<td><code>minRole</code>, typically <code>student</code></td>
+<td><code>authoring.minRole</code>, typically <code>educator</code></td>
+</tr>
+<tr>
+<td>writes</td>
+<td>a learner&#39;s own work, per session</td>
+<td>the case material every learner is then assessed against</td>
+</tr>
+<tr>
+<td>store</td>
+<td><code>ctx.store</code>, namespaced by session</td>
+<td><strong>not <code>ctx.store</code></strong> — see below</td>
+</tr>
+</tbody></table></div>
+<h3 id="authoringminrole-is-required-never-inherited"><code>authoring.minRole</code> is required, never inherited</h3>
+<p>Authored material is what every learner is subsequently assessed against.
+Inheriting the room&#39;s <code>student</code> would be the most consequential default in the
+standard to get wrong, so R13 makes the manifest say it out loud, and R14 stops
+it being weaker than the room it edits.</p>
+<blockquote>
+<p><strong>1.1 also made <code>minRole</code> real.</strong> It shipped in 1.0 and was enforced nowhere —
+a field that read like a guarantee and was not one. <code>registry.resolve()</code> now
+checks it, and reports a role refusal as its own reason rather than as
+&quot;declined for this case&quot;: <em>&quot;you may not open this&quot;</em> and <em>&quot;this case has no
+material&quot;</em> are very different absences.</p>
+</blockquote>
+<h3 id="persistence-is-the-host39s-and-it-is-not-ctxstore">Persistence is the host&#39;s, and it is not <code>ctx.store</code></h3>
+<p><code>ctx.store</code> is namespaced <code>rohy_plugin:&lt;id&gt;:&lt;sessionId&gt;:</code> — right for a
+learner&#39;s in-progress work, wrong for authored material, which belongs to the
+<strong>case</strong> and outlives every session.</p>
+<p>So <code>PluginAuthor</code> takes the draft and its save callback as props: whoever
+renders it decides where authored material lives. This is §8&#39;s rule applied one
+level up — the plugin hands back its whole document, and the host owns storage.</p>
+<blockquote>
+<p><strong>Rohy&#39;s case-config write path landed in v2.9.74.</strong> The wizard&#39;s <em>Plugins</em>
+step opens the editor full-viewport and Done writes the document into
+<code>editingCase.config[&lt;id&gt;]</code>, which the ordinary case save persists. A host may
+still render <code>PluginAuthor</code> with no <code>onSave</code>, in which case the plugin&#39;s own
+export remains the way out.</p>
+</blockquote>
+<h2 id="11a-the-document-13">11a. The document <em>(1.3)</em></h2>
+<p>A plugin is <strong>part editor, part room</strong>, and the thing that travels between the
+two halves is its <em>document</em>: the plugin&#39;s slice of the case config,
+<code>config[manifest.id]</code>. 1.1 named both halves and gated them; 1.3 says what the
+document is, who judges it, and what the host owes it. Nothing here <em>needs</em> to touch a
+plugin&#39;s source — pathology&#39;s <code>caseAuthoring.js</code> already exports <code>validateCase</code>
+and <code>isShippable</code>; the descriptor adapts them, exactly as <code>props()</code> adapts the
+room. (The package is edited upstream and re-vendored — see §3.2 — so the
+hooks are adapters by design; a package that ships its own validator needs no
+change to gain them.)</p>
+<h3 id="11a1-shape">11a.1 Shape</h3>
+<ul>
+<li><p><code>config[&lt;id&gt;]</code> is <strong>one JSON document</strong>, owned by the plugin, opaque to rohy.
+The host never reads inside it; it stores, snapshots, exports and versions it
+as a unit. This is §8 applied to authoring: the plugin hands back the <em>whole</em>
+document, never a patch.</p>
+</li>
+<li><p><code>null</code> / absent means <strong>no material</strong>. The host does not invent the key.</p>
+</li>
+<li><p>It is text — paths, <code>remote:</code> refs (§7a), coordinates, prose. Bulk bytes live
+behind the remote proxy, never inline. The server caps a document at
+<strong>64 KB serialised</strong> (well under the 256 KB request limit, and enough for
+hundreds of annotations); a plugin that needs more raises it <em>per plugin</em> in
+the manifest (<code>document: { maxBytes }</code>), never globally.</p>
+<p><strong>The cap is a real constraint, not a formality.</strong> Measured on pathology: an
+empty canonical case is 1.0 KB and a text case with slides, ROIs and prose
+stays around that — but ONE 438x320 gross photograph embedded as a <code>data:</code>
+URL takes the document to 34 KB and <strong>two take it to 83 KB</strong>, past the cap.
+Case Studio bounds photographs at 1600px, several times larger again, so no
+cap below express&#39;s 256 KB body limit makes a photographic case fit. This is
+what &quot;bulk bytes live behind the remote proxy, never inline&quot; costs when a
+plugin ignores it — and closing it properly needs an upload path, which
+§14.2 says does not exist.</p>
+</li>
+</ul>
+<h3 id="11a2-the-plugin-judges-its-own-document">11a.2 The plugin judges its own document</h3>
+<p>Two descriptor hooks, both pure functions of the document, both usable on the
+server side one day because they take no context:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>hook</th>
+<th>required</th>
+<th>returns</th>
+<th>the host uses it to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>validate(doc)</code></td>
+<td><strong>yes</strong> when <code>authoring</code> is declared (R19)</td>
+<td><code>[{ level: &#39;error&#39; | &#39;warning&#39;, message }]</code></td>
+<td>show issues on the wizard card; refuse to mark a case <em>available to students</em> while an <code>error</code> remains — never refuse to <strong>save</strong> (a half-finished draft must be storable)</td>
+</tr>
+<tr>
+<td><code>summarize(doc)</code></td>
+<td>no</td>
+<td><code>{ count, labelKey }</code></td>
+<td>print &quot;3 slides&quot; on the card; falls back to <em>&quot;material present&quot;</em></td>
+</tr>
+</tbody></table></div>
+<p><code>available(ctx)</code> keeps its role — <em>can this plugin serve this case?</em> — but R20
+makes explicit what 1.1 left implicit: it decides on the <strong>document</strong>, not on
+whether the key exists. Pathology&#39;s <code>ctx.data != null</code> is the anti-pattern;
+<code>ctx.data?.slides?.some(s =&gt; s.dzi)</code> is the rule.</p>
+<span class="anchor-alias" id="11a2a-what-the-learner39s-browser-may-receive--documentlearneromit"></span><h3 id="11a2a-what-the-learner39s-browser-may-receive-documentlearneromit">11a.2a What the learner&#39;s browser may receive — <code>document.learnerOmit</code></h3>
+<p><code>learnerCase()</code> in the room decides what a component <strong>shows</strong>; only the
+server decides what a role <strong>receives</strong>. <code>GET /cases</code>, <code>GET /cases/:id</code> and
+every endpoint that returns <code>sessions.case_snapshot</code> used to hand the whole
+document — pathology&#39;s <code>rubric</code>, i.e. the answer key — to the learner being
+assessed with it. The server cannot import the package, so the plugin names
+what to strip as frozen manifest data:</p>
+<pre><code class="language-js">document: { learnerOmit: [&#39;rubric&#39;] }   // dotted paths into the document
+</code></pre>
+<p>The host removes those paths from <code>config[&lt;id&gt;]</code> on every read a role below
+<strong>reviewer</strong> makes, before the response leaves the server (rohy: v2.9.78,
+<code>projectPluginDocumentsForRole</code> / <code>projectCaseSnapshotForRole</code> in
+<code>server/shared/pluginDocument.js</code>). Educators and above receive the whole
+document. The shape is validated strictly because a typo here fails <em>open</em>.
+The room-side projection stays: it is what makes the room correct on a
+document that arrived already stripped.</p>
+<h3 id="11a3-what-the-host-owes-the-editor-half">11a.3 What the host owes the editor half</h3>
+<p>The mirror of §6–§9 for rooms. A host is conformant when all five hold:</p>
+<ol>
+<li><strong>Discoverable.</strong> Every plugin in <code>registry.authors(role)</code> has an entry point
+the case author can find without knowing the plugin exists — a <em>Plugins</em>
+step in the case wizard, one card per plugin: label (<code>authoring.labelKey</code>),
+<code>summarize()</code> line, <code>validate()</code> issues, <strong>Open editor</strong>, <strong>Remove</strong>
+(confirm; sets <code>config[&lt;id&gt;] = undefined</code>). The step is hidden when no
+registered plugin ships an editor.</li>
+<li><strong>A surface, not a panel.</strong> The editor mounts full-page via <code>PluginAuthor</code>
+(like the persona editor), with <code>value = config[&lt;id&gt;]</code> and <code>onSave</code> writing
+the whole document back into the wizard&#39;s draft. A plugin editor is a
+workstation — two headers and a wizard footer around it is the wrong frame.
+The host guards <strong>Discard</strong> on a dirty draft.</li>
+<li><strong>Persistence through the case.</strong> The document is saved by the ordinary case
+save (<code>POST/PUT /cases</code>) and nothing else. That is what buys, with zero
+plugin code, everything the case already has: the session snapshot
+(<code>sessions.case_snapshot.config</code>, so a learner&#39;s room is pinned to the
+document they started on), export/import, and case versions.</li>
+<li><strong>A server-side guard driven by the manifest snapshot.</strong> For every plugin in
+<code>PLUGIN_MANIFESTS</code> that declares <code>authoring</code>, <code>normaliseCaseForStorage</code>
+requires <code>config[&lt;id&gt;]</code> to be a plain object within the size cap, and any
+<code>remote:</code> ref inside it to start with one of <code>manifest.remote.paths</code>;
+otherwise <code>400 { code: &#39;invalid_plugin_config&#39; }</code>, never 500. Keys the
+manifests do not claim are left alone — they are not ours to police.</li>
+<li><strong>Seed-once respected.</strong> Editors seed internal state from <code>initial*</code> once
+(§8 ordering trap). The host mounts the surface only when the document is in
+hand and keys the mount by <code>(pluginId, caseId)</code>.</li>
+</ol>
+<h3 id="11a4-lifecycle-of-a-document">11a.4 Lifecycle of a document</h3>
+<pre><code>author opens wizard → Plugins step → Open editor
+   → PluginAuthor(value = config[id]) → onSave(whole doc) → wizard draft
+   → PUT /cases (guard: object, ≤64 KB, remote paths)      ← the ONLY write
+   → cases.config[id]
+   → POST /sessions copies it into case_snapshot.config    ← pinned per learner
+   → PluginRoom: available(ctx) judges ctx.data            ← R20
+   → learner works; ctx.store holds THEIR work, per session (§8)
+</code></pre>
+<p>Two documents, two stores, never confused: the <strong>case</strong> document is the
+author&#39;s and lives in <code>config[&lt;id&gt;]</code>; the <strong>learner&#39;s</strong> work is theirs and
+lives in <code>ctx.store</code>. 1.1 said this in prose; 1.3 makes each half of the plugin
+write to exactly one of them.</p>
+<h3 id="the-mount">The mount</h3>
+<pre><code class="language-jsx">import { PluginAuthor } from &#39;./plugins/index.js&#39;;
+
+&lt;PluginAuthor
+    pluginId=&quot;pathology&quot;
+    session={session}
+    caseConfig={caseConfig}
+    eventLogger={eventLogger}
+    value={draft}            // optional; falls back to ctx.data
+    onSave={persistTheCase}  // optional today
+/&gt;
+</code></pre>
+<p><code>registry.authors(role)</code> lists the plugins offering an editor this role may
+open — deliberately <strong>not</strong> filtered by <code>available()</code>, for the reason above.
+<code>PluginAuthor</code> re-checks the role itself rather than trusting the navigation
+that led to it: a surface reachable by URL must not depend on a check somewhere
+else having happened.</p>
+<hr>
+<h2 id="11b-the-server-slot-14">11b. The server slot <em>(1.4)</em></h2>
+<p>Everything before this was a plugin running in a browser. Whole-slide import is
+not that: it downloads gigabytes, runs a tiler for minutes, and writes to a
+directory only the server can see. So a plugin may ship a <strong>server module</strong>,
+mounted by the host exactly as its room and editor are.</p>
+<pre><code>server/plugins/&lt;id&gt;/index.js
+
+export default {
+    jobs:   { import_slide: async (job, api, ctx) =&gt; { … } },
+    routes: (router, ctx) =&gt; { router.post(&#39;/imports&#39;, ctx.guards.educator, handler) },
+}
+</code></pre>
+<h3 id="11b1-peaceful-exclusion-on-the-server-too">11b.1 Peaceful exclusion, on the server too</h3>
+<p><code>src/plugins/index.js</code> uses <code>import.meta.glob</code> so deleting a plugin directory
+still leaves a bootable app. The server half keeps that property: discovery is a
+directory read plus a dynamic <code>import()</code> in a <code>try/catch</code>. A module that is
+absent, throws while loading, or has no manifest is <strong>reported</strong> as unavailable
+and rohy starts normally. <em>A plugin that can take the server down at boot is not
+a plugin, it is a dependency.</em></p>
+<h3 id="11b2-what-the-context-narrows-and-why-harder-than-6">11b.2 What the context narrows, and why harder than §6</h3>
+<p>§6&#39;s rule is that a capability is an adapter the host builds, never a host
+singleton. It applies with more force here, because a server module runs as the
+rohy service user with the deployment&#39;s filesystem and network position.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>ctx</code></th>
+<th>What it is</th>
+<th>Why it is not the raw thing</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>registerJob</code></td>
+<td>one handler per kind, namespaced <code>&lt;id&gt;:&lt;kind&gt;</code></td>
+<td>two plugins cannot collide on <code>import</code>; the host owns the queue, the worker and the concurrency</td>
+</tr>
+<tr>
+<td><code>download</code></td>
+<td><code>pluginFetch.js</code>, allowlist already resolved</td>
+<td>the plugin passes no origin list and therefore cannot widen one</td>
+</tr>
+<tr>
+<td><code>runBinary</code></td>
+<td><code>pluginSpawn.js</code>, argv only, allow-listed binary</td>
+<td><strong>never a shell</strong> — a filename containing <code>; rm -rf /</code> is a filename</td>
+</tr>
+<tr>
+<td><code>libraryDir</code></td>
+<td>the one directory it may write in, or <code>null</code></td>
+<td>a path outside it is a refusal, not a warning</td>
+</tr>
+<tr>
+<td><code>settings</code></td>
+<td>the tenant&#39;s effective settings, read fresh</td>
+<td>an admin who turns imports off expects the <em>next</em> import refused, not the one after a cache expiry</td>
+</tr>
+<tr>
+<td><code>guards</code></td>
+<td>rohy&#39;s own <code>authenticateToken</code> / <code>require*</code></td>
+<td><code>authenticateToken</code> is not only auth — it checks revocation in <code>active_sessions</code>, re-reads the role so a change takes effect immediately, <strong>and runs CSRF for cookie clients</strong>. A hand-rolled equivalent loses all three</td>
+</tr>
+<tr>
+<td><code>helpers</code></td>
+<td><code>tenantId</code>, <code>auditSuccess</code></td>
+<td>a plugin&#39;s mutations are tenant-scoped and land in the tamper-evident audit chain like every other mutation</td>
+</tr>
+</tbody></table></div>
+<h3 id="11b3-one-worker-and-why-that-is-not-a-knob">11b.3 One worker, and why that is not a knob</h3>
+<p>Measured on 2026-08-29 with vips 8.18.6: <code>openslideload --level 2</code> on a 2.1 GB
+NDPI peaks at <strong>252 MB</strong> RSS, <code>dzsave</code> at <strong>299 MB</strong>. The target server is
+budgeted at 3 GB. One worker leaves an order of magnitude of headroom; four turn
+that margin into an OOM kill under a batch import — and an OOM-killed tiler
+leaves a partial pyramid on disk that nothing distinguishes from a complete one.
+Concurrency stays fixed at 1 in 1.4 because raising it needs a disk-state design
+first, not because nobody thought of it.</p>
+<p>For the same reason, <strong>a job found <code>running</code> at boot is requeued from the
+start</strong>, never resumed from its recorded phase: the process that owned it is
+gone, so <code>phase</code> is the last phase it <em>announced</em>, not the one it reached.
+Trusting it is how a half-downloaded file gets tiled. Handlers are therefore
+required to be idempotent over their own asset directory.</p>
+<p><strong>Cancellation is cooperative</strong> and checked at phase boundaries, not by killing a
+child mid-write: a <code>dzsave</code> killed halfway leaves a directory of tiles that looks
+exactly like a finished one, and a phase boundary is the one place the on-disk
+state is known.</p>
+<h3 id="11b4-route-ordering-is-part-of-the-contract">11b.4 Route ordering is part of the contract</h3>
+<p>Under <code>/api/plugins/:pluginId/</code> the host mounts three things, and the order is
+load-bearing:</p>
+<ol>
+<li>the host&#39;s own specific routes (<code>/catalog</code>, <code>/settings</code>) — so a plugin can
+never shadow a surface the standard guarantees;</li>
+<li>the plugin&#39;s own routes;</li>
+<li>the content proxy, which is a <strong>catch-all</strong> (<code>*splat</code>) — so it does not
+swallow the plugin&#39;s paths.</li>
+</ol>
+<p>Get this wrong and a plugin&#39;s <code>GET /plugins/pathology/jobs/:id</code> is answered as an
+undeclared content path — a bug that only appears once a plugin ships its first
+GET.</p>
+<hr>
+<h2 id="11c-settings-14">11c. Settings <em>(1.4)</em></h2>
+<p>A plugin&#39;s material is per-case; its <strong>policy</strong> is per-deployment. Which hosts a
+university will fetch slides from, how much disk it will spend on one, and what
+magnification its teaching actually uses are three questions a case author
+cannot answer and a manifest must not hardcode.</p>
+<p>§14.4 recorded the gap as &quot;no per-tenant enable/disable&quot; and named
+<code>oyon_settings</code> as the pattern to copy. Copying it literally — a column per knob
+— solves it for pathology and leaves the second plugin exactly where the first
+one was, because a column per setting means a <strong>migration per plugin</strong>. So the
+host renders and stores plugin settings <strong>generically from a schema the manifest
+declares</strong>. Pathology is the first user, not the only intended one.</p>
+<h3 id="11c1-the-schema">11c.1 The schema</h3>
+<pre><code class="language-js">settings: {
+    groups: [{ key: &#39;imports&#39;, labelKey: &#39;x_settings_imports&#39; }],
+    fields: {
+        &#39;imports.enabled&#39;:        { type: &#39;boolean&#39;, default: false, labelKey: &#39;x_imports_enabled&#39; },
+        &#39;imports.allowedOrigins&#39;: { type: &#39;origins&#39;, default: [],    labelKey: &#39;x_imports_origins&#39; },
+        &#39;imports.maxBytes&#39;:       { type: &#39;bytes&#39;, min: 1 &lt;&lt; 26, max: 1 &lt;&lt; 34, default: 1 &lt;&lt; 32,
+                                    ceilingEnv: &#39;ROHY_PLUGIN_IMPORT_MAX_BYTES&#39;,
+                                    labelKey: &#39;x_imports_max_bytes&#39; },
+    },
+}
+</code></pre>
+<p>Types are <code>boolean</code>, <code>int</code>, <code>bytes</code>, <code>enum</code>, <code>enumList</code>, <code>origins</code>. A field key
+is <code>&#39;&lt;group&gt;.&lt;field&gt;&#39;</code>; the group must be declared. <code>minRole</code> defaults to
+<strong>admin</strong> — the safe reading of an omission about who may change a
+deployment-wide knob is the strictest one, and it is per FIELD rather than per
+route because one page can hold an admin-only import policy and an
+educator-readable library table.</p>
+<p><code>ceilingEnv</code> names an environment variable an <strong>operator</strong> sets. A tenant admin
+may lower a value below that ceiling and can never raise one above it: an
+operator who caps a deployment is not overridden by a manifest declaring a
+larger <code>max</code>. Only the server reads it — <code>server/shared/pluginSettings.js</code> is
+bundled into the browser, where <code>process</code> does not exist and a limit read from
+it would be no limit at all.</p>
+<h3 id="11c2-storage-is-flat-and-the-put-is-a-merge">11c.2 Storage is flat, and the PUT is a merge</h3>
+<p>Values live in <code>plugin_settings(tenant_id, plugin_id, settings JSON, …)</code>
+(migration 0048) as a <strong>flat map of dotted keys</strong> — <code>{&quot;imports.enabled&quot;: true}</code>
+— never a nested object. <code>PUT /api/plugins/&lt;id&gt;/settings</code> is a <strong>key-presence
+merge</strong> (the same semantics as <code>/platform-settings/voice</code>, and deliberately not
+the full replace <code>/addons/oyon/settings</code> is), and <em>&quot;which keys did the caller
+send&quot;</em> has exactly one answer on a flat map and several defensible ones on a
+nested one. Deep-merge ambiguity is how a partial save silently erases a sibling
+key. A plugin that would rather read <code>settings.imports.enabled</code> gets the nested
+view from <code>nestSettings()</code>; storage stays flat.</p>
+<p>A tenant with <strong>no row</strong> is not an error and must never be: it runs on the
+manifest&#39;s declared defaults. That is why every field is required to declare
+one, and why the absence of a row means <em>&quot;never configured&quot;</em> rather than
+<em>&quot;configured to nothing&quot;</em>.</p>
+<h3 id="11c3-a-default-is-a-value-and-is-checked-like-one">11c.3 A default is a value, and is checked like one</h3>
+<p>The single most important check in the slot: a schema whose default violates its
+own constraint <strong>fails open</strong>. <code>{ max: 16 GiB, default: 64 GiB }</code> would ship
+64 GiB to every tenant that never opened the settings page, while the page
+itself refused to save that number. So <code>validateSettingsSchema()</code> runs each
+declared default through the same <code>coerceSettingValue()</code> a request body goes
+through, at <code>plugins:gen</code> time, before any code runs.</p>
+<p>Two more rules follow the same fail-closed instinct. An <strong>unknown key in a PUT
+is refused</strong>, never ignored — silently dropping it is how an operator saves a
+typo&#39;d field, sees a <code>200</code>, and believes a limit is in force that nothing ever
+reads. And on <strong>read</strong>, a stored key the schema no longer declares is dropped
+and a stored value it now rejects falls back to the default, because that is
+what a plugin upgrade looks like from the database&#39;s point of view.</p>
+<hr>
+<h2 id="12-adding-a-plugin">12. Adding a plugin</h2>
+<ol>
+<li><code>src/plugins/&lt;id&gt;/manifest.js</code></li>
+<li><code>src/plugins/&lt;id&gt;/index.jsx</code></li>
+<li><code>npm run plugins:gen</code>, commit the generated file</li>
+<li>Add <code>room_&lt;id&gt;</code> / <code>room_&lt;id&gt;_sub</code> to <code>src/locales/en/common.json</code>, then
+<code>npm run i18n:extract</code> → <code>i18n:pseudo</code> → <code>i18n:translate</code></li>
+<li>Put material on a case: the wizard&#39;s <strong>Plugins</strong> step lists every plugin
+that ships an editor, and Done writes the document to <code>case.config.&lt;id&gt;</code></li>
+</ol>
+<p>No edit to <code>App.jsx</code>, <code>RoomNavigator.jsx</code>, <code>eventLogger.js</code>,
+<code>clinicalStates.js</code> or <code>analytics-routes.js</code>. <strong>That list is the standard&#39;s
+acceptance test</strong> — each of those files used to require one.</p>
+<hr>
+<h2 id="13-conformance-checklist">13. Conformance checklist</h2>
+<ul>
+<li><input disabled="" type="checkbox"> Both <code>manifest.js</code> and <code>index.jsx</code> present</li>
+<li><input disabled="" type="checkbox"> Manifest passes <code>npm run plugins:gen</code> (rules R1–R15)</li>
+<li><input disabled="" type="checkbox"> <code>available()</code> declines a case the plugin cannot serve, and never throws</li>
+<li><input disabled="" type="checkbox"> Every declared capability is checked for presence before use</li>
+<li><input disabled="" type="checkbox"> Nothing is persisted that the plugin cannot restore</li>
+<li><input disabled="" type="checkbox"> The plugin imports nothing from rohy</li>
+<li><input disabled="" type="checkbox"> i18n keys exist for <code>room.labelKey</code> and <code>room.subKey</code></li>
+<li><input disabled="" type="checkbox"> If it ships an editor: <code>authoring</code> block AND <code>authorComponent</code> both present,
+<code>authoring.minRole</code> stated and at least as strong as <code>minRole</code>, and its
+<code>labelKey</code> has an i18n entry (§11)</li>
+<li><input disabled="" type="checkbox"> <em>(1.3)</em> If it ships an editor: the descriptor exports <code>validate(doc)</code> (R19),
+<code>available()</code> judges the document not the key (R20), and its document
+round-trips <code>PUT /cases</code> → <code>case_snapshot</code> → room with no plugin code (§11a)</li>
+<li><input disabled="" type="checkbox"> <em>(1.3)</em> A blank document saved from the editor does NOT light the room</li>
+<li><input disabled="" type="checkbox"> <em>(1.4)</em> If it declares <code>settings</code>: every field has a <code>default</code> that its own
+constraints accept (R21), keys name declared groups (R22), numeric fields
+are bounded (R23), and each <code>labelKey</code> has an i18n entry (§11c)</li>
+<li><input disabled="" type="checkbox"> <em>(1.4)</em> Its settings survive the round trip <code>PUT</code> → re-<code>GET</code> with untouched
+keys unchanged — the PUT is a merge, not a replace</li>
+<li><input disabled="" type="checkbox"> <em>(1.4)</em> If it ships a server module: tables are namespaced (R24), the
+network and binaries are reached only through <code>ctx</code> (R25), writes stay
+inside <code>ctx.libraryDir</code> (R26), and deleting the directory still boots rohy</li>
+<li><input disabled="" type="checkbox"> <em>(1.4)</em> Its job handlers are idempotent over their own asset directory —
+an interrupted job is requeued from the START, not resumed mid-phase</li>
+<li><input disabled="" type="checkbox"> <em>(1.4)</em> If it is vendored from its own repo: <code>.vendor.json</code> is present and
+current (R27), the copy has not been edited in rohy (R28), and
+<code>npm run vendor:check</code> is clean (§16)</li>
+<li><input disabled="" type="checkbox"> <em>(1.5)</em> If it ships a server module: every instant comes from <code>ctx.now()</code> —
+no <code>new Date()</code>, no <code>CURRENT_TIMESTAMP</code> (R31) — and every <code>INSERT</code> into a
+shared plugin table names its time column (R32), pinned by a test in the
+package&#39;s own repo so the author sees the failure before the host does (§17)</li>
+<li><input disabled="" type="checkbox"> <em>(1.5)</em> Server-side events go through <code>ctx.emit()</code> with a verb the manifest
+declares; operational work (an import, a sweep) is NOT dressed as a learner
+verb (§17)</li>
+</ul>
+<hr>
+<h2 id="14-not-built-yet">14. Not built yet</h2>
+<p>Ordered by how much they matter to a plugin author.</p>
+<ol>
+<li><strong>No narrowed <code>log()</code> adapter</strong> — <code>ctx.eventLogger</code> is the mutable global
+singleton (§6).</li>
+<li><strong><code>ctx.store</code> is still per-browser.</strong> Narrowed in 1.4 rather than closed. A
+plugin&#39;s SERVER module can now write (§11b) — routes, jobs and its own
+<code>plugin_&lt;id&gt;_</code> tables — so bulk content and long work have a home. But the
+CLIENT-side <code>ctx.store</code> a room uses for drafts is still <code>localStorage</code>: fine
+for a draft, not for anything that must survive a device change.
+Nor is there an upstream-authentication design: the proxy can only reach a
+host that will serve it unauthenticated from rohy&#39;s network position.</li>
+<li><strong>No plugin/version attribution on rows.</strong> Events store neither <code>plugin_id</code>
+nor manifest version, and clinical state is resolved with the currently
+installed maps — so upgrading or removing a plugin retroactively reinterprets
+historical analytics.</li>
+<li><del><strong>No per-tenant enable/disable</strong></del> — <strong>closed in 1.4</strong> by the settings slot
+(§11c): <code>plugin_settings</code> is per (tenant, plugin), and a plugin declares its
+own knobs rather than getting a hand-written screen. <code>minRole</code> and
+<code>authoring.minRole</code> ARE enforced — as of 1.1 in <code>registry.resolve()</code> and
+<code>PluginAuthor</code>, as of 1.2 server-side in the remote proxy, and as of 1.4 per
+settings FIELD.</li>
+<li><strong>No LLM grant exists</strong>, so <code>capabilities.llm</code> is always absent.</li>
+<li><strong>No cleanup path for <code>rohy_plugin:*</code></strong> — a <code>session</code> lifetime is declared
+but nothing clears the keys, so state persists on shared browsers.</li>
+<li><strong>Runtime/third-party loading is out of scope</strong> (§1).</li>
+</ol>
+<span class="anchor-alias" id="pre-existing-rohy-issues-surfaced-during-review--now-fixed"></span><h3 id="pre-existing-rohy-issues-surfaced-during-review-now-fixed">Pre-existing rohy issues surfaced during review — now fixed</h3>
+<p>Not caused by RPS-1, but they affected every plugin&#39;s data. All three were
+closed in v2.9.60; kept here because they define guarantees a plugin author can
+now rely on.</p>
+<ul>
+<li><strong>Session ownership.</strong> <code>resolveSessionTrinity()</code> checked tenant membership but
+not ownership, and deriving <code>(user_id, case_id)</code> from the sessions row made
+that worse rather than better: a forged event arrived correctly attributed to
+the victim. It now takes an optional <code>principal</code> and returns
+<code>reason: &#39;not_owner&#39;</code> for a session the caller does not own — passed by both
+ingest endpoints, and not widened by rank. It also excludes soft-deleted
+sessions. <strong>A plugin&#39;s events are attributable</strong>: a row naming a learner means
+that learner&#39;s browser produced it.</li>
+<li><strong><code>severity</code> / <code>category</code> are persisted.</strong> Both were dropped at ingestion, so
+every row landed NULL. The verb→metadata map moved from
+<code>src/services/eventLogger.js</code> to <code>server/shared/learningVerbs.js</code>, so the
+server now <em>derives</em> both from the verb — which is what makes a manifest&#39;s
+mandatory <code>verbMetadata</code> (R7) mean something. A caller may override within the
+enum; an out-of-enum value is rejected as <code>invalid_event_metadata</code> rather than
+coerced or left to fail the CHECK constraint.</li>
+<li><strong>Batch cap and per-user rate limit.</strong> <code>MAX_BATCH_EVENTS = 500</code> matches
+BackendSurface&#39;s own queue cap. The endpoint was not strictly unlimited before
+— <code>routes.js</code> mounts a 600/min global limiter — but that one is keyed by IP,
+and a teaching lab shares one NAT address, so telemetry from one noisy client
+spent the whole room&#39;s budget. The route-level limiter is keyed by
+(tenant, user) at 240/min against a legitimate ~12/min.</li>
+</ul>
+<hr>
+<h2 id="15-reference-implementation">15. Reference implementation</h2>
+<p><code>src/plugins/pathology/</code> — adapts the Pathoyon package
+(<code>src/components/pathology/</code>, a byte-identical copy of
+<code>~/Documents/Github/Pathoyon/pathoyon/src</code>, re-vendored v2.9.69; rohy&#39;s
+<code>portability.test.js</code> guards the boundary) into a room with 23
+verbs, 9 object types, whole-slide viewing, annotation with QuPath GeoJSON
+interchange, and read-process assessment.</p>
+<hr>
+<h2 id="16-vendored-packages-14">16. Vendored packages <em>(1.4)</em></h2>
+<p>Three of rohy&#39;s plugins are not written in rohy. <code>pathoyon</code> and <code>radoyon</code> live
+in their own repositories and rohy carries <strong>byte-identical copies</strong> of them.
+This section is the contract that makes that safe, and it applies to every
+vendored plugin package equally.</p>
+<h3 id="161-why-copies-and-not-dependencies">16.1 Why copies and not dependencies</h3>
+<p>rohy ships a <strong>Docker image</strong> and an <strong>air-gap source bundle</strong>. A
+<code>file:../Radoyon/radoyon</code> dependency resolves on a developer&#39;s laptop and
+nowhere else — not in CI, not in the image, not in the offline tarball. The
+JStats siblings in this workspace use <code>file:</code> deps happily because they never
+ship offline.</p>
+<p><em>Vendoring was never the mistake. Untracked vendoring was.</em></p>
+<h3 id="162-what-a-vendored-folder-contains">16.2 What a vendored folder contains</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>the package&#39;s files</td>
+<td>byte-identical to the upstream subtree</td>
+</tr>
+<tr>
+<td><code>README.md</code></td>
+<td><strong>host-owned</strong> — where it came from, how to re-vendor</td>
+</tr>
+<tr>
+<td><code>portability.test.js</code></td>
+<td><strong>host-owned</strong> — the import gate (§3.2, §11b.2)</td>
+</tr>
+<tr>
+<td><code>.vendor.json</code></td>
+<td><strong>the stamp</strong> — written by the vendoring tool</td>
+</tr>
+</tbody></table></div>
+<p>Host-owned files are excluded from the copy and from the stamp&#39;s hash. They must
+survive re-vendoring: if a copy deleted them, the gate on that package would
+disappear with it and nothing would notice.</p>
+<pre><code class="language-json">{ &quot;package&quot;: &quot;radoyon&quot;, &quot;version&quot;: &quot;0.1.0&quot;, &quot;commit&quot;: &quot;029e4e1b…&quot;,
+  &quot;vendoredAt&quot;: &quot;2026-08-29&quot;, &quot;files&quot;: 19, &quot;sha256&quot;: &quot;3a7f2d08…&quot;,
+  &quot;hostOwned&quot;: [&quot;README.md&quot;, &quot;portability.test.js&quot;] }
+</code></pre>
+<h3 id="163-what-a-stamp-proves-and-what-it-cannot">16.3 What a stamp proves, and what it cannot</h3>
+<p>It proves <strong>provenance</strong> — which package, version and upstream commit this is —
+and <strong>integrity</strong>: <code>tests/server/vendored-packages.test.js</code> recomputes the hash
+over the folder&#39;s contents, so a copy edited in place is a red test rather than
+a surprise at the next re-vendor.</p>
+<p>It cannot prove <strong>currency</strong> on its own. A copy three commits behind hashes
+perfectly against its own stamp. Staleness needs the upstream checkout, which CI
+does not have, so <code>npm run vendor:check</code> reports it only where upstream is
+present. The stamp&#39;s job is to make the question <em>answerable</em> — before it, rohy&#39;s
+PACS copy sat frozen while both repos moved and nothing in rohy said so or could
+have. <code>portability.test.js</code> checks imports, not currency; the room&#39;s own tests
+stay green against stale code.</p>
+<h3 id="164-the-rules">16.4 The rules</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Rule</th>
+<th>What it prevents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R27</td>
+<td>A vendored folder carries <code>.vendor.json</code> naming the package, upstream commit and a content hash</td>
+<td>a copy whose origin is archaeology, and drift nothing can detect</td>
+</tr>
+<tr>
+<td>R28</td>
+<td>The copy is <strong>never edited in rohy</strong> — edit upstream and re-vendor</td>
+<td>a fix that exists in the host and vanishes at the next copy</td>
+</tr>
+<tr>
+<td>R29</td>
+<td>Vendoring <strong>refuses a source that does not hold the package</strong>, and refuses to stamp a <strong>dirty</strong> upstream</td>
+<td><code>rsync --delete</code> from an empty source emptying the destination (which has happened here), and a stamp naming a commit that does not contain the code</td>
+</tr>
+<tr>
+<td>R30</td>
+<td>Host-owned files are excluded from the copy and survive it</td>
+<td>losing the gate along with the code it guards</td>
+</tr>
+</tbody></table></div>
+<h3 id="165-the-commands">16.5 The commands</h3>
+<pre><code>npm run vendor              # every registered package
+npm run vendor -- pacs      # one of them
+npm run vendor:check        # verify stamps; report staleness where upstream is present
+</code></pre>
+<p>The registry lives in <code>scripts/vendor-plugins.mjs</code>. A package <strong>may</strong> ship its
+own installer — radoyon does, on the principle that a package knows how to
+install itself — and the host delegates to it, then verifies the stamp like any
+other. <strong>One contract, one gate, more than one permitted implementation</strong>, the
+same way <code>plugins:gen</code> owns the manifest contract without owning every manifest.</p>
+<h3 id="166-not-covered-here">16.6 Not covered here</h3>
+<p><code>OyonR/</code> and <code>src/components/lessons/</code> are also copies of code from elsewhere,
+and are deliberately outside this section: neither is an RPS-1 plugin. <code>OyonR</code>
+is an add-on with its own server routes, and <code>lessons</code> was ported from LAILA and
+has diverged. The same discipline would suit both, and adding them is two lines
+in the registry once someone decides what their upstreams are.</p>
+<h2 id="17-time-15">17. Time <em>(1.5)</em></h2>
+<p><strong>One rule: every instant rohy stores or transmits is UTC ISO-8601 with an
+explicit <code>Z</code> and milliseconds — <code>2026-08-29T12:34:56.789Z</code>.</strong> It is defined once,
+in <code>server/shared/time.js</code>, and reaches a plugin as <code>ctx.now()</code>.</p>
+<h3 id="why-this-is-a-standard-and-not-a-style-note">Why this is a standard and not a style note</h3>
+<p>Before 1.5 two shapes coexisted in the same columns. Anything a browser wrote
+arrived as <code>2026-08-29T12:34:56.789Z</code>; anything falling through to sqlite&#39;s
+<code>DEFAULT CURRENT_TIMESTAMP</code> was written as <code>2026-08-29 12:34:56</code> — also UTC, but
+with a space, no zone marker and no milliseconds. Both are the same instant and
+sqlite&#39;s own date functions read them identically (<code>julianday(iso) - julianday(space)</code> is exactly <code>0.0</code>), which is why the defect survived so long:
+every <code>julianday()</code> and <code>date()</code> filter in the codebase was always correct.</p>
+<p>Two things were not.</p>
+<p><strong>Ordering.</strong> These columns have TEXT storage, so <code>ORDER BY &lt;ts&gt;</code> is a <em>string</em>
+sort, and <code>&#39; &#39;</code> (0x20) sorts before <code>&#39;T&#39;</code> (0x54):</p>
+<pre><code>&#39;2026-08-29 23:59:59&#39;  &lt;  &#39;2026-08-29T00:00:01.000Z&#39;   →  true
+</code></pre>
+<p>A row a full day later sorted first. On the development database, 2169 of 3119
+<code>learning_events</code> rows sat in the wrong position under <code>ORDER BY timestamp</code> —
+70% of them, from only 107 legacy rows among 3012 conforming ones. A minority
+shape is enough to scramble the majority.</p>
+<p><strong>Browser parsing.</strong> <code>new Date(&#39;2026-08-29 23:59:59&#39;)</code> is not an ISO string, so
+V8 falls back to local-time parsing and the row lands at the <em>viewer&#39;s</em> UTC
+offset — three hours out in Europe/Helsinki, a different number for every
+viewer, and a different number either side of a DST boundary.</p>
+<p>Neither failure is loud. Both produce plausible numbers.</p>
+<h3 id="the-contract">The contract</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Shape</td>
+<td><code>YYYY-MM-DDTHH:MM:SS.mmmZ</code> — UTC, <code>T</code>, exactly three decimals, <code>Z</code></td>
+</tr>
+<tr>
+<td>Minted by</td>
+<td><code>nowIso()</code> (JS) / <code>SQL_NOW</code> (SQL) / <code>ctx.now()</code> (a plugin)</td>
+</tr>
+<tr>
+<td>Parsed by</td>
+<td><code>timeMs()</code> / <code>toIsoZ()</code> — which also read the legacy shape <em>as UTC</em></td>
+</tr>
+<tr>
+<td>Displayed by</td>
+<td><code>src/utils/formatTime.js</code> — the viewer&#39;s own zone, the one place a local zone belongs</td>
+</tr>
+</tbody></table></div>
+<p>Storage and comparison are zone-free; <strong>display is local</strong>. A learner in
+Helsinki and a reviewer in Madrid should see the same event at different
+wall-clock times. That is correct, and it is the only place a local zone
+belongs.</p>
+<h3 id="whose-clock">Whose clock</h3>
+<p><strong>The server&#39;s.</strong> A browser clock is unverifiable, and a device three hours fast
+used to drag a learner&#39;s whole session away from the server-stamped chat turns
+beside it — indistinguishable, afterwards, from a genuine overnight resume.</p>
+<p>The device&#39;s reading is <em>kept</em>, not <em>trusted</em>: <code>/learning-events/batch</code> writes
+the server&#39;s instant into <code>timestamp</code> and the browser&#39;s into <code>client_time</code>. The
+difference between those two columns is the skew, per event, measurable after
+the fact.</p>
+<p>Spacing survives the change. A batched event carries <code>offset_ms</code> — how long
+before the flush it happened — and the server subtracts that from its own
+receipt time. Gaps between a session&#39;s events stay exact, which is what
+time-on-task and TNA actually read, while the <em>anchor</em> comes from a clock rohy
+controls. A missing or absurd offset degrades to receipt time rather than
+throwing: telemetry that cannot be placed perfectly still beats telemetry
+dropped.</p>
+<h3 id="two-things-a-plugin-must-not-do">Two things a plugin must not do</h3>
+<p>A plugin has <code>ctx.db</code>, so it <em>can</em> write any shape it likes. Both of these were
+found in the reference implementation when this section was written:</p>
+<pre><code class="language-js">// NO — sqlite&#39;s DEFAULT supplies the legacy shape, silently.
+INSERT INTO plugin_assets (id, tenant_id, label) VALUES (?, ?, ?)
+
+// NO — names the legacy shape outright.
+UPDATE plugin_assets SET state = &#39;ready&#39;, updated_at = CURRENT_TIMESTAMP
+
+// YES — the host&#39;s clock, bound like any other value.
+INSERT INTO plugin_assets (id, tenant_id, label, created_at) VALUES (?, ?, ?, ?)
+UPDATE plugin_assets SET state = &#39;ready&#39;, updated_at = ?
+</code></pre>
+<p>A column <code>DEFAULT</code> cannot be altered in sqlite without rebuilding the table, so
+the shared plugin tables still default to the legacy shape. <strong>The guarantee rests
+entirely on the INSERT naming its time column</strong> (R32), which is why both the host
+and the reference package pin it with a source-scanning test rather than trusting
+review.</p>
+<h3 id="the-one-column-that-is-not-normalised">The one column that is not normalised</h3>
+<p><code>system_audit_log.timestamp</code> keeps its original shape forever. It is inside the
+tamper-evident hash — <code>canonicalRow()</code> in <code>server/audit-chain.js</code> emits it as
+<code>ts</code> — and the chain cannot tell a reformat from a forgery. That is the property
+it exists to have, so rewriting it would make every historical row fail
+verification.</p>
+<p>It instead carries <code>ts_utc</code>, a VIRTUAL generated column over <code>timestamp</code>. A
+virtual column stores no bytes, is indexable, is correct for <em>any</em> input shape,
+and is not one of <code>canonicalRow()</code>&#39;s <code>LOGICAL_FIELDS</code> — verified by
+<code>scripts/verify-audit-chain.js</code> producing byte-identical output with and without
+it. <strong>Order and date-filter that table by <code>ts_utc</code>, never by <code>timestamp</code>.</strong></p>
+<h3 id="server-side-events">Server-side events</h3>
+<p>Until 1.5 every plugin event was emitted by the browser, so a plugin&#39;s server
+work was invisible: a slide import that ran for four minutes wrote <code>plugin_jobs</code>
+rows and not one learning event, and <code>plugin_jobs</code> was not one of the Activity
+view&#39;s sources. Work nobody clicked through — a job finishing, a job failing, an
+asset expiring — had no way to be seen at all.</p>
+<p><code>ctx.emit()</code> closes the learner-facing half. The verb must be one the plugin
+<strong>declared in its manifest vocabulary</strong>: the same rule the ingest route applies
+to a browser, and what stops a plugin inventing verbs at runtime that no
+dashboard, state map or export knows how to read. The trinity is derived from
+the session, never accepted — a plugin is not more trusted than a browser here —
+and <code>timestamp</code> is the server&#39;s clock, so a plugin can say <em>what</em> happened but
+never <em>when</em>.</p>
+<p>Operational work is not a learning event. A slide import is not something a
+learner did, and forcing it into a learner verb would corrupt exactly the
+analytics it was meant to enrich. <code>plugin_jobs</code> is instead its own source in the
+unified Activity view, beside <code>system_audit_log</code> — which is where a four-minute
+import, and every failure of one, belongs.</p>
+<hr>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

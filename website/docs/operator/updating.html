@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Updating Rohy · Rohy docs</title>
+    <meta name="description" content="This is the operator manual for keeping a rohy install current. If you are looking only at the strategy or how it was designed, see the Update strategy. This document is the pag…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Updating Rohy · Rohy docs">
+    <meta property="og:description" content="This is the operator manual for keeping a rohy install current. If you are looking only at the strategy or how it was designed, see the Update strategy. This document is the pag…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Operator</span>
+        <h1>Updating Rohy</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#tldr-three-commands">TL;DR: three commands</a>
+            <a href="#before-your-first-upgrade">Before your first upgrade</a>
+            <a href="#two-upgrade-paths">Two upgrade paths</a>
+            <a href="#the-upgrade-procedure-path-a-binrohy-update">The upgrade procedure (Path A: bin/rohy-update)</a>
+            <a href="#rollback">Rollback</a>
+            <a href="#major-version-upgrades">Major version upgrades</a>
+            <a href="#off-site-backups">Off-site backups</a>
+            <a href="#troubleshooting">Troubleshooting</a>
+            <a href="#security-verifying-releases">Security: verifying releases</a>
+            <a href="#what-the-tool-does-not-do">What the tool does NOT do</a>
+            <a href="#filing-bugs">Filing bugs</a>
+            <a href="#further-reading">Further reading</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Running Rohy in Production</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="install.html">Install</a>
+                    <a href="deploy.html">Deploy &amp; harden</a>
+                    <a href="updating.html" aria-current="page">Update</a>
+                    <a href="update-strategy.html">Update strategy</a>
+                    <a href="backup-restore.html">Backup &amp; restore</a>
+                    <a href="migrations.html">Migrations runbook</a>
+                    <a href="retention.html">Retention &amp; purges</a>
+                    <a href="observability.html">Observability</a>
+                    <a href="incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>This is the operator manual for keeping a rohy install current. If you are
+looking only at the strategy or how it was designed, see the
+<a href="update-strategy.html">Update strategy</a>. This document is the page you
+read <strong>before pressing the upgrade button</strong>.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Reference</p>
+<p><code>bin/rohy-update</code> subcommands, exit codes and config vars are
+single-sourced in <a href="../reference/cli/index.html">CLI &amp; ops</a>. Terms like <em>snapshot</em>,
+<em>rollback recipe</em> and <em>additive migration</em> are defined in the
+<a href="../reference/glossary.html">Glossary</a>.</p>
+</aside>
+<blockquote>
+<p><strong>Audience:</strong> anyone running a rohy install (your own lab, a teaching
+hospital, a research site). One operator per install. No fleet.</p>
+</blockquote>
+<hr>
+<h2 id="tldr-three-commands">TL;DR: three commands</h2>
+<pre><code class="language-bash">sudo rohy-update check       # what would change?
+sudo rohy-update apply       # apply it (auto-backup, auto-rollback on failure)
+sudo rohy-update rollback    # undo the last apply
+</code></pre>
+<p>That is the entire happy path. Everything below is detail for when something
+needs care.</p>
+<hr>
+<h2 id="before-your-first-upgrade">Before your first upgrade</h2>
+<p>You only need to do this once per install.</p>
+<h3 id="1-confirm-rohy-update-is-on-your-path">1. Confirm <code>rohy-update</code> is on your <code>$PATH</code></h3>
+<p>If you installed via <code>deploy/bootstrap.sh</code>, <code>bin/rohy-update</code> is symlinked to
+<code>/usr/local/bin/rohy-update</code>. Check:</p>
+<pre><code class="language-bash">which rohy-update
+</code></pre>
+<p>If empty, link it manually:</p>
+<pre><code class="language-bash">sudo ln -s /opt/repos/rohy/bin/rohy-update /usr/local/bin/rohy-update
+</code></pre>
+<h3 id="2-verify-your-config">2. Verify your config</h3>
+<p><code>rohy-update</code> reads <code>/etc/rohy/update.conf</code> if it exists. The defaults in
+<code>bin/rohy-update</code>&#39;s header work for the standard <code>bootstrap.sh</code> install
+layout. Override only what differs. Common case (LAN install with
+self-signed cert):</p>
+<pre><code class="language-bash">sudo install -d /etc/rohy
+sudo tee /etc/rohy/update.conf &gt;/dev/null &lt;&lt;&#39;EOF&#39;
+ROHY_VERIFY_URL=https://192.168.50.39:4001/rohy
+ROHY_INSECURE=1
+EOF
+sudo chmod 644 /etc/rohy/update.conf
+</code></pre>
+<p>If <code>ROHY_VERIFY_URL</code> is empty, the post-deploy verifier is skipped: the
+update succeeds as long as the service comes back up. Setting it gives
+the strongest signal that the new version works.</p>
+<h3 id="2b-optional-arm-the-oyon-contract-probe">2b. (Optional) Arm the Oyon contract probe</h3>
+<p>By default the verifier checks 27 things including liveness, route
+mounting, security headers, and bundle integrity. With one extra step you
+also get a contract probe that POSTs an intentionally malformed emotion
+batch and asserts the server validator catches it (the May-2026
+&quot;label-set drift&quot; bug class). To enable it, drop a credentials file:</p>
+<pre><code class="language-bash">sudo install -m 0600 -o &quot;$USER&quot; -g &quot;$USER&quot; /dev/null &quot;$HOME/.rohy-deploy-creds&quot;
+sudo tee &quot;$HOME/.rohy-deploy-creds&quot; &gt;/dev/null &lt;&lt;EOF
+ROHY_LOGIN_URL=&#39;https://192.168.50.39:4001/rohy/api/auth/login&#39;
+ROHY_DEPLOY_USER=&#39;deploy-verifier&#39;
+ROHY_DEPLOY_PASS=&#39;&lt;paste-password-here&gt;&#39;
+EOF
+chmod 600 &quot;$HOME/.rohy-deploy-creds&quot;
+</code></pre>
+<p>Replace <code>&lt;paste-password-here&gt;</code> with the real password of the verifier
+account. The credentials must belong to a real rohy user. Any role works:
+the contract probe does not read data. It needs only to pass
+<code>authenticateToken</code> so the route reaches the validator. A dedicated
+low-privilege account is recommended.</p>
+<p>If the file is absent, <code>rohy-update</code>&#39;s post-verify still runs. The
+contract probe skips, and the deploy passes on the other 27 checks.
+No breaking change.</p>
+<h3 id="3-take-a-manual-baseline-backup">3. Take a manual baseline backup</h3>
+<p>Belt-and-braces: every <code>apply</code> snapshots automatically, but a manual
+baseline gives you a known-good restore point before you start trusting the
+automation:</p>
+<pre><code class="language-bash">sudo scripts/rohy-backup.sh --label baseline
+sudo scripts/rohy-backup.sh --check          # verify it can be read
+</code></pre>
+<p>Backups live at <code>/var/backups/rohy/&lt;timestamp&gt;-&lt;git-sha&gt;-&lt;label&gt;/</code>, where
+<code>&lt;timestamp&gt;</code>, <code>&lt;git-sha&gt;</code> and <code>&lt;label&gt;</code> are filled in per snapshot.</p>
+<hr>
+<h2 id="two-upgrade-paths">Two upgrade paths</h2>
+<p>Pick one. Both end at the same place.</p>
+<h3 id="path-a-binrohy-update-sourcesystemd-installs">Path A: <code>bin/rohy-update</code> (source/systemd installs)</h3>
+<p>For boxes installed via <code>bootstrap.sh</code> or <code>local-install.sh</code>. Git-based:
+<code>rohy-update</code> pulls latest, rebuilds in place, runs migrations,
+verifies, auto-rolls-back on failure. <strong>This is the path the rest of
+this document covers.</strong></p>
+<h3 id="path-b-docker-pull-a-newer-tag-docker-installs">Path B: <code>docker pull</code> a newer tag (Docker installs)</h3>
+<p>For boxes installed via the published image. Each tagged release
+publishes <code>ghcr.io/mohsaqr/rohy:vX.Y.Z</code> and <code>:latest</code>. Upgrade:</p>
+<pre><code class="language-bash"># Snapshot the DB first (Docker doesn&#39;t do this for you)
+docker compose -f deploy/docker/compose.yml exec rohy \
+    sqlite3 /var/lib/rohy/database.sqlite \
+    &quot;.backup /var/lib/rohy/backup-$(date -u +%Y%m%dT%H%M%SZ).sqlite&quot;
+
+# Pull and recreate
+docker compose -f deploy/docker/compose.yml pull rohy
+docker compose -f deploy/docker/compose.yml up -d --no-deps rohy
+
+# Verify
+ROHY_INSECURE=0 scripts/tech-test.sh https://your-host
+</code></pre>
+<p>Migrations auto-run on container start (same code path as <code>rohy-update</code>).
+The release workflow&#39;s <code>verify-published-image</code> job already proved the
+image boots cleanly before publishing the tag, so this upgrade is
+low-risk by construction.</p>
+<p>Rollback for Docker = pin to the previous tag in <code>compose.yml</code> and
+<code>up -d</code> again. Image layers for the previous tag are still cached
+locally until you <code>docker image prune</code>.</p>
+<hr>
+<h2 id="the-upgrade-procedure-path-a-binrohy-update">The upgrade procedure (Path A: <code>bin/rohy-update</code>)</h2>
+<h3 id="step-1-rohy-update-check">Step 1: <code>rohy-update check</code></h3>
+<p>Always run this first. Read everything it prints.</p>
+<pre><code class="language-bash">sudo rohy-update check
+</code></pre>
+<p>Example output:</p>
+<pre><code class="language-text">━━ checking for updates ━━
+  current : 56fe0d11a7b3 (branch: main)
+  remote  : 3b579aa4c8e1 (origin/main)
+  behind  : 4 commits
+
+━━ changes summary ━━
+  3b579aa deploy: turn Oyon ON by default in Docker path
+  0b7d4ab tech-test: wait for upstream readiness before probing
+  dabbf2d oyon: proactive camera enumeration
+  ...
+
+━━ migrations ━━
+  pending:
+    - 0019_some_new_migration.sql
+  ✓ all migrations are additive — safe to apply
+
+━━ to apply ━━
+  sudo rohy-update apply
+</code></pre>
+<p>The check is <strong>read-only</strong>. Run it as often as you like. It does:</p>
+<ul>
+<li><code>git fetch</code> to refresh refs.</li>
+<li>Compare local vs <code>origin/main</code>.</li>
+<li>List commits and pending migrations.</li>
+<li>Classify migrations from <code>migrations/MANIFEST.md</code>.</li>
+<li>Print whether destructive flags are involved.</li>
+</ul>
+<p>Exit code 10 means &quot;update available,&quot; 0 means &quot;up to date.&quot; Useful in scripts.</p>
+<h3 id="step-2-rohy-update-apply">Step 2: <code>rohy-update apply</code></h3>
+<pre><code class="language-bash">sudo rohy-update apply
+</code></pre>
+<p>Walks through these steps, in this order. Any failure rolls back to where
+you started.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>What happens</th>
+<th>Safe to abort?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Pre-flight</td>
+<td>Checks disk space, lock, service health</td>
+<td>yes (no changes yet)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Backup</td>
+<td>DB snapshot + env copy + manifest written</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Stop service</td>
+<td>Graceful SIGTERM, wait for clean shutdown</td>
+<td>recoverable: <code>systemctl start rohy</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Checkout new code</td>
+<td><code>git checkout &lt;new-sha&gt;</code> in repo dir</td>
+<td>recoverable: <code>rohy-update rollback</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>npm ci + build</td>
+<td>Install deps, build frontend</td>
+<td>recoverable: <code>rohy-update rollback</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Migration dry-run</td>
+<td><code>node scripts/migrate.js --dry-run</code></td>
+<td>yes (no DB changes yet)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Start service</td>
+<td><code>systemctl start</code>, real migrations run on boot</td>
+<td>recoverable via rollback</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Verify</td>
+<td><code>tech-test.sh</code> against <code>ROHY_VERIFY_URL</code></td>
+<td>recoverable via rollback</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Persist rollback recipe</td>
+<td>Records what was applied for <code>rohy-update rollback</code></td>
+<td>done</td>
+</tr>
+</tbody></table></div>
+<p>In step 4, <code>&lt;new-sha&gt;</code> is the target commit <code>check</code> reported. Total wall
+time: 30-120 seconds for a typical update, depending on <code>npm ci</code> cache
+state and how much the build does.</p>
+<p><strong>You will be asked to confirm.</strong> If running unattended (cron, CI), pass
+<code>--yes</code>. If destructive migrations are pending, <code>--allow-destructive</code> is
+also required, and you will be prompted to type the migration filename.</p>
+<h3 id="step-3-verify-in-the-browser">Step 3: Verify in the browser</h3>
+<p>The automated verifier covers the API surface. The pill widget, camera
+permission, login flow: those still need a human. Hard-refresh
+<code>https://your-host/rohy/</code> in your browser, click around. If anything looks
+broken, <strong>do not wait</strong>. Run <code>sudo rohy-update rollback</code> and report the issue.</p>
+<hr>
+<h2 id="rollback">Rollback</h2>
+<h3 id="automatic">Automatic</h3>
+<p>If any step in <code>apply</code> fails, the tool <strong>already rolled back</strong> before
+exiting non-zero. You will see:</p>
+<pre><code class="language-text">✗ post-deploy verify failed
+! auto-rollback to 56fe0d11a7b3
+✓ DB restored from /var/backups/rohy/20260510T120000Z-...
+✓ env restored
+✓ running (after 4s)
+! rolled back to 56fe0d11a7b3 (was attempting update). See /var/log/rohy-update.log.
+</code></pre>
+<p>When you see this, the install is back where it started. The new code is
+checked out (so <code>git status</code> looks new) but <code>git checkout &lt;old-sha&gt;</code> was
+run before the service restart: you are on the old version.</p>
+<h3 id="manual-after-a-successful-apply-you-change-your-mind">Manual (after a successful <code>apply</code>, you change your mind)</h3>
+<pre><code class="language-bash">sudo rohy-update rollback
+</code></pre>
+<p>Reads <code>/var/lib/rohy/rollback/last</code>, restores the snapshot taken before the
+last <code>apply</code>, checks out the old git sha, restarts. Confirms with you first.</p>
+<aside class="callout callout-danger">
+<p class="callout-title">Destructive migrations block auto-rollback</p>
+<p><strong>If the apply included destructive migrations</strong>, <code>rollback</code> will refuse and
+print an alternative procedure: you must restore manually because the old
+code cannot read the new schema. Use <code>rohy-update restore-backup &lt;snapshot&gt;</code>
+and accept that you may have to re-do anything that happened
+since the apply.</p>
+</aside>
+<h3 id="restoring-an-arbitrary-snapshot">Restoring an arbitrary snapshot</h3>
+<pre><code class="language-bash">sudo rohy-update list-backups          # see what&#39;s available
+sudo rohy-update restore-backup 20260510T120000Z-abc123-baseline
+</code></pre>
+<p>Replace the example name with one from <code>list-backups</code>. Restores DB.
+Optionally restores the env file too. Restarts service.</p>
+<hr>
+<h2 id="major-version-upgrades">Major version upgrades</h2>
+<p>Some releases will require a <strong>multi-step upgrade path</strong>. The release notes
+will say so explicitly. The pattern, when destructive migrations are
+involved:</p>
+<blockquote>
+<p>&quot;If you are on v0.3.x or earlier, upgrade to v0.4.5 first, run for at
+least a week to confirm stability, then upgrade to v0.5+. Do not skip.&quot;</p>
+</blockquote>
+<p>Why: destructive migrations are split across releases on purpose so that
+<strong>old code can always read the new schema</strong> (see the
+<a href="migrations.html">Migrations runbook</a>).
+Skipping a release breaks that invariant.</p>
+<p>The tool tries to enforce this via the <code>--allow-destructive</code> gate, but if
+upstream forgets to mark a migration destructive, you might silently take
+on incompatibility. <strong>Always read the release notes for major version
+bumps.</strong></p>
+<hr>
+<h2 id="off-site-backups">Off-site backups</h2>
+<p>Local snapshots in <code>/var/backups/rohy/</code> survive bad updates. They do NOT
+survive disk failure, ransomware, or the building burning down. If your
+install carries data you cannot afford to lose, set up an off-site copy.</p>
+<p>Two simple recipes:</p>
+<h3 id="option-a-rsync-to-another-machine-cheapest">Option A: rsync to another machine (cheapest)</h3>
+<pre><code class="language-bash">sudo crontab -e
+# weekly off-site backup, every Sunday 03:00:
+# 0 3 * * 0 rsync -az --delete /var/backups/rohy/ backup@offsite-host:/srv/rohy-backups/
+</code></pre>
+<span class="anchor-alias" id="option-b-rclone-to-s3--b2--google-drive--other-backends"></span><h3 id="option-b-rclone-to-s3-b2-google-drive-other-backends">Option B: rclone to S3 / B2 / Google Drive / other backends</h3>
+<pre><code class="language-bash"># one-time setup (interactive, on the rohy host):
+rclone config
+
+# weekly cron line:
+# 0 3 * * 0 rclone sync /var/backups/rohy s3-backup:rohy-backups --transfers 4
+</code></pre>
+<p><code>rclone</code> handles 30+ backends uniformly. For HIPAA-style compliance, prefer
+a backend with at-rest encryption and audit logs. See the
+<a href="backup-restore.html">Backup &amp; restore runbook</a> for the full drill.</p>
+<hr>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="another-rohy-update-is-running-lock-varlockrohy-updatelock-held">&quot;another rohy-update is running (lock /var/lock/rohy-update.lock held)&quot;</h3>
+<p>A previous run did not clean up. If you are sure none is running:</p>
+<pre><code class="language-bash">sudo ls -la /var/lock/rohy-update.lock     # check ownership
+sudo rm /var/lock/rohy-update.lock
+</code></pre>
+<h3 id="service-did-not-start-within-60s">&quot;service did not start within 60s&quot;</h3>
+<p>The new version&#39;s startup is failing. Check:</p>
+<pre><code class="language-bash">sudo journalctl -u rohy -n 100 --no-pager
+</code></pre>
+<p>Common causes:</p>
+<ul>
+<li>Migration failed at runtime (despite dry-run passing: rare, usually means
+DB had unexpected state).</li>
+<li>An env var introduced in the new release is not set in <code>/etc/rohy/env</code>.
+Compare against <code>deploy/env.example</code>.</li>
+<li>A native dependency failed to install on this distro / arch.</li>
+</ul>
+<p><code>rohy-update apply</code> should have already auto-rolled back. If it did not
+(for example, the rollback itself failed), see &quot;Manual recovery&quot; below.</p>
+<h3 id="post-deploy-verify-failed">&quot;post-deploy verify failed&quot;</h3>
+<p>The service started but <code>tech-test.sh</code> found a regression. Look at:</p>
+<pre><code class="language-bash">sudo cat /var/log/rohy-update.log     # the full apply transcript
+sudo journalctl -u rohy -n 100        # service-side errors
+</code></pre>
+<p>Most often: one specific endpoint is broken in the new release. The tool
+auto-rolled back; you are on the old version. File a bug with the
+<code>tech-test.sh</code> output included.</p>
+<h3 id="destructive-migrations-pending-refusing-to-apply">&quot;destructive migrations pending: refusing to apply&quot;</h3>
+<p>Read the release notes for the target version. Likely you need to step
+through an intermediate version first. If you are sure, re-run with
+<code>--allow-destructive</code>. <strong>Take an extra manual snapshot first</strong>:</p>
+<pre><code class="language-bash">sudo scripts/rohy-backup.sh --label pre-destructive
+</code></pre>
+<p>Then:</p>
+<pre><code class="language-bash">sudo rohy-update apply --allow-destructive
+</code></pre>
+<p>You will be prompted to type each destructive migration filename to confirm
+you read it.</p>
+<h3 id="one-or-more-migrations-not-declared-in-migrationsmanifestmd">&quot;one or more migrations not declared in migrations/MANIFEST.md&quot;</h3>
+<p>The release shipped a migration without a manifest entry. <strong>Do not apply it.</strong>
+This is a bug in the release. Open an issue or wait for a fix release.</p>
+<h3 id="manual-recovery-when-even-rollback-fails">Manual recovery (when even rollback fails)</h3>
+<p>If you see <code>MANUAL RECOVERY REQUIRED</code> in the apply output, the tool got
+stuck in a bad intermediate state. Recovery procedure:</p>
+<pre><code class="language-bash"># 1. Stop the service (it may be running on broken code)
+sudo systemctl stop rohy
+
+# 2. Find your latest snapshot
+sudo ls -1dt /var/backups/rohy/*/ | head -3
+
+# 3. Restore DB (replace &lt;snapshot&gt; with the dir from step 2)
+sudo cp /var/backups/rohy/&lt;snapshot&gt;/database.sqlite /opt/data/rohy/database.sqlite
+
+# 4. Restore env if needed
+sudo cp /var/backups/rohy/&lt;snapshot&gt;/env /etc/rohy/env
+sudo chmod 600 /etc/rohy/env
+
+# 5. Pick a known-good git sha (the from_sha in the latest rollback recipe)
+sudo cat /var/lib/rohy/rollback/last
+# Note the &quot;from_sha&quot; value, then (replace &lt;from_sha&gt;):
+sudo -u $(stat -c%U /opt/repos/rohy) git -C /opt/repos/rohy checkout &lt;from_sha&gt;
+
+# 6. Reinstall + rebuild
+cd /opt/repos/rohy
+sudo -u $(stat -c%U .) npm ci
+sudo -u $(stat -c%U .) npm run build
+
+# 7. Start
+sudo systemctl start rohy
+</code></pre>
+<p>If you reach this section, file a detailed bug report: the tool should
+have handled it. Include <code>/var/log/rohy-update.log</code>.</p>
+<hr>
+<h2 id="security-verifying-releases">Security: verifying releases</h2>
+<aside class="callout callout-warning">
+<p class="callout-title">v1 does not verify release signatures</p>
+<p><strong>v1 of <code>rohy-update</code> does NOT verify release signatures.</strong> It pulls
+from a github remote configured in your local clone. If the remote is
+compromised, your install is compromised.</p>
+</aside>
+<p>Until signed releases ship (planned; see the
+<a href="update-strategy.html">Update strategy</a>, Phase D), you can verify
+what you are about to install manually:</p>
+<pre><code class="language-bash">sudo rohy-update check                        # see the target sha
+git -C /opt/repos/rohy log --oneline HEAD..origin/main \
+  --stat                                       # see the diff
+</code></pre>
+<p>If anything looks suspicious, such as a commit you do not recognize from the
+maintainer, an unexplained binary blob, or a sudden <code>node_modules</code> change,
+<strong>do not apply it</strong>. Open an issue first.</p>
+<hr>
+<h2 id="what-the-tool-does-not-do">What the tool does NOT do</h2>
+<ul>
+<li>Does not auto-update on a schedule. You decide when.</li>
+<li>Does not send any telemetry. The tool does not phone home.</li>
+<li>Does not modify your <code>/etc/rohy/env</code> (except restoring during rollback).</li>
+<li>Does not touch user-uploaded data outside <code>/opt/data/rohy/database.sqlite</code>.</li>
+<li>Does not update Node, Python, system packages. Those are your distro&#39;s job.</li>
+<li>Does not manage TLS certs.</li>
+</ul>
+<hr>
+<h2 id="filing-bugs">Filing bugs</h2>
+<p>Include this with every bug report:</p>
+<pre><code class="language-bash">sudo rohy-update --help                       # confirm version
+git -C /opt/repos/rohy log -1 --oneline       # current sha
+sudo cat /var/log/rohy-update.log | tail -200
+sudo journalctl -u rohy -n 100 --no-pager
+sudo rohy-update list-backups
+</code></pre>
+<p>Do not include the full DB or <code>/etc/rohy/env</code> (it contains secrets).</p>
+<hr>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="update-strategy.html">Update strategy</a>: design rationale, phases
+beyond v1, references.</li>
+<li><a href="migrations.html">Migrations runbook</a>: migration policy<ul>
+<li>per-migration metadata.</li>
+</ul>
+</li>
+<li><code>README.md</code> in the repo: install paths.</li>
+<li><code>HANDOFF.md</code> in the repo: current development state.</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rohy Enterprise Documentation &amp; Support: Execution Plan · Rohy docs</title>
+    <meta name="description" content="Status: approved, ready to execute. This is a tracked planning contract, not a session artifact — it is intended to live in docs/ and be reviewed/updated as stages complete. Own…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Rohy Enterprise Documentation &amp; Support: Execution Plan · Rohy docs">
+    <meta property="og:description" content="Status: approved, ready to execute. This is a tracked planning contract, not a session artifact — it is intended to live in docs/ and be reviewed/updated as stages complete. Own…">
+    <meta property="og:image" content="../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../index.html">Overview</a>
+            <a href="../rooms.html">Rooms</a>
+            <a href="../whats-new.html">What's new</a>
+            <a href="../docs/index.html" aria-current="page">Docs</a>
+            <a href="../help.html">Help</a>
+            <a href="../index.html#install" class="optional">Install</a>
+            <a href="../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Documentation</span>
+        <h1>Rohy Enterprise Documentation &amp; Support: Execution Plan</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#0-locked-decisions-do-not-relitigate">0. Locked decisions (do not relitigate)</a>
+            <a href="#1-why-this-shape-grounded-in-the-codebase-audit">1. Why this shape (grounded in the codebase audit)</a>
+            <a href="#2-toolchain-information-architecture-stage-0-deliverables">2. Toolchain &amp; information architecture (Stage 0 deliverables)</a>
+            <a href="#3-stage-by-stage-execution">3. Stage-by-stage execution</a>
+            <a href="#4-critical-path-milestones">4. Critical path &amp; milestones</a>
+            <a href="#5-stage-1-gap-matrix-seeded-from-recon-to-be-ratified-not-started-from-zero">5. Stage-1 gap matrix (seeded from recon — to be ratified, not started from zero)</a>
+            <a href="#6-cross-cutting-constraints-from-claudemd-non-negotiable">6. Cross-cutting constraints (from CLAUDE.md — non-negotiable)</a>
+            <a href="#7-risks-mitigations">7. Risks &amp; mitigations</a>
+            <a href="#8-next-actions">8. Next actions</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="product/index.html">Overview</a>
+                    <a href="product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="trainee/index.html">Overview</a>
+                    <a href="trainee/getting-started.html">Getting started</a>
+                    <a href="trainee/rooms.html">The rooms</a>
+                    <a href="trainee/history.html">Taking a history</a>
+                    <a href="trainee/room-3d.html">The 3D Room</a>
+                    <a href="trainee/examination.html">Physical examination</a>
+                    <a href="trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="trainee/ecg.html">12-lead ECG</a>
+                    <a href="trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="trainee/voice.html">Voice mode</a>
+                    <a href="trainee/debrief.html">Debrief</a>
+                    <a href="trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="educator/index.html">Overview</a>
+                    <a href="educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="educator/assigning-cases.html">Assigning cases</a>
+                    <a href="educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="educator/agents.html">Agent personas</a>
+                    <a href="educator/scenarios.html">Scenario timelines</a>
+                    <a href="educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="educator/tna.html">TNA analytics</a>
+                    <a href="educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="educator/classroom-policy.html">Classroom policy</a>
+                    <a href="educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="admin/index.html">Overview</a>
+                    <a href="admin/first-week.html">First-week checklist</a>
+                    <a href="admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="admin/platform-settings.html">Platform settings</a>
+                    <a href="admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="admin/pathology-slides.html">Pathology slides</a>
+                    <a href="admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="operator/index.html">Overview</a>
+                    <a href="operator/install.html">Install</a>
+                    <a href="operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="operator/updating.html">Update</a>
+                    <a href="operator/update-strategy.html">Update strategy</a>
+                    <a href="operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="operator/migrations.html">Migrations runbook</a>
+                    <a href="operator/retention.html">Retention &amp; purges</a>
+                    <a href="operator/observability.html">Observability</a>
+                    <a href="operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="integrator/index.html">Overview</a>
+                    <a href="integrator/architecture.html">Architecture seams</a>
+                    <a href="integrator/api-auth.html">API authentication</a>
+                    <a href="integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="reference/api/index.html">API</a>
+                    <a href="reference/data/index.html">Data model</a>
+                    <a href="reference/config/index.html">Config &amp; env</a>
+                    <a href="reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="tutorials/index.html">Overview</a>
+                    <a href="tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="security/index.html">Overview</a>
+                    <a href="security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="security/audit-chain.html">Audit chain</a>
+                    <a href="security/redaction.html">Redaction &amp; PII</a>
+                    <a href="security/retention.html">Data retention</a>
+                    <a href="security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="audits/index.html">Audits</a>
+                    <a href="audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="changelog.html">Changelog</a>
+                    <a href="contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="contributing/index.html">Contributing</a>
+                    <a href="DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="design/index.html">Design</a>
+                    <a href="design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="DOCUMENTATION-PLAN.html" aria-current="page">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="INSTALL.html">Installing Rohy</a>
+                    <a href="license.html">License</a>
+                    <a href="OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="reference/api/admin.html">admin API</a>
+                    <a href="reference/api/agents.html">agents API</a>
+                    <a href="reference/api/analytics.html">analytics API</a>
+                    <a href="reference/api/auth.html">auth API</a>
+                    <a href="reference/api/cases.html">cases API</a>
+                    <a href="reference/api/catalogue.html">catalogue API</a>
+                    <a href="reference/api/cohorts.html">cohorts API</a>
+                    <a href="reference/api/health.html">health API</a>
+                    <a href="reference/api/help.html">help API</a>
+                    <a href="reference/api/lessons.html">lessons API</a>
+                    <a href="reference/api/notes.html">notes API</a>
+                    <a href="reference/api/notification.html">notification API</a>
+                    <a href="reference/api/orders.html">orders API</a>
+                    <a href="reference/api/oyon.html">oyon API</a>
+                    <a href="reference/api/patient-record.html">patient-record API</a>
+                    <a href="reference/api/plugins.html">plugins API</a>
+                    <a href="reference/api/proxy.html">proxy API</a>
+                    <a href="reference/api/registration.html">registration API</a>
+                    <a href="reference/api/sessions.html">sessions API</a>
+                    <a href="reference/api/surveys.html">surveys API</a>
+                    <a href="reference/api/tenants.html">tenants API</a>
+                    <a href="reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="reference/api/uploads.html">uploads API</a>
+                    <a href="reference/api/users.html">users API</a>
+                    <a href="reference/data/tables.html">Tables</a>
+                    <a href="reference/index.html">Reference</a>
+                    <a href="release-notes/index.html">Release notes</a>
+                    <a href="UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<blockquote>
+<p>Status: <strong>approved, ready to execute</strong>. This is a tracked planning contract, not a session
+artifact — it is intended to live in <code>docs/</code> and be reviewed/updated as stages complete.
+Owner: docs lead. Last revised: 2026-05-16.</p>
+</blockquote>
+<hr>
+<h2 id="0-locked-decisions-do-not-relitigate">0. Locked decisions (do not relitigate)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Choice</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Docs toolchain</td>
+<td><strong>VitePress</strong></td>
+<td>Vite-native, matches the React 19 / Vite 7 stack; Markdown-centric; lives in-repo</td>
+</tr>
+<tr>
+<td>In-app Help &amp; Support</td>
+<td><strong>Full scope</strong></td>
+<td>Stage 4 is a real React/Express build, not docs-only</td>
+</tr>
+<tr>
+<td>First shippable milestone</td>
+<td><strong>Trainee + Educator</strong></td>
+<td>End-user-facing guides + the in-app help they need ship first</td>
+</tr>
+<tr>
+<td>Plan artifact</td>
+<td><strong>Tracked doc in <code>docs/</code></strong></td>
+<td>This file; updated as the source of truth for progress</td>
+</tr>
+</tbody></table></div>
+<p>Out of the locked set, the load-bearing one is <strong>full in-app scope</strong>: it makes Stage 4
+(Product track) a first-class workstream that runs in parallel with the docs track, not an
+afterthought.</p>
+<hr>
+<h2 id="1-why-this-shape-grounded-in-the-codebase-audit">1. Why this shape (grounded in the codebase audit)</h2>
+<p>A three-agent recon of the repo established the real gap profile:</p>
+<p><strong>Strong already</strong> — operator/engineer docs: <code>README.md</code> (full feature catalogue),
+<code>docs/INSTALL.md</code>, <code>docs/DEPLOY.md</code>, <code>docs/UPDATING.md</code>, <code>docs/UPDATE-STRATEGY.md</code>,
+<code>migrations/MANIFEST.md</code>, <code>CLAUDE.md</code>, the OyonR doc set, 15+ <code>audit-*.sh</code> + <code>tech-test.sh</code>.</p>
+<p><strong>Missing or thin</strong> — everything the other four audiences need:</p>
+<ol>
+<li>No trainee/student documentation, no user manual, no getting-started.</li>
+<li>No educator/case-author guide (12-step wizard, agent editor, scenario design, the 4
+reporting views + TNA all undocumented for end users).</li>
+<li>No consolidated admin guide (first-week checklist, settings reference, cohort ops).</li>
+<li>No API reference — <strong>~260 endpoints across 21 route files</strong>, zero OpenAPI/Swagger.</li>
+<li>No data-model reference — <strong>~65 tables</strong>, only migration policy documented.</li>
+<li><strong>No in-app help surface at all</strong> — no tour, no contextual help, no FAQ UI, no
+support/diagnostics path. This is an engineering gap, not a writing gap.</li>
+<li>No docs build tooling (no site, no search, no versioning).</li>
+</ol>
+<p>Enterprise documentation is organized by <strong>audience journey</strong>, not by feature. Six audiences:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Audience</th>
+<th>Success metric</th>
+<th>Today</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>Trainee / student</strong></td>
+<td>Can run a case unaided</td>
+<td>❌ none</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Educator / teacher</strong></td>
+<td>Can build a class + a case + read reports</td>
+<td>❌ none</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Administrator</strong></td>
+<td>Can configure the platform safely</td>
+<td>🟡 partial (<code>ADMIN_FIRST_RUN.md</code> only)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Operator / DevOps</strong></td>
+<td>Can install, update, recover</td>
+<td>✅ strong</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Integrator / developer</strong></td>
+<td>Can call the API / embed / extend</td>
+<td>🟡 architecture only, no API ref</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Security / compliance</strong></td>
+<td>Can attest RBAC, PII, AI-Act posture</td>
+<td>🟡 scattered across audits</td>
+</tr>
+</tbody></table></div>
+<hr>
+<span class="anchor-alias" id="2-toolchain--information-architecture-stage-0-deliverables"></span><h2 id="2-toolchain-information-architecture-stage-0-deliverables">2. Toolchain &amp; information architecture (Stage 0 deliverables)</h2>
+<h3 id="21-vitepress-setup">2.1 VitePress setup</h3>
+<ul>
+<li>Site root: <code>docs/</code> (VitePress <code>srcDir</code>), config in <code>docs/.vitepress/config.mjs</code>.</li>
+<li>Reuse existing <code>docs/*.md</code> in place where possible (INSTALL/DEPLOY/UPDATING become
+pages under the Operator section — no content rewrite, just re-homed + cross-linked).</li>
+<li>Local search (VitePress built-in MiniSearch; no external service — matches the
+self-hosted, air-gapped deployment constraint).</li>
+<li>Versioned to releases via <code>CHANGELOG.md</code>; nav reflects the 6-audience IA.</li>
+<li>Build wired into CI in Stage 7 (<code>npm run docs:build</code>), published alongside the app.</li>
+<li><strong>Constraint:</strong> must build offline (air-gapped self-hosters) — no CDN-only assets.</li>
+</ul>
+<h3 id="22-navigation-tree-the-ia-contract">2.2 Navigation tree (the IA contract)</h3>
+<pre><code>/                     Landing — what is Rohy, pick your path by role
+/trainee/             Using the Simulator        (M1)
+/educator/            Teaching with Rohy          (M1)
+/admin/               Administering Rohy
+/operator/            Running Rohy in Production   (re-homes existing docs)
+/integrator/          Building on Rohy
+/reference/api/       Generated OpenAPI reference
+/reference/data/      Schema reference
+/reference/config/    Env vars &amp; platform settings
+/reference/cli/       rohy-update, migrate, seed, audits
+/security/            Security &amp; Compliance
+/release-notes/       Bound to CHANGELOG.md
+</code></pre>
+<h3 id="23-single-sourcing-rule">2.3 Single-sourcing rule</h3>
+<ul>
+<li><strong>Reference = generated</strong> from source (Stage 2). Never hand-written, never drifts.</li>
+<li><strong>Guides = authored</strong> (Stage 3), curated, link <em>into</em> reference.</li>
+<li><strong>In-app help (Stage 4)</strong> consumes the <em>same</em> Markdown content where feasible (Help
+Center articles are the trainee/educator pages, role-filtered), so there is one source.</li>
+<li>Glossary + style guide is the terminology lock: <code>cohort</code> = teacher-owned class; the
+<code>educator</code> role is labelled <strong>&quot;Teacher&quot;</strong> in UI; &quot;Base Class&quot; = backfill cohort; etc.</li>
+</ul>
+<hr>
+<h2 id="3-stage-by-stage-execution">3. Stage-by-stage execution</h2>
+<p>Agents within a stage run concurrently. Stages are sequenced only on real dependencies.
+Every stage ends at a <strong>gate</strong> that must pass before dependents proceed.</p>
+<span class="anchor-alias" id="stage-0--foundation-serial-lead"></span><h3 id="stage-0-foundation-serial-lead">Stage 0 — Foundation <em>(serial, lead)</em></h3>
+<p>VitePress scaffold + IA tree + style guide + glossary + docs-as-code contract
+(CODEOWNERS, doc-rot guardrails, versioning).
+<strong>Gate:</strong> site builds empty-but-navigable; IA + glossary approved.</p>
+<span class="anchor-alias" id="stage-1--content-audit--gap-matrix-3-agents"></span><h3 id="stage-1-content-audit-gap-matrix-3-agents">Stage 1 — Content audit &amp; gap matrix <em>(3 agents ∥)</em></h3>
+<ul>
+<li>A1 audit-existing → reuse/retire ledger</li>
+<li>A2 audit-product → task-to-screen matrix (per role)</li>
+<li>A3 audit-platform → reference manifest (endpoints/tables/env/CLI)
+<strong>Gate:</strong> signed gap matrix (Section 5) = the master backlog.</li>
+</ul>
+<span class="anchor-alias" id="stage-2--generated-reference-4-agents"></span><h3 id="stage-2-generated-reference-4-agents">Stage 2 — Generated reference <em>(4 agents ∥)</em></h3>
+<ul>
+<li>R1 OpenAPI 3.1 spec + rendered API docs (auth model, error envelope, redaction notes)</li>
+<li>R2 schema reference + ER overview (soft-delete/tenant/audit columns called out)</li>
+<li>R3 config reference (every env var + platform setting, default, required-ness)</li>
+<li>R4 CLI &amp; ops reference (<code>rohy-update</code>, <code>migrate.js</code>, <code>seed*</code>, <code>retention-sweep</code>, audits)
+<strong>Gate:</strong> spec validates; 100% surface coverage; sampled accuracy check vs. source passes.</li>
+</ul>
+<span class="anchor-alias" id="stage-3--authored-guides-6-agents--m1--g1g2-first"></span><h3 id="stage-3-authored-guides-6-agents-m1-g1g2-first">Stage 3 — Authored guides <em>(6 agents ∥; M1 = G1+G2 first)</em></h3>
+<ul>
+<li><strong>G1 Trainee</strong> — 5 rooms, history, exams/body-map, ordering, vitals/alarms, voice,
+debrief, FAQ, troubleshooting <strong>(M1)</strong></li>
+<li><strong>G2 Educator</strong> — cohorts/join codes, assigning cases, 12-step wizard, agent personas,
+scenario timelines, 4 reporting views + TNA, Oyon analytics, classroom-policy semantics
+including the <em>stored-not-yet-enforced</em> honesty note <strong>(M1)</strong></li>
+<li>G3 Admin — first-week checklist, users/RBAC, settings reference, editors, multi-tenant</li>
+<li>G4 Operator — reconcile existing INSTALL/DEPLOY/UPDATING into a runbook library</li>
+<li>G5 Integrator — architecture seams, API auth walkthrough, embed <code>talking-avatars</code>,
+add a TTS/LLM provider, contribution + coverage-ratchet</li>
+<li>G6 Security/Compliance — RBAC, audit chain, redaction/PII, retention, Oyon on-device +
+EU AI Act Art. 5, consent, medical-training disclaimers, hardening checklist
+<strong>Gate per guide:</strong> task-coverage vs. Stage-1 matrix + technical review.</li>
+</ul>
+<span class="anchor-alias" id="stage-4--in-app-help--support-product-track-4-agents--starts-after-a2"></span><h3 id="stage-4-in-app-help-support-product-track-4-agents-starts-after-a2">Stage 4 — In-app Help &amp; Support <em>(Product track, 4 agents ∥; starts after A2)</em></h3>
+<p>Real engineering. Runs parallel to Stages 2/3.</p>
+<ul>
+<li><strong>P1 Help Center</strong> — <code>src/help/</code> searchable, role-aware drawer; consumes the same
+single-sourced content; <strong>must not</strong> introduce a parallel notification path (register
+through the existing model per <code>CLAUDE.md</code>)</li>
+<li><strong>P2 Contextual help &amp; onboarding tour</strong> — first-run guided tour per role + <code>?</code>
+affordances on the 5 rooms / settings tabs / orders drawer; dismissible + persisted;
+honors role gates <strong>(M1: trainee + educator tours)</strong></li>
+<li><strong>P3 Support &amp; diagnostics</strong> — &quot;Get Support&quot; → redacted diagnostics bundle (version,
+request-id, env health, recent errors). <strong>Must route through <code>server/redaction.js</code></strong> —
+no PII/secret leak; new sensitive fields registered there, not deleted at call sites</li>
+<li>P4 Release notes &amp; status — in-app surface bound to <code>CHANGELOG.md</code> + &quot;what&#39;s new&quot;
+badge + readiness indicator (closes UPDATE-STRATEGY Phase-F gap)
+<strong>Gate:</strong> client+server vitest green (pass <code>--project</code>); coverage ratchet holds; lint
+zero-error; redaction audited (<code>audit-redaction.sh</code>); e2e for support bundle.</li>
+</ul>
+<span class="anchor-alias" id="stage-5--tutorials--media-3-agents"></span><h3 id="stage-5-tutorials-media-3-agents">Stage 5 — Tutorials &amp; media <em>(3 agents ∥)</em></h3>
+<ul>
+<li>T1 quickstarts (per-audience 10-min &quot;first success&quot;)</li>
+<li>T2 end-to-end walkthroughs using the 12 pre-built acute cases</li>
+<li>T3 media kit — screenshot/diagram standards + scripted capture list + video outlines
+<strong>Gate:</strong> every command/step <strong>executed and verified</strong>, not assumed. Rendered media
+(screenshots/HTML) presented to the user for review — not self-judged.</li>
+</ul>
+<span class="anchor-alias" id="stage-6--qa-a11y-i18n-readiness-4-agents"></span><h3 id="stage-6-qa-a11y-i18n-readiness-4-agents">Stage 6 — QA, a11y, i18n readiness <em>(4 agents ∥)</em></h3>
+<ul>
+<li>Q1 technical accuracy re-verify + doc-tests run real commands</li>
+<li>Q2 editorial (style/glossary consistency, cross-links, dead-link sweep)</li>
+<li>Q3 accessibility — docs site + in-app Help to <strong>WCAG 2.2 AA</strong></li>
+<li>Q4 i18n readiness — externalize strings, translation-ready structure (English at launch)
+<strong>Gate:</strong> zero broken links, zero unverified commands, a11y pass.</li>
+</ul>
+<span class="anchor-alias" id="stage-7--publish-ci-maintenance-2-agents---serial-cutover"></span><h3 id="stage-7-publish-ci-maintenance-2-agents-serial-cutover">Stage 7 — Publish, CI, maintenance <em>(2 agents ∥ → serial cutover)</em></h3>
+<ul>
+<li>M1-ci docs CI: build + lint + link-check + OpenAPI-validate + screenshot-regen</li>
+<li>M2-rot doc-rot guardrails: CODEOWNERS, &quot;touch a route → update the spec&quot; check,
+contribution guide, ownership map, review cadence
+<strong>Gate:</strong> docs build green in CI; ownership assigned; maintenance contract documented.</li>
+</ul>
+<hr>
+<span class="anchor-alias" id="4-critical-path--milestones"></span><h2 id="4-critical-path-milestones">4. Critical path &amp; milestones</h2>
+<pre><code>Stage 0 ─┬─&gt; Stage 1 ─┬─&gt; Stage 2 (R1–R4) ───────┐
+         │            ├─&gt; Stage 3 (G1–G6) ───────┼─&gt; Stage 6 ─&gt; Stage 7
+         │            └─&gt; Stage 5 (T1–T3) ───────┤
+         └─ (after A2) ─&gt; Stage 4 (P1–P4) ───────┘   Product track ∥
+</code></pre>
+<p><strong>Milestone M1 (first ship) — Trainee + Educator:</strong>
+Stage 0 → Stage 1 → { G1, G2 } + { P1, P2 (trainee/educator tours) } +
+the slices of R1/R2 those guides link into → Stage 6 (scoped to M1) → publish.
+M1 is the demo-able, enterprise-rollout-credible cut.</p>
+<p><strong>M2:</strong> Admin + Operator (G3, G4) + P3/P4 + full reference (R1–R4).
+<strong>M3:</strong> Integrator + Security/Compliance (G5, G6) + Stage 5 + Stage 7 hardening.</p>
+<p>Up to <strong>14 agents concurrently</strong> at peak (Stages 2+3+5 plus the 4 Product agents).
+Stage 4&#39;s P-agents are the long pole — start them the moment A2 (product audit) lands.</p>
+<hr>
+<span class="anchor-alias" id="5-stage-1-gap-matrix-seeded-from-recon--to-be-ratified-not-started-from-zero"></span><h2 id="5-stage-1-gap-matrix-seeded-from-recon-to-be-ratified-not-started-from-zero">5. Stage-1 gap matrix (seeded from recon — to be ratified, not started from zero)</h2>
+<p>Legend: ✅ exists &amp; good · 🟡 partial/stale · ❌ missing · ⚠ wrong/misleading</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Trainee</th>
+<th>Educator</th>
+<th>Admin</th>
+<th>Operator</th>
+<th>Integrator</th>
+<th>Sec/Comp</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Getting started</td>
+<td>❌</td>
+<td>❌</td>
+<td>🟡</td>
+<td>✅</td>
+<td>🟡</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Core task walkthroughs</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>✅</td>
+<td>n/a</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Feature reference</td>
+<td>🟡(README)</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>✅</td>
+<td>🟡</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>API reference</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>❌</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>Data model</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>❌</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>Config/env</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>🟡</td>
+<td>✅</td>
+<td>🟡</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>Install/deploy/update</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>🟡</td>
+<td>✅</td>
+<td>n/a</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>RBAC / auth</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>Audit / PII / retention</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>n/a</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>Oyon (emotion / AI Act)</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+<td>🟡</td>
+</tr>
+<tr>
+<td>In-app help / tour</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Support / diagnostics</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Troubleshooting/FAQ</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>🟡</td>
+<td>❌</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Tutorials / media</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>🟡</td>
+<td>❌</td>
+<td>n/a</td>
+</tr>
+</tbody></table></div>
+<hr>
+<span class="anchor-alias" id="6-cross-cutting-constraints-from-claudemd--non-negotiable"></span><h2 id="6-cross-cutting-constraints-from-claudemd-non-negotiable">6. Cross-cutting constraints (from CLAUDE.md — non-negotiable)</h2>
+<ul>
+<li>In-app help <strong>must not</strong> spawn a new toast/banner/alarm path — register through the
+central <code>src/notifications/</code> model.</li>
+<li>Support/diagnostics bundle <strong>must</strong> pass through <code>server/redaction.js</code>; register any new
+sensitive field there.</li>
+<li>Coverage ratchet is real — Stage 4 code must keep <code>vitest.config.js</code> floors; raise,
+never lower.</li>
+<li>Vitest is split <code>client</code>(jsdom)/<code>server</code>(node) — always pass <code>--project</code>.</li>
+<li>Session artifacts (HANDOFF/LEARNINGS/CHANGES/CLAUDE) stay local-only and uncommitted.
+<strong>This file is <em>not</em> a session artifact</strong> — it is intended docs and may be committed
+when the user directs.</li>
+<li>Branch policy for the current working tree (<code>feat/teacher-cohorts</code>): stay on branch,
+do not commit until the user explicitly asks.</li>
+<li>No <code>Co-Authored-By</code> lines in commits.</li>
+</ul>
+<hr>
+<span class="anchor-alias" id="7-risks--mitigations"></span><h2 id="7-risks-mitigations">7. Risks &amp; mitigations</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Generated API ref drifts from code</td>
+<td>Stage 7 CI check fails build if a route changes without spec regen</td>
+</tr>
+<tr>
+<td>In-app help becomes a parallel notification path</td>
+<td>Architectural review gate in Stage 4; reuse <code>src/notifications/</code></td>
+</tr>
+<tr>
+<td>Diagnostics bundle leaks PII</td>
+<td>Mandatory <code>redaction.js</code> route + <code>audit-redaction.sh</code> in the Stage 4 gate</td>
+</tr>
+<tr>
+<td>Screenshots can&#39;t be self-verified by the agent</td>
+<td>T3 presents rendered output to the user for sign-off (per repo testing rule)</td>
+</tr>
+<tr>
+<td>Docs can&#39;t build air-gapped</td>
+<td>VitePress local search + bundled assets; verified offline in Stage 7</td>
+</tr>
+<tr>
+<td>Scope creep past M1</td>
+<td>Milestone gates; M1 is strictly Trainee+Educator + their in-app help</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="8-next-actions">8. Next actions</h2>
+<ol>
+<li>Stage 0: scaffold VitePress under <code>docs/</code>, commit IA tree + glossary + style guide
+(build empty-but-navigable site).</li>
+<li>Stage 1: launch A1/A2/A3 in parallel; ratify the Section-5 matrix.</li>
+<li>Kick the Product track (P1/P2) the moment A2 lands — it is the long pole for M1.</li>
+<li>Report progress by updating this file&#39;s stage gates as they pass.</li>
+</ol>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../index.html">Overview</a>
+                <a href="../rooms.html">Rooms</a>
+                <a href="../whats-new.html">What's new</a>
+                <a href="../help.html">Help</a>
+                <a href="../about.html">About the author</a>
+                <a href="../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../docs/index.html">Docs home</a>
+                <a href="../docs/INSTALL.html">Install</a>
+                <a href="../docs/DEPLOY.html">Deploy</a>
+                <a href="../docs/UPDATING.html">Updating</a>
+                <a href="../docs/trainee/index.html">Trainee guides</a>
+                <a href="../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

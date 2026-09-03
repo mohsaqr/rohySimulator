@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>How imaging and slides reach a deployment · Rohy docs</title>
+    <meta name="description" content="The pipeline from &quot;someone found an open dataset&quot; to &quot;a learner in another country opens the study&quot;. Follow it for every asset; the gates in it are the reason the archive can be…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="How imaging and slides reach a deployment · Rohy docs">
+    <meta property="og:description" content="The pipeline from &quot;someone found an open dataset&quot; to &quot;a learner in another country opens the study&quot;. Follow it for every asset; the gates in it are the reason the archive can be…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Contributing</span>
+        <h1>How imaging and slides reach a deployment</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#the-rule-the-whole-thing-rests-on">The rule the whole thing rests on</a>
+            <a href="#1-find-it-and-check-the-licence-yourself">1. Find it, and check the licence yourself</a>
+            <a href="#2-ingest-it-with-a-named-reviewer">2. Ingest it, with a named reviewer</a>
+            <a href="#3-build-the-origins">3. Build the origins</a>
+            <a href="#4-build-pack-and-publish">4. Build, pack and publish</a>
+            <a href="#5-a-deployment-installs-it">5. A deployment installs it</a>
+            <a href="#before-cutting-a-release">Before cutting a release</a>
+            <a href="#why-selection-is-never-by-name">Why selection is never by name</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="imaging-content.html" aria-current="page">How imaging and slides reach a deployment</a>
+                    <a href="index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>The pipeline from &quot;someone found an open dataset&quot; to &quot;a learner in another
+country opens the study&quot;. Follow it for every asset; the gates in it are the
+reason the archive can be shipped at all.</p>
+<h2 id="the-rule-the-whole-thing-rests-on">The rule the whole thing rests on</h2>
+<p><strong>Provenance is recorded at ingest, because that is the only moment the person
+who knows is present.</strong> Once the pixels are on disk, the terms are invisible: a
+folder of DICOM and a tile pyramid look exactly the same whether they may ship
+in a release or may not leave the building.</p>
+<p>Every gate below is a consequence of that one sentence.</p>
+<h2 id="1-find-it-and-check-the-licence-yourself">1. Find it, and check the licence yourself</h2>
+<p>The exact-match allow-lists are deliberate. A Creative Commons licence carrying
+a NonCommercial or NoDerivatives clause is a different answer from CC BY, and
+substring matching cannot tell them apart.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>verdict</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>permitted</code></td>
+<td>CC0, public domain — ships outright</td>
+</tr>
+<tr>
+<td><code>attribution_only</code></td>
+<td>CC BY, CC BY-SA — ships <strong>only with its notice</strong></td>
+</tr>
+<tr>
+<td><code>local_only</code></td>
+<td>usable on site, must not be redistributed</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>never bundled</td>
+</tr>
+</tbody></table></div>
+<p>Things that look open and are not: a CC BY badge on a <em>record page</em> is not a
+licence on the pixels; &quot;open access&quot; with a data-use agreement is not
+redistributable; a per-user research agreement does not permit organisational
+redistribution. All three were met while building the cardiac set.</p>
+<h2 id="2-ingest-it-with-a-named-reviewer">2. Ingest it, with a named reviewer</h2>
+<p>Imaging, in <code>Radoyon/radoyon</code>:</p>
+<pre><code class="language-bash">node scripts/tcia-sources.mjs --collection … --reviewed-by &quot;your name&quot;
+node scripts/commons-sources.mjs --files &quot;File:…&quot; --id abnormal/… --reviewed-by &quot;your name&quot;
+node scripts/cap-sources.mjs --patient SCD… --id normal/… --reviewed-by &quot;your name&quot;
+node scripts/fetch-archive.mjs --only &lt;entry-id&gt;
+</code></pre>
+<p>Slides, in <code>Pathoyon</code>:</p>
+<pre><code class="language-bash">node scripts/ingest-image-slide.mjs --manifest scripts/&lt;set&gt;.json --reviewed-by &quot;your name&quot;
+</code></pre>
+<p>Every one of these <strong>refuses to write without a licence and a reviewer</strong>.
+<code>fetch-archive.mjs</code> refuses to download an unreviewed source at all.</p>
+<p>Two honesty constraints the tools enforce, not preferences:</p>
+<ul>
+<li><p><strong>No fabricated calibration.</strong> A transcoded loop gets no <code>PixelSpacing</code>; a
+published micrograph is ingested <code>measurable: false</code>, displayed with the
+ruler and counting frame withheld. A plausible value is still wrong data, and
+a wrong measurement carries the full authority of a number on a screen.</p>
+</li>
+<li><p><strong>Burned-in identifiers are a human&#39;s job, and ingest now refuses without
+one.</strong> Ingest de-identifies headers, but no header operation touches text
+rendered into the <em>pixels</em>. <code>burnedInAnnotationRisk()</code> flags the modalities
+that routinely carry it (US, XA, SC, OT, ES, NM), and an at-risk study
+<strong>will not ingest</strong> unless you pass
+<code>--pixels-reviewed &quot;&lt;who looked, when, what was masked&gt;&quot;</code>, which is recorded
+in the entry&#39;s <code>provenance.pixelsReviewed</code>.</p>
+<p>This used to be a warning printed at the end of a successful run. On
+2026-09-01 a review of the shipped starter bundle found four full patient
+names, two hospital names, a probable date of birth and four accession
+numbers burned into eleven ultrasound entries — every one of them correctly
+flagged at ingest, every flag cleared by nobody. A warning nothing blocks on
+is a warning that ships.</p>
+<p><strong>Reviewing means max-projecting every frame, not looking at the first
+one.</strong> Burned-in text changes within a loop: in one stress echo the patient&#39;s
+name was in frame 0 and the acquisition date appeared only after frame ~350.
+Take the per-pixel maximum across all frames of a series, and any text that
+ever appears shows up in one image. Mask, then re-project the masked output
+to confirm nothing survives.</p>
+<p>The masks applied to the current starter bundle are recorded in
+<a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/contributing/burned-in-masks.json"><code>burned-in-masks.json</code></a> — geometry and categories
+only. It deliberately does not record the strings that were removed: writing
+them down re-creates the disclosure the masking exists to undo.</p>
+</li>
+</ul>
+<h2 id="3-build-the-origins">3. Build the origins</h2>
+<pre><code class="language-bash">cd Radoyon/radoyon &amp;&amp; npm run content-bundle    # ships only redistributableEntries()
+cd Pathoyon        &amp;&amp; bash scripts/content-bundle.sh
+</code></pre>
+<h2 id="4-build-pack-and-publish">4. Build, pack and publish</h2>
+<pre><code class="language-bash">cd rohySimulator
+npm run starter-content   # selects from the origins BY LICENCE
+npm run pack:content      # archives + checksums; prints GitHub&#39;s 2 GB ceiling
+</code></pre>
+<p><code>starter-content</code> names every asset it excludes and why. An asset dropped for
+want of a licence is something to go and establish, not a number to notice
+later.</p>
+<p>Then attach the archives to a release on <code>mohsaqr/rohy-content</code> and record the
+new checksums in <code>scripts/content-sources.json</code>.</p>
+<h2 id="5-a-deployment-installs-it">5. A deployment installs it</h2>
+<pre><code class="language-bash">npm run setup:content                          # from the published release
+npm run setup:content -- --from /media/usb/…   # air-gapped, or a shared drive
+</code></pre>
+<p>Checksum-verified before anything is written, so a truncated transfer, the
+wrong archive and an HTML error page saved with the right filename are one
+clear failure at install rather than three confusing ones later.</p>
+<h2 id="before-cutting-a-release">Before cutting a release</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <code>archiveIssues()</code> reports no errors</li>
+<li><input disabled="" type="checkbox"> every <code>attribution_only</code> entry has an attribution</li>
+<li><input disabled="" type="checkbox"> burned-in annotation reviewed for every ultrasound and angiographic entry
+— max-projection of <strong>every frame</strong>, and <code>provenance.pixelsReviewed</code> set</li>
+<li><input disabled="" type="checkbox"> <code>npm run starter-content</code> excluded nothing you expected to ship</li>
+<li><input disabled="" type="checkbox"> checksums in <code>scripts/content-sources.json</code> match the published assets</li>
+<li><input disabled="" type="checkbox"> a clean <code>npm run setup:content</code> installs and the rooms render</li>
+</ul>
+<h2 id="why-selection-is-never-by-name">Why selection is never by name</h2>
+<p>The bundler once selected slides by an id prefix. It gave the right answer only
+because the unshippable slides happened to be called <code>local-*</code>, and it would
+have failed silently in both directions the moment anything was renamed. Both
+bundlers now ask the licence, and both name what they exclude.</p>
+<p>Three slides in the pathology library still cannot ship: they carry a sha256, a
+stain and a calibration, and nothing about who may use them. That is precisely
+the failure this document exists to prevent, preserved as an example of it.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -3,11 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Help — Rohy</title>
+    <title>Help · Rohy</title>
     <meta name="description" content="The Rohy reference: status, requirements, install, the rooms, features, architecture, configuration, testing, documentation and licence.">
     <meta name="theme-color" content="#09090b">
 
-    <meta property="og:title" content="Help — Rohy">
+    <meta property="og:title" content="Help · Rohy">
     <meta property="og:description" content="The Rohy reference: status, requirements, install, the rooms, features, architecture, configuration, testing, documentation and licence.">
     <meta property="og:image" content="assets/patient-room.jpg">
     <meta property="og:type" content="article">
@@ -31,6 +31,7 @@
             <a href="index.html">Overview</a>
             <a href="rooms.html">Rooms</a>
             <a href="whats-new.html">What's new</a>
+            <a href="docs/index.html">Docs</a>
             <a href="help.html" aria-current="page">Help</a>
             <a href="index.html#install" class="optional">Install</a>
             <a href="about.html">About the author</a>
@@ -46,11 +47,7 @@
     <div class="wrap hero-inner">
         <span class="eyebrow accent">Help</span>
         <h1>The Rohy <span class="accent">reference.</span></h1>
-        <p class="sub">
-            This page is generated from the repository README. It records what the
-            platform is made of and how it is installed, configured, tested and
-            licensed, with every figure taken from the source it describes.
-        </p>
+        <p class="sub">This page is generated from the repository README. It records what the platform is made of and how it is installed, configured, tested and licensed, with every figure taken from the source it describes.</p>
         <nav class="subnav" aria-label="On this page">
             <span class="subnav-label">On this page</span>
             <a href="#status">Status</a>
@@ -71,7 +68,7 @@
     </div>
 </section>
 
-<!-- ── README ────────────────────────────────────────────────── -->
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
 <section class="tight">
     <div class="wrap">
         <article class="md-body">
@@ -110,7 +107,7 @@
 <td>Carm Research License v1.4 (<a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE"><code>LICENSE</code></a>)</td>
 </tr>
 </tbody></table></div>
-<p>Releases carry a channel in their title: <code>v2.9.119</code> is titled &quot;Stable fixes (pre-plugin channel)&quot; and <code>v2.9.132</code> is titled &quot;Advanced: PACS, Pathology &amp; ECG workstations&quot;. <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a> names the two channels <code>current</code> (without the PACS, Pathology and ECG rooms) and <code>advanced</code> (with those rooms, imaging content required).</p>
+<p>Releases carry a channel in their title: <code>v2.9.119</code> is titled &quot;Stable fixes (pre-plugin channel)&quot; and <code>v2.9.132</code> is titled &quot;Advanced: PACS, Pathology &amp; ECG workstations&quot;. <a href="docs/INSTALL.html"><code>docs/INSTALL.md</code></a> names the two channels <code>current</code> (without the PACS, Pathology and ECG rooms) and <code>advanced</code> (with those rooms, imaging content required).</p>
 <h2 id="requirements">Requirements</h2>
 <div class="table-wrap"><table>
 <thead>
@@ -162,7 +159,7 @@
 </tr>
 </tbody></table></div>
 <h2 id="install">Install</h2>
-<h3>Quick start</h3>
+<h3 id="quick-start">Quick start</h3>
 <p>Clone both siblings first, because <code>package.json</code> declares them as <code>file:</code> dependencies. <code>npm install</code> then runs <code>postinstall</code>, which calls <code>npm run setup:oyon</code> and downloads the model files.</p>
 <pre><code class="language-bash">git clone https://github.com/mohsaqr/dynajs.git ../dynajs
 (cd ../dynajs &amp;&amp; npm install)
@@ -173,7 +170,7 @@ npm run dev
 </code></pre>
 <p>Set <code>JWT_SECRET</code> in <code>server/.env</code> before starting. The Vite dev server listens on port 5173 and proxies <code>/api</code> to <code>http://localhost:3000</code>; the Express server reads <code>PORT</code> and falls back to 3000. The development seeder creates <code>admin</code> / <code>admin123</code> and <code>student</code> / <code>student123</code>; in production that seeder requires <code>ALLOW_DEFAULT_USERS=1</code>.</p>
 <p>Optional add-ons: <code>npm run setup:oyon</code> re-runs the model download on its own, <code>npm run setup:content</code> installs the PACS and Pathology archives, and <code>npm run install:piper</code> installs local Piper voices.</p>
-<h3>Production, update and air-gap</h3>
+<h3 id="production-update-and-air-gap">Production, update and air-gap</h3>
 <p>The published image runs under the compose stack. <code>deploy/bootstrap.sh</code> installs from source onto a Linux host with systemd and nginx, and also accepts <code>--dry-run</code>, <code>--no-nginx</code>, <code>--no-piper</code>, <code>--no-audit</code>, <code>--skip-build</code>, <code>--prewarm-kokoro</code> and <code>--reverse-proxy</code>. <code>bin/rohy-update</code> drives upgrades of source and systemd installs, with subcommands <code>check</code>, <code>apply</code>, <code>rollback</code>, <code>list-backups</code> and <code>restore-backup</code>. <code>deploy/bundle-airgap.sh</code> writes a self-contained tarball in <code>source</code>, <code>docker</code> or <code>both</code> mode.</p>
 <pre><code class="language-bash">docker pull ghcr.io/mohsaqr/rohy:v3.0.0-beta.2
 docker compose -f deploy/docker/compose.yml up -d
@@ -182,7 +179,7 @@ sudo rohy-update check
 sudo rohy-update apply
 deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 </code></pre>
-<p>Operator guides: <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md"><code>docs/DEPLOY.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md"><code>docs/UPDATING.md</code></a>, <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATE-STRATEGY.md"><code>docs/UPDATE-STRATEGY.md</code></a>.</p>
+<p>Operator guides: <a href="docs/INSTALL.html"><code>docs/INSTALL.md</code></a>, <a href="docs/DEPLOY.html"><code>docs/DEPLOY.md</code></a>, <a href="docs/UPDATING.html"><code>docs/UPDATING.md</code></a>, <a href="docs/UPDATE-STRATEGY.html"><code>docs/UPDATE-STRATEGY.md</code></a>.</p>
 <h2 id="the-rooms">The rooms</h2>
 <p>The bottom navigator holds core rooms and plugin rooms, sorted by the <code>order</code> field on each room definition. The core rooms are always present; plugin rooms render when the case enables them. Labels are the on-screen strings from <code>src/locales/en/common.json</code>.</p>
 <div class="table-wrap"><table>
@@ -249,9 +246,9 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 <td><code>src/components/discussion/</code></td>
 </tr>
 </tbody></table></div>
-<p><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/trainee/rooms.md"><code>docs/trainee/rooms.md</code></a> documents every room, and which of them a given case shows.</p>
+<p><a href="docs/trainee/rooms.html"><code>docs/trainee/rooms.md</code></a> documents every room, and which of them a given case shows.</p>
 <h2 id="features">Features</h2>
-<h3>Conversation and agents</h3>
+<h3 id="conversation-and-agents">Conversation and agents</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -284,9 +281,9 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 <td><code>interactions.source</code> records <code>typed</code>, <code>voice</code> or a plugin room id (<code>migrations/0053_interactions_source.sql</code>)</td>
 </tr>
 </tbody></table></div>
-<h3>Voice and avatars</h3>
+<h3 id="voice-and-avatars">Voice and avatars</h3>
 <p><code>TTS_PROVIDERS</code> in <code>server/shared/voiceIdentity.js</code> lists four engines: <code>kokoro</code> (local, in-process through <code>kokoro-js</code>), <code>piper</code> (local subprocess, voices under <code>server/data/piper/</code>), <code>google</code> (cloud) and <code>openai</code> (cloud). The voice id determines the engine by exact catalogue membership. <code>public/avatars/heads/</code> holds 28 GLB heads and a <code>manifest.json</code>. Lipsync runs through <code>wawa-lipsync</code> over Three.js and <code>@react-three/fiber</code>.</p>
-<h3>Patient monitor and physiology</h3>
+<h3 id="patient-monitor-and-physiology">Patient monitor and physiology</h3>
 <ul>
 <li>Seven channels: HR, SpO₂, systolic and diastolic NIBP, RR, temperature, EtCO₂.</li>
 <li><code>src/services/ecgWaveform.js</code> builds the trace from a sum of Gaussians, with the PR interval from an Atterhög 1977 regression and QT by Fridericia.</li>
@@ -294,9 +291,9 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 <li>Vitals persist through a deadband of <code>{ hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 }</code>.</li>
 <li>The 3D room samples the same generator, so both views show one physiology.</li>
 </ul>
-<h3>Treatments</h3>
+<h3 id="treatments">Treatments</h3>
 <p><code>server/data/treatment_effects.json</code> carries 264 rows over 245 distinct treatment names, each with onset, peak and duration in minutes, per-channel effects, and <code>rxcui</code>, <code>pk_source</code> and <code>pk_evidence_url</code> provenance fields. By type: <code>medication</code> 204 rows over 185 names, <code>nursing</code> 31, <code>iv_fluid</code> 16, <code>oxygen</code> 13.</p>
-<h3>Investigations</h3>
+<h3 id="investigations">Investigations</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -337,15 +334,15 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 </tr>
 </tbody></table></div>
 <p>Reference ranges split by <code>category</code> where clinically relevant: Hemoglobin is 12-16 g/dL for Female and 14-18 g/dL for Male. Turnaround is clamped to a 1 to 5 minute band by <code>migrations/0023_clamp_turnaround_to_5min.sql</code>. The DICOM reading room, the whole-slide viewer and the twelve-lead workstation are RPS-1 plugins with their own manifests, capabilities and authoring surfaces.</p>
-<h3>Examination</h3>
+<h3 id="examination">Examination</h3>
 <p><code>src/data/examRegions.js</code> defines 57 body regions (37 anterior, 18 posterior, 2 special) and 12 techniques: inspection, palpation, percussion, auscultation, special tests, mental status, cranial nerves, motor, sensory, reflexes, coordination, gait. Each region carries default findings per technique and a <code>specialTests</code> list.</p>
-<h3>Alarms and notifications</h3>
+<h3 id="alarms-and-notifications">Alarms and notifications</h3>
 <p>One <code>NotificationCenter</code> (<code>src/notifications/</code>) with six surfaces: <code>AudioSurface</code>, <code>BackendSurface</code>, <code>BannerSurface</code>, <code>ConsoleSurface</code>, <code>HistorySurface</code>, <code>ToastSurface</code>. Routing, persistence and defaults are separate modules with their own tests.</p>
-<h3>Debrief</h3>
+<h3 id="debrief">Debrief</h3>
 <p>Ending a case opens <code>src/components/discussion/</code>, which resolves its own persona, voice, avatar and model from the <code>discussant</code> agent type. <code>server/services/encounterRecord.js</code> assembles the learner&#39;s encounter record for that conversation.</p>
-<h3>Analytics and learning events</h3>
+<h3 id="analytics-and-learning-events">Analytics and learning events</h3>
 <p><code>server/shared/learningVerbs.js</code> holds 90 base verbs; with the registered plugin vocabularies the whitelist reaches 136. Events carry one of eight categories (SESSION, NAVIGATION, CLINICAL, COMMUNICATION, MONITORING, CONFIGURATION, ASSESSMENT, ERROR) and one of five severities (DEBUG, INFO, ACTION, IMPORTANT, CRITICAL), both derived server-side from the verb. <code>learning_events.room</code> stamps the active room (<code>migrations/0021_learning_events_room.sql</code>). The dashboard is <code>src/components/analytics/tna/TnaDashboardV2.jsx</code>, with sequence, clinical-state and window modules beside it.</p>
-<h3>Oyon capture</h3>
+<h3 id="oyon-capture">Oyon capture</h3>
 <p>Face landmarking and emotion classification run in the browser. <code>OyonR/scripts/download-models.sh</code> fetches five files, each checked against a SHA-256 recorded in the script.</p>
 <div class="table-wrap"><table>
 <thead>
@@ -382,15 +379,15 @@ deploy/bundle-airgap.sh --mode=source --with-hf-cache --with-dynajs --with-3d
 </tr>
 </tbody></table></div>
 <p>The server mounts the Oyon routes when <code>OYON_ENABLED=1</code>, and <code>deploy/env.example</code> ships that value. With the variable unset, the routes answer a structured 503 and the settings tab renders a disabled panel. Oyon tables and settings arrive through <code>migrations/0011_oyon_addon.sql</code> and eleven later Oyon migrations.</p>
-<h3>Courses, lessons and users</h3>
+<h3 id="courses-lessons-and-users">Courses, lessons and users</h3>
 <p>Cohorts, courses and lessons have their own tables and routers: <code>migrations/0025_cohorts.sql</code>, <code>0027_cohort_entity.sql</code>, <code>0032_lessons.sql</code>, <code>server/routes/cohorts-routes.js</code>, <code>server/routes/lessons-routes.js</code>, <code>server/routes/surveys-routes.js</code>. Registration invites and requests arrive in <code>migrations/0037_registration_invites.sql</code> and <code>0038_registration_requests.sql</code>.</p>
-<h3>Help and support</h3>
+<h3 id="help-and-support">Help and support</h3>
 <p><code>src/help/</code> mounts a Help &amp; Support drawer from <code>App.jsx</code> with three tabs. The Help tab lists 23 articles from <code>HELP_ARTICLES</code>, filtered by role rank: 15 reach <code>student</code>, 20 reach <code>educator</code>, 23 reach <code>admin</code>, grouped as Using the simulator, Teaching and Administration. Each article links to a page on the VitePress docs site under <code>DOCS_BASE</code> (<code>/rohy/docs/</code>, overridable with <code>VITE_DOCS_BASE</code>), and all 23 target files exist under <code>docs/</code>. The What&#39;s new tab reads <code>GET /api/help/release-notes</code>, which parses <code>CHANGELOG.md</code> in Keep a Changelog format. The Support tab reads <code>GET /api/help/diagnostics</code>, a bundle of version, runtime and boolean health flags passed through <code>server/redaction.js</code>. <code>OnboardingTour</code> plays a per-role first-run tour at <code>TOUR_VERSION</code> 1, four steps for <code>student</code> and four for <code>educator</code>, recorded in <code>localStorage</code> under <code>rohy.onboarding.&lt;role&gt;.v&lt;version&gt;</code>. The drawer chrome is translated: 62 keys per locale in <code>src/locales/&lt;lang&gt;/help.json</code> across all seven locale directories.</p>
-<h3>Administration and authoring</h3>
+<h3 id="administration-and-authoring">Administration and authoring</h3>
 <p><code>src/components/settings/</code> holds 32 non-test <code>.jsx</code> components, including the agent persona editor and the per-tab settings editors. <code>src/data/scenarioTemplates.js</code> carries 16 scenario templates. <code>server/seeders/cases.js</code> seeds 6 cases on first boot: Acute Chest Pain - STEMI, Septic Shock - Pneumonia, Diabetic Ketoacidosis, Acute Asthma Exacerbation, Acute Stroke - Left MCA, Maria Mercedes - Acute STEMI. <code>server/scripts/seed-acute-cases.cjs</code> seeds a further set on demand. Case codes come from <code>migrations/0035_case_code.sql</code>.</p>
-<h3>Internationalisation</h3>
+<h3 id="internationalisation">Internationalisation</h3>
 <p>Six languages in <code>server/shared/languages.js</code>: English, Italian, Finnish, Swedish, German, Spanish, with <code>en</code> as the default. Each entry carries a display name, a native name, a flag, a Web Speech STT locale and an LLM output directive. <code>src/locales/</code> also holds the <code>en-XA</code> pseudo-locale produced by <code>npm run i18n:pseudo</code>. Extraction, status, XLIFF export and XLIFF import each have an npm script.</p>
-<h3>Security and governance</h3>
+<h3 id="security-and-governance">Security and governance</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -493,11 +490,11 @@ The admin case list: English, German, Spanish and Italian cases in one course, e
 ├── tests/        145 server tests, 14 Playwright specs, shared utils
 └── website/      the static public site
 </code></pre>
-<h3>Request flow</h3>
+<h3 id="request-flow">Request flow</h3>
 <p><code>server/server.js</code> boots Express, mounts <code>server/routes.js</code> under <code>/api</code>, and composes 24 router modules from <code>server/routes/</code>. <code>server/middleware/auth.js</code> extracts the JWT, resolves the role rank and the tenant, and refreshes role, status and tenant from the <code>users</code> table on every request. <code>server/middleware/routeTimeout.js</code> bounds each request, with the TTS and LLM proxy routes exempt because they stream. <code>server/redaction.js</code> filters the response before it leaves the process, and <code>server/observability.js</code> writes NDJSON access records carrying the request id.</p>
-<h3>Database and migrations</h3>
+<h3 id="database-and-migrations">Database and migrations</h3>
 <p>SQLite through the <code>sqlite3</code> async API, wrapped by <code>server/dbAdapter.js</code>. <code>server/migrationRunner.js</code> applies the 53 files in <code>migrations/</code> in order and records them in <code>schema_migrations</code>. <code>migrations/MANIFEST.md</code> states the policy: additive by default, with destructive changes gated behind <code>--allow-destructive</code>.</p>
-<h3>Plugins</h3>
+<h3 id="plugins">Plugins</h3>
 <p><code>src/plugins/index.js</code> discovers plugins with <code>import.meta.glob(&#39;./*/index.jsx&#39;)</code>, so deleting a plugin directory removes its room and leaves the build working. <code>npm run plugins:gen</code> freezes each <code>manifest.js</code> into <code>server/shared/plugins/manifests.generated.js</code>, which allows the server to read plugin vocabulary without importing from <code>src/</code>. <code>npm run plugins:check</code> runs in <code>prebuild</code>.</p>
 <div class="table-wrap"><table>
 <thead>
@@ -716,27 +713,27 @@ The admin case list: English, German, Spanish and Italian cases in one course, e
 </tr>
 </thead>
 <tbody><tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/index.md"><code>docs/index.md</code></a></td>
+<td><a href="docs/index.html"><code>docs/index.md</code></a></td>
 <td>VitePress home, one entry per role</td>
 </tr>
 <tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md"><code>docs/INSTALL.md</code></a></td>
+<td><a href="docs/INSTALL.html"><code>docs/INSTALL.md</code></a></td>
 <td>Six install paths, channels, imaging content, first boot, smoke verify</td>
 </tr>
 <tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md"><code>docs/DEPLOY.md</code></a></td>
+<td><a href="docs/DEPLOY.html"><code>docs/DEPLOY.md</code></a></td>
 <td>Production hardening, reverse proxy, TLS, environment reference</td>
 </tr>
 <tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md"><code>docs/UPDATING.md</code></a></td>
+<td><a href="docs/UPDATING.html"><code>docs/UPDATING.md</code></a></td>
 <td><code>bin/rohy-update</code> and the Docker upgrade path</td>
 </tr>
 <tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATE-STRATEGY.md"><code>docs/UPDATE-STRATEGY.md</code></a></td>
+<td><a href="docs/UPDATE-STRATEGY.html"><code>docs/UPDATE-STRATEGY.md</code></a></td>
 <td>Design record behind the update tool</td>
 </tr>
 <tr>
-<td><a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/ADMIN_FIRST_RUN.md"><code>docs/ADMIN_FIRST_RUN.md</code></a></td>
+<td><a href="docs/ADMIN_FIRST_RUN.html"><code>docs/ADMIN_FIRST_RUN.md</code></a></td>
 <td>First administrator session</td>
 </tr>
 <tr>
@@ -892,19 +889,20 @@ npm run production   # run the built server with NODE_ENV=production
                 <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
                 <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+                <a href="docs/license.html">License</a>
             </div>
             <div class="footer-col">
                 <h4>Docs</h4>
-                <a href="https://rohy.lacarm.com/rohy/docs/trainee/" target="_blank" rel="noopener">Trainee guides</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/INSTALL.md" target="_blank" rel="noopener">Install</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/DEPLOY.md" target="_blank" rel="noopener">Deploy</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/docs/UPDATING.md" target="_blank" rel="noopener">Updating</a>
-                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/migrations/MANIFEST.md" target="_blank" rel="noopener">Migrations</a>
+                <a href="docs/index.html">Docs home</a>
+                <a href="docs/INSTALL.html">Install</a>
+                <a href="docs/DEPLOY.html">Deploy</a>
+                <a href="docs/UPDATING.html">Updating</a>
+                <a href="docs/trainee/index.html">Trainee guides</a>
+                <a href="docs/reference/index.html">Reference</a>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© 2026 Mohammed Saqr · <a href="https://github.com/mohsaqr/rohySimulator/blob/main/LICENSE" target="_blank" rel="noopener">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>© 2026 Mohammed Saqr · <a href="docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
             <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
         </div>
     </div>

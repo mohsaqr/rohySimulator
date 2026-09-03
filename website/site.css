@@ -704,3 +704,142 @@ body.no-scroll { overflow: hidden; }
     .md-body p, .md-body li { font-size: 16px; }
     .md-body h2 { margin-top: 52px; }
 }
+
+/* ── Rendered documentation (website/docs/**, generated) ───── */
+.docs-layout {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+}
+.docs-sidebar {
+    position: sticky;
+    top: 84px;
+    max-height: calc(100vh - 108px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 8px;
+    border-right: 1px solid var(--border);
+}
+.docs-group { border-bottom: 1px solid var(--border); }
+.docs-group:last-child { border-bottom: 0; }
+.docs-group > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 12px 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+.docs-group > summary::-webkit-details-marker { display: none; }
+.docs-group > summary::before {
+    content: '+';
+    display: inline-block;
+    width: 14px;
+    color: var(--text-dimmer);
+    font-weight: 700;
+}
+.docs-group[open] > summary::before { content: '−'; }
+.docs-group[open] > summary { color: var(--text); }
+.docs-sidebar a {
+    display: block;
+    padding: 6px 6px 6px 20px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-dim);
+    border-left: 2px solid transparent;
+    overflow-wrap: anywhere;
+}
+.docs-sidebar a:hover { color: var(--text); }
+.docs-sidebar a[aria-current="page"] {
+    color: var(--cyan);
+    border-left-color: var(--cyan);
+    background: rgba(34, 211, 238, 0.06);
+}
+@media (max-width: 980px) {
+    .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .docs-sidebar {
+        position: static;
+        max-height: none;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 12px;
+    }
+}
+
+/* The header carries eight items. Below the tablet breakpoint the row
+   scrolls sideways inside the header, so the page itself stays put. */
+@media (max-width: 860px) {
+    .nav-links {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex: 1;
+        justify-content: flex-end;
+        margin-left: 16px;
+    }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-links a { white-space: nowrap; }
+}
+
+/* An alias anchor carries the GitHub spelling of a heading slug. */
+.anchor-alias { display: block; height: 0; scroll-margin-top: 84px; }
+
+/* ── Callouts (VitePress ::: containers) ───────────────────── */
+.md-body .callout {
+    margin: 0 0 24px;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--indigo);
+    border-radius: 12px;
+    background: var(--bg-elev);
+}
+.md-body .callout > :last-child { margin-bottom: 0; }
+.md-body .callout-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--indigo);
+}
+.md-body .callout-tip { border-left-color: var(--cyan); }
+.md-body .callout-tip .callout-title { color: var(--cyan); }
+.md-body .callout-info { border-left-color: var(--indigo); }
+.md-body .callout-info .callout-title { color: var(--indigo); }
+.md-body .callout-warning { border-left-color: var(--amber); }
+.md-body .callout-warning .callout-title { color: var(--amber); }
+.md-body .callout-danger { border-left-color: var(--rose); }
+.md-body .callout-danger .callout-title { color: var(--rose); }
+.md-body .callout-details > summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+/* ── Documentation home, the sidebar tree as cards ─────────── */
+.docs-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-top: 40px;
+}
+.docs-card {
+    padding: 20px 22px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-elev);
+    min-width: 0;
+}
+.docs-card h3 { margin-bottom: 12px; color: var(--text); }
+.docs-card-links { display: flex; flex-direction: column; gap: 6px; }
+.docs-card-links a {
+    font-size: 15px;
+    color: var(--text-dim);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.docs-card-links a:hover { color: var(--cyan); }

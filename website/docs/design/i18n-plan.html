@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>rohySimulator Internationalization Plan · Rohy docs</title>
+    <meta name="description" content="Goal: ship Italian first, with an architecture where adding Finnish, Swedish, or any further language is a data change (one registry entry + one translated locale file + optiona…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="rohySimulator Internationalization Plan · Rohy docs">
+    <meta property="og:description" content="Goal: ship Italian first, with an architecture where adding Finnish, Swedish, or any further language is a data change (one registry entry + one translated locale file + optiona…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Design</span>
+        <h1>rohySimulator Internationalization Plan</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#1-current-state-audited-2026-07-08">1. Current state (audited 2026-07-08)</a>
+            <a href="#2-design-principle-the-language-registry">2. Design principle: the language registry</a>
+            <a href="#3-layer-1-language-preference-plumbing">3. Layer 1 — Language preference plumbing</a>
+            <a href="#4-layer-2-llm-patient-dialogue-highest-value-lowest-effort">4. Layer 2 — LLM patient dialogue (highest value, lowest effort)</a>
+            <a href="#5-layer-3-speech-stt-tts">5. Layer 3 — Speech (STT + TTS)</a>
+            <a href="#6-layer-4-ui-strings-the-long-tail">6. Layer 4 — UI strings (the long tail)</a>
+            <a href="#7-layer-5-translation-production-workflow">7. Layer 5 — Translation production workflow</a>
+            <a href="#8-layer-6-formatting-rtl-readiness-and-scope-fences">8. Layer 6 — Formatting, RTL-readiness, and scope fences</a>
+            <a href="#9-delivery-phases">9. Delivery phases</a>
+            <a href="#10-risks-mitigations">10. Risks &amp; mitigations</a>
+            <a href="#11-success-criteria">11. Success criteria</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Using the Simulator</summary>
+                    <a href="../trainee/index.html">Overview</a>
+                    <a href="../trainee/getting-started.html">Getting started</a>
+                    <a href="../trainee/rooms.html">The rooms</a>
+                    <a href="../trainee/history.html">Taking a history</a>
+                    <a href="../trainee/room-3d.html">The 3D Room</a>
+                    <a href="../trainee/examination.html">Physical examination</a>
+                    <a href="../trainee/investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="../trainee/ecg.html">12-lead ECG</a>
+                    <a href="../trainee/pathology.html">Reading a pathology slide</a>
+                    <a href="../trainee/imaging-reading-room.html">The PACS reading room</a>
+                    <a href="../trainee/treatments.html">Treatments &amp; medications</a>
+                    <a href="../trainee/vitals.html">Vitals &amp; alarms</a>
+                    <a href="../trainee/voice.html">Voice mode</a>
+                    <a href="../trainee/debrief.html">Debrief</a>
+                    <a href="../trainee/courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="../trainee/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="i18n-plan.html" aria-current="page">rohySimulator Internationalization Plan</a>
+                    <a href="index.html">Design</a>
+                    <a href="plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><strong>Goal:</strong> ship Italian first, with an architecture where adding Finnish, Swedish,
+or any further language is a <em>data change</em> (one registry entry + one translated
+locale file + optional voice files) — never a code change.</p>
+<p><strong>Status:</strong> <strong>Phases A–D implemented end-to-end, 2026-07-08</strong> (single session on
+<code>lang_dev</code>, rebased onto origin/main first). Registry + LLM directive + STT +
+voice-mismatch warning (A); react-i18next + ICU + parser + pseudo-locale (B);
+all student-facing domains extracted, ~1,035 keys × 12 namespaces (C, scoped —
+analytics/admin deferred per §6); Italian/Finnish/Swedish machine-first
+translations with glossary, delta pipeline, Intl formatting sweep (D).
+Verified: full test suite green (incl. locale-integrity + language-switch
+tests), clean build with per-locale lazy chunks, live browser run
+(pseudo-locale exposes zero missed strings on login; Italian UI + Italian
+date formatting + preference persistence across reload). LLM dialogue smoke VERIFIED against a live keyed server (all six
+first-turn + drift probes pass in it/fi/sv). <strong>Remaining: native-speaker
+review per language (the release gate, §7).</strong> Phase E (Piper packs, Google voices, deploy check) as needed.
+<strong>Date:</strong> 2026-07-08</p>
+<hr>
+<h2 id="1-current-state-audited-2026-07-08">1. Current state (audited 2026-07-08)</h2>
+<p>The app is effectively English-only. There is <strong>no i18n framework, no locale
+files, no language switcher</strong>. What exists today:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Asset</th>
+<th>Location</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>i18n library</td>
+<td><code>package.json</code></td>
+<td>none (no i18next / react-intl / lingui)</td>
+</tr>
+<tr>
+<td>Translation shim</td>
+<td><code>src/components/analytics/tna/laila/i18nShim.js</code></td>
+<td>fake <code>useTranslation()</code>/<code>t()</code>, English-only, <strong>written to be swap-compatible with react-i18next</strong> (~50 call sites, all in the laila subtree)</td>
+</tr>
+<tr>
+<td>Language preference</td>
+<td><code>migrations/0001_initial.sql</code> (<code>user_preferences.language TEXT DEFAULT &#39;en&#39;</code>)</td>
+<td>column exists; <code>server/routes/users-routes.js</code> GET/PUT already persist it — <strong>stored but never consumed</strong></td>
+</tr>
+<tr>
+<td>Language settings UI</td>
+<td><code>src/components/settings/</code></td>
+<td>none — no field surfaces the <code>language</code> preference</td>
+</tr>
+<tr>
+<td>UI strings</td>
+<td>~97 non-test components under <code>src/components/</code></td>
+<td>hardcoded inline in JSX (<code>App.jsx</code>, <code>ChatInterface.jsx</code> ~1,960 lines, etc.); only <code>src/constants/roleLabels.js</code> is centralized</td>
+</tr>
+<tr>
+<td>STT languages</td>
+<td><code>src/components/settings/VoiceSettingsTab.jsx</code> (~lines 22–30)</td>
+<td>hardcoded array: <code>en-US, en-GB, tr-TR, ar-SA, fr-FR, de-DE, es-ES</code> — no <code>it-IT</code>, <code>fi-FI</code>, <code>sv-SE</code></td>
+</tr>
+<tr>
+<td>TTS providers</td>
+<td><code>server/routes/proxy-routes.js:66</code> <code>VOICE_TTS_PROVIDERS = [&#39;piper&#39;,&#39;kokoro&#39;,&#39;openai&#39;,&#39;google&#39;,&#39;browser&#39;]</code></td>
+<td>Piper voices installed: <code>en_GB-jenny_dioco</code>, <code>en_US-amy</code>, <code>en_US-ryan</code> only. <code>GOOGLE_VOICES</code> (<code>server/services/googleTts.js</code>) all <code>en-US</code>. OpenAI + browser providers are inherently multilingual. Kokoro is English-oriented.</td>
+</tr>
+<tr>
+<td>LLM prompts</td>
+<td>client: <code>src/components/chat/ChatInterface.jsx</code> (<code>buildPersonaBlocks</code>, <code>roleAnchor</code>), <code>src/utils/personaBlocks.js</code>, <code>src/utils/roleAnchor.js</code>; server: <code>server/services/systemPromptAssembly.js</code></td>
+<td><strong>no output-language directive anywhere</strong> — the model defaults to English. Fallbacks like <code>&#39;You are a patient.&#39;</code> are hardcoded English</td>
+</tr>
+<tr>
+<td>Clinical content</td>
+<td><code>Lab_database.json</code>, drug catalogue (<code>server/routes/catalogue.js</code>, migration <code>0007</code>), cases/scenarios in DB</td>
+<td>English author-entered content — <strong>out of scope</strong> (see §8)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Key architectural fact:</strong> most of what a student reads is <em>LLM-generated at
+runtime</em>, not static UI text. A prompt directive translates the core experience
+before a single string is extracted. The plan exploits this ordering.</p>
+<hr>
+<h2 id="2-design-principle-the-language-registry">2. Design principle: the language registry</h2>
+<p>One module is the single source of truth for every language the app knows:</p>
+<pre><code class="language-js">// src/i18n/languages.js
+export const LANGUAGES = {
+  en: {
+    name: &#39;English&#39;, native: &#39;English&#39;,
+    stt: &#39;en-US&#39;,
+    llmDirective: null,                    // English is the model default
+    dir: &#39;ltr&#39;,
+  },
+  it: {
+    name: &#39;Italian&#39;, native: &#39;Italiano&#39;,
+    stt: &#39;it-IT&#39;,
+    llmDirective: &#39;Rispondi sempre in italiano, indipendentemente dalla lingua della domanda.&#39;,
+    dir: &#39;ltr&#39;,
+  },
+  fi: {
+    name: &#39;Finnish&#39;, native: &#39;Suomi&#39;,
+    stt: &#39;fi-FI&#39;,
+    llmDirective: &#39;Vastaa aina suomeksi riippumatta siitä, millä kielellä kysymys esitetään.&#39;,
+    dir: &#39;ltr&#39;,
+  },
+  sv: {
+    name: &#39;Swedish&#39;, native: &#39;Svenska&#39;,
+    stt: &#39;sv-SE&#39;,
+    llmDirective: &#39;Svara alltid på svenska, oavsett vilket språk frågan ställs på.&#39;,
+    dir: &#39;ltr&#39;,
+  },
+}
+</code></pre>
+<p>Every consumer — settings UI, prompt assembly, STT list, TTS voice resolver,
+<code>&lt;html lang dir&gt;</code> attributes, <code>Intl</code> formatters — derives from this registry.
+Nothing else may hardcode a language name or code.</p>
+<p><strong>Definition of done for the architecture</strong> (the acceptance test used in §7):
+adding a new language touches (1) this registry, (2) a <code>locales/xx/</code> folder,
+(3) optionally provider voice <strong>catalogue data entries</strong> (e.g. rows in
+<code>GOOGLE_VOICES</code>) / Piper <code>.onnx</code> files. Catalogue rows count as data even
+though they live in service files. No component edits, no <em>logic</em>
+conditionals on language codes anywhere in <code>src/</code> or <code>server/</code>.</p>
+<hr>
+<span class="anchor-alias" id="3-layer-1--language-preference-plumbing"></span><h2 id="3-layer-1-language-preference-plumbing">3. Layer 1 — Language preference plumbing</h2>
+<p>The cheapest layer; everything else keys off it.</p>
+<ol>
+<li><strong>Settings UI</strong>: add a language selector to the profile/settings panel in
+<code>src/components/settings/</code> (options generated from <code>LANGUAGES</code>, labelled by
+<code>native</code> name). Persist via the existing <code>PUT user_preferences</code> — the
+backend needs <strong>zero changes</strong>.</li>
+<li><strong>Two fields, not one</strong> (small now, painful to retrofit):<ul>
+<li><code>uiLanguage</code> — interface chrome.</li>
+<li><code>caseLanguage</code> — patient dialogue + TTS/STT (defaults to <code>uiLanguage</code>).
+A Finnish program may want a Finnish UI with an English-speaking patient
+scenario, or vice versa. Store <code>caseLanguage</code> alongside session settings
+(<code>session_settings</code> / <code>sessions.llm_settings</code> already exist in
+<code>0001_initial.sql</code>); <code>uiLanguage</code> lives in <code>user_preferences.language</code>.</li>
+</ul>
+</li>
+<li><strong>React context</strong>: a <code>LanguageProvider</code> exposing <code>{ uiLanguage, caseLanguage, setUiLanguage, setCaseLanguage }</code>, hydrated from the users
+API at login. Sets <code>document.documentElement.lang</code> / <code>dir</code> from the
+registry.</li>
+</ol>
+<hr>
+<span class="anchor-alias" id="4-layer-2--llm-patient-dialogue-highest-value-lowest-effort"></span><h2 id="4-layer-2-llm-patient-dialogue-highest-value-lowest-effort">4. Layer 2 — LLM patient dialogue (highest value, lowest effort)</h2>
+<ol>
+<li><strong>Directive injection — server-side only</strong>: append
+<code>LANGUAGES[caseLanguage].llmDirective</code> inside
+<code>server/services/systemPromptAssembly.js</code> when non-null, passing
+<code>caseLanguage</code> through the <code>/proxy/llm</code> request body. <strong>Not</strong> client-side
+in <code>buildPersonaBlocks</code> — the rich <code>## INSTRUCTIONS</code> block is built
+client-side (<code>ChatInterface.jsx:724</code>) and shipped as <code>system_prompt</code>,
+which <code>assembleSystemPrompt</code> then wraps (<code>proxy-routes.js:434</code>); injecting
+in both places would double the directive. Server-side covers the
+ChatInterface path <em>and</em> <code>src/services/llmService.js</code> and any future path.</li>
+<li><strong>Prompt fragments</strong>: role anchors (<code>src/utils/roleAnchor.js</code>) and
+fallbacks become locale-keyed strings so the scaffolding around the case
+prompt matches the dialogue language. Note <code>&#39;You are a patient.&#39;</code> is
+hardcoded in <strong>three</strong> places: <code>ChatInterface.jsx:725</code>,
+<code>llmService.js:54</code>, and <code>llmService.js:129</code> — all three must be covered.
+(The prompt <em>skeleton</em> headers like <code>## PERSONA</code> stay English — they are
+instructions to the model, not user-visible.)</li>
+<li><strong>Case content interplay</strong>: admin-authored <code>case.system_prompt</code> stays in
+whatever language the author wrote. The directive dominates output language
+regardless; document this behaviour for case authors in
+<code>docs/</code> (VitePress).</li>
+<li><strong>Verification</strong>: scripted smoke test per language — send a fixed probe
+question through <code>/proxy/llm</code> with each registry directive; assert the
+reply is in the target language (trivial check: LLM self-reports, or
+franc/langdetect-style heuristic). Covers Claude <em>and</em> OpenAI providers.
+Probe the <strong>first</strong> assistant turn as well as multi-turn drift. Also A/B
+the directive phrasing once: target-language directive (current registry)
+vs an English directive naming the target language (&quot;Always respond in
+Italian…&quot;) — keep whichever holds better; English-phrased directives keep
+the registry reviewable by non-speakers.</li>
+</ol>
+<hr>
+<span class="anchor-alias" id="5-layer-3--speech-stt--tts"></span><h2 id="5-layer-3-speech-stt-tts">5. Layer 3 — Speech (STT + TTS)</h2>
+<h3 id="stt">STT</h3>
+<ul>
+<li>Replace the hardcoded array in <code>VoiceSettingsTab.jsx</code> with a list generated
+from the registry (<code>LANGUAGES[*].stt</code>), preserving the existing extra
+dialects (en-GB etc.) as registry data.</li>
+<li>Default the STT language to <code>caseLanguage</code> while keeping the manual
+override.</li>
+</ul>
+<span class="anchor-alias" id="tts--language-tagging--mismatch-warning-not-a-fallback-chain"></span><h3 id="tts-language-tagging-mismatch-warning-not-a-fallback-chain">TTS — language tagging + mismatch warning (NOT a fallback chain)</h3>
+<p><strong>Reconciliation with the existing design (review finding, 2026-07-08).</strong>
+<code>src/utils/voiceResolver.js</code> is the single source of truth for voice
+resolution, and it is deliberately <strong>one tier, no fallbacks</strong>: per-persona
+<code>case_voice</code> only, collapsed 2026-05-12/13 after three weeks of voice churn
+caused by cross-provider voice leakage. An earlier draft of this plan
+proposed a language-based fallback chain (Piper → Google → OpenAI/browser →
+English) — that would reintroduce exactly the resolver architecture this
+repo tore out, and split resolution across a second (server-side) resolver.
+<strong>Dropped.</strong> Instead, language is a <em>validation</em> concern layered on the
+existing one-tier design:</p>
+<ol>
+<li><strong>Tag every voice with a BCP-47 language</strong> in each provider catalogue
+(data, not resolution logic):<ul>
+<li><code>server/services/googleTts.js</code> <code>GOOGLE_VOICES</code> → add <code>it-IT</code>, <code>fi-FI</code>,
+<code>sv-SE</code> Google voices (the file&#39;s own comment invites this).</li>
+<li><code>server/services/kokoroTts.js</code> already exposes per-voice <code>language</code>
+(default <code>&#39;en&#39;</code>) — keep; Kokoro has no usable it/fi/sv packs and will
+simply never match non-English.</li>
+<li>Piper: voice language is derivable from the model name
+(<code>it_IT-…</code>, <code>fi_FI-…</code>, <code>sv_SE-…</code>) — the resolver&#39;s own
+<code>VOICE_ID_PATTERNS</code> comment already cites <code>fi_FI-harri-medium.onnx</code>.</li>
+<li>OpenAI + <code>browser</code>: <code>multilingual: true</code> (they follow input text;
+browser voices are enumerated client-side via
+<code>speechSynthesis.getVoices()</code> filtered by lang).</li>
+</ul>
+</li>
+<li><strong>Language-mismatch warning, not substitution</strong>: a
+<code>voiceLanguage(voiceId, provider)</code> helper beside the resolver derives the
+voice&#39;s language; when it conflicts with the session&#39;s <code>caseLanguage</code>
+(and the voice is not multilingual), surface a <strong>loud diagnostic-bar
+warning</strong> and an authoring-time nudge to pick a matching <code>case_voice</code>.
+The voice actually used never silently changes — same &quot;loud failure over
+silent fallback&quot; ethos as §10, without resurrecting fallback chains.
+If per-language personas become common, the escape hatch is per-language
+<code>case_voice</code> maps on the persona (still one tier), not a chain.</li>
+<li><strong>Piper voice packs</strong> (offline TTS, matters for the Docker deploy):
+download <code>it_IT-riccardo</code>/<code>it_IT-paola</code>, <code>fi_FI-harri</code>, <code>sv_SE-nst</code> <code>.onnx</code>
+models into <code>server/data/piper/</code>. <strong>Deployment note:</strong> verify the
+Dockerfile runtime stage copies these (repo has prior history of runtime
+files missing from the image — see LEARNINGS on <code>Lab_database.json</code> and
+<code>CHANGELOG.md</code>); note <code>server/data/piper/</code> also contains a stray <code>venv/</code>
+directory that COPY globs must not drag in. Decide whether large <code>.onnx</code>
+files ship in the image or are fetched/mounted at deploy time.</li>
+</ol>
+<hr>
+<span class="anchor-alias" id="6-layer-4--ui-strings-the-long-tail"></span><h2 id="6-layer-4-ui-strings-the-long-tail">6. Layer 4 — UI strings (the long tail)</h2>
+<h3 id="framework">Framework</h3>
+<ul>
+<li><strong>react-i18next + i18next</strong>, with <strong>ICU message format</strong> (<code>i18next-icu</code>).
+ICU is required, not nice-to-have: Finnish/Swedish plural and inflection
+rules (&quot;1 tulos / 2 tulosta&quot;) break naive <code>count === 1 ? … : …</code> string
+code.</li>
+<li>Replace <code>laila/i18nShim.js</code> with the real library — <strong>deferred to the
+analytics tail (§ migration order), and not a one-import swap</strong> (review
+finding): the shim <em>humanises unknown keys</em> (<code>network_density</code> → &quot;Network
+density&quot;) while real i18next renders the raw key. The swap requires first
+materialising the shim&#39;s <code>OVERRIDES</code> map plus the humanised output of all
+52 <code>t()</code> call sites (8 files) into <code>en/analytics.json</code>, and fixing the
+<code>t(&#39;key&#39;) || &#39;fallback&#39;</code> idiom (e.g. <code>ProcessMap.jsx:126</code>) — with real
+i18next a missing key returns the key itself (truthy), silently killing
+the <code>||</code> fallback. Use <code>t(&#39;key&#39;, &#39;Default text&#39;)</code> instead.</li>
+</ul>
+<h3 id="structure">Structure</h3>
+<pre><code>src/locales/
+  en/chat.json  en/monitor.json  en/settings.json  en/investigations.json …
+  it/…          fi/…             sv/…
+</code></pre>
+<ul>
+<li><strong>Namespaces mirror component domains</strong> (<code>chat</code>, <code>monitor</code>, <code>settings</code>,
+<code>investigations</code>, <code>treatments</code>, <code>examination</code>, <code>orders</code>, <code>analytics</code>,
+<code>auth</code>, <code>common</code>), <strong>lazy-loaded</strong> so students never download admin-panel
+strings.</li>
+<li><code>en/</code> is the canonical source. <strong>English is the global fallback</strong> — a
+missing Finnish key renders English, never a raw key.</li>
+</ul>
+<h3 id="tooling-what-makes-97-components-tractable">Tooling (what makes 97 components tractable)</h3>
+<ul>
+<li><strong><code>i18next-parser</code></strong> in the repo: scans JSX for <code>t()</code> calls, keeps <code>en/*.json</code>
+in sync automatically. Extraction becomes CI-verified, not a manual audit.</li>
+<li><strong>CI checks</strong>: (a) parser output is clean (no unextracted keys drift),
+(b) key-set diff across locales — every locale&#39;s missing-key count is
+visible per PR.</li>
+<li><strong>Pseudo-locale <code>en-XA</code></strong> (accented + ~40% lengthened strings, generated
+from <code>en/</code>): running the app in <code>en-XA</code> exposes hardcoded strings and
+layout truncation <em>before</em> paying for translation. Swedish/Finnish run
+~30% longer than English; the monitor and chat layouts are the overflow
+hotspots.</li>
+</ul>
+<h3 id="migration-order-incremental-by-student-value">Migration order (incremental, by student value)</h3>
+<p><strong>Scope decision (2026-07-08): student-facing surfaces are the priority.
+Analytics and admin/instructor panels are explicitly deprioritised</strong> — they
+are instructor/researcher-facing, English is acceptable there indefinitely,
+and <code>settings/</code> alone is 18.8k lines (46% of all component JSX). English
+fallback makes partial coverage invisible-safe, so the tail can trail
+releases forever without harm.</p>
+<ol>
+<li><code>chat/</code> + <code>monitor/</code> (the student-facing core, ~4.6k lines)</li>
+<li><code>investigations/</code>, <code>treatments/</code>, <code>examination/</code>, <code>orders/</code>,
+<code>discussion/</code>, <code>patient/</code> (student workflow, ~6.3k lines)</li>
+<li><code>auth/</code>, <code>common/</code>, student-visible parts of <code>App.jsx</code></li>
+<li><strong>Deferred, no target date</strong>: <code>settings/</code> admin panels, <code>analytics/</code>
+(laila shim swap included), <code>debug/</code>, <code>oyon/</code> — pick up only if a
+language gains non-English-reading instructors.</li>
+</ol>
+<p>Each domain migrates in its own PR with the pseudo-locale check passing.</p>
+<hr>
+<span class="anchor-alias" id="7-layer-5--translation-production-workflow"></span><h2 id="7-layer-5-translation-production-workflow">7. Layer 5 — Translation production workflow</h2>
+<ul>
+<li><strong>First pass by LLM, through the app&#39;s own <code>/proxy/llm</code></strong>: a script
+(<code>scripts/translate-locales.mjs</code>) diffs new/changed keys in <code>en/*.json</code>,
+translates them with a pinned <strong>clinical glossary</strong> (vitals, lab, drug
+terminology per language) and ICU-syntax-preservation instructions, and
+writes <code>it/ fi/ sv/</code> files. Deterministic keys → re-runs only touch deltas.</li>
+<li><strong>Native review as git diff review</strong>: reviewers see only changed strings
+per PR, never a from-scratch spreadsheet. For Finnish/Swedish you have
+native-speaker colleagues in the UEF orbit; treat their sign-off as the
+release gate per language.</li>
+<li><strong>TMS deferred</strong>: self-hosted Tolgee/Weblate only if non-developer
+translators need a web editor later. For a research project the
+LLM-script + git-review loop is leaner; revisit if a language gains a
+dedicated non-technical maintainer.</li>
+</ul>
+<span class="anchor-alias" id="acceptance-test-run-when-adding-swedish-after-italian--finnish-exist"></span><h3 id="acceptance-test-run-when-adding-swedish-after-italian-finnish-exist">Acceptance test (run when adding Swedish, after Italian + Finnish exist)</h3>
+<p>Adding <code>sv</code> must require exactly:</p>
+<ol>
+<li>one entry in <code>src/i18n/languages.js</code>;</li>
+<li><code>npm run translate -- sv</code> → generated <code>src/locales/sv/</code>;</li>
+<li>optional: Google voice entries + Piper <code>sv_SE</code> <code>.onnx</code>.</li>
+</ol>
+<p>If any component, route, or service needs editing, that&#39;s an architecture
+bug — fix the abstraction, not the instance.</p>
+<hr>
+<span class="anchor-alias" id="8-layer-6--formatting-rtl-readiness-and-scope-fences"></span><h2 id="8-layer-6-formatting-rtl-readiness-and-scope-fences">8. Layer 6 — Formatting, RTL-readiness, and scope fences</h2>
+<ul>
+<li><strong><code>Intl</code> everywhere</strong>: dates via <code>Intl.DateTimeFormat(locale)</code>, numbers via
+<code>Intl.NumberFormat(locale)</code> — Finnish/Swedish use <code>7.7.2026</code> and decimal
+commas. Sweep hotspots: monitor vitals, lab result tables, timestamps in
+chat/session logs. One shared <code>formatters.js</code> keyed off <code>uiLanguage</code>;
+ban ad-hoc <code>toLocaleString()</code>/<code>toFixed()</code>+concat in reviewed code.</li>
+<li><strong>RTL-readiness (cheap now, expensive later)</strong>: Arabic is already in the
+STT list, so the request will come. Do <em>not</em> retrofit; just stop digging:
+new/touched code uses Tailwind logical utilities (<code>ms-*</code>/<code>me-*</code>,
+<code>ps-*</code>/<code>pe-*</code>), and <code>dir</code> is already set from the registry (§3).</li>
+<li><strong>Clinical content stays out of scope</strong>: <code>Lab_database.json</code>, the
+RxNorm/LOINC drug-lab catalogue, and case/scenario text are author-entered
+data. Lab/drug nomenclature should remain standard (LOINC/RxNorm names are
+international practice); case translation is a per-case authoring feature —
+if wanted later, it&#39;s an authoring-UI feature (&quot;duplicate case in
+language X&quot; with LLM assist), not part of this i18n effort.</li>
+</ul>
+<hr>
+<h2 id="9-delivery-phases">9. Delivery phases</h2>
+<span class="anchor-alias" id="phase-a--multilingual-skeleton-1-session"></span><h3 id="phase-a-multilingual-skeleton-1-session">Phase A — Multilingual skeleton (≈1 session)</h3>
+<p>Registry · settings selector + LanguageProvider · LLM directive injection
+(server-side) · STT list from registry · TTS voice tagging + resolver with
+visible-fallback warning · per-language LLM smoke test.
+<strong>Milestone:</strong> an Italian (or Finnish/Swedish) student converses with a
+patient who replies — and speaks via OpenAI/browser TTS — in their language.
+No UI strings extracted yet.</p>
+<span class="anchor-alias" id="phase-b--i18n-framework--tooling-1-session"></span><h3 id="phase-b-i18n-framework-tooling-1-session">Phase B — i18n framework + tooling (≈1 session)</h3>
+<p>react-i18next + ICU · locale folder structure · i18next-parser + CI checks ·
+pseudo-locale <code>en-XA</code> · migrate <code>chat/</code> + <code>monitor/</code>. (Laila shim swap moved
+to the deferred analytics tail — see §6.)</p>
+<span class="anchor-alias" id="phase-c--string-migration-student-facing-domains-23-sessions-parallelizable"></span><h3 id="phase-c-string-migration-student-facing-domains-23-sessions-parallelizable">Phase C — String migration, student-facing domains (2–3 sessions, parallelizable)</h3>
+<p>Student-workflow domains per §6 migration order, one PR per domain.
+Independent domains can be run as parallel agent tasks. The deferred tail
+(settings/analytics/admin) is out of scope until explicitly re-prioritised.</p>
+<span class="anchor-alias" id="phase-d--translation-production-1-session--review-latency"></span><h3 id="phase-d-translation-production-1-session-review-latency">Phase D — Translation production (≈1 session + review latency)</h3>
+<p><code>translate-locales.mjs</code> + glossary · generate <code>it</code>, <code>fi</code>, <code>sv</code> · native
+review gates · <code>Intl</code> formatting sweep.</p>
+<span class="anchor-alias" id="phase-e--per-language-polish-as-needed"></span><h3 id="phase-e-per-language-polish-as-needed">Phase E — Per-language polish (as needed)</h3>
+<p>Piper <code>.onnx</code> packs + Dockerfile/runtime-image verification · Google voice
+entries · docs page for case authors on <code>caseLanguage</code> behaviour ·
+deploy to SaqrServer and verify in the deployed image (repo history: runtime
+assets have been silently dropped by <code>.dockerignore</code>/COPY gates twice).</p>
+<h3 id="ordering-rationale">Ordering rationale</h3>
+<p>Phase A alone delivers most pedagogical value because the core experience is
+LLM-generated dialogue, not static UI. Phases B–D are mechanical and gated by
+tooling built once. Phase C is the only genuinely long phase and can trail
+behind releases indefinitely — untranslated components safely fall back to
+English throughout.</p>
+<hr>
+<span class="anchor-alias" id="10-risks--mitigations"></span><h2 id="10-risks-mitigations">10. Risks &amp; mitigations</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LLM drifts back to English mid-conversation (long chats, English case prompts)</td>
+<td>Directive in <em>system</em> prompt (server-assembled), not first user turn; re-assert in the instructions block; smoke test with multi-turn probes</td>
+</tr>
+<tr>
+<td>Clinical terminology mistranslated by machine pass</td>
+<td>Pinned per-language glossary in the translation script; native review is the release gate</td>
+</tr>
+<tr>
+<td>Layout breakage from longer strings</td>
+<td>Pseudo-locale <code>en-XA</code> in CI/manual QA before any real translation</td>
+</tr>
+<tr>
+<td>Locale files drift out of sync</td>
+<td>i18next-parser + key-diff CI check per PR</td>
+</tr>
+<tr>
+<td>Piper <code>.onnx</code> files missing from Docker runtime image</td>
+<td>Explicit Dockerfile COPY verification step in Phase E (two prior incidents of exactly this failure mode)</td>
+</tr>
+<tr>
+<td>Wrong-language TTS served silently</td>
+<td>Language-mismatch validation on the one-tier resolver — diagnostic bar warning + authoring nudge; the voice is never silently substituted (no fallback chains, per <code>voiceResolver.js</code> design)</td>
+</tr>
+<tr>
+<td>Scope creep into clinical content translation</td>
+<td>Fenced in §8; requires its own decision</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="11-success-criteria">11. Success criteria</h2>
+<ol>
+<li>Student can select Italiano/Suomi/Svenska and get: translated UI (Phase C
+coverage), patient dialogue in that language, STT recognizing it, TTS
+speaking it.</li>
+<li>Adding Swedish after Finnish satisfied the §7 acceptance test (data-only).</li>
+<li>English-only users see zero behaviour change.</li>
+<li>All CI checks (extraction, key-diff, tests) green; per-language LLM smoke
+tests pass on both OpenAI and Anthropic providers.</li>
+</ol>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

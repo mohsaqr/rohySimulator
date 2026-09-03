@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Courses, lessons &amp; surveys · Rohy docs</title>
+    <meta name="description" content="Beside the clinical rooms, a case can carry course material: lessons to read and work through, and surveys to answer. You reach it from the black Course button at the right end …">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Courses, lessons &amp; surveys · Rohy docs">
+    <meta property="og:description" content="Beside the clinical rooms, a case can carry course material: lessons to read and work through, and surveys to answer. You reach it from the black Course button at the right end …">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Trainee</span>
+        <h1>Courses, lessons &amp; surveys</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#joining-a-course">Joining a course</a>
+            <a href="#seeing-the-classes-you-are-in">Seeing the classes you are in</a>
+            <a href="#how-a-case-relates-to-a-course">How a case relates to a course</a>
+            <a href="#opening-the-course-view">Opening the Course view</a>
+            <a href="#what-a-course-holds">What a course holds</a>
+            <a href="#working-through-a-lesson">Working through a lesson</a>
+            <a href="#surveys">Surveys</a>
+            <a href="#what-you-can-see-of-your-own-progress">What you can see of your own progress</a>
+            <a href="#next-steps">Next steps</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Using the Simulator</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="getting-started.html">Getting started</a>
+                    <a href="rooms.html">The rooms</a>
+                    <a href="history.html">Taking a history</a>
+                    <a href="room-3d.html">The 3D Room</a>
+                    <a href="examination.html">Physical examination</a>
+                    <a href="investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="ecg.html">12-lead ECG</a>
+                    <a href="pathology.html">Reading a pathology slide</a>
+                    <a href="imaging-reading-room.html">The PACS reading room</a>
+                    <a href="treatments.html">Treatments &amp; medications</a>
+                    <a href="vitals.html">Vitals &amp; alarms</a>
+                    <a href="voice.html">Voice mode</a>
+                    <a href="debrief.html">Debrief</a>
+                    <a href="courses.html" aria-current="page">Courses, lessons &amp; surveys</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p>Beside the clinical rooms, a case can carry <strong>course</strong> material: lessons to
+read and work through, and surveys to answer. You reach it from the black
+<strong>Course</strong> button at the right end of the bottom navigation bar. A course is
+the same thing your instructor calls a <strong>class</strong> (a <em>cohort</em> in the API);
+enrolment, lessons, surveys and case assignment all hang off it.</p>
+<h2 id="joining-a-course">Joining a course</h2>
+<p>There are four ways you end up in one:</p>
+<ol>
+<li><strong>Automatically.</strong> Each tenant has one default course flagged for
+auto-enrolment. Every account is put into it when you register and again
+at each sign-in, so you always have at least one course and at least the
+default case.</li>
+<li><strong>With a join code.</strong> Open <strong>My Profile</strong> from the top bar, go to the
+<strong>Join a class</strong> tab, type the code your teacher shared into <strong>Join
+code</strong>, and click <strong>Join class</strong>. The code is folded to upper case and
+stripped of separators before it is looked up, so <code>abc-123</code> and <code>ABC123</code>
+are the same code.</li>
+<li><strong>With an invite.</strong> An invitation link or code used on the sign-up screen
+can carry a course. When it does, the register screen says <em>&quot;You&#39;ve been
+invited to join {course}.&quot;</em> and you are enrolled as your account is
+created.</li>
+<li><strong>Your teacher adds you.</strong> Instructors can enrol people directly from the
+class roster. See <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>.</li>
+</ol>
+<p>If the code is wrong you get <code>Could not join — check the code and try again</code>.
+<strong>That class has been closed</strong> means the code was right and the class is gone.</p>
+<h2 id="seeing-the-classes-you-are-in">Seeing the classes you are in</h2>
+<p>The same <strong>My Profile → Join a class</strong> tab lists <strong>My classes</strong> underneath
+the form: the name of each class you are a live member of, its description,
+and the date you joined. The list refreshes after a successful join. Before
+you have joined anything it reads <code>You haven&#39;t joined a class yet — enter a code above to join one.</code></p>
+<h2 id="how-a-case-relates-to-a-course">How a case relates to a course</h2>
+<p>A case belongs to at most one course. Your instructor sets that link when
+they assign the case to a class (see
+<a href="../educator/assigning-cases.html">Assigning cases</a>). Two things follow from it:
+in <strong>Settings → Cases</strong> the cases are grouped under the heading of the
+course they belong to, and the <strong>Course</strong> button opens the course of
+whichever case you currently have loaded. Which cases you can start is also
+driven by enrolment: the default case in the default course, plus the cases
+assigned to classes you are a live member of.</p>
+<h2 id="opening-the-course-view">Opening the Course view</h2>
+<p>The <strong>Course</strong> button sits at the right end of the bottom bar, in black with
+a book icon, next to the room buttons. It appears on the in-session surfaces
+once a case is loaded and a session has started, so start the case first
+(see <a href="getting-started.html">Getting started</a>).</p>
+<p>Clicking it resolves the active case to a course and opens it, preferring a
+course you are enrolled in. The header shows the course name and a <strong>Back to
+simulation</strong> button that returns you to the room you left; your session keeps
+running while you are in there. When the case is linked to no course you can
+reach, the view shows <strong>No course content here</strong> with <em>&quot;This case is not
+linked to a course yet.&quot;</em></p>
+<h2 id="what-a-course-holds">What a course holds</h2>
+<p>The course opens on a contents list, headed by the course name and a line
+counting its lessons, its surveys, and how many items you have completed. A
+toggle switches between <strong>cards</strong> and <strong>list</strong>.</p>
+<ul>
+<li>A <strong>lesson</strong> card shows the title, the description, how many sections it
+has, and a duration in minutes when the author set one.</li>
+<li>A <strong>survey</strong> card shows the title, the description, how many questions it
+has, and a <strong>Survey</strong> tag.</li>
+</ul>
+<p>Only published material reaches you; drafts stay with their author. When a
+course holds exactly one lesson and no surveys, that lesson opens directly
+and is the whole view.</p>
+<h2 id="working-through-a-lesson">Working through a lesson</h2>
+<p>Open a lesson and its sections render in order. A section can be:</p>
+<ul>
+<li><strong>Text</strong>, written in Markdown or HTML, which can also carry embedded blocks
+such as a video, a multiple-choice question, a link, an embed, or a file.</li>
+<li><strong>A file</strong>, shown as a download card with the file name, type and size.</li>
+</ul>
+<p>Use <strong>All contents</strong> at the top left to go back to the list when the course
+holds more than one item.</p>
+<p><strong>Mark complete</strong> is at the top right of the lesson. Clicking it records the
+completion against your account and the button changes to <strong>Completed</strong>.
+Completed lessons then carry a check mark in the contents list and count
+toward the total in the course header.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Completion is a click you make</p>
+<p>Reading a lesson to the end leaves it unmarked. Click <strong>Mark complete</strong>
+yourself. The record is per lesson and per learner, and it persists across
+sessions and sign-ins.</p>
+</aside>
+<h2 id="surveys">Surveys</h2>
+<p>Open a survey card and its questions appear numbered in order, in three
+shapes: single choice, multiple choice, and free text. A question the author
+marked as required must be answered before the form will submit; leaving one
+blank shows <strong>This question is required</strong> against it, and the server applies
+the same rule.</p>
+<p>Click <strong>Submit Survey</strong> to send your answers. The form is replaced by
+<strong>Survey Completed</strong> with a thank-you message, and reopening the survey later
+shows that same card. You get one response per survey per course; a second
+submission is refused with <strong>You have already responded</strong>.</p>
+<aside class="callout callout-warning">
+<p class="callout-title">Anonymous surveys behave differently</p>
+<p>When a survey is marked anonymous, your answers are stored without your user
+id. Because there is no record of who answered, an anonymous survey does not
+show the completed card and does not block a second submission.</p>
+</aside>
+<p>Surveys live inside the course view. Nothing prompts you to fill one in when
+you click <strong>End &amp; Debrief</strong>; you open them yourself from the Course button.</p>
+<h2 id="what-you-can-see-of-your-own-progress">What you can see of your own progress</h2>
+<ul>
+<li>Which lessons you have marked complete, as a check mark on each card and a
+completed count in the course header.</li>
+<li>Which surveys you have submitted, as the completed card.</li>
+<li>Which classes you belong to and when you joined, under <strong>My Profile → Join
+a class</strong>.</li>
+</ul>
+<p>Roster views, per-student session reports and course analytics are for
+instructors and are scoped to the classes they own.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="getting-started.html">Getting started</a> for signing in and loading your
+first case</li>
+<li><a href="rooms.html">The rooms</a> for the bottom bar and how rooms work</li>
+<li><a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a> for the instructor side</li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The PACS reading room · Rohy docs</title>
+    <meta name="description" content="PACS is the imaging workstation: a worklist of studies, a series rail, one to four image panes, window and level controls, measurement tools, and a pane for the report you write…">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="The PACS reading room · Rohy docs">
+    <meta property="og:description" content="PACS is the imaging workstation: a worklist of studies, a series rail, one to four image panes, window and level controls, measurement tools, and a pane for the report you write…">
+    <meta property="og:image" content="../../assets/patient-room.jpg">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="../../index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="../../index.html">Overview</a>
+            <a href="../../rooms.html">Rooms</a>
+            <a href="../../whats-new.html">What's new</a>
+            <a href="../../docs/index.html" aria-current="page">Docs</a>
+            <a href="../../help.html">Help</a>
+            <a href="../../index.html#install" class="optional">Install</a>
+            <a href="../../about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Trainee</span>
+        <h1>The PACS reading room</h1>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#when-the-room-appears">When the room appears</a>
+            <a href="#pick-a-study">Pick a study</a>
+            <a href="#series-and-panes">Series and panes</a>
+            <a href="#move-through-a-stack">Move through a stack</a>
+            <a href="#window-width-and-level">Window width and level</a>
+            <a href="#look-and-measure">Look, and measure</a>
+            <a href="#write-the-report">Write the report</a>
+            <a href="#what-the-room-withholds-from-you">What the room withholds from you</a>
+            <a href="#the-room-is-empty">The room is empty</a>
+            <a href="#next-steps">Next steps</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <div class="docs-layout">
+            <nav class="docs-sidebar" aria-label="Documentation">
+                <details class="docs-group">
+                    <summary>Rohy product architecture</summary>
+                    <a href="../product/index.html">Overview</a>
+                    <a href="../product/analytics.html">Analytics, evidence &amp; research traces</a>
+                    <a href="../product/clinical-infrastructure.html">Clinical simulation infrastructure</a>
+                    <a href="../product/case-authoring.html">Case building &amp; scenario authoring</a>
+                    <a href="../product/users-courses-management.html">Users, courses &amp; management</a>
+                    <a href="../product/platform-technologies-operations.html">Platform technologies &amp; operations</a>
+                </details>
+                <details class="docs-group" open>
+                    <summary>Using the Simulator</summary>
+                    <a href="index.html">Overview</a>
+                    <a href="getting-started.html">Getting started</a>
+                    <a href="rooms.html">The rooms</a>
+                    <a href="history.html">Taking a history</a>
+                    <a href="room-3d.html">The 3D Room</a>
+                    <a href="examination.html">Physical examination</a>
+                    <a href="investigations.html">Ordering labs &amp; imaging</a>
+                    <a href="ecg.html">12-lead ECG</a>
+                    <a href="pathology.html">Reading a pathology slide</a>
+                    <a href="imaging-reading-room.html" aria-current="page">The PACS reading room</a>
+                    <a href="treatments.html">Treatments &amp; medications</a>
+                    <a href="vitals.html">Vitals &amp; alarms</a>
+                    <a href="voice.html">Voice mode</a>
+                    <a href="debrief.html">Debrief</a>
+                    <a href="courses.html">Courses, lessons &amp; surveys</a>
+                    <a href="faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Teaching with Rohy</summary>
+                    <a href="../educator/index.html">Overview</a>
+                    <a href="../educator/cohorts.html">Classes (cohorts) &amp; join codes</a>
+                    <a href="../educator/assigning-cases.html">Assigning cases</a>
+                    <a href="../educator/case-wizard.html">Authoring a case (wizard)</a>
+                    <a href="../educator/agents.html">Agent personas</a>
+                    <a href="../educator/scenarios.html">Scenario timelines</a>
+                    <a href="../educator/languages.html">Languages &amp; multilingual cases</a>
+                    <a href="../educator/reporting.html">Reporting &amp; analytics</a>
+                    <a href="../educator/tna.html">TNA analytics</a>
+                    <a href="../educator/oyon-analytics.html">Oyon emotion analytics</a>
+                    <a href="../educator/classroom-policy.html">Classroom policy</a>
+                    <a href="../educator/faq.html">FAQ &amp; troubleshooting</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Administering Rohy</summary>
+                    <a href="../admin/index.html">Overview</a>
+                    <a href="../admin/first-week.html">First-week checklist</a>
+                    <a href="../admin/users-roles.html">Users &amp; roles (RBAC)</a>
+                    <a href="../admin/platform-settings.html">Platform settings</a>
+                    <a href="../admin/catalogue-editors.html">Lab &amp; medication editors</a>
+                    <a href="../admin/voice-providers.html">Voice / TTS providers</a>
+                    <a href="../admin/pathology-slides.html">Pathology slides</a>
+                    <a href="../admin/multi-tenant.html">Multi-tenant operations</a>
+                    <a href="../admin/system-logs.html">System logs</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Running Rohy in Production</summary>
+                    <a href="../operator/index.html">Overview</a>
+                    <a href="../operator/install.html">Install</a>
+                    <a href="../operator/deploy.html">Deploy &amp; harden</a>
+                    <a href="../operator/updating.html">Update</a>
+                    <a href="../operator/update-strategy.html">Update strategy</a>
+                    <a href="../operator/backup-restore.html">Backup &amp; restore</a>
+                    <a href="../operator/migrations.html">Migrations runbook</a>
+                    <a href="../operator/retention.html">Retention &amp; purges</a>
+                    <a href="../operator/observability.html">Observability</a>
+                    <a href="../operator/incidents.html">Incident playbooks</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Building on Rohy</summary>
+                    <a href="../integrator/index.html">Overview</a>
+                    <a href="../integrator/architecture.html">Architecture seams</a>
+                    <a href="../integrator/api-auth.html">API authentication</a>
+                    <a href="../integrator/embedding.html">Embedding the avatar kit</a>
+                    <a href="../integrator/providers.html">Adding a TTS/LLM provider</a>
+                    <a href="../integrator/knowledge-base.html">Knowledge base</a>
+                    <a href="../integrator/contributing.html">Contributing &amp; tests</a>
+                    <a href="../integrator/vendored-packages.html">Vendored packages</a>
+                    <a href="../integrator/i18n-review.html">Translation review (XLIFF)</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Reference (generated)</summary>
+                    <a href="../reference/api/index.html">API</a>
+                    <a href="../reference/data/index.html">Data model</a>
+                    <a href="../reference/config/index.html">Config &amp; env</a>
+                    <a href="../reference/cli/index.html">CLI &amp; ops</a>
+                    <a href="../reference/glossary.html">Glossary</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Tutorials &amp; media</summary>
+                    <a href="../tutorials/index.html">Overview</a>
+                    <a href="../tutorials/trainee-quickstart.html">Trainee quickstart</a>
+                    <a href="../tutorials/educator-quickstart.html">Educator quickstart</a>
+                    <a href="../tutorials/operator-quickstart.html">Operator quickstart</a>
+                    <a href="../tutorials/walkthrough-acute-cases.html">Walkthrough: acute cases</a>
+                    <a href="../tutorials/media-kit.html">Media kit</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Security &amp; Compliance</summary>
+                    <a href="../security/index.html">Overview</a>
+                    <a href="../security/rbac.html">RBAC &amp; auth model</a>
+                    <a href="../security/audit-chain.html">Audit chain</a>
+                    <a href="../security/redaction.html">Redaction &amp; PII</a>
+                    <a href="../security/retention.html">Data retention</a>
+                    <a href="../security/oyon-ai-act.html">Oyon &amp; EU AI Act</a>
+                    <a href="../security/disclaimer.html">Medical-training disclaimer</a>
+                    <a href="../security/hardening.html">Hardening checklist</a>
+                </details>
+                <details class="docs-group">
+                    <summary>Other documents</summary>
+                    <a href="../ADMIN_FIRST_RUN.html">Admin first-run checklist</a>
+                    <a href="../audits/index.html">Audits</a>
+                    <a href="../audits/stability-audit-2026-05-08.html">Stability Audit - 2026-05-08</a>
+                    <a href="../audits/stability-handoff-2026-05-08.html">Stability Handoff - 2026-05-08</a>
+                    <a href="../changelog.html">Changelog</a>
+                    <a href="../contributing.html">Documentation style guide &amp; docs-as-code contract</a>
+                    <a href="../contributing/imaging-content.html">How imaging and slides reach a deployment</a>
+                    <a href="../contributing/index.html">Contributing</a>
+                    <a href="../DEPLOY.html">Deploying Rohy to production</a>
+                    <a href="../design/agent-behaviour-model.html">Supporting-agent behaviour model</a>
+                    <a href="../design/audio-improvements.html">Audio Improvement: Per-Provider Default Voices (Plan v3)</a>
+                    <a href="../design/i18n-plan.html">rohySimulator Internationalization Plan</a>
+                    <a href="../design/index.html">Design</a>
+                    <a href="../design/plugin-standard.html">RPS-1: the Rohy Plugin Standard</a>
+                    <a href="../design/voice-2.0-plan.html">Voice 2.0: The Voice Owns Its Engine (Plan v1.1)</a>
+                    <a href="../design/voice-defaults-plan.html">Voice Defaults: Issue, History, and Implementation Plan</a>
+                    <a href="../DOCUMENTATION-AUDIT.html">Rohy Documentation: Stage 1 Content Audit &amp; Gap Matrix</a>
+                    <a href="../DOCUMENTATION-PLAN.html">Rohy Enterprise Documentation &amp; Support: Execution Plan</a>
+                    <a href="../DOCUMENTATION-QA.html">Documentation QA: Stage 6</a>
+                    <a href="../INSTALL.html">Installing Rohy</a>
+                    <a href="../license.html">License</a>
+                    <a href="../OYON_INTEGRATION_PLAYBOOK.html">Oyon Integration Playbook</a>
+                    <a href="../OYON_INTEGRATION_POLICY.html">Oyon Integration Policy</a>
+                    <a href="../OYONR_INTEGRATION_NOTE.html">OyonR Integration Note</a>
+                    <a href="../reference/api/admin.html">admin API</a>
+                    <a href="../reference/api/agents.html">agents API</a>
+                    <a href="../reference/api/analytics.html">analytics API</a>
+                    <a href="../reference/api/auth.html">auth API</a>
+                    <a href="../reference/api/cases.html">cases API</a>
+                    <a href="../reference/api/catalogue.html">catalogue API</a>
+                    <a href="../reference/api/cohorts.html">cohorts API</a>
+                    <a href="../reference/api/health.html">health API</a>
+                    <a href="../reference/api/help.html">help API</a>
+                    <a href="../reference/api/lessons.html">lessons API</a>
+                    <a href="../reference/api/notes.html">notes API</a>
+                    <a href="../reference/api/notification.html">notification API</a>
+                    <a href="../reference/api/orders.html">orders API</a>
+                    <a href="../reference/api/oyon.html">oyon API</a>
+                    <a href="../reference/api/patient-record.html">patient-record API</a>
+                    <a href="../reference/api/plugins.html">plugins API</a>
+                    <a href="../reference/api/proxy.html">proxy API</a>
+                    <a href="../reference/api/registration.html">registration API</a>
+                    <a href="../reference/api/sessions.html">sessions API</a>
+                    <a href="../reference/api/surveys.html">surveys API</a>
+                    <a href="../reference/api/tenants.html">tenants API</a>
+                    <a href="../reference/api/treatments-library.html">treatments-library API</a>
+                    <a href="../reference/api/uploads.html">uploads API</a>
+                    <a href="../reference/api/users.html">users API</a>
+                    <a href="../reference/data/tables.html">Tables</a>
+                    <a href="../reference/index.html">Reference</a>
+                    <a href="../release-notes/index.html">Release notes</a>
+                    <a href="../UPDATE-STRATEGY.html">Update strategy for rohy</a>
+                    <a href="../UPDATING.html">Updating rohy</a>
+                </details>
+            </nav>
+            <article class="md-body">
+<p><strong>PACS</strong> is the imaging workstation: a worklist of studies, a series rail,
+one to four image panes, window and level controls, measurement tools, and
+a pane for the report you write. You order the study in the <strong>Radiology</strong>
+room, described in <a href="investigations.html">Ordering labs &amp; imaging</a>, and
+read its pixels here: the radiology information system carries the order
+and the text report, the PACS carries the pictures, and you cross the same
+boundary a clinician does.</p>
+<h2 id="when-the-room-appears">When the room appears</h2>
+<p>The room sits in the same bottom navigation bar as every other room, one
+place after <strong>Radiology</strong>, labelled <strong>PACS</strong> with the subtitle
+<strong>workstation</strong>. It appears when both of these hold:</p>
+<ul>
+<li>Your institution runs the <code>advanced</code> release channel. A <code>current</code>-channel
+install ships without the PACS room.</li>
+<li>The case has something for you to open: an educator wired imaging into
+the case, or you have ordered an imaging study in this session.</li>
+</ul>
+<h2 id="pick-a-study">Pick a study</h2>
+<p>The <strong>Imaging worklist</strong> fills the left column. Each row shows the study
+description, a line of detail, and a two-letter modality badge such as
+<code>CT</code>, <code>MR</code>, <code>XR</code>, <code>US</code> or <code>NM</code>. A green dot marks a study you can open, and
+the first ready study opens on its own when you arrive. Where the worklist
+runs past eight studies, a <strong>Search studies</strong> box appears above it and
+filters on description, modality and accession.</p>
+<p>The detail line on a row is its status:</p>
+<ul>
+<li><strong>Ordered</strong>: the study is ready to read.</li>
+<li><code>Reporting — images not released yet</code>: the order is still within its
+turnaround, so the row is dimmed. Wait it out, as you would a lab result.</li>
+<li><strong>No images for this study</strong>: the archive holds no material for this
+study. The row is dimmed and carries a warning icon.</li>
+</ul>
+<p>With no studies at all, the column reads
+<em>No imaging has been ordered for this patient.</em></p>
+<h2 id="series-and-panes">Series and panes</h2>
+<p>The <strong>Series</strong> rail on the right gives every series in the open study a
+thumbnail, with its description, its plane or modality, the slice spacing,
+and the number of images in the corner. A series already on screen carries
+the number of the pane holding it, and two warnings can appear under a
+stack: <strong>Irregular slice spacing</strong> and <strong>Ordered by image number</strong>. The
+layout buttons at the right of the toolbar hang the study across one pane,
+two side by side, or a two-by-two grid, filling them with the study&#39;s
+series in order.</p>
+<ol>
+<li>Click a pane to make it the active one; in a multi-pane layout it is
+outlined.</li>
+<li>Click a thumbnail in the rail to load that series into the active pane.</li>
+<li>The toolbar, the presets and the shortcuts act on the active pane.</li>
+</ol>
+<h2 id="move-through-a-stack">Move through a stack</h2>
+<p>The wheel scrolls the stack, the slider along the pane footer jumps
+anywhere in it, and the track down the right edge of the image does the
+same by dragging. The footer counts your position as <code>12/240</code> and, beside
+it, the share of distinct slices you have reviewed. The play button runs
+the stack as cine, and <strong>Space</strong> starts and stops it. With the image
+focused, the arrow keys step one slice (hold <strong>Shift</strong> for ten), <strong>Page
+Up</strong> and <strong>Page Down</strong> step ten, and <strong>Home</strong> and <strong>End</strong> jump to the ends
+of the stack.</p>
+<h2 id="window-width-and-level">Window width and level</h2>
+<p>Windowing decides which range of recorded values you see. <strong>Window</strong> is the
+tool the room opens with: drag left and right for the width, up and down
+for the level. The top-right corner of the image reads back <code>W</code> and <code>L</code> as
+numbers. The <strong>Image</strong> panel carries the same two under <strong>Window / level</strong>,
+each a slider with an editable number beside it: <strong>Width</strong>, hinted
+<em>Narrower = more contrast</em>, and <strong>Level</strong>, hinted <em>Lower = brighter</em>.</p>
+<p><strong>Window presets</strong> sits in the toolbar, and each option prints its own
+numbers. On CT they are absolute Hounsfield values: Lung, Mediastinum,
+Abdomen, Liver, Bone, Brain, Stroke, Subdural and Angio. On modalities with
+no absolute scale, such as radiographs, they are relative to the window the
+study was stored with: As acquired, Soft tissue, High contrast, Bone and
+Penetrated. Keys <code>1</code> to <code>9</code> apply the first nine directly, and once you
+drag away from a preset the control reads <strong>Custom</strong>.</p>
+<p>Under <strong>Transfer function</strong> you choose <strong>Linear</strong> or <strong>Sigmoid</strong> and set
+<strong>Gamma</strong>; sigmoid rolls contrast off at both ends, holding the apices and
+the abdomen of one film together. Under <strong>Detail</strong>, <strong>Edge enhancement</strong>
+sharpens the picture and <strong>Interpolate when zoomed out</strong> smooths it below
+1:1. <strong>Reset to as acquired</strong> returns the panel to the window the study
+arrived with.</p>
+<aside class="callout callout-tip">
+<p class="callout-title">Display controls stop at the display</p>
+<p>Edge enhancement, gamma and the window act on the picture you see, while
+the values behind it stay as the scanner recorded them. The cursor readout
+and both measurement tools report those acquired values whatever the panel
+is set to: <code>Display only — measurements are unaffected</code>.</p>
+</aside>
+<h2 id="look-and-measure">Look, and measure</h2>
+<p>The remaining tools are <strong>Zoom</strong> (<code>Z</code>), <strong>Pan</strong> (<code>P</code>), <strong>Distance</strong> (<code>D</code>)
+and <strong>Region</strong> (<code>E</code>); <strong>Window</strong> is <code>W</code>. Beside them sit <strong>Invert</strong> (<code>I</code>),
+<strong>Rotate 90°</strong> (<code>R</code>), <strong>Flip horizontal</strong> (<code>H</code>), <strong>Flip vertical</strong> (<code>V</code>)
+and <strong>Reset view</strong> (<code>0</code>); double-clicking the image resets it too, and the
+orientation letters at the edges follow every rotation and flip. Hovering
+prints the pixel coordinates and the value under the cursor at the bottom
+left, in the image&#39;s own units (<code>HU</code> on CT).</p>
+<ol>
+<li>Choose <strong>Distance</strong> and drag a line. It reads in millimetres where the
+study declares its pixel spacing, and in pixels otherwise.</li>
+<li>Choose <strong>Region</strong> and drag outward from the centre of the circle. It
+reads back the mean and standard deviation inside it.</li>
+<li>Both land in the <strong>Measurements</strong> list at the bottom of the right panel,
+with the slice each was taken on and a control to delete it.</li>
+</ol>
+<p>A click with no drag leaves nothing behind. Your measurements are saved
+with the session and come back when you return to the room.</p>
+<h2 id="write-the-report">Write the report</h2>
+<p>The <strong>Report</strong> section of the right panel takes two free-text fields:
+<strong>Findings</strong> (<em>What you see</em>) and <strong>Impression</strong> (<em>What it means</em>). Under
+them the room counts what it observed while you read: <strong>Series opened</strong>,
+<strong>Images reviewed</strong> and <strong>Measurements</strong>, described on screen as <code>Attached automatically — what the room observed, not what the report claims.</code>
+<strong>Copy</strong> puts the whole composed report on your clipboard. Until one of the
+two fields has text in it, an amber line notes that a report needs
+findings, an impression, or both.</p>
+<aside class="callout callout-warning">
+<p class="callout-title">Keep a copy before you leave</p>
+<p>Your measurements are held with the session; the text you type into
+<strong>Findings</strong> and <strong>Impression</strong> lives in the panel while the room is open.
+Press <strong>Copy</strong> once you are happy with it, and paste it where your
+instructor expects it.</p>
+</aside>
+<h2 id="what-the-room-withholds-from-you">What the room withholds from you</h2>
+<p>An educator authors a case against an answer key: the expected findings,
+the key images, the reading thresholds. The server strips that key from the
+case document for every learner role, so it is absent from the room and
+from anything the browser can be made to show. The archive of studies is
+reduced the same way, to identity and series, keeping the pathology
+library&#39;s names out of the one room where they would give the case away.</p>
+<h2 id="the-room-is-empty">The room is empty</h2>
+<p>Bulk imaging is large, so it lives on a content origin your operator
+configures separately from the simulator. Where that content is absent, the
+room still opens and reports what it has, study by study: rows dimmed with
+<strong>No images for this study</strong>, or a pane reading <em>This study could not be
+loaded.</em> Tell your instructor or administrator, who can check whether
+imaging content is installed for this deployment.</p>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="investigations.html">Ordering labs &amp; imaging</a></li>
+<li><a href="rooms.html">The rooms</a></li>
+<li><a href="debrief.html">Debrief</a></li>
+</ul>
+            </article>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="../../index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="../../index.html">Overview</a>
+                <a href="../../rooms.html">Rooms</a>
+                <a href="../../whats-new.html">What's new</a>
+                <a href="../../help.html">Help</a>
+                <a href="../../about.html">About the author</a>
+                <a href="../../index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="../../docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="../../docs/index.html">Docs home</a>
+                <a href="../../docs/INSTALL.html">Install</a>
+                <a href="../../docs/DEPLOY.html">Deploy</a>
+                <a href="../../docs/UPDATING.html">Updating</a>
+                <a href="../../docs/trainee/index.html">Trainee guides</a>
+                <a href="../../docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="../../docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<script src="../../site.js"></script>
+</body>
+</html>
