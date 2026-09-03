@@ -29,6 +29,7 @@ import requestLoggerMiddleware from './middleware/requestLogger.js';
 import errorHandler from './middleware/errorHandler.js';
 import { logger } from './logger.js';
 import { validateEnvOrExit } from './config/validateEnv.js';
+import { applyKeepAliveTimeouts } from './config/keepAlive.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -173,9 +174,9 @@ app.use(errorHandler);
 
 // Start server with port fallback — bind to :: with ipv6Only:false for dual-stack (IPv4 + IPv6)
 function startServer(port, maxRetries = 10) {
-        const server = app.listen(port, '0.0.0.0', () => {
+    const server = applyKeepAliveTimeouts(app.listen(port, '0.0.0.0', () => {
         bootLog.info('http server listening', { host: '0.0.0.0', port });
-    });
+    }));
 
     server.on('error', (err) => {
         if (err.code === 'EADDRINUSE' && maxRetries > 0) {
@@ -209,9 +210,9 @@ function startHttpsServer(port) {
         return null;
     }
     try {
-        const server = https.createServer({ cert, key }, app).listen(port, '0.0.0.0', () => {
+        const server = applyKeepAliveTimeouts(https.createServer({ cert, key }, app).listen(port, '0.0.0.0', () => {
             httpsLog.info('https server listening', { host: '0.0.0.0', port });
-        });
+        }));
         server.on('error', (err) => {
             httpsLog.warn('https listener error', { error: err.message, code: err.code || null });
         });

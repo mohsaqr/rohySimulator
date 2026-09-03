@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.3] — 2026-09-03
+
+### Fixed
+
+- **Intermittent Cloudflare 502s on a healthy server** (`server/config/keepAlive.js`).
+  rohy.lacarm.com sits behind cloudflared, which pools idle origin sockets for
+  90 s; node's `http.Server` closed them after its 5 s default, so a request
+  that reused a just-closed socket got a TCP reset before Express saw it and
+  the browser rendered Cloudflare's 502 page (a lost chat message, eight
+  times in the last fortnight). Both listeners now set `keepAliveTimeout` to
+  95 s and `headersTimeout` to 96 s, so the upstream outlives the proxy pool.
+  Regression lock in `tests/server/keep-alive-timeouts.test.js` holds a raw
+  keep-alive socket idle for 6.5 s and expects the second request to be served.
+
 ## [3.0.0-beta.2] — 2026-09-02
 
 Second beta of Rohy 3. Rohy 3 adds a sixth room: the patient in a 3D bedside room, sharing the
