@@ -17450,6 +17450,13 @@
     "reviewer": null,
     "risk": "low"
   },
+  "help.article_bedside": {
+    "src": "03b0f845311f",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "help.article_case_wizard": {
     "src": "37a9eafd97a4",
     "state": "machine",
@@ -17471,8 +17478,22 @@
     "reviewer": null,
     "risk": "low"
   },
+  "help.article_courses": {
+    "src": "b69b23552167",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "help.article_debrief": {
     "src": "8f86a81abd30",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_ecg": {
+    "src": "0212d87aedf9",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,
@@ -17515,6 +17536,20 @@
   },
   "help.article_investigations": {
     "src": "6bac854f1a5d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_pacs": {
+    "src": "4d9ef340b60d",
+    "state": "machine",
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "help.article_pathology": {
+    "src": "c9e7765b6b63",
     "state": "machine",
     "reviewed_at": null,
     "reviewer": null,

@@ -82,6 +82,6 @@ Ending vs. leaving, transcript and notes: [Debrief](/trainee/debrief).
 
 ## Next steps
 
-- [The five rooms](/trainee/rooms) — the full layout
+- [The rooms](/trainee/rooms) — the full layout
 - [Voice mode](/trainee/voice) — talk to the patient out loud
 - [FAQ & troubleshooting](/trainee/faq)

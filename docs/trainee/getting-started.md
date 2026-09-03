@@ -74,7 +74,7 @@ screen:
 | **Radiology** | Order and read imaging |
 | **Consultant** | Debrief and reflect after you end the case |
 
-See [the six rooms](/trainee/rooms) for how moving between them works.
+See [the rooms](/trainee/rooms) for how moving between them works.
 Order medications from the **Treatments** button that floats above the bottom
 bar on the patient screen.
 
@@ -99,5 +99,5 @@ case, or your instructor ends it. See the
 ## Next steps
 
 - [Taking a history](/trainee/history) — get the most out of the patient chat
-- [The six rooms](/trainee/rooms) — the full layout
+- [The rooms](/trainee/rooms) — the full layout
 - [Vitals & alarms](/trainee/vitals) — read the monitor and handle alarms

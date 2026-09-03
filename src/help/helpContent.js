@@ -35,16 +35,29 @@ export function docsUrl(path) {
 }
 
 export const HELP_ARTICLES = Object.freeze([
-  // Trainee (everyone rank >= student)
+  // Trainee (everyone rank >= student). Ordered the way a learner meets the
+  // material, and the room entries follow the bottom navigator's own order
+  // (RoomNavigator's `order` field) so the drawer and the navigator agree.
+  //
+  // The plugin rooms (3D, ECG, Pathology, PACS) are listed unconditionally.
+  // A learner whose case does not enable one of them still benefits from the
+  // article explaining why the tab is absent, and gating the list on the
+  // running case would make the drawer's contents depend on which case
+  // happened to be open.
   { id: 'getting-started', titleKey: 'article_getting_started', groupKey: 'group_using', minRank: 1, path: 'trainee/getting-started' },
   { id: 'rooms', titleKey: 'article_rooms', groupKey: 'group_using', minRank: 1, path: 'trainee/rooms' },
   { id: 'history', titleKey: 'article_history', groupKey: 'group_using', minRank: 1, path: 'trainee/history' },
+  { id: 'bedside', titleKey: 'article_bedside', groupKey: 'group_using', minRank: 1, path: 'trainee/room-3d' },
   { id: 'examination', titleKey: 'article_examination', groupKey: 'group_using', minRank: 1, path: 'trainee/examination' },
   { id: 'investigations', titleKey: 'article_investigations', groupKey: 'group_using', minRank: 1, path: 'trainee/investigations' },
+  { id: 'ecg', titleKey: 'article_ecg', groupKey: 'group_using', minRank: 1, path: 'trainee/ecg' },
+  { id: 'pathology', titleKey: 'article_pathology', groupKey: 'group_using', minRank: 1, path: 'trainee/pathology' },
+  { id: 'pacs', titleKey: 'article_pacs', groupKey: 'group_using', minRank: 1, path: 'trainee/imaging-reading-room' },
   { id: 'treatments', titleKey: 'article_treatments', groupKey: 'group_using', minRank: 1, path: 'trainee/treatments' },
   { id: 'vitals', titleKey: 'article_vitals', groupKey: 'group_using', minRank: 1, path: 'trainee/vitals' },
   { id: 'voice', titleKey: 'article_voice', groupKey: 'group_using', minRank: 1, path: 'trainee/voice' },
   { id: 'debrief', titleKey: 'article_debrief', groupKey: 'group_using', minRank: 1, path: 'trainee/debrief' },
+  { id: 'courses', titleKey: 'article_courses', groupKey: 'group_using', minRank: 1, path: 'trainee/courses' },
   { id: 'trainee-faq', titleKey: 'article_trainee_faq', groupKey: 'group_using', minRank: 1, path: 'trainee/faq' },
   // Educator (rank >= educator)
   { id: 'cohorts', titleKey: 'article_cohorts', groupKey: 'group_teaching', minRank: 3, path: 'educator/cohorts' },

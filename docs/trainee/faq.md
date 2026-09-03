@@ -103,7 +103,7 @@ your session activity is recorded, which helps them investigate.
 ## Related pages
 
 - [Getting started](/trainee/getting-started)
-- [The six rooms](/trainee/rooms)
+- [The rooms](/trainee/rooms)
 - [Vitals & alarms](/trainee/vitals)
 - [Voice mode](/trainee/voice)
 - [Glossary](/reference/glossary)

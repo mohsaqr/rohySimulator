@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.4] — 2026-09-03
+
+### Added
+
+- **Trainee documentation for the plugin rooms** (`docs/trainee/`): five new
+  pages — the 3D Room, 12-lead ECG, reading a pathology slide, the PACS
+  reading room, and courses, lessons & surveys — wired into the VitePress
+  sidebar. `rooms.md` now covers all nine rooms in navigator order.
+- **Help & Support drawer** lists the same pages (`src/help/helpContent.js`)
+  in the order a learner meets the material, unconditionally: a learner whose
+  case does not enable a plugin room still gets the article explaining why the
+  tab is absent. New `help` catalogue keys in all six languages plus `en-XA`.
+
 ## [3.0.0-beta.3] — 2026-09-03
 
 ### Fixed
