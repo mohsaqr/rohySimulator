@@ -46,7 +46,7 @@ export default function ClinicalRecordsPanel({ caseConfig, initialTab = 'history
     // history / medications" actually shows up in the activity analytics
     // instead of being invisible (this panel logged nothing before).
     useEffect(() => {
-        EventLogger.recordTabViewed(activeTab, RECORD_TAB_LABELS[activeTab], 'ClinicalRecordsPanel');
+        EventLogger.recordViewed(activeTab, RECORD_TAB_LABELS[activeTab], 'ClinicalRecordsPanel');
     }, [activeTab]);
     const [expandedSection, setExpandedSection] = useState(null);
     const [openHistoryGroups, setOpenHistoryGroups] = useState({

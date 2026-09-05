@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Pill, Droplets, Wind, HeartPulse,
     Search, AlertTriangle, Clock,
@@ -9,6 +9,20 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../../contexts/ToastContext';
 import { usePatientRecord } from '../../services/PatientRecord';
 import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+
+// treatment_type → learning_events.object_type. The registry keys severity
+// and the fine label on this (medication is CRITICAL, "Ordered IV fluid" …).
+const TREATMENT_TYPE_OBJECT = Object.freeze({
+    medication: 'medication',
+    iv_fluid: 'iv_fluid',
+    fluid: 'iv_fluid',
+    oxygen: 'oxygen_therapy',
+    oxygen_therapy: 'oxygen_therapy',
+    nursing: 'nursing_intervention',
+    nursing_intervention: 'nursing_intervention',
+    procedure: 'treatment',
+    treatment: 'treatment',
+});
 import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import { categoryClass } from './treatmentTheme';
 
@@ -38,6 +52,16 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    // One SEARCHED row per typed term (400 ms quiet), not one per keystroke;
+    // the object type is the active category's kind (medication → treating).
+    const searchTimer = useRef(null);
+    const logSearch = (term) => {
+        clearTimeout(searchTimer.current);
+        if (!term) return;
+        searchTimer.current = setTimeout(() => {
+            EventLogger.searched(TREATMENT_TYPE_OBJECT[activeCategory] || 'treatment', term, filteredTreatments.length, COMPONENTS.TREATMENT_PANEL, { category: activeCategory });
+        }, 400);
+    };
     const [selectedTreatment, setSelectedTreatment] = useState(null);
     const [orderingInProgress, setOrderingInProgress] = useState(false);
     const { t } = useTranslation('treatments');
@@ -137,11 +161,18 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 throw err;
             }
 
+            // One verb per act; the KIND rides as object_type (a drug order
+            // stays CRITICAL by object type in the registry). The server's
+            // verdict rides as `result` so the order row itself says whether
+            // it was contraindicated or expected.
+            const kind = TREATMENT_TYPE_OBJECT[selectedTreatment.treatment_type] || 'treatment';
             EventLogger.treatmentOrdered(
                 result.order_id,
                 selectedTreatment.treatment_name,
                 COMPONENTS.TREATMENT_PANEL,
-                { type: selectedTreatment.treatment_type, dose: orderData.dose, route: orderData.route }
+                { type: selectedTreatment.treatment_type, dose: orderData.dose, route: orderData.route, rate: orderData.rate, urgency: orderData.urgency },
+                kind,
+                result.is_contraindicated ? 'contraindicated' : result.is_expected ? 'expected' : 'neutral',
             );
 
             ordered(selectedTreatment.treatment_type, selectedTreatment.treatment_name, {
@@ -151,8 +182,11 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             });
 
             if (result.is_contraindicated) {
+                // The judgement is its own assessment row, not only a toast.
+                EventLogger.contraindicationFlagged(result.order_id, selectedTreatment.treatment_name, result.contraindication_feedback || null, COMPONENTS.TREATMENT_PANEL, kind);
                 toast.warning(t('warning_prefix', { message: result.contraindication_feedback || t('contraindication_default') }));
             } else if (result.is_expected) {
+                EventLogger.expectedTreatmentMet(result.order_id, selectedTreatment.treatment_name, result.points_awarded ?? null, COMPONENTS.TREATMENT_PANEL);
                 toast.success(t('ordered_with_points', { name: selectedTreatment.treatment_name, points: result.points_awarded }));
             } else {
                 toast.success(t('ordered_treatment', { name: selectedTreatment.treatment_name }));
@@ -193,12 +227,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 route: order?.route
             });
 
-            EventLogger.log('ADMINISTERED_MEDICATION', 'treatment', {
-                objectId: orderId,
-                objectName: order?.treatment_item,
-                component: COMPONENTS.TREATMENT_PANEL,
-                context: result?.effect_details
-            });
+            EventLogger.treatmentAdministered(orderId, order?.treatment_item, COMPONENTS.TREATMENT_PANEL, result?.effect_details, TREATMENT_TYPE_OBJECT[order?.treatment_type] || 'treatment');
 
             fetchOrders();
             onEffectsUpdate?.();
@@ -213,7 +242,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
             await apiPut(`/sessions/${sessionId}/discontinue/${orderId}`);
             const order = orders.find(o => o.id === orderId);
             toast.info(t('treatment_discontinued'));
-            EventLogger.treatmentDiscontinued(orderId, order?.treatment_item, COMPONENTS.TREATMENT_PANEL);
+            EventLogger.treatmentDiscontinued(orderId, order?.treatment_item, COMPONENTS.TREATMENT_PANEL, null, TREATMENT_TYPE_OBJECT[order?.treatment_type] || 'treatment');
             fetchOrders();
             onEffectsUpdate?.();
         } catch (error) {
@@ -512,7 +541,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         onClick={() => {
                             setActiveCategory(cat.id);
                             setSelectedTreatment(null);
-                            EventLogger.tabSwitched(cat.id, COMPONENTS.TREATMENT_PANEL);
+                            EventLogger.tabSwitched(cat.id, COMPONENTS.TREATMENT_PANEL, { category: cat.id });
                         }}
                         className={`flex-1 px-3 py-2 rounded text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
                             activeCategory === cat.id
@@ -533,7 +562,7 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                     <input
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => { setSearchQuery(e.target.value); logSearch(e.target.value); }}
                         placeholder={t('search_category_placeholder', { category: categories.find(c => c.id === activeCategory)?.label.toLowerCase() })}
                         className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-neutral-500 focus:outline-none"
                     />

@@ -10,6 +10,7 @@ import { getAois, onAois } from './screenAois';
 import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
 import { ensureSessionConsent } from './ensureSessionConsent';
+import EventLogger from '../../services/eventLogger';
 
 export const VALENCE_GRAPH_PREF_KEY = 'oyon.showValenceGraph';
 export const CONSENT_PREF_KEY = 'oyon.defaultConsent';
@@ -163,12 +164,15 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          if (state === 'running') {
             runningRef.current = true;
             setErrorMsg(null);
+            // Metadata about capture — never a sample taken under it.
+            EventLogger.captureStarted({ consent: Boolean(readConsentPref?.()) }, 'OyonCaptureWidget');
             // Consent is recorded when capture ACTUALLY starts (the user
             // pressed the element pill's start control). The first window is
             // one aggregation interval away (~10 s), so the POST settles long
             // before anything could need persisting.
             void ensureConsent();
          } else if (state === 'stopped' || state === 'idle' || state === 'error') {
+            if (runningRef.current) EventLogger.captureStopped(state, 'OyonCaptureWidget');
             runningRef.current = false;
             if (state === 'stopped') {
                setEmotion(null);

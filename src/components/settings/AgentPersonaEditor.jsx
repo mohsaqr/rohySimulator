@@ -34,6 +34,7 @@ import AvatarFramingSliders from './AvatarFraming.jsx';
 import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { resolveVoice } from '../../utils/voiceResolver.js';
 import { useAllVoices, VoiceEngineOptions, VoiceSubstitutionNote } from './VoiceEngineOptions.jsx';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -287,6 +288,7 @@ export default function AgentPersonaEditor({ templateId, onClose, onSaved }) {
       if (!template?.id) return;
       try {
          await AgentService.duplicateTemplate(template.id, t('copy_suffix', { name: template.name }));
+         EventLogger.contentDuplicated(OBJECT_TYPES.AGENT_PERSONA, template.id, template.name, COMPONENTS.CONFIG_PANEL);
          toast.success(t('toast_duplicated_returning'));
          onClose?.();
       } catch (err) {

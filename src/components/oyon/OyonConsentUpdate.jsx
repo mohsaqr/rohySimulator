@@ -5,6 +5,7 @@ import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
 import { needsConsentUpgrade, acceptableVersion, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { CONSENT_PREF_KEY } from './OyonCaptureWidget';
+import EventLogger from '../../services/eventLogger';
 
 /*
  * Re-consent prompt for an Oyon contract that has grown in scope.
@@ -60,6 +61,7 @@ export default function OyonConsentUpdate() {
       // Record the version ACCEPTED, which is the version actually rendered
       // above — never whatever the server currently advertises.
       const version = acceptableVersion(state.requiredVersion);
+      EventLogger.consentRecorded(version, granted ? 'granted' : 'declined', 'OyonConsentUpdate');
       try {
          await apiFetch('/users/preferences', {
             method: 'PUT',

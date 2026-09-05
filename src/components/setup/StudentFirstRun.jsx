@@ -22,6 +22,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { LANGUAGES } from '../../i18n/languages';
 import { pickLandingCase } from '../../services/landingCase';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
+import EventLogger from '../../services/eventLogger';
 
 // Bump to re-show this screen to everyone (checked in FirstRunGate).
 export const FIRST_RUN_VERSION = 1;
@@ -132,6 +133,7 @@ export default function StudentFirstRun({ onDone }) {
             }
         } catch { /* private mode */ }
         setSaving(false);
+        EventLogger.tourEnded('first_run:student', 'completed', 'StudentFirstRun');
         onDone();
     };
 

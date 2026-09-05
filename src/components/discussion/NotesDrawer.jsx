@@ -1,10 +1,18 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import DiscussionNotes from './DiscussionNotes';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 // Slide-out drawer for discussion notes. Hidden by default; opened via a
 // topbar button. Click outside or the close icon to dismiss.
 export default function NotesDrawer({ open, onClose, sessionId }) {
+    // A bracketed visit: OPENED starts the timing mark, CLOSED carries the dwell.
+    useEffect(() => {
+        if (!open) return undefined;
+        EventLogger.panelOpened(OBJECT_TYPES.CLINICAL_NOTE, 'notes_drawer', 'Notes', COMPONENTS.DISCUSSION_SCREEN);
+        return () => EventLogger.panelClosed(OBJECT_TYPES.CLINICAL_NOTE, 'notes_drawer', 'Notes', COMPONENTS.DISCUSSION_SCREEN);
+    }, [open]);
     const { t } = useTranslation('discussion');
     if (!open) return null;
     return (

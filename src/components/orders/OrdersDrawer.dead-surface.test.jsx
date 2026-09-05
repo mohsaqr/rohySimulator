@@ -54,7 +54,7 @@ vi.mock('../treatments', () => ({
 
 // vi.mock is hoisted, so the spy bag must be created inside the factory
 // and read back through the mocked module afterwards.
-vi.mock('../../services/eventLogger', () => ({
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: {
         drawerOpened: vi.fn(),
         drawerClosed: vi.fn(),
@@ -66,6 +66,8 @@ vi.mock('../../services/eventLogger', () => ({
         settingChanged: vi.fn(),
         componentOpened: vi.fn(),
         componentClosed: vi.fn(),
+        panelOpened: vi.fn(),
+        panelClosed: vi.fn(),
         getStatus: vi.fn(() => ({ room: 'chat' })),
     },
     COMPONENTS: { ORDERS_DRAWER: 'OrdersDrawer' },

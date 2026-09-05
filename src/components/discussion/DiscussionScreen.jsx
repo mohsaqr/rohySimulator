@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Keyboard, GraduationCap, ListChecks, MessagesSquare, NotebookPen, Play, X } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
@@ -8,7 +8,7 @@ import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import { fetchDiscussantForCase } from '../../services/discussionService';
 import { useDiscussionEngine } from '../../hooks/useDiscussionEngine';
-import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 import VoiceControl from './VoiceControl';
 import DiscussionTranscript from './DiscussionTranscript';
 import TextComposerModal from './TextComposerModal';
@@ -63,9 +63,27 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
         return () => { cancelled = true; };
     }, [activeCase?.id]);
 
+    // OPENED on the `debrief` object (→ reflecting), component unchanged so the
+    // cohort completion predicate (OPENED + DiscussionScreen) keeps matching
+    // historical rows. On the way out, a debrief with at least one turn is
+    // SUBMITTED_DEBRIEF — the verb the cohort roster keys completion on, which
+    // had no producer before.
+    const turnsRef = useRef(0);
     useEffect(() => {
-        EventLogger.componentOpened(COMPONENTS.DISCUSSION_SCREEN, 'Discussion');
-        return () => EventLogger.componentClosed(COMPONENTS.DISCUSSION_SCREEN, 'Discussion');
+        EventLogger.log(VERBS.OPENED, OBJECT_TYPES.DEBRIEF, {
+            objectId: String(sessionId ?? 'debrief'), objectName: 'Debrief', component: COMPONENTS.DISCUSSION_SCREEN,
+        });
+        return () => {
+            EventLogger.log(VERBS.CLOSED, OBJECT_TYPES.DEBRIEF, {
+                objectId: String(sessionId ?? 'debrief'), objectName: 'Debrief', component: COMPONENTS.DISCUSSION_SCREEN,
+                context: { turns: turnsRef.current },
+            });
+            if (turnsRef.current > 0) {
+                EventLogger.debriefSubmitted(sessionId, { turns: turnsRef.current }, COMPONENTS.DISCUSSION_SCREEN);
+            }
+        };
+        // Once per mount: the session is the mount's identity.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Voice mode is the default + only mode for streaming TTS playback. The
@@ -75,6 +93,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
         sessionId, activeCase, discussant, voiceMode: true,
         voiceSettings,
     });
+    turnsRef.current = messages.filter((m) => m.role === 'user').length;
 
     const handleStart = async () => {
         if (started || busy) return; // ignore double-taps

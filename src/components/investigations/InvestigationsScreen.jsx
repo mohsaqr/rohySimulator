@@ -6,7 +6,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
 import { usePatientRecord } from '../../services/PatientRecord';
-import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import EventLogger, { VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 import SessionNotesDrawer from '../common/SessionNotesDrawer';
 import InvestigationCatalogue from './InvestigationCatalogue';
 import InvestigationWorklist from './InvestigationWorklist';
@@ -95,9 +95,10 @@ export default function InvestigationsScreen({
     const { user } = useAuth();
     const { ordered } = usePatientRecord();
 
+    // Bracketed, so the CLOSED row carries the room's dwell.
     useEffect(() => {
-        EventLogger.componentOpened(COMPONENTS.ORDERS_DRAWER, 'InvestigationsScreen');
-        return () => EventLogger.componentClosed(COMPONENTS.ORDERS_DRAWER, 'InvestigationsScreen');
+        EventLogger.panelOpened(OBJECT_TYPES.PANEL, 'investigations', 'Investigations', 'InvestigationsScreen');
+        return () => EventLogger.panelClosed(OBJECT_TYPES.PANEL, 'investigations', 'Investigations', 'InvestigationsScreen');
     }, []);
 
     const lab = useInvestigationState({
@@ -526,8 +527,25 @@ function useInvestigationState({
     const [catalogue, setCatalogue] = useState({ items: [], groups: [] });
     const [orders, setOrders] = useState([]);
     const [selected, setSelected] = useState([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [groupFilter, setGroupFilter] = useState('all');
+    const [searchQuery, setSearchQueryState] = useState('');
+    const [groupFilter, setGroupFilterState] = useState('all');
+    const objectType = kind === 'radiology' ? OBJECT_TYPES.RADIOLOGY_ORDER : OBJECT_TYPES.LAB_TEST;
+    // SEARCHED once per typed term (400 ms quiet); FILTERED per pick. The
+    // object type (lab_test / radiology_order) is what makes these resolve
+    // to `investigating` rather than generic navigation.
+    const searchTimer = useRef(null);
+    const setSearchQuery = useCallback((term) => {
+        setSearchQueryState(term);
+        clearTimeout(searchTimer.current);
+        if (!term) return;
+        searchTimer.current = setTimeout(() => {
+            EventLogger.searched(objectType, term, null, 'InvestigationsScreen', { kind });
+        }, 400);
+    }, [objectType, kind]);
+    const setGroupFilter = useCallback((group) => {
+        setGroupFilterState(group);
+        EventLogger.filtered(objectType, 'group', String(group), 'InvestigationsScreen');
+    }, [objectType]);
     // Radiology-only coarse filter: 'all' | 'imaging' | 'diagnostics'
     // (see server/shared/diagnostics.js). Sits ABOVE the modality group
     // dropdown; changing the family resets the group so a stale
@@ -535,8 +553,9 @@ function useInvestigationState({
     const [familyFilter, setFamilyFilterState] = useState('all');
     const setFamilyFilter = useCallback((family) => {
         setFamilyFilterState(family);
-        setGroupFilter('all');
-    }, []);
+        setGroupFilterState('all');
+        EventLogger.filtered(objectType, 'family', String(family), 'InvestigationsScreen');
+    }, [objectType]);
     const [submitting, setSubmitting] = useState(false);
     // `openOrders` is the stack of reports rendered in the centre
     // column. The contract: every result the student has *viewed* in
@@ -555,6 +574,7 @@ function useInvestigationState({
     const [lastRefresh, setLastRefresh] = useState(null);
     const openOrdersRef = useRef([]);
     openOrdersRef.current = openOrders;
+    const ordersRef = useRef([]);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -565,11 +585,28 @@ function useInvestigationState({
         return () => { cancelled = true; };
     }, [sessionId, catalogueEndpoint]);
 
+    // A result BECOMING ready is a system act worth a row (RELEASED_RESULT,
+    // actor system): the first poll that sees `is_ready` flip for an order
+    // emits it, once per order.
+    const readyLoggedRef = useRef(new Set());
     const fetchOrders = useCallback(async () => {
         if (!sessionId) return;
         try {
             const data = await apiFetch(ordersEndpoint);
-            setOrders(data?.orders || []);
+            const next = data?.orders || [];
+            next.forEach((o) => {
+                if (!o.is_ready || readyLoggedRef.current.has(o.id)) return;
+                readyLoggedRef.current.add(o.id);
+                // Orders already ready when the screen first loads were released
+                // before we were watching; a row for them would misdate the act.
+                if (readyLoggedRef.current.size === 0 || !ordersRef.current.some((p) => p.id === o.id && !p.is_ready)) return;
+                EventLogger.resultReleased(o.id, o.test_name, 'InvestigationsScreen', {
+                    abnormal: Boolean(o.is_abnormal),
+                    objectType: kind === 'radiology' ? OBJECT_TYPES.RADIOLOGY_RESULT : OBJECT_TYPES.LAB_RESULT,
+                });
+            });
+            ordersRef.current = next;
+            setOrders(next);
             setLastRefresh(Date.now());
         } catch (err) {
             if (err instanceof ApiError) {
@@ -627,8 +664,14 @@ function useInvestigationState({
 
     const closeOrder = useCallback((id) => {
         dismissedIdsRef.current.add(id);
-        setOpenOrders((prev) => prev.filter((o) => o.id !== id));
-    }, []);
+        setOpenOrders((prev) => {
+            const order = prev.find((o) => o.id === id);
+            EventLogger.log(VERBS.CLOSED, kind === 'radiology' ? OBJECT_TYPES.RADIOLOGY_RESULT : OBJECT_TYPES.LAB_RESULT, {
+                objectId: String(id), objectName: order?.test_name ?? String(id), component: 'InvestigationsScreen',
+            });
+            return prev.filter((o) => o.id !== id);
+        });
+    }, [kind]);
 
     const clearStack = useCallback(() => {
         setOpenOrders((prev) => {
@@ -638,8 +681,13 @@ function useInvestigationState({
     }, []);
 
     const toggleSelect = useCallback((id) => {
-        setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-    }, []);
+        setSelected((prev) => {
+            const selectedNow = !prev.includes(id);
+            const item = catalogue.items.find((i) => String(i.id) === String(id));
+            EventLogger.toggled(objectType, String(id), item?.test_name ?? item?.name ?? String(id), selectedNow, 'InvestigationsScreen');
+            return selectedNow ? [...prev, id] : prev.filter((x) => x !== id);
+        });
+    }, [catalogue.items, objectType]);
 
     // submit({ instant }) — when instant=true the body carries
     // turnaround_override: 0 so the server-side resolver skips the wait.

@@ -145,7 +145,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             logTurn(sessionId, 'user', trimmed);
             // Debrief turns log as `debrief` (→ reflecting), keeping post-case
             // discussion distinct from bedside patient chat (→ communicating).
-            EventLogger.debriefMessageSent(trimmed, COMPONENTS.DISCUSSION_SCREEN);
+            EventLogger.debriefMessageSent(trimmed, COMPONENTS.DISCUSSION_SCREEN, { objectId: String(discussant?.id ?? 'discussant'), objectName: discussant?.name ?? 'Discussant' });
         }
 
         const controller = new AbortController();
@@ -253,7 +253,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             // tutor turn: invisible to the learner, replayed on restore, and
             // counted by the analytics (2026-08-30 UI review, #6).
             logTurn(sessionId, 'assistant', finalText);
-            EventLogger.debriefMessageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN);
+            EventLogger.debriefMessageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN, { objectId: String(discussant?.id ?? 'discussant'), objectName: discussant?.name ?? 'Discussant' });
         } catch (err) {
             // LLM stream failed mid-utterance — cancel any in-flight TTS
             // so we don't leave speaking=true forever on an abort path.

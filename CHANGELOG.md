@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.13] — 2026-09-05
+
+### Added
+
+- **Every interaction produces a row.** Session end with its reason; alarm
+  firing (`TRIGGERED_ALARM`, `context.actor = 'system'`); treatment kinds by
+  object type with contraindication, expected-treatment and effect-phase
+  outcomes; agent paging, arrival and messages, and the chat/agent tab switch;
+  debrief open and close, notes autosave, `SUBMITTED_DEBRIEF`, case summary
+  and memory tab; investigations search, filter, toggle, result close and
+  `RELEASED_RESULT`; record tabs as `VIEWED_RECORD`; monitor sliders
+  (debounced), rhythm, scenario start / pause / resume / `JUMPED_SCENARIO_STEP`,
+  monitor presets; case, catalogue, persona and template saves, exports and
+  duplicates; onboarding tours, the admin wizard and the student first run;
+  the help centre; Oyon consent and capture; lessons course open / close,
+  lecture submit and the video family (the nine lowercase xAPI verbs used to
+  be rejected); MCQ answers with their result; the end-of-session
+  questionnaire submit; `RECORDED_HISTORY` mirrored from the patient record.
+
 ## [3.0.0-beta.12] — 2026-09-05
 
 ### Added

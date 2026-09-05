@@ -5,6 +5,7 @@ import { apiFetch } from '../../services/apiClient';
 import { parseConfig } from '../../utils/parseConfig.js';
 import { resolveCaseHistory } from '../../utils/casePromptContext.js';
 import { regionLabel, techniqueLabel } from '../examination/examinationLabels';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 async function safeFetch(path) {
     try {
@@ -53,6 +54,12 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
     const { t: tExam } = useTranslation('examination');
     const [data, setData] = useState({ labs: null, treatments: null, exams: null, radiology: null, debrief: null });
     const [loading, setLoading] = useState(!!sessionId);
+
+    // Reading the case summary is record review (assessing), bracketed.
+    useEffect(() => {
+        EventLogger.panelOpened(OBJECT_TYPES.PATIENT_RECORD, 'case_summary', 'Case summary', COMPONENTS.DISCUSSION_SCREEN);
+        return () => EventLogger.panelClosed(OBJECT_TYPES.PATIENT_RECORD, 'case_summary', 'Case summary', COMPONENTS.DISCUSSION_SCREEN);
+    }, []);
 
     useEffect(() => {
         if (!sessionId) return;

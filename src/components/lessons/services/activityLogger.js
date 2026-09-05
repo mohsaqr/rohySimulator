@@ -10,6 +10,23 @@ import EventLogger, { VERBS, OBJECT_TYPES } from '../../../services/eventLogger'
 
 const LESSONS_COMPONENT = 'lessons';
 
+// The xAPI Video Profile verbs videoXapi emits, mapped to the registry.
+// videoXapi itself is untouched: its lowercase names and IRIs are provenance,
+// kept in context.extensions; this seam is where they become rohy verbs.
+// Until this map existed every one of these rows was rejected at ingest as
+// `unknown_verb` — two months of video telemetry, gone.
+const VIDEO_VERB_MAP = Object.freeze({
+  initialized: [VERBS.OPENED_VIDEO],
+  played: [VERBS.PLAYED_VIDEO],
+  paused: [VERBS.PAUSED_VIDEO],
+  seeked: [VERBS.SEEKED_VIDEO],
+  'playback-rate-changed': [VERBS.CHANGED_VIDEO_SPEED],
+  progressed: [VERBS.PROGRESSED_VIDEO],
+  completed: [VERBS.COMPLETED_VIDEO],
+  terminated: [VERBS.CLOSED_VIDEO, 'completed'],
+  abandoned: [VERBS.CLOSED_VIDEO, 'abandoned'],
+});
+
 // videoXapi (and any future block) calls log() with a single object:
 // { verb, objectType, objectId, objectTitle, courseId, lectureId, sectionId,
 //   duration, progress, actionSubtype, extensions }. Everything that isn't a
@@ -24,12 +41,18 @@ const log = (event = {}) => {
     ...rest
   } = event;
   if (!verb) return;
-  EventLogger.log(verb, objectType, {
+  const mapped = VIDEO_VERB_MAP[verb];
+  const canonical = mapped ? mapped[0] : verb;
+  if (!VERBS[canonical]) {
+    throw new Error(`activityLogger: '${verb}' is not a registered verb (add it to VIDEO_VERB_MAP or the registry)`);
+  }
+  EventLogger.log(canonical, mapped ? OBJECT_TYPES.VIDEO : objectType, {
     objectId: objectId != null ? String(objectId) : undefined,
     objectName: objectTitle,
     component: LESSONS_COMPONENT,
     durationMs: duration != null ? Math.round(duration * 1000) : undefined,
-    context: rest,
+    result: mapped?.[1] ?? rest.result,
+    context: mapped ? { ...rest, xapiVerb: verb } : rest,
   });
 };
 
@@ -47,7 +70,7 @@ export const activityLogger = {
   logLectureEditorViewed: async (lectureId, lectureTitle, courseId) =>
     logView(lectureTitle || 'lecture-editor', lectureId, { surface: 'lecture-editor', courseId }),
   logSurveySubmitted: async (surveyId, surveyTitle, courseId, extra = {}) => {
-    EventLogger.log(VERBS.SUBMITTED, OBJECT_TYPES.COMPONENT, {
+    EventLogger.log(VERBS.SUBMITTED, OBJECT_TYPES.SURVEY, {
       objectId: String(surveyId),
       objectName: surveyTitle,
       component: LESSONS_COMPONENT,
@@ -56,21 +79,16 @@ export const activityLogger = {
   },
   logSurveyViewed: async (surveyId, surveyTitle, courseId) =>
     logView(surveyTitle || 'survey', surveyId, { surface: 'survey', courseId }),
+  // Authoring a survey is SAVED_CONTENT on a survey (result created|updated).
+  // These used to emit CREATED / UPDATED, verbs the registry never had, so
+  // both rows were rejected at ingest.
   logSurveyCreated: async (surveyId, surveyTitle, courseId) => {
-    EventLogger.log(VERBS.CREATED || 'CREATED', OBJECT_TYPES.COMPONENT, {
-      objectId: String(surveyId),
-      objectName: surveyTitle,
-      component: LESSONS_COMPONENT,
-      context: { surface: 'survey-manager', action: 'created', courseId },
-    });
+    EventLogger.contentSaved(OBJECT_TYPES.SURVEY, surveyId, surveyTitle, LESSONS_COMPONENT, 'created');
+    void courseId;
   },
   logSurveyUpdated: async (surveyId, surveyTitle, courseId) => {
-    EventLogger.log(VERBS.UPDATED || 'UPDATED', OBJECT_TYPES.COMPONENT, {
-      objectId: String(surveyId),
-      objectName: surveyTitle,
-      component: LESSONS_COMPONENT,
-      context: { surface: 'survey-manager', action: 'updated', courseId },
-    });
+    EventLogger.contentSaved(OBJECT_TYPES.SURVEY, surveyId, surveyTitle, LESSONS_COMPONENT, 'updated');
+    void courseId;
   },
   logSurveyManagerViewed: async (courseId) =>
     logView('survey-manager', courseId, { surface: 'survey-manager', courseId }),

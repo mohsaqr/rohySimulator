@@ -6,8 +6,6 @@ import ChatInterface from './components/chat/ChatInterface';
 import ConfigPanel from './components/settings/ConfigPanel';
 import AuthGate from './components/auth/AuthGate';
 import OrdersDrawer from './components/orders/OrdersDrawer';
-import LabResultsModal from './components/investigations/LabResultsModal';
-import RadiologyResultsModal from './components/investigations/RadiologyResultsModal';
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -112,7 +110,6 @@ function MainApp() {
    // A case with config.case_language overrides the session dialogue
    // language (LLM directive, STT locale, fallback voice) while active.
    useCaseLanguageSync(activeCase);
-   const [selectedResult, setSelectedResult] = useState(null);
    // currentRoom drives the in-session bottom navigator. One of:
    //   'chat'        — main patient-chat UI (default)
    //   'examination' — PhysicalExamScreen
@@ -134,6 +131,11 @@ function MainApp() {
    // session clock at this value instead of Date.now(), so "Back to patient"
    // from the debrief shows the elapsed time AT the end, not end + debrief.
    const [caseEndedAt, setCaseEndedAt] = useState(null);
+   // When THIS browser started (or resumed) the current session — the
+   // duration ENDED_SESSION reports. The server owns the authoritative
+   // start_time; this is the client's view of the run it is ending.
+   const sessionStartedAtRef = useRef(null);
+   useEffect(() => { sessionStartedAtRef.current = sessionId ? Date.now() : null; }, [sessionId]);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
    const [showHelpCenter, setShowHelpCenter] = useState(false);
    const showExamination = currentRoom === 'examination';
@@ -336,6 +338,10 @@ function MainApp() {
       conversation: pluginConversation,
       openDrawer,
       patientCase: pluginCase,
+      // Live physiology, as a getter the context freezes per read: a plugin
+      // room that mirrors the monitor reads this instead of the EventLogger
+      // singleton's field (RPS-1 §6 — no host singleton crosses the seam).
+      vitals: () => EventLogger.currentVitals,
    }), [pluginOrders, pluginConversation, openDrawer, pluginCase]);
 
    // Which plugin rooms this case actually offers. A plugin gates itself —
@@ -640,6 +646,10 @@ function MainApp() {
          objectName: 'End & Debrief',
          component: COMPONENTS.APP,
       });
+      // The session ENDING is its own row — ENDED_SESSION had no producer at
+      // all until here, so BackendSurface's flush-on-end branch was dead code
+      // and no analytics could see where a session stopped.
+      EventLogger.sessionEnded(sessionStartedAtRef.current ? Date.now() - sessionStartedAtRef.current : null, 'explicit');
       endSessionOnServer(sessionId);
       // Bug 7 (16.5.2026): clinical alarms latch until acked, and the
       // AudioSurface keeps beeping any active alarm. Ending the case is an
@@ -661,6 +671,7 @@ function MainApp() {
       // end_time = NULL and learners can rack up zombie rows by switching
       // cases without explicitly ending.
       if (sessionId) {
+         EventLogger.sessionEnded(sessionStartedAtRef.current ? Date.now() - sessionStartedAtRef.current : null, 'case_reload');
          endSessionOnServer(sessionId);
       }
       // Clear previous session data when loading new case. Also drops the
@@ -730,17 +741,6 @@ function MainApp() {
       setSettingsInitialTab(ret?.tab || 'agents');
       setSettingsInitialStep(ret?.wizardStep || 1);
       setShowFullPageSettings(true);
-   };
-
-   // Handle lab results modal with logging
-   const handleViewResult = (result) => {
-      setSelectedResult(result);
-      EventLogger.labResultViewed(result?.id, result?.test_name, result?.current_value, COMPONENTS.LAB_RESULTS_MODAL);
-   };
-
-   const handleCloseLabResults = () => {
-      setSelectedResult(null);
-      EventLogger.modalClosed('LabResults', COMPONENTS.LAB_RESULTS_MODAL);
    };
 
    // Persona editor takes priority — when open, hide every other surface.
@@ -1212,7 +1212,6 @@ function MainApp() {
             <OrdersDrawer
                caseId={activeCase.id}
                sessionId={sessionId}
-               onViewResult={handleViewResult}
                caseData={activeCase}
                isAdmin={isAdmin()}
                openRequest={drawerRequest}
@@ -1256,33 +1255,6 @@ function MainApp() {
                   sessionId={sessionId}
                />
             </div>
-         )}
-
-         {/* Lab/Radiology Results Modal - renders based on result type */}
-         {selectedResult && (
-            selectedResult.modality ? (
-               <RadiologyResultsModal
-                  result={selectedResult}
-                  sessionId={sessionId}
-                  patientInfo={{
-                     name: activeCase?.config?.patient_name || 'Unknown',
-                     age: activeCase?.config?.demographics?.age || 'Unknown',
-                     gender: activeCase?.config?.demographics?.gender || 'Unknown'
-                  }}
-                  onClose={handleCloseLabResults}
-               />
-            ) : (
-               <LabResultsModal
-                  result={selectedResult}
-                  sessionId={sessionId}
-                  patientInfo={{
-                     name: activeCase?.config?.patient_name || 'Unknown',
-                     age: activeCase?.config?.demographics?.age || 'Unknown',
-                     gender: activeCase?.config?.demographics?.gender || 'Unknown'
-                  }}
-                  onClose={handleCloseLabResults}
-               />
-            )
          )}
 
          {/* Physical Examination is now a full-page screen — see the

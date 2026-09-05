@@ -201,7 +201,8 @@ const McqStudent = ({ questions, isDark }) => {
     // Self-check grading is client-side by design (no persistence), but the
     // attempt itself is a learning event — log it like other rooms do.
     activityLogger.log({
-      verb: picked === q.correctIndex ? 'CORRECT_ANSWER' : 'INCORRECT_ANSWER',
+      verb: 'ANSWERED',
+      result: picked === q.correctIndex ? 'correct' : 'incorrect',
       objectType: 'question',
       objectId: `mcq-${cur + 1}`,
       objectTitle: q.question,

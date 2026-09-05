@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Copy, Users, Bot, RotateCcw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { AgentService } from '../../services/AgentService';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 const AGENT_TYPE_BADGE = {
    patient: 'bg-neutral-200 text-teal-700 border border-neutral-300',
@@ -46,6 +47,7 @@ export default function AgentTemplateManager({ onOpenEditor }) {
    const handleDuplicate = async (template) => {
       try {
          await AgentService.duplicateTemplate(template.id, t('copy_suffix', { name: template.name }));
+         EventLogger.contentDuplicated(OBJECT_TYPES.AGENT_TEMPLATE, template.id, template.name, COMPONENTS.CONFIG_PANEL);
          toast.success(t('toast_duplicated'));
          loadTemplates();
       } catch (err) {

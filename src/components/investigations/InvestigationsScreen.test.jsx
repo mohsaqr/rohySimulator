@@ -58,10 +58,19 @@ vi.mock('../../services/PatientRecord', () => ({
 // --- EventLogger mock --------------------------------------------------
 const componentOpened = vi.fn();
 const componentClosed = vi.fn();
-vi.mock('../../services/eventLogger', () => ({
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: {
         componentOpened: (...a) => componentOpened(...a),
         componentClosed: (...a) => componentClosed(...a),
+        // The screen brackets its visit with panelOpened/panelClosed and
+        // emits SEARCHED / FILTERED / TOGGLED / CLOSED / RELEASED_RESULT.
+        panelOpened: (...a) => componentOpened(...a),
+        panelClosed: (...a) => componentClosed(...a),
+        searched: vi.fn(),
+        filtered: vi.fn(),
+        toggled: vi.fn(),
+        resultReleased: vi.fn(),
+        log: vi.fn(),
     },
     COMPONENTS: { ORDERS_DRAWER: 'OrdersDrawer' },
 }));

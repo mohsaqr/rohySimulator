@@ -23,6 +23,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { LANGUAGES } from '../../i18n/languages';
 import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
 import ModelSelect from '../settings/ModelSelect';
+import EventLogger from '../../services/eventLogger';
 
 const STEP_IDS = ['llm', 'language', 'case', 'voice', 'emotion', 'access'];
 
@@ -506,7 +507,13 @@ export default function AdminSetupWizard({ onClose }) {
     const { t } = useTranslation('first_run');
     const toast = useToast();
     const [status, setStatus] = useState(null);
-    const [stepIndex, setStepIndex] = useState(0);
+    const [stepIndex, setStepIndexState] = useState(0);
+    const setStepIndex = (next) => setStepIndexState((prev) => {
+        const i = typeof next === 'function' ? next(prev) : next;
+        if (i !== prev) EventLogger.tourStepAdvanced('admin_setup', STEP_IDS[i] ?? String(i), i, 'AdminSetupWizard');
+        return i;
+    });
+    useEffect(() => { EventLogger.tourStarted('admin_setup', 'AdminSetupWizard'); }, []);
     const [closing, setClosing] = useState(false);
     // Session-local "the Test Connection round-trip passed" — the strongest
     // signal we have that students can actually chat.
@@ -525,6 +532,7 @@ export default function AdminSetupWizard({ onClose }) {
     // network blip must not trap the admin in the wizard.
     const persistAndClose = async () => {
         setClosing(true);
+        EventLogger.tourEnded('admin_setup', stepIndex >= STEP_IDS.length - 1 ? 'completed' : 'finish_later', 'AdminSetupWizard');
         try {
             await apiPut('/platform-settings/setup', { completed: true });
         } catch (err) {

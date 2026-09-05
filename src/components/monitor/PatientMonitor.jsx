@@ -13,7 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // here. Imports and audio init click-handler removed below.
 import LabValueEditor from '../investigations/LabValueEditor';
 import VersionBadge from '../VersionBadge';
-import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import AoiRegion from '../oyon/AoiRegion';
@@ -457,11 +457,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       }
    };
    const startScenarioAnchored = (scenarioId, startMs = Date.now()) => {
+      EventLogger.scenarioStarted(String(scenarioId), COMPONENTS.PATIENT_MONITOR);
       applyScenarioAnchor({ sessionId: sessionId ?? null, scenarioId, startMs, offsetSec: 0, playing: true });
    };
    const toggleScenarioPlayingAnchored = () => {
       const anchor = scenarioAnchorRef.current;
       if (!anchor) { setScenarioPlaying(prev => !prev); return; }
+      if (anchor.playing) EventLogger.scenarioPaused(String(anchor.scenarioId), COMPONENTS.PATIENT_MONITOR);
+      else EventLogger.scenarioResumed(String(anchor.scenarioId), COMPONENTS.PATIENT_MONITOR);
       applyScenarioAnchor(anchor.playing
          ? { ...anchor, playing: false, offsetSec: anchorSeconds(anchor) }
          : { ...anchor, playing: true, startMs: Date.now(), offsetSec: anchor.offsetSec });
@@ -777,8 +780,26 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    };
 
    // Helper to update a vital and mark as overridden
+   // One ADJUSTED_VITAL row per slider gesture (500 ms quiet), carrying the
+   // value before the gesture and the value it settled on — not one per tick.
+   const vitalAdjustRef = useRef({});
+   const logVitalAdjusted = (vitalKey, prevValue, value) => {
+      const pending = vitalAdjustRef.current[vitalKey];
+      if (pending) clearTimeout(pending.timer);
+      const from = pending ? pending.from : prevValue;
+      const samples = pending ? pending.samples + 1 : 1;
+      vitalAdjustRef.current[vitalKey] = {
+         from, samples,
+         timer: setTimeout(() => {
+            delete vitalAdjustRef.current[vitalKey];
+            EventLogger.vitalAdjusted(vitalKey, from, value, COMPONENTS.PATIENT_MONITOR, { samples });
+         }, 500),
+      };
+   };
+
    const updateVitalWithOverride = (vitalKey, value) => {
       const prevValue = params[vitalKey];
+      if (prevValue !== value) logVitalAdjusted(vitalKey, prevValue, value);
       setParams(prev => ({ ...prev, [vitalKey]: value }));
       if (caseBaseline && trackOverrides) {
          setOverriddenVitals(prev => new Set([...prev, vitalKey]));
@@ -794,6 +815,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // Helper to update rhythm with override tracking
    const updateRhythmWithOverride = (newRhythm) => {
       const prevRhythm = rhythm;
+      // One verb; the vital's id (rhythm) carries which parameter changed.
+      if (prevRhythm !== newRhythm) EventLogger.vitalAdjusted('rhythm', prevRhythm, newRhythm, COMPONENTS.PATIENT_MONITOR);
       setRhythm(newRhythm);
       // Always mark manual rhythm changes as overridden so the scenario engine
       // doesn't revert them on its next tick. The scenario engine reads this
@@ -1686,12 +1709,11 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                                    if (step.conditions) {
                                                       setConditions(c => ({ ...c, ...step.conditions }));
                                                    }
-                                                   // Log scenario-step jump as an admin "click" event so it's
-                                                   // visible in the analytics timeline without a dedicated verb.
-                                                   EventLogger.buttonClicked(
-                                                      `scenario-step-jump:${step.label || `Step ${index + 1}`}`,
+                                                   // The dedicated verb the old comment said this lacked.
+                                                   EventLogger.scenarioStepJumped(
+                                                      scenario.id ?? scenario.name, index, step.label || `Step ${index + 1}`,
+                                                      { scenarioName: scenario.name, time: step.time, rhythm: step.rhythm ?? null },
                                                       COMPONENTS.PATIENT_MONITOR,
-                                                      { scenarioName: scenario.name, time: step.time }
                                                    );
                                                 }}
                                                 className={`w-full text-left p-2 rounded text-xs transition-colors ${
@@ -2430,6 +2452,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   {/* Save to Browser (localStorage) */}
                   <button
                      onClick={() => {
+                        EventLogger.contentSaved(OBJECT_TYPES.MONITOR_PRESET, 'monitor_settings', 'Monitor settings', COMPONENTS.PATIENT_MONITOR);
                         if (saveSettings(rhythm, conditions, params)) {
                            toast.success(t('settings_saved_toast'));
                            window.location.reload();
@@ -2447,6 +2470,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="grid grid-cols-2 gap-2">
                      <button
                         onClick={() => {
+                           EventLogger.contentExported(OBJECT_TYPES.MONITOR_PRESET, 'monitor_settings', 'Monitor settings', COMPONENTS.PATIENT_MONITOR);
                            exportSettingsToJSON(rhythm, conditions, params);
                            toast.success(t('settings_exported_toast'));
                         }}

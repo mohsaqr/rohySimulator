@@ -17,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { useNotifications, SOURCES, SEVERITY } from '../notifications';
 import { apiGet } from '../services/apiClient.js';
 import { articlesForRole, docsUrl } from './helpContent.js';
+import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../services/eventLogger';
 
 // Tab labels are catalogue keys (`help` namespace) resolved at render time —
 // an explicit key map, the pattern i18next-parser.config.js documents.
@@ -67,8 +68,16 @@ export default function HelpCenter({ open, onClose }) {
   // it never runs synchronously inside the data effect.
   const selectTab = useCallback((id) => {
     setError(null);
+    EventLogger.log(VERBS.VIEWED, OBJECT_TYPES.HELP_ARTICLE, { objectId: String(id), objectName: String(id), component: COMPONENTS.APP });
     setTab(id);
   }, []);
+
+  // A help visit is studying, bracketed for dwell.
+  useEffect(() => {
+    if (!open) return undefined;
+    EventLogger.panelOpened(OBJECT_TYPES.HELP_CENTER, 'help_center', 'Help centre', COMPONENTS.APP);
+    return () => EventLogger.panelClosed(OBJECT_TYPES.HELP_CENTER, 'help_center', 'Help centre', COMPONENTS.APP);
+  }, [open]);
 
   // WCAG 2.1.2 — keyboard users must be able to dismiss the dialog without
   // a pointer. Escape closes the drawer while it is open.
