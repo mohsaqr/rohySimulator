@@ -21,7 +21,7 @@
 import dbAdapter from '../dbAdapter.js';
 import { LEARNING_VERBS, SERVER_ONLY_VERBS, normalizeVerb, resolveEventMetadata } from '../shared/learningVerbs.js';
 import { resolvePluginAttribution } from '../shared/pluginRegistry.js';
-import { resolveSessionTrinity, logAudit } from '../routes/_helpers.js';
+import { resolveSessionTrinity, logAuditAsync } from '../routes/_helpers.js';
 import { anchorToServer, toIsoZ, nowIso } from '../shared/time.js';
 import { logger } from '../logger.js';
 
@@ -180,19 +180,28 @@ export async function ingestEvents({
         if (FORGERY.has(reason)) {
             // A forgery is a security event, not telemetry noise: the audit
             // chain gets the fact (who, which session), never the payload.
-            logAudit({
-                userId: principalUserId,
-                username: principal?.username ?? null,
-                action: 'learning_event_rejected',
-                resourceType: 'session',
-                resourceId: event?.session_id ?? null,
-                status: 'failure',
-                errorMessage: reason,
-                metadata: { source, verb: event?.verb ?? null },
-                tenantId,
-                ipAddress: req?.ip ?? null,
-                userAgent: req?.headers?.['user-agent'] ?? null,
-            });
+            // AWAITED, unlike the fire-and-forget logAudit: the response says
+            // the event was rejected, and the audit row that proves it must
+            // exist by then — under CI load the chain's retry landed the row
+            // after the caller had already read the table. A failed audit
+            // write is warned, never allowed to fail the batch.
+            try {
+                await logAuditAsync({
+                    userId: principalUserId,
+                    username: principal?.username ?? null,
+                    action: 'learning_event_rejected',
+                    resourceType: 'session',
+                    resourceId: event?.session_id ?? null,
+                    status: 'failure',
+                    errorMessage: reason,
+                    metadata: { source, verb: event?.verb ?? null },
+                    tenantId,
+                    ipAddress: req?.ip ?? null,
+                    userAgent: req?.headers?.['user-agent'] ?? null,
+                });
+            } catch (err) {
+                (req?.log || log).warn('forgery audit write failed', { reason, error: err.message });
+            }
         }
     };
 
