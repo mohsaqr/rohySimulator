@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**95 tables.**
+**96 tables.**
 
 ## `active_sessions`
 
@@ -907,6 +907,28 @@ Stores learning events records.
 | `vital_rhythm` | TEXT | — | `0018_learning_events_vitals.sql` |
 | `room` | TEXT | — | `0021_learning_events_room.sql` |
 | `client_time` | TEXT | — | `0050_utc_iso_timestamps.sql` |
+| `plugin_id` | TEXT | — | `0055_learning_events_plugin_attribution.sql` |
+| `plugin_version` | TEXT | — | `0055_learning_events_plugin_attribution.sql` |
+
+## `learning_events_rejected`
+
+Stores learning events rejected records.
+
+**Introduced by:** migration `0056_learning_events_rejected.sql`
+
+**Cross-cutting:** `tenant-scoped`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `user_id` | INTEGER | — | — |
+| `never` | a | derived victim session_id INTEGER | — |
+| `written` | by | the ingest core reason TEXT NOT NULL CHECK(reason IN ( 'missing_required_field', 'unknown_verb', 'invalid_metadata', 'server_only_verb', 'not_owner', 'cross_tenant', 'payload_too_large', 'db_error')) | — |
+| `source` | TEXT | — | — |
+| `object_type` | TEXT | — | — |
+| `payload_json` | TEXT | — | — |
+| `plugin_id` | TEXT | — | — |
 
 ## `lesson_progress`
 

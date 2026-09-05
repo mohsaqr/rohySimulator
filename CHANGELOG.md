@@ -9,6 +9,31 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.15] — 2026-09-05
+
+### Added
+
+- **Analytics surface.** `GET /api/analytics/events` — paged, the same filter
+  object as every aggregate, so the admin dashboard's charts and stat cards
+  describe one population (it used to fetch the newest 5,000 rows tenant-wide
+  and slice them client-side); `?room=` and `?session_id=` now reach the
+  aggregates; `?lens=` on both `tna-sequences` endpoints; `rooms` in
+  filter-options; `GET /api/analytics/sessions/:id/reconcile`;
+  `GET /api/cohorts/:id/analytics/events`; `GET /api/analytics/rejected-events`;
+  `/learning-events/verbs` authenticated and returning facets and aliases. The
+  CSV export appends `verb_canonical`, `room`, `client_time`, `plugin_id`,
+  `plugin_version` and the vitals after the original columns. `CohortReports`
+  and the TNA dashboard label the same data with the same facets; the activity
+  table gains room and plugin columns. `scripts/verify-timestamps.js` audits
+  every time column.
+
+### Fixed
+
+- Chat turns were double-counted in moments and case insights when a session
+  had both `interactions` and `learning_events` chat rows.
+- `/learning-events/verbs` was unauthenticated; `/learning-events/all` is
+  deprecated with a `Deprecation` header.
+
 ## [3.0.0-beta.14] — 2026-09-05
 
 ### Added

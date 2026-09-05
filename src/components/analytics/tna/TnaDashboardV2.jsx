@@ -57,18 +57,21 @@ import DayHourMatrix from '../charts/DayHourMatrix';
 
 import { DEFAULT_INTERPRETATIONS } from './clinicalStates';
 import {
-    eventStateLabels, filterEvents, toDailyStateSeries, toMatrixEvents,
-    eventsToSequences, eventRoomCounts,
+    eventStateLabels, toDailyStateSeries, toMatrixEvents, eventsToSequences,
 } from './activityEvents';
 import { ACTIVITY_MAPPINGS, resolveActivityLabel } from './activityMappings';
 import { recordsToEmotionSequences } from './emotionSequences';
-import { recordsToRoomSequences, recordsToGazeTargetSequences, ROOM_LABELS } from './windowSequences';
+import { recordsToRoomSequences, recordsToGazeTargetSequences } from './windowSequences';
 import { observedDominantLabels, probabilityChannelLabels } from '../../oyon/emotionVocabulary';
 
 const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, attention: atna };
-// Newest-rows cap for the /learning-events/all fetch behind the Activity-tab
-// charts; when the response hits it, a note flags the truncation.
-const EVENTS_FETCH_LIMIT = 5000;
+// The Activity-tab rows come from GET /analytics/events — the SAME
+// server-side filter every stat card and aggregate uses — paged at
+// EVENTS_PAGE and capped at EVENTS_CAP rows for the browser's sake. The cap
+// applies to the FILTERED population (narrow the filters and the whole set
+// fits), not to the newest N rows tenant-wide as `/learning-events/all` did.
+const EVENTS_PAGE = 5000;
+const EVENTS_CAP = 20000;
 const LAYOUT_OPTIONS = [
     { value: 'circle',        label: 'Circle' },
     { value: 'fr',            label: 'Force' },
@@ -256,12 +259,15 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const [emotionTruncated, setEmotionTruncated] = useState(false);
 
     // --- Server data ---
-    const [filterOptions, setFilterOptions] = useState({ courses: [], cases: [], users: [] });
+    const [filterOptions, setFilterOptions] = useState({ courses: [], cases: [], users: [], rooms: [] });
     const [activityBundle, setActivityBundle] = useState(null);
-    // Raw learning-event rows for the Activity-tab charts (educator-accessible,
-    // unlike the admin-only aggregate bundle). Fetched once per mount, capped
-    // at the EVENTS_FETCH_LIMIT most recent rows; filters apply client-side.
+    // Learning-event rows for the Activity-tab charts and the network-family
+    // sequences (educator-accessible, unlike the admin-only aggregate bundle).
+    // Already filtered by the server; re-fetched whenever a filter changes.
     const [learningEvents, setLearningEvents] = useState(null);
+    // The server's count for the current filters — larger than the loaded
+    // rows only when EVENTS_CAP was hit.
+    const [eventsTotal, setEventsTotal] = useState(0);
     const [eventsError, setEventsError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -303,7 +309,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         // analytics. apiFetch handles the no-token case by falling
         // through to the rohy_auth cookie.
         apiFetch('/analytics/filter-options')
-            .then((d) => setFilterOptions({ courses: d?.courses || [], cases: d?.cases || [], users: d?.users || [] }))
+            .then((d) => setFilterOptions({ courses: d?.courses || [], cases: d?.cases || [], users: d?.users || [], rooms: d?.rooms || [] }))
             .catch(() => {});
     }, []);
 
@@ -393,19 +399,49 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         }).catch((err) => setError(err.message));
     }, [effCourseId, effCaseId, effUserId, effStartDate, effEndDate, isActivityTab]);
 
-    // --- Fetch raw learning events for the activity screens ---
-    // The endpoint only takes `limit` (reviewer+ reads tenant-wide, others
-    // their own rows), so this fires ONCE per mount when the activity source is
-    // first needed (Activity tab OR any network-family tab). Every filter —
-    // case / student / date / room — then re-slices these cached rows
-    // client-side, so the Activity charts and the Network/Process/Clusters/
-    // Patterns screens all read from ONE consistently-filtered dataset.
+    // --- Fetch the learning events for the activity screens ---
+    // GET /analytics/events applies course / case / student / date / room on
+    // the server with the same filter object the aggregate endpoints use, so
+    // the Activity charts, the Network/Process/Clusters/Patterns screens AND
+    // the stat cards all describe one population. Re-runs when any effective
+    // filter changes; a stale response from a superseded filter set is
+    // dropped via the `cancelled` flag.
     useEffect(() => {
-        if (!wantsActivityEvents || learningEvents !== null) return;
-        apiFetch(`/learning-events/all?limit=${EVENTS_FETCH_LIMIT}`)
-            .then((d) => setLearningEvents(d?.events || []))
-            .catch((err) => setEventsError(err.message));
-    }, [wantsActivityEvents, learningEvents]);
+        if (!wantsActivityEvents) return undefined;
+        let cancelled = false;
+        const params = new URLSearchParams();
+        if (effCourseId) params.set('course_id', effCourseId);
+        if (effCaseId) params.set('case_id', effCaseId);
+        if (effUserId) params.set('user_id', effUserId);
+        if (effStartDate) params.set('start_date', effStartDate);
+        if (effEndDate) params.set('end_date', effEndDate);
+        if (effRoom) params.set('room', effRoom);
+        setLearningEvents(null);
+        setEventsError(null);
+        (async () => {
+            try {
+                const all = [];
+                let offset = 0;
+                let total = Infinity;
+                while (offset < total && all.length < EVENTS_CAP) {
+                    params.set('limit', String(EVENTS_PAGE));
+                    params.set('offset', String(offset));
+                    const d = await apiFetch(`/analytics/events?${params}`);
+                    const rows = d?.events || [];
+                    all.push(...rows);
+                    total = Number.isFinite(d?.total) ? d.total : all.length;
+                    if (rows.length < EVENTS_PAGE) break;
+                    offset += EVENTS_PAGE;
+                }
+                if (cancelled) return;
+                setLearningEvents(all);
+                setEventsTotal(Number.isFinite(total) ? total : all.length);
+            } catch (err) {
+                if (!cancelled) setEventsError(err.message);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [wantsActivityEvents, effCourseId, effCaseId, effUserId, effStartDate, effEndDate, effRoom]);
 
     // Label function for the currently-selected mapping lens. Every activity
     // screen resolves its events through this ONE function, so a lens switch
@@ -415,26 +451,16 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         [activityMapping, interpretations],
     );
 
-    // --- Activity dataset: cached rows filtered by case/student/date/ROOM.
-    // Shared by the Activity-tab charts AND the network-family sequences. ---
-    const filteredEvents = useMemo(() => (
-        learningEvents
-            ? filterEvents(learningEvents, {
-                courseId: effCourseId, caseId: effCaseId, userId: effUserId,
-                startDate: effStartDate, endDate: effEndDate, room: effRoom,
-            })
-            : null
-    ), [learningEvents, effCourseId, effCaseId, effUserId, effStartDate, effEndDate, effRoom]);
+    // --- Activity dataset: the server-filtered rows (case/student/date/ROOM
+    // already applied). Shared by the Activity-tab charts AND the
+    // network-family sequences; the name survives from the client-filtered era
+    // so the consumers below read unchanged. ---
+    const filteredEvents = learningEvents;
 
-    // Rooms present in the loaded dataset (ignores the room filter itself) so
-    // the Room dropdown only offers rooms that actually have events.
-    const availableRooms = useMemo(() => {
-        if (!learningEvents) return [];
-        const pre = filterEvents(learningEvents, {
-            courseId: effCourseId, caseId: effCaseId, userId: effUserId, startDate: effStartDate, endDate: effEndDate,
-        });
-        return eventRoomCounts(pre).filter((r) => r.id !== '');
-    }, [learningEvents, effCourseId, effCaseId, effUserId, effStartDate, effEndDate]);
+    // Rooms that have events for this tenant, with their labels resolved by
+    // the server from the room registry (core rooms + plugin manifests), so a
+    // newly installed plugin room appears here without a client change.
+    const availableRooms = filterOptions.rooms;
 
     const activityCharts = useMemo(() => {
         if (!filteredEvents) return null;
@@ -807,7 +833,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                 <select value={effRoom} onChange={(e) => setRoomFilter(e.target.value)} className="px-2 py-1 text-sm bg-white border border-gray-300 rounded">
                                     <option value="">All rooms</option>
                                     {availableRooms.map((r) => (
-                                        <option key={r.id} value={r.id}>{(ROOM_LABELS[r.id] || r.id)} ({r.count})</option>
+                                        <option key={r.id} value={r.id}>{r.label || r.id} ({r.count})</option>
                                     ))}
                                 </select>
                             </div>
@@ -987,10 +1013,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                         )}
                         {activityCharts && (
                             <>
-                                {learningEvents.length >= EVENTS_FETCH_LIMIT && (
+                                {eventsTotal > learningEvents.length && (
                                     <div className="px-1 text-xs text-amber-700">
-                                        Charts cover the {EVENTS_FETCH_LIMIT.toLocaleString()} most recent
-                                        events — older activity is not included.
+                                        Charts cover the {learningEvents.length.toLocaleString()} most recent
+                                        of {eventsTotal.toLocaleString()} matching events — narrow the
+                                        filters to include the rest.
                                     </div>
                                 )}
                                 <Panel title={activityCharts.daily.granularity === 'day' ? 'Daily Activity by State' : 'Activity by State over Time'}>

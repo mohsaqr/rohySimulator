@@ -129,6 +129,15 @@ const COLUMNS = [
             <CopyableCell value={info.getValue()} className="text-neutral-200" />
         </div>
       ) },
+    // Where the act happened: a core room key or a plugin id (0021), and
+    // which plugin produced the row (0055). Filterable — the room filter was
+    // the one dimension this table had no column for.
+    { accessorKey: 'room', header: 'room', size: 100,
+      meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.room) },
+      cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-300" /> },
+    { accessorKey: 'plugin_id', header: 'plugin', size: 90,
+      meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.plugin_id) },
+      cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-400" /> },
     { accessorKey: 'component', header: 'component', size: 130,
       meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.component) },
       cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-300" /> },
@@ -209,6 +218,7 @@ const INITIAL_HIDDEN = {
     session_id: false,
     object_id: false,
     parent_component: false,
+    plugin_id: false,
     severity: false,
     duration_ms: false,
     vital_etco2: false,

@@ -11,6 +11,7 @@ import {
     hasRoleAtLeast,
 } from '../middleware/auth.js';
 import { auditSuccess, tenantId } from './_helpers.js';
+import { pulseBucket, verbWithAliases, roomLabel, roomLabelKey } from '../shared/eventFacets.js';
 import {
     buildEventFilter,
     summary as aggSummary,
@@ -1108,13 +1109,21 @@ router.post('/cohorts/join', authenticateToken, requireStudent, async (req, res,
 // is the terminal screen of every run and is logged unconditionally on open.
 // ---------------------------------------------------------------------------
 
+// Verb-first: SUBMITTED_DEBRIEF (and any historical alias of it) is the
+// completion signal now that the debrief screen emits it. The old
+// OPENED + DiscussionScreen string pair is kept OR'd in, permanently — it is
+// how every session before this release recorded reaching the debrief, and
+// a second reading of the same fact is not a migration.
+const DEBRIEF_VERB_MARKERS = verbWithAliases('SUBMITTED_DEBRIEF').map((v) => `'${v}'`).join(', ');
 const DEBRIEF_COMPLETED_SQL = `
     EXISTS (
         SELECT 1 FROM learning_events le
          WHERE le.session_id = s.id
            AND le.tenant_id = s.tenant_id
-           AND le.verb = 'OPENED'
-           AND le.component = 'DiscussionScreen'
+           AND (
+                le.verb IN (${DEBRIEF_VERB_MARKERS})
+             OR (le.verb = 'OPENED' AND le.component = 'DiscussionScreen')
+           )
     )`;
 
 // Live student enrolments of an owned course, with stable ordering. Reporting
@@ -1158,6 +1167,16 @@ function laterIso(a, b) {
 }
 
 function pulseActivityBucket(row) {
+    // The verb registry decides (server/shared/eventFacets.js): a plugin
+    // verb, or a rohy verb whose name contains none of the magic words below,
+    // used to land in 'Navigation' by default. The substring ladder survives
+    // for two cases only — a row whose verb the registry does not know
+    // (historical strings from before the whitelist existed), and a generic
+    // UI verb (CLICKED, OPENED…) whose bucket is the Navigation default: for
+    // those the COMPONENT says where the click happened, and a click inside
+    // the debrief screen is debrief activity, not navigation.
+    const fromRegistry = pulseBucket(row.verb, row.object_type);
+    if (fromRegistry && fromRegistry !== 'Navigation') return fromRegistry;
     const text = [
         row.category,
         row.component,
@@ -1503,6 +1522,7 @@ async function cohortEventFilter(req, res, { alias = '' } = {}) {
         caseId: req.query.case_id,
         userId: req.query.user_id,
         sessionId: req.query.session_id,
+        room: req.query.room,
         memberIds: members.map(m => m.id),
         startDate: req.query.start_date,
         endDate: req.query.end_date,
@@ -1548,7 +1568,19 @@ router.get('/cohorts/:id/analytics/filter-options', authenticateToken, requireEd
                 [tenantId(req), ...members.map(m => m.id)]
             );
         }
-        res.json({ cases, users });
+        let rooms = [];
+        if (members.length > 0) {
+            const placeholders = members.map(() => '?').join(',');
+            rooms = (await dbAdapter.all(
+                `SELECT room AS id, COUNT(*) AS count
+                   FROM learning_events
+                  WHERE tenant_id = ? AND room IS NOT NULL AND room != ''
+                    AND user_id IN (${placeholders})
+                  GROUP BY room ORDER BY count DESC`,
+                [tenantId(req), ...members.map(m => m.id)]
+            )).map((r) => ({ id: r.id, count: r.count, label: roomLabel(r.id), labelKey: roomLabelKey(r.id) }));
+        }
+        res.json({ cases, users, rooms });
     } catch (err) {
         next(err);
     }
@@ -1908,6 +1940,34 @@ router.get('/cohorts/:id/analytics/top-resources', authenticateToken, requireEdu
 
 // GET /api/cohorts/:id/analytics/tna-sequences — alias 'le.' because the
 // pipeline joins cases for the title.
+// GET /api/cohorts/:id/analytics/events — the cohort-scoped twin of
+// /analytics/events: the same filter object the cohort aggregates use, paged.
+router.get('/cohorts/:id/analytics/events', authenticateToken, requireEducator, async (req, res, next) => {
+    try {
+        const scoped = await cohortEventFilter(req, res, { alias: 'le.' });
+        if (!scoped) return;
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 2000, 1), 5000);
+        const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+        const [rows, totalRow] = await Promise.all([
+            dbAdapter.all(
+                `SELECT le.*, c.name AS case_name, u.username
+                   FROM learning_events le
+                   LEFT JOIN cases c ON c.id = le.case_id AND c.tenant_id = le.tenant_id
+                   LEFT JOIN users u ON u.id = le.user_id
+                   ${scoped.filter.where}
+                  ORDER BY le.timestamp DESC, le.id DESC
+                  LIMIT ? OFFSET ?`,
+                [...scoped.filter.params, limit, offset]
+            ),
+            dbAdapter.get(`SELECT COUNT(*) AS n FROM learning_events le
+                ${scoped.filter.where}`, scoped.filter.params),
+        ]);
+        res.json({ events: rows || [], total: totalRow?.n ?? 0, limit, offset });
+    } catch (err) {
+        next(err);
+    }
+});
+
 router.get('/cohorts/:id/analytics/tna-sequences', authenticateToken, requireEducator, async (req, res, next) => {
     try {
         const scoped = await cohortEventFilter(req, res, { alias: 'le.' });
@@ -1923,6 +1983,7 @@ router.get('/cohorts/:id/analytics/tna-sequences', authenticateToken, requireEdu
             minVerbPct: Math.max(0, parseFloat(min_verb_pct) || 0),
             skipMerges: String(skip_merges) === 'true',
             grouping: group_by === 'actor' ? 'actor' : 'actor-session',
+            lens: typeof req.query.lens === 'string' ? req.query.lens : 'tna',
         });
         res.json(result);
     } catch (err) {

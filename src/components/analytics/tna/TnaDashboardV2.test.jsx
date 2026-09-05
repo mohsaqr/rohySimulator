@@ -7,11 +7,12 @@
 //     (undefined/null fields treated as ''), the four Case/Student/Start/End
 //     input groups are NOT rendered, and the per-tab controls (Source,
 //     Group by, Mapping / Emotion states) still are. Changing externalFilters
-//     re-slices the cached rows client-side.
+//     re-fetches with the new filter set.
 //   - Activity source (default) builds ALL its screens — Activity charts AND
-//     the Network/Process/Clusters/Patterns sequences — from ONE client-side
-//     /learning-events/all fetch, filtered by case/student/date/room/mapping.
-//     There is NO /analytics/tna-sequences fetch for the activity source.
+//     the Network/Process/Clusters/Patterns sequences — from ONE
+//     server-filtered GET /analytics/events (case/student/date/room applied
+//     by the same filter object the stat cards use); mapping applies
+//     client-side. There is NO /analytics/tna-sequences fetch for it.
 //   - `hideHeader` (default false): suppresses V2's own header row (title +
 //     close/refresh buttons); the tab strip still renders.
 //   - Defaults preserve standalone behavior exactly: local filter inputs
@@ -64,18 +65,23 @@ import TnaDashboardV2 from './TnaDashboardV2.jsx';
 const routeApi = ({ emotionTotal = 3 } = {}) => {
     apiFetchMock.mockImplementation(async (url) => {
         if (url.startsWith('/analytics/filter-options')) {
-            return { cases: [{ id: 'c1', title: 'Chest pain' }], users: [{ id: 'u1', username: 'amina' }] };
+            return {
+                cases: [{ id: 'c1', title: 'Chest pain' }], users: [{ id: 'u1', username: 'amina' }],
+                rooms: [{ id: 'chat', label: 'Patient (main)', count: 1 }, { id: 'lab', label: 'Lab', count: 1 }],
+            };
         }
         if (url.startsWith('/analytics/tna-sequences')) {
             return { sequences: [], objectTypeSequences: [], metadata: null };
         }
-        if (url.startsWith('/learning-events/all')) {
-            return {
-                events: [
-                    { timestamp: '2026-06-01T10:00:00.000Z', user_id: 1, username: 'amina', verb: 'ORDERED_LAB', object_type: 'lab_test', case_id: 'c1' },
-                    { timestamp: '2026-06-02T11:00:00.000Z', user_id: 2, username: 'omar', verb: 'SENT_MESSAGE', object_type: 'chat_message', case_id: 'c1' },
-                ],
-            };
+        if (url.startsWith('/analytics/events')) {
+            // The server applies the filters; the mock honours case_id so a
+            // narrowed re-fetch comes back empty the way the real route does.
+            const caseId = new URLSearchParams(url.split('?')[1]).get('case_id');
+            const events = [
+                { timestamp: '2026-06-01T10:00:00.000Z', user_id: 1, username: 'amina', verb: 'ORDERED_LAB', object_type: 'lab_test', case_id: 'c1', room: 'lab' },
+                { timestamp: '2026-06-02T11:00:00.000Z', user_id: 2, username: 'omar', verb: 'SENT_MESSAGE', object_type: 'chat_message', case_id: 'c1', room: 'chat' },
+            ].filter((e) => !caseId || e.case_id === caseId);
+            return { events, total: events.length, limit: 5000, offset: 0 };
         }
         if (url.startsWith('/addons/oyon/emotion-records')) {
             const params = new URLSearchParams(url.split('?')[1]);
@@ -109,7 +115,7 @@ beforeEach(() => {
 describe('TnaDashboardV2 standalone (defaults)', () => {
     it('lands on Activity and renders its own Case/Student/Start/End filter inputs and header close button', async () => {
         render(<TnaDashboardV2 onClose={() => {}} />);
-        await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
+        await waitFor(() => expect(eventUrls()).toEqual(['/analytics/events?limit=5000&offset=0']));
 
         expect(screen.getByText('Case')).toBeTruthy();
         expect(screen.getByText('Student')).toBeTruthy();
@@ -145,31 +151,34 @@ describe('TnaDashboardV2 externalFilters', () => {
         expect(screen.queryByText('Mode')).toBeNull();
     });
 
-    it('builds the network tab from the client event cache, not a server sequence fetch', async () => {
+    it('builds the network tab from the server-filtered event set, not a server sequence fetch', async () => {
         render(
             <TnaDashboardV2
                 externalFilters={{ caseId: 'c1', userId: '42', startDate: '2026-01-01', endDate: undefined }}
             />,
         );
-        await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
+        // Every external filter reaches the server as the aggregate
+        // endpoints' own query names; an undefined field is simply absent.
+        await waitFor(() => expect(eventUrls()).toEqual([
+            '/analytics/events?case_id=c1&user_id=42&start_date=2026-01-01&limit=5000&offset=0',
+        ]));
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
-        // Never touches the removed /analytics/tna-sequences endpoint, and the
-        // single cached fetch is reused (client-side filtering).
+        // Never touches the removed /analytics/tna-sequences endpoint, and a
+        // tab switch alone does not re-fetch (same filters).
         expect(seqUrls().length).toBe(0);
         expect(eventUrls().length).toBe(1);
     });
 
-    it('re-slices client-side when externalFilters changes — no refetch, no sequence call', async () => {
+    it('re-fetches with the new filters when externalFilters changes — still no sequence call', async () => {
         const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: 'c1' }} />);
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
         expect(eventUrls().length).toBe(1);
 
         rerender(<TnaDashboardV2 externalFilters={{ caseId: 'c2' }} />);
-        // The 5000-row cache is filtered in memory; no new fetch of either kind.
-        await waitFor(() => expect(screen.getByText('Mapping')).toBeTruthy());
-        expect(eventUrls().length).toBe(1);
+        await waitFor(() => expect(eventUrls().length).toBe(2));
+        expect(eventUrls()[1]).toBe('/analytics/events?case_id=c2&limit=5000&offset=0');
         expect(seqUrls().length).toBe(0);
     });
 });
@@ -193,13 +202,13 @@ const emotionUrls = () => apiFetchMock.mock.calls
 
 const eventUrls = () => apiFetchMock.mock.calls
     .map((c) => c[0])
-    .filter((u) => u.startsWith('/learning-events/all'));
+    .filter((u) => u.startsWith('/analytics/events'));
 
 describe('TnaDashboardV2 activity tab charts', () => {
     it('loads raw learning events on the landing Activity tab and renders both chart cards', async () => {
         render(<TnaDashboardV2 />);
 
-        await waitFor(() => expect(eventUrls()).toEqual(['/learning-events/all?limit=5000']));
+        await waitFor(() => expect(eventUrls()).toEqual(['/analytics/events?limit=5000&offset=0']));
         await waitFor(() => expect(screen.getByTestId('stacked-area-chart')).toBeTruthy());
         // Both new chart titles render; the fixture's two events flow through.
         // The 2-day mock fixture is a short span → adaptive granularity
@@ -209,18 +218,30 @@ describe('TnaDashboardV2 activity tab charts', () => {
         expect(screen.getByTestId('day-hour-matrix').textContent).toBe('matrix:2');
     });
 
-    it('filter changes re-slice the cached rows client-side without a second fetch', async () => {
+    it('a filter change re-fetches the narrowed set from the server', async () => {
         const { rerender } = render(<TnaDashboardV2 externalFilters={{ caseId: '' }} />);
 
         await waitFor(() => expect(screen.getByTestId('day-hour-matrix').textContent).toBe('matrix:2'));
 
-        // Both fixture events are case c1 — narrowing to c2 empties the charts
-        // but must NOT re-fetch (the 5000-row cache is filtered in-memory).
+        // Both fixture events are case c1 — narrowing to c2 asks the server
+        // again (the same filter the stat cards use) and the charts empty.
         rerender(<TnaDashboardV2 externalFilters={{ caseId: 'c2' }} />);
         // Three empty states: the two chart panels and the time-on-task panel.
         await waitFor(() =>
             expect(screen.getAllByText('No events for the current filters').length).toBe(3));
-        expect(eventUrls().length).toBe(1);
+        expect(eventUrls()).toEqual([
+            '/analytics/events?limit=5000&offset=0',
+            '/analytics/events?case_id=c2&limit=5000&offset=0',
+        ]);
+    });
+
+    it('the Room control lists the server\'s rooms with their registry labels, and narrows server-side', async () => {
+        render(<TnaDashboardV2 />);
+        await waitFor(() => expect(screen.getByTestId('day-hour-matrix').textContent).toBe('matrix:2'));
+        const select = screen.getByText('Room').parentElement.querySelector('select');
+        expect([...select.options].map((o) => o.textContent)).toEqual(['All rooms', 'Patient (main) (1)', 'Lab (1)']);
+        fireEvent.change(select, { target: { value: 'lab' } });
+        await waitFor(() => expect(eventUrls().at(-1)).toBe('/analytics/events?room=lab&limit=5000&offset=0'));
     });
 });
 
@@ -361,9 +382,9 @@ describe('TnaDashboardV2 time on task (Activity tab)', () => {
     const T0 = Date.UTC(2026, 5, 1, 10, 0, 0);
     const at = (min, extra) => ({ timestamp: new Date(T0 + min * 60_000).toISOString(), verb: 'CLICKED', object_type: 'button', case_id: 'c1', ...extra });
     const richFixture = () => apiFetchMock.mockImplementation(async (url) => {
-        if (url.startsWith('/analytics/filter-options')) return { cases: [{ id: 'c1', title: 'Chest pain' }], users: [] };
-        if (url.startsWith('/learning-events/all')) {
-            return { events: [
+        if (url.startsWith('/analytics/filter-options')) return { cases: [{ id: 'c1', title: 'Chest pain' }], users: [], rooms: [] };
+        if (url.startsWith('/analytics/events')) {
+            return { total: 6, events: [
                 // amina, session 7: gaps 1, 12, 3 → cap 5 → 9 active; span 16.
                 at(0, { id: 1, session_id: 7, user_id: 1, username: 'amina' }),
                 at(1, { id: 2, session_id: 7, user_id: 1, username: 'amina' }),

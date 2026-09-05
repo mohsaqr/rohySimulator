@@ -64,9 +64,13 @@ source of truth in `App.jsx`.
 
 **Session** — One trainee's run of one case, from start to debrief end.
 
-**Learning event** — An xAPI-style row written via `eventLogger.js` (130+
-verbs); every row is `room`-stamped server-side. The only canonical way to
-write `learning_events`.
+**Learning event** — An xAPI-style row in `learning_events`. The verb
+registry is `server/shared/learningVerbs.js` (rohy's base verbs plus every
+plugin manifest's, with per-verb analytics facets); the client writes through
+`eventLogger.js` / a plugin's `ctx.log`, and the server's one writer is
+`server/lib/learningEventIngest.js`. Every row carries `room`, and a plugin row
+carries `plugin_id` / `plugin_version`. Historical verb names are read through
+the alias map, never rewritten.
 
 **NotificationCenter** — The central notification dispatch. All toasts,
 banners and alarms route through `src/notifications/` and fan out to 6
