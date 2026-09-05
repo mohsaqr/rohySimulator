@@ -20,6 +20,7 @@ import { VISIBILITY_SQL as TREATMENT_VISIBILITY_SQL } from './treatments-library
 
 import { logger } from '../logger.js';
 import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
+import { recordServerEvent } from '../lib/learningEventIngest.js';
 import {
     auditSuccess,
     logAudit,
@@ -210,6 +211,7 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
     // First get the order details for logging
     const getOrderSql = `
         SELECT io.*, ci.test_name, ci.test_group, ci.current_value, ci.unit, ci.is_abnormal,
+               ci.investigation_type,
                s.case_id, s.id as session_id, s.user_id as session_user_id
         FROM investigation_orders io
         LEFT JOIN case_investigations ci ON io.investigation_id = ci.id
@@ -256,19 +258,13 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
         dbAdapter.run(updateSql, [orderId, tenantId(req)], function(updateErr) {
             if (updateErr) return res.status(500).json({ error: updateErr.message });
 
-            // Log detailed learning event. Pull `room` from the request
-            // body so the lab-result viewer's POST stamps which room the
-            // student was in when they opened the report (typically 'lab'
-            // or 'radiology'); falls back to NULL when the client didn't
-            // attach one.
-            const logSql = `
-                INSERT INTO learning_events (
-                    session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                    component, result, duration_ms, context, tenant_id, room,
-                    timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
-            `;
-
+            // Learning event through the one write path. `room` comes from
+            // the request body (the viewer POSTs which room the student was in
+            // — typically 'lab' or 'radiology'). object_type says lab vs
+            // radiology: every radiology report used to be recorded as a lab
+            // result because this INSERT hard-coded 'lab_result'. An abnormal
+            // result is IMPORTANT; that is information the registry cannot
+            // derive, so it is passed as the one honoured override.
             const context = {
                 test_group: order.test_group,
                 value: order.current_value,
@@ -280,24 +276,21 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
                 ordered_at: order.ordered_at,
                 available_at: order.available_at
             };
-
             const resultText = `${order.current_value} ${order.unit || ''}${order.is_abnormal ? ' (ABNORMAL)' : ''}`;
-
-            dbAdapter.run(logSql, [
-                order.session_id,
-                userId,
-                order.case_id,
-                'VIEWED_LAB_RESULT',
-                'lab_result',
-                String(order.investigation_id),
-                order.test_name,
-                'OrdersDrawer',
-                resultText,
-                viewDelayMs,
-                JSON.stringify(context),
-                tenantId(req),
-                req.body?.room || null,
-            ]);
+            recordServerEvent(req, {
+                session_id: order.session_id,
+                user_id: userId,
+                verb: 'VIEWED_RESULT',
+                object_type: order.investigation_type === 'radiology' ? 'radiology_result' : 'lab_result',
+                object_id: String(order.investigation_id),
+                object_name: order.test_name,
+                component: 'OrdersDrawer',
+                result: resultText,
+                duration_ms: viewDelayMs,
+                context,
+                room: req.body?.room || null,
+                severity: order.is_abnormal ? 'IMPORTANT' : undefined,
+            }, { tenantId: tenantId(req), source: 'server:orders' }).catch(() => {});
 
             res.json({
                 message: 'Investigation marked as viewed',
@@ -1135,41 +1128,29 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => 
                     // PLAN_LOGGING.md (one row per ordered lab is more useful than
                     // one summary row anyway).
 
-                    // Log detailed learning events for each ordered lab.
-                    // Lab orders almost always originate from the Laboratory
-                    // room; client supplies `req.body.room` so the analytics
-                    // layer can attribute the order to a specific room
-                    // without joining against NAVIGATED events.
-                    const logSql = `
-                        INSERT INTO learning_events (
-                            session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                            component, result, context, room,
-                            timestamp
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
-                    `;
+                    // One learning event per ordered lab, through the one write
+                    // path (severity/category derived — this INSERT used to
+                    // omit both). `req.body.room` attributes the order to the
+                    // room the learner was in without joining NAVIGATED events.
                     const orderRoom = req.body?.room || null;
-
                     orderIds.forEach(order => {
                         const turnaround = order.turnaround ?? getTurnaround();
-                        const context = {
-                            turnaround_minutes: turnaround,
-                            instant_results: caseConfig.investigations?.instantResults === true,
-                            order_id: order.id
-                        };
-
-                        dbAdapter.run(logSql, [
-                            sessionId,
-                            req.user.id,
-                            session.case_id,
-                            'ORDERED_LAB',
-                            'lab_test',
-                            String(order.id),
-                            order.test_name,
-                            'OrdersDrawer',
-                            `Turnaround: ${turnaround} min`,
-                            JSON.stringify(context),
-                            orderRoom,
-                        ]);
+                        recordServerEvent(req, {
+                            session_id: sessionId,
+                            user_id: req.user.id,
+                            verb: 'ORDERED_LAB',
+                            object_type: 'lab_test',
+                            object_id: String(order.id),
+                            object_name: order.test_name,
+                            component: 'OrdersDrawer',
+                            result: `Turnaround: ${turnaround} min`,
+                            context: {
+                                turnaround_minutes: turnaround,
+                                instant_results: caseConfig.investigations?.instantResults === true,
+                                order_id: order.id
+                            },
+                            room: orderRoom,
+                        }, { tenantId: tenantId(req), source: 'server:orders' }).catch(() => {});
                     });
 
                     res.json({
@@ -1384,32 +1365,22 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
             // Instructor lab-value edits happen from the instructor panel,
             // not a learner room — room stays NULL. Column kept for parity
             // with the canonical learning_events schema.
-            dbAdapter.run(
-                `INSERT INTO learning_events (
-                    session_id, user_id, case_id, verb,
-                    object_type, object_id, object_name,
-                    component, result, context, severity, category, tenant_id, room,
-                    timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ${SQL_NOW})`,
-                [
-                    sessionId,
-                    trinity.user_id,
-                    trinity.case_id,
-                    'EDITED_LAB_VALUE',
-                    'lab',
-                    String(labId),
-                    `Lab ${labId}`,
-                    'INSTRUCTOR_PANEL',
-                    `value=${current_value}`,
-                    JSON.stringify({ current_value, instructor_id: req.user.id }),
-                    'IMPORTANT',
-                    'CLINICAL',
-                    tenantId(req),
-                ],
-                (insertErr) => {
-                    if (insertErr) routesOrdersLog.warn('lab edit learning_events failed', { error: insertErr.message });
-                }
-            );
+            // Instructor lab-value edits happen from the instructor panel, not
+            // a learner room — room stays NULL. The row is attributed to the
+            // session owner; the editing instructor rides in context.
+            recordServerEvent(req, {
+                session_id: sessionId,
+                user_id: trinity.user_id,
+                verb: 'EDITED_LAB_VALUE',
+                object_type: 'lab',
+                object_id: String(labId),
+                object_name: `Lab ${labId}`,
+                component: 'INSTRUCTOR_PANEL',
+                result: `value=${current_value}`,
+                context: { current_value, instructor_id: req.user.id, actor: 'educator' },
+            }, { tenantId: tenantId(req), source: 'server:orders' }).catch((err) => {
+                routesOrdersLog.warn('lab edit learning_events failed', { error: err.message });
+            });
         } else {
             routesOrdersLog.warn('lab edit: session trinity not resolvable', { sessionId, labId });
         }
@@ -1658,30 +1629,23 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
         `;
 
         const finalize = () => {
-            // Canonical activity record — one xAPI row per ordered study.
+            // Canonical activity record — one xAPI row per ordered study,
+            // through the one write path (severity/category derived).
             if (loggableOrders.length > 0) {
-                const logSql = `
-                    INSERT INTO learning_events (
-                        session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                        component, result, context, room,
-                        timestamp
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
-                `;
                 loggableOrders.forEach(o => {
-                    dbAdapter.run(logSql, [
-                        sessionId,
-                        session.user_id,
-                        session.case_id,
-                        'ORDERED_IMAGING',
-                        'radiology_order',
-                        String(o.orderId),
-                        o.testName,
-                        'OrdersDrawer',
-                        o.modality ? `Modality: ${o.modality}` : null,
-                        JSON.stringify({ modality: o.modality || null, order_id: o.orderId }),
-                        orderRoom,
-                    ], (logErr) => {
-                        if (logErr) (req.log || routesOrdersLog).warn('radiology order learning_events failed', { error: logErr.message });
+                    recordServerEvent(req, {
+                        session_id: sessionId,
+                        user_id: session.user_id,
+                        verb: 'ORDERED_IMAGING',
+                        object_type: 'radiology_order',
+                        object_id: String(o.orderId),
+                        object_name: o.testName,
+                        component: 'OrdersDrawer',
+                        result: o.modality ? `Modality: ${o.modality}` : null,
+                        context: { modality: o.modality || null, order_id: o.orderId },
+                        room: orderRoom,
+                    }, { tenantId: tenantId(req), source: 'server:orders' }).catch((logErr) => {
+                        (req.log || routesOrdersLog).warn('radiology order learning_events failed', { error: logErr.message });
                     });
                 });
             }

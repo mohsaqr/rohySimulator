@@ -157,7 +157,10 @@ describe('learning-event ingest hardening', () => {
             session_id: victimSessionId, verb: 'ORDERED_MEDICATION', object_type: 'medication',
         });
         const row = (await rowsFor(victimSessionId)).at(-1);
-        // ORDERED_MEDICATION is CRITICAL/CLINICAL in the shared verb registry.
+        // ORDERED_MEDICATION is a historical alias of ORDERED_TREATMENT; the
+        // registry keeps a drug order CRITICAL by object type (medication).
+        // The stored verb is the canonical one — a rename never costs a row.
+        expect(row.verb).toBe('ORDERED_TREATMENT');
         expect(row.severity).toBe('CRITICAL');
         expect(row.category).toBe('CLINICAL');
     });

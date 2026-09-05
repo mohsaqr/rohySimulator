@@ -33,6 +33,7 @@ const LOCKOUT_MINUTES = 15;
 
 import { logger } from '../logger.js';
 import { SQL_NOW, sqlNowPlus } from '../shared/time.js';
+import { recordServerEvent } from '../lib/learningEventIngest.js';
 import {
     emailDomainAllowed,
     enrollUserInCohort,
@@ -456,11 +457,10 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [null, username, 'failed_login', ipAddress, userAgent, 1]
             );
-            dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
-                 VALUES (NULL, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, 1, NULL, ${SQL_NOW})`,
-                [username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'unknown_user' })]
-            );
+            // No learning event for an UNKNOWN username: there is no learner
+            // to attribute it to and no honest tenant to file it under (the
+            // old row hard-coded tenant 1). login_logs and the audit chain
+            // keep the attempt.
             return res.status(401).json({ error: 'Invalid username or password' });
         }
 
@@ -507,15 +507,19 @@ router.post('/auth/login', authLimiter, (req, res) => {
             if (!match) {
                 // Log + bump fail counter; lock at threshold.
                 const newAttempts = (user.failed_login_attempts || 0) + 1;
+                // Awaited: the next attempt reads this counter, and a 401 that
+                // races ahead of its own UPDATE lets a sixth wrong password
+                // see four. (Fire-and-forget here was a latent race that the
+                // extra queued write for the learning event made visible.)
                 if (newAttempts >= MAX_FAILED_LOGINS) {
-                    dbAdapter.run(
+                    await dbAdapter.run(
                         `UPDATE users SET failed_login_attempts = ?,
                             locked_until = ${sqlNowPlus("'+' || ? || ' minutes'")}
                          WHERE id = ?`,
                         [newAttempts, LOCKOUT_MINUTES, user.id]
                     );
                 } else {
-                    dbAdapter.run(
+                    await dbAdapter.run(
                         `UPDATE users SET failed_login_attempts = ? WHERE id = ?`,
                         [newAttempts, user.id]
                     );
@@ -524,11 +528,10 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                     [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
                 );
-                dbAdapter.run(
-                    `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
-                     VALUES (?, 'FAILED_LOGIN', 'auth', ?, 'IMPORTANT', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
-                    [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts }), user.tenant_id || 1]
-                );
+                recordServerEvent(req, {
+                    user_id: user.id, verb: 'FAILED_LOGIN', object_type: 'auth', object_name: username,
+                    context: { ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts },
+                }, { tenantId: user.tenant_id || 1, source: 'server:auth' }).catch(() => {});
                 return res.status(401).json({ error: 'Invalid username or password' });
             }
 
@@ -537,11 +540,10 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [user.id, username, 'login', ipAddress, userAgent, user.tenant_id || 1]
             );
-            dbAdapter.run(
-                `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
-                 VALUES (?, 'LOGGED_IN', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
-                [user.id, username, JSON.stringify({ ip: ipAddress, ua: userAgent }), user.tenant_id || 1]
-            );
+            recordServerEvent(req, {
+                user_id: user.id, verb: 'LOGGED_IN', object_type: 'auth', object_name: username,
+                context: { ip: ipAddress, ua: userAgent },
+            }, { tenantId: user.tenant_id || 1, source: 'server:auth' }).catch(() => {});
 
             // Reset both failed_login_attempts and locked_until on success.
             dbAdapter.run(
@@ -756,11 +758,10 @@ router.post('/auth/logout', authenticateToken, async (req, res) => {
     // Dual-write: legacy login_logs + canonical learning_events. Auth
     // events never carry a room (logout fires from the menu, not a room);
     // column included as NULL for parity with the canonical schema.
-    dbAdapter.run(
-        `INSERT INTO learning_events (user_id, verb, object_type, object_name, severity, category, context, tenant_id, room, timestamp)
-         VALUES (?, 'LOGGED_OUT', 'auth', ?, 'INFO', 'SESSION', ?, ?, NULL, ${SQL_NOW})`,
-        [req.user.id, req.user.username, JSON.stringify({ ip: ipAddress, ua: userAgent }), tenantId(req)]
-    );
+    recordServerEvent(req, {
+        user_id: req.user.id, verb: 'LOGGED_OUT', object_type: 'auth', object_name: req.user.username,
+        context: { ip: ipAddress, ua: userAgent },
+    }, { tenantId: tenantId(req), source: 'server:auth' }).catch(() => {});
 
     dbAdapter.run(
         `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,

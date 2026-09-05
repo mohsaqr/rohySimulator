@@ -9,6 +9,34 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.11] — 2026-09-05
+
+### Added
+
+- **One ingest writer.** `server/lib/learningEventIngest.js#ingestEvents` is the
+  only code that inserts into `learning_events`; `recordServerEvent` is the
+  server-side entry the auth, orders and settings writers now use, and
+  `ctx.emit()` in the plugin server slot goes through it too. Rows the pipeline
+  cannot write are **quarantined** in `learning_events_rejected` (migration
+  0056) with their reason instead of dropped; forgeries are stored as a shape
+  summary and audited. `/api/ready` gains `ingest` (`ROHY_REJECTED_EVENTS_ALERT`)
+  and `timestamps` checks; the retention sweep and the system-log table know
+  the new table.
+- **Plugin attribution.** `plugin_id` / `plugin_version` on every plugin row
+  (migration 0055, back-filled from `room`). A `plugin_id` the host does not
+  ship, or a verb that plugin does not declare, strips the attribution and
+  keeps the row.
+- `server/lib/sessionReconcile.js`: per-session reconciliation of
+  `learning_events` against `patient_record_events`.
+
+### Fixed
+
+- Three server-side order writers wrote rows with NULL severity/category, and
+  radiology result reads were labelled as lab reads (`VIEWED_RESULT` is typed
+  by the investigation).
+- Unknown-user failed logins no longer write a learning row under tenant 1.
+- Auth lockout counter updates were not awaited.
+
 ## [3.0.0-beta.10] — 2026-09-05
 
 ### Added

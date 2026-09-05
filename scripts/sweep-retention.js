@@ -51,6 +51,7 @@ if (!Number.isFinite(horizonDays) || horizonDays <= 0) {
 const SWEEP_TABLES = [
     { table: 'event_log',        ts: 'timestamp' },
     { table: 'learning_events',  ts: 'timestamp' },
+    { table: 'learning_events_rejected', ts: 'received_at' },
     { table: 'interactions',     ts: 'timestamp' },
     { table: 'alarm_events',     ts: 'triggered_at' },
     { table: 'llm_request_log',  ts: 'request_timestamp' },

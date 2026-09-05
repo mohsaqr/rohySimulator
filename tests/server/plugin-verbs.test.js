@@ -17,6 +17,10 @@ const ROUTES = readFileSync(
     path.join(import.meta.dirname, '..', '..', 'server', 'routes', 'analytics-routes.js'),
     'utf8',
 );
+const INGEST = readFileSync(
+    path.join(import.meta.dirname, '..', '..', 'server', 'lib', 'learningEventIngest.js'),
+    'utf8',
+);
 
 describe('learning verb whitelist', () => {
     it('accepts every verb a registered plugin declares', () => {
@@ -38,13 +42,17 @@ describe('both ingest paths validate', () => {
     // Source-level, in the same spirit as src/storage/registry.test.js: the
     // property being locked is "neither handler stopped checking", which is
     // invisible to a request-level test that only ever sends valid verbs.
-    it('the single-event and batch handlers both check LEARNING_VERBS', () => {
-        const checks = ROUTES.match(/LEARNING_VERBS\.includes\(/g) ?? [];
-        expect(checks.length).toBeGreaterThanOrEqual(2);
+    // Both handlers now delegate to ONE core (server/lib/learningEventIngest.js);
+    // the lock is that both still go through it, and that it still checks.
+    it('the single-event and batch handlers both go through ingestEvents()', () => {
+        const calls = ROUTES.match(/await ingestEvents\(\{/g) ?? [];
+        expect(calls.length).toBeGreaterThanOrEqual(2);
+        expect(ROUTES).not.toContain('INSERT INTO learning_events (');
     });
 
-    it('the batch handler reports an unknown verb as its own drop reason', () => {
-        expect(ROUTES).toContain('droppedReasons.unknown_verb++');
-        expect(ROUTES).toContain('unknown_verb: 0');
+    it('the core checks LEARNING_VERBS and reports an unknown verb as its own reason', () => {
+        expect(INGEST).toContain('LEARNING_VERBS.includes(verb)');
+        expect(INGEST).toContain("'unknown_verb'");
+        expect(INGEST).toContain('INSERT INTO learning_events_rejected');
     });
 });

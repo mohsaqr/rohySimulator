@@ -61,8 +61,15 @@ function adapterGet(sql) {
     });
 }
 
+// Above this many quarantined learning events in 24 h, readiness reports the
+// ingest check as failing: a client (or a whole subsystem) is emitting rows
+// the registry does not accept, which used to be invisible.
+const REJECTED_ALERT_PER_DAY = Number(process.env.ROHY_REJECTED_EVENTS_ALERT || 1000);
+// The RPS-1 §17 contract shape as a sqlite GLOB (the same one migration 0050 used).
+const ISO_Z_GLOB = '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z';
+
 router.get('/ready', async (req, res) => {
-    const checks = { db: 'unknown', migrations: 'unknown' };
+    const checks = { db: 'unknown', migrations: 'unknown', ingest: 'unknown', timestamps: 'unknown' };
     let healthy = true;
 
     const probes = Promise.all([
@@ -76,6 +83,27 @@ router.get('/ready', async (req, res) => {
                 ? { key: 'migrations', value: 'none_applied', ok: false }
                 : { key: 'migrations', value: `at ${row.latest} (${row.applied} applied)`, ok: true })
             .catch((err) => ({ key: 'migrations', value: `error: ${err.message}`, ok: false })),
+        // Bounded and indexed: (tenant_id, received_at) covers the scan.
+        adapterGet(`SELECT COUNT(*) AS n FROM learning_events_rejected
+                     WHERE received_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day')`)
+            .then((row) => {
+                const n = row?.n ?? 0;
+                return { key: 'ingest', value: `${n} rejected/24h`, ok: n <= REJECTED_ALERT_PER_DAY };
+            })
+            .catch((err) => ({ key: 'ingest', value: `error: ${err.message}`, ok: false })),
+        // A restored pre-0050 backup, or a writer that fell through to a
+        // column DEFAULT, puts legacy-shaped instants back into a column that
+        // is string-sorted. Bounded: learning_events.timestamp only, indexed.
+        // `scripts/verify-timestamps.js` covers every column and fixes nothing;
+        // readiness reports rather than blocks, so a cosmetic defect in a
+        // restored backup is a warning, not an outage.
+        adapterGet(`SELECT COUNT(*) AS n FROM learning_events
+                     WHERE timestamp IS NOT NULL AND timestamp NOT GLOB ?`, [ISO_Z_GLOB])
+            .then((row) => {
+                const n = row?.n ?? 0;
+                return { key: 'timestamps', value: n === 0 ? 'ok' : `${n} legacy-shaped`, ok: true };
+            })
+            .catch((err) => ({ key: 'timestamps', value: `error: ${err.message}`, ok: false })),
     ]);
 
     let timeoutId;
@@ -95,6 +123,8 @@ router.get('/ready', async (req, res) => {
     } catch (err) {
         checks.db = checks.db === 'unknown' ? `error: ${err.message}` : checks.db;
         checks.migrations = checks.migrations === 'unknown' ? `error: ${err.message}` : checks.migrations;
+        checks.ingest = checks.ingest === 'unknown' ? `error: ${err.message}` : checks.ingest;
+        checks.timestamps = checks.timestamps === 'unknown' ? `error: ${err.message}` : checks.timestamps;
         healthy = false;
     } finally {
         clearTimeout(timeoutId);
