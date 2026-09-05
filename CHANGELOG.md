@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.17] — 2026-09-05
+
+### Fixed
+
+- The audit row for a rejected forgery (`learning_event_rejected`) is now
+  written before the batch response is sent; it was fire-and-forget, and under
+  load the audit chain's retry landed it after a reader had already looked.
+
 ## [3.0.0-beta.16] — 2026-09-05
 
 ### Changed
