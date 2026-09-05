@@ -160,6 +160,15 @@ export function readStamp(entry) {
     try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
 }
 
+function gitHead(dir) {
+    try { return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return null; }
+}
+function gitCountBehind(dir, commit) {
+    try {
+        return Number(execFileSync('git', ['-C', dir, 'rev-list', '--count', `${commit}..HEAD`], { encoding: 'utf8' }).trim());
+    } catch { return null; }
+}
+
 /**
  * Verify one vendored copy against its stamp.
  *
@@ -184,11 +193,24 @@ export function verify(entry) {
         };
     }
     // Staleness needs upstream, which CI does not have. Reported, never failed.
+    // Two kinds: the vendored SUBTREE's content has moved (the copy is behind),
+    // or only the upstream COMMIT has (the copy is current but the stamp's
+    // provenance claim — "this is cardoyon 0.2.1 @ 8925b7f" — is no longer
+    // what upstream HEAD says). The second used to be invisible.
     let stale = null;
-    const src = join(upstreamOf(entry), entry.from);
+    const upstreamDir = upstreamOf(entry);
+    const src = join(upstreamDir, entry.from);
     if (existsSync(src)) {
         const upstream = hashTree(src, entry.hostOwned);
         if (upstream.sha256 !== stamp.sha256) stale = 'upstream has moved since this was vendored';
+        else {
+            const head = gitHead(upstreamDir);
+            if (head && stamp.commit && !head.startsWith(stamp.commit) && !stamp.commit.startsWith(head)) {
+                const behind = gitCountBehind(upstreamDir, stamp.commit);
+                stale = `stamp names ${stamp.commit.slice(0, 8)} but upstream HEAD is ${head.slice(0, 8)}`
+                    + (behind != null ? ` (${behind} commit(s) behind; vendored subtree unchanged)` : '');
+            }
+        }
     }
     return { id: entry.id, ok: true, reason: 'matches its stamp', stamp, stale };
 }

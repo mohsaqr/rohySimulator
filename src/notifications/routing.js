@@ -1,4 +1,4 @@
-import { SOURCES, SEVERITY, SURFACES, severityRank } from './types';
+import { SOURCES, SEVERITY, SURFACES, severityRank, normalizeSource } from './types';
 import { DEFAULT_ROUTING } from './defaults';
 
 // Route a notification through the user's prefs + transient state (snooze, ack)
@@ -32,7 +32,8 @@ export function routeNotification(notification, prefs, transient) {
     // Computed up front so the blanket mutes below can still return the
     // persistence surface after stripping every user-facing one.
     const explicit = notification.surfaces;
-    const fromMatrix = DEFAULT_ROUTING[`${source}/${severity}`] || [];
+    const matrixSource = normalizeSource(source);
+    const fromMatrix = DEFAULT_ROUTING[`${matrixSource}/${severity}`] || [];
     let surfaces = explicit && explicit.length > 0 ? [...explicit] : [...fromMatrix];
     const persistedOnly = surfaces.includes(SURFACES.BACKEND) ? [SURFACES.BACKEND] : [];
 
@@ -40,15 +41,19 @@ export function routeNotification(notification, prefs, transient) {
     // severity — if the clinician acks a critical alarm, they have seen it
     // and the producer will re-fire only when the vital recovers and breaches
     // again (resolve() is called by useAlarms when the value normalises).
+    // "Stop shouting at me" is not "stop recording": an acked alarm that
+    // re-fires five minutes later is a clinical fact the record must hold.
+    // Persistence survives ack and snooze exactly as it survives DND, the
+    // threshold and the source mutes below.
     if (transient.acked.has(key)) {
-        return [];
+        return persistedOnly;
     }
 
     // Snoozed: user-initiated suppression with explicit expiry. Same logic
     // as ack — explicit + bounded, so even critical clinical respects it.
     const snoozeUntil = transient.snoozed.get(key);
     if (snoozeUntil && Date.now() < snoozeUntil) {
-        return [];
+        return persistedOnly;
     }
 
     // Blanket rules below — clinical critical bypasses these so a user who
@@ -68,7 +73,7 @@ export function routeNotification(notification, prefs, transient) {
     }
 
     // Source mute.
-    if (prefs.mutedSources.includes(source) && !isCriticalClinical) {
+    if (prefs.mutedSources.includes(matrixSource) && !isCriticalClinical) {
         return persistedOnly;
     }
 

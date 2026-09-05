@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, X } from 'lucide-react';
 import { PluginAuthor } from '../../plugins/index.js';
-import EventLogger from '../../services/eventLogger';
+import EventLogger, { VERBS } from '../../services/eventLogger';
 
 /**
  * RPS-1 §11a.3(2) — "a surface, not a panel".
@@ -40,6 +40,32 @@ export function PluginAuthorSurface({ pluginId, caseData, user, onCommit, onClos
     const dirty = useRef(false);
     const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
+    // Document SHAPE for the two host authoring verbs — bytes and top-level
+    // keys, never the content (the case save already stores the document).
+    const shapeOf = (doc) => {
+        let bytes = 0;
+        try { bytes = JSON.stringify(doc ?? null).length; } catch { bytes = -1; }
+        return { bytes, keys: doc && typeof doc === 'object' ? Object.keys(doc).length : 0, surface: 'author' };
+    };
+    const logAuthoring = (verb) => EventLogger.log(verb, 'plugin_document', {
+        objectId: String(caseData?.id ?? 'new'),
+        objectName: `${pluginId} document`,
+        component: 'PluginAuthor',
+        parentComponent: 'PluginAuthor',
+        room: pluginId,
+        pluginId,
+        context: shapeOf(draft),
+    });
+    // One EDITED row per burst of edits (2 s quiet), not one per keystroke.
+    const editTimer = useRef(null);
+    useEffect(() => {
+        if (!dirty.current) return undefined;
+        clearTimeout(editTimer.current);
+        editTimer.current = setTimeout(() => logAuthoring(VERBS.EDITED_PLUGIN_DOCUMENT), 2000);
+        return () => clearTimeout(editTimer.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draft]);
+
     const session = useMemo(() => ({
         id: null,
         caseId: caseData?.id ?? null,
@@ -60,7 +86,7 @@ export function PluginAuthorSurface({ pluginId, caseData, user, onCommit, onClos
             </button>
             <button
                 type="button"
-                onClick={() => onCommit(draft)}
+                onClick={() => { clearTimeout(editTimer.current); logAuthoring(VERBS.SAVED_PLUGIN_DOCUMENT); onCommit(draft); }}
                 className="px-3 py-2 rounded bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold flex items-center gap-2"
             >
                 <Check className="w-4 h-4" /> {t('plugins_done')}

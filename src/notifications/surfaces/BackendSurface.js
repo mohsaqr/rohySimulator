@@ -3,6 +3,7 @@ import { useNotifications } from '../useNotifications';
 import { SURFACES, SOURCES } from '../types';
 import { apiPost, apiPut } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
+import { VERBS } from '../../../server/shared/learningVerbs.js';
 
 // Backend surface batches notifications and POSTs them. Two endpoints today:
 //  - clinical alarms → /api/alarms/log (one row per fire transition)
@@ -242,9 +243,10 @@ const NOTIFY_TO_XAPI_SEVERITY = {
 // on the server. Producers that pass `data.verb` always win (EventLogger sets
 // these correctly already); this default only fires for un-typed notifications.
 function defaultVerbFor(n) {
-    if (n.severity === 'critical' || n.severity === 'error') return 'ERROR_OCCURRED';
-    if (n.severity === 'warning') return 'VIEWED'; // generic non-clinical surface event
-    return 'VIEWED';
+    if (n.severity === 'critical' || n.severity === 'error') return VERBS.RAISED_ERROR;
+    // A toast the learner was shown is a notification, not a page view —
+    // labelling it VIEWED made every warning look like navigation.
+    return VERBS.NOTIFIED;
 }
 
 
@@ -281,7 +283,8 @@ function sendTelemetry(events, immediate) {
                 category: n.data?.category || 'NAVIGATION',
                 object_id: n.data?.objectId || null,
                 object_name: n.data?.objectName || n.title || null,
-                component: n.data?.component || null,
+                // A plugin notification keeps its `plugin:<id>` as attribution.
+                component: n.data?.component || (typeof n.source === 'string' && n.source.startsWith('plugin:') ? n.source : null),
                 parent_component: n.data?.parentComponent || null,
                 result: n.data?.result || n.message || null,
                 duration_ms: n.data?.durationMs || null,
@@ -292,6 +295,10 @@ function sendTelemetry(events, immediate) {
                 // 0021). Null when no room is active (settings,
                 // persona editor, pre-login).
                 room: n.data?.room || null,
+                // Plugin attribution (migration 0055): only the narrowed
+                // plugin logger sets these.
+                plugin_id: n.data?.pluginId || null,
+                plugin_version: n.data?.pluginVersion || null,
                 message_content: n.data?.messageContent || null,
                 message_role: n.data?.messageRole || null,
                 // Wide vitals snapshot — null when no monitor has reported
@@ -309,8 +316,10 @@ function sendTelemetry(events, immediate) {
     };
 
     if (immediate && navigator.sendBeacon) {
-        // sendBeacon doesn't carry custom headers reliably; the route
-        // accepts beacon traffic without auth specifically for unload paths.
+        // sendBeacon carries no custom headers, so the bearer token cannot
+        // ride along — the same-origin HttpOnly auth COOKIE does, which is
+        // why /learning-events/batch (which is authenticated) still accepts
+        // an unload flush.
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         const queued = navigator.sendBeacon(apiUrl('/learning-events/batch'), blob);
         if (queued) return;

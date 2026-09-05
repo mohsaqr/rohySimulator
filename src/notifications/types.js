@@ -5,7 +5,18 @@ export const SOURCES = {
     SYSTEM: 'system',         // API errors, TTS errors, validation failures
     USER: 'user',             // success/info confirmations from user actions
     TELEMETRY: 'telemetry',   // xAPI events, analytics
+    PLUGIN: 'plugin',         // a plugin's `notify` capability: `plugin:<id>` routes as this
 };
+
+/**
+ * The routing-matrix source for a notification's `source`. A plugin's
+ * notifications carry `plugin:<id>` (the id is attribution, kept on the
+ * notification); the matrix and the source mutes see them as `plugin`.
+ * Before this every `plugin:<id>` had no matrix row and vanished.
+ */
+export const normalizeSource = (source) => (
+    typeof source === 'string' && source.startsWith('plugin:') ? SOURCES.PLUGIN : source
+);
 
 // Severity ladder (low → high). minSeverity pref filters below this threshold.
 export const SEVERITIES = ['debug', 'info', 'success', 'warning', 'error', 'critical'];

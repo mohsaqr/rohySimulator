@@ -18,6 +18,11 @@ export const DEFAULT_ROUTING = {
     [`${SOURCES.SYSTEM}/${SEVERITY.INFO}`]: [SURFACES.TOAST],
     [`${SOURCES.SYSTEM}/${SEVERITY.DEBUG}`]: [SURFACES.CONSOLE],
 
+    [`${SOURCES.SYSTEM}/${SEVERITY.SUCCESS}`]: [SURFACES.TOAST],
+
+    // `user` has NO backend row on purpose: a "Case saved" toast is the UI's
+    // echo of an act EventLogger already recorded; persisting it would double
+    // every confirmed action.
     [`${SOURCES.USER}/${SEVERITY.SUCCESS}`]: [SURFACES.TOAST],
     [`${SOURCES.USER}/${SEVERITY.INFO}`]: [SURFACES.TOAST],
     [`${SOURCES.USER}/${SEVERITY.WARNING}`]: [SURFACES.TOAST],
@@ -27,7 +32,19 @@ export const DEFAULT_ROUTING = {
     [`${SOURCES.TELEMETRY}/${SEVERITY.ERROR}`]: [SURFACES.BACKEND, SURFACES.CONSOLE],
     [`${SOURCES.TELEMETRY}/${SEVERITY.WARNING}`]: [SURFACES.BACKEND],
     [`${SOURCES.TELEMETRY}/${SEVERITY.INFO}`]: [SURFACES.BACKEND],
+    // Had no row: a producer passing SEVERITY.SUCCESS on telemetry was dropped.
+    [`${SOURCES.TELEMETRY}/${SEVERITY.SUCCESS}`]: [SURFACES.BACKEND],
     [`${SOURCES.TELEMETRY}/${SEVERITY.DEBUG}`]: [SURFACES.BACKEND],
+
+    // A plugin's `notify` capability (source `plugin:<id>`, routed as
+    // `plugin`). Every level persists — a plugin's notification is a learner-
+    // visible event in that plugin's room.
+    [`${SOURCES.PLUGIN}/${SEVERITY.DEBUG}`]: [SURFACES.BACKEND],
+    [`${SOURCES.PLUGIN}/${SEVERITY.INFO}`]: [SURFACES.TOAST, SURFACES.BACKEND],
+    [`${SOURCES.PLUGIN}/${SEVERITY.SUCCESS}`]: [SURFACES.TOAST, SURFACES.BACKEND],
+    [`${SOURCES.PLUGIN}/${SEVERITY.WARNING}`]: [SURFACES.TOAST, SURFACES.HISTORY, SURFACES.BACKEND],
+    [`${SOURCES.PLUGIN}/${SEVERITY.ERROR}`]: [SURFACES.TOAST, SURFACES.HISTORY, SURFACES.BACKEND],
+    [`${SOURCES.PLUGIN}/${SEVERITY.CRITICAL}`]: [SURFACES.TOAST, SURFACES.BANNER, SURFACES.HISTORY, SURFACES.BACKEND],
 };
 
 // Default toast/banner TTL in ms by severity. 0 = sticky until dismissed/resolved.

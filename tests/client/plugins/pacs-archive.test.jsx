@@ -64,7 +64,7 @@ const REMOTE_BASELINE_CASE = {
 };
 
 function ctxFor(data) {
-    return { pluginId: 'pacs', data, eventLogger: { log: vi.fn() }, t: (k, f) => f ?? k };
+    return { pluginId: 'pacs', data, log: vi.fn(), t: (k, f) => f ?? k };
 }
 
 function stubCatalog(archive) {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createPluginContext, frozenCopy } from './context.js';
 
 const manifest = (capabilities) => ({ id: 'demo', room: { key: 'demo' }, vocabulary: { verbs: {} }, capabilities });
@@ -41,5 +41,37 @@ describe('plugin context: the case, conversation and drawer grants', () => {
         const copy = frozenCopy({ a: [{ b: 1 }] });
         expect(Object.isFrozen(copy.a)).toBe(true);
         expect(Object.isFrozen(copy.a[0])).toBe(true);
+    });
+});
+
+// RPS-1 1.6: the narrowed logger replaces the raw singleton.
+describe('plugin context: ctx.log', () => {
+    const sink = () => ({ log: vi.fn() });
+
+    it('hands a plugin a narrowed log() that stamps its id, and never the raw singleton', () => {
+        const eventLogger = sink();
+        const m = { ...manifest([]), vocabulary: { verbs: { DID: { severity: 'INFO', category: 'CLINICAL' } }, objectTypes: { T: 'demo_t' } } };
+        const ctx = createPluginContext({ manifest: m, session, caseConfig: {}, eventLogger, t: (k) => k, navigate: () => {} });
+        expect(typeof ctx.log).toBe('function');
+        expect(ctx.surface).toBe('room');
+        ctx.log('DID', 'demo_t', { objectId: '1' });
+        const [verb, objectType, options] = eventLogger.log.mock.calls[0];
+        expect([verb, objectType]).toEqual(['DID', 'demo_t']);
+        expect(options).toMatchObject({ room: 'demo', pluginId: 'demo', sessionId: 's1' });
+        // The deprecated shim forwards log and refuses the mutators.
+        ctx.eventLogger.log('DID', 'demo_t');
+        expect(eventLogger.log).toHaveBeenCalledTimes(2);
+        expect(() => ctx.eventLogger.setContext({ room: 'chat' })).toThrow();
+        expect(ctx.eventLogger.currentVitals).toBeUndefined();
+    });
+
+    it('grants vitals as a frozen getter only when requested and provided', () => {
+        const live = { hr: 88, spo2: 96 };
+        const yes = createPluginContext({ manifest: manifest(['vitals']), session, caseConfig: {}, eventLogger: sink(), t: (k) => k, navigate: () => {}, grants: { vitals: () => live } });
+        const snap = yes.capabilities.vitals();
+        expect(snap).toEqual(live);
+        expect(Object.isFrozen(snap)).toBe(true);
+        const no = createPluginContext({ manifest: manifest([]), session, caseConfig: {}, eventLogger: sink(), t: (k) => k, navigate: () => {}, grants: { vitals: () => live } });
+        expect(no.capabilities.vitals).toBeUndefined();
     });
 });

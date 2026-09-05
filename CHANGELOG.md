@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.12] — 2026-09-05
+
+### Added
+
+- **Plugin logging contract (RPS-1 1.6).** `ctx.log` is a narrowed logger built
+  per mount by `src/plugins/logger.js`: three positionals (the one-object form
+  is accepted for one release, marked and warned), undeclared verbs redirected
+  to `UNDECLARED_VERB` and never dropped, prose keys stripped, `context`
+  capped at 4 KB, host-stamped room, plugin id and version, parent component
+  and `context.surface`. `ctx.eventLogger` becomes a deprecation proxy that
+  forwards `log` and throws on global-state mutation; removed in 1.7.
+  `ctx.surface` and a `vitals` capability join the context.
+- The runtime drift guard deep-compares the whole canonical manifest and names
+  the first differing path; `vendor:check` reports commits behind upstream.
+- Plugin rooms and the plugin editor log through `ctx.log`: render errors as
+  `RAISED_ERROR`, and `OPENED_PLUGIN_EDITOR` / `EDITED_PLUGIN_DOCUMENT`
+  (debounced, shape only) / `SAVED_PLUGIN_DOCUMENT` with `surface = 'author'`.
+- Notification routing: a `plugin` source with rows of its own, `telemetry` and
+  `system` success rows, and acknowledged or snoozed notifications still
+  persisted to the backend ("stop shouting" is not "stop recording").
+
 ## [3.0.0-beta.11] — 2026-09-05
 
 ### Added

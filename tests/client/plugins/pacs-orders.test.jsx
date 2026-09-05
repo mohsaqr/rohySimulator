@@ -110,7 +110,7 @@ const ctxFor = (over = {}) => ({
     archive: ARCHIVE,
     studyCatalogue: CATALOGUE,
     orders: { imaging: [], loaded: true },
-    eventLogger: { log: vi.fn() },
+    log: vi.fn(),
     t: (key, fallback) => fallback ?? key,
     session: { examMode: false },
     ...over,

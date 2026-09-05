@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registry } from './registry.js';
 import { createPluginContext } from './context.js';
@@ -45,10 +45,26 @@ export function PluginAuthor({
     const ctx = useMemo(() => (plugin
         ? createPluginContext({
             manifest: plugin.manifest, session, caseConfig, eventLogger, notify, t, navigate, grants,
+            // The author surface: rows stamp room = the plugin id (a room is a
+            // filter enum, and `<id>:author` would be a room nobody declared)
+            // with context.surface = 'author' and parent_component = PluginAuthor.
+            surface: 'author',
         })
         : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plugin, session?.id, session?.caseId, caseConfig]);
+
+    // Opening an editor is an educator act worth a row of its own — a
+    // host-level verb, because authoring is a host slot with one lifecycle
+    // for every plugin (RPS-1 §11).
+    useEffect(() => {
+        if (!ctx || !plugin?.manifest?.authoring) return;
+        ctx.log('OPENED_PLUGIN_EDITOR', 'plugin_document', {
+            objectId: String(session?.caseId ?? 'new'),
+            objectName: `${plugin.manifest.id} editor`,
+            component: 'PluginAuthor',
+        });
+    }, [ctx, plugin, session?.caseId]);
 
     const draft = useMemo(() => ({
         // Falls back to the plugin's slice of the case config, so opening the
