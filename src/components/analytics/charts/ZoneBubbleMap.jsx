@@ -25,12 +25,15 @@ const LABEL_MUTED = '#6b7280';
  * @param {{student:string,color:string,zones:Record<string,number>}[]}
  *   props.studentZoneWeights one bubble per student per zone with share > 0
  * @param {number} [props.width=280] panel width; height = width × 10/16
+ * @param {{src:string,label?:string}|null} [props.screen] a picture of the
+ *   screen the gaze fell on, drawn behind the grid
  */
 export default function ZoneBubbleMap({
     title,
     zoneWeights = {},
     studentZoneWeights = [],
     width = 280,
+    screen = null,
 }) {
     const height = (width * 10) / 16;
     const cellW = width / 3;
@@ -54,6 +57,22 @@ export default function ZoneBubbleMap({
                 role="img"
                 aria-label={title ?? 'Gaze zone map'}
             >
+                {screen?.src && (
+                    <g data-testid="zone-screen">
+                        <image
+                            href={screen.src}
+                            x={0}
+                            y={0}
+                            width={width}
+                            height={height}
+                            preserveAspectRatio="xMidYMin slice"
+                            style={{ filter: 'grayscale(1) contrast(0.9)' }}
+                            opacity={0.55}
+                            aria-hidden="true"
+                        />
+                        <rect x={0} y={0} width={width} height={height} fill="#ffffff" fillOpacity={0.38} />
+                    </g>
+                )}
                 {ROWS.map((rk, ri) => COLS.map((ck, ci) => {
                     const zone = `${rk}_${ck}`;
                     const share = zoneWeights[zone] ?? 0;
