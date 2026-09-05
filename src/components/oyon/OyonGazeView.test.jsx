@@ -49,21 +49,33 @@ describe('OyonGazeView', () => {
         expect(screen.queryByText('Gaze log')).not.toBeInTheDocument();
     });
 
-    it('renders fixed simulator-room ZoneBubbleMaps and omits settings/unassigned', () => {
+    it('renders every navigator room as a ZoneBubbleMap and omits unassigned', () => {
         render(<OyonGazeView records={RECORDS} loading={false} />);
         expect(screen.getByText('Gaze maps by screen')).toBeInTheDocument();
         const maps = screen.getAllByTestId('zone-bubble-map');
-        expect(maps).toHaveLength(5); // patient main, examination, lab, radiology, discussant
-
-        // Friendly labels in simulator-room order; missing rooms render blank
-        // instead of being replaced by Settings/Unassigned.
+        // Friendly labels in navigator order; rooms without windows render
+        // blank over their picture instead of disappearing.
+        expect(maps.map((m) => m.textContent.split(' · ')[0])).toEqual([
+            'Patient (main)', 'Bedside', 'Examination', 'Lab', 'Radiology', '12-lead ECG', 'Pathology', 'PACS', 'Discussant',
+        ]);
         expect(maps[0]).toHaveTextContent('Patient (main) · 2 windows');
-        expect(maps[1]).toHaveTextContent('Examination · 0 windows');
-        expect(maps[2]).toHaveTextContent('Lab · 0 windows');
-        expect(maps[3]).toHaveTextContent('Radiology · 0 windows');
-        expect(maps[4]).toHaveTextContent('Discussant · 1 window');
+        expect(maps[6]).toHaveTextContent('Pathology · 0 windows');
+        expect(maps[8]).toHaveTextContent('Discussant · 1 window');
         expect(maps.some((m) => /Settings ·/.test(m.textContent))).toBe(false);
         expect(maps.some((m) => /Unassigned ·/.test(m.textContent))).toBe(false);
+    });
+
+    it('draws every panel over a picture of that screen, and adds a panel for an app surface with windows', () => {
+        const withSettings = [gazeRec({ window_end: '2026-07-02T08:00:50.000Z', room: 'settings', username: 'bob' }), ...RECORDS];
+        const { container } = render(<OyonGazeView records={withSettings} loading={false} />);
+        const maps = screen.getAllByTestId('zone-bubble-map');
+        expect(maps.map((m) => m.textContent.split(' · ')[0])).toEqual([
+            'Patient (main)', 'Bedside', 'Examination', 'Lab', 'Radiology', '12-lead ECG', 'Pathology', 'PACS', 'Discussant', 'Settings',
+        ]);
+        const hrefs = maps.map((m) => m.querySelector('[data-testid="zone-screen"] image')?.getAttribute('href'));
+        expect(hrefs).toEqual(['chat', 'room3d', 'examination', 'lab', 'radiology', 'ecg', 'pathology', 'pacs', 'consultant', 'settings']
+            .map((r) => `/gaze-screens/${r}.webp`));
+        expect(container.querySelectorAll('[data-testid="zone-screen"]')).toHaveLength(10);
     });
 
     it('draws per-student bubbles in simulator-room panels only', () => {

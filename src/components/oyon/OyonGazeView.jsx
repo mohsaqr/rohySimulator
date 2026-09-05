@@ -6,6 +6,7 @@ import { CARM_PALETTE } from '../analytics/charts/chartMath';
 import { recordsToRoomSequences, recordsToGazeTargetSequences } from '../analytics/tna/windowSequences';
 import { recordsToWindows } from './serverWindows';
 import { gazeAnalytics, perRoomZoneStudentWeights } from './gazeAnalytics';
+import { ALWAYS_SHOWN_ROOMS, gazeScreenFor, orderGazeRooms } from './gazeScreens';
 
 /*
  * Gaze analytics over the filtered server records — the Rohy port of
@@ -25,23 +26,15 @@ const ZONE_ROWS = [
    ['bottom_left', 'bottom_center', 'bottom_right'],
 ];
 
-// Friendly names for the simulator-room stamps on the per-screen gaze maps.
-const ROOM_LABELS = {
-   chat: 'Patient (main)',
-   examination: 'Examination',
-   lab: 'Lab',
-   radiology: 'Radiology',
-   consultant: 'Discussant',
-   unassigned: 'Unassigned',
-};
-
-const GAZE_MAP_ROOMS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
 const GAZE_MAP_WIDTH = 340;
 
+// Friendly names for the room stamps on the per-screen gaze maps come from
+// the same table as the pictures behind them (gazeScreens.js).
 function roomLabel(room) {
-   if (ROOM_LABELS[room]) return ROOM_LABELS[room];
+   const screen = gazeScreenFor(room);
+   if (screen) return screen.label;
    const s = String(room ?? '');
-   return s ? s.charAt(0).toUpperCase() + s.slice(1) : ROOM_LABELS.unassigned;
+   return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unassigned';
 }
 
 export default function OyonGazeView({ records, loading }) {
@@ -52,15 +45,20 @@ export default function OyonGazeView({ records, loading }) {
    // "Where they look, per screen" — per-room zone weights + per-student
    // shares (pure helper), with one stable palette colour per student across
    // every room panel.
+   // Every navigator room always gets a panel (blank when nothing was
+   // captured there); app surfaces appear once the selection holds gaze
+   // windows stamped with them. Each panel sits over a picture of its screen.
+   // Stamps without a picture ('unassigned', an unknown key) stay out.
    const roomMaps = useMemo(() => perRoomZoneStudentWeights(windows), [windows]);
    const displayRoomMaps = useMemo(() => {
       const byRoom = new Map(
          roomMaps
-            .filter((r) => GAZE_MAP_ROOMS.includes(r.room))
+            .filter((r) => gazeScreenFor(r.room))
             .map((r) => [r.room, r]),
       );
       if (byRoom.size === 0) return [];
-      return GAZE_MAP_ROOMS.map((room) => byRoom.get(room) ?? ({
+      const rooms = orderGazeRooms([...ALWAYS_SHOWN_ROOMS, ...byRoom.keys()]);
+      return rooms.map((room) => byRoom.get(room) ?? ({
          room,
          windows: 0,
          zoneWeights: {},
@@ -211,12 +209,16 @@ export default function OyonGazeView({ records, loading }) {
          {/* Gaze maps by screen — ZoneBubbleMap small multiples, one per simulator room */}
          {displayRoomMaps.length > 0 && (
             <section className="rounded-lg border border-gray-200 bg-white p-4">
-               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-800">Gaze maps by screen</h3>
+               <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Gaze maps by screen</h3>
+               <p className="mb-3 text-xs text-gray-500">
+                  Each grid sits over a miniature of that screen, so a zone reads as the part of the room it covers.
+               </p>
                <div className="flex flex-wrap gap-x-12 gap-y-6">
                   {displayRoomMaps.map((r) => (
                      <ZoneBubbleMap
                         key={r.room}
                         title={`${roomLabel(r.room)} · ${r.windows} window${r.windows === 1 ? '' : 's'}`}
+                        screen={gazeScreenFor(r.room)}
                         zoneWeights={r.zoneWeights}
                         studentZoneWeights={r.students.map((s) => ({
                            student: s.student,

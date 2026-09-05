@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.23] — 2026-09-05
+
+### Added
+
+- **Gaze maps over the actual screens.** In Analytics → Gaze, each per-screen map draws its 3×3 grid over a toned-down miniature of that room, so a zone reads as the part of the screen it covers. All nine navigator rooms always get a panel; Settings, Analytics and Course panels appear when a session holds gaze windows from them. `src/components/oyon/gazeScreens.js` maps room stamps to pictures; `ZoneBubbleMap` takes a `screen` prop. Pictures live in `public/gaze-screens/`, exported from the website miniatures by `npm run website:gaze-screens` (`website/export-gaze-screens.mjs`).
+
 ## [3.0.0-beta.22] — 2026-09-05
 
 ### Changed

@@ -37,4 +37,18 @@ describe('ZoneBubbleMap', () => {
         expect(container.querySelectorAll('[data-testid^="zone-cell-"]')).toHaveLength(9);
         expect(container.querySelectorAll('[data-testid="zone-bubble"]')).toHaveLength(0);
     });
+
+    it('draws the screen picture behind the grid when one is given, and nothing otherwise', () => {
+        const { container, rerender } = render(
+            <ZoneBubbleMap zoneWeights={ZONE_WEIGHTS} studentZoneWeights={STUDENTS} screen={{ src: '/gaze-screens/chat.webp', label: 'Patient (main)' }} />);
+        const image = container.querySelector('[data-testid="zone-screen"] image');
+        expect(image).not.toBeNull();
+        expect(image.getAttribute('href')).toBe('/gaze-screens/chat.webp');
+        // The picture is the ground: it comes before every zone cell in the SVG.
+        const svg = container.querySelector('svg');
+        expect(svg.firstElementChild.getAttribute('data-testid')).toBe('zone-screen');
+        expect(container.querySelectorAll('[data-testid^="zone-cell-"]')).toHaveLength(9);
+        rerender(<ZoneBubbleMap zoneWeights={ZONE_WEIGHTS} studentZoneWeights={STUDENTS} />);
+        expect(container.querySelector('[data-testid="zone-screen"]')).toBeNull();
+    });
 });
