@@ -50,7 +50,10 @@ describe('buildEventFilter', () => {
             'WHERE tenant_id = ? AND case_id = ? AND user_id = ? AND session_id = ? '
             + 'AND timestamp >= ? AND timestamp <= ?'
         );
-        expect(f.params).toEqual([1, 2, 3, 4, '2026-05-01T00:00:00Z', '2026-05-09T00:00:00Z']);
+        // Bounds are normalised to the stored shape (three decimals, `Z`)
+        // because `timestamp` is compared as a STRING: '…T00:00:00Z' sorts
+        // after '…T00:00:00.000Z', so an un-normalised bound skipped rows.
+        expect(f.params).toEqual([1, 2, 3, 4, '2026-05-01T00:00:00.000Z', '2026-05-09T00:00:00.000Z']);
     });
 
     it('date-only end_date is treated as inclusive of the whole calendar day', () => {

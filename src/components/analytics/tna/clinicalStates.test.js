@@ -12,8 +12,12 @@ import {
 } from './clinicalStates';
 
 describe('clinicalStates resolver', () => {
-    it('lists exactly the ten canonical states', () => {
-        expect(CLINICAL_STATES).toHaveLength(10);
+    it('lists exactly the eleven canonical states', () => {
+        // Ten reasoning-loop states plus `studying` (lessons / didactic
+        // material), added with the facet registry so lessons rows stop
+        // landing in `navigating`.
+        expect(CLINICAL_STATES).toHaveLength(11);
+        expect(CLINICAL_STATES).toContain('studying');
         expect(CLINICAL_STATES).toContain('assessing');
         expect(CLINICAL_STATES).toContain('treating');
         expect(CLINICAL_STATES).toContain('monitoring');
@@ -51,7 +55,7 @@ describe('clinicalStates resolver', () => {
         expect(resolveClinicalState('ORDERED_LAB', 'lab_test', custom)).toBe('reflecting');
     });
 
-    it('every state in DEFAULT_INTERPRETATIONS is one of the canonical 10', () => {
+    it('every state in DEFAULT_INTERPRETATIONS is canonical', () => {
         const canonical = new Set(CLINICAL_STATES);
         for (const state of Object.values(DEFAULT_INTERPRETATIONS)) {
             expect(canonical.has(state)).toBe(true);
@@ -79,6 +83,9 @@ describe('clinicalStates resolver', () => {
     // fix gives those events real object_types; this locks the outcome.
     it('treatment / medication object types resolve to treating', () => {
         expect(resolveClinicalState('ORDERED_TREATMENT', 'treatment')).toBe('treating');
+        expect(resolveClinicalState('ORDERED_TREATMENT', 'medication')).toBe('treating');
+        expect(resolveClinicalState('ADMINISTERED_TREATMENT', 'oxygen_therapy')).toBe('treating');
+        // Historical verb names read as their canonical form.
         expect(resolveClinicalState('ORDERED_MEDICATION', 'medication')).toBe('treating');
         expect(resolveClinicalState('ORDERED_IV_FLUID', 'iv_fluid')).toBe('treating');
         expect(resolveClinicalState('STARTED_OXYGEN', 'oxygen_therapy')).toBe('treating');
@@ -87,6 +94,7 @@ describe('clinicalStates resolver', () => {
     });
 
     it('reading the patient record resolves to assessing', () => {
+        expect(resolveClinicalState('VIEWED_RECORD', 'patient_record')).toBe('assessing');
         expect(resolveClinicalState('VIEWED_HISTORY', 'patient_record')).toBe('assessing');
         expect(resolveClinicalState('VIEWED_MEDICATIONS', 'patient_record')).toBe('assessing');
         expect(resolveClinicalState('VIEWED_RECORDS', 'patient_record')).toBe('assessing');
@@ -94,6 +102,7 @@ describe('clinicalStates resolver', () => {
 
     it('imaging orders + radiology reads resolve to investigating / assessing', () => {
         expect(resolveClinicalState('ORDERED_IMAGING', 'radiology_order')).toBe('investigating');
+        expect(resolveClinicalState('VIEWED_RESULT', 'radiology_result')).toBe('assessing');
         expect(resolveClinicalState('VIEWED_RADIOLOGY_RESULT', 'radiology_result')).toBe('assessing');
     });
 

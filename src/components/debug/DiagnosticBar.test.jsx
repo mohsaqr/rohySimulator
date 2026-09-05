@@ -43,7 +43,7 @@ vi.mock('../../services/voiceService.js', () => ({
 
 // EventLogger is read on a 1s tick — stub it so the bar doesn't try to look up
 // session/case context.
-vi.mock('../../services/eventLogger', () => ({
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: { getStatus: () => ({}) },
 }));
 

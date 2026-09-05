@@ -75,7 +75,7 @@ vi.mock('../utils/personaBlocks', () => ({
     buildPersonaBlocks: vi.fn(() => '\n[PERSONA]'),
 }));
 
-vi.mock('../services/eventLogger', () => ({
+vi.mock('../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: {
         // The debrief engine logs turns via the debrief-specific verbs
         // (object_type=DEBRIEF → reflecting), not the bedside chat ones.

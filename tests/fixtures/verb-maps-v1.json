@@ -1,0 +1,1105 @@
+{
+  "_note": "Snapshot of the hard-coded analytics maps as of v3.0.0-beta.9 (2026-09-05), taken before they became derived from verb facets. Consumed by tests/server/derived-maps-parity.test.js during the derivation-only phase; deleted with that test once the rename phase lands.",
+  "learningVerbs": [
+    "ACKNOWLEDGED_ALARM",
+    "ADJUSTED_VITAL",
+    "ADMINISTERED_MEDICATION",
+    "ALARM_TRIGGERED",
+    "ANNOTATED_SLIDE",
+    "ANSWERED",
+    "API_ERROR",
+    "APPLIED_PRESET",
+    "ATTEMPTED",
+    "CANCELLED_IMAGING",
+    "CANCELLED_LAB",
+    "CANCELLED_MEDICATION",
+    "CHANGED_ECG_LAYOUT",
+    "CHANGED_OBJECTIVE",
+    "CHANGED_SETTING",
+    "CHANGED_WINDOW",
+    "CLICKED",
+    "CLOSED",
+    "CLOSED_EXAM_PANEL",
+    "CLOSED_SLIDE",
+    "CLOSED_STUDY",
+    "COLLAPSED",
+    "COMPLETED_SCENARIO",
+    "COMPLETED_SLIDE_TASK",
+    "CONTRAINDICATED_TREATMENT_ORDERED",
+    "COPIED_MESSAGE",
+    "CORRECT_ANSWER",
+    "COUNTED_FEATURE",
+    "DESELECTED",
+    "DISCONTINUED_TREATMENT",
+    "DRAFTED_REPORT",
+    "DWELLED_REGION",
+    "EDITED_LAB_VALUE",
+    "EDITED_MESSAGE",
+    "ENDED_SESSION",
+    "ERROR_OCCURRED",
+    "EXPANDED",
+    "EXPECTED_TREATMENT_GIVEN",
+    "EXPECTED_TREATMENT_MISSED",
+    "EXPORTED_ANNOTATIONS",
+    "EXPORTED_CASE",
+    "EXPRESSED_EMOTION",
+    "FAILED_TO_LOAD",
+    "FILTERED_LABS",
+    "FOCUSED_ECG_LEAD",
+    "IDLE_TIMEOUT",
+    "INCORRECT_ANSWER",
+    "LAB_RESULT_READY",
+    "LOADED_CASE",
+    "LOST_FOCUS",
+    "MEASURED_DISTANCE",
+    "MEASURED_ECG_AMPLITUDE",
+    "MEASURED_ECG_INTERVAL",
+    "MEASURED_REGION",
+    "MEASURED_SLIDE",
+    "MISSED_ROI",
+    "NAVIGATED",
+    "OPENED",
+    "OPENED_ECG_RECORDING",
+    "OPENED_EXAM_PANEL",
+    "OPENED_PLATE",
+    "OPENED_SLIDE",
+    "OPENED_STUDY",
+    "ORDERED_IMAGING",
+    "ORDERED_IV_FLUID",
+    "ORDERED_LAB",
+    "ORDERED_MEDICATION",
+    "ORDERED_NURSING",
+    "ORDERED_TREATMENT",
+    "PANNED_SLIDE",
+    "PAUSED_SCENARIO",
+    "PERFORMED_INTERVENTION",
+    "PERFORMED_PHYSICAL_EXAM",
+    "REACHED_ROI",
+    "RECEIVED_FEEDBACK",
+    "RECEIVED_MESSAGE",
+    "RECORDED_ECG_NOTE",
+    "REQUESTED_ECG_HINT",
+    "REQUESTED_HINT",
+    "REQUESTED_SECOND_OPINION",
+    "RESET_SCENARIO",
+    "RESET_SETTING",
+    "RESUMED_FOCUS",
+    "RESUMED_SCENARIO",
+    "RESUMED_SESSION",
+    "REVEALED_ECG_EXPLANATION",
+    "REVIEWED_SERIES",
+    "REVISED_DIAGNOSIS",
+    "REVISED_ECG_INTERPRETATION",
+    "SAVED_CASE",
+    "SAVED_ECG_INTERPRETATION",
+    "SAVED_NOTE",
+    "SAVED_REPORT",
+    "SAVED_SETTING",
+    "SCROLLED",
+    "SCROLLED_SERIES",
+    "SEARCHED_LABS",
+    "SELECTED",
+    "SELECTED_SERIES",
+    "SENT_MESSAGE",
+    "SIGNED_REPORT",
+    "SILENCED_ALARM",
+    "STARTED_OXYGEN",
+    "STARTED_SCENARIO",
+    "STARTED_SESSION",
+    "STARTED_SLIDE_TASK",
+    "STOPPED_OXYGEN",
+    "STT_ERROR",
+    "STT_RESULT",
+    "SUBMITTED",
+    "SUBMITTED_DEBRIEF",
+    "SUBMITTED_DIAGNOSIS",
+    "SUBMITTED_ECG_INTERPRETATION",
+    "SUBMITTED_REPORT",
+    "SWITCHED_TAB",
+    "TOGGLED",
+    "TREATMENT_EFFECT_ENDED",
+    "TREATMENT_EFFECT_PEAKED",
+    "TREATMENT_EFFECT_STARTED",
+    "TTS_PLAYED",
+    "UNLOAD",
+    "UPDATED_NOTE",
+    "VALIDATION_ERROR",
+    "VIEWED",
+    "VIEWED_ALLERGIES",
+    "VIEWED_HISTORY",
+    "VIEWED_LAB_RESULT",
+    "VIEWED_MEDICATIONS",
+    "VIEWED_PATIENT_INFO",
+    "VIEWED_PATIENT_SUMMARY",
+    "VIEWED_RADIOLOGY_RESULT",
+    "VIEWED_RECORDS",
+    "VIEWED_SPECIMEN",
+    "VIEWED_TRENDS",
+    "WROTE_NOTE",
+    "ZOOMED_SLIDE"
+  ],
+  "verbMetadata": {
+    "ACKNOWLEDGED_ALARM": {
+      "severity": "INFO",
+      "category": "MONITORING"
+    },
+    "ADJUSTED_VITAL": {
+      "severity": "INFO",
+      "category": "MONITORING"
+    },
+    "ADMINISTERED_MEDICATION": {
+      "severity": "CRITICAL",
+      "category": "CLINICAL"
+    },
+    "ALARM_TRIGGERED": {
+      "severity": "CRITICAL",
+      "category": "MONITORING"
+    },
+    "ANNOTATED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "ACTION"
+    },
+    "ANSWERED": {
+      "severity": "INFO",
+      "category": "ASSESSMENT"
+    },
+    "API_ERROR": {
+      "severity": "CRITICAL",
+      "category": "ERROR"
+    },
+    "APPLIED_PRESET": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "ATTEMPTED": {
+      "severity": "INFO",
+      "category": "ASSESSMENT"
+    },
+    "CANCELLED_IMAGING": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "CANCELLED_LAB": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "CANCELLED_MEDICATION": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "CHANGED_ECG_LAYOUT": {
+      "category": "NAVIGATION",
+      "severity": "INFO"
+    },
+    "CHANGED_OBJECTIVE": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "CHANGED_SETTING": {
+      "severity": "INFO",
+      "category": "CONFIGURATION"
+    },
+    "CHANGED_WINDOW": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "CLICKED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "CLOSED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "CLOSED_EXAM_PANEL": {
+      "severity": "DEBUG",
+      "category": "CLINICAL"
+    },
+    "CLOSED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "CLOSED_STUDY": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "COLLAPSED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "COMPLETED_SCENARIO": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "COMPLETED_SLIDE_TASK": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "CONTRAINDICATED_TREATMENT_ORDERED": {
+      "severity": "CRITICAL",
+      "category": "CLINICAL"
+    },
+    "COPIED_MESSAGE": {
+      "severity": "DEBUG",
+      "category": "COMMUNICATION"
+    },
+    "CORRECT_ANSWER": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "COUNTED_FEATURE": {
+      "category": "CLINICAL",
+      "severity": "ACTION"
+    },
+    "DESELECTED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "DISCONTINUED_TREATMENT": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "DRAFTED_REPORT": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "DWELLED_REGION": {
+      "category": "CLINICAL",
+      "severity": "DEBUG"
+    },
+    "EDITED_LAB_VALUE": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "ENDED_SESSION": {
+      "severity": "IMPORTANT",
+      "category": "SESSION"
+    },
+    "ERROR_OCCURRED": {
+      "severity": "CRITICAL",
+      "category": "ERROR"
+    },
+    "EXPANDED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "EXPECTED_TREATMENT_GIVEN": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "EXPECTED_TREATMENT_MISSED": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "EXPORTED_ANNOTATIONS": {
+      "category": "CLINICAL",
+      "severity": "ACTION"
+    },
+    "EXPORTED_CASE": {
+      "severity": "INFO",
+      "category": "CONFIGURATION"
+    },
+    "EXPRESSED_EMOTION": {
+      "severity": "INFO",
+      "category": "COMMUNICATION"
+    },
+    "FAILED_TO_LOAD": {
+      "category": "ERROR",
+      "severity": "IMPORTANT"
+    },
+    "FILTERED_LABS": {
+      "severity": "DEBUG",
+      "category": "CLINICAL"
+    },
+    "FOCUSED_ECG_LEAD": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "IDLE_TIMEOUT": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "INCORRECT_ANSWER": {
+      "severity": "INFO",
+      "category": "ASSESSMENT"
+    },
+    "LAB_RESULT_READY": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "LOADED_CASE": {
+      "severity": "IMPORTANT",
+      "category": "SESSION"
+    },
+    "LOST_FOCUS": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "MEASURED_DISTANCE": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "MEASURED_ECG_AMPLITUDE": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "MEASURED_ECG_INTERVAL": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "MEASURED_REGION": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "MEASURED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "ACTION"
+    },
+    "MISSED_ROI": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "NAVIGATED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "OPENED": {
+      "severity": "INFO",
+      "category": "NAVIGATION"
+    },
+    "OPENED_ECG_RECORDING": {
+      "category": "CLINICAL",
+      "severity": "IMPORTANT"
+    },
+    "OPENED_EXAM_PANEL": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "OPENED_PLATE": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "OPENED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "IMPORTANT"
+    },
+    "OPENED_STUDY": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "ORDERED_IMAGING": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "ORDERED_IV_FLUID": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "ORDERED_LAB": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "ORDERED_MEDICATION": {
+      "severity": "CRITICAL",
+      "category": "CLINICAL"
+    },
+    "ORDERED_NURSING": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "ORDERED_TREATMENT": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "PANNED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "DEBUG"
+    },
+    "PAUSED_SCENARIO": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "PERFORMED_INTERVENTION": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "PERFORMED_PHYSICAL_EXAM": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "REACHED_ROI": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "RECEIVED_FEEDBACK": {
+      "category": "ASSESSMENT",
+      "severity": "INFO"
+    },
+    "RECEIVED_MESSAGE": {
+      "severity": "INFO",
+      "category": "COMMUNICATION"
+    },
+    "RECORDED_ECG_NOTE": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "REQUESTED_ECG_HINT": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "REQUESTED_HINT": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "REQUESTED_SECOND_OPINION": {
+      "category": "COMMUNICATION",
+      "severity": "IMPORTANT"
+    },
+    "RESET_SCENARIO": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "RESET_SETTING": {
+      "severity": "INFO",
+      "category": "CONFIGURATION"
+    },
+    "RESUMED_FOCUS": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "RESUMED_SCENARIO": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "RESUMED_SESSION": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "REVEALED_ECG_EXPLANATION": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "REVIEWED_SERIES": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "REVISED_DIAGNOSIS": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "REVISED_ECG_INTERPRETATION": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "SAVED_CASE": {
+      "severity": "INFO",
+      "category": "CONFIGURATION"
+    },
+    "SAVED_ECG_INTERPRETATION": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "SAVED_NOTE": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "SAVED_REPORT": {
+      "category": "ASSESSMENT",
+      "severity": "ACTION"
+    },
+    "SAVED_SETTING": {
+      "severity": "INFO",
+      "category": "CONFIGURATION"
+    },
+    "SCROLLED_SERIES": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "SEARCHED_LABS": {
+      "severity": "DEBUG",
+      "category": "CLINICAL"
+    },
+    "SELECTED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "SELECTED_SERIES": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "SENT_MESSAGE": {
+      "severity": "INFO",
+      "category": "COMMUNICATION"
+    },
+    "SIGNED_REPORT": {
+      "category": "ASSESSMENT",
+      "severity": "CRITICAL"
+    },
+    "SILENCED_ALARM": {
+      "severity": "INFO",
+      "category": "MONITORING"
+    },
+    "STARTED_OXYGEN": {
+      "severity": "IMPORTANT",
+      "category": "CLINICAL"
+    },
+    "STARTED_SCENARIO": {
+      "severity": "IMPORTANT",
+      "category": "SESSION"
+    },
+    "STARTED_SESSION": {
+      "severity": "IMPORTANT",
+      "category": "SESSION"
+    },
+    "STARTED_SLIDE_TASK": {
+      "category": "ASSESSMENT",
+      "severity": "IMPORTANT"
+    },
+    "STOPPED_OXYGEN": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "STT_ERROR": {
+      "severity": "IMPORTANT",
+      "category": "ERROR"
+    },
+    "STT_RESULT": {
+      "severity": "DEBUG",
+      "category": "COMMUNICATION"
+    },
+    "SUBMITTED": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "SUBMITTED_DEBRIEF": {
+      "severity": "IMPORTANT",
+      "category": "ASSESSMENT"
+    },
+    "SUBMITTED_DIAGNOSIS": {
+      "category": "ASSESSMENT",
+      "severity": "CRITICAL"
+    },
+    "SUBMITTED_ECG_INTERPRETATION": {
+      "category": "ASSESSMENT",
+      "severity": "CRITICAL"
+    },
+    "SUBMITTED_REPORT": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "SWITCHED_TAB": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "TOGGLED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "TREATMENT_EFFECT_ENDED": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "TREATMENT_EFFECT_PEAKED": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "TREATMENT_EFFECT_STARTED": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "TTS_PLAYED": {
+      "severity": "DEBUG",
+      "category": "COMMUNICATION"
+    },
+    "UNLOAD": {
+      "severity": "INFO",
+      "category": "SESSION"
+    },
+    "UPDATED_NOTE": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VALIDATION_ERROR": {
+      "severity": "INFO",
+      "category": "ERROR"
+    },
+    "VIEWED": {
+      "severity": "DEBUG",
+      "category": "NAVIGATION"
+    },
+    "VIEWED_ALLERGIES": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_HISTORY": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_LAB_RESULT": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_MEDICATIONS": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_PATIENT_INFO": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_PATIENT_SUMMARY": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_RADIOLOGY_RESULT": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_RECORDS": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "VIEWED_SPECIMEN": {
+      "category": "CLINICAL",
+      "severity": "INFO"
+    },
+    "VIEWED_TRENDS": {
+      "severity": "INFO",
+      "category": "MONITORING"
+    },
+    "WROTE_NOTE": {
+      "severity": "INFO",
+      "category": "CLINICAL"
+    },
+    "ZOOMED_SLIDE": {
+      "category": "CLINICAL",
+      "severity": "DEBUG"
+    }
+  },
+  "verbFallbacks": {
+    "ACKNOWLEDGED_ALARM": "monitoring",
+    "ADJUSTED_VITAL": "monitoring",
+    "ADMINISTERED_MEDICATION": "treating",
+    "ALARM_TRIGGERED": "monitoring",
+    "ANNOTATED_SLIDE": "documenting",
+    "APPLIED_PRESET": "assessing",
+    "CANCELLED_LAB": "investigating",
+    "CANCELLED_MEDICATION": "treating",
+    "CHANGED_ECG_LAYOUT": "examining",
+    "CHANGED_OBJECTIVE": "examining",
+    "CHANGED_SETTING": "regulating",
+    "CHANGED_WINDOW": "assessing",
+    "CLICKED": "navigating",
+    "CLOSED": "navigating",
+    "CLOSED_EXAM_PANEL": "examining",
+    "CLOSED_SLIDE": "assessing",
+    "CLOSED_STUDY": "assessing",
+    "COLLAPSED": "navigating",
+    "COMPLETED_SLIDE_TASK": "regulating",
+    "CONTRAINDICATED_TREATMENT_ORDERED": "treating",
+    "COPIED_MESSAGE": "communicating",
+    "COUNTED_FEATURE": "examining",
+    "DESELECTED": "navigating",
+    "DISCONTINUED_TREATMENT": "treating",
+    "DRAFTED_REPORT": "documenting",
+    "DWELLED_REGION": "examining",
+    "EDITED_MESSAGE": "communicating",
+    "ENDED_SESSION": "regulating",
+    "EXPANDED": "navigating",
+    "EXPECTED_TREATMENT_GIVEN": "treating",
+    "EXPECTED_TREATMENT_MISSED": "treating",
+    "EXPORTED_ANNOTATIONS": "documenting",
+    "EXPRESSED_EMOTION": "reflecting",
+    "FAILED_LOGIN": "regulating",
+    "FAILED_TO_LOAD": "assessing",
+    "FILTERED_LABS": "investigating",
+    "FOCUSED_ECG_LEAD": "examining",
+    "IDLE_TIMEOUT": "regulating",
+    "LAB_RESULT_READY": "assessing",
+    "LOADED_CASE": "regulating",
+    "LOGGED_IN": "regulating",
+    "LOGGED_OUT": "regulating",
+    "MEASURED_DISTANCE": "assessing",
+    "MEASURED_ECG_AMPLITUDE": "examining",
+    "MEASURED_ECG_INTERVAL": "examining",
+    "MEASURED_REGION": "assessing",
+    "MEASURED_SLIDE": "examining",
+    "MISSED_ROI": "examining",
+    "NAVIGATED": "navigating",
+    "OPENED": "navigating",
+    "OPENED_ECG_RECORDING": "assessing",
+    "OPENED_EXAM_PANEL": "examining",
+    "OPENED_PLATE": "examining",
+    "OPENED_SLIDE": "assessing",
+    "OPENED_STUDY": "assessing",
+    "ORDERED_IMAGING": "investigating",
+    "ORDERED_INVESTIGATION": "investigating",
+    "ORDERED_IV_FLUID": "treating",
+    "ORDERED_LAB": "investigating",
+    "ORDERED_MEDICATION": "treating",
+    "ORDERED_NURSING": "treating",
+    "ORDERED_TREATMENT": "treating",
+    "PANNED_SLIDE": "examining",
+    "PAUSED_SCENARIO": "regulating",
+    "PERFORMED_INTERVENTION": "treating",
+    "PERFORMED_PHYSICAL_EXAM": "examining",
+    "REACHED_ROI": "examining",
+    "RECEIVED_FEEDBACK": "reflecting",
+    "RECEIVED_MESSAGE": "communicating",
+    "RECORDED_ECG_NOTE": "documenting",
+    "REQUESTED_ECG_HINT": "reflecting",
+    "REQUESTED_HINT": "reflecting",
+    "REQUESTED_SECOND_OPINION": "communicating",
+    "RESET_SETTING": "regulating",
+    "RESUMED_SCENARIO": "regulating",
+    "RESUMED_SESSION": "regulating",
+    "REVEALED_ECG_EXPLANATION": "reflecting",
+    "REVIEWED_SERIES": "assessing",
+    "REVISED_DIAGNOSIS": "documenting",
+    "REVISED_ECG_INTERPRETATION": "documenting",
+    "SAVED_ECG_INTERPRETATION": "documenting",
+    "SAVED_NOTE": "documenting",
+    "SAVED_REPORT": "documenting",
+    "SAVED_SETTING": "regulating",
+    "SCROLLED": "navigating",
+    "SCROLLED_SERIES": "assessing",
+    "SEARCHED_LABS": "investigating",
+    "SELECTED": "navigating",
+    "SELECTED_SERIES": "assessing",
+    "SENT_MESSAGE": "communicating",
+    "SIGNED_REPORT": "documenting",
+    "SILENCED_ALARM": "monitoring",
+    "STARTED_OXYGEN": "treating",
+    "STARTED_SCENARIO": "regulating",
+    "STARTED_SESSION": "regulating",
+    "STARTED_SLIDE_TASK": "regulating",
+    "STOPPED_OXYGEN": "treating",
+    "SUBMITTED_DEBRIEF": "reflecting",
+    "SUBMITTED_DIAGNOSIS": "documenting",
+    "SUBMITTED_ECG_INTERPRETATION": "documenting",
+    "SUBMITTED_REPORT": "documenting",
+    "SWITCHED_TAB": "navigating",
+    "TOGGLED": "navigating",
+    "UPDATED_NOTE": "documenting",
+    "VIEWED": "navigating",
+    "VIEWED_ALLERGIES": "assessing",
+    "VIEWED_HISTORY": "assessing",
+    "VIEWED_LAB_RESULT": "assessing",
+    "VIEWED_MEDICATIONS": "assessing",
+    "VIEWED_PATIENT_INFO": "assessing",
+    "VIEWED_PATIENT_SUMMARY": "assessing",
+    "VIEWED_RADIOLOGY_RESULT": "assessing",
+    "VIEWED_RECORDS": "assessing",
+    "VIEWED_SPECIMEN": "examining",
+    "VIEWED_TRENDS": "monitoring",
+    "WROTE_NOTE": "documenting",
+    "ZOOMED_SLIDE": "examining"
+  },
+  "objectOverrides": {
+    "alarm": "monitoring",
+    "auth": "regulating",
+    "body_region": "examining",
+    "case": "regulating",
+    "chat_message": "communicating",
+    "clinical_note": "documenting",
+    "component": "navigating",
+    "debrief": "reflecting",
+    "discussion": "communicating",
+    "drawer": "navigating",
+    "ecg_interpretation": "documenting",
+    "ecg_lead": "examining",
+    "ecg_measurement": "examining",
+    "ecg_note": "documenting",
+    "ecg_recording": "assessing",
+    "ecg_teaching_point": "reflecting",
+    "emotion": "reflecting",
+    "imaging_image": "assessing",
+    "imaging_measurement": "assessing",
+    "imaging_report": "documenting",
+    "imaging_series": "assessing",
+    "imaging_study": "assessing",
+    "investigation": "investigating",
+    "iv_fluid": "treating",
+    "lab_result": "assessing",
+    "lab_test": "investigating",
+    "medication": "treating",
+    "monitor": "monitoring",
+    "note": "documenting",
+    "nursing": "treating",
+    "nursing_intervention": "treating",
+    "oxygen": "treating",
+    "oxygen_therapy": "treating",
+    "page": "navigating",
+    "panel": "navigating",
+    "pathology_report": "documenting",
+    "patient_record": "assessing",
+    "physical_exam": "examining",
+    "radiology_order": "investigating",
+    "radiology_result": "assessing",
+    "scenario": "regulating",
+    "session": "regulating",
+    "slide": "assessing",
+    "slide_annotation": "documenting",
+    "slide_measurement": "examining",
+    "slide_region": "examining",
+    "slide_roi": "examining",
+    "slide_task": "regulating",
+    "specimen": "examining",
+    "specimen_plate": "examining",
+    "treatment": "treating",
+    "vital_sign": "monitoring"
+  },
+  "defaultInterpretations": {
+    "ANNOTATED_SLIDE:slide_measurement": "documenting",
+    "DRAFTED_REPORT:imaging_report": "documenting",
+    "FOCUSED_ECG_LEAD:ecg_lead": "examining",
+    "MEASURED_REGION:imaging_measurement": "assessing",
+    "OPENED:alarm": "monitoring",
+    "OPENED:body_region": "examining",
+    "OPENED:medication_picker": "treating",
+    "OPENED:monitor": "monitoring",
+    "OPENED:physical_exam": "examining",
+    "OPENED:slide_region": "examining",
+    "OPENED:treatment_drawer": "treating",
+    "OPENED_ECG_RECORDING:ecg_recording": "assessing",
+    "RECORDED_ECG_NOTE:ecg_note": "documenting",
+    "SUBMITTED_ECG_INTERPRETATION:ecg_interpretation": "documenting",
+    "SUBMITTED_REPORT:imaging_report": "documenting",
+    "VIEWED:allergies": "assessing",
+    "VIEWED:history": "assessing",
+    "VIEWED:lab_result": "assessing",
+    "VIEWED:medications": "assessing",
+    "VIEWED:pathology_report": "assessing",
+    "VIEWED:patient_record": "assessing",
+    "VIEWED:radiology_result": "assessing",
+    "VIEWED:slide": "assessing",
+    "VIEWED:vital_trend": "monitoring"
+  },
+  "clinicalActionByVerb": {
+    "ACKNOWLEDGED_ALARM": "Monitoring",
+    "ADJUSTED_VITAL": "Monitoring",
+    "ADMINISTERED_MEDICATION": "Treating",
+    "ALARM_TRIGGERED": "Monitoring",
+    "CANCELLED_IMAGING": "Ordering",
+    "CANCELLED_LAB": "Ordering",
+    "CANCELLED_MEDICATION": "Treating",
+    "CHANGED_SETTING": "Session",
+    "CLICKED": "Navigating",
+    "CLOSED": "Navigating",
+    "CLOSED_EXAM_PANEL": "Examining",
+    "COLLAPSED": "Navigating",
+    "CONTRAINDICATED_TREATMENT_ORDERED": "Treating",
+    "COPIED_MESSAGE": "Communicating",
+    "DISCONTINUED_TREATMENT": "Treating",
+    "EDITED_MESSAGE": "Communicating",
+    "ENDED_SESSION": "Session",
+    "EXPANDED": "Navigating",
+    "EXPECTED_TREATMENT_GIVEN": "Treating",
+    "EXPECTED_TREATMENT_MISSED": "Treating",
+    "EXPRESSED_EMOTION": "Debriefing",
+    "FAILED_LOGIN": "Session",
+    "FILTERED_LABS": "Ordering",
+    "IDLE_TIMEOUT": "Session",
+    "LAB_RESULT_READY": "Reading results",
+    "LOADED_CASE": "Session",
+    "LOGGED_IN": "Session",
+    "LOGGED_OUT": "Session",
+    "NAVIGATED": "Navigating",
+    "OPENED": "Navigating",
+    "OPENED_EXAM_PANEL": "Examining",
+    "ORDERED_IMAGING": "Ordering",
+    "ORDERED_INVESTIGATION": "Ordering",
+    "ORDERED_IV_FLUID": "Treating",
+    "ORDERED_LAB": "Ordering",
+    "ORDERED_MEDICATION": "Treating",
+    "ORDERED_NURSING": "Treating",
+    "ORDERED_TREATMENT": "Treating",
+    "PAUSED_SCENARIO": "Session",
+    "PERFORMED_INTERVENTION": "Treating",
+    "PERFORMED_PHYSICAL_EXAM": "Examining",
+    "RECEIVED_MESSAGE": "Communicating",
+    "RESET_SETTING": "Session",
+    "RESUMED_SCENARIO": "Session",
+    "RESUMED_SESSION": "Session",
+    "SAVED_NOTE": "Documenting",
+    "SAVED_SETTING": "Session",
+    "SCROLLED": "Navigating",
+    "SEARCHED_LABS": "Ordering",
+    "SELECTED": "Navigating",
+    "SENT_MESSAGE": "Communicating",
+    "SILENCED_ALARM": "Monitoring",
+    "STARTED_OXYGEN": "Treating",
+    "STARTED_SCENARIO": "Session",
+    "STARTED_SESSION": "Session",
+    "STOPPED_OXYGEN": "Treating",
+    "SUBMITTED_DEBRIEF": "Debriefing",
+    "SWITCHED_TAB": "Navigating",
+    "TOGGLED": "Navigating",
+    "TREATMENT_EFFECT_ENDED": "Treating",
+    "TREATMENT_EFFECT_PEAKED": "Treating",
+    "TREATMENT_EFFECT_STARTED": "Treating",
+    "UNLOAD": "Session",
+    "UPDATED_NOTE": "Documenting",
+    "VIEWED": "Navigating",
+    "VIEWED_ALLERGIES": "History",
+    "VIEWED_HISTORY": "History",
+    "VIEWED_LAB_RESULT": "Reading results",
+    "VIEWED_MEDICATIONS": "History",
+    "VIEWED_PATIENT_INFO": "History",
+    "VIEWED_PATIENT_SUMMARY": "History",
+    "VIEWED_RADIOLOGY_RESULT": "Reading results",
+    "VIEWED_RECORDS": "History",
+    "VIEWED_TRENDS": "Monitoring",
+    "WROTE_NOTE": "Documenting"
+  },
+  "actionToDomain": {
+    "Communicating": "Communication",
+    "Debriefing": "Reflection",
+    "Documenting": "Documentation",
+    "Examining": "Assessment",
+    "History": "Assessment",
+    "Monitoring": "Monitoring",
+    "Navigating": "Administration",
+    "Ordering": "Diagnostics",
+    "Reading results": "Assessment",
+    "Session": "Administration",
+    "Treating": "Therapeutics"
+  },
+  "fineLabelByVerb": {
+    "ACKNOWLEDGED_ALARM": "Acknowledged alarm",
+    "ADJUSTED_VITAL": "Adjusted vital",
+    "ADMINISTERED_MEDICATION": "Gave medication",
+    "ALARM_TRIGGERED": "Alarm fired",
+    "CANCELLED_IMAGING": "Cancelled radiology",
+    "CANCELLED_LAB": "Cancelled lab",
+    "CANCELLED_MEDICATION": "Cancelled medication",
+    "CHANGED_SETTING": "Changed setting",
+    "CLICKED": "Clicked",
+    "CLOSED": "Closed panel",
+    "CLOSED_EXAM_PANEL": "Closed exam",
+    "CONTRAINDICATED_TREATMENT_ORDERED": "Contraindicated order",
+    "COPIED_MESSAGE": "Copied message",
+    "DISCONTINUED_TREATMENT": "Stopped treatment",
+    "EDITED_LAB_VALUE": "Edited lab value",
+    "EDITED_MESSAGE": "Edited message",
+    "ENDED_SESSION": "Ended session",
+    "EXPECTED_TREATMENT_GIVEN": "Correct treatment",
+    "EXPECTED_TREATMENT_MISSED": "Missed treatment",
+    "EXPRESSED_EMOTION": "Emotion pulse",
+    "FAILED_LOGIN": "Failed login",
+    "FILTERED_LABS": "Filtered labs",
+    "IDLE_TIMEOUT": "Idle timeout",
+    "LAB_RESULT_READY": "Lab result ready",
+    "LOADED_CASE": "Loaded case",
+    "LOGGED_IN": "Logged in",
+    "LOGGED_OUT": "Logged out",
+    "NAVIGATED": "Changed room",
+    "OPENED": "Opened panel",
+    "OPENED_EXAM_PANEL": "Opened exam",
+    "ORDERED_IMAGING": "Ordered radiology",
+    "ORDERED_IV_FLUID": "Ordered IV fluid",
+    "ORDERED_LAB": "Ordered lab",
+    "ORDERED_MEDICATION": "Ordered medication",
+    "ORDERED_NURSING": "Ordered nursing",
+    "ORDERED_TREATMENT": "Ordered treatment",
+    "PAUSED_SCENARIO": "Paused scenario",
+    "PERFORMED_INTERVENTION": "Performed intervention",
+    "PERFORMED_PHYSICAL_EXAM": "Examined patient",
+    "RECEIVED_MESSAGE": "Patient replied",
+    "RESUMED_SCENARIO": "Resumed scenario",
+    "RESUMED_SESSION": "Resumed session",
+    "SAVED_NOTE": "Saved note",
+    "SEARCHED_LABS": "Searched labs",
+    "SENT_MESSAGE": "Messaged patient",
+    "SILENCED_ALARM": "Snoozed alarm",
+    "STARTED_OXYGEN": "Started oxygen",
+    "STARTED_SCENARIO": "Started scenario",
+    "STARTED_SESSION": "Started session",
+    "STOPPED_OXYGEN": "Stopped oxygen",
+    "SUBMITTED_DEBRIEF": "Submitted debrief",
+    "SWITCHED_TAB": "Switched tab",
+    "TREATMENT_EFFECT_ENDED": "Effect ended",
+    "TREATMENT_EFFECT_PEAKED": "Effect peak",
+    "TREATMENT_EFFECT_STARTED": "Effect onset",
+    "UNLOAD": "Left session",
+    "UPDATED_NOTE": "Updated note",
+    "VIEWED_ALLERGIES": "Read allergies",
+    "VIEWED_HISTORY": "Read history",
+    "VIEWED_LAB_RESULT": "Read lab result",
+    "VIEWED_MEDICATIONS": "Read medications",
+    "VIEWED_PATIENT_INFO": "Read patient info",
+    "VIEWED_PATIENT_SUMMARY": "Read summary",
+    "VIEWED_RADIOLOGY_RESULT": "Read radiology",
+    "VIEWED_RECORDS": "Read records",
+    "VIEWED_TRENDS": "Viewed trends",
+    "WROTE_NOTE": "Wrote note"
+  },
+  "tnaVerbMergeMap": {
+    "ACKNOWLEDGED_ALARM": "ALARM_RESPONSE",
+    "ADJUSTED_VITAL": "MONITORING",
+    "ADMINISTERED_MEDICATION": "TREATMENT",
+    "ALARM_TRIGGERED": "ALARM_RESPONSE",
+    "ANSWERED": null,
+    "ATTEMPTED": null,
+    "CANCELLED_LAB": "ORDERED_LAB",
+    "CANCELLED_MEDICATION": "TREATMENT",
+    "CHANGED_SETTING": null,
+    "CLICKED": "NAVIGATION",
+    "CLOSED": "NAVIGATION",
+    "CLOSED_EXAM_PANEL": "EXAMINATION",
+    "COLLAPSED": "NAVIGATION",
+    "CONTRAINDICATED_TREATMENT_ORDERED": "TREATMENT",
+    "COPIED_MESSAGE": "SENT_MESSAGE",
+    "DESELECTED": "NAVIGATION",
+    "DISCONTINUED_TREATMENT": "TREATMENT",
+    "EDITED_MESSAGE": "SENT_MESSAGE",
+    "ENDED_SESSION": null,
+    "EXPANDED": "NAVIGATION",
+    "EXPECTED_TREATMENT_GIVEN": "TREATMENT",
+    "EXPECTED_TREATMENT_MISSED": "TREATMENT",
+    "FILTERED_LABS": "ORDERED_LAB",
+    "IDLE_TIMEOUT": null,
+    "LAB_RESULT_READY": "VIEWED_LAB_RESULT",
+    "LOADED_CASE": null,
+    "NAVIGATED": "NAVIGATION",
+    "OPENED": "NAVIGATION",
+    "OPENED_EXAM_PANEL": "EXAMINATION",
+    "ORDERED_IV_FLUID": "TREATMENT",
+    "ORDERED_LAB": "ORDERED_LAB",
+    "ORDERED_MEDICATION": "TREATMENT",
+    "ORDERED_NURSING": "TREATMENT",
+    "ORDERED_TREATMENT": "TREATMENT",
+    "PAUSED_SCENARIO": null,
+    "PERFORMED_INTERVENTION": "TREATMENT",
+    "PERFORMED_PHYSICAL_EXAM": "EXAMINATION",
+    "RECEIVED_MESSAGE": "RECEIVED_MESSAGE",
+    "RESET_SETTING": null,
+    "RESUMED_SCENARIO": null,
+    "RESUMED_SESSION": null,
+    "SAVED_SETTING": null,
+    "SCROLLED": "NAVIGATION",
+    "SEARCHED_LABS": "ORDERED_LAB",
+    "SELECTED": "NAVIGATION",
+    "SENT_MESSAGE": "SENT_MESSAGE",
+    "SILENCED_ALARM": "ALARM_RESPONSE",
+    "STARTED_OXYGEN": "TREATMENT",
+    "STARTED_SCENARIO": null,
+    "STARTED_SESSION": null,
+    "STOPPED_OXYGEN": "TREATMENT",
+    "SUBMITTED": null,
+    "SWITCHED_TAB": "NAVIGATION",
+    "TOGGLED": "NAVIGATION",
+    "TREATMENT_EFFECT_ENDED": null,
+    "TREATMENT_EFFECT_PEAKED": null,
+    "TREATMENT_EFFECT_STARTED": null,
+    "VIEWED": "NAVIGATION",
+    "VIEWED_ALLERGIES": "REVIEWED_RECORDS",
+    "VIEWED_HISTORY": "REVIEWED_RECORDS",
+    "VIEWED_LAB_RESULT": "VIEWED_LAB_RESULT",
+    "VIEWED_MEDICATIONS": "REVIEWED_RECORDS",
+    "VIEWED_PATIENT_INFO": "REVIEWED_RECORDS",
+    "VIEWED_PATIENT_SUMMARY": "REVIEWED_RECORDS",
+    "VIEWED_RECORDS": "REVIEWED_RECORDS",
+    "VIEWED_TRENDS": "MONITORING"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "3.0.0-beta.9",
+  "version": "3.0.0-beta.10",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -56,7 +56,8 @@
     "i18n:xliff:export": "node scripts/i18n/xliff-export.mjs",
     "i18n:xliff:import": "node scripts/i18n/xliff-import.mjs",
     "plugins:gen": "node scripts/gen-plugin-manifests.mjs",
-    "plugins:check": "node scripts/gen-plugin-manifests.mjs --check",
+    "plugins:check": "node scripts/gen-plugin-manifests.mjs --check && node scripts/check-plugin-emissions.mjs --check",
+    "plugins:emissions": "node scripts/check-plugin-emissions.mjs",
     "vendor": "node scripts/vendor-plugins.mjs",
     "vendor:check": "node scripts/vendor-plugins.mjs --check",
     "kb": "node scripts/knowledge/kb.mjs",

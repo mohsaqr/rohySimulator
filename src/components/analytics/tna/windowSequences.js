@@ -17,21 +17,17 @@
 
 import { normalizeAoiDwell, windowZones, dominantZoneOf, zoneTargetLabel } from '../../oyon/gazeAnalytics.js';
 import { aoiLabel } from '../../oyon/screenAois.js';
+import { ROOMS, roomLabel } from '../../../../server/shared/rooms.js';
 
-// Same readable room names the Gaze view uses.
-export const ROOM_LABELS = {
-    chat: 'Patient (main)',
-    examination: 'Examination',
-    lab: 'Lab',
-    radiology: 'Radiology',
-    consultant: 'Discussant',
-};
+// Readable room names — core rooms, every plugin room from the generated
+// manifests, and the lessons surface — from the one room list rohy keeps.
+// Kept as a map because the dashboard's room filter indexes it by key.
+export const ROOM_LABELS = Object.freeze(Object.fromEntries(
+    Object.values(ROOMS).map((r) => [r.key, r.label]),
+));
 
 function roomState(rec) {
-    const room = typeof rec.room === 'string' ? rec.room.trim().toLowerCase() : '';
-    if (!room) return null;
-    if (ROOM_LABELS[room]) return ROOM_LABELS[room];
-    return room.charAt(0).toUpperCase() + room.slice(1);
+    return roomLabel(rec.room);
 }
 
 function gazeTargetState(rec) {

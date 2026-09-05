@@ -1,8 +1,8 @@
 /**
  * EventLogger Service - Comprehensive Learning Analytics Tracker
  *
- * The 130+ xAPI-style convenience methods (sessionStarted, labOrdered, etc.)
- * are preserved for backwards compatibility. Internally, every event now
+ * The convenience methods below (sessionStarted, treatmentOrdered, …) are the
+ * host's emitters, one per learner act. Internally, every event
  * routes through the central NotificationCenter as a telemetry-source
  * notification — which means DND, severity threshold, batching, retries,
  * and the unbounded-requeue fix all happen in one place.
@@ -14,19 +14,18 @@
 
 import { getExternalApi } from '../notifications/externalApi';
 import { SOURCES } from '../notifications/types';
-// Plugin vocabulary (RPS-1). rohy no longer points at any individual plugin
-// folder: every registered plugin's verbs arrive through the generated
-// manifests, and foldManifests THROWS on a collision instead of letting a
-// spread silently overwrite one. See docs/design/plugin-standard.md.
-import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
-import { foldManifests } from '../../server/shared/pluginRegistry.js';
-// SEVERITY / CATEGORIES / the verb->metadata map moved to server/shared/ so the
-// SERVER can derive severity+category on ingest instead of dropping both
-// columns. Re-exported here because ~40 call sites import them from this
-// module; the definitions, not the exports, are what moved.
-import { SEVERITY, CATEGORIES, VERB_METADATA, DEFAULT_VERB_METADATA } from '../../server/shared/learningVerbs.js';
+// The vocabulary lives in server/shared/ so the SERVER validates the same
+// verbs, object types and components the client emits, and every plugin's
+// contribution arrives through the generated manifests (foldManifests THROWS
+// on a collision instead of letting a spread silently overwrite one — see
+// docs/design/plugin-standard.md). Re-exported here because ~40 call sites
+// import them from this module; the definitions, not the exports, moved.
+import {
+    SEVERITY, CATEGORIES, VERBS, VERB_METADATA, VERB_FACETS, DEFAULT_VERB_METADATA, normalizeVerb,
+} from '../../server/shared/learningVerbs.js';
+import { OBJECT_TYPES, COMPONENTS } from '../../server/shared/eventFacets.js';
 
-export { SEVERITY, CATEGORIES };
+export { SEVERITY, CATEGORIES, VERBS, OBJECT_TYPES, COMPONENTS };
 
 // Map xAPI severity strings → notification severity.
 const SEV_MAP = {
@@ -38,101 +37,13 @@ const SEV_MAP = {
 };
 
 
-const BASE_VERBS = {
-    STARTED_SESSION: 'STARTED_SESSION', ENDED_SESSION: 'ENDED_SESSION',
-    RESUMED_SESSION: 'RESUMED_SESSION', IDLE_TIMEOUT: 'IDLE_TIMEOUT',
-    UNLOAD: 'UNLOAD',
-    VIEWED: 'VIEWED', OPENED: 'OPENED', CLOSED: 'CLOSED', NAVIGATED: 'NAVIGATED',
-    SWITCHED_TAB: 'SWITCHED_TAB', SCROLLED: 'SCROLLED',
-    LOST_FOCUS: 'LOST_FOCUS', RESUMED_FOCUS: 'RESUMED_FOCUS',
-    CLICKED: 'CLICKED', SELECTED: 'SELECTED', DESELECTED: 'DESELECTED',
-    TOGGLED: 'TOGGLED', EXPANDED: 'EXPANDED', COLLAPSED: 'COLLAPSED',
-    ORDERED_LAB: 'ORDERED_LAB', CANCELLED_LAB: 'CANCELLED_LAB',
-    VIEWED_LAB_RESULT: 'VIEWED_LAB_RESULT', SEARCHED_LABS: 'SEARCHED_LABS',
-    FILTERED_LABS: 'FILTERED_LABS', LAB_RESULT_READY: 'LAB_RESULT_READY',
-    ORDERED_IMAGING: 'ORDERED_IMAGING', CANCELLED_IMAGING: 'CANCELLED_IMAGING',
-    VIEWED_RADIOLOGY_RESULT: 'VIEWED_RADIOLOGY_RESULT',
-    ORDERED_MEDICATION: 'ORDERED_MEDICATION', ADMINISTERED_MEDICATION: 'ADMINISTERED_MEDICATION',
-    CANCELLED_MEDICATION: 'CANCELLED_MEDICATION', ORDERED_TREATMENT: 'ORDERED_TREATMENT',
-    PERFORMED_INTERVENTION: 'PERFORMED_INTERVENTION', ORDERED_IV_FLUID: 'ORDERED_IV_FLUID',
-    STARTED_OXYGEN: 'STARTED_OXYGEN', STOPPED_OXYGEN: 'STOPPED_OXYGEN',
-    ORDERED_NURSING: 'ORDERED_NURSING', DISCONTINUED_TREATMENT: 'DISCONTINUED_TREATMENT',
-    TREATMENT_EFFECT_STARTED: 'TREATMENT_EFFECT_STARTED', TREATMENT_EFFECT_PEAKED: 'TREATMENT_EFFECT_PEAKED',
-    TREATMENT_EFFECT_ENDED: 'TREATMENT_EFFECT_ENDED',
-    CONTRAINDICATED_TREATMENT_ORDERED: 'CONTRAINDICATED_TREATMENT_ORDERED',
-    EXPECTED_TREATMENT_GIVEN: 'EXPECTED_TREATMENT_GIVEN',
-    EXPECTED_TREATMENT_MISSED: 'EXPECTED_TREATMENT_MISSED',
-    PERFORMED_PHYSICAL_EXAM: 'PERFORMED_PHYSICAL_EXAM',
-    OPENED_EXAM_PANEL: 'OPENED_EXAM_PANEL', CLOSED_EXAM_PANEL: 'CLOSED_EXAM_PANEL',
-    SENT_MESSAGE: 'SENT_MESSAGE', RECEIVED_MESSAGE: 'RECEIVED_MESSAGE',
-    COPIED_MESSAGE: 'COPIED_MESSAGE', EDITED_MESSAGE: 'EDITED_MESSAGE',
-    STT_RESULT: 'STT_RESULT', STT_ERROR: 'STT_ERROR', TTS_PLAYED: 'TTS_PLAYED',
-    ADJUSTED_VITAL: 'ADJUSTED_VITAL', ACKNOWLEDGED_ALARM: 'ACKNOWLEDGED_ALARM',
-    SILENCED_ALARM: 'SILENCED_ALARM', ALARM_TRIGGERED: 'ALARM_TRIGGERED',
-    VIEWED_TRENDS: 'VIEWED_TRENDS',
-    EDITED_LAB_VALUE: 'EDITED_LAB_VALUE',
-    VIEWED_PATIENT_SUMMARY: 'VIEWED_PATIENT_SUMMARY', VIEWED_HISTORY: 'VIEWED_HISTORY',
-    VIEWED_MEDICATIONS: 'VIEWED_MEDICATIONS', VIEWED_ALLERGIES: 'VIEWED_ALLERGIES',
-    WROTE_NOTE: 'WROTE_NOTE', SAVED_NOTE: 'SAVED_NOTE', UPDATED_NOTE: 'UPDATED_NOTE',
-    SUBMITTED_DEBRIEF: 'SUBMITTED_DEBRIEF',
-    CHANGED_SETTING: 'CHANGED_SETTING', SAVED_SETTING: 'SAVED_SETTING',
-    RESET_SETTING: 'RESET_SETTING',
-    LOADED_CASE: 'LOADED_CASE', VIEWED_PATIENT_INFO: 'VIEWED_PATIENT_INFO',
-    VIEWED_RECORDS: 'VIEWED_RECORDS', SAVED_CASE: 'SAVED_CASE', EXPORTED_CASE: 'EXPORTED_CASE',
-    STARTED_SCENARIO: 'STARTED_SCENARIO', PAUSED_SCENARIO: 'PAUSED_SCENARIO',
-    RESUMED_SCENARIO: 'RESUMED_SCENARIO', COMPLETED_SCENARIO: 'COMPLETED_SCENARIO',
-    RESET_SCENARIO: 'RESET_SCENARIO',
-    SUBMITTED: 'SUBMITTED', ANSWERED: 'ANSWERED', ATTEMPTED: 'ATTEMPTED',
-    CORRECT_ANSWER: 'CORRECT_ANSWER', INCORRECT_ANSWER: 'INCORRECT_ANSWER',
-    EXPRESSED_EMOTION: 'EXPRESSED_EMOTION',
-    ERROR_OCCURRED: 'ERROR_OCCURRED', API_ERROR: 'API_ERROR', VALIDATION_ERROR: 'VALIDATION_ERROR',
-};
 
+const getVerbMetadata = (verb) => VERB_METADATA[normalizeVerb(verb)] || DEFAULT_VERB_METADATA;
 
-const BASE_OBJECT_TYPES = {
-    SESSION: 'session', CASE: 'case', LAB_TEST: 'lab_test', LAB_RESULT: 'lab_result',
-    RADIOLOGY_ORDER: 'radiology_order', RADIOLOGY_RESULT: 'radiology_result',
-    CHAT_MESSAGE: 'chat_message', VITAL_SIGN: 'vital_sign', ALARM: 'alarm',
-    SETTING: 'setting', BUTTON: 'button', TAB: 'tab', MODAL: 'modal',
-    DRAWER: 'drawer', PANEL: 'panel', SCENARIO: 'scenario', COMPONENT: 'component',
-    PHYSICAL_EXAM: 'physical_exam', TREATMENT: 'treatment', MEDICATION: 'medication',
-    IV_FLUID: 'iv_fluid', OXYGEN_THERAPY: 'oxygen_therapy',
-    NURSING_INTERVENTION: 'nursing_intervention', EMOTION: 'emotion',
-    // Patient-record reading (History / Meds / Allergies / past exam …) — a
-    // dedicated type so record review resolves to `assessing`, not the
-    // generic `component` → `navigating` bucket.
-    PATIENT_RECORD: 'patient_record',
-    // Debrief / discussant participation — distinct from bedside chat so it
-    // resolves to `reflecting` instead of `communicating`.
-    DEBRIEF: 'debrief', CLINICAL_NOTE: 'clinical_note',
-    ROOM: 'room',
-};
-
-const BASE_COMPONENTS = {
-    CHAT_INTERFACE: 'ChatInterface', PATIENT_MONITOR: 'PatientMonitor',
-    PATIENT_VISUAL: 'PatientVisual', ORDERS_DRAWER: 'OrdersDrawer',
-    LAB_RESULTS_MODAL: 'LabResultsModal', CONFIG_PANEL: 'ConfigPanel',
-    CASE_EDITOR: 'CaseEditor', SCENARIO_REPOSITORY: 'ScenarioRepository',
-    LOGIN_PAGE: 'LoginPage', APP: 'App',
-    MANIKIN_PANEL: 'ManikinPanel', AUSCULTATION_PANEL: 'AuscultationPanel',
-    PATIENT_INFO_PANEL: 'PatientInfoPanel',
-    MEDICATION_PANEL: 'MedicationPanel', TREATMENT_PANEL: 'TreatmentPanel',
-    SESSION_LOG_VIEWER: 'SessionLogViewer', VITAL_TRENDS: 'VitalTrends',
-    DISCUSSION_SCREEN: 'DiscussionScreen',
-};
-
-// Merged vocabularies. The exported names are unchanged, so every existing
-// import site keeps working; plugin rows simply extend them.
-const MERGED = foldManifests(PLUGIN_MANIFESTS, {
-    verbs: BASE_VERBS,
-    objectTypes: BASE_OBJECT_TYPES,
-    components: BASE_COMPONENTS,
-});
-export const VERBS = MERGED.verbs;
-export const OBJECT_TYPES = MERGED.objectTypes;
-export const COMPONENTS = MERGED.components;
-
-const getVerbMetadata = (verb) => VERB_METADATA[verb] || DEFAULT_VERB_METADATA;
+// Throw on an undeclared verb in dev and test; keep the row in production.
+const STRICT_VERBS = (() => {
+    try { return Boolean(import.meta.env?.DEV) || import.meta.env?.MODE === 'test'; } catch { return false; }
+})();
 
 class EventLoggerService {
     constructor() {
@@ -198,6 +109,20 @@ class EventLoggerService {
 
     log(verb, objectType, options = {}) {
         if (!this.isEnabled) return null;
+        // An undeclared verb costs a whole row at ingest (the registry is a
+        // hard whitelist there). In dev/test that is a bug to fix now, so it
+        // throws; in production the click is kept as UNDECLARED_VERB with the
+        // attempt in context — never dropped. Historical names are fine: the
+        // server reads them through the alias map.
+        if (typeof verb !== 'string' || !VERB_FACETS[normalizeVerb(verb)]) {
+            const attempted = typeof verb === 'string' ? verb : String(verb);
+            if (STRICT_VERBS) {
+                throw new Error(`EventLogger: '${attempted}' is not in the verb registry. Declare it in server/shared/learningVerbs.js (or the plugin manifest) before emitting it.`);
+            }
+            options = { ...options, context: { ...(options.context || {}), attempted_verb: attempted, attempted_object_type: objectType ?? null } };
+            verb = VERBS.UNDECLARED_VERB;
+            objectType = OBJECT_TYPES.UNKNOWN;
+        }
         const meta = getVerbMetadata(verb);
         const severity = options.severity || meta.severity;
         const category = options.category || meta.category;
@@ -241,8 +166,15 @@ class EventLoggerService {
                 // Active room when this event fired. Set by App.jsx via
                 // setContext({ room }) on every RoomNavigator change.
                 // Null means "no in-session room" (login screen,
-                // settings, persona editor, etc.).
-                room: this.room,
+                // settings, persona editor, etc.). A plugin's narrowed
+                // logger stamps its own id per event, which is what lets a
+                // plugin editor open from the settings page still attribute
+                // its rows to the plugin.
+                room: options.room ?? this.room,
+                // Plugin attribution (RPS-1 §14.3, migration 0055): set only
+                // by the narrowed plugin logger.
+                pluginId: options.pluginId ?? null,
+                pluginVersion: options.pluginVersion ?? null,
                 objectId: options.objectId || null,
                 objectName: options.objectName || null,
                 component: options.component || null,
@@ -313,9 +245,15 @@ class EventLoggerService {
         this.setContext({ sessionId, caseId });
         this.log(VERBS.STARTED_SESSION, OBJECT_TYPES.SESSION, { objectId: String(sessionId), objectName: caseName, component: COMPONENTS.APP });
     }
-    sessionEnded(duration) {
-        this.log(VERBS.ENDED_SESSION, OBJECT_TYPES.SESSION, { objectId: String(this.sessionId), durationMs: duration, component: COMPONENTS.APP });
-        this.clearContext();
+    sessionEnded(duration, reason = 'explicit') {
+        // Emitted BEFORE clearContext so the row still carries the session.
+        // Context is NOT cleared here any more: App.jsx tears the session
+        // down itself, and the debrief that follows an explicit end still
+        // belongs to this session (its rows need the id).
+        this.log(VERBS.ENDED_SESSION, OBJECT_TYPES.SESSION, {
+            objectId: String(this.sessionId ?? ''), durationMs: duration ?? null, result: reason,
+            component: COMPONENTS.APP, context: { reason },
+        });
     }
     sessionResumed(sessionId, caseId, caseName) {
         this.setContext({ sessionId, caseId });
@@ -323,7 +261,7 @@ class EventLoggerService {
     }
     focusLost() { this.log(VERBS.LOST_FOCUS, OBJECT_TYPES.COMPONENT, { objectId: COMPONENTS.APP, objectName: 'Window blur', component: COMPONENTS.APP }); }
     focusResumed() { this.log(VERBS.RESUMED_FOCUS, OBJECT_TYPES.COMPONENT, { objectId: COMPONENTS.APP, objectName: 'Window focus', component: COMPONENTS.APP }); }
-    unload() { this.log(VERBS.UNLOAD, OBJECT_TYPES.SESSION, { objectId: String(this.sessionId || ''), objectName: 'Window unload', component: COMPONENTS.APP }); }
+    unload() { this.log(VERBS.UNLOADED_APP, OBJECT_TYPES.SESSION, { objectId: String(this.sessionId || ''), objectName: 'Window unload', component: COMPONENTS.APP }); }
     caseLoaded(caseId, caseName) {
         // Re-stamp the singleton so subsequent events on the client carry
         // the new caseId in EventLogger.getStatus(). The server is now
@@ -334,21 +272,26 @@ class EventLoggerService {
     }
     componentOpened(c, n = null) { this.log(VERBS.OPENED, OBJECT_TYPES.COMPONENT, { objectId: c, objectName: n || c, component: c }); }
     componentClosed(c, n = null) { this.log(VERBS.CLOSED, OBJECT_TYPES.COMPONENT, { objectId: c, objectName: n || c, component: c }); }
-    tabSwitched(t, c) { this.log(VERBS.SWITCHED_TAB, OBJECT_TYPES.TAB, { objectId: t, objectName: t, component: c }); }
+    tabSwitched(t, c, ctx = null) { this.log(VERBS.SWITCHED_TAB, OBJECT_TYPES.TAB, { objectId: t, objectName: t, component: c, context: ctx }); }
     buttonClicked(b, c, ctx = null) { this.log(VERBS.CLICKED, OBJECT_TYPES.BUTTON, { objectId: b, objectName: b, component: c, context: ctx }); }
     modalOpened(m, c) { this.log(VERBS.OPENED, OBJECT_TYPES.MODAL, { objectId: m, objectName: m, component: c }); }
     modalClosed(m, c) { this.log(VERBS.CLOSED, OBJECT_TYPES.MODAL, { objectId: m, objectName: m, component: c }); }
     drawerOpened(d) { this.log(VERBS.OPENED, OBJECT_TYPES.DRAWER, { objectId: d, objectName: d }); }
     drawerClosed(d) { this.log(VERBS.CLOSED, OBJECT_TYPES.DRAWER, { objectId: d, objectName: d }); }
-    labOrdered(id, name, c) { this.log(VERBS.ORDERED_LAB, OBJECT_TYPES.LAB_TEST, { objectId: String(id), objectName: name, component: c }); }
-    labResultViewed(id, name, result, c) { this.log(VERBS.VIEWED_LAB_RESULT, OBJECT_TYPES.LAB_RESULT, { objectId: String(id), objectName: name, result, component: c }); }
-    labSearched(term, count, c) { this.log(VERBS.SEARCHED_LABS, OBJECT_TYPES.LAB_TEST, { objectName: term, result: `${count} results`, component: c }); }
-    labFiltered(t, v, c) { this.log(VERBS.FILTERED_LABS, OBJECT_TYPES.LAB_TEST, { objectId: t, objectName: v, component: c }); }
-    messageSent(content, c) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'user' }); }
-    messageReceived(content, c) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'assistant' }); }
+    // Orders are written by the SERVER (orders-routes) — a client copy would
+    // double-count. Result reads: object_type says lab vs radiology.
+    resultViewed(id, name, result, c, objectType = OBJECT_TYPES.LAB_RESULT) { this.log(VERBS.VIEWED_RESULT, objectType, { objectId: String(id), objectName: name, result, component: c }); }
+    resultReleased(id, name, c, { abnormal = false, objectType = OBJECT_TYPES.LAB_RESULT } = {}) { this.log(VERBS.RELEASED_RESULT, objectType, { objectId: String(id), objectName: name, component: c, context: { isAbnormal: abnormal, actor: 'system' }, severity: abnormal ? SEVERITY.IMPORTANT : SEVERITY.INFO }); }
+    // Bare UI verbs: the object type carries the meaning (lab_test → investigating).
+    searched(objectType, term, count, c, ctx = null) { this.log(VERBS.SEARCHED, objectType, { objectName: term, result: `${count} results`, component: c, context: ctx }); }
+    filtered(objectType, filterId, value, c) { this.log(VERBS.FILTERED, objectType, { objectId: filterId, objectName: value, component: c }); }
+    sorted(objectType, key, direction, c) { this.log(VERBS.SORTED, objectType, { objectId: key, objectName: key, result: direction, component: c }); }
+    toggled(objectType, id, name, selected, c) { this.log(VERBS.TOGGLED, objectType, { objectId: id, objectName: name, result: selected ? 'selected' : 'deselected', component: c }); }
+    messageSent(content, c, extra = {}) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'user', ...extra }); }
+    messageReceived(content, c, extra = {}) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'assistant', ...extra }); }
     messageCopied(c) { this.log(VERBS.COPIED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c }); }
     sttResult({ finalLength = 0, interimLength = 0, isFinal = false, lang = null } = {}) {
-        this.log(VERBS.STT_RESULT, OBJECT_TYPES.COMPONENT, {
+        this.log(VERBS.RECOGNIZED_SPEECH, OBJECT_TYPES.SPEECH, {
             objectId: 'speech_recognition',
             objectName: 'Speech recognition result',
             component: 'VoiceService',
@@ -356,7 +299,7 @@ class EventLoggerService {
         });
     }
     sttError(message, ctx = null) {
-        this.log(VERBS.STT_ERROR, OBJECT_TYPES.COMPONENT, {
+        this.log(VERBS.FAILED_SPEECH_RECOGNITION, OBJECT_TYPES.SPEECH, {
             objectId: 'speech_recognition',
             objectName: 'Speech recognition error',
             result: message || 'speech recognition error',
@@ -365,7 +308,7 @@ class EventLoggerService {
         });
     }
     ttsPlayed(ctx = null) {
-        this.log(VERBS.TTS_PLAYED, OBJECT_TYPES.COMPONENT, {
+        this.log(VERBS.PLAYED_TTS, OBJECT_TYPES.AUDIO, {
             objectId: 'tts_audio',
             objectName: 'TTS audio played',
             component: 'VoiceService',
@@ -373,7 +316,7 @@ class EventLoggerService {
         });
     }
     emotionExpressed(e, c) { this.log(VERBS.EXPRESSED_EMOTION, OBJECT_TYPES.EMOTION, { objectName: e, component: c, context: { emotion: e } }); }
-    vitalAdjusted(v, oldV, newV, c) { this.log(VERBS.ADJUSTED_VITAL, OBJECT_TYPES.VITAL_SIGN, { objectId: v, objectName: v, component: c, context: { oldValue: oldV, newValue: newV } }); }
+    vitalAdjusted(v, oldV, newV, c, ctx = null) { this.log(VERBS.ADJUSTED_VITAL, OBJECT_TYPES.VITAL_SIGN, { objectId: v, objectName: v, component: c, result: String(newV), context: { oldValue: oldV, newValue: newV, ...(ctx || {}) } }); }
     alarmAcknowledged(t, c) { this.log(VERBS.ACKNOWLEDGED_ALARM, OBJECT_TYPES.ALARM, { objectId: t, objectName: t, component: c }); }
     alarmSilenced(t, c) { this.log(VERBS.SILENCED_ALARM, OBJECT_TYPES.ALARM, { objectId: t, objectName: t, component: c }); }
     settingChanged(name, oldV, newV, c) { this.log(VERBS.CHANGED_SETTING, OBJECT_TYPES.SETTING, { objectId: name, objectName: name, component: c, context: { oldValue: oldV, newValue: newV } }); }
@@ -381,54 +324,36 @@ class EventLoggerService {
     scenarioPaused(name, c) { this.log(VERBS.PAUSED_SCENARIO, OBJECT_TYPES.SCENARIO, { objectName: name, component: c }); }
     scenarioResumed(name, c) { this.log(VERBS.RESUMED_SCENARIO, OBJECT_TYPES.SCENARIO, { objectName: name, component: c }); }
     scenarioCompleted(name, c, dur = null) { this.log(VERBS.COMPLETED_SCENARIO, OBJECT_TYPES.SCENARIO, { objectName: name, component: c, durationMs: dur }); }
-    errorOccurred(t, msg, c, ctx = null) { this.log(VERBS.ERROR_OCCURRED, OBJECT_TYPES.COMPONENT, { objectId: t, objectName: t, result: msg, component: c, context: ctx, severity: SEVERITY.CRITICAL }); }
-    apiError(ep, code, msg, c) { this.log(VERBS.API_ERROR, OBJECT_TYPES.COMPONENT, { objectId: ep, objectName: `${code}: ${ep}`, result: msg, component: c, context: { endpoint: ep, statusCode: code }, severity: SEVERITY.CRITICAL }); }
-    labPanelOpened(c) { this.startTiming('labPanel'); this.log(VERBS.OPENED, OBJECT_TYPES.PANEL, { objectId: 'investigation_panel', objectName: 'Investigation Panel', component: c }); }
-    labPanelClosed(c) { this.log(VERBS.CLOSED, OBJECT_TYPES.PANEL, { objectId: 'investigation_panel', objectName: 'Investigation Panel', component: c, timingMark: 'labPanel' }); }
-    labResultReady(id, name, c, abnormal = false) { this.log(VERBS.LAB_RESULT_READY, OBJECT_TYPES.LAB_RESULT, { objectId: String(id), objectName: name, component: c, context: { isAbnormal: abnormal }, severity: abnormal ? SEVERITY.IMPORTANT : SEVERITY.INFO }); }
+    errorOccurred(t, msg, c, ctx = null) { this.log(VERBS.RAISED_ERROR, OBJECT_TYPES.COMPONENT, { objectId: t, objectName: t, result: msg, component: c, context: ctx, severity: SEVERITY.CRITICAL }); }
+    apiError(ep, code, msg, c) { this.log(VERBS.FAILED_REQUEST, OBJECT_TYPES.ENDPOINT, { objectId: ep, objectName: `${code}: ${ep}`, result: msg, component: c, context: { endpoint: ep, statusCode: code }, severity: SEVERITY.CRITICAL }); }
+    validationFailed(form, field, msg, c) { this.log(VERBS.FAILED_VALIDATION, OBJECT_TYPES.FORM, { objectId: form, objectName: field ? `${form}.${field}` : form, result: msg, component: c }); }
+    // A bracketed panel visit: the open starts a timing mark, the close carries the dwell.
+    panelOpened(objectType, id, name, c) { this.startTiming(`panel:${id}`); this.log(VERBS.OPENED, objectType, { objectId: id, objectName: name, component: c }); }
+    panelClosed(objectType, id, name, c) { this.log(VERBS.CLOSED, objectType, { objectId: id, objectName: name, component: c, timingMark: `panel:${id}` }); }
     // Treatment / medication actions carry a real clinical object_type so the
     // activity resolver lands them in `treating` — NOT `component`, which the
     // clinical-state map overrides to `navigating` (the old bug that painted
     // every ordered drug as a UI navigation event).
-    medicationOrdered(id, name, dose, route, c) { this.log(VERBS.ORDERED_MEDICATION, OBJECT_TYPES.MEDICATION, { objectId: String(id), objectName: name, component: c, context: { dose, route } }); }
-    treatmentOrdered(id, name, c, ctx = null) { this.log(VERBS.ORDERED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, component: c, context: ctx }); }
-    interventionPerformed(name, c, result = null) { this.log(VERBS.PERFORMED_INTERVENTION, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, result }); }
-    ivFluidOrdered(id, name, rate, c) { this.log(VERBS.ORDERED_IV_FLUID, OBJECT_TYPES.IV_FLUID, { objectId: String(id), objectName: name, component: c, context: { rate } }); }
-    oxygenStarted(id, type, flow, c) { this.log(VERBS.STARTED_OXYGEN, OBJECT_TYPES.OXYGEN_THERAPY, { objectId: String(id), objectName: type, component: c, context: { flowRate: flow } }); }
-    oxygenStopped(id, type, c) { this.log(VERBS.STOPPED_OXYGEN, OBJECT_TYPES.OXYGEN_THERAPY, { objectId: String(id), objectName: type, component: c }); }
-    nursingOrdered(id, name, c) { this.log(VERBS.ORDERED_NURSING, OBJECT_TYPES.NURSING_INTERVENTION, { objectId: String(id), objectName: name, component: c }); }
-    treatmentDiscontinued(id, name, c, reason = null) { this.log(VERBS.DISCONTINUED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, component: c, context: { reason } }); }
-    treatmentEffectStarted(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_STARTED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: effects }); }
-    treatmentEffectPeaked(name, effects, c) { this.log(VERBS.TREATMENT_EFFECT_PEAKED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: effects }); }
-    treatmentEffectEnded(name, c) { this.log(VERBS.TREATMENT_EFFECT_ENDED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c }); }
-    contraindicatedTreatmentOrdered(id, name, fb, c) { this.log(VERBS.CONTRAINDICATED_TREATMENT_ORDERED, OBJECT_TYPES.MEDICATION, { objectId: String(id), objectName: name, component: c, context: { feedback: fb }, severity: SEVERITY.CRITICAL }); }
-    expectedTreatmentGiven(name, points, c) { this.log(VERBS.EXPECTED_TREATMENT_GIVEN, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: { points } }); }
-    expectedTreatmentMissed(name, fb, c) { this.log(VERBS.EXPECTED_TREATMENT_MISSED, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: { feedback: fb } }); }
-    alarmTriggered(t, vital, value, threshold, c) { this.log(VERBS.ALARM_TRIGGERED, OBJECT_TYPES.ALARM, { objectId: t, objectName: `${vital} Alarm`, component: c, context: { vitalSign: vital, value, threshold }, severity: SEVERITY.CRITICAL }); }
-    // Imaging orders + radiology-result reads (labs have a server-side event;
-    // radiology previously logged nothing at all — see order-radiology route).
-    radiologyOrdered(id, name, c, ctx = null) { this.log(VERBS.ORDERED_IMAGING, OBJECT_TYPES.RADIOLOGY_ORDER, { objectId: String(id), objectName: name, component: c, context: ctx }); }
-    radiologyResultViewed(id, name, result, c) { this.log(VERBS.VIEWED_RADIOLOGY_RESULT, OBJECT_TYPES.RADIOLOGY_RESULT, { objectId: String(id), objectName: name, result, component: c }); }
-    // Reading the patient record. object_type `patient_record` resolves to
-    // `assessing`; the generic `component` type it used before was silently
-    // reclassified as `navigating`, so record review never showed up.
-    patientSummaryViewed(c) { this.log(VERBS.VIEWED_PATIENT_SUMMARY, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Summary', component: c }); }
-    patientHistoryViewed(c) { this.log(VERBS.VIEWED_HISTORY, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient History', component: c }); }
-    patientMedicationsViewed(c) { this.log(VERBS.VIEWED_MEDICATIONS, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Medications', component: c }); }
-    patientAllergiesViewed(c) { this.log(VERBS.VIEWED_ALLERGIES, OBJECT_TYPES.PATIENT_RECORD, { objectName: 'Patient Allergies', component: c }); }
-    // One record tab was viewed — maps the tab id to the right VIEWED_* verb so
-    // History/Meds/etc. all land in `assessing` with a specific, readable verb.
-    recordTabViewed(tabId, label, c) {
-        const verb = { history: VERBS.VIEWED_HISTORY, medications: VERBS.VIEWED_MEDICATIONS,
-            allergies: VERBS.VIEWED_ALLERGIES, radiology: VERBS.VIEWED_RADIOLOGY_RESULT }[tabId]
-            || VERBS.VIEWED_RECORDS;
-        this.log(verb, OBJECT_TYPES.PATIENT_RECORD, { objectId: tabId, objectName: label || tabId, component: c });
-    }
+    // One verb per treatment act; `objectType` says what kind (medication,
+    // iv_fluid, oxygen_therapy, nursing_intervention, treatment). The registry
+    // keeps a drug order CRITICAL by object type, so callers pass the kind
+    // rather than picking a verb.
+    treatmentOrdered(id, name, c, ctx = null, objectType = OBJECT_TYPES.TREATMENT, result = null) { this.log(VERBS.ORDERED_TREATMENT, objectType, { objectId: String(id), objectName: name, component: c, context: ctx, result }); }
+    treatmentAdministered(id, name, c, ctx = null, objectType = OBJECT_TYPES.TREATMENT) { this.log(VERBS.ADMINISTERED_TREATMENT, objectType, { objectId: String(id), objectName: name, component: c, context: ctx }); }
+    treatmentDiscontinued(id, name, c, reason = null, objectType = OBJECT_TYPES.TREATMENT) { this.log(VERBS.DISCONTINUED_TREATMENT, objectType, { objectId: String(id), objectName: name, component: c, context: { reason } }); }
+    treatmentEffectObserved(id, name, phase, effects, c) { this.log(VERBS.OBSERVED_TREATMENT_EFFECT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, result: phase, component: c, context: { ...(effects || {}), actor: 'system' } }); }
+    contraindicationFlagged(id, name, fb, c, objectType = OBJECT_TYPES.MEDICATION) { this.log(VERBS.FLAGGED_CONTRAINDICATION, objectType, { objectId: String(id), objectName: name, component: c, context: { feedback: fb } }); }
+    expectedTreatmentMet(id, name, points, c) { this.log(VERBS.MET_EXPECTED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectId: String(id), objectName: name, component: c, context: { points } }); }
+    expectedTreatmentMissed(name, fb, c) { this.log(VERBS.MISSED_EXPECTED_TREATMENT, OBJECT_TYPES.TREATMENT, { objectName: name, component: c, context: { feedback: fb } }); }
+    alarmTriggered(t, vital, value, threshold, c, ctx = null) { this.log(VERBS.TRIGGERED_ALARM, OBJECT_TYPES.ALARM, { objectId: t, objectName: `${vital} Alarm`, component: c, context: { vitalSign: vital, value, threshold, actor: 'system', ...(ctx || {}) } }); }
+    // Reading the patient record. One verb; object_id names the tab, so
+    // History/Meds/Notes/Memory all land in `assessing` and the fine lens
+    // labels them from the tab id.
+    recordViewed(tabId, label, c) { this.log(VERBS.VIEWED_RECORD, OBJECT_TYPES.PATIENT_RECORD, { objectId: tabId, objectName: label || tabId, component: c }); }
     // Debrief / discussant turns. object_type `debrief` resolves to
     // `reflecting`, keeping post-case discussion distinct from bedside chat.
-    debriefMessageSent(content, c) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'user' }); }
-    debriefMessageReceived(content, c) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'assistant' }); }
-    viewModeChanged(oldM, newM, c) { this.log(VERBS.SWITCHED_TAB, OBJECT_TYPES.COMPONENT, { objectId: newM, objectName: `View Mode: ${newM}`, component: c, context: { oldMode: oldM, newMode: newM } }); }
+    debriefMessageSent(content, c, extra = {}) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'user', ...extra }); }
+    debriefMessageReceived(content, c, extra = {}) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.DEBRIEF, { component: c, messageContent: content, messageRole: 'assistant', ...extra }); }
     groupExpanded(g, c) { this.log(VERBS.EXPANDED, OBJECT_TYPES.COMPONENT, { objectId: g, objectName: g, component: c }); }
     groupCollapsed(g, c) { this.log(VERBS.COLLAPSED, OBJECT_TYPES.COMPONENT, { objectId: g, objectName: g, component: c }); }
     examPanelOpened() { this.startTiming('examPanel'); this.log(VERBS.OPENED_EXAM_PANEL, OBJECT_TYPES.PANEL, { objectId: 'manikin_panel', objectName: 'Physical Examination Panel', component: COMPONENTS.MANIKIN_PANEL }); }
@@ -436,9 +361,36 @@ class EventLoggerService {
     physicalExamPerformed(region, type, finding, ctx = null) { this.log(VERBS.PERFORMED_PHYSICAL_EXAM, OBJECT_TYPES.PHYSICAL_EXAM, { objectId: `${region}:${type}`, objectName: `${type} - ${region}`, component: COMPONENTS.MANIKIN_PANEL, result: finding, context: ctx }); }
     auscultationPerformed(loc, type, finding, played = false, url = null) { this.log(VERBS.PERFORMED_PHYSICAL_EXAM, OBJECT_TYPES.PHYSICAL_EXAM, { objectId: `auscultation:${loc}`, objectName: `Auscultation - ${loc}`, component: COMPONENTS.AUSCULTATION_PANEL, result: finding, context: { soundType: type, audioPlayed: played, audioUrl: url } }); }
 
-    // Legacy stubs preserved so callers don't break.
-    flush() { /* batching is now BackendSurface's job */ }
-    startPeriodicFlush() { /* same */ }
+    // Consultation with a supporting agent (page → arrive → talk).
+    agentPaged(agentType, name, c, ctx = null) { this.log(VERBS.PAGED_AGENT, OBJECT_TYPES.AGENT, { objectId: agentType, objectName: name, component: c, context: ctx }); }
+    agentArrived(agentType, name, c, ctx = null) { this.log(VERBS.ARRIVED_AGENT, OBJECT_TYPES.AGENT, { objectId: agentType, objectName: name, component: c, context: { actor: 'system', ...(ctx || {}) } }); }
+    agentMessageSent(agentType, name, content, c) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.AGENT_MESSAGE, { objectId: agentType, objectName: name, component: c, messageContent: content, messageRole: 'user' }); }
+    agentMessageReceived(agentType, name, content, c) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.AGENT_MESSAGE, { objectId: agentType, objectName: name, component: c, messageContent: content, messageRole: 'assistant' }); }
+    // Documentation. The note TEXT is never logged — only its shape.
+    noteSaved(id, name, mode, shape, c) { this.log(VERBS.SAVED_NOTE, OBJECT_TYPES.CLINICAL_NOTE, { objectId: id, objectName: name, result: mode, component: c, context: shape }); }
+    debriefSubmitted(sessionId, ctx, c) { this.log(VERBS.SUBMITTED_DEBRIEF, OBJECT_TYPES.DEBRIEF, { objectId: String(sessionId), objectName: 'Debrief', component: c, context: ctx }); }
+    // Scenario control.
+    scenarioReset(name, c) { this.log(VERBS.RESET_SCENARIO, OBJECT_TYPES.SCENARIO, { objectName: name, component: c }); }
+    scenarioStepJumped(scenarioId, index, label, ctx, c) { this.log(VERBS.JUMPED_SCENARIO_STEP, OBJECT_TYPES.SCENARIO, { objectId: `${scenarioId}:${index}`, objectName: label, component: c, context: ctx }); }
+    trendViewed(vital, c) { this.startTiming(`trend:${vital}`); this.log(VERBS.VIEWED_TREND, OBJECT_TYPES.VITAL_TREND, { objectId: vital, objectName: vital, component: c }); }
+    // Authored content (cases, catalogues, personas, presets…). `objectType`
+    // names the kind; `result` created|updated for saves.
+    contentSaved(objectType, id, name, c, result = 'updated') { this.log(VERBS.SAVED_CONTENT, objectType, { objectId: String(id), objectName: name, component: c, result }); }
+    contentExported(objectType, id, name, c) { this.log(VERBS.EXPORTED_CONTENT, objectType, { objectId: String(id), objectName: name, component: c }); }
+    contentImported(objectType, id, name, c) { this.log(VERBS.IMPORTED_CONTENT, objectType, { objectId: String(id), objectName: name, component: c }); }
+    contentDuplicated(objectType, id, name, c) { this.log(VERBS.DUPLICATED_CONTENT, objectType, { objectId: String(id), objectName: name, component: c }); }
+    contentDeleted(objectType, id, name, c) { this.log(VERBS.DELETED_CONTENT, objectType, { objectId: String(id), objectName: name, component: c }); }
+    // Onboarding / help.
+    tourStarted(tourId, c) { this.log(VERBS.STARTED_TOUR, OBJECT_TYPES.TOUR, { objectId: tourId, objectName: tourId, component: c }); }
+    tourStepAdvanced(tourId, stepId, index, c) { this.log(VERBS.ADVANCED_TOUR_STEP, OBJECT_TYPES.TOUR, { objectId: `${tourId}:${stepId}`, objectName: stepId, component: c, context: { index } }); }
+    tourEnded(tourId, result, c) { this.log(VERBS.ENDED_TOUR, OBJECT_TYPES.TOUR, { objectId: tourId, objectName: tourId, result, component: c }); }
+    // Oyon consent / capture — metadata about consent, never a sample taken under it.
+    consentRecorded(version, result, c) { this.log(VERBS.RECORDED_CONSENT, OBJECT_TYPES.CONSENT, { objectId: String(version), objectName: `Consent v${version}`, result, component: c }); }
+    captureStarted(ctx, c) { this.log(VERBS.STARTED_CAPTURE, OBJECT_TYPES.CAPTURE_SESSION, { objectId: String(this.sessionId || ''), component: c, context: ctx }); }
+    captureStopped(result, c) { this.log(VERBS.STOPPED_CAPTURE, OBJECT_TYPES.CAPTURE_SESSION, { objectId: String(this.sessionId || ''), result, component: c }); }
+    // Assessment items.
+    answered(objectType, id, name, result, ctx, c) { this.log(VERBS.ANSWERED, objectType, { objectId: id, objectName: name, result, component: c, context: ctx }); }
+    submitted(objectType, id, name, ctx, c) { this.log(VERBS.SUBMITTED, objectType, { objectId: id, objectName: name, component: c, context: ctx }); }
 }
 
 const EventLogger = new EventLoggerService();
