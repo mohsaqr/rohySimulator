@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, CheckCircle, ChevronRight } from 'lucide-react';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 // ─── Page 1: Questions ───────────────────────────────────────────────────────
 
@@ -330,7 +331,14 @@ export default function EndSessionQuestionnaire({
       return;
     }
     setSubmitting(true);
-    await onSubmit({ ...answers, ...reflectionAnswers });
+    // The answers go to the API; the row carries only how many were answered
+    // and how long the free text was — never the text.
+    const all = { ...answers, ...reflectionAnswers };
+    EventLogger.submitted(OBJECT_TYPES.QUESTIONNAIRE, 'end_session', 'End-of-session questionnaire', {
+      answered: Object.values(all).filter((v) => v !== null && v !== undefined && v !== '').length,
+      reflection_chars: Object.values(reflectionAnswers).reduce((n, v) => n + (typeof v === 'string' ? v.length : 0), 0),
+    }, COMPONENTS.APP);
+    await onSubmit(all);
     setSubmitting(false);
   };
 

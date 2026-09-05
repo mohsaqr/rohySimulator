@@ -377,6 +377,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
     // Multi-agent state
     const [activeTab, setActiveTab] = useState(() => readActiveTab(activeCase?.id)); // 'patient' or agent_type
+    // For the chat rows' object identity (they carried none before): the
+    // patient's name, never the case title (which names the diagnosis).
+    const patientDisplayName = activeCase?.config?.patient_name || activeCase?.patient_name || 'Patient';
+    // Once per agent per session: the arrival row is emitted when the status
+    // first converges to 'present', not on every tick that observes it.
+    const arrivedLoggedRef = useRef(new Set());
     const [agents, setAgents] = useState([]);
     // True once the session's agent list has actually come back, so "no agent
     // matches the remembered tab" can be told apart from "the list hasn't
@@ -639,6 +645,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         (async () => {
             try {
                 const fresh = await AgentService.getSessionAgents(sessionId);
+                // The ETA passed and the server says present: the arrival is
+                // a row of its own, once per agent per page cycle.
+                fresh.forEach((a) => {
+                    if (a.status === 'present' && due.some(([type]) => type === a.agent_type) && !arrivedLoggedRef.current.has(a.agent_type)) {
+                        arrivedLoggedRef.current.add(a.agent_type);
+                        const waitMs = a.paged_at && a.arrived_at ? Math.max(0, new Date(a.arrived_at) - new Date(a.paged_at)) : null;
+                        EventLogger.agentArrived(a.agent_type, agents.find((x) => x.agent_type === a.agent_type)?.name || a.agent_type, COMPONENTS.CHAT_INTERFACE, { wait_ms: waitMs });
+                    }
+                });
                 setAgentStates(prev => {
                     const next = { ...prev };
                     fresh.forEach(a => {
@@ -735,6 +750,16 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             const arrivesAt = result?.arrives_at || null;
             const pagedAt = new Date().toISOString();
             const status = result?.status || (arrivesAt ? 'paged' : 'present');
+            // Paging a consultant is a communication act with a wait attached;
+            // an instant arrival is recorded in the same row.
+            EventLogger.agentPaged(agentType, agent.name || agentType, COMPONENTS.CHAT_INTERFACE, {
+                status, arrives_at: arrivesAt, delayed: Boolean(arrivesAt),
+            });
+            arrivedLoggedRef.current.delete(agentType);
+            if (status === 'present') {
+                arrivedLoggedRef.current.add(agentType);
+                EventLogger.agentArrived(agentType, agent.name || agentType, COMPONENTS.CHAT_INTERFACE, { wait_ms: 0 });
+            }
 
             setAgentStates(prev => ({
                 ...prev,
@@ -1262,7 +1287,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const userMsg = { role: 'user', content: text, source };
         setMessages(prev => [...prev, userMsg]);
 
-        EventLogger.messageSent(text, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source);
+        EventLogger.messageSent(text, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source, { objectId: 'patient', objectName: patientDisplayName, context: { source } });
 
         setInput('');
         setLoading(true);
@@ -1441,7 +1466,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         });
 
         const loggedText = isError ? finalDisplay : responseText;
-        EventLogger.messageReceived(loggedText, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source);
+        EventLogger.messageReceived(loggedText, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source, { objectId: 'patient', objectName: patientDisplayName, context: { source, error: Boolean(isError) } });
         obtained('history', text, loggedText);
         setLoading(false);
 
@@ -1714,6 +1739,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
         const userMsg = { role: 'user', content: input };
         const currentConversation = agentConversations[agentType] || [];
+        EventLogger.agentMessageSent(agentType, agent.name || agentType, input, COMPONENTS.CHAT_INTERFACE);
 
         // Use functional update to properly add user message
         setAgentConversations(prev => ({
@@ -1742,6 +1768,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 ...prev,
                 [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: responseText }]
             }));
+            EventLogger.agentMessageReceived(agentType, agent.name || agentType, responseText, COMPONENTS.CHAT_INTERFACE);
 
             // Reload team log after agent response
             const updatedLog = await AgentService.getTeamCommunications(sessionId);
@@ -1802,7 +1829,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         return (
             <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => {
+                    if (key !== activeTab) EventLogger.tabSwitched(key, COMPONENTS.CHAT_INTERFACE, { kind: key === 'patient' ? 'patient' : 'agent' });
+                    setActiveTab(key);
+                }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-t-lg text-sm font-medium transition-colors ${
                     isActive
                         ? 'bg-neutral-900 text-white border-t border-l border-r border-neutral-700'

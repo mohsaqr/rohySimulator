@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ApiError, apiFetch, apiPost } from '../services/apiClient';
 import { useNotifications } from '../notifications/useNotifications';
 import { SOURCES, SEVERITY, AUDIO_PATTERNS } from '../notifications/types';
+import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // Default thresholds — used until the backend config loads. Kept identical
 // to the historical values so existing user expectations don't shift.
@@ -166,6 +167,13 @@ export const useAlarms = (vitals, sessionId) => {
                         sessionId, // BackendSurface uses this when posting to /alarms/log
                     },
                 });
+                // The FIRING is a learning event too — with the room and the
+                // vitals snapshot EventLogger stamps — not only an alarm_events
+                // row. TRIGGERED_ALARM had no producer before this line.
+                EventLogger.alarmTriggered(
+                    `${vital}_${kind}`, vital, num, bound, COMPONENTS.PATIENT_MONITOR,
+                    { refresh: !isFirstFire, thresholdType: kind },
+                );
                 lastFireRef.current.set(key, now);
                 activeKeysRef.current.add(key);
                 fireStateDirty = true;

@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 // Role rank table mirrors server/middleware/auth.js so we can gate the
 // Edit button by the same rules canMutate() enforces server-side. Keeps
@@ -392,6 +393,7 @@ export default function MedicationManager() {
     };
 
     const handleExport = () => {
+        EventLogger.contentExported(OBJECT_TYPES.MEDICATION_CATALOGUE, 'medication_catalogue', 'Medication catalogue', COMPONENTS.CONFIG_PANEL);
         const csv = [
             'Name,Class,Category,Route,Dose,RxCUI,Scope',
             ...medications.map(m =>

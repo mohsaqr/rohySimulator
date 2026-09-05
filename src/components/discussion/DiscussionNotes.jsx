@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Save, NotebookPen } from 'lucide-react';
 import { fetchSessionNote, saveSessionNote } from '../../services/notesService';
+import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -37,6 +38,8 @@ export default function DiscussionNotes({ sessionId }) {
                 await saveSessionNote(sessionId, text);
                 dirtyRef.current = false;
                 setStatus('saved');
+                // The SHAPE of the note, never its text (the host stores it).
+                EventLogger.noteSaved('debrief_note', 'Debrief notes', 'autosave', { chars: text.length, words: text.trim().split(/\s+/).filter(Boolean).length }, COMPONENTS.DISCUSSION_SCREEN);
             } catch (err) {
                 console.error('[DiscussionNotes] save failed:', err);
                 setStatus('error');
@@ -59,6 +62,7 @@ export default function DiscussionNotes({ sessionId }) {
             saveSessionNote(sid, latestTextRef.current).catch((err) => {
                 console.error('[DiscussionNotes] unmount flush failed:', err);
             });
+            EventLogger.noteSaved('debrief_note', 'Debrief notes', 'flush', { chars: latestTextRef.current.length }, COMPONENTS.DISCUSSION_SCREEN);
             dirtyRef.current = false;
         };
     }, []);
@@ -73,7 +77,10 @@ export default function DiscussionNotes({ sessionId }) {
         <div className="flex flex-col h-full">
             <button
                 type="button"
-                onClick={() => setCollapsed(c => !c)}
+                onClick={() => setCollapsed((c) => {
+                    EventLogger.log(c ? VERBS.EXPANDED : VERBS.COLLAPSED, OBJECT_TYPES.CLINICAL_NOTE, { objectId: 'debrief_note', objectName: 'Debrief notes', component: COMPONENTS.DISCUSSION_SCREEN });
+                    return !c;
+                })}
                 className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-200 border-b border-slate-700 hover:bg-slate-700/50"
             >
                 <span className="flex items-center gap-2">

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/apiClient';
+import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
 
 /**
  * Lab Test Manager Component
@@ -247,6 +248,7 @@ export default function LabTestManager() {
 
     // Export to CSV
     const handleExport = () => {
+        EventLogger.contentExported(OBJECT_TYPES.LAB_CATALOGUE, 'lab_catalogue', 'Lab catalogue', COMPONENTS.CONFIG_PANEL);
         const headers = ['test_name', 'group', 'category', 'min_value', 'max_value', 'unit', 'normal_samples'];
         const csvLines = [headers.join(',')];
 

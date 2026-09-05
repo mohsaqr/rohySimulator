@@ -8,6 +8,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import PatientRecord from './PatientRecord';
 import { syncPatientRecord, loadPatientRecord } from './patientRecordSync';
+import EventLogger, { VERBS, OBJECT_TYPES } from '../eventLogger';
 
 const PatientRecordContext = createContext(null);
 
@@ -174,6 +175,17 @@ export function PatientRecordProvider({ children, sessionId, caseId, patientInfo
     if (!recordRef.current) return null;
     const event = recordRef.current.obtained(category, content, source);
     setRecord({ ...recordRef.current });
+    // The learning-event mirror of the encounter record's OBTAINED. Only this
+    // verb is mirrored here: EXAMINED / ORDERED / ADMINISTERED / EXPRESSED are
+    // already emitted at their call sites, and a blanket mirror would count
+    // them twice. Content is NOT logged — its length is.
+    EventLogger.log(VERBS.RECORDED_HISTORY, OBJECT_TYPES.PATIENT_RECORD, {
+      objectId: String(category || 'history'),
+      objectName: String(category || 'history'),
+      result: source || null,
+      component: 'PatientRecord',
+      context: { chars: typeof content === 'string' ? content.length : null },
+    });
     return event;
   }, []);
 

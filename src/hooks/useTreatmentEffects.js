@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import treatmentEffectsEngine from '../services/TreatmentEffects/TreatmentEffectsEngine';
 import { ApiError, apiFetch } from '../services/apiClient';
+import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // The six numeric channels the engine aggregates. Kept as one list so the
 // zero-effect constant, the identity check and the reset path can never
@@ -100,8 +101,32 @@ export function useTreatmentEffects(sessionId, options = {}) {
     // we hand back the previous state object (and, when only the treatment
     // list moved, the previous `aggregate` identity) so the sync effect
     // fires on real treatment changes only.
+    // A treatment moving between pharmacokinetic phases (onset → peak →
+    // offset) is a system act the learner did not click: one
+    // OBSERVED_TREATMENT_EFFECT row per transition, per order.
+    const phasesRef = useRef(new Map());
+    const logPhaseTransitions = (treatments) => {
+        const seen = new Set();
+        (treatments || []).forEach((t) => {
+            if (t?.id == null) return;
+            seen.add(t.id);
+            const prevPhase = phasesRef.current.get(t.id);
+            phasesRef.current.set(t.id, t.phase);
+            // First sight of an order records its phase without a row; only a
+            // CHANGE while we are watching is an observed transition.
+            if (prevPhase === undefined || prevPhase === t.phase || !t.phase) return;
+            EventLogger.treatmentEffectObserved(
+                t.id, t.name ?? t.treatment_item ?? t.treatment_name ?? String(t.id), String(t.phase),
+                { from: prevPhase, strength: t.strength ?? null, elapsed_minutes: t.elapsed_minutes ?? null },
+                COMPONENTS.TREATMENT_PANEL,
+            );
+        });
+        for (const id of [...phasesRef.current.keys()]) if (!seen.has(id)) phasesRef.current.delete(id);
+    };
+
     const updateEffects = useCallback(() => {
         const calculated = treatmentEffectsEngine.calculateAggregateEffects();
+        logPhaseTransitions(calculated.treatments);
         setEffects(prev => {
             const aggregate = sameAggregate(prev.aggregate, calculated.aggregate)
                 ? prev.aggregate

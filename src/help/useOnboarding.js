@@ -5,7 +5,8 @@
 // localStorage so it never nags a returning user. Storage logic is pure
 // and exported so it can be unit-tested without React or a real DOM.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
+import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 export const TOUR_VERSION = 1;
 
@@ -78,21 +79,30 @@ export function useOnboarding(role, opts = {}) {
   );
   const [index, setIndex] = useState(0);
 
+  const tourId = `first_run:${role}`;
+  // STARTED_TOUR once, when the tour actually opens.
+  useEffect(() => {
+    if (open) EventLogger.tourStarted(tourId, COMPONENTS.APP);
+  }, [open, tourId]);
+
   const finish = useCallback(() => {
     markTourDone(storage, role);
+    EventLogger.tourEnded(tourId, 'skipped', COMPONENTS.APP);
     setOpen(false);
-  }, [storage, role]);
+  }, [storage, role, tourId]);
 
   const next = useCallback(() => {
     setIndex((i) => {
       if (i + 1 >= steps.length) {
         markTourDone(storage, role);
+        EventLogger.tourEnded(tourId, 'completed', COMPONENTS.APP);
         setOpen(false);
         return i;
       }
+      EventLogger.tourStepAdvanced(tourId, steps[i + 1]?.id ?? String(i + 1), i + 1, COMPONENTS.APP);
       return i + 1;
     });
-  }, [steps.length, storage, role]);
+  }, [steps, storage, role, tourId]);
 
   return {
     open,

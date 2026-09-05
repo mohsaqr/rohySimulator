@@ -103,8 +103,12 @@ vi.mock('./VoiceControl', () => ({
 }));
 
 // EventLogger writes to a network endpoint we don't want to hit in tests.
-vi.mock('../../services/eventLogger', () => ({
-    default: { componentOpened: vi.fn(), componentClosed: vi.fn() },
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
+    default: {
+        componentOpened: vi.fn(), componentClosed: vi.fn(),
+        // OPENED/CLOSED on the debrief object, SUBMITTED_DEBRIEF on the way out.
+        log: vi.fn(), debriefSubmitted: vi.fn(), panelOpened: vi.fn(), panelClosed: vi.fn(),
+    },
     COMPONENTS: { DISCUSSION_SCREEN: 'DISCUSSION_SCREEN' },
 }));
 

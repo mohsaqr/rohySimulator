@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { X, ChevronUp, ChevronDown, FileText, Activity, Syringe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import PatientRecordViewer from '../PatientRecordViewer';
-import EventLogger, { COMPONENTS } from '../../services/eventLogger';
+import EventLogger, { OBJECT_TYPES, COMPONENTS } from '../../services/eventLogger';
 import ClinicalRecordsPanel from '../investigations/ClinicalRecordsPanel';
 import { TreatmentPanel } from '../treatments';
 import { apiFetch } from '../../services/apiClient';
@@ -34,6 +34,16 @@ const ACTIVE_TREATMENT_STATUSES = new Set(['ordered', 'in_progress']);
  * The `onViewResult` prop was part of the deleted labs/radiology result
  * list; callers may still pass it, this component no longer reads it.
  */
+// The memory tab's CONTENT view (tabSwitched already records the switch):
+// reading the encounter record is record review, bracketed for dwell.
+function MemoryTabView() {
+    useEffect(() => {
+        EventLogger.panelOpened(OBJECT_TYPES.PATIENT_RECORD, 'memory', 'Encounter record', COMPONENTS.ORDERS_DRAWER);
+        return () => EventLogger.panelClosed(OBJECT_TYPES.PATIENT_RECORD, 'memory', 'Encounter record', COMPONENTS.ORDERS_DRAWER);
+    }, []);
+    return <PatientRecordViewer />;
+}
+
 export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = false, openRequest = null, onOpenRequestConsumed = null, fabAlign = 'seam' }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('treatments'); // treatments, records, memory
@@ -296,7 +306,7 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
                         {/* Memory Tab - Patient Record Viewer */}
                         {activeTab === 'memory' && isAdmin && (
                             <div className="h-full">
-                                <PatientRecordViewer />
+                                <MemoryTabView />
                             </div>
                         )}
                     </div>

@@ -51,8 +51,8 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
   // App.jsx via EventLogger.roomChanged).
   useEffect(() => {
     if (cohortId == null) return undefined;
-    EventLogger.componentOpened('lessons', cohortName || `course-${cohortId}`);
-    return () => EventLogger.componentClosed('lessons', cohortName || `course-${cohortId}`);
+    EventLogger.panelOpened(OBJECT_TYPES.COURSE, String(cohortId), cohortName || `course-${cohortId}`, 'lessons');
+    return () => EventLogger.panelClosed(OBJECT_TYPES.COURSE, String(cohortId), cohortName || `course-${cohortId}`, 'lessons');
   }, [cohortId, cohortName]);
 
   const onMarkComplete = async (lessonId) => {
@@ -60,9 +60,12 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
       await coursesApi.markLectureComplete(lessonId);
       setCompletedIds((prev) => new Set(prev).add(lessonId));
       const lesson = lessons.find((l) => l.id === lessonId);
-      EventLogger.log(VERBS.COMPLETED_SCENARIO, OBJECT_TYPES.COMPONENT, {
+      // Marking a lecture complete is a submission on the lecture, not a
+      // scenario completing (the verb it used to borrow).
+      EventLogger.log(VERBS.SUBMITTED, OBJECT_TYPES.LECTURE, {
         objectId: String(lessonId),
         objectName: lesson?.title || `lesson-${lessonId}`,
+        result: 'completed',
         component: 'lessons',
         context: { surface: 'lesson', cohortId },
       });

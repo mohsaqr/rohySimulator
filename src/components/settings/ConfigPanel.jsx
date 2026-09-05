@@ -95,6 +95,7 @@ import { RHYTHMS, DEFAULT_RHYTHM, resolveRhythm } from '../../services/rhythms';
 import { MARITAL_STATUSES, PATIENT_GENDERS, PERSONA_TYPES } from '../../services/patientDemographics';
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
 import { useBodyImage } from '../../hooks/useBodyImage';
+import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 
 // Wizard step order — the single source of truth for step numbers. CaseWizard's
 // WIZARD_STEPS table (titles + icons) is built from this list, and any call
@@ -493,7 +494,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         if (savedCase) {
             try {
                 const parsed = JSON.parse(savedCase);
-                console.log('Restored case from auto-save:', parsed.name);
+                EventLogger.log(VERBS.LOADED_CASE, OBJECT_TYPES.CASE, {
+                    objectId: String(parsed.id ?? 'draft'), objectName: parsed.name, result: 'autosave_restore', component: COMPONENTS.CONFIG_PANEL,
+                });
                 return parsed;
             } catch (e) {
                 console.warn('Failed to restore auto-saved case:', e);
@@ -640,7 +643,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
         try {
             const saved = isUpdate ? await apiPut(path, payload) : await apiPost(path, payload);
-            console.log('Case saved successfully:', saved);
+            EventLogger.contentSaved(OBJECT_TYPES.CASE, saved?.id ?? editingCase.id ?? 'new', saved?.name ?? editingCase.name, COMPONENTS.CONFIG_PANEL, isUpdate ? 'updated' : 'created');
 
             // Stage-2 audit: bulk-replace labs in one atomic call. Pre-fix
             // this looped POST per lab with a "first delete" comment that was
@@ -1151,7 +1154,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                     // The copy gets its own server-stamped code.
                                                                     delete duplicatedCase.case_code;
                                                                     localStorage.removeItem('rohy_editing_case');
-                                                                    console.log('[ConfigPanel] Duplicating case:', c.name);
+                                                                    EventLogger.contentDuplicated(OBJECT_TYPES.CASE, c.id, c.name, COMPONENTS.CONFIG_PANEL);
                                                                     setEditingCase(duplicatedCase);
                                                                     toast.success(t('toast_duplicated', { name: c.name }));
                                                                 }}
