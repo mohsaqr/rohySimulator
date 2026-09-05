@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>RPS-1: the Rohy Plugin Standard · Rohy docs</title>
-    <meta name="description" content="Status: 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · Spec version: 1.5 · Last reviewed: 2026-08-29">
+    <meta name="description" content="Status: 1.0–1.6 implemented (rohy v2.9.59–v3.0.0-beta.10) · Spec version: 1.6 · Last reviewed: 2026-09-05">
     <meta name="theme-color" content="#09090b">
 
     <meta property="og:title" content="RPS-1: the Rohy Plugin Standard · Rohy docs">
-    <meta property="og:description" content="Status: 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · Spec version: 1.5 · Last reviewed: 2026-08-29">
+    <meta property="og:description" content="Status: 1.0–1.6 implemented (rohy v2.9.59–v3.0.0-beta.10) · Spec version: 1.6 · Last reviewed: 2026-09-05">
     <meta property="og:image" content="../../assets/patient-room.jpg">
     <meta property="og:type" content="article">
     <meta name="twitter:card" content="summary">
@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../index.html">Overview</a>
             <a href="../../rooms.html">Rooms</a>
+            <a href="../../screenshots.html">Screenshots</a>
             <a href="../../whats-new.html">What's new</a>
             <a href="../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../help.html">Help</a>
@@ -245,7 +246,7 @@
                 </details>
             </nav>
             <article class="md-body">
-<p><strong>Status:</strong> 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · <strong>Spec version:</strong> 1.5 · <strong>Last reviewed:</strong> 2026-08-29</p>
+<p><strong>Status:</strong> 1.0–1.6 implemented (rohy v2.9.59–v3.0.0-beta.10) · <strong>Spec version:</strong> 1.6 · <strong>Last reviewed:</strong> 2026-09-05</p>
 <blockquote>
 <p><strong>Reading this document.</strong> 1.3 was specified before it was built — the same
 discipline as 1.1 and 1.2 — and landed in rohy v2.9.72–v2.9.74. The
@@ -339,12 +340,27 @@ folder with only one of them is not a plugin.</p>
         order: 45,                    // position among rooms
     },
     vocabulary: {
-        verbs: { OPENED_STRIP: { severity: &#39;INFO&#39;, category: &#39;CLINICAL&#39; } },
-        objectTypes: { STRIP: &#39;ecg_strip&#39; },
+        version: 2,                   // 1.6: the full facet row per verb (R33)
+        verbs: {
+            OPENED_STRIP: {
+                severity: &#39;INFO&#39;, category: &#39;CLINICAL&#39;,
+                clinicalState: &#39;assessing&#39;,           // the TNA state
+                action: &#39;Reading results&#39;,            // the clinical-action lens
+                label: &#39;Opened ECG strip&#39;,            // the fine-grained lens
+                // optional: domain, tnaMerge, pulseBucket (derived from the
+                // above when absent), emitter: &#39;planned&#39; + emitterNote for a
+                // verb whose surface is not built yet (R36)
+            },
+        },
+        objectTypes: { ECG_STRIP: &#39;ecg_strip&#39; },      // namespaced keys AND values
         components: { VIEWER: &#39;EcgViewer&#39; },
+        componentPrefix: &#39;Ecg&#39;,       // every component value starts with it (R34)
+        coreVerbs: [],                // rohy verbs the plugin emits on its own behalf (R35)
+        serverOnlyVerbs: [],          // verbs only its server module emits (R36)
     },
     states: {
-        verbFallbacks:   { OPENED_STRIP: &#39;assessing&#39; },   // REQUIRED for every verb
+        // verbFallbacks is derived from `clinicalState` for a v2 vocabulary;
+        // a v1 vocabulary (no longer shippable) declared it here.
         objectOverrides: { ecg_strip: &#39;assessing&#39; },      // own object types only
         interpretations: { &#39;OPENED_STRIP:ecg_strip&#39;: &#39;assessing&#39; },  // own vocabulary only
     },
@@ -540,12 +556,34 @@ far from its cause.</p>
 <td>a server module <code>INSERT</code>ing into a shared plugin table <strong>names its time column</strong></td>
 <td>sqlite&#39;s <code>DEFAULT CURRENT_TIMESTAMP</code> supplying the legacy shape, silently, in a statement that otherwise looks correct</td>
 </tr>
+<tr>
+<td>R33 <em>(1.6)</em></td>
+<td>a shipped manifest declares <code>vocabulary.version: 2</code> and every verb carries the full facet row — <code>severity</code>, <code>category</code>, <code>clinicalState</code>, <code>action</code>, <code>label</code> — each value from the host&#39;s enums</td>
+<td>a plugin&#39;s rows labelled by a host-side guess: before 1.6 the TNA merge map, the seven client lenses and the cohort pulse buckets each hard-coded their own verb list and 65 plugin verbs fell to <code>Other</code></td>
+</tr>
+<tr>
+<td>R34 <em>(1.6)</em></td>
+<td><code>vocabulary.componentPrefix</code> is declared, PascalCase, and every component value starts with it</td>
+<td>two packages&#39; <code>Canvas</code> components indistinguishable in <code>learning_events.component</code></td>
+</tr>
+<tr>
+<td>R35 <em>(1.6)</em></td>
+<td><code>vocabulary.coreVerbs</code> names only rohy base verbs, and no base verb is re-declared as the plugin&#39;s own</td>
+<td>a plugin redefining <code>PERFORMED_PHYSICAL_EXAM</code>&#39;s facets for the whole host</td>
+</tr>
+<tr>
+<td>R36 <em>(1.6)</em></td>
+<td>every declared verb is <strong>emitted by the plugin&#39;s source</strong>, listed in <code>serverOnlyVerbs</code>, or declared <code>emitter: &#39;planned&#39;</code> with an <code>emitterNote</code> — checked by <code>npm run plugins:emissions</code></td>
+<td>a legend of acts a learner could do and never did: the vendored packages once declared 46 verbs and emitted 12</td>
+</tr>
 </tbody></table></div>
 <p>Roles: <code>guest student reviewer educator admin</code> (mirrors <code>ROLE_RANKS</code> in
 <code>server/middleware/auth.js</code>; a contract test asserts the copies agree).</p>
-<p>Clinical states: <code>assessing examining investigating treating communicating documenting monitoring regulating reflecting navigating</code>.
-Capabilities: <code>llm uploads notify persist remote</code>.
-Icons: <code>Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap</code>.
+<p>Clinical states: <code>assessing examining investigating treating communicating documenting monitoring regulating reflecting navigating studying</code>.
+Clinical actions (1.6): <code>History Examining Ordering &#39;Reading results&#39; Treating Monitoring Communicating Consulting Debriefing Documenting Studying Session Navigating</code>. The enums live in <code>server/shared/learningVerbFacets.js</code>; a
+package pins a copy in its own tests so drift fails upstream first.
+Capabilities: <code>llm uploads notify persist remote orders case conversation drawer vitals</code>.
+Icons: <code>Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap HeartPulse Bed</code>.
 Accents: <code>fuchsia teal indigo</code>.</p>
 <p>Icon and accent are <strong>strings resolved against host allowlists</strong> — a manifest is
 server-importable data, so it cannot carry a React component, and Tailwind only
@@ -564,9 +602,11 @@ explicit interpretations outrank both object and verb defaults.</p>
 <h2 id="6-host-context">6. Host context</h2>
 <pre><code class="language-js">ctx = {
     pluginId,
+    surface,         // &#39;room&#39; | &#39;author&#39; — which host surface mounted this
     session: { id, caseId, userId, role, language, examMode },
     data,            // caseConfig[manifest.id] — the plugin&#39;s case material
-    eventLogger,     // see the caveat below
+    log,             // 1.6: the narrowed logger — log(verb, objectType, options)
+    eventLogger,     // DEPRECATED (1.6): a proxy over `log`; removed in 1.7
     capabilities,    // only what the host actually granted
     store,           // present iff &#39;persist&#39; was requested
     t, navigate,
@@ -580,26 +620,61 @@ would write grading prompts into the case transcript. The plugin wants
 all, and a plugin that requested it MUST degrade rather than crash.</p>
 <p>A capability the manifest requests but the host does not grant is <strong>absent</strong>,
 not a broken stub. Check before calling.</p>
-<blockquote>
-<p><strong>Known weakness.</strong> <code>ctx.eventLogger</code> is currently the whole <code>EventLogger</code>
-singleton, which exposes <code>setContext()</code> and unrestricted <code>log()</code>. A plugin can
-therefore change the global session/room context or emit another plugin&#39;s
-verbs. The narrowed <code>log()</code> adapter that would fix this — fixing
-<code>{pluginId, sessionId, room, allowedVerbs}</code> — is <strong>not built</strong>. Until it is,
-plugins are expected to wrap the logger themselves, as the pathology package
-does with <code>createPathologyLogger()</code>.</p>
-</blockquote>
+<p><strong><code>ctx.log</code> is the logger</strong> <em>(1.6)</em>. <code>src/plugins/logger.js#createPluginLogger</code>
+builds it per mount, fixed to <code>{pluginId, pluginVersion, sessionId, room = pluginId, surface}</code>, and it:</p>
+<ul>
+<li>accepts exactly <code>log(verb, objectType, options)</code> — three positionals. (The
+one-object form <code>log({verb, objectType, component, detail})</code> is accepted for
+one release with <code>context._log_shape = &#39;object&#39;</code> and a warning, because
+Radoyon 0.3 spoke it and every one of its rows was lost at ingest; 1.7 drops it);</li>
+<li>refuses a verb the manifest does not declare — its own <code>vocabulary.verbs</code>, its
+<code>coreVerbs</code>, or a host-delegable verb (<code>RAISED_ERROR</code>, <code>NOTIFIED</code>, …) — by
+writing <code>UNDECLARED_VERB</code> with <code>context.attempted_verb</code>, never by dropping
+the row (it throws in dev/test so the author sees it first);</li>
+<li>soft-gates object type and component: an undeclared one is kept and marked
+<code>context._undeclared</code>;</li>
+<li>strips prose — <code>answer</code>, <code>expected</code>, <code>text</code>, <code>body</code>, <code>notes</code>, <code>transcript</code>,
+<code>answer_key</code>, … at any depth — from <code>context</code>, truncates <code>objectName</code> to its
+first line, drops <code>messageContent</code>/<code>messageRole</code>, and caps <code>context</code> at 4 KB;</li>
+<li>stamps <code>room</code>, <code>pluginId</code>, <code>pluginVersion</code>, <code>parentComponent</code> and
+<code>context.surface</code>, and refuses a caller&#39;s attempt to override them.</li>
+</ul>
+<p>There is nothing on it a plugin could use to change the global session or room
+context, or to emit another plugin&#39;s verbs. <code>ctx.eventLogger</code> still exists as a
+deprecation proxy: <code>log</code> forwards; <code>setContext</code>, <code>clearContext</code>, <code>roomChanged</code>,
+<code>setEnabled</code> throw with a message naming <code>ctx.log</code>. It is removed in 1.7.</p>
+<p>A package is still expected to wrap the logger in its own factory — Radoyon&#39;s
+<code>createRadoyonLogger</code>, Cardoyon&#39;s <code>create_ecg_logger</code>, Pathoyon&#39;s
+<code>createPathologyLogger</code> — so that severity and category are passed explicitly,
+every act has a named helper, and the package&#39;s own contract test can pin the
+call shape without a host present.</p>
 <hr>
 <h2 id="7-events">7. Events</h2>
 <p>Plugin rows land in <code>learning_events</code> with <code>room = &#39;&lt;id&gt;&#39;</code>, interleaved with
 every other event by timestamp. That is the entire point: a slide read and a lab
 order sit in one sequence, so TNA can show the transition between them. No new
 table, no ETL.</p>
-<p>The manifest&#39;s <code>states</code> block feeds <code>clinicalStates.js</code>, so plugin verbs resolve
-to clinical states instead of a literal bucket.</p>
-<p>The server validates every verb against one registry
-(<code>server/shared/learningVerbs.js</code>), on <strong>both</strong> <code>POST /learning-events</code> and
-<code>POST /learning-events/batch</code>.</p>
+<p><em>(1.6)</em> Every plugin row also carries <strong><code>plugin_id</code> and <code>plugin_version</code></strong>
+(migration 0055; historical rows back-filled from <code>room</code>). Attribution is
+metadata: a <code>plugin_id</code> the host does not ship, or a verb that plugin does not
+declare, is <strong>stripped</strong> (<code>stripped_reasons</code> in the batch response) and the row
+is still written — a learner&#39;s act is never lost over a provenance label. A
+<code>plugin_version</code> the host does not ship is stored as NULL and counted.
+<code>context.surface</code> says whether the row came from the room or the editor
+(§11); an editor row still carries <code>room = &#39;&lt;id&gt;&#39;</code>.</p>
+<p>The manifest&#39;s facets (R33) feed <strong>every</strong> consumer: the TNA merge map, the
+seven client lenses, the cohort pulse buckets, the server sequence builder
+(<code>/analytics/tna-sequences?lens=</code>), the room labels. There is no second list
+anywhere; <code>server/shared/eventFacets.js</code> is where all of them resolve.</p>
+<p><strong>One writer.</strong> <code>server/lib/learningEventIngest.js#ingestEvents</code> is the only
+code that inserts into <code>learning_events</code>: both client routes, <code>ctx.emit()</code>
+(§17) and every server-side writer go through it. Every verb is checked against
+one registry (<code>server/shared/learningVerbs.js</code>), historical verb names are
+read through the alias map (<code>VERB_ALIASES</code>, read-time only — stored rows are
+never rewritten), and a row that cannot be written is <strong>quarantined</strong> in
+<code>learning_events_rejected</code> with its reason rather than dropped (<code>GET /api/analytics/rejected-events</code>; <code>/api/ready</code> reports the day&#39;s count). A
+retired name emitted by a stale client is normalised on the way in, so an old
+build keeps producing rows.</p>
 <hr>
 <h2 id="7a-remote-content-added-in-12">7a. Remote content <em>(added in 1.2)</em></h2>
 <p>A plugin whose material is too large to ship inside rohy declares the <code>remote</code>
@@ -834,8 +909,12 @@ same deletion into a build failure.</li>
 npm run plugins:check    # drift gate — runs in prebuild
 </code></pre>
 <p>Runtime registration additionally cross-checks the frozen snapshot and throws if
-a descriptor&#39;s id or vocabulary has drifted, so a plugin cannot mount
-client-side while the server rejects everything it emits.</p>
+a descriptor&#39;s manifest has drifted — a <strong>deep compare</strong> of the whole canonical
+manifest as of 1.6, naming the first differing path. The earlier guard compared
+verb names only, so a changed severity, state or object type mounted silently
+while the server persisted the old value. The generator also refuses to ship a
+manifest that fails R33/R34 (<code>assertShippedManifest</code>), and <code>plugins:check</code> runs
+<code>plugins:emissions</code> (R36) beside the drift check.</p>
 <blockquote>
 <p><strong>Note.</strong> An earlier version of this document justified generation with &quot;the
 Docker runtime stage copies <code>server/</code> but not <code>src/</code>&quot;. That is false for the
@@ -912,6 +991,13 @@ step opens the editor full-viewport and Done writes the document into
 still render <code>PluginAuthor</code> with no <code>onSave</code>, in which case the plugin&#39;s own
 export remains the way out.</p>
 </blockquote>
+<h3 id="the-editor39s-rows-16">The editor&#39;s rows <em>(1.6)</em></h3>
+<p>The host emits <code>OPENED_PLUGIN_EDITOR</code>, <code>EDITED_PLUGIN_DOCUMENT</code> (debounced,
+shape only — never the document) and <code>SAVED_PLUGIN_DOCUMENT</code> on the plugin&#39;s
+behalf, stamped with its <code>plugin_id</code> and <code>context.surface = &#39;author&#39;</code>. A package
+that logs from inside its editor (Radoyon&#39;s inspector previews a study) logs
+through the same <code>ctx.log</code>, so those rows carry the author surface too rather
+than reading as learner acts.</p>
 <h2 id="11a-the-document-13">11a. The document <em>(1.3)</em></h2>
 <p>A plugin is <strong>part editor, part room</strong>, and the thing that travels between the
 two halves is its <em>document</em>: the plugin&#39;s slice of the case config,
@@ -1263,13 +1349,26 @@ package&#39;s own repo so the author sees the failure before the host does (§17
 <li><input disabled="" type="checkbox"> <em>(1.5)</em> Server-side events go through <code>ctx.emit()</code> with a verb the manifest
 declares; operational work (an import, a sweep) is NOT dressed as a learner
 verb (§17)</li>
+<li><input disabled="" type="checkbox"> <em>(1.6)</em> <code>vocabulary.version: 2</code>, and every verb carries severity, category,
+<code>clinicalState</code>, <code>action</code> and <code>label</code> from the host&#39;s enums (R33)</li>
+<li><input disabled="" type="checkbox"> <em>(1.6)</em> <code>componentPrefix</code> declared and every component value carries it (R34);
+object-type keys and values are namespaced</li>
+<li><input disabled="" type="checkbox"> <em>(1.6)</em> Every declared verb is emitted, server-only, or planned with a note —
+<code>npm run plugins:emissions</code> is clean (R36) — and the package&#39;s own repo
+carries a <code>logger-contract</code> test pinning the three-positional call shape,
+explicit severity/category, and the absence of learner prose</li>
+<li><input disabled="" type="checkbox"> <em>(1.6)</em> The room logs only through <code>ctx.log</code> (or a package factory wrapping
+it); nothing reaches for <code>ctx.eventLogger</code></li>
+<li><input disabled="" type="checkbox"> <em>(1.6)</em> No row carries learner prose or the answer key: not a report body,
+not an annotation&#39;s text, not an ROI&#39;s finding label, not the expected
+diagnosis — shape (word counts, ids, geometry in microns) only</li>
 </ul>
 <hr>
 <h2 id="14-not-built-yet">14. Not built yet</h2>
 <p>Ordered by how much they matter to a plugin author.</p>
 <ol>
-<li><strong>No narrowed <code>log()</code> adapter</strong> — <code>ctx.eventLogger</code> is the mutable global
-singleton (§6).</li>
+<li><del><strong>No narrowed <code>log()</code> adapter</strong></del> — <strong>closed in 1.6</strong> by <code>ctx.log</code> (§6);
+<code>ctx.eventLogger</code> is a deprecation proxy until 1.7.</li>
 <li><strong><code>ctx.store</code> is still per-browser.</strong> Narrowed in 1.4 rather than closed. A
 plugin&#39;s SERVER module can now write (§11b) — routes, jobs and its own
 <code>plugin_&lt;id&gt;_</code> tables — so bulk content and long work have a home. But the
@@ -1277,10 +1376,12 @@ CLIENT-side <code>ctx.store</code> a room uses for drafts is still <code>localSt
 for a draft, not for anything that must survive a device change.
 Nor is there an upstream-authentication design: the proxy can only reach a
 host that will serve it unauthenticated from rohy&#39;s network position.</li>
-<li><strong>No plugin/version attribution on rows.</strong> Events store neither <code>plugin_id</code>
-nor manifest version, and clinical state is resolved with the currently
-installed maps — so upgrading or removing a plugin retroactively reinterprets
-historical analytics.</li>
+<li><del><strong>No plugin/version attribution on rows.</strong></del> — <strong>closed in 1.6</strong> by
+<code>plugin_id</code> / <code>plugin_version</code> (migration 0055, §7). Clinical state is still
+resolved with the currently installed maps: a removed plugin&#39;s rows keep
+their columns but resolve through the alias map and the last folded
+facets, so removing a plugin still reinterprets its history. Freezing facets
+per <code>plugin_version</code> is not built.</li>
 <li><del><strong>No per-tenant enable/disable</strong></del> — <strong>closed in 1.4</strong> by the settings slot
 (§11c): <code>plugin_settings</code> is per (tenant, plugin), and a plugin declares its
 own knobs rather than getting a hand-written screen. <code>minRole</code> and
@@ -1414,10 +1515,14 @@ stay green against stale code.</p>
 <td>losing the gate along with the code it guards</td>
 </tr>
 </tbody></table></div>
+<p><em>(1.6)</em> <code>vendor:check</code> also reports <strong>currency</strong> where the upstream checkout is
+present: the stamp&#39;s commit against upstream <code>HEAD</code>, as &quot;N commits behind&quot;.
+Report only — a stale copy is a decision to make, not a broken build.</p>
 <h3 id="165-the-commands">16.5 The commands</h3>
 <pre><code>npm run vendor              # every registered package
 npm run vendor -- pacs      # one of them
 npm run vendor:check        # verify stamps; report staleness where upstream is present
+npm run plugins:emissions   # 1.6: every declared verb is emitted (R36); --check in plugins:check
 </code></pre>
 <p>The registry lives in <code>scripts/vendor-plugins.mjs</code>. A package <strong>may</strong> ship its
 own installer — radoyon does, on the principle that a package knows how to
@@ -1540,7 +1645,9 @@ to a browser, and what stops a plugin inventing verbs at runtime that no
 dashboard, state map or export knows how to read. The trinity is derived from
 the session, never accepted — a plugin is not more trusted than a browser here —
 and <code>timestamp</code> is the server&#39;s clock, so a plugin can say <em>what</em> happened but
-never <em>when</em>.</p>
+never <em>when</em>. <em>(1.6)</em> It writes through the same <code>ingestEvents</code> core as the
+browser routes (§7), so the row carries <code>plugin_id</code> / <code>plugin_version</code> and a
+refused row is quarantined with its reason like any other.</p>
 <p>Operational work is not a learning event. A slide import is not something a
 learner did, and forcing it into a learner verb would corrupt exactly the
 analytics it was meant to enrich. <code>plugin_jobs</code> is instead its own source in the
@@ -1572,6 +1679,7 @@ import, and every failure of one, belongs.</p>
                 <h4>Pages</h4>
                 <a href="../../index.html">Overview</a>
                 <a href="../../rooms.html">Rooms</a>
+                <a href="../../screenshots.html">Screenshots</a>
                 <a href="../../whats-new.html">What's new</a>
                 <a href="../../help.html">Help</a>
                 <a href="../../about.html">About the author</a>

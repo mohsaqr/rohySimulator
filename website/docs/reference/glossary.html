@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../index.html">Overview</a>
             <a href="../../rooms.html">Rooms</a>
+            <a href="../../screenshots.html">Screenshots</a>
             <a href="../../whats-new.html">What's new</a>
             <a href="../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../help.html">Help</a>
@@ -273,9 +274,13 @@ not bleed in.</p>
 Laboratory, Radiology, Consultant (debrief). <code>currentRoom</code> is the single
 source of truth in <code>App.jsx</code>.</p>
 <p><strong>Session</strong> — One trainee&#39;s run of one case, from start to debrief end.</p>
-<p><strong>Learning event</strong> — An xAPI-style row written via <code>eventLogger.js</code> (130+
-verbs); every row is <code>room</code>-stamped server-side. The only canonical way to
-write <code>learning_events</code>.</p>
+<p><strong>Learning event</strong> — An xAPI-style row in <code>learning_events</code>. The verb
+registry is <code>server/shared/learningVerbs.js</code> (rohy&#39;s base verbs plus every
+plugin manifest&#39;s, with per-verb analytics facets); the client writes through
+<code>eventLogger.js</code> / a plugin&#39;s <code>ctx.log</code>, and the server&#39;s one writer is
+<code>server/lib/learningEventIngest.js</code>. Every row carries <code>room</code>, and a plugin row
+carries <code>plugin_id</code> / <code>plugin_version</code>. Historical verb names are read through
+the alias map, never rewritten.</p>
 <p><strong>NotificationCenter</strong> — The central notification dispatch. All toasts,
 banners and alarms route through <code>src/notifications/</code> and fan out to 6
 surfaces. There is no other notification path.</p>
@@ -327,6 +332,7 @@ Never hand-written; never drifts.</p>
                 <h4>Pages</h4>
                 <a href="../../index.html">Overview</a>
                 <a href="../../rooms.html">Rooms</a>
+                <a href="../../screenshots.html">Screenshots</a>
                 <a href="../../whats-new.html">What's new</a>
                 <a href="../../help.html">Help</a>
                 <a href="../../about.html">About the author</a>

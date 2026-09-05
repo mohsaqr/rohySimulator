@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../index.html">Overview</a>
             <a href="../../rooms.html">Rooms</a>
+            <a href="../../screenshots.html">Screenshots</a>
             <a href="../../whats-new.html">What's new</a>
             <a href="../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../help.html">Help</a>
@@ -278,9 +279,12 @@ They are excluded from the copy and survive re-vendoring.</li>
 <h2 id="commands">Commands</h2>
 <pre><code class="language-bash">npm run vendor                    # re-vendor every registered package
 npm run vendor -- pacs            # just one
-npm run vendor:check              # verify stamps; report staleness
-npm run plugins:gen &amp;&amp; npx vitest run &amp;&amp; npm run build   # after any re-vendor
+npm run vendor:check              # verify stamps; report staleness and commits-behind
+npm run plugins:gen &amp;&amp; npm run plugins:emissions &amp;&amp; npx vitest run &amp;&amp; npm run build   # after any re-vendor
 </code></pre>
+<p><code>plugins:emissions</code> (RPS-1 R36) reads the vendored source and refuses a manifest
+that declares a verb nothing emits — the check that would have caught the 34
+declared-but-dead plugin verbs the packages carried before 1.6.</p>
 <p>If your checkouts are not in <code>~/Documents/Github/</code>, point the tool at them:</p>
 <pre><code class="language-bash">ROHY_VENDOR_RADOYON=~/src/Radoyon/radoyon npm run vendor -- pacs
 </code></pre>
@@ -293,7 +297,8 @@ A folder edited in place is a failing test, not a surprise later.</li>
 <li><strong>Provenance</strong> — &quot;which radoyon is this?&quot; is a file, not archaeology.</li>
 <li><strong>Currency</strong> — <em>not</em> proven by the stamp. A copy three commits behind hashes
 perfectly against its own stamp. Only <code>vendor:check</code>, on a machine that has the
-upstream checkout, can say &quot;upstream has moved&quot;.</li>
+upstream checkout, can say &quot;upstream has moved&quot; — and since 1.6 it says by how
+much (&quot;3 commits behind&quot;), report only.</li>
 </ul>
 <p>That last distinction is the reason this machinery exists. rohy&#39;s PACS copy once
 sat frozen while both repos advanced, and nothing in rohy said so or could have:
@@ -346,6 +351,7 @@ what their upstreams are.</p>
                 <h4>Pages</h4>
                 <a href="../../index.html">Overview</a>
                 <a href="../../rooms.html">Rooms</a>
+                <a href="../../screenshots.html">Screenshots</a>
                 <a href="../../whats-new.html">What's new</a>
                 <a href="../../help.html">Help</a>
                 <a href="../../about.html">About the author</a>

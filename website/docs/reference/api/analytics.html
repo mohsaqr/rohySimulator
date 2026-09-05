@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../../index.html">Overview</a>
             <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../screenshots.html">Screenshots</a>
             <a href="../../../whats-new.html">What's new</a>
             <a href="../../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../../help.html">Help</a>
@@ -225,7 +226,7 @@
 <p><strong>Generated file — do not hand-edit.</strong> Produced from <code>server/routes/*.js</code>
 by <code>scripts/docs-gen/gen-api.mjs</code>. Regenerate with <code>npm run docs:gen:api</code>.</p>
 </blockquote>
-<p>48 endpoints. All paths are
+<p>51 endpoints. All paths are
 relative to the <code>/api</code> base. See the <a href="index.html">API index</a> for the auth
 model.</p>
 <div class="table-wrap"><table>
@@ -241,289 +242,307 @@ model.</p>
 <td><code>PUT</code></td>
 <td><code>/api/alarms/:id/acknowledge</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:2861</code></td>
+<td><code>server/routes/analytics-routes.js:2745</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/alarms/config</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:2906</code></td>
+<td><code>server/routes/analytics-routes.js:2790</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/alarms/config</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:2947</code></td>
+<td><code>server/routes/analytics-routes.js:2831</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/alarms/config/:userId</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:2922</code></td>
+<td><code>server/routes/analytics-routes.js:2806</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/alarms/log</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:2837</code></td>
+<td><code>server/routes/analytics-routes.js:2721</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/case-insights</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1539</code></td>
+<td><code>server/routes/analytics-routes.js:1406</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/daily-counts</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3068</code></td>
+<td><code>server/routes/analytics-routes.js:3007</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/analytics/events</code></td>
+<td><code>authenticateToken</code></td>
+<td><code>server/routes/analytics-routes.js:2915</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/filter-options</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3127</code></td>
+<td><code>server/routes/analytics-routes.js:3066</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/hourly-counts</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3078</code></td>
+<td><code>server/routes/analytics-routes.js:3017</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/login-logs</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:358</code></td>
+<td><code>server/routes/analytics-routes.js:359</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/analytics/rejected-events</code></td>
+<td><code>authenticateToken, requireAdmin</code></td>
+<td><code>server/routes/analytics-routes.js:904</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/sessions</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:198</code></td>
+<td><code>server/routes/analytics-routes.js:208</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/sessions/:id</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:237</code></td>
+<td><code>server/routes/analytics-routes.js:247</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/analytics/sessions/:id/reconcile</code></td>
+<td><code>authenticateToken, requireEducator</code></td>
+<td><code>server/routes/analytics-routes.js:948</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/settings-logs</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:377</code></td>
+<td><code>server/routes/analytics-routes.js:378</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/stats</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3107</code></td>
+<td><code>server/routes/analytics-routes.js:3046</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/summary</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3098</code></td>
+<td><code>server/routes/analytics-routes.js:3037</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/timeline-series</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3089</code></td>
+<td><code>server/routes/analytics-routes.js:3028</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/tna-sequences</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3038</code></td>
+<td><code>server/routes/analytics-routes.js:2976</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/top-resources</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3118</code></td>
+<td><code>server/routes/analytics-routes.js:3057</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/analytics/user-stats/:userId</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:272</code></td>
+<td><code>server/routes/analytics-routes.js:282</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/chat-log/feed</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:1971</code></td>
+<td><code>server/routes/analytics-routes.js:1850</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/chat-log/turns</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1453</code></td>
+<td><code>server/routes/analytics-routes.js:1320</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/client-logs</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/analytics-routes.js:940</code></td>
+<td><code>server/routes/analytics-routes.js:720</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/client-logs/batch</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:894</code></td>
+<td><code>server/routes/analytics-routes.js:674</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/emotion-logs</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3183</code></td>
+<td><code>server/routes/analytics-routes.js:3139</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/emotion-logs</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:3164</code></td>
+<td><code>server/routes/analytics-routes.js:3120</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/export/complete-session/:sessionId</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:410</code></td>
+<td><code>server/routes/analytics-routes.js:411</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/export/learning-events</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1855</code></td>
+<td><code>server/routes/analytics-routes.js:1722</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/export/questionnaire-responses</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:3211</code></td>
+<td><code>server/routes/analytics-routes.js:3167</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/export/system-log/:source</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:2323</code></td>
+<td><code>server/routes/analytics-routes.js:2207</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/interactions</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:152</code></td>
+<td><code>server/routes/analytics-routes.js:162</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/interactions/:session_id</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:174</code></td>
+<td><code>server/routes/analytics-routes.js:184</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/learning-events</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:544</code></td>
+<td><code>server/routes/analytics-routes.js:545</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/all</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1148</code></td>
+<td><code>server/routes/analytics-routes.js:999</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/analytics/summary</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1056</code></td>
+<td><code>server/routes/analytics-routes.js:836</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/learning-events/batch</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:673</code></td>
+<td><code>server/routes/analytics-routes.js:605</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/detailed/:sessionId</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1739</code></td>
+<td><code>server/routes/analytics-routes.js:1606</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/moments</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1430</code></td>
+<td><code>server/routes/analytics-routes.js:1297</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/recent</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1120</code></td>
+<td><code>server/routes/analytics-routes.js:971</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/session/:id</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:976</code></td>
+<td><code>server/routes/analytics-routes.js:756</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/user/:id</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:1004</code></td>
+<td><code>server/routes/analytics-routes.js:784</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/learning-events/verbs</code></td>
-<td><code>(none)</code></td>
-<td><code>server/routes/analytics-routes.js:1115</code></td>
+<td><code>authenticateToken</code></td>
+<td><code>server/routes/analytics-routes.js:898</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/questionnaire-responses</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:3297</code></td>
+<td><code>server/routes/analytics-routes.js:3253</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/questionnaire-responses</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:3278</code></td>
+<td><code>server/routes/analytics-routes.js:3234</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/sessions/:id/events</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:509</code></td>
+<td><code>server/routes/analytics-routes.js:510</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/settings/log</code></td>
 <td><code>authenticateToken</code></td>
-<td><code>server/routes/analytics-routes.js:315</code></td>
+<td><code>server/routes/analytics-routes.js:325</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/system-log/feed</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:2412</code></td>
+<td><code>server/routes/analytics-routes.js:2296</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/system-log/table/:name</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:2790</code></td>
+<td><code>server/routes/analytics-routes.js:2674</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/system-log/tables</code></td>
 <td><code>authenticateToken, requireAdmin</code></td>
-<td><code>server/routes/analytics-routes.js:2764</code></td>
+<td><code>server/routes/analytics-routes.js:2648</code></td>
 </tr>
 </tbody></table></div>
             </article>
@@ -551,6 +570,7 @@ model.</p>
                 <h4>Pages</h4>
                 <a href="../../../index.html">Overview</a>
                 <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../screenshots.html">Screenshots</a>
                 <a href="../../../whats-new.html">What's new</a>
                 <a href="../../../help.html">Help</a>
                 <a href="../../../about.html">About the author</a>

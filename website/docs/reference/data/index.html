@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../../index.html">Overview</a>
             <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../screenshots.html">Screenshots</a>
             <a href="../../../whats-new.html">What's new</a>
             <a href="../../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../../help.html">Help</a>
@@ -230,7 +231,7 @@
 <blockquote>
 <p><strong>Generated file — do not edit by hand.</strong> Produced by <code>scripts/docs-gen/gen-data.mjs</code> from <code>server/db.js</code>, <code>migrations/0001_initial.sql</code> (the bootstrap schema) and all <code>migrations/*.sql</code>. Regenerate with <code>npm run docs:gen:data</code>.</p>
 </blockquote>
-<p><strong>95 tables</strong> in the durable data model.</p>
+<p><strong>96 tables</strong> in the durable data model.</p>
 <blockquote>
 <p>Note: <code>server/db.js</code> no longer holds inline <code>CREATE TABLE</code> DDL — it delegates to the migration runner. The canonical bootstrap schema is <code>migrations/0001_initial.sql</code>, treated here as the base schema. SQLite rebuild-scaffold tables (<code>*_new</code>/<code>*_old</code>) are intentionally excluded.</p>
 </blockquote>
@@ -268,7 +269,7 @@
 </tbody></table></div>
 <h2 id="migration-policy">Migration policy</h2>
 <p>Schema evolves only through versioned <code>migrations/*.sql</code>. Each migration is classified <strong>additive</strong> (previous-version code still runs) or <strong>destructive</strong> in <code>migrations/MANIFEST.md</code>, which <code>bin/rohy-update</code> reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.</p>
-<p>Parsed <strong>53 migration files</strong> beyond the base schema (<code>0001_initial.sql</code>).</p>
+<p>Parsed <strong>55 migration files</strong> beyond the base schema (<code>0001_initial.sql</code>).</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -547,6 +548,16 @@
 <td>additive</td>
 <td>The two default patient templates answer only what is asked: one question, one answer, one or two sentences, nothing volunteered. Two idempotent <code>UPDATE</code>s on <code>agent_templates</code>, both guarded on the shipped text (the earlier prompt&#39;s opening sentence; the earlier first &quot;do&quot;), so an admin-edited template keeps the admin&#39;s words. Fresh installs get the same text from <code>server/db.js</code> <code>PATIENT_TEMPLATE_PROMPT</code>. No column changes.</td>
 </tr>
+<tr>
+<td><code>0055_learning_events_plugin_attribution.sql</code></td>
+<td>additive</td>
+<td>Which plugin produced a learning-event row, and which version of it (RPS-1 §14.3, &quot;no plugin/version attribution on rows&quot;). Until now a plugin&#39;s rows were told apart from the host&#39;s only by <code>room</code>, and clinical state was resolved with whatever maps were installed at READ time — so upgrading or removing a plugin retroactively reinterpreted its history. Two nullable <code>ADD COLUMN</code>s (<code>plugin_id</code>, <code>plugin_version</code>) and a partial index <code>idx_learning_events_plugin(tenant_id, plugin_id, timestamp) WHERE plugin_id IS NOT NULL</code>, the same shape 0021 used for <code>room</code>. A guarded backfill sets <code>plugin_id = room</code> for the four plugin ids installed at this release (<code>pacs</code>, <code>ecg</code>, <code>pathology</code>, <code>room3d</code>) — <code>room</code> HAS been the plugin id for every plugin row since 0021 — and leaves <code>plugin_version</code> NULL, because it is genuinely unknown for a historical row and inventing the currently-installed version would be the lie attribution exists to prevent. The ingest core writes both columns for every new plugin row; a mismatched (plugin_id, verb) pair STRIPS the attribution and inserts the row rather than dropping a learner&#39;s action over a provenance label. Existing rows read NULL and pre-migration code never selects the columns.</td>
+</tr>
+<tr>
+<td><code>0056_learning_events_rejected.sql</code></td>
+<td>additive</td>
+<td>The learning-event quarantine. A rejected event used to be a counter in the batch response (<code>dropped_reasons</code>) — visible to the client that sent it and to nobody else — so an entire subsystem could write into a pipeline that threw its rows away without an operator ever seeing it (the lessons video verbs did exactly that for two months). New <code>learning_events_rejected(tenant_id, user_id, session_id, received_at, reason, source, verb, object_type, payload_json, client_time, plugin_id)</code> with a CHECK on <code>reason</code> (the six legacy drop reasons plus <code>server_only_verb</code> and <code>payload_too_large</code>), indexed on <code>(tenant_id, received_at DESC)</code> and <code>(tenant_id, reason, received_at DESC)</code>. <code>user_id</code> is the PRINCIPAL who posted, never a derived victim; <code>session_id</code> is stored as posted and deliberately not validated (that is the point). <code>payload_json</code> is capped at 4 KB and is a SHAPE summary (key names and lengths) for a forgery — <code>not_owner</code> / <code>cross_tenant</code> — so attacker-supplied prose is never persisted under a victim&#39;s tenant; forgeries also produce a <code>system_audit_log</code> entry. Read by <code>GET /api/analytics/rejected-events</code>, exported as <code>/export/system-log/rejected</code>, counted on <code>/api/ready</code>, swept by <code>scripts/sweep-retention.js</code> with the same 365-day horizon as <code>learning_events</code>. Also adds the two read indexes every tenant-scoped aggregate was missing: <code>idx_learning_events_tenant_time(tenant_id, timestamp)</code> and <code>idx_learning_events_tenant_verb(tenant_id, verb)</code> — <code>buildEventFilter</code> always leads with <code>tenant_id = ?</code> and then either ranges on <code>timestamp</code> or groups on <code>verb</code>, and neither pair had a composite. Strictly additive: one new table referenced by nothing pre-existing, two indexes.</td>
+</tr>
 </tbody></table></div>
 <h2 id="tables-by-concern">Tables by concern</h2>
 <span class="anchor-alias" id="auth--users"></span><h3 id="auth-users">Auth &amp; users</h3>
@@ -578,7 +589,7 @@
 <span class="anchor-alias" id="platform--retention"></span><h3 id="platform-retention">Platform &amp; retention</h3>
 <p><code>platform_settings</code></p>
 <h3 id="other">Other</h3>
-<p><code>cohort_surveys</code>, <code>lesson_progress</code>, <code>lesson_sections</code>, <code>lessons</code>, <code>plugin_assets</code>, <code>plugin_jobs</code>, <code>plugin_settings</code>, <code>registration_invite_uses</code>, <code>registration_invites</code>, <code>registration_requests</code>, <code>survey_answers</code>, <code>survey_questions</code>, <code>survey_responses</code>, <code>surveys</code></p>
+<p><code>cohort_surveys</code>, <code>learning_events_rejected</code>, <code>lesson_progress</code>, <code>lesson_sections</code>, <code>lessons</code>, <code>plugin_assets</code>, <code>plugin_jobs</code>, <code>plugin_settings</code>, <code>registration_invite_uses</code>, <code>registration_invites</code>, <code>registration_requests</code>, <code>survey_answers</code>, <code>survey_questions</code>, <code>survey_responses</code>, <code>surveys</code></p>
 <hr>
 <p><em>Regenerate: <code>npm run docs:gen:data</code></em></p>
             </article>
@@ -606,6 +617,7 @@
                 <h4>Pages</h4>
                 <a href="../../../index.html">Overview</a>
                 <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../screenshots.html">Screenshots</a>
                 <a href="../../../whats-new.html">What's new</a>
                 <a href="../../../help.html">Help</a>
                 <a href="../../../about.html">About the author</a>

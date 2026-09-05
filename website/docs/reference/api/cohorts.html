@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="../../../index.html">Overview</a>
             <a href="../../../rooms.html">Rooms</a>
+            <a href="../../../screenshots.html">Screenshots</a>
             <a href="../../../whats-new.html">What's new</a>
             <a href="../../../docs/index.html" aria-current="page">Docs</a>
             <a href="../../../help.html">Help</a>
@@ -225,7 +226,7 @@
 <p><strong>Generated file — do not hand-edit.</strong> Produced from <code>server/routes/*.js</code>
 by <code>scripts/docs-gen/gen-api.mjs</code>. Regenerate with <code>npm run docs:gen:api</code>.</p>
 </blockquote>
-<p>32 endpoints. All paths are
+<p>33 endpoints. All paths are
 relative to the <code>/api</code> base. See the <a href="index.html">API index</a> for the auth
 model.</p>
 <div class="table-wrap"><table>
@@ -241,193 +242,199 @@ model.</p>
 <td><code>GET</code></td>
 <td><code>/api/cohorts</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:258</code></td>
+<td><code>server/routes/cohorts-routes.js:259</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:151</code></td>
+<td><code>server/routes/cohorts-routes.js:152</code></td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/cohorts/:id</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:437</code></td>
+<td><code>server/routes/cohorts-routes.js:438</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:319</code></td>
+<td><code>server/routes/cohorts-routes.js:320</code></td>
 </tr>
 <tr>
 <td><code>PATCH</code></td>
 <td><code>/api/cohorts/:id</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:361</code></td>
+<td><code>server/routes/cohorts-routes.js:362</code></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/cohorts/:id/analytics/events</code></td>
+<td><code>authenticateToken, requireEducator</code></td>
+<td><code>server/routes/cohorts-routes.js:1945</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/filter-options</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1518</code></td>
+<td><code>server/routes/cohorts-routes.js:1538</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/hourly-counts</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1877</code></td>
+<td><code>server/routes/cohorts-routes.js:1909</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/pulse</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1561</code></td>
+<td><code>server/routes/cohorts-routes.js:1593</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/stats</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1888</code></td>
+<td><code>server/routes/cohorts-routes.js:1920</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/summary</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1855</code></td>
+<td><code>server/routes/cohorts-routes.js:1887</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/timeline-series</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1866</code></td>
+<td><code>server/routes/cohorts-routes.js:1898</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/tna-sequences</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1911</code></td>
+<td><code>server/routes/cohorts-routes.js:1971</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/analytics/top-resources</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1899</code></td>
+<td><code>server/routes/cohorts-routes.js:1931</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/:id/cases</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:593</code></td>
+<td><code>server/routes/cohorts-routes.js:594</code></td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/cohorts/:id/cases/:caseId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:694</code></td>
+<td><code>server/routes/cohorts-routes.js:695</code></td>
 </tr>
 <tr>
 <td><code>PATCH</code></td>
 <td><code>/api/cohorts/:id/cases/:caseId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:721</code></td>
+<td><code>server/routes/cohorts-routes.js:722</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/export</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1407</code></td>
+<td><code>server/routes/cohorts-routes.js:1426</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/feed</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1356</code></td>
+<td><code>server/routes/cohorts-routes.js:1375</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/grid</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1243</code></td>
+<td><code>server/routes/cohorts-routes.js:1262</code></td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/cohorts/:id/join-code</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1014</code></td>
+<td><code>server/routes/cohorts-routes.js:1015</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/:id/join-code</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:995</code></td>
+<td><code>server/routes/cohorts-routes.js:996</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/:id/members</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:523</code></td>
+<td><code>server/routes/cohorts-routes.js:524</code></td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/cohorts/:id/members/:userId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:558</code></td>
+<td><code>server/routes/cohorts-routes.js:559</code></td>
 </tr>
 <tr>
 <td><code>PATCH</code></td>
 <td><code>/api/cohorts/:id/members/:userId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:776</code></td>
+<td><code>server/routes/cohorts-routes.js:777</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/:id/members/bulk</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:830</code></td>
+<td><code>server/routes/cohorts-routes.js:831</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/roster</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1197</code></td>
+<td><code>server/routes/cohorts-routes.js:1216</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/:id/student/:userId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:1294</code></td>
+<td><code>server/routes/cohorts-routes.js:1313</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/:id/teachers</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:933</code></td>
+<td><code>server/routes/cohorts-routes.js:934</code></td>
 </tr>
 <tr>
 <td><code>DELETE</code></td>
 <td><code>/api/cohorts/:id/teachers/:userId</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:966</code></td>
+<td><code>server/routes/cohorts-routes.js:967</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/bulk-enroll</code></td>
 <td><code>authenticateToken, requireEducator</code></td>
-<td><code>server/routes/cohorts-routes.js:869</code></td>
+<td><code>server/routes/cohorts-routes.js:870</code></td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/cohorts/join</code></td>
 <td><code>authenticateToken, requireStudent</code></td>
-<td><code>server/routes/cohorts-routes.js:1030</code></td>
+<td><code>server/routes/cohorts-routes.js:1031</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/cohorts/mine</code></td>
 <td><code>authenticateToken, requireStudent</code></td>
-<td><code>server/routes/cohorts-routes.js:302</code></td>
+<td><code>server/routes/cohorts-routes.js:303</code></td>
 </tr>
 </tbody></table></div>
             </article>
@@ -455,6 +462,7 @@ model.</p>
                 <h4>Pages</h4>
                 <a href="../../../index.html">Overview</a>
                 <a href="../../../rooms.html">Rooms</a>
+                <a href="../../../screenshots.html">Screenshots</a>
                 <a href="../../../whats-new.html">What's new</a>
                 <a href="../../../help.html">Help</a>
                 <a href="../../../about.html">About the author</a>
