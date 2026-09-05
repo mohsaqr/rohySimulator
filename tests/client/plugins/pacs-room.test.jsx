@@ -15,6 +15,8 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
 import descriptor from '../../../src/plugins/pacs/index.jsx';
+import { manifest as pacsManifest } from '../../../src/plugins/pacs/manifest.js';
+import { createPluginLogger } from '../../../src/plugins/logger.js';
 import { SOURCE_KIND, SUBSTITUTION_SCOPE } from '../../../src/components/pacs/caseDocument.js';
 import { parseDicom } from '../../../src/components/pacs/dicomParse.js';
 import { buildSeries, describeInstance } from '../../../src/components/pacs/series.js';
@@ -169,11 +171,17 @@ const CASE_DOCUMENT = {
     }],
 };
 
+// The narrowed logger (RPS-1 1.6), exactly as PluginRoom builds it, over a
+// spy sink. Radoyon 0.4 speaks log(verb, objectType, options) through its
+// own createRadoyonLogger; the SINK must see three positionals with the
+// plugin stamped — the pre-0.4 assertion (`([e]) => e.verb`) had enshrined
+// the object shape that lost every PACS row at ingest.
+const sink = { log: vi.fn() };
 const ctx = {
     pluginId: 'pacs',
     data: CASE_DOCUMENT,
     archive: ARCHIVE,
-    eventLogger: { log: vi.fn() },
+    log: createPluginLogger({ manifest: pacsManifest, eventLogger: sink, sessionId: null }),
     t: (key, fallback) => fallback ?? key,
     session: { examMode: false },
 };
@@ -256,10 +264,25 @@ describe('PACS room — the end-to-end thin slice', () => {
         // (vendored at 029e4e1) moved the emit later, and this passed on a fast
         // machine while failing in CI.
         await waitFor(() => {
-            const verbs = ctx.eventLogger.log.mock.calls.map(([e]) => e.verb);
+            const verbs = sink.log.mock.calls.map(([verb]) => verb);
             expect(verbs).toContain('OPENED_STUDY');
             expect(verbs).toContain('SELECTED_SERIES');
         }, { timeout: 5000 });
+        // Every row reached the host as three positionals with the plugin
+        // stamped, in the POSITIONAL shape (no `_log_shape` compatibility
+        // marker), naming its object and carrying explicit metadata — the
+        // conformance property, asserted where it was broken.
+        for (const call of sink.log.mock.calls) {
+            expect(typeof call[0]).toBe('string');
+            expect(typeof call[1]).toBe('string');
+            expect(call[2]).toMatchObject({ room: 'pacs', pluginId: 'pacs', pluginVersion: '0.2.0' });
+            expect(call[2].context?._log_shape).toBeUndefined();
+            expect(call[2].severity).toBeTruthy();
+            expect(call[2].category).toBeTruthy();
+        }
+        const opened = sink.log.mock.calls.find(([verb]) => verb === 'OPENED_STUDY');
+        expect(opened[1]).toBe('imaging_study');
+        expect(opened[2].objectId).toBeTruthy();
     });
 
     it('the fetched bytes really are DICOM, and order spatially', () => {

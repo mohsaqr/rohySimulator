@@ -11,6 +11,7 @@ import { NEUTRAL_ADJUSTMENTS, adjustmentFilter } from './imageAdjustments.js';
 import { useReadRecorder } from './useReadRecorder.js';
 import { useAnnotations } from './useAnnotations.js';
 import { createPathologyLogger } from './pathologyEvents.js';
+import { createViewportEventTracker } from './viewportEvents.js';
 import { createViewerCommands, runViewerCommand } from './viewerCommands.js';
 import { ANNOTATION_KINDS } from './annotationModel.js';
 import { createReport, snapshotFindings, submitReport } from './report.js';
@@ -206,6 +207,42 @@ export function PathologyRoom({
         logger.slideOpened(slide);
     }, [slide, logger]);
 
+    // CLOSED_SLIDE pairs with the open: on switching slide or leaving the
+    // room, with the time spent. Keyed on the slide id so a re-render with
+    // the same slide does not close and reopen it.
+    useEffect(() => {
+        if (!slide) return undefined;
+        const opened = slide;
+        const openedAt = Date.now();
+        return () => {
+            logger.slideClosed(opened, Date.now() - openedAt);
+            loggedSlideRef.current = null;
+        };
+    }, [slide?.id, logger]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // The task around the read: started once per task, completed when the
+    // report is submitted and the read closes (see submitActiveReport).
+    useEffect(() => {
+        if (task) logger.taskStarted(task);
+    }, [task?.id, logger]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Pan / zoom / dwell, throttled at the source. Independent of the read
+    // recorder: a slide with no rubric still has a read path worth seeing.
+    const trackerRef = useRef(null);
+    useEffect(() => {
+        trackerRef.current = createViewportEventTracker();
+        return () => { trackerRef.current = null; };
+    }, [slide?.id]);
+    const onSample = useCallback((sample, observation) => {
+        accept(sample, observation);
+        const events = trackerRef.current?.accept(sample, observation);
+        if (!events) return;
+        const current = slideRef.current;
+        if (events.dwelled) logger.regionDwelled(current, events.dwelled.sample, events.dwelled.durationMs);
+        if (events.zoomed) logger.slideZoomed(current, sample, events.zoomed);
+        if (events.panned) logger.slidePanned(current, sample);
+    }, [accept, logger]);
+
     // --- keyboard ----------------------------------------------------------
     //
     // Bound to the window rather than to a container, because focus legitimately
@@ -304,12 +341,7 @@ export function PathologyRoom({
         try {
             const count = annotations.importGeoJSON(JSON.parse(await file.text()));
             setImportError(null);
-            logger.emit('ANNOTATED_SLIDE', 'slide_annotation', {
-                objectId: slideRef.current?.id ?? null,
-                objectName: file.name,
-                result: `imported_${count}`,
-                context: { source: 'geojson_import', count },
-            });
+            logger.annotationsImported(slideRef.current, count);
         } catch (err) {
             setImportError(err.message);
         }
@@ -386,7 +418,13 @@ export function PathologyRoom({
             roiCoverage: scored?.roiCoverage ?? null,
             slideCoverage: scored?.slideCoverage ?? null,
         });
-    }, [reports, finish, logger, emitReports]);
+        // Submitting closes the task, and the feedback panel the reader then
+        // sees is its own act — the moment they learn how they read.
+        if (task) {
+            logger.taskCompleted(task, scored ?? {});
+            if (scored) logger.feedbackReceived(task, scored);
+        }
+    }, [reports, finish, logger, emitReports, task]);
 
     if (!viewerCase) {
         return (
@@ -525,7 +563,7 @@ export function PathologyRoom({
                             {slide ? (
                                 <SlideCanvas
                                     slide={slide}
-                                    onSample={accept}
+                                    onSample={onSample}
                                     onViewer={attachViewer}
                                     startedAt={startedAt}
                                     filter={adjustmentFilter(adjustments)}

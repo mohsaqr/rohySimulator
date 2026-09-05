@@ -1,16 +1,10 @@
-export const ECG_VERB_FALLBACKS = Object.freeze({
-  OPENED_ECG_RECORDING: 'assessing',
-  FOCUSED_ECG_LEAD: 'examining',
-  CHANGED_ECG_LAYOUT: 'examining',
-  MEASURED_ECG_INTERVAL: 'examining',
-  MEASURED_ECG_AMPLITUDE: 'examining',
-  RECORDED_ECG_NOTE: 'documenting',
-  SAVED_ECG_INTERPRETATION: 'documenting',
-  SUBMITTED_ECG_INTERPRETATION: 'documenting',
-  REVISED_ECG_INTERPRETATION: 'documenting',
-  REQUESTED_ECG_HINT: 'reflecting',
-  REVEALED_ECG_EXPLANATION: 'reflecting',
-});
+import { ECG_VERB_METADATA } from './ecgEvents.js';
+
+// Derived from each verb's own `clinicalState` (RPS-1 1.6): one source of
+// truth, so the fallback map cannot drift from the facet row.
+export const ECG_VERB_FALLBACKS = Object.freeze(
+  Object.fromEntries(Object.entries(ECG_VERB_METADATA).map(([verb, meta]) => [verb, meta.clinicalState])),
+);
 
 export const ECG_OBJECT_OVERRIDES = Object.freeze({
   ecg_recording: 'assessing',

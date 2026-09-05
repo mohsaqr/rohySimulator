@@ -4,7 +4,7 @@ import { Pause, Play } from 'lucide-react';
 import { Viewport } from './Viewport.jsx';
 import { useStudy, openingWindow } from './useStudy.js';
 import { adoptWindow, coverage, initialViewport, scrollTo } from './viewportState.js';
-import { RADOYON_COMPONENTS, RADOYON_OBJECT_TYPES } from './radoyonEvents.js';
+import { createRadoyonLogger, REVIEWED_COVERAGE } from './radoyonEvents.js';
 
 /**
  * One pane of the hanging layout.
@@ -53,9 +53,7 @@ export function ReadingPane({
     const viewportRef = useRef(viewport);
     viewportRef.current = viewport;
 
-    const log = useCallback((verb, objectType, detail) => {
-        eventLogger?.log?.({ verb, objectType, component: RADOYON_COMPONENTS.VIEWPORT, detail });
-    }, [eventLogger]);
+    const logger = useMemo(() => createRadoyonLogger(eventLogger), [eventLogger]);
 
     // When a series becomes current, open it the way a workstation would: the
     // whole stack available, positioned mid-study, windowed from the middle
@@ -68,12 +66,7 @@ export function ReadingPane({
             window: openingWindow(activeSeries, study.frameAt),
         }));
         onSeriesReady?.(pane, activeSeries, study.series);
-        log('SELECTED_SERIES', RADOYON_OBJECT_TYPES.SERIES, {
-            series_uid: activeSeries.seriesInstanceUid,
-            description: activeSeries.description,
-            images: activeSeries.count,
-            plane: activeSeries.plane,
-        });
+        logger.seriesSelected(activeSeries);
     }, [activeSeries?.stackId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Self-heal. The room clears every pane's viewport when the study changes,
@@ -95,10 +88,7 @@ export function ReadingPane({
 
     useEffect(() => {
         if (study.status === 'error') {
-            log('FAILED_TO_LOAD', RADOYON_OBJECT_TYPES.STUDY, {
-                study: assignment?.ref,
-                reason: study.error?.message,
-            });
+            logger.loadFailed(assignment?.ref, study.error);
         }
     }, [study.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -108,12 +98,12 @@ export function ReadingPane({
     useEffect(() => () => {
         const v = viewportRef.current;
         if (!activeSeries || !v || v.seen?.size <= 1) return;
-        log('SCROLLED_SERIES', RADOYON_OBJECT_TYPES.SERIES, {
-            series_uid: activeSeries.seriesInstanceUid,
-            images_seen: v.seen.size,
-            images_total: activeSeries.count,
-            coverage: Number(coverage(v).toFixed(3)),
-        });
+        const sweep = { imagesSeen: v.seen.size, coverage: Number(coverage(v).toFixed(3)) };
+        logger.seriesScrolled(activeSeries, sweep);
+        // A sweep that covered the stack is the fact a rubric asks about —
+        // "did they look at every image?" — so it gets its own row beside the
+        // sweep itself, rather than a threshold every consumer must re-apply.
+        if (sweep.coverage >= REVIEWED_COVERAGE) logger.seriesReviewed(activeSeries, sweep);
     }, [activeSeries?.stackId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Self-heal. The room clears every pane's viewport when the study changes,

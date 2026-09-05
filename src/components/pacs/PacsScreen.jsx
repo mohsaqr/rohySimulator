@@ -13,9 +13,11 @@ import {
     applyPreset, cineStep, flipHorizontal, flipVertical, resetView, setAdjustment, setWindow,
     rotateQuarter, scrollBy, toggleInvert, zoomAbout,
 } from './viewportState.js';
-import { RADOYON_COMPONENTS, RADOYON_OBJECT_TYPES } from './radoyonEvents.js';
+import { createRadoyonLogger } from './radoyonEvents.js';
 
 const CINE_FPS = 12;
+// How long the window must hold still before the change is logged.
+const WINDOW_SETTLE_MS = 500;
 
 /**
  * The reading room.
@@ -47,6 +49,9 @@ export function PacsScreen({
     reportedBy = null,
 }) {
     const [activeEntry, setActiveEntry] = useState(() => worklist.find((e) => e.available) ?? null);
+    // The host's logger, spoken to in its own signature (see radoyonEvents.js).
+    // Declared before any effect that names it in a dependency list.
+    const logger = useMemo(() => createRadoyonLogger(eventLogger), [eventLogger]);
 
     // Whether the reader has actually picked a study, as opposed to the room
     // having auto-selected one for them.
@@ -130,14 +135,21 @@ export function PacsScreen({
         } else {
             setAssignments([]);
         }
-        if (activeEntry) {
-            log('OPENED_STUDY', RADOYON_OBJECT_TYPES.STUDY, {
-                study: activeEntry.id,
-                study_id: activeEntry.studyId,
-                series: catalogueSeries.length,
-            });
-        }
     }, [activeEntry?.id, seriesSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // One OPENED_STUDY per study, and its CLOSED_STUDY with the time spent,
+    // keyed on the study id ALONE. The layout effect above also re-runs when
+    // the series arrive (`seriesSignature`), and logging the open from there
+    // counted every asynchronously loaded study twice.
+    const seriesCountRef = useRef(0);
+    seriesCountRef.current = catalogueSeries.length;
+    useEffect(() => {
+        if (!activeEntry) return undefined;
+        const entry = activeEntry;
+        const openedAt = Date.now();
+        logger.studyOpened(entry, { series: seriesCountRef.current });
+        return () => { logger.studyClosed(entry, Date.now() - openedAt); };
+    }, [activeEntry?.id, logger]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Growing the layout fills the new panes with the next unassigned series;
     // shrinking it just hides the extra panes (their assignments are kept, so
@@ -161,9 +173,6 @@ export function PacsScreen({
         setActivePane((p) => Math.min(p, layout.panes - 1));
     }, [layout.panes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const log = useCallback((verb, objectType, detail) => {
-        eventLogger?.log?.({ verb, objectType, component: RADOYON_COMPONENTS.VIEWPORT, detail });
-    }, [eventLogger]);
 
     const updateViewport = useCallback((pane, next) => {
         setViewports((vs) => {
@@ -236,14 +245,9 @@ export function PacsScreen({
             onMeasurementsChange?.(next);
             return next;
         });
-        log(
-            measurement.kind === 'distance' ? 'MEASURED_DISTANCE' : 'MEASURED_REGION',
-            RADOYON_OBJECT_TYPES.MEASUREMENT,
-            measurement.kind === 'distance'
-                ? { mm: measurement.result?.mm, unit: measurement.result?.unit, slice: measurement.slice }
-                : { mean: measurement.result?.mean, sd: measurement.result?.sd, slice: measurement.slice },
-        );
-    }, [log, onMeasurementsChange]);
+        if (measurement.kind === 'distance') logger.distanceMeasured(measurement);
+        else logger.regionMeasured(measurement);
+    }, [logger, onMeasurementsChange]);
 
     const onDeleteMeasurement = useCallback((stackId, id) => {
         setMeasurements((current) => {
@@ -263,10 +267,31 @@ export function PacsScreen({
 
     const onPreset = useCallback((preset) => {
         updateViewport(activePane, (v) => applyPreset(v, preset));
-        log('APPLIED_PRESET', RADOYON_OBJECT_TYPES.SERIES, {
-            preset: preset.id, center: preset.center, width: preset.width,
-        });
-    }, [activePane, updateViewport, log]);
+        logger.presetApplied(preset);
+    }, [activePane, updateViewport, logger]);
+
+    // A window change is logged once the drag SETTLES, not per pixel: the
+    // window tool fires an update per pointer move, and a per-move row would
+    // be the per-slice problem again. A preset is its own verb, and the
+    // opening window a series is shown with is not a change the reader made.
+    const activeWindow = viewports[activePane]?.window;
+    const baseWindow = viewports[activePane]?.baseWindow;
+    const lastLoggedWindow = useRef(null);
+    useEffect(() => {
+        if (!activeWindow) return undefined;
+        const key = `${activeWindow.center}/${activeWindow.width}`;
+        if (lastLoggedWindow.current === null) { lastLoggedWindow.current = key; return undefined; }
+        if (key === lastLoggedWindow.current) return undefined;
+        const timer = setTimeout(() => {
+            lastLoggedWindow.current = key;
+            const isPreset = activePreset(presetsFor(activeModality, baseWindow), activeWindow) !== null;
+            const isOpening = baseWindow && baseWindow.center === activeWindow.center && baseWindow.width === activeWindow.width;
+            if (isPreset || isOpening) return;
+            // paneInfo carries the pane's series identity (stackId, description).
+            logger.windowChanged(paneInfo[activePane] ?? null, activeWindow);
+        }, WINDOW_SETTLE_MS);
+        return () => clearTimeout(timer);
+    }, [activeWindow, baseWindow, activeModality, activePane, paneInfo, logger]);
 
     const onAction = useCallback((id) => {
         const action = {
@@ -436,6 +461,7 @@ export function PacsScreen({
                                 reportedBy={reportedBy}
                                 onSubmitReport={onSubmitReport}
                                 reportLinkFor={reportLinkFor}
+                                logger={logger}
                                 t={t}
                             />
                         </section>

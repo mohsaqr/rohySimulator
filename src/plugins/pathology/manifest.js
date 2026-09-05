@@ -12,8 +12,8 @@
  * plugin, it is not plug-and-play.
  */
 import {
-    PATHOLOGY_OBJECT_TYPES, PATHOLOGY_COMPONENTS,
-    PATHOLOGY_VERB_METADATA, PATHOLOGY_ROOM,
+    PATHOLOGY_OBJECT_TYPES, PATHOLOGY_COMPONENTS, PATHOLOGY_COMPONENT_PREFIX,
+    PATHOLOGY_VERB_METADATA, PATHOLOGY_ROOM, PATHOLOGY_VOCABULARY_VERSION,
 } from '../../components/pathology/pathologyEvents.js';
 import {
     PATHOLOGY_VERB_FALLBACKS, PATHOLOGY_OBJECT_OVERRIDES, PATHOLOGY_INTERPRETATIONS,
@@ -21,7 +21,7 @@ import {
 
 export const manifest = {
     id: PATHOLOGY_ROOM,
-    version: '1.0.0',
+    version: '1.1.0',
     room: {
         key: PATHOLOGY_ROOM,
         labelKey: 'room_pathology',
@@ -33,12 +33,15 @@ export const manifest = {
         order: 50,
     },
     vocabulary: {
-        // PATHOLOGY_VERB_METADATA is already keyed by verb with
-        // {severity, category}; the standard uses that shape verbatim so a
-        // plugin never restates its own vocabulary in two formats.
+        // v2 (RPS-1 1.6): PATHOLOGY_VERB_METADATA is keyed by verb with the
+        // full facet row (R33); the standard uses that shape verbatim so a
+        // plugin never restates its own vocabulary in two formats. Every
+        // component name starts with `Pathology` (R34).
+        version: PATHOLOGY_VOCABULARY_VERSION,
         verbs: PATHOLOGY_VERB_METADATA,
         objectTypes: PATHOLOGY_OBJECT_TYPES,
         components: PATHOLOGY_COMPONENTS,
+        componentPrefix: PATHOLOGY_COMPONENT_PREFIX,
     },
     states: {
         verbFallbacks: PATHOLOGY_VERB_FALLBACKS,

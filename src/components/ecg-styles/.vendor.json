@@ -1,8 +1,8 @@
 {
   "package": "cardoyon",
-  "version": "0.2.2",
-  "commit": "91dd191f9f18a850812cdd7f323800f7f1625f86",
-  "vendoredAt": "2026-08-31",
+  "version": "0.3.0",
+  "commit": "2752f14ecb32c4299357729fa569f3d5ba0c5eb0",
+  "vendoredAt": "2026-09-05",
   "from": "styles",
   "files": 2,
   "sha256": "ce94fce4964cc2cdba7714684e9624ff15c55d5536879c028ccdbbbee30ab0a9",

@@ -9,6 +9,36 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.14] — 2026-09-05
+
+### Added
+
+- **Upstream packages re-vendored on the 1.6 contract.** Radoyon 0.4.0
+  (`createRadoyonLogger`, positional calls, namespaced object-type keys, v2
+  facets; `CLOSED_STUDY`, `REVIEWED_SERIES`, `CHANGED_WINDOW`,
+  `DRAFTED_REPORT`, `SUBMITTED_REPORT` now emitted), Cardoyon 0.3.0 (v2
+  facets, `hint_requested`, three verbs declared planned with notes), Pathoyon
+  0.2.0 (v2 facets, `Pathology*` components, answer key and learner prose
+  removed from rows, `CLOSED_SLIDE`, throttled `PANNED_SLIDE` /
+  `ZOOMED_SLIDE` / `DWELLED_REGION`, task lifecycle and feedback rows). All
+  three byte-identical to their committed upstreams; stamps updated.
+- **Manifest rules R33–R36.** Every shipped manifest declares
+  `vocabulary.version: 2` with the full facet row per verb and a
+  `componentPrefix`; `assertShippedManifest` in the generator refuses
+  otherwise. `scripts/check-plugin-emissions.mjs` (`npm run plugins:emissions`,
+  part of `plugins:check`) reads each plugin's source and refuses a declared
+  verb nothing emits, unless it is server-only or planned with a note. Adapter
+  versions: pacs 0.2.0, ecg 1.1.0, pathology 1.1.0.
+- **Bedside vocabulary.** The 3D room declares six verbs of its own
+  (`OPENED_EXAM_WHEEL`, `OPENED_BODY_MAP`, `CLOSED_BODY_MAP`,
+  `SELECTED_BEDSIDE_PROP`, `OBSERVED_PATIENT_STATUS`, `VOICED_PATIENT_LINE`),
+  `PERFORMED_PHYSICAL_EXAM` as a core verb, and logs through `ctx.log` with a
+  `vitals` capability instead of the host singleton.
+
+### Fixed
+
+- Every PACS learning event was rejected at ingest (`verb=[object Object]`).
+
 ## [3.0.0-beta.13] — 2026-09-05
 
 ### Added

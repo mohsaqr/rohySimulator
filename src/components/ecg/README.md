@@ -9,6 +9,10 @@ folder drifts from its stamp.
 - **Never edit here.** Edit upstream, run `npm run verify` there, then
   `npm run vendor -- ecg` here (RPS-1 §16).
 - Host adapter: `src/plugins/ecg/` (`manifest.js`, `index.jsx`, `EcgRoom.jsx`).
+  The adapter hands the room `event_logger: { log: ctx.log }` (RPS-1 1.6);
+  `create_ecg_logger` wraps it. Three verbs are declared `planned` (no submit
+  button by design; hints/explanations not yet shown) — `npm run
+  plugins:emissions` prints them.
 - The only host-owned files in this folder are this README and
   `portability.test.js` — the gate that keeps the copy a *package*
   (props in, nothing imported from rohy).

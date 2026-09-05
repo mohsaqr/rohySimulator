@@ -1,6 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { composeReport, reportToText, validateReport } from './report.js';
+
+// How long typing must pause before the draft is logged.
+const DRAFT_SETTLE_MS = 2000;
 
 /**
  * Where the reader writes their report, and files it.
@@ -29,6 +32,10 @@ export function ReportPane({
     reportLinkFor,
     onDraft,
     draft = null,
+    // A createRadoyonLogger() instance. Drafting is logged as SHAPE (word
+    // counts, evidence) once typing pauses; filing is logged when the host
+    // has actually taken the report. Never the prose.
+    logger = null,
     t = (key, fallback) => fallback ?? key,
 }) {
     const [findings, setFindings] = useState(draft?.findings ?? '');
@@ -43,18 +50,35 @@ export function ReportPane({
     const check = validateReport(report);
     const evidence = report.evidence;
 
+    // Set by `edit`, so a restored draft is not logged as freshly drafted on
+    // mount, and cleared by the settle timer.
+    const dirtyRef = useRef(false);
     const edit = useCallback((next) => {
         if (next.findings !== undefined) setFindings(next.findings);
         if (next.impression !== undefined) setImpression(next.impression);
         setState({ status: 'idle', message: null });
+        dirtyRef.current = true;
         onDraft?.({ findings: next.findings ?? findings, impression: next.impression ?? impression });
     }, [findings, impression, onDraft]);
+
+    // A run of keystrokes is one act of drafting, not a hundred.
+    useEffect(() => {
+        if (!dirtyRef.current || !logger) return undefined;
+        const timer = setTimeout(() => {
+            dirtyRef.current = false;
+            logger.reportDrafted(report);
+        }, DRAFT_SETTLE_MS);
+        return () => clearTimeout(timer);
+    }, [report, logger]);
 
     const submit = useCallback(async () => {
         if (!check.ok) return;
         setState({ status: 'sending', message: null });
         try {
             await onSubmitReport(report);
+            // Logged AFTER the host took it: a filing the host refused is an
+            // error row in the host's own log, not a SUBMITTED_REPORT.
+            logger?.reportSubmitted(report);
             setState({ status: 'sent', message: t('radoyon_report_filed', 'Report filed.') });
         } catch (error) {
             // Surfaced, never swallowed: a learner who believes their report was
@@ -62,7 +86,7 @@ export function ReportPane({
             // chance to notice.
             setState({ status: 'error', message: error?.message ?? String(error) });
         }
-    }, [check.ok, onSubmitReport, report, t]);
+    }, [check.ok, onSubmitReport, report, logger, t]);
 
     const link = reportLinkFor && check.ok ? safeLink(reportLinkFor, report) : null;
 

@@ -1,11 +1,11 @@
 {
   "package": "radoyon",
-  "version": "0.3.3",
-  "commit": "e32735ac4d33513adb34d4c21d44351fde9cebef",
-  "vendoredAt": "2026-08-31",
+  "version": "0.4.0",
+  "commit": "8b1c899e10f7bbc6e845f59525e86837a65910d4",
+  "vendoredAt": "2026-09-05",
   "from": "src",
   "files": 32,
-  "sha256": "0c2073c0774cae071d21238c60beb6768d2bb340f85c3448aea16310b4517a06",
+  "sha256": "a87c27a35ef94b0472ccbca60ebee736b10781121a99c7e6b5398311cb71a4fc",
   "hostOwned": [
     "README.md",
     "portability.test.js"
