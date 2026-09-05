@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.22] — 2026-09-05
+
+### Changed
+
+- Website documentation pages regenerated (`npm run website:build`): the Screenshots entry in every page's nav and footer, and the analytics note on screen-backed gaze maps.
+
 ## [3.0.0-beta.21] — 2026-09-05
 
 ### Added
