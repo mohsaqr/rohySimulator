@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.20] — 2026-09-05
+
+### Fixed
+
+- `scripts/build-starter-content.mjs` never copied PACS thumbnails into a starter bundle (a doubled `thumbs/` prefix, and a silent miss), so the imaging case editor showed a broken image on every card; the builder now copies them and fails loudly when the origin lacks one. `buildPacs`/`buildPathology` are exported and tested (`tests/server/build-starter-content.test.js`). The published content-v1 bundle still lacks the thumbnails; a content-v2 pack is needed.
+
 ## [3.0.0-beta.19] — 2026-09-05
 
 ### Fixed
