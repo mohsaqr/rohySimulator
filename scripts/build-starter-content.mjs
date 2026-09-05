@@ -87,7 +87,9 @@ const wantsPathologyAsset = (asset) => {
 };
 
 const say = (m) => console.log(`  ${m}`);
-const fail = (m) => { console.error(`build-starter-content: ${m}`); process.exit(1); };
+// Throws rather than exits so a test can call a builder and assert on the
+// failure; the command-line entry below turns the throw into exit 1.
+const fail = (m) => { throw new Error(`build-starter-content: ${m}`); };
 
 function copyTree(src, dst, seen) {
     if (!existsSync(src)) return;
@@ -135,8 +137,7 @@ function stamp(pluginId, dir, paths) {
 
 // --- pacs -------------------------------------------------------------------
 
-function buildPacs(src) {
-    const out = join(OUT_ROOT, 'pacs');
+export function buildPacs(src, out = join(OUT_ROOT, 'pacs')) {
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });
 
@@ -163,8 +164,15 @@ function buildPacs(src) {
         const kept = {};
         Object.entries(JSON.parse(readFileSync(thumbIndex, 'utf8')).thumbs ?? {}).forEach(([ref, v]) => {
             if (!refs.has(ref)) return;
+            // The index value is the portable `remote:thumbs/<path>.png`; it is
+            // the origin-relative path once `remote:` comes off. Prefixing it
+            // with `thumbs/` again (as this once did) named a file that does
+            // not exist, copyOne() returned false, and every starter bundle
+            // shipped an index with no pictures behind it — the imaging editor
+            // showed a broken image on all 74 cards, in every deployment.
+            const rel = (typeof v === 'string' ? v : v.path).replace(/^remote:\/?/, '');
+            if (!copyOne(src, out, rel, seen)) fail(`pacs: thumbs/index.json names ${rel} but the origin has no such file`);
             kept[ref] = v;
-            copyOne(src, out, `thumbs/${typeof v === 'string' ? v : v.path}`, seen);
         });
         mkdirSync(join(out, 'thumbs'), { recursive: true });
         writeFileSync(join(out, 'thumbs', 'index.json'), `${JSON.stringify({ version: 1, thumbs: kept }, null, 2)}\n`);
@@ -183,8 +191,7 @@ function buildPacs(src) {
 
 // --- pathology --------------------------------------------------------------
 
-function buildPathology(src) {
-    const out = join(OUT_ROOT, 'pathology');
+export function buildPathology(src, out = join(OUT_ROOT, 'pathology')) {
     rmSync(out, { recursive: true, force: true });
     mkdirSync(join(out, 'tiles', 'previews'), { recursive: true });
 
@@ -222,6 +229,11 @@ function buildPathology(src) {
 
 // ----------------------------------------------------------------------------
 
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) main();
+
+function main() {
+try {
 const sources = {
     pacs: process.env.ROHY_PACS_CONTENT ?? join(ROOT, '..', 'Radoyon', 'radoyon', 'dist-content'),
     pathology: process.env.ROHY_PATHOLOGY_CONTENT ?? join(ROOT, '..', 'Pathoyon', 'dist-content'),
@@ -247,3 +259,8 @@ if (built === 0) {
     process.exit(1);
 }
 console.log(`\nbuild-starter-content: ${built} bundle(s) in server/plugin-content/`);
+} catch (err) {
+    console.error(err.message);
+    process.exit(1);
+}
+}
