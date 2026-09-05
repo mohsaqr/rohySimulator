@@ -1,6 +1,6 @@
 # RPS-1 — the Rohy Plugin Standard
 
-**Status:** 1.0–1.5 implemented (rohy v2.9.59–v2.9.93) · **Spec version:** 1.5 · **Last reviewed:** 2026-08-29
+**Status:** 1.0–1.6 implemented (rohy v2.9.59–v3.0.0-beta.10) · **Spec version:** 1.6 · **Last reviewed:** 2026-09-05
 
 > **Reading this document.** 1.3 was specified before it was built — the same
 > discipline as 1.1 and 1.2 — and landed in rohy v2.9.72–v2.9.74. The
@@ -77,12 +77,27 @@ export const manifest = {
         order: 45,                    // position among rooms
     },
     vocabulary: {
-        verbs: { OPENED_STRIP: { severity: 'INFO', category: 'CLINICAL' } },
-        objectTypes: { STRIP: 'ecg_strip' },
+        version: 2,                   // 1.6: the full facet row per verb (R33)
+        verbs: {
+            OPENED_STRIP: {
+                severity: 'INFO', category: 'CLINICAL',
+                clinicalState: 'assessing',           // the TNA state
+                action: 'Reading results',            // the clinical-action lens
+                label: 'Opened ECG strip',            // the fine-grained lens
+                // optional: domain, tnaMerge, pulseBucket (derived from the
+                // above when absent), emitter: 'planned' + emitterNote for a
+                // verb whose surface is not built yet (R36)
+            },
+        },
+        objectTypes: { ECG_STRIP: 'ecg_strip' },      // namespaced keys AND values
         components: { VIEWER: 'EcgViewer' },
+        componentPrefix: 'Ecg',       // every component value starts with it (R34)
+        coreVerbs: [],                // rohy verbs the plugin emits on its own behalf (R35)
+        serverOnlyVerbs: [],          // verbs only its server module emits (R36)
     },
     states: {
-        verbFallbacks:   { OPENED_STRIP: 'assessing' },   // REQUIRED for every verb
+        // verbFallbacks is derived from `clinicalState` for a v2 vocabulary;
+        // a v1 vocabulary (no longer shippable) declared it here.
         objectOverrides: { ecg_strip: 'assessing' },      // own object types only
         interpretations: { 'OPENED_STRIP:ecg_strip': 'assessing' },  // own vocabulary only
     },
@@ -167,14 +182,24 @@ far from its cause.
 | R26 *(1.4)* | a server module writes only inside `ctx.libraryDir`, and treats its absence as "this surface is unavailable" | a plugin writing into the image, and a deployment with no provisioned disk failing at first import instead of declining up front |
 | R31 *(1.5)* | a server module takes every instant from `ctx.now()` — never `new Date()`, never `CURRENT_TIMESTAMP` | a second timestamp shape in a column the host orders by. rohy has already paid for having two; see §17 |
 | R32 *(1.5)* | a server module `INSERT`ing into a shared plugin table **names its time column** | sqlite's `DEFAULT CURRENT_TIMESTAMP` supplying the legacy shape, silently, in a statement that otherwise looks correct |
+| R33 *(1.6)* | a shipped manifest declares `vocabulary.version: 2` and every verb carries the full facet row — `severity`, `category`, `clinicalState`, `action`, `label` — each value from the host's enums | a plugin's rows labelled by a host-side guess: before 1.6 the TNA merge map, the seven client lenses and the cohort pulse buckets each hard-coded their own verb list and 65 plugin verbs fell to `Other` |
+| R34 *(1.6)* | `vocabulary.componentPrefix` is declared, PascalCase, and every component value starts with it | two packages' `Canvas` components indistinguishable in `learning_events.component` |
+| R35 *(1.6)* | `vocabulary.coreVerbs` names only rohy base verbs, and no base verb is re-declared as the plugin's own | a plugin redefining `PERFORMED_PHYSICAL_EXAM`'s facets for the whole host |
+| R36 *(1.6)* | every declared verb is **emitted by the plugin's source**, listed in `serverOnlyVerbs`, or declared `emitter: 'planned'` with an `emitterNote` — checked by `npm run plugins:emissions` | a legend of acts a learner could do and never did: the vendored packages once declared 46 verbs and emitted 12 |
 
 Roles: `guest student reviewer educator admin` (mirrors `ROLE_RANKS` in
 `server/middleware/auth.js`; a contract test asserts the copies agree).
 
 Clinical states: `assessing examining investigating treating communicating
-documenting monitoring regulating reflecting navigating`.
-Capabilities: `llm uploads notify persist remote`.
-Icons: `Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap`.
+documenting monitoring regulating reflecting navigating studying`.
+Clinical actions (1.6): `History Examining Ordering 'Reading results' Treating
+Monitoring Communicating Consulting Debriefing Documenting Studying Session
+Navigating`. The enums live in `server/shared/learningVerbFacets.js`; a
+package pins a copy in its own tests so drift fails upstream first.
+Capabilities: `llm uploads notify persist remote orders case conversation drawer
+vitals`.
+Icons: `Microscope FlaskConical Scan Stethoscope BookOpen GraduationCap
+HeartPulse Bed`.
 Accents: `fuchsia teal indigo`.
 
 Icon and accent are **strings resolved against host allowlists** — a manifest is
@@ -203,9 +228,11 @@ Hence R8/R9: **a plugin may only make claims about its own vocabulary.**
 ```js
 ctx = {
     pluginId,
+    surface,         // 'room' | 'author' — which host surface mounted this
     session: { id, caseId, userId, role, language, examMode },
     data,            // caseConfig[manifest.id] — the plugin's case material
-    eventLogger,     // see the caveat below
+    log,             // 1.6: the narrowed logger — log(verb, objectType, options)
+    eventLogger,     // DEPRECATED (1.6): a proxy over `log`; removed in 1.7
     capabilities,    // only what the host actually granted
     store,           // present iff 'persist' was requested
     t, navigate,
@@ -222,13 +249,36 @@ all, and a plugin that requested it MUST degrade rather than crash.
 A capability the manifest requests but the host does not grant is **absent**,
 not a broken stub. Check before calling.
 
-> **Known weakness.** `ctx.eventLogger` is currently the whole `EventLogger`
-> singleton, which exposes `setContext()` and unrestricted `log()`. A plugin can
-> therefore change the global session/room context or emit another plugin's
-> verbs. The narrowed `log()` adapter that would fix this — fixing
-> `{pluginId, sessionId, room, allowedVerbs}` — is **not built**. Until it is,
-> plugins are expected to wrap the logger themselves, as the pathology package
-> does with `createPathologyLogger()`.
+**`ctx.log` is the logger** *(1.6)*. `src/plugins/logger.js#createPluginLogger`
+builds it per mount, fixed to `{pluginId, pluginVersion, sessionId, room = pluginId,
+surface}`, and it:
+
+- accepts exactly `log(verb, objectType, options)` — three positionals. (The
+  one-object form `log({verb, objectType, component, detail})` is accepted for
+  one release with `context._log_shape = 'object'` and a warning, because
+  Radoyon 0.3 spoke it and every one of its rows was lost at ingest; 1.7 drops it);
+- refuses a verb the manifest does not declare — its own `vocabulary.verbs`, its
+  `coreVerbs`, or a host-delegable verb (`RAISED_ERROR`, `NOTIFIED`, …) — by
+  writing `UNDECLARED_VERB` with `context.attempted_verb`, never by dropping
+  the row (it throws in dev/test so the author sees it first);
+- soft-gates object type and component: an undeclared one is kept and marked
+  `context._undeclared`;
+- strips prose — `answer`, `expected`, `text`, `body`, `notes`, `transcript`,
+  `answer_key`, … at any depth — from `context`, truncates `objectName` to its
+  first line, drops `messageContent`/`messageRole`, and caps `context` at 4 KB;
+- stamps `room`, `pluginId`, `pluginVersion`, `parentComponent` and
+  `context.surface`, and refuses a caller's attempt to override them.
+
+There is nothing on it a plugin could use to change the global session or room
+context, or to emit another plugin's verbs. `ctx.eventLogger` still exists as a
+deprecation proxy: `log` forwards; `setContext`, `clearContext`, `roomChanged`,
+`setEnabled` throw with a message naming `ctx.log`. It is removed in 1.7.
+
+A package is still expected to wrap the logger in its own factory — Radoyon's
+`createRadoyonLogger`, Cardoyon's `create_ecg_logger`, Pathoyon's
+`createPathologyLogger` — so that severity and category are passed explicitly,
+every act has a named helper, and the package's own contract test can pin the
+call shape without a host present.
 
 ---
 
@@ -239,12 +289,30 @@ every other event by timestamp. That is the entire point: a slide read and a lab
 order sit in one sequence, so TNA can show the transition between them. No new
 table, no ETL.
 
-The manifest's `states` block feeds `clinicalStates.js`, so plugin verbs resolve
-to clinical states instead of a literal bucket.
+*(1.6)* Every plugin row also carries **`plugin_id` and `plugin_version`**
+(migration 0055; historical rows back-filled from `room`). Attribution is
+metadata: a `plugin_id` the host does not ship, or a verb that plugin does not
+declare, is **stripped** (`stripped_reasons` in the batch response) and the row
+is still written — a learner's act is never lost over a provenance label. A
+`plugin_version` the host does not ship is stored as NULL and counted.
+`context.surface` says whether the row came from the room or the editor
+(§11); an editor row still carries `room = '<id>'`.
 
-The server validates every verb against one registry
-(`server/shared/learningVerbs.js`), on **both** `POST /learning-events` and
-`POST /learning-events/batch`.
+The manifest's facets (R33) feed **every** consumer: the TNA merge map, the
+seven client lenses, the cohort pulse buckets, the server sequence builder
+(`/analytics/tna-sequences?lens=`), the room labels. There is no second list
+anywhere; `server/shared/eventFacets.js` is where all of them resolve.
+
+**One writer.** `server/lib/learningEventIngest.js#ingestEvents` is the only
+code that inserts into `learning_events`: both client routes, `ctx.emit()`
+(§17) and every server-side writer go through it. Every verb is checked against
+one registry (`server/shared/learningVerbs.js`), historical verb names are
+read through the alias map (`VERB_ALIASES`, read-time only — stored rows are
+never rewritten), and a row that cannot be written is **quarantined** in
+`learning_events_rejected` with its reason rather than dropped (`GET
+/api/analytics/rejected-events`; `/api/ready` reports the day's count). A
+retired name emitted by a stale client is normalised on the way in, so an old
+build keeps producing rows.
 
 ---
 
@@ -461,8 +529,12 @@ npm run plugins:check    # drift gate — runs in prebuild
 ```
 
 Runtime registration additionally cross-checks the frozen snapshot and throws if
-a descriptor's id or vocabulary has drifted, so a plugin cannot mount
-client-side while the server rejects everything it emits.
+a descriptor's manifest has drifted — a **deep compare** of the whole canonical
+manifest as of 1.6, naming the first differing path. The earlier guard compared
+verb names only, so a changed severity, state or object type mounted silently
+while the server persisted the old value. The generator also refuses to ship a
+manifest that fails R33/R34 (`assertShippedManifest`), and `plugins:check` runs
+`plugins:emissions` (R36) beside the drift check.
 
 > **Note.** An earlier version of this document justified generation with "the
 > Docker runtime stage copies `server/` but not `src/`". That is false for the
@@ -526,6 +598,15 @@ level up — the plugin hands back its whole document, and the host owns storage
 > `editingCase.config[<id>]`, which the ordinary case save persists. A host may
 > still render `PluginAuthor` with no `onSave`, in which case the plugin's own
 > export remains the way out.
+
+### The editor's rows *(1.6)*
+
+The host emits `OPENED_PLUGIN_EDITOR`, `EDITED_PLUGIN_DOCUMENT` (debounced,
+shape only — never the document) and `SAVED_PLUGIN_DOCUMENT` on the plugin's
+behalf, stamped with its `plugin_id` and `context.surface = 'author'`. A package
+that logs from inside its editor (Radoyon's inspector previews a study) logs
+through the same `ctx.log`, so those rows carry the author surface too rather
+than reading as learner acts.
 
 ## 11a. The document *(1.3)*
 
@@ -877,6 +958,19 @@ acceptance test** — each of those files used to require one.
 - [ ] *(1.5)* Server-side events go through `ctx.emit()` with a verb the manifest
       declares; operational work (an import, a sweep) is NOT dressed as a learner
       verb (§17)
+- [ ] *(1.6)* `vocabulary.version: 2`, and every verb carries severity, category,
+      `clinicalState`, `action` and `label` from the host's enums (R33)
+- [ ] *(1.6)* `componentPrefix` declared and every component value carries it (R34);
+      object-type keys and values are namespaced
+- [ ] *(1.6)* Every declared verb is emitted, server-only, or planned with a note —
+      `npm run plugins:emissions` is clean (R36) — and the package's own repo
+      carries a `logger-contract` test pinning the three-positional call shape,
+      explicit severity/category, and the absence of learner prose
+- [ ] *(1.6)* The room logs only through `ctx.log` (or a package factory wrapping
+      it); nothing reaches for `ctx.eventLogger`
+- [ ] *(1.6)* No row carries learner prose or the answer key: not a report body,
+      not an annotation's text, not an ROI's finding label, not the expected
+      diagnosis — shape (word counts, ids, geometry in microns) only
 
 ---
 
@@ -884,8 +978,8 @@ acceptance test** — each of those files used to require one.
 
 Ordered by how much they matter to a plugin author.
 
-1. **No narrowed `log()` adapter** — `ctx.eventLogger` is the mutable global
-   singleton (§6).
+1. ~~**No narrowed `log()` adapter**~~ — **closed in 1.6** by `ctx.log` (§6);
+   `ctx.eventLogger` is a deprecation proxy until 1.7.
 2. **`ctx.store` is still per-browser.** Narrowed in 1.4 rather than closed. A
    plugin's SERVER module can now write (§11b) — routes, jobs and its own
    `plugin_<id>_` tables — so bulk content and long work have a home. But the
@@ -893,10 +987,12 @@ Ordered by how much they matter to a plugin author.
    for a draft, not for anything that must survive a device change.
    Nor is there an upstream-authentication design: the proxy can only reach a
    host that will serve it unauthenticated from rohy's network position.
-3. **No plugin/version attribution on rows.** Events store neither `plugin_id`
-   nor manifest version, and clinical state is resolved with the currently
-   installed maps — so upgrading or removing a plugin retroactively reinterprets
-   historical analytics.
+3. ~~**No plugin/version attribution on rows.**~~ — **closed in 1.6** by
+   `plugin_id` / `plugin_version` (migration 0055, §7). Clinical state is still
+   resolved with the currently installed maps: a removed plugin's rows keep
+   their columns but resolve through the alias map and the last folded
+   facets, so removing a plugin still reinterprets its history. Freezing facets
+   per `plugin_version` is not built.
 4. ~~**No per-tenant enable/disable**~~ — **closed in 1.4** by the settings slot
    (§11c): `plugin_settings` is per (tenant, plugin), and a plugin declares its
    own knobs rather than getting a hand-written screen. `minRole` and
@@ -1009,12 +1105,17 @@ stay green against stale code.
 | R29 | Vendoring **refuses a source that does not hold the package**, and refuses to stamp a **dirty** upstream | `rsync --delete` from an empty source emptying the destination (which has happened here), and a stamp naming a commit that does not contain the code |
 | R30 | Host-owned files are excluded from the copy and survive it | losing the gate along with the code it guards |
 
+*(1.6)* `vendor:check` also reports **currency** where the upstream checkout is
+present: the stamp's commit against upstream `HEAD`, as "N commits behind".
+Report only — a stale copy is a decision to make, not a broken build.
+
 ### 16.5 The commands
 
 ```
 npm run vendor              # every registered package
 npm run vendor -- pacs      # one of them
 npm run vendor:check        # verify stamps; report staleness where upstream is present
+npm run plugins:emissions   # 1.6: every declared verb is emitted (R36); --check in plugins:check
 ```
 
 The registry lives in `scripts/vendor-plugins.mjs`. A package **may** ship its
@@ -1151,7 +1252,9 @@ to a browser, and what stops a plugin inventing verbs at runtime that no
 dashboard, state map or export knows how to read. The trinity is derived from
 the session, never accepted — a plugin is not more trusted than a browser here —
 and `timestamp` is the server's clock, so a plugin can say *what* happened but
-never *when*.
+never *when*. *(1.6)* It writes through the same `ingestEvents` core as the
+browser routes (§7), so the row carries `plugin_id` / `plugin_version` and a
+refused row is quarantined with its reason like any other.
 
 Operational work is not a learning event. A slide import is not something a
 learner did, and forcing it into a learner verb would corrupt exactly the

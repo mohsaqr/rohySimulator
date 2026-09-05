@@ -35,9 +35,13 @@ offline.
 ```bash
 npm run vendor                    # re-vendor every registered package
 npm run vendor -- pacs            # just one
-npm run vendor:check              # verify stamps; report staleness
-npm run plugins:gen && npx vitest run && npm run build   # after any re-vendor
+npm run vendor:check              # verify stamps; report staleness and commits-behind
+npm run plugins:gen && npm run plugins:emissions && npx vitest run && npm run build   # after any re-vendor
 ```
+
+`plugins:emissions` (RPS-1 R36) reads the vendored source and refuses a manifest
+that declares a verb nothing emits — the check that would have caught the 34
+declared-but-dead plugin verbs the packages carried before 1.6.
 
 If your checkouts are not in `~/Documents/Github/`, point the tool at them:
 
@@ -55,7 +59,8 @@ copied contents.
 - **Provenance** — "which radoyon is this?" is a file, not archaeology.
 - **Currency** — *not* proven by the stamp. A copy three commits behind hashes
   perfectly against its own stamp. Only `vendor:check`, on a machine that has the
-  upstream checkout, can say "upstream has moved".
+  upstream checkout, can say "upstream has moved" — and since 1.6 it says by how
+  much ("3 commits behind"), report only.
 
 That last distinction is the reason this machinery exists. rohy's PACS copy once
 sat frozen while both repos advanced, and nothing in rohy said so or could have:

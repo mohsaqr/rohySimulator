@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.16] — 2026-09-05
+
+### Changed
+
+- `docs/design/plugin-standard.md` → RPS-1 **1.6**: the v2 manifest anatomy,
+  rules R33–R36 and the corrected allowlists, `ctx.log` in §6, attribution /
+  one writer / quarantine in §7, the deep-compare drift gate, the editor's rows,
+  five new checklist items, §14 items 1 and 3 closed, vendoring currency and
+  the emission gate. `docs/integrator/vendored-packages.md`, the vendored
+  folders' READMEs and the glossary follow.
+
 ## [3.0.0-beta.15] — 2026-09-05
 
 ### Added
