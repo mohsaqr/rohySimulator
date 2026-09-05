@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.19] — 2026-09-05
+
+### Fixed
+
+- The floating Diag pill (admin diagnostic-bar toggle) sat over the room navigator's Course tab; it now rests above the navigator. Regression lock in `DiagnosticBar.test.jsx`.
+
 ## [3.0.0-beta.18] — 2026-09-05
 
 ### Fixed

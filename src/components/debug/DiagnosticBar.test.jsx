@@ -191,6 +191,32 @@ describe('DiagnosticBar — render gating', () => {
         const { container } = renderWithProviders(<DiagnosticBar />);
         expect(container.querySelector('[role="status"]')).toBeNull();
     });
+
+    // Regression lock: the disabled-bar pill used to sit in the bottom-right
+    // corner (bottom-2), which is exactly where the room navigator's last tab
+    // (Course) is for every admin at 1440 px — the tab was unclickable. The
+    // pill now sits above the bar. The navigator lives in a lower stacking
+    // context, so this cannot be fixed with a z-index on the bar.
+    it('the disabled-bar pill sits above the room navigator, not in its corner', () => {
+        const original = mockUseAuth.getMockImplementation();
+        mockUseAuth.mockImplementation(() => ({
+            user: { id: 1, role: 'admin' },
+            loading: false,
+            isAuthenticated: true,
+            isAdmin: () => true,
+            login: vi.fn(),
+            register: vi.fn(),
+            logout: vi.fn(),
+        }));
+        try {
+            renderWithProviders(<DiagnosticBar />);
+            const pill = screen.getByLabelText(/show diagnostic bar/i);
+            expect(pill.className).toMatch(/(^|\s)bottom-\[76px\](\s|$)/);
+            expect(pill.className).not.toMatch(/\bbottom-2\b/);
+        } finally {
+            mockUseAuth.mockImplementation(original);
+        }
+    });
 });
 
 describe('DiagnosticBar — wire history table', () => {

@@ -416,6 +416,10 @@ export default function DiagnosticBar() {
     // the gate impossible to bypass via flag flipping.
     if (!roleAllowed) return null;
 
+    // It sits just above the room navigator (bottom-[76px]), not in the corner:
+    // at bottom-2 it covered the navigator's last tab (Course) for every admin
+    // and educator, and the navigator lives in a lower stacking context than
+    // this fixed pill, so no z-index on the bar could put it underneath.
     // Floating toggle when bar is disabled — a tiny pill bottom-right that
     // surfaces the feature without requiring the user to dig into Settings.
     if (!enabled) {
@@ -423,7 +427,7 @@ export default function DiagnosticBar() {
         return (
             <button
                 onClick={() => toggleEnabled(true)}
-                className="fixed bottom-2 right-2 z-[9990] flex items-center gap-1 px-2 py-1 rounded-full bg-neutral-900/80 hover:bg-neutral-800 border border-neutral-700 text-xs text-neutral-400 hover:text-white shadow-lg"
+                className="fixed bottom-[76px] right-2 z-[9990] flex items-center gap-1 px-2 py-1 rounded-full bg-neutral-900/80 hover:bg-neutral-800 border border-neutral-700 text-xs text-neutral-400 hover:text-white shadow-lg"
                 title="Show diagnostic bar"
                 aria-label="Show diagnostic bar"
             >
