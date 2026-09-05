@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="index.html">Overview</a>
             <a href="rooms.html" aria-current="page">Rooms</a>
+            <a href="screenshots.html">Screenshots</a>
             <a href="whats-new.html">What's new</a>
             <a href="docs/index.html">Docs</a>
             <a href="help.html">Help</a>
@@ -61,17 +62,19 @@
             <a class="btn btn-primary" href="#patient">Start with the Patient room <span class="arrow">→</span></a>
             <a class="btn btn-ghost" href="index.html">Platform overview</a>
         </div>
-        <nav class="subnav" aria-label="On this page">
+        <nav class="subnav tiles" aria-label="On this page">
             <span class="subnav-label">On this page</span>
-            <a href="#patient">Patient</a>
-            <a href="#room-3d">Bedside</a>
-            <a href="#examination">Examination</a>
-            <a href="#laboratory">Laboratory</a>
-            <a href="#radiology">Radiology</a>
-            <a href="#ecg">12-lead ECG</a>
-            <a href="#pathology">Pathology</a>
-            <a href="#pacs">PACS</a>
-            <a href="#consultant">Consultant</a>
+            <a href="#patient"><span class="mini"><img src="assets/screenshots/mini/patient-room.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Patient<small>chat and monitor</small></span></a>
+            <a href="#room-3d"><span class="mini"><img src="assets/screenshots/mini/room-3d.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Bedside<small>the patient in 3D</small></span></a>
+            <a href="#examination"><span class="mini"><img src="assets/screenshots/mini/examination-finding.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Examination<small>body map</small></span></a>
+            <a href="#laboratory"><span class="mini"><img src="assets/screenshots/mini/laboratory-results.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Laboratory<small>orders and reports</small></span></a>
+            <a href="#radiology"><span class="mini"><img src="assets/screenshots/mini/radiology-report.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Radiology<small>imaging and diagnostics</small></span></a>
+            <a href="#ecg"><span class="mini"><img src="assets/screenshots/mini/ecg-room.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">12-lead ECG<small>plugin room</small></span></a>
+            <a href="#pathology"><span class="mini"><img src="assets/screenshots/mini/pathology-slide.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Pathology<small>plugin room</small></span></a>
+            <a href="#pacs"><span class="mini"><img src="assets/screenshots/mini/pacs-study.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">PACS<small>plugin room</small></span></a>
+            <a href="#consultant"><span class="mini"><img src="assets/screenshots/mini/debrief.webp" alt="" loading="lazy" width="480" height="300"></span><span class="label">Consultant<small>debrief</small></span></a>
+        </nav>
+        <nav class="subnav" aria-label="Also on this page">
             <a href="#between-rooms">Between rooms</a>
             <a href="#guides">Learner guides</a>
         </nav>
@@ -102,7 +105,8 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/patient-room.jpg" alt="The Patient room. A 3D avatar of John Martinez, 55, above the chat panel on the left; a live monitor on the right with lead II ECG, plethysmograph and respiration waveforms, heart rate 120, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 and EtCO2 32; a latched warning banner reading 'HR high, hr = 122 (limit ≤ 120)' with Snooze and Acknowledge buttons; Treatments, Records and Memory buttons; and the room navigator along the bottom.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Patient</span></div>
+                <img src="assets/screenshots/patient-room.webp" alt="The Patient room in Rohy 3.0.0-beta.17. Left: the 3D avatar of John Martinez, 55, male, above an empty transcript reading 'Start a conversation with your patient' and a message box. Right: the live monitor with lead II ECG, plethysmograph and respiration traces, heart rate 110, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 °C and EtCO2 32, with Treatments, Records and Memory buttons under the traces. The header holds the Oyon capture pill, the session clock at 0:13, the date, alarms, settings and End & Debrief. The navigator along the bottom lists Patient, Bedside, Examination, Laboratory, Radiology, Consultant and Course.">
                 <figcaption>Avatar, dialogue and the live monitor in one space. The session clock, the alarm bell and the End &amp; Debrief action sit in the header.</figcaption>
             </figure>
         </div>
@@ -163,8 +167,9 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/physical-exam.jpg" alt="The Examination room. An anterior male body silhouette on the left with the chest region highlighted and a legend for hover, normal, abnormal and selected. On the right, a technique chooser with Inspection, Palpation (marked Done), Percussion and Auscultation (selected). Below it, 'Auscultation – Chest' with a cardiac point picker showing Tricuspid selected at the 4th intercostal space, left sternal border, a clinical narrative reading 'Vesicular breath sounds are heard throughout all lung zones with no added sounds…', an audio player for tricuspid sounds, and clickable points for Aortic, Pulmonic, Erb's Point, Tricuspid, Mitral (Apex), left and right lung and bases. An examination log lists Abdomen – Inspection (abnormal), Chest – Palpation and Chest – Auscultation with timestamps.">
-                <figcaption>Examination on the body map. Region, then technique, then the finding, with auscultation localised to valve areas and lung fields.</figcaption>
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Examination</span></div>
+                <img src="assets/screenshots/examination-finding.webp" alt="The Examination room. Left: the anterior male body map with the chest region highlighted, Anterior and Posterior switches, a legend for hover, normal, abnormal and selected, and General and Neuro buttons. Right: 'Chest' with four technique buttons, Inspection selected beside Palpation, Percussion and Auscultation; the finding 'Chest / Inspection' flagged Normal, reading 'Chest wall is symmetrical with no visible deformity…'; and an examination log with one entry, Chest – Inspection at 02:47 PM. An Export button sits in the panel header.">
+                <figcaption>The Examination room. A region is chosen on the body map, a technique on the right, and the finding the case author wrote for that pair is recorded in the log with its time.</figcaption>
             </figure>
         </div>
     </div>
@@ -198,7 +203,8 @@
                 </p>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/laboratory.jpg" alt="The Laboratory room during the Acute Chest Pain – STEMI case. Left: a catalogue of 201 tests with a search box and group filter, listing bilirubin, AST, ALT, alkaline phosphatase, GGT and LDH, each with a 3-minute turnaround. Centre: a laboratory report for John Martinez, accession LAB-000056, status Final, showing ALT (SGPT) 30.00 U/L against a reference range of 7–56 with a Normal flag, plus Show Ranges and Show Flags toggles and a legend for high, low and normal. Right: a worklist of 12 with AST and alkaline phosphatase under Ready and ten tests under Viewed.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Laboratory</span></div>
+                <img src="assets/screenshots/laboratory-results.webp" alt="The Laboratory room. Left: the catalogue of 201 tests with a search box and group filter; Hemoglobin, White Blood Cell Count and Platelet Count are marked ordered. Centre: a laboratory report from VipSim Medical Center for John Martinez, accession LAB-000191, status Final, showing Potassium, serum 4.20 mEq/L against a reference range of 3.5–5 with a Normal flag, Show Ranges and Show Flags toggles, a legend and an 'Electronically Verified' footer. Right: a worklist of 5 with Potassium under Ready and Platelet Count, Troponin I, White Blood Cell Count and Hemoglobin pending with about 3 minutes remaining. A toast reads 'Ordered 1 test(s) — instant'.">
                 <figcaption>Catalogue, report and worklist. Orders move through pending, ready and viewed, with a controlled delay between requesting information and receiving it.</figcaption>
             </figure>
         </div>
@@ -226,8 +232,9 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/radiology-worklist.jpg" alt="The Radiology and diagnostics room. Left: a catalogue of 74 studies filtered as All 74, Imaging 58, Diagnostics 16, listing ultrasound aorta and cardiac studies such as stress echocardiogram, dobutamine stress echo, cardiac MRI, cardiac MRI stress perfusion, coronary CT angiography and CT coronary calcium score, each with a turnaround. Centre: counters reading Ready 0, Pending 4, Viewed 0, and a notice that four studies are pending and reports land automatically. Right: a pending worklist with cardiac MRI, stress echocardiogram, FAST exam and ultrasound aorta showing two to five minutes remaining. A toast confirms 'Ordered 2 study(s)'.">
-                <figcaption>The radiology worklist. Imaging is requested and awaited, with the remaining time on each pending study.</figcaption>
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Radiology</span></div>
+                <img src="assets/screenshots/radiology-report.webp" alt="The Radiology & diagnostics room. Left: a catalogue of 74 studies filtered as All 74, Imaging 58, Diagnostics 16, with the X-ray group listing chest, abdominal, spine, pelvis and hand films, each with a one-minute turnaround. Centre: a radiology report from VipSim Medical Center for John Martinez, accession RAD-000193, status Final, for Chest X-Ray (PA/Lateral): clinical indication, technique, findings reading 'The lungs are clear bilaterally without focal consolidation, effusion, or pneumothorax…' and an impression of no acute cardiopulmonary disease and normal heart size. Right: a worklist with the study under Viewed. A toast reads 'Ordered 1 study(s) — instant'.">
+                <figcaption>A chest X-ray reported. The report is laid out like a hospital report, and the study moves to Viewed in the worklist once it is opened.</figcaption>
             </figure>
         </div>
 
@@ -247,7 +254,8 @@
                 </p>
             </div>
             <figure class="shot">
-                <img src="assets/ecg-workstation.jpg" alt="ECGyon, the 12-lead ECG workstation. Controls for gain (5, 10, 20 mm/mV), speed (12.5, 25, 50 mm/s), filter (raw, diagnostic, monitor, 50 Hz, 60 Hz), caliper mode (interval, amplitude, rate) and paper grid. A twelve-lead tracing on calibrated pink paper with leads I, II, III, aVR, aVL, aVF and V1 to V6 plus a lead II rhythm strip, and an active caliper reading Δ 202 ms, 0.13 mV. On the right, a chest-electrode diagram, a frontal-plane hexaxial diagram with lead II highlighted and labelled 'left leg minus right arm, +60°, inferior wall', and a Measure tab listing six retained measurements with a classification dropdown and Discard button for each.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · 12-lead ECG</span></div>
+                <img src="assets/screenshots/ecg-room.webp" alt="Cardoyon, the 12-lead ECG workstation, in the Acute Chest Pain – STEMI case. A toolbar with 12-lead and Lead focus views, Lead map · II, Lens, zoom, Isolate, the caliper modes Interval, Amplitude and Rate, and a Cart. The tracing on calibrated pink paper at 25 mm/s and 10 mm/mV shows leads I, II, III, aVR, aVL, aVF and V1 to V6 with a lead II rhythm strip, and ST elevation in the anterior leads. A hint reads 'Click two points to span an interval. Drag either leg to adjust it.' On the right, the Systematic read tab: rate, rhythm, frontal QRS axis, PR, QRS and QT fields, and a findings checklist beginning with sinus rhythm, sinus bradycardia, sinus tachycardia and atrial fibrillation. The navigator shows 12-lead ECG selected.">
                 <figcaption>Calibrated paper, selectable gain and sweep speed, diagnostic and monitor filters, calipers whose intervals are retained, and a lead map showing the anatomical region each lead represents.</figcaption>
             </figure>
         </div>
@@ -301,8 +309,9 @@
                 </p>
             </div>
             <figure class="shot">
-                <img src="assets/radiology-pacs.jpg" alt="The DICOM reading room. A study list on the left with MRI studies such as MRI Chest (3 series, 210 images), MRI Brain, cervical spine, knee, lumbar spine, pelvis and shoulder. Two coronal chest MRI viewports side by side, T1 at window 490 level 245 and T2 at window 614 level 307, each labelled with orientation markers, image index and zoom. A series rail with three thumbnails. A right-hand panel with Width and Level sliders, Linear and Sigmoid transfer-function buttons, a Gamma control, an Edge enhancement slider labelled 'display only — measurements are unaffected', an 'Interpolate when zoomed out' checkbox, a 'Reset to as acquired' button, and a Findings report field.">
-                <figcaption>Multiple series, thumbnail navigation, dual viewports, and window and level manipulation. Display processing is explicitly separated from measurement.</figcaption>
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · PACS</span></div>
+                <img src="assets/screenshots/pacs-study.webp" alt="The PACS room. Left: the study list with Chest X-Ray (PA/Lateral), marked Ordered. Centre: the Lateral Chest image of a CR study, slice 1/1, window 32767 level 16383, zoom 1.00×, with a 5 cm scale bar. A series rail shows PA Chest and Lateral Chest thumbnails. Right: Width and Level sliders, Linear and Sigmoid transfer-function buttons with Sigmoid selected and a note that sigmoid rolls contrast off instead of clipping, a Gamma control, an Edge enhancement slider labelled 'Display only — measurements are unaffected', an 'Interpolate when zoomed out' checkbox, 'Reset to as acquired', and a Findings report field. The navigator shows PACS Workstation selected.">
+                <figcaption>The lateral series with a sigmoid transfer function. Window, level, gamma and edge enhancement are kept per pane, and measurements stay in acquired units.</figcaption>
             </figure>
         </div>
     </div>
@@ -331,7 +340,8 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/debrief.jpg" alt="The Case Debrief screen for Acute Chest Pain – STEMI. Left: the patient card for John Martinez, 55, male, with a 'View full case summary' button. Right: the Default Discussant avatar, a woman with dark hair, above a subtitle reading 'so what do you think of my performance today with the case', a red listening button labelled 'Listening — talk now', and a 'Type instead' option. The header shows a Back to patient button, the Oyon status pill reading Happy 49%, Notes, and Transcript with 5 entries. The Consultant room is selected in the navigator.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Consultant · Debrief</span></div>
+                <img src="assets/screenshots/debrief.webp" alt="The Case Debrief for Acute Chest Pain – STEMI with the Default Discussant. Left: the patient card for John Martinez, 55 y, male, above a 'View full case summary' button. Right: the discussant's avatar, a woman with fair hair tied back, above a microphone button labelled 'Tap to talk' and a 'Type instead' option. The header holds Back to patient, the Oyon capture pill, language, Logout, Notes and Transcript with one entry. The navigator shows Consultant · Debrief selected.">
                 <figcaption>The debrief. The AI discussant has its own persona and access to the encounter history: examinations, orders, treatments and their temporal sequence.</figcaption>
             </figure>
         </div>
@@ -426,6 +436,7 @@
                 <h4>Pages</h4>
                 <a href="index.html">Overview</a>
                 <a href="rooms.html">Rooms</a>
+                <a href="screenshots.html">Screenshots</a>
                 <a href="whats-new.html">What's new</a>
                 <a href="help.html">Help</a>
                 <a href="about.html">About the author</a>

@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Screenshots · Rohy</title>
+    <meta name="description" content="36 screenshots of the Rohy clinical simulation platform, from sign-in to debrief.">
+    <meta name="theme-color" content="#09090b">
+
+    <meta property="og:title" content="Screenshots · Rohy">
+    <meta property="og:description" content="36 screenshots of the Rohy clinical simulation platform, from sign-in to debrief.">
+    <meta property="og:image" content="assets/screenshots/patient-room.webp">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<!-- ── Fixed nav (identical on every page) ───────────────────── -->
+<header class="nav">
+    <div class="wrap">
+        <a class="brand" href="index.html">
+            <span class="brand-dot"></span>
+            <span>rohy</span>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+            <a href="index.html">Overview</a>
+            <a href="rooms.html">Rooms</a>
+            <a href="screenshots.html" aria-current="page">Screenshots</a>
+            <a href="whats-new.html">What's new</a>
+            <a href="docs/index.html">Docs</a>
+            <a href="help.html">Help</a>
+            <a href="index.html#install" class="optional">Install</a>
+            <a href="about.html">About the author</a>
+            <a class="nav-cta" href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub →</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+<!-- ── Hero ──────────────────────────────────────────────────── -->
+<section class="hero compact" id="top">
+    <div class="wrap hero-inner">
+        <span class="eyebrow accent">Screenshots</span>
+        <h1>Rohy, <span class="accent">screen by screen.</span></h1>
+        <p class="sub">36 screenshots of Rohy 3.0.0-beta.17, taken on 2026-09-05 from a running copy with the seeded teaching case. Click a picture to enlarge it.</p>
+        <nav class="subnav" aria-label="On this page">
+            <span class="subnav-label">On this page</span>
+            <a href="#signing-in">Signing in</a>
+            <a href="#patient">The Patient room</a>
+            <a href="#simulator">Simulator controls</a>
+            <a href="#orders">Orders</a>
+            <a href="#exam">Examination and Bedside</a>
+            <a href="#labs">Laboratory and Radiology</a>
+            <a href="#pacs">PACS</a>
+            <a href="#ecg">12-lead ECG</a>
+            <a href="#consultant">Consultant and Course</a>
+            <a href="#authoring">Authoring a case</a>
+            <a href="#plugins">Plugin editors</a>
+            <a href="#settings">Settings</a>
+            <a href="#analytics">Learning analytics</a>
+            <a href="#oyon">Oyon</a>
+            <a href="#setup">Setup and debrief</a>
+        </nav>
+    </div>
+</section>
+
+<!-- ── Rendered Markdown ─────────────────────────────────────── -->
+<section class="tight">
+    <div class="wrap">
+        <article class="gallery">
+        <section class="gallery-section" id="signing-in">
+            <h2>Signing in</h2>
+            <p>The sign-in page offers six interface languages. A new account can be created directly or with an invitation code from a course. On the first visit a short guided tour points out the rooms, the monitor and the debrief.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/login.webp" alt="The sign-in page in English. Italian, Finnish, Swedish, German and Spanish are available from the language menu." loading="lazy" width="1440" height="900">
+                <figcaption>The sign-in page in English. Italian, Finnish, Swedish, German and Spanish are available from the language menu.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/getting-started.webp" alt="The guided tour shown on the first sign-in. It can be skipped and reopened later from Help &amp; Support." loading="lazy" width="1440" height="900">
+                <figcaption>The guided tour shown on the first sign-in. It can be skipped and reopened later from Help &amp; Support.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="patient">
+            <h2>The Patient room</h2>
+            <p>The Patient room shows the avatar, the conversation and the live monitor on one screen. The patient answers through the configured language model. The monitor traces ECG, plethysmograph and respiration and updates the vital signs as the case progresses.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/patient-room.webp" alt="The Patient room at the start of a session with John Martinez, a 55-year-old man with acute chest pain. The monitor shows sinus tachycardia at 110 bpm, SpO2 94% and blood pressure 160/95." loading="lazy" width="1440" height="900">
+                <figcaption>The Patient room at the start of a session with John Martinez, a 55-year-old man with acute chest pain. The monitor shows sinus tachycardia at 110 bpm, SpO2 94% and blood pressure 160/95.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/chat-turn.webp" alt="A typed history question and the patient's reply. Every message is logged for the debrief and for the analytics." loading="lazy" width="1440" height="900">
+                <figcaption>A typed history question and the patient's reply. Every message is logged for the debrief and for the analytics.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/voice-mode.webp" alt="Voice mode. The learner holds the button or the space bar to speak, and the patient answers with the voice configured for the case." loading="lazy" width="1440" height="900">
+                <figcaption>Voice mode. The learner holds the button or the space bar to speak, and the patient answers with the voice configured for the case.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="simulator">
+            <h2>Simulator controls</h2>
+            <p>The educator opens the simulator controls beside the monitor. Rhythm, vital signs, scenarios, alarms and lab release can be changed during the session. Changes ramp over a chosen time, so the learner sees the patient change gradually.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/sim-rhythm.webp" alt="The rhythm tab lists ten rhythms, from normal sinus rhythm to asystole and pulseless electrical activity, with PVC and wide QRS modifiers." loading="lazy" width="1440" height="900">
+                <figcaption>The rhythm tab lists ten rhythms, from normal sinus rhythm to asystole and pulseless electrical activity, with PVC and wide QRS modifiers.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/sim-scenarios.webp" alt="The scenarios tab. The current scenario has timed steps at 0, 10 and 20 minutes. Alternative evolutions such as untreated MI progression can be started at any point." loading="lazy" width="1440" height="900">
+                <figcaption>The scenarios tab. The current scenario has timed steps at 0, 10 and 20 minutes. Alternative evolutions such as untreated MI progression can be started at any point.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="orders">
+            <h2>Orders</h2>
+            <p>The order drawer opens from the monitor. Treatments come from the platform catalogue of medications, IV fluids, oxygen and nursing orders. Each entry carries its dose, its route and the physiological effects the engine applies after administration.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/orders-treatments.webp" alt="The Treatments tab of the order drawer with the four order categories and the medication list." loading="lazy" width="1440" height="900">
+                <figcaption>The Treatments tab of the order drawer with the four order categories and the medication list.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/orders-medications-search.webp" alt="A search for aspirin in the medication catalogue. The result shows the drug class, the indication and the route." loading="lazy" width="1440" height="900">
+                <figcaption>A search for aspirin in the medication catalogue. The result shows the drug class, the indication and the route.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="exam">
+            <h2>Examination and Bedside</h2>
+            <p>The Examination room presents a body map with anterior and posterior views. Each region offers inspection, palpation, percussion and auscultation, and the findings come from the case. The Bedside room shows the same patient in a 3D ward with the live monitor.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/examination-finding.webp" alt="Inspection of the chest. The finding is written to the examination log and to the patient record." loading="lazy" width="1440" height="900">
+                <figcaption>Inspection of the chest. The finding is written to the examination log and to the patient record.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/bedside.webp" alt="The Bedside room. The learner moves around the bed, talks to the patient by voice and reads the monitor on the right." loading="lazy" width="1440" height="900">
+                <figcaption>The Bedside room. The learner moves around the bed, talks to the patient by voice and reads the monitor on the right.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="labs">
+            <h2>Laboratory and Radiology</h2>
+            <p>The Laboratory room lists 201 tests in groups. The learner ticks tests and orders them, and each result arrives after its own turnaround. The Radiology room works the same way with 74 imaging and diagnostic studies. Educators can release a result immediately.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/laboratory-results.webp" alt="A potassium result opened as a laboratory report with the reference range and a normal flag. Four earlier orders are still pending in the worklist." loading="lazy" width="1440" height="900">
+                <figcaption>A potassium result opened as a laboratory report with the reference range and a normal flag. Four earlier orders are still pending in the worklist.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/radiology-report.webp" alt="The chest X-ray report with clinical indication, technique, findings and impression, written by the case author." loading="lazy" width="1440" height="900">
+                <figcaption>The chest X-ray report with clinical indication, technique, findings and impression, written by the case author.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="pacs">
+            <h2>PACS</h2>
+            <p>The PACS room appears in the navigator once imaging has been ordered. The study opens in a DICOM reading room with a series rail, window and level controls, transfer functions, measurement tools and a report pane.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/pacs.webp" alt="The PA chest film of the ordered study, with window width and level, gamma and edge enhancement in the right panel." loading="lazy" width="1440" height="900">
+                <figcaption>The PA chest film of the ordered study, with window width and level, gamma and edge enhancement in the right panel.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/pacs-study.webp" alt="The lateral series of the same study with a sigmoid transfer function applied." loading="lazy" width="1440" height="900">
+                <figcaption>The lateral series of the same study with a sigmoid transfer function applied.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="ecg">
+            <h2>12-lead ECG</h2>
+            <p>The 12-lead ECG room appears when the case carries a record. The tracing sits on calibrated paper with gain, sweep speed, filters and calipers; a systematic read and the learner's measurements are kept with the session.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/ecg-room.webp" alt="The admission ECG of the STEMI case on calibrated paper, with the systematic-read panel on the right." loading="lazy" width="1440" height="900">
+                <figcaption>The admission ECG of the STEMI case on calibrated paper, with the systematic-read panel on the right.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/ecg-caliper.webp" alt="The Measure tab with an interval caliper placed on the rhythm strip." loading="lazy" width="1440" height="900">
+                <figcaption>The Measure tab with an interval caliper placed on the rhythm strip.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="consultant">
+            <h2>Consultant and Course</h2>
+            <p>The Consultant room holds the case debrief with a discussant persona. The Course room holds the lessons, readings and surveys attached to the learner's course, with progress kept per learner.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/consultant.webp" alt="The Consultant room with the patient summary on the left and the discussant on the right, ready to start the debrief." loading="lazy" width="1440" height="900">
+                <figcaption>The Consultant room with the patient summary on the left and the discussant on the right, ready to start the debrief.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/course-lesson.webp" alt="A lesson in the Course room. The STEMI lesson is marked completed and ends with knowledge questions and a reflection survey." loading="lazy" width="1440" height="900">
+                <figcaption>A lesson in the Course room. The STEMI lesson is marked completed and ends with knowledge questions and a reflection survey.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="authoring">
+            <h2>Authoring a case</h2>
+            <p>A case is edited in twelve steps, from demographics and voice to scenario, vitals, labs, radiology, exam findings, records, treatments and agents. The editor saves as the author works.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/case-editor.webp" alt="The Demographics step of the STEMI case, with the twelve steps in the rail above the form." loading="lazy" width="1440" height="900">
+                <figcaption>The Demographics step of the STEMI case, with the twelve steps in the rail above the form.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/case-scenario.webp" alt="The Scenario step. A scenario from the repository gives the patient timed steps, and alternative evolutions can be added for the educator to trigger." loading="lazy" width="1440" height="900">
+                <figcaption>The Scenario step. A scenario from the repository gives the patient timed steps, and alternative evolutions can be added for the educator to trigger.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/case-treatments.webp" alt="The Treatments step. Each treatment can be marked expected, contraindicated or hidden for this case, and effect values come from the shared treatment library." loading="lazy" width="1440" height="900">
+                <figcaption>The Treatments step. Each treatment can be marked expected, contraindicated or hidden for this case, and effect values come from the shared treatment library.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="plugins">
+            <h2>Plugin editors</h2>
+            <p>The Plugins step of the case editor opens the tools that add their own material to a case. The ECG studio, the pathology editor and the imaging editor each save into the case, so the material travels with it.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/ecg-studio.webp" alt="The ECG case studio. The author picks a signal pattern, sets the patient and the learning purpose, and previews the learner's 12-lead ECG." loading="lazy" width="1440" height="900">
+                <figcaption>The ECG case studio. The author picks a signal pattern, sets the patient and the learning purpose, and previews the learner's 12-lead ECG.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/pathology-editor.webp" alt="The pathology case editor. Slides come from the slide library, gross photographs can be added, and publish checks list what the case still needs." loading="lazy" width="1440" height="900">
+                <figcaption>The pathology case editor. Slides come from the slide library, gross photographs can be added, and publish checks list what the case still needs.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/imaging-editor.webp" alt="The imaging case editor. The 74 studies of the radiology catalogue are shown with their normal imaging, and the author changes the ones that differ for this patient." loading="lazy" width="1440" height="900">
+                <figcaption>The imaging case editor. The 74 studies of the radiology catalogue are shown with their normal imaging, and the author changes the ones that differ for this patient.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="settings">
+            <h2>Settings</h2>
+            <p>The settings surface covers cases, scenarios, agents, avatars, voice, affect, users, courses, lessons, analytics, Oyon, logs, the body map, the lab database, medications, treatments, platform configuration, plugins and notifications.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/settings-cases.webp" alt="The Cases tab. Cases are grouped by course, and each one can be loaded, exported, duplicated, edited or hidden." loading="lazy" width="1440" height="900">
+                <figcaption>The Cases tab. Cases are grouped by course, and each one can be loaded, exported, duplicated, edited or hidden.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/settings-voice.webp" alt="The Voice tab. Kokoro, Google Cloud TTS, OpenAI TTS and Piper are enabled here, and each voice plays on its own engine." loading="lazy" width="1440" height="900">
+                <figcaption>The Voice tab. Kokoro, Google Cloud TTS, OpenAI TTS and Piper are enabled here, and each voice plays on its own engine.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/settings-platform-ai.webp" alt="The AI section of the Platform tab. The provider, base URL and model apply to every user, and the current wiring is shown below the form." loading="lazy" width="1440" height="900">
+                <figcaption>The AI section of the Platform tab. The provider, base URL and model apply to every user, and the current wiring is shown below the form.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="analytics">
+            <h2>Learning analytics</h2>
+            <p>Every learning event feeds the analytics. The same filters for course, case, learner, dates and room apply on each tab. Sequences of clinical states are read as a transition network, as a process map and as clusters of learners.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/analytics-network.webp" alt="The Network tab. Ten clinical states form a transition network with edge weights, and the centrality panel ranks them by in-strength." loading="lazy" width="1440" height="900">
+                <figcaption>The Network tab. Ten clinical states form a transition network with edge weights, and the centrality panel ranks them by in-strength.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/analytics-process.webp" alt="The Process map with 6,450 transitions across 45 sessions, with a threshold slider and CSV and PNG export." loading="lazy" width="1440" height="900">
+                <figcaption>The Process map with 6,450 transitions across 45 sessions, with a threshold slider and CSV and PNG export.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/analytics-clusters.webp" alt="The Clusters tab. Forty-five sequences fall into three clusters with a silhouette score of 0.908, each with its own state profile and network." loading="lazy" width="1440" height="900">
+                <figcaption>The Clusters tab. Forty-five sequences fall into three clusters with a silhouette score of 0.908, each with its own state profile and network.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="oyon">
+            <h2>Oyon</h2>
+            <p>Oyon estimates affect, attention and gaze from the camera on the learner's own device, with consent. The browser sends aggregated ten-second windows to the server, and the dashboard reads them by session.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/oyon-dashboard.webp" alt="The Affect tab of the Oyon dashboard with the emotion co-occurrence map, the heat strip, the affect plane and the dynamics timeline." loading="lazy" width="1440" height="900">
+                <figcaption>The Affect tab of the Oyon dashboard with the emotion co-occurrence map, the heat strip, the affect plane and the dynamics timeline.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/oyon-attention.webp" alt="The Attention &amp; engagement tab with focus, eye openness, blink rate, off-screen share and signal quality." loading="lazy" width="1440" height="900">
+                <figcaption>The Attention &amp; engagement tab with focus, eye openness, blink rate, off-screen share and signal quality.</figcaption>
+            </figure>
+            </div>
+        </section>
+        <section class="gallery-section" id="setup">
+            <h2>Setup and debrief</h2>
+            <p>The setup wizard walks an administrator through the AI engine, the default language, the default course, voices, emotion capture and access. It can be finished later and reopened from the menu. A session ends on purpose, and the debrief opens in the Consultant room.</p>
+            <div class="gallery-grid">
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/setup-wizard.webp" alt="The AI engine step of the platform setup. The connection is tested before students can talk to patients." loading="lazy" width="1440" height="900">
+                <figcaption>The AI engine step of the platform setup. The connection is tested before students can talk to patients.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/end-confirm.webp" alt="The confirmation before a session ends. The timeline stops, orders and chat are locked, and the transcript stays available in the debrief room." loading="lazy" width="1440" height="900">
+                <figcaption>The confirmation before a session ends. The timeline stops, orders and chat are locked, and the transcript stays available in the debrief room.</figcaption>
+            </figure>
+            <figure class="shot gallery-shot">
+                <img src="assets/screenshots/debrief.webp" alt="The debrief in progress. The discussant has joined, the learner can talk or type, and the transcript and notes are open from the header." loading="lazy" width="1440" height="900">
+                <figcaption>The debrief in progress. The discussant has joined, the learner can talk or type, and the transcript and notes are open from the header.</figcaption>
+            </figure>
+            </div>
+        </section>
+        </article>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a class="brand" href="index.html">
+                    <span class="brand-dot"></span>
+                    <span>rohy</span>
+                </a>
+                <p>
+                    AI-enabled virtual patient simulation platform for clinical reasoning research
+                    and education. Built by Mohammed Saqr, Professor of Computer Science,
+                    University of Eastern Finland.
+                </p>
+            </div>
+            <div class="footer-col">
+                <h4>Pages</h4>
+                <a href="index.html">Overview</a>
+                <a href="rooms.html">Rooms</a>
+                <a href="screenshots.html">Screenshots</a>
+                <a href="whats-new.html">What's new</a>
+                <a href="help.html">Help</a>
+                <a href="about.html">About the author</a>
+                <a href="index.html#install">Install</a>
+            </div>
+            <div class="footer-col">
+                <h4>Project</h4>
+                <a href="https://github.com/mohsaqr/rohySimulator" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/blob/main/README.md" target="_blank" rel="noopener">README</a>
+                <a href="https://github.com/mohsaqr/rohySimulator/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="docs/license.html">License</a>
+            </div>
+            <div class="footer-col">
+                <h4>Docs</h4>
+                <a href="docs/index.html">Docs home</a>
+                <a href="docs/INSTALL.html">Install</a>
+                <a href="docs/DEPLOY.html">Deploy</a>
+                <a href="docs/UPDATING.html">Updating</a>
+                <a href="docs/trainee/index.html">Trainee guides</a>
+                <a href="docs/reference/index.html">Reference</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Mohammed Saqr · <a href="docs/license.html">Carm Research License v1.4</a> · <a href="https://www.saqr.me" target="_blank" rel="noopener">saqr.me</a></span>
+            <span>Free for research, teaching, personal learning and non-profit use. Commercial use requires a paid licence.</span>
+        </div>
+    </div>
+</footer>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot viewer" hidden>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close screenshot viewer">×</button>
+    <img id="lightbox-img" alt="">
+    <div class="lightbox-hint">Click outside or press Esc to close</div>
+</div>
+
+<script src="site.js"></script>
+</body>
+</html>

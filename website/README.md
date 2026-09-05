@@ -9,8 +9,9 @@ repository root `node_modules`) for the two generators.
 
 | Page | Purpose |
 |---|---|
-| `index.html` | Overview: hero, CRETIC context, the rooms at a glance, care team, physiology, analytics, Oyon, authoring, governance, install, author. |
-| `rooms.html` | Every room in depth with a screenshot each. Five core rooms (Patient, Examination, Laboratory, Radiology, Consultant) and four plugin rooms (Bedside, 12-lead ECG, Pathology, PACS), in navigator order, plus navigation between rooms. The room list follows `RoomNavigator.jsx` and the plugin manifests, as the root README does. |
+| `index.html` | Overview: hero, CRETIC context, the rooms at a glance (one miniature per room card), care team, physiology, analytics, Oyon, authoring, governance, install, author. The full-screen pictures come from `assets/screenshots/`; the Oyon live-signal and gaze panels are older pictures under `assets/`, since the dev database holds no gaze windows and the live panel needs a camera. |
+| `screenshots.html` | **Generated.** Fifteen sections, each with a short paragraph and two or three real screenshots with captions, from sign-in to debrief. The selection and every caption live in `build-screenshots.mjs`; the pictures come from `assets/screenshots/`, which `screenshot-shots.mjs` fills (it records more scenes than the page shows, so a different selection needs no re-shoot). |
+| `rooms.html` | Every room in depth with a screenshot each, shown inside a browser-window frame (`.mock-bar` in `site.css`); the "On this page" row is a strip of tinted miniatures from `assets/screenshots/mini/`. The Pathology picture is the older `assets/pathology-slide.jpg`: the starter slide archive holds no measurable slide, so no local case can open the room (see HANDOFF). Five core rooms (Patient, Examination, Laboratory, Radiology, Consultant) and four plugin rooms (Bedside, 12-lead ECG, Pathology, PACS), in navigator order, plus navigation between rooms. The room list follows `RoomNavigator.jsx` and the plugin manifests, as the root README does. |
 | `whats-new.html` | What changed from v1.0.0 to the current 3.0 beta, with a release arc. |
 | `help.html` | **Generated.** The repository `README.md` rendered into the site shell: status, requirements, install, the rooms, features, screenshots, architecture, configuration, testing, documentation, development, roles, author, licence. This is the *public site's* help page. The application has its own **Help & Support** drawer (`src/help/`, 18 role-gated articles linking into the VitePress docs at `/rohy/docs/`); the two are separate surfaces and neither generates the other. |
 | `about.html` | The author: photo, background, research context, licence, and profile links (saqr.me, UEF, Scholar, ORCID, ResearchGate, Scopus, Semantic Scholar, GitHub, LinkedIn, X). |
@@ -24,6 +25,9 @@ Shared files:
 | `site.js` | Smooth in-page scrolling, reveal-on-scroll, screenshot lightbox. |
 | `build-docs.mjs` | Generates `docs/**` from `../docs/**`, `../CHANGELOG.md` and `../LICENSE`. Exports the page shell, the Markdown pipeline and the slug function. |
 | `build-help.mjs` | Generates `help.html` from `../README.md`, through the shell that `build-docs.mjs` exports. |
+| `build-screenshots.mjs` | Generates `screenshots.html` from `assets/screenshots/shots.json` and the PNGs beside it, through the same shell. Refuses a manifest entry whose picture is missing. |
+| `screenshot-shots.mjs` | Takes the pictures: one Chromium against a running dev server (`npm run dev`), signed in as the seeded admin, driving every surface and saving `assets/screenshots/<scene>.webp` (PNG when `cwebp` is missing), a 480 px miniature in `assets/screenshots/mini/`, and `shots.json`. The admin's floating Diag pill is hidden in every picture. The seeded case needs an ECG record for the 12-lead ECG scenes; the record used for the pictures was built with `create_case_document()` from `src/components/ecg/caseDocument.js` and saved under `config.ecg` of case 1. `ONLY=a,b` limits the scenes, `PROBE=1` also dumps each scene's accessibility tree. Run it against the seeded dev database only — it starts a session, places orders and edits a case. |
+| `export-gaze-screens.mjs` | Copies one miniature per room stamp from `assets/screenshots/mini/` into `public/gaze-screens/<room>.webp` (`npm run website:gaze-screens`), the pictures the Analytics → Gaze tab draws its per-screen maps over (`src/components/oyon/gazeScreens.js`). Run it after a re-shoot so the app's pictures match the release. |
 
 Every page carries the same header navigation (Overview · Rooms · What's new ·
 Docs · Help · Install · About the author · GitHub) and the same footer (Pages ·
@@ -48,9 +52,14 @@ npm run website:build
 That runs the two generators in order:
 
 ```bash
-node website/build-docs.mjs     # docs/**, from ../docs, ../CHANGELOG.md, ../LICENSE
-node website/build-help.mjs     # help.html, from ../README.md
+node website/build-docs.mjs      # docs/**, from ../docs, ../CHANGELOG.md, ../LICENSE
+node website/build-help.mjs      # help.html, from ../README.md
+node website/build-screenshots.mjs  # screenshots.html, from assets/screenshots/shots.json
 ```
+
+The screenshots themselves are not rebuilt by `website:build`; they come
+from `npm run website:shots` against a running dev server, and are committed
+with the manifest so the page builds without one.
 
 Order matters. `build-docs.mjs` writes the pages that a README link into
 `docs/` resolves to, and `build-help.mjs` points at a rendered page when the

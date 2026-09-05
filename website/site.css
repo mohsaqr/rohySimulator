@@ -843,3 +843,95 @@ body.no-scroll { overflow: hidden; }
     overflow-wrap: anywhere;
 }
 .docs-card-links a:hover { color: var(--cyan); }
+
+/* ── Showcase gallery (showcase.html) ─────────────────────────── */
+.gallery-section { margin: 0 0 56px; }
+.gallery-section h2 { font-size: clamp(24px, 3vw, 32px); margin-bottom: 10px; }
+.gallery-section > p { max-width: 860px; margin-bottom: 22px; font-size: 17px; }
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+.gallery-shot img { width: 100%; height: auto; display: block; cursor: zoom-in; }
+.gallery-shot figcaption {
+    font-size: 13px; line-height: 1.5; color: var(--text-dim);
+    padding: 10px 14px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-elev);
+}
+@media (max-width: 1100px) { .gallery-grid { grid-template-columns: 1fr; } }
+
+/* ── Screen mockups ─────────────────────────────────────────── */
+/* A real screenshot inside a browser window: a slim bar with three dots and
+   the address, then the picture. The figure classes above keep the frame,
+   radius and shadow; this only adds the bar. */
+.mock-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 14px;
+    background: var(--bg-elev-2);
+    border-bottom: 1px solid var(--border);
+}
+.mock-bar .dots { display: flex; gap: 6px; flex: 0 0 auto; }
+.mock-bar .dots i { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--border-bright); }
+.mock-bar .url {
+    flex: 1 1 auto; max-width: 440px; margin: 0 auto;
+    font-size: 11.5px; line-height: 1.4; color: var(--text-dimmer);
+    background: rgba(9, 9, 11, 0.6);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 3px 12px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}
+.mock-bar .url b { color: var(--text-dim); font-weight: 600; }
+
+/* ── Miniatures ─────────────────────────────────────────────── */
+/* The same screens small: tinted towards the site's indigo and cyan at rest,
+   in their own colours on hover and focus. A miniature is an index entry,
+   so it lives inside a link and never opens the lightbox. */
+.mini {
+    position: relative; display: block; overflow: hidden;
+    aspect-ratio: 16 / 10; background: var(--bg-elev-2);
+}
+.mini img {
+    width: 100%; height: 100%; object-fit: cover; object-position: top left;
+    filter: grayscale(1) contrast(1.08) brightness(0.92);
+    transition: filter 0.25s ease;
+}
+.mini::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.7), rgba(34, 211, 238, 0.55));
+    mix-blend-mode: color;
+    transition: opacity 0.25s ease;
+}
+a:hover .mini img, a:focus-visible .mini img { filter: none; }
+a:hover .mini::after, a:focus-visible .mini::after { opacity: 0; }
+
+/* room cards on the front page: the miniature bleeds to the card's edges */
+.card .mini {
+    margin: -24px -24px 18px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 13px 13px 0 0;
+}
+
+/* the "On this page" row as tiles */
+.subnav.tiles {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px; align-items: stretch;
+}
+.subnav.tiles .subnav-label { grid-column: 1 / -1; margin: 0 0 2px; }
+.subnav.tiles a {
+    padding: 0; border-radius: 10px; overflow: hidden;
+    background: var(--bg-elev); display: block;
+}
+.subnav.tiles a .label {
+    display: block; padding: 8px 10px 9px;
+    font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+}
+.subnav.tiles a:hover .label { color: var(--text); }
+.subnav.tiles a .label small { display: block; font-size: 11px; font-weight: 500; color: var(--text-dimmer); letter-spacing: 0.02em; }
+
+@media (prefers-reduced-motion: reduce) {
+    .mini img, .mini::after { transition: none; }
+}

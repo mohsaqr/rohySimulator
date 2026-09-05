@@ -189,43 +189,43 @@ Six languages in `server/shared/languages.js`: English, Italian, Finnish, Swedis
 The 13 images below live in [`docs/images/screens/`](docs/images/screens/).
 
 ![Patient room](docs/images/screens/patient-room.jpg)
-The patient room: avatar and chat on the left, the live monitor on the right, a red clinical alarm banner with Snooze and Acknowledge, the session clock at top right, and the room navigator along the bottom.
+The patient room: avatar and chat on the left, the live monitor with synthesised ECG, plethysmograph and respiration traces on the right, the Treatments, Records and Memory buttons under it, the session clock and End & Debrief in the header, and the room navigator along the bottom.
 
 ![Physical examination](docs/images/screens/physical-exam.jpg)
-The examination room: an anatomical body map with region hit areas, a technique chooser, the auscultation point picker, and the Examination Log.
+The examination room: an anatomical body map with region hit areas, a technique chooser, the finding written for the chosen region and technique, and the Examination Log.
 
 ![Laboratory](docs/images/screens/laboratory.jpg)
 The laboratory: the searchable test catalogue on the left, a rendered lab report with reference ranges in the middle, and the worklist with pending, ready and viewed states on the right.
 
 ![Radiology worklist](docs/images/screens/radiology-worklist.jpg)
-The radiology room: the imaging catalogue, counters for pending, ready and viewed studies, and the worklist of ordered studies.
+The radiology room: the imaging catalogue on the left, a rendered radiology report with indication, technique, findings and impression in the middle, and the worklist on the right.
 
 ![DICOM reading room](docs/images/screens/radiology-pacs.jpg)
-The PACS room: a multi-series MRI study with a thumbnail rail, two viewports side by side, and window width and level controls.
+The PACS room: a chest X-ray study with a series rail, the lateral film in the viewport, and window width and level, transfer function, gamma and edge-enhancement controls.
 
 ![ECG workstation](docs/images/screens/ecg-workstation.jpg)
-The twelve-lead ECG room: calibrated paper, gain and sweep-speed selectors, filter selectors, calipers with retained measurements, and a lead map.
+The twelve-lead ECG room: the admission tracing on calibrated paper, lead focus and lead map, calipers for interval, amplitude and rate, and the systematic-read panel.
 
 ![Pathology slide](docs/images/screens/pathology-slide.jpg)
 The pathology room: a whole-slide H&E image with a magnification ladder, a scale bar in microns, an ellipse annotation reporting an area, and the display-only adjustment panel.
 
 ![Debrief](docs/images/screens/debrief.jpg)
-The debrief room: the discussant with its own avatar and voice, in voice mode, after the case has ended.
+The debrief room: the patient summary on the left and the discussant, with its own avatar and voice, ready to talk on the right.
 
 ![Transition network analysis](docs/images/screens/tna-clusters.jpg)
-The analytics dashboard: learner clusters, one transition network per cluster, and state distributions over time with a silhouette score.
+The analytics dashboard: learner clusters with their state counts, one transition network per cluster, and the silhouette score of the grouping.
 
 ![Oyon live signals](docs/images/screens/oyon-signals.jpg)
 The Oyon panel: emotion probabilities, gaze, head pose, body posture, and an rPPG heart-rate estimate with its integration window and signal-quality flags.
 
 ![Affect analytics](docs/images/screens/affect-analytics.jpg)
-Post-session affect: an emotion co-occurrence map, a heat strip across the session, and the arousal-valence plane, with counts beside percentages.
+Post-session affect in the Oyon dashboard: an emotion co-occurrence map, a heat strip across the session, totals with counts beside percentages, and the arousal-valence plane.
 
 ![Gaze analytics](docs/images/screens/gaze-analytics.jpg)
 Gaze aggregates: per-screen-ninth shares, gaze centroids, and the same shares broken down by room.
 
 ![Case management](docs/images/screens/admin-cases.jpg)
-The admin case list: English, German, Spanish and Italian cases in one course, each with a language flag, a case code, and a live-session count.
+The admin case list: English, German, Spanish and Italian cases in one course, each with a language flag, a case code, availability, and a live-session count.
 
 ## Architecture
 
