@@ -30,6 +30,7 @@
         <nav class="nav-links" aria-label="Site">
             <a href="index.html" aria-current="page">Overview</a>
             <a href="rooms.html">Rooms</a>
+            <a href="screenshots.html">Screenshots</a>
             <a href="whats-new.html">What's new</a>
             <a href="docs/index.html">Docs</a>
             <a href="help.html">Help</a>
@@ -61,7 +62,8 @@
             <a class="btn btn-ghost" href="whats-new.html">What's new since v1</a>
         </div>
         <figure class="hero-shot">
-            <img src="assets/patient-room.jpg" alt="The Patient room. A 3D avatar of John Martinez, 55, above the chat panel on the left; a live monitor on the right with lead II ECG, plethysmograph and respiration waveforms, heart rate 120, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 and EtCO2 32; a latched warning banner reading 'HR high, hr = 122 (limit ≤ 120)' with Snooze and Acknowledge buttons; Treatments, Records and Memory buttons; and the room navigator along the bottom.">
+            <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Patient</span></div>
+            <img src="assets/screenshots/patient-room.webp" alt="The Patient room in Rohy 3.0.0-beta.17. Left: the 3D avatar of John Martinez, 55, male, above an empty transcript reading 'Start a conversation with your patient' and a message box. Right: the live monitor with lead II ECG, plethysmograph and respiration traces, heart rate 110, SpO2 94%, NIBP 160/95, respiratory rate 22, temperature 37.2 °C and EtCO2 32, with Treatments, Records and Memory buttons under the traces. The header holds the Oyon capture pill, the session clock at 0:13, the date, alarms, settings and End & Debrief. The navigator along the bottom lists Patient, Bedside, Examination, Laboratory, Radiology, Consultant and Course.">
             <figcaption>The Patient room: avatar, dialogue and the live monitor in one space. The ECG is synthesised in real time, so rhythm changes are visible consequences of the evolving scenario.</figcaption>
         </figure>
         <div class="capabilities" aria-label="Capabilities">
@@ -143,54 +145,63 @@
         </div>
         <div class="cards reveal">
             <a class="card" href="rooms.html#patient">
+                <span class="mini"><img src="assets/screenshots/mini/patient-room.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">01 · Patient</span>
                 <h3>Interview, monitor, treatments</h3>
                 <p>The patient answers by text or voice through an animated 3D avatar. The live monitor, the Treatments panel, the Records drawer and the End &amp; Debrief action live here.</p>
                 <span class="card-link">Patient room →</span>
             </a>
             <a class="card" href="rooms.html#room-3d">
+                <span class="mini"><img src="assets/screenshots/mini/room-3d.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">02 · Bedside</span>
                 <h3>The same patient at the bedside</h3>
                 <p>Rohy 3 adds a 3D bedside room. The patient lies in bed with the live monitor, a camera wheel, and an examination wheel. Conversation and findings are shared with the Patient room.</p>
                 <span class="card-link">Bedside →</span>
             </a>
             <a class="card" href="rooms.html#examination">
+                <span class="mini"><img src="assets/screenshots/mini/examination-finding.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">03 · Examination</span>
                 <h3>Structured physical examination</h3>
                 <p>A body map with 67 named regions. Inspection, palpation, percussion and auscultation reveal the finding the case author wrote for that pair, with site-specific heart and lung sounds.</p>
                 <span class="card-link">Examination room →</span>
             </a>
             <a class="card" href="rooms.html#laboratory">
+                <span class="mini"><img src="assets/screenshots/mini/laboratory-results.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">04 · Laboratory</span>
                 <h3>Catalogue, orders, reports</h3>
                 <p>Over 200 tests in more than 30 clinical groups. Orders move from pending to ready to viewed on a one-to-five-minute turnaround, and reports are laid out like hospital reports.</p>
                 <span class="card-link">Laboratory →</span>
             </a>
             <a class="card" href="rooms.html#radiology">
+                <span class="mini"><img src="assets/screenshots/mini/radiology-report.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">05 · Radiology</span>
                 <h3>Imaging catalogue, orders, reports</h3>
                 <p>74 orderable studies across nine modalities with the same pending, ready and viewed lifecycle as the laboratory, and a per-case report authored by the educator.</p>
                 <span class="card-link">Radiology →</span>
             </a>
             <a class="card" href="rooms.html#ecg">
+                <span class="mini"><img src="assets/screenshots/mini/ecg-room.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">06 · 12-lead ECG · plugin</span>
                 <h3>A reading workstation with calipers</h3>
                 <p>Calibrated paper, selectable gain and sweep speed, diagnostic and monitor filters, interval, amplitude and rate calipers whose measurements are retained, and a lead map.</p>
                 <span class="card-link">ECG workstation →</span>
             </a>
             <a class="card" href="rooms.html#pathology">
+                <span class="mini"><img src="assets/screenshots/mini/pathology-slide.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">07 · Pathology · plugin</span>
                 <h3>Whole-slide imaging with measurement</h3>
                 <p>Whole-slide navigation, a magnification ladder, a scale bar in micrometres, and annotation tools that report area. Display adjustments and measurements are kept separate.</p>
                 <span class="card-link">Pathology →</span>
             </a>
             <a class="card" href="rooms.html#pacs">
+                <span class="mini"><img src="assets/screenshots/mini/pacs-study.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">08 · PACS · plugin</span>
                 <h3>The DICOM reading room</h3>
                 <p>Multi-series studies, a thumbnail rail, side-by-side viewports, and window width and level controls. Display processing is labelled as such and leaves the pixel values untouched.</p>
                 <span class="card-link">PACS →</span>
             </a>
             <a class="card" href="rooms.html#consultant">
+                <span class="mini"><img src="assets/screenshots/mini/debrief.webp" alt="" loading="lazy" width="480" height="300"></span>
                 <span class="card-index">09 · Consultant</span>
                 <h3>The consultant answers during the case and leads the debrief</h3>
                 <p>A separate discussant persona with its own voice, avatar and model receives the learner's encounter record and leads a Socratic debrief once End &amp; Debrief stops the case.</p>
@@ -283,7 +294,8 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/tna-clusters.jpg" alt="Transition network analysis dashboard. A header reads '3 clusters found, silhouette score 0.636 (cluster good)'. Three columns: Cluster 1 (1 session, 2%, average sequence length 3262, dominated by monitoring with 2449 events), Cluster 2 (7 sessions, 12%, average length 48.3, led by navigating), and Cluster 3 (51 sessions, 86%, average length 9.9, led by regulating and navigating). Each column shows a horizontal state-distribution bar chart, a circular directed weighted transition network with edge probabilities, and a stacked-bar plot of state proportions across timesteps.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Analytics · Clusters</span></div>
+                <img src="assets/screenshots/analytics-clusters.webp" alt="The Analytics dashboard, Clusters tab, with course, case, student and date filters, source Activity, mapping Clinical state, all rooms, grouped per session. Tiles read 45 sequences, 6,495 events, 10 states, density 49.0%, 49 edges. A line reads '3 clusters found, silhouette score 0.908 (cluster good)'. Three cluster cards: Cluster 1, 3 sessions (7%), average sequence length 1035.7, led by assessing with 2,901 events; Cluster 2, 1 session (2%), average length 1993.0, led by monitoring with 974; Cluster 3, 41 sessions (91%), average length 34.0, led by navigating with 580 and regulating with 453. Under each, a circular transition network with labelled edge probabilities.">
                 <figcaption>Behaviour as a directed weighted network. Clusters, transition networks and state distributions, with the silhouette score on display so the grouping can be evaluated.</figcaption>
             </figure>
         </div>
@@ -317,7 +329,8 @@
             </figure>
             <div class="cards two">
                 <figure class="shot">
-                    <img src="assets/affect-analytics.jpg" alt="Post-session affect analytics, four panels. An eight-emotion co-occurrence map with weighted arcs between emotions arranged in a ring. An emotion heat strip over the timeline with totals: Anger 20 (2.0%), Contempt 0, Disgust 54 (5.4%), Fear 0, Happy 25 (2.5%), Neutral 678 (67.8%), Sad 25 (2.5%), Surprise 13 (1.3%). An affect plane scattering windows across arousal and valence. A dynamics panel with affect-speed and instability traces and a quadrant breakdown: positive-active 57 (7.0%), positive-calm 16 (2.0%), negative-active 488 (59.9%).">
+                    <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Oyon · Affect</span></div>
+                    <img src="assets/screenshots/oyon-dashboard.webp" alt="The Oyon dashboard, Affect tab, for session 483 with 446 windows. Tiles read 446 windows, dominant 6/8, links 15; model channels 7, latest state Insufficient, latest quality 100%. An 8-emotion co-occurrence map with weighted arcs between neutral, anger, contempt, disgust, fear, sad, happy and surprise. An emotion heat strip over the timeline with totals: Anger 70 (15.7%), Contempt 0, Disgust 22 (4.9%), Fear 0, Happy 16 (3.6%), Neutral 317 (71.1%), Sad 2 (0.4%), Surprise 4 (0.9%). Below, an affect plane of windows across arousal and valence and an arousal–valence mix: positive-active 61 (13.7%), positive-calm 24 (5.4%).">
                     <figcaption>Post-session affective analytics. Co-occurring classifications, distribution over time, and position in the arousal–valence plane. Counts sit next to percentages so the number of observations behind each proportion stays visible.</figcaption>
                 </figure>
                 <figure class="shot">
@@ -362,7 +375,8 @@
                 </ul>
             </div>
             <figure class="pillar-shot">
-                <img src="assets/admin-cases.jpg" alt="Settings and administration, Manage Cases. Summary tiles read 10 total cases, 9 available, 1 hidden. Under 'Basic course (4)': Acute Chest Pain – STEMI in English (EN-0001, default, 35 live sessions), Akute Anaphylaxie nach Wespenstich in German (DE-0008), Cetoacidosis Diabetica – Diabetes Tipo 1 in Spanish (ES-0009, 1 live), and Ictus Ischemico Acuto – Codice Ictus in Italian (IT-0010). Each row has course assignment, Hide, Set Default, Load, Edit, Duplicate and Delete controls. A sidebar lists Simulation, Overview, Cases, Scenarios, Agents, Avatars, Voice, Affect, Users, Courses, Lessons, Analytics, Oyon, Logs, Body Map and Lab Database.">
+                <div class="mock-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url"><b>rohy.lacarm.com</b> · Settings · Cases</span></div>
+                <img src="assets/screenshots/settings-cases.webp" alt="Settings & Administration, Manage Cases. Tiles read 9 total cases, 9 available, 0 hidden. Under 'Basic course (4)': Acute Chest Pain – STEMI in English (EN-0001, default, available, 255 live), Akute Anaphylaxie nach Wespenstich in German (DE-0062), Cetoacidosis Diabetica – Diabetes Tipo 1 in Spanish (ES-0063) and Ictus Ischemico Acuto – Codice Ictus in Italian (IT-0064), each with a course selector and Hide, Set Default, Load, export, Edit, Duplicate and Delete controls. 'Unassigned cases (5)' begins with Septic Shock – Pneumonia. The sidebar lists Simulation, Overview, Cases, Scenarios, Agents, Avatars, Voice, Affect, Users, Courses, Lessons, Analytics, Oyon, Logs, Body Map, Lab Database and Medications.">
                 <figcaption>Case management. One course holds cases in English, German, Spanish and Italian side by side; the flag and the case code carry the language, and the live badge counts sessions running against a case.</figcaption>
             </figure>
         </div>
@@ -560,6 +574,7 @@
                 <h4>Pages</h4>
                 <a href="index.html">Overview</a>
                 <a href="rooms.html">Rooms</a>
+                <a href="screenshots.html">Screenshots</a>
                 <a href="whats-new.html">What's new</a>
                 <a href="help.html">Help</a>
                 <a href="about.html">About the author</a>

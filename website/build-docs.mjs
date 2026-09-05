@@ -69,6 +69,7 @@ const textOf = (html) => html.replace(/<[^>]+>/g, '')
 const NAV = [
     { href: 'index.html', label: 'Overview', key: 'overview' },
     { href: 'rooms.html', label: 'Rooms', key: 'rooms' },
+    { href: 'screenshots.html', label: 'Screenshots', key: 'screenshots' },
     { href: 'whats-new.html', label: "What's new", key: 'whats-new' },
     { href: 'docs/index.html', label: 'Docs', key: 'docs' },
     { href: 'help.html', label: 'Help', key: 'help' },
@@ -127,6 +128,7 @@ export function footerHtml(rel) {
                 <h4>Pages</h4>
                 <a href="${rel}index.html">Overview</a>
                 <a href="${rel}rooms.html">Rooms</a>
+                <a href="${rel}screenshots.html">Screenshots</a>
                 <a href="${rel}whats-new.html">What's new</a>
                 <a href="${rel}help.html">Help</a>
                 <a href="${rel}about.html">About the author</a>

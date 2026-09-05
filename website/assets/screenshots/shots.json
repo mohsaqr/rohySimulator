@@ -1,0 +1,586 @@
+{
+  "base": "http://localhost:5173",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "takenAt": "2026-09-05T14:11:10.352Z",
+  "shots": [
+    {
+      "name": "login",
+      "file": "login.webp",
+      "section": "signing-in",
+      "caption": "The sign-in page: six interface languages, an account, an invitation code"
+    },
+    {
+      "name": "getting-started",
+      "file": "getting-started.webp",
+      "section": "signing-in",
+      "caption": "The guided tour on first sign-in: a few steps over the rooms, the monitor and the debrief, skippable and recallable from Help"
+    },
+    {
+      "name": "patient-room",
+      "file": "patient-room.webp",
+      "section": "patient",
+      "caption": "The Patient room: the avatar, the transcript, and the live monitor with its ECG, pleth and respiration traces"
+    },
+    {
+      "name": "patient-menu",
+      "file": "patient-menu.webp",
+      "section": "patient",
+      "caption": "The settings and profile menu: cases, profile, settings, help, language, the three analytics surfaces and the setup wizard"
+    },
+    {
+      "name": "chat-turn",
+      "file": "chat-turn.webp",
+      "section": "patient",
+      "caption": "A history question typed to the patient; the reply arrives from the configured language model with the persona and the case in play"
+    },
+    {
+      "name": "voice-mode",
+      "file": "voice-mode.webp",
+      "section": "patient",
+      "caption": "Voice mode: speak to the patient, hear the reply through the configured voice, with subtitles"
+    },
+    {
+      "name": "monitor-settings",
+      "file": "monitor-settings.webp",
+      "section": "patient",
+      "caption": "Monitor settings: which traces and parameters the learner sees"
+    },
+    {
+      "name": "sim-rhythm",
+      "file": "sim-rhythm.webp",
+      "section": "simulator",
+      "caption": "Simulator controls — rhythm: the educator switches the patient to any of ten rhythms while the learner watches"
+    },
+    {
+      "name": "sim-vitals",
+      "file": "sim-vitals.webp",
+      "section": "simulator",
+      "caption": "Simulator controls — vitals: every parameter on a slider, changes ramp over the chosen time"
+    },
+    {
+      "name": "sim-scenarios",
+      "file": "sim-scenarios.webp",
+      "section": "simulator",
+      "caption": "Simulator controls — scenarios: timed deterioration and recovery steps, paused, resumed or jumped"
+    },
+    {
+      "name": "sim-alarms",
+      "file": "sim-alarms.webp",
+      "section": "simulator",
+      "caption": "Simulator controls — alarms"
+    },
+    {
+      "name": "sim-labs",
+      "file": "sim-labs.webp",
+      "section": "simulator",
+      "caption": "Simulator controls — labs: release or edit a result during the session"
+    },
+    {
+      "name": "orders-treatments",
+      "file": "orders-treatments.webp",
+      "section": "orders",
+      "caption": "The order entry drawer — Treatments: medications, IV fluids, oxygen and nursing orders, searched from the catalogue"
+    },
+    {
+      "name": "orders-medications-search",
+      "file": "orders-medications-search.webp",
+      "section": "orders",
+      "caption": "Searching the medication catalogue; each entry carries its dose, route and the effects the physiology engine will apply"
+    },
+    {
+      "name": "orders-records",
+      "file": "orders-records.webp",
+      "section": "orders",
+      "caption": "The Records tab: the patient record the learner has assembled — history, findings, results, notes"
+    },
+    {
+      "name": "orders-memory",
+      "file": "orders-memory.webp",
+      "section": "orders",
+      "caption": "The Memory tab (admin): what the patient model remembers of the encounter so far"
+    },
+    {
+      "name": "laboratory",
+      "file": "laboratory.webp",
+      "section": "rooms",
+      "caption": "The Laboratory room: 200 tests in the catalogue, grouped and searchable; ordering is one click, results arrive on the test's own turnaround"
+    },
+    {
+      "name": "laboratory-order",
+      "file": "laboratory-order.webp",
+      "section": "rooms",
+      "caption": "Four tests ticked and ordered: the worklist shows them pending with their turnaround"
+    },
+    {
+      "name": "laboratory-results",
+      "file": "laboratory-results.webp",
+      "section": "rooms",
+      "caption": "Results ready: the worklist turns green and the report opens in the middle pane with reference ranges and flags. \"Order instantly\" is the educator's shortcut past the turnaround"
+    },
+    {
+      "name": "radiology",
+      "file": "radiology.webp",
+      "section": "rooms",
+      "caption": "The Radiology room: the imaging and diagnostics catalogue, X-ray to MRI, each with a turnaround"
+    },
+    {
+      "name": "radiology-report",
+      "file": "radiology-report.webp",
+      "section": "rooms",
+      "caption": "A chest X-ray ordered and reported: the radiologist's text as the case author wrote it"
+    },
+    {
+      "name": "pacs",
+      "file": "pacs.webp",
+      "section": "rooms",
+      "caption": "The PACS room, which appeared in the navigator the moment imaging was ordered: the study in a DICOM reading room with a series rail, window presets, measurements and a report pane"
+    },
+    {
+      "name": "pacs-study",
+      "file": "pacs-study.webp",
+      "section": "rooms",
+      "caption": "The second series of the study and a sigmoid transfer function: the reading room keeps window, level, gamma and edge enhancement per pane, and measurements stay in acquired units"
+    },
+    {
+      "name": "ecg-room",
+      "file": "ecg-room.webp",
+      "section": "rooms",
+      "caption": "The 12-lead ECG room: the admission tracing on calibrated paper with gain, speed, filter and caliper controls, lead topography and a measurement list"
+    },
+    {
+      "name": "ecg-caliper",
+      "file": "ecg-caliper.webp",
+      "section": "rooms",
+      "caption": "An interval caliper spanning two points of the rhythm strip, and the Measure tab where every caliper the learner places is kept with its classification"
+    },
+    {
+      "name": "examination",
+      "file": "examination.webp",
+      "section": "rooms",
+      "caption": "The Examination room: a body map, front and back, general and neurological exams"
+    },
+    {
+      "name": "examination-region",
+      "file": "examination-region.webp",
+      "section": "rooms",
+      "caption": "A region chosen on the body map: the exam types it offers, and the findings the case holds for it"
+    },
+    {
+      "name": "examination-finding",
+      "file": "examination-finding.webp",
+      "section": "rooms",
+      "caption": "An examination performed: the finding is recorded in the log and in the patient record"
+    },
+    {
+      "name": "consultant",
+      "file": "consultant.webp",
+      "section": "rooms",
+      "caption": "The Consultant room: present the case to a senior colleague who knows only what the learner tells them"
+    },
+    {
+      "name": "course",
+      "file": "course.webp",
+      "section": "rooms",
+      "caption": "The Course room: the learner's course with its lessons and surveys, as cards or a list"
+    },
+    {
+      "name": "course-lesson",
+      "file": "course-lesson.webp",
+      "section": "rooms",
+      "caption": "A lesson opened: sections, video and reading, with progress kept per learner"
+    },
+    {
+      "name": "bedside",
+      "file": "bedside.webp",
+      "section": "rooms",
+      "caption": "The Bedside room: the patient in 3D at the bedside, examined by walking around the bed"
+    },
+    {
+      "name": "help-centre",
+      "file": "help-centre.webp",
+      "section": "patient",
+      "caption": "Help & Support: role-gated articles that open the documentation"
+    },
+    {
+      "name": "profile",
+      "file": "profile.webp",
+      "section": "patient",
+      "caption": "My Profile: account, personal details and the dialogue language for this user's sessions"
+    },
+    {
+      "name": "profile-password",
+      "file": "profile-password.webp",
+      "section": "patient",
+      "caption": "My Profile — Password: the same policy the server enforces, mirrored in the form"
+    },
+    {
+      "name": "profile-ai",
+      "file": "profile-ai.webp",
+      "section": "patient",
+      "caption": "My Profile — AI settings: a per-user provider and model, baked into each new session"
+    },
+    {
+      "name": "profile-join",
+      "file": "profile-join.webp",
+      "section": "patient",
+      "caption": "My Profile — Join a class: an invitation code enrols the learner in a course"
+    },
+    {
+      "name": "settings-overview",
+      "file": "settings-overview.webp",
+      "section": "settings",
+      "caption": "Settings — Overview: the platform at a glance"
+    },
+    {
+      "name": "settings-cases",
+      "file": "settings-cases.webp",
+      "section": "settings",
+      "caption": "Settings — Cases: every case with its course, a default, load, export, duplicate and edit"
+    },
+    {
+      "name": "settings-scenarios",
+      "file": "settings-scenarios.webp",
+      "section": "settings",
+      "caption": "Settings — Scenarios: the deterioration scripts a case can run"
+    },
+    {
+      "name": "settings-agents",
+      "file": "settings-agents.webp",
+      "section": "settings",
+      "caption": "Settings — Agents: the care team personas — nurse, consultant, relative, discussant — each with a knowledge boundary"
+    },
+    {
+      "name": "settings-avatars",
+      "file": "settings-avatars.webp",
+      "section": "settings",
+      "caption": "Settings — Avatars: the patient faces, framing and animation"
+    },
+    {
+      "name": "settings-voice",
+      "file": "settings-voice.webp",
+      "section": "settings",
+      "caption": "Settings — Voice: every engine and every voice per language; the voice owns its engine"
+    },
+    {
+      "name": "settings-affect",
+      "file": "settings-affect.webp",
+      "section": "settings",
+      "caption": "Settings — Affect: how Oyon's emotion signal reaches the patient model, off by default"
+    },
+    {
+      "name": "settings-users",
+      "file": "settings-users.webp",
+      "section": "settings",
+      "caption": "Settings — Users: accounts, roles, status, invitations and the registration policy"
+    },
+    {
+      "name": "settings-courses",
+      "file": "settings-courses.webp",
+      "section": "settings",
+      "caption": "Settings — Courses: cohorts, their members, their cases, and reports"
+    },
+    {
+      "name": "settings-lessons",
+      "file": "settings-lessons.webp",
+      "section": "settings",
+      "caption": "Settings — Lessons: authoring lectures and videos for the Course room"
+    },
+    {
+      "name": "settings-oyon",
+      "file": "settings-oyon.webp",
+      "section": "settings",
+      "caption": "Settings — Oyon: consent, capture, on-device models and the analytics that read them"
+    },
+    {
+      "name": "settings-logs",
+      "file": "settings-logs.webp",
+      "section": "settings",
+      "caption": "Settings — Logs: sessions, activity, chat, system and rejected events, filterable and exportable"
+    },
+    {
+      "name": "settings-bodymap",
+      "file": "settings-bodymap.webp",
+      "section": "settings",
+      "caption": "Settings — Body Map: the examination regions and what each reveals"
+    },
+    {
+      "name": "settings-labdb",
+      "file": "settings-labdb.webp",
+      "section": "settings",
+      "caption": "Settings — Lab Database: the LOINC-mapped catalogue behind the Laboratory room"
+    },
+    {
+      "name": "settings-medications",
+      "file": "settings-medications.webp",
+      "section": "settings",
+      "caption": "Settings — Medications: the drug catalogue with doses, routes and physiologic effects"
+    },
+    {
+      "name": "settings-treatments",
+      "file": "settings-treatments.webp",
+      "section": "settings",
+      "caption": "Settings — Treatments library: interventions a case can expect or forbid"
+    },
+    {
+      "name": "settings-platform",
+      "file": "settings-platform.webp",
+      "section": "settings",
+      "caption": "Settings — Platform: general, AI provider and model, users, monitor"
+    },
+    {
+      "name": "settings-plugins",
+      "file": "settings-plugins.webp",
+      "section": "settings",
+      "caption": "Settings — Plugins: the installed rooms, their versions, content and per-tenant switches"
+    },
+    {
+      "name": "settings-notifications",
+      "file": "settings-notifications.webp",
+      "section": "settings",
+      "caption": "Settings — Notifications: one centre, six surfaces; every source routed per severity"
+    },
+    {
+      "name": "settings-platform-ai",
+      "file": "settings-platform-ai.webp",
+      "section": "settings",
+      "caption": "Platform — AI: provider, model from the curated catalogue, keys, and per-voice-mode model swap"
+    },
+    {
+      "name": "case-editor",
+      "file": "case-editor.webp",
+      "section": "authoring",
+      "caption": "Editing a case: twelve steps in a rail, save as you go"
+    },
+    {
+      "name": "case-demographics",
+      "file": "case-demographics.webp",
+      "section": "authoring",
+      "caption": "Case editor — Demographics: identity, measurements, contact"
+    },
+    {
+      "name": "case-avatar-voice",
+      "file": "case-avatar-voice.webp",
+      "section": "authoring",
+      "caption": "Case editor — Avatar & Voice: the face and the literal voice this patient speaks with"
+    },
+    {
+      "name": "case-story",
+      "file": "case-story.webp",
+      "section": "authoring",
+      "caption": "Case editor — Story: presentation, history, what the patient knows and withholds"
+    },
+    {
+      "name": "case-scenario",
+      "file": "case-scenario.webp",
+      "section": "authoring",
+      "caption": "Case editor — Scenario: timed physiological steps"
+    },
+    {
+      "name": "case-vitals",
+      "file": "case-vitals.webp",
+      "section": "authoring",
+      "caption": "Case editor — Vitals: the starting physiology and the rhythm"
+    },
+    {
+      "name": "case-labs",
+      "file": "case-labs.webp",
+      "section": "authoring",
+      "caption": "Case editor — Labs: values for this patient, the rest of the catalogue stays available"
+    },
+    {
+      "name": "case-radiology",
+      "file": "case-radiology.webp",
+      "section": "authoring",
+      "caption": "Case editor — Radiology & diagnostics: reports per study"
+    },
+    {
+      "name": "case-exam",
+      "file": "case-exam.webp",
+      "section": "authoring",
+      "caption": "Case editor — Exam: findings per region and exam type"
+    },
+    {
+      "name": "case-records",
+      "file": "case-records.webp",
+      "section": "authoring",
+      "caption": "Case editor — Records: the chart the learner can open"
+    },
+    {
+      "name": "case-treatments",
+      "file": "case-treatments.webp",
+      "section": "authoring",
+      "caption": "Case editor — Treatments: expected, contraindicated, and their effects"
+    },
+    {
+      "name": "case-agents",
+      "file": "case-agents.webp",
+      "section": "authoring",
+      "caption": "Case editor — Agents: which care-team personas this case pages in, and how fast they arrive"
+    },
+    {
+      "name": "case-plugins",
+      "file": "case-plugins.webp",
+      "section": "authoring",
+      "caption": "Case editor — Plugins: the ECG studio, the pathology editor and the imaging editor, each authoring material that travels with the case"
+    },
+    {
+      "name": "ecg-studio",
+      "file": "ecg-studio.webp",
+      "section": "authoring",
+      "caption": "The ECG case studio: a 12-lead record built from a rhythm preset, a seed and a patient"
+    },
+    {
+      "name": "pathology-editor",
+      "file": "pathology-editor.webp",
+      "section": "authoring",
+      "caption": "The pathology case editor: slides from the starter archive, a task, an answer key and regions of interest"
+    },
+    {
+      "name": "imaging-editor",
+      "file": "imaging-editor.webp",
+      "section": "authoring",
+      "caption": "The imaging case editor: a worklist built from the DICOM archive, with substitutions per case"
+    },
+    {
+      "name": "analytics",
+      "file": "analytics.webp",
+      "section": "analytics",
+      "caption": "Case analytics: the transition-network dashboard over every learning event, with the same course, case, learner, date and room filters on every tab"
+    },
+    {
+      "name": "analytics-activity",
+      "file": "analytics-activity.webp",
+      "section": "analytics",
+      "caption": "Analytics — Activity: every learning event, filtered by course, case, learner, dates and room"
+    },
+    {
+      "name": "analytics-network",
+      "file": "analytics-network.webp",
+      "section": "analytics",
+      "caption": "Analytics — Network: the transition network of clinical states, with edge weights and centralities"
+    },
+    {
+      "name": "analytics-patterns",
+      "file": "analytics-patterns.webp",
+      "section": "analytics",
+      "caption": "Analytics — Patterns: frequent sequences and their support"
+    },
+    {
+      "name": "analytics-process",
+      "file": "analytics-process.webp",
+      "section": "analytics",
+      "caption": "Analytics — Process map: the paths learners take between rooms and acts"
+    },
+    {
+      "name": "analytics-clusters",
+      "file": "analytics-clusters.webp",
+      "section": "analytics",
+      "caption": "Analytics — Clusters: learners grouped by how they reason"
+    },
+    {
+      "name": "analytics-attention",
+      "file": "analytics-attention.webp",
+      "section": "analytics",
+      "caption": "Analytics — Attention: Oyon's gaze and engagement over the session"
+    },
+    {
+      "name": "analytics-affect",
+      "file": "analytics-affect.webp",
+      "section": "analytics",
+      "caption": "Analytics — Affect: emotion over the timeline of the encounter"
+    },
+    {
+      "name": "analytics-gaze",
+      "file": "analytics-gaze.webp",
+      "section": "analytics",
+      "caption": "Analytics — Gaze: where the learner looked, per screen, each grid drawn over a miniature of that room"
+    },
+    {
+      "name": "analytics-compare",
+      "file": "analytics-compare.webp",
+      "section": "analytics",
+      "caption": "Analytics — Compare: two cohorts or two learners side by side"
+    },
+    {
+      "name": "analytics-sessions",
+      "file": "analytics-sessions.webp",
+      "section": "analytics",
+      "caption": "Analytics — Sessions: every session with its learner, case, length and event count"
+    },
+    {
+      "name": "analytics-settings",
+      "file": "analytics-settings.webp",
+      "section": "analytics",
+      "caption": "Analytics — Settings: the lens, the merge rules and the thresholds the network is built with"
+    },
+    {
+      "name": "cohort-reports",
+      "file": "cohort-reports.webp",
+      "section": "analytics",
+      "caption": "Cohort reports: completion, pulse and debrief per course"
+    },
+    {
+      "name": "oyon-dashboard",
+      "file": "oyon-dashboard.webp",
+      "section": "oyon",
+      "caption": "The Oyon dashboard: affect, dynamics, patterns, typing, voice, attention, gaze, position, heart and breathing — from the on-device signals only"
+    },
+    {
+      "name": "oyon-dynamics",
+      "file": "oyon-dynamics.webp",
+      "section": "oyon",
+      "caption": "Oyon — Dynamics: affect speed and instability over the session"
+    },
+    {
+      "name": "oyon-attention",
+      "file": "oyon-attention.webp",
+      "section": "oyon",
+      "caption": "Oyon — Attention & engagement"
+    },
+    {
+      "name": "oyon-gaze",
+      "file": "oyon-gaze.webp",
+      "section": "oyon",
+      "caption": "Oyon — Gaze: fixations per area of interest"
+    },
+    {
+      "name": "oyon-heart",
+      "file": "oyon-heart.webp",
+      "section": "oyon",
+      "caption": "Oyon — Heart & breathing, estimated from the face"
+    },
+    {
+      "name": "oyon-comparison",
+      "file": "oyon-comparison.webp",
+      "section": "oyon",
+      "caption": "Oyon — Comparison across sessions"
+    },
+    {
+      "name": "emotion-analytics",
+      "file": "emotion-analytics.webp",
+      "section": "oyon",
+      "caption": "Emotion analytics: the affect timeline of the current session"
+    },
+    {
+      "name": "setup-wizard",
+      "file": "setup-wizard.webp",
+      "section": "setup",
+      "caption": "The platform setup wizard: six steps from language and AI provider to the first course, recallable from the menu"
+    },
+    {
+      "name": "end-confirm",
+      "file": "end-confirm.webp",
+      "section": "debrief",
+      "caption": "Ending the session asks first"
+    },
+    {
+      "name": "debrief",
+      "file": "debrief.webp",
+      "section": "debrief",
+      "caption": "The debrief: the encounter summary, a discussant persona, and the learner's notes — with the encounter record when the educator allows it"
+    }
+  ]
+}
