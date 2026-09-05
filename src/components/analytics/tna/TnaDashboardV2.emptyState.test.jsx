@@ -32,13 +32,15 @@ const routeApi = () => {
         if (url.startsWith('/analytics/filter-options')) {
             return { cases: [{ id: 'c1', title: 'Chest pain' }], users: [] };
         }
-        if (url.startsWith('/learning-events/all')) {
-            return {
-                events: [
-                    { timestamp: '2026-06-01T10:00:00.000Z', session_id: 1, user_id: 1, username: 'amina', verb: 'ORDERED_LAB', object_type: 'lab_test', case_id: 'c1' },
-                    { timestamp: '2026-06-01T10:05:00.000Z', session_id: 1, user_id: 1, username: 'amina', verb: 'SENT_MESSAGE', object_type: 'chat_message', case_id: 'c1' },
-                ],
-            };
+        if (url.startsWith('/analytics/events')) {
+            // The server applies the case filter; the mock honours it the
+            // same way so a non-existent case really does return no rows.
+            const caseId = new URLSearchParams(url.split('?')[1]).get('case_id');
+            const events = [
+                { timestamp: '2026-06-01T10:00:00.000Z', session_id: 1, user_id: 1, username: 'amina', verb: 'ORDERED_LAB', object_type: 'lab_test', case_id: 'c1' },
+                { timestamp: '2026-06-01T10:05:00.000Z', session_id: 1, user_id: 1, username: 'amina', verb: 'SENT_MESSAGE', object_type: 'chat_message', case_id: 'c1' },
+            ].filter((e) => !caseId || e.case_id === caseId);
+            return { events, total: events.length, limit: 5000, offset: 0 };
         }
         if (url.startsWith('/addons/oyon/emotion-records')) return { records: [], total: 0 };
         return {};
@@ -58,7 +60,7 @@ describe('TnaDashboardV2 zero-match filters', () => {
         'the %s tab explains that nothing matched instead of rendering blank',
         async (tab) => {
             render(<TnaDashboardV2 externalFilters={{ caseId: 'no-such-case' }} />);
-            await waitFor(() => expect(apiFetchMock.mock.calls.some((c) => c[0].startsWith('/learning-events/all'))).toBe(true));
+            await waitFor(() => expect(apiFetchMock.mock.calls.some((c) => c[0].startsWith('/analytics/events'))).toBe(true));
 
             fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${tab}$`) }));
 

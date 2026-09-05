@@ -231,26 +231,39 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
         it('is tenant-scoped and does not leak other-tenant events', async () => {
             const res = await authedFetch('/api/analytics/tna-sequences?skip_merges=true');
             const body = await res.json();
-            // 28 seeded clinical events + 1 LOGGED_IN event written by the
-            // auth dual-write when this test logged its admin in (Phase 3
-            // of PLAN_LOGGING.md).
-            expect(body.metadata.totalEvents).toBe(29);
+            // Scope is asserted through the VERBS each tenant seeded, not
+            // through a row total: the auth dual-write adds a LOGGED_IN row
+            // per login, and every server-side writer added since moves an
+            // exact count (LEARNINGS.md, "test counts that hard-code 28").
+            // 28 seeded rows is a floor this tenant can never drop below.
+            expect(body.metadata.totalEvents).toBeGreaterThanOrEqual(28);
+            // (skip_merges only skips the merge map; the rare-verb collapse
+            // still folds the one-off lab/exam verbs into OTHER.)
+            expect(body.metadata.uniqueVerbs).toEqual(expect.arrayContaining(
+                ['STARTED_SESSION', 'OPENED', 'ADJUSTED_VITAL', 'SENT_MESSAGE'],
+            ));
+            expect(body.metadata.uniqueVerbs).not.toContain('ORDERED_TREATMENT');
             expect(body.metadata.uniqueVerbs).not.toContain('ORDERED_MEDICATION');
 
             const otherRes = await otherTenantFetch('/api/analytics/tna-sequences?skip_merges=true');
             const otherBody = await otherRes.json();
-            // 2 seeded medication events + 1 LOGGED_IN row from the
-            // other-tenant admin login. uniqueVerbs is built from
-            // sequences[], which excludes session-less events; the
-            // LOGGED_IN row counts in totalEvents but not in uniqueVerbs.
-            expect(otherBody.metadata.totalEvents).toBe(3);
-            expect(otherBody.metadata.uniqueVerbs).toEqual(['ADMINISTERED_MEDICATION', 'ORDERED_MEDICATION']);
+            // uniqueVerbs is built from sequences[], which excludes
+            // session-less events (the LOGGED_IN row), so it is exactly the
+            // two medication verbs the other tenant seeded — read through the
+            // alias map as their canonical names (the rows still say
+            // ORDERED_MEDICATION / ADMINISTERED_MEDICATION).
+            expect(otherBody.metadata.uniqueVerbs).toEqual(['ADMINISTERED_TREATMENT', 'ORDERED_TREATMENT']);
+            expect(otherBody.metadata.uniqueVerbs).not.toContain('ORDERED_LAB');
         });
 
         it('treats date-only end_date as inclusive of the selected calendar day', async () => {
             const res = await authedFetch('/api/analytics/tna-sequences?skip_merges=true&start_date=2026-05-01&end_date=2026-05-01');
             const body = await res.json();
+            // Every seeded row sits on 2026-05-01; the LOGGED_IN row written
+            // at login sits on today's date and must be OUTSIDE the bound.
             expect(body.metadata.totalEvents).toBe(28);
+            expect(body.metadata.dateRange.start.slice(0, 10)).toBe('2026-05-01');
+            expect(body.metadata.dateRange.end.slice(0, 10)).toBe('2026-05-01');
         });
     });
 
@@ -259,11 +272,12 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             const res = await authedFetch('/api/analytics/summary');
             expect(res.status).toBe(200);
             const body = await res.json();
-            // 28 seeded events + 1 LOGGED_IN from the auth dual-write
-            // performed during beforeAll's login(); see analytics-tna
-            // brittleness note in LEARNINGS.md. uniqueUsers also gains
-            // the admin (3 total: userA, userB, analytics-admin).
-            expect(body.totalActivities).toBe(29);
+            // 28 seeded events is a floor; the auth dual-write adds a
+            // LOGGED_IN row per login and any later server-side writer adds
+            // more, so an exact total is not a lock (LEARNINGS.md). Scope is
+            // asserted on users and sessions, which seeds fully determine:
+            // userA, userB and the admin who logged in.
+            expect(body.totalActivities).toBeGreaterThanOrEqual(28);
             expect(body.uniqueUsers).toBe(3);
             expect(body.uniqueSessions).toBe(3);
             expect(body.avgPerUser).toBeGreaterThan(0);
@@ -273,9 +287,11 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             const res = await otherTenantFetch('/api/analytics/summary');
             expect(res.status).toBe(200);
             const body = await res.json();
-            // 2 seeded events + 1 LOGGED_IN from the other-tenant admin
-            // login.
-            expect(body.totalActivities).toBe(3);
+            // 2 seeded events + whatever the other-tenant admin's login
+            // wrote; tenant isolation is the property — the count must be
+            // far below tenant 1's 28-row floor.
+            expect(body.totalActivities).toBeGreaterThanOrEqual(2);
+            expect(body.totalActivities).toBeLessThan(28);
             expect(body.uniqueUsers).toBe(1);
             expect(body.uniqueSessions).toBe(1);
         });
@@ -343,6 +359,7 @@ describe('/api/analytics — LAILA-shaped endpoints', () => {
             expect(verbs.get('SENT_MESSAGE')).toBe(2);
             expect(verbs.has('OPENED')).toBe(false);
             expect(verbs.has('ORDERED_MEDICATION')).toBe(false);
+            expect(verbs.has('ORDERED_TREATMENT')).toBe(false);
         });
 
         it('filter-options surfaces the seeded case', async () => {

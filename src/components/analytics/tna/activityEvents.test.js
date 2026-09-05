@@ -2,7 +2,7 @@
 // carmdash-chart mappers used by TnaDashboardV2's Activity tab.
 import { describe, expect, it } from 'vitest';
 import {
-    eventState, eventStateLabels, filterEvents, toDailyStateSeries, toMatrixEvents,
+    eventState, eventStateLabels, toDailyStateSeries, toMatrixEvents,
 } from './activityEvents';
 
 const ev = (over = {}) => ({
@@ -37,51 +37,6 @@ describe('eventState — clinicalStates resolution chain', () => {
     it('tolerates missing fields', () => {
         expect(eventState({})).toBe('navigating');
         expect(eventState(undefined)).toBe('navigating');
-    });
-});
-
-describe('filterEvents', () => {
-    const rows = [
-        ev({ case_id: 'c1', user_id: 1, timestamp: '2026-06-01T10:00:00.000Z' }),
-        ev({ case_id: 'c2', user_id: 2, timestamp: '2026-06-03T10:00:00.000Z' }),
-        ev({ case_id: 'c1', user_id: 2, timestamp: '2026-06-05 08:30:00' }), // sqlite format
-    ];
-
-    it('passes everything through with empty filters', () => {
-        expect(filterEvents(rows, {})).toHaveLength(3);
-        expect(filterEvents(rows)).toHaveLength(3);
-    });
-
-    it('filters by case and user with loose string/number matching', () => {
-        expect(filterEvents(rows, { caseId: 'c1' })).toHaveLength(2);
-        expect(filterEvents(rows, { userId: '2' })).toHaveLength(2);
-        expect(filterEvents(rows, { caseId: 'c1', userId: '2' })).toHaveLength(1);
-    });
-
-    it('filters by course membership from comma-separated course ids', () => {
-        const courseRows = [
-            ev({ id: 1, course_ids: '1,2' }),
-            ev({ id: 2, course_ids: '3' }),
-            ev({ id: 3, course_ids: null }),
-        ];
-        expect(filterEvents(courseRows, { courseId: '2' }).map((r) => r.id)).toEqual([1]);
-    });
-
-    it('date bounds are inclusive on the ISO day, including sqlite timestamps', () => {
-        expect(filterEvents(rows, { startDate: '2026-06-03' })).toHaveLength(2);
-        expect(filterEvents(rows, { endDate: '2026-06-03' })).toHaveLength(2);
-        expect(filterEvents(rows, { startDate: '2026-06-05', endDate: '2026-06-05' })).toHaveLength(1);
-    });
-
-    it('drops unparseable timestamps only when a date filter is active', () => {
-        const bad = ev({ timestamp: 'not-a-date' });
-        expect(filterEvents([bad], {})).toHaveLength(1);
-        expect(filterEvents([bad], { startDate: '2026-01-01' })).toHaveLength(0);
-    });
-
-    it('handles null/undefined input', () => {
-        expect(filterEvents(null, {})).toEqual([]);
-        expect(filterEvents(undefined)).toEqual([]);
     });
 });
 

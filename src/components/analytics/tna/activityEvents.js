@@ -1,4 +1,4 @@
-// Pure helpers turning /learning-events/all rows into the inputs the
+// Pure helpers turning /analytics/events rows into the inputs the
 // carmdash-style activity charts need (StackedAreaChart + DayHourMatrix
 // in src/components/analytics/charts/).
 //
@@ -38,57 +38,11 @@ function dayKey(timestamp) {
     return ms == null ? null : new Date(ms).toISOString().slice(0, 10);
 }
 
-/**
- * Client-side filter matching the dashboard's effective filter bar. The
- * /learning-events/all endpoint only takes `limit`, so case/user/date
- * narrowing happens here. Date bounds compare on the ISO day (inclusive),
- * matching the date-only <input type="date"> values.
- *
- * @param {object[]} events rows from /learning-events/all
- * @param {{courseId?:string, caseId?:string, userId?:string, startDate?:string, endDate?:string}} filters
- * @returns {object[]} the surviving rows (original order preserved)
- */
-export function filterEvents(events, { courseId = '', caseId = '', userId = '', startDate = '', endDate = '', room = '' } = {}) {
-    return (events ?? []).filter((e) => {
-        if (!e) return false;
-        if (courseId) {
-            const ids = Array.isArray(e.course_ids)
-                ? e.course_ids
-                : String(e.course_ids ?? '').split(',').map((v) => v.trim()).filter(Boolean);
-            if (!ids.map(String).includes(String(courseId))) return false;
-        }
-        if (caseId && String(e.case_id ?? '') !== String(caseId)) return false;
-        if (userId && String(e.user_id ?? '') !== String(userId)) return false;
-        if (room && String(e.room ?? '') !== String(room)) return false;
-        if (startDate || endDate) {
-            const day = dayKey(e.timestamp);
-            if (!day) return false;
-            if (startDate && day < startDate) return false;
-            if (endDate && day > endDate) return false;
-        }
-        return true;
-    });
-}
-
-/**
- * The set of rooms actually present in a batch of events, as
- * {id, label, count} rows sorted by count desc — feeds the Room filter
- * dropdown so it only offers rooms that have data. Rows with no room
- * (`data.room` null — pre-session events) are grouped under id ''.
- * @param {object[]} events rows from /learning-events/all
- * @returns {{id:string, count:number}[]}
- */
-export function eventRoomCounts(events) {
-    const counts = new Map();
-    for (const e of events ?? []) {
-        if (!e) continue;
-        const id = e.room == null ? '' : String(e.room);
-        counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-        .map(([id, count]) => ({ id, count }))
-        .sort((a, b) => b.count - a.count);
-}
+// `filterEvents` and `eventRoomCounts` used to live here: the dashboard
+// fetched the newest N rows and narrowed them client-side, so its stat cards
+// (server-filtered) and its networks (client-filtered over a capped set)
+// described two populations. GET /analytics/events applies the SAME filter
+// as every aggregate endpoint, and /analytics/filter-options lists the rooms.
 
 /**
  * Group events into per-actor sequences of labels — the client-side analogue

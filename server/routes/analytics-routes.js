@@ -27,20 +27,22 @@ import {
     ROLE_RANKS,
     hasRoleAtLeast,
 } from '../middleware/auth.js';
-import { LEARNING_VERBS, resolveEventMetadata } from '../shared/learningVerbs.js';
+import { LEARNING_VERBS, VERB_FACETS, VERB_ALIASES, normalizeVerb, verbWithAliases } from '../shared/learningVerbs.js';
+import { roomLabel, roomLabelKey } from '../shared/rooms.js';
+import { ingestEvents, recordServerEvent, statusForReason, MAX_BATCH_EVENTS, DROP_REASONS } from '../lib/learningEventIngest.js';
+import { reconcileSession, RECORD_VERB_EXPECTATIONS } from '../lib/sessionReconcile.js';
 
 
 
 
 import { logger } from '../logger.js';
-import { SQL_NOW, anchorToServer, toIsoZ, timeMs } from '../shared/time.js';
+import { SQL_NOW, toIsoZ, timeMs } from '../shared/time.js';
 import {
     auditSuccess,
     canReadAcrossUsers,
     dbRun,
     redactRow,
     redactRows,
-    resolveSessionTrinity,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
@@ -65,6 +67,17 @@ const clientLogLimiter = rateLimit({
 // visibility-hidden and ENDED_SESSION, so a busy legitimate client sends well
 // under 20/min; 240 leaves an order of magnitude of headroom and still bounds
 // a hostile one.
+// The chat-log feed's verb list, derived from the registry: every verb whose
+// facet is COMMUNICATION, plus the speech and emotion verbs (which are ERROR /
+// reflecting by facet but belong to the conversation surface), plus every
+// historical alias of those — as `?` markers, never interpolated.
+const COMMUNICATION_VERBS = [...new Set(
+    Object.entries(VERB_FACETS)
+        .filter(([verb, f]) => f.category === 'COMMUNICATION' || ['FAILED_SPEECH_RECOGNITION', 'EXPRESSED_EMOTION'].includes(verb))
+        .flatMap(([verb]) => verbWithAliases(verb)),
+)];
+const COMMUNICATION_VERB_MARKERS = COMMUNICATION_VERBS.map(() => '?').join(', ');
+
 const learningEventLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 240,
@@ -74,9 +87,6 @@ const learningEventLimiter = rateLimit({
     keyGenerator: (req) => `${req.user?.tenant_id || 'tenant'}:${req.user?.id || 'user'}`
 });
 
-// BackendSurface caps its own queue at MAX_QUEUE = 500, so a legitimate flush
-// can never exceed that. Anything larger is a client bug or an attack.
-const MAX_BATCH_EVENTS = 500;
 
 const COURSE_META_SQL = (userExpr, tenantExpr) => `
     (SELECT GROUP_CONCAT(DISTINCT cm.cohort_id)
@@ -327,30 +337,21 @@ router.post('/settings/log', authenticateToken, (req, res) => {
     ], function (err) {
         if (err) return res.status(500).json({ error: err.message });
 
-        // Dual-write into learning_events so the unified Activity view sees
-        // settings changes alongside session events. Settings changes never
-        // happen inside a room — they're on the settings page — so `room`
-        // is always NULL here, but kept in the INSERT for column parity
-        // with the canonical /learning-events endpoint.
-        dbAdapter.run(
-            `INSERT INTO learning_events (
-                session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                component, result, context, severity, category, tenant_id, room,
-                timestamp
-            ) VALUES (?, ?, ?, 'CHANGED_SETTING', 'setting', ?, ?, 'CONFIG_PANEL', ?, ?, 'INFO', 'CONFIGURATION', ?, NULL, ${SQL_NOW})`,
-            [
-                session_id || null,
-                req.user.id,
-                case_id || null,
-                setting_type || null,
-                setting_name || setting_type,
-                new_value != null ? `${old_value ?? ''} → ${new_value}` : null,
-                JSON.stringify({ setting_type, setting_name, old_value, new_value }),
-                tenantId(req),
-            ]
-        );
+        // Dual-write into learning_events, through the one write path, so the
+        // unified Activity view sees settings changes alongside session events.
+        // Settings changes never happen inside a room — `room` stays NULL.
+        recordServerEvent(req, {
+            session_id: session_id || null,
+            verb: 'CHANGED_SETTING',
+            object_type: 'setting',
+            object_id: setting_type || null,
+            object_name: setting_name || setting_type,
+            component: 'CONFIG_PANEL',
+            result: new_value != null ? `${old_value ?? ''} → ${new_value}` : null,
+            context: { setting_type, setting_name, old_value, new_value },
+        }, { tenantId: tenantId(req) }).catch(() => {});
 
-        res.json({ id: this.lastID, message: 'Setting logged' });
+        res.json({ id: this.lastID, message: 'Setting change logged' });
     });
 });
 
@@ -541,113 +542,44 @@ router.get('/sessions/:id/events', authenticateToken, async (req, res) => {
 // and case_id from session_id via the sessions table. Client-supplied
 // case_id is ignored; client-supplied user_id is irrelevant (auth principal
 // is used for pre-session events). A stale/replayed POST cannot mislabel.
-router.post('/learning-events', authenticateToken, async (req, res) => {
-    const {
-        session_id,
-        verb,
-        object_type,
-        object_id,
-        object_name,
-        component,
-        parent_component,
-        result,
-        duration_ms,
-        context,
-        message_content,
-        message_role,
-        room,
-    } = req.body;
-
-    if (!verb || !LEARNING_VERBS.includes(verb)) {
-        return res.status(400).json({
-            error: `Invalid verb. Must be one of: ${LEARNING_VERBS.join(', ')}`
-        });
-    }
-
-    if (!object_type) {
-        return res.status(400).json({ error: 'object_type is required' });
-    }
-
-    // severity/category are real columns with CHECK constraints, and both used
-    // to be dropped on the floor here — every row this endpoint wrote landed
-    // NULL in both. The verb registry supplies the default; a caller override
-    // is honoured only if it is inside the enum.
-    const meta = resolveEventMetadata(verb, req.body);
-    if (!meta.ok) {
-        return res.status(400).json({
-            error: `Invalid ${meta.field}: ${meta.value}`,
-            code: 'invalid_event_metadata',
-        });
-    }
-
-    let user_id;
-    let case_id;
-
-    if (session_id) {
-        // `principal` is what stops a same-tenant user writing events into
-        // someone else's session — see resolveSessionTrinity.
-        const trinity = await resolveSessionTrinity(session_id, tenantId(req), { principal: req.user });
-        if (!trinity.found) {
-            if (trinity.reason === 'not_owner') {
-                req.log?.warn('learning event rejected: session not owned by principal', {
-                    session_id, user_id: req.user.id,
-                });
-                return res.status(403).json({
-                    error: 'session does not belong to this user',
-                    reason: trinity.reason,
-                });
-            }
-            return res.status(404).json({
-                error: 'session not found in tenant',
-                reason: trinity.reason,
-            });
-        }
-        user_id = trinity.user_id;
-        case_id = trinity.case_id;
-    } else {
-        // Pre-session telemetry (e.g. case browsing before session start).
-        user_id = req.user.id;
-        case_id = null;
-    }
-
-    const sql = `
-        INSERT INTO learning_events (
-            session_id, user_id, case_id, verb,
-            object_type, object_id, object_name,
-            component, parent_component,
-            result, duration_ms, context,
-            message_content, message_role, tenant_id,
-            severity, category,
-            room,
-            timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})
-    `;
-
-    dbAdapter.run(sql, [
-        session_id || null,
-        user_id,
-        case_id,
-        verb,
-        object_type,
-        object_id || null,
-        object_name || null,
-        component || null,
-        parent_component || null,
-        result || null,
-        duration_ms || null,
-        context ? JSON.stringify(context) : null,
-        message_content || null,
-        message_role || null,
-        tenantId(req),
-        meta.severity,
-        meta.category,
-        room || null,
-    ], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ id: this.lastID });
+router.post('/learning-events', authenticateToken, learningEventLimiter, async (req, res) => {
+    // One write path (server/lib/learningEventIngest.js): alias-normalised
+    // verb, registry check, derived severity/category, trinity with the
+    // principal, server clock, quarantine for anything that cannot be
+    // inserted. The single route keeps its historical status-code contract
+    // (400 unknown verb / invalid metadata, 403 not_owner, 404 cross_tenant)
+    // and now gets the limiter, vitals, client_time and offset_ms the batch
+    // route always had.
+    const out = await ingestEvents({
+        tenantId: tenantId(req),
+        principal: req.user,
+        events: [req.body || {}],
+        source: 'single',
+        req,
     });
+    if (out.inserted === 1) {
+        const body = { id: out.rowIds[0] };
+        if (out.stripped_reasons.unknown_plugin || out.stripped_reasons.plugin_verb_mismatch || out.stripped_reasons.plugin_version_mismatch) {
+            body.stripped_reasons = out.stripped_reasons;
+        }
+        return res.json(body);
+    }
+    const reason = out.firstReason || 'db_error';
+    const status = statusForReason(reason);
+    const messages = {
+        missing_required_field: !req.body?.verb ? 'verb is required' : 'object_type is required',
+        unknown_verb: `Invalid verb. Must be one of: ${LEARNING_VERBS.join(', ')}`,
+        server_only_verb: 'This verb is written by the server only',
+        invalid_metadata: 'Invalid severity or category',
+        not_owner: 'session does not belong to this user',
+        cross_tenant: 'session not found in tenant',
+        payload_too_large: 'event payload too large',
+        db_error: 'could not persist the event',
+    };
+    const body = { error: messages[reason] || reason, reason };
+    if (reason === 'invalid_metadata') body.code = 'invalid_event_metadata';
+    if (reason === 'unknown_verb') body.code = 'unknown_verb';
+    return res.status(status).json(body);
 });
 
 // POST /api/learning-events/batch - Log multiple events at once
@@ -671,14 +603,7 @@ router.post('/learning-events', authenticateToken, async (req, res) => {
 //     }
 //   }
 router.post('/learning-events/batch', authenticateToken, learningEventLimiter, async (req, res) => {
-    const { events } = req.body;
-    const reqTenantId = tenantId(req);
-    const principalUserId = req.user.id;
-    // Read the clock ONCE per batch. Reading it per event would spread a
-    // single flush across however many milliseconds the loop happens to take,
-    // which is indistinguishable from real spacing in the data afterwards.
-    const receivedMs = Date.now();
-
+    const { events } = req.body || {};
     if (!Array.isArray(events) || events.length === 0) {
         return res.status(400).json({ error: 'events array is required' });
     }
@@ -688,169 +613,24 @@ router.post('/learning-events/batch', authenticateToken, learningEventLimiter, a
             code: 'batch_too_large',
         });
     }
-
-    // Resolve trinity once per distinct session_id. `principal` is passed so a
-    // batch cannot carry events for a session the caller doesn't own — the
-    // server would otherwise derive the VICTIM's user_id and write the forged
-    // row under their name.
-    const distinctSessionIds = [...new Set(events.map(e => e.session_id).filter(Boolean))];
-    const trinityCache = new Map();
-    await Promise.all(distinctSessionIds.map(async (sid) => {
-        trinityCache.set(sid, await resolveSessionTrinity(sid, reqTenantId, { principal: req.user }));
-    }));
-
-    const sql = `
-        INSERT INTO learning_events (
-            session_id, user_id, case_id, verb,
-            object_type, object_id, object_name,
-            component, parent_component,
-            result, duration_ms, context,
-            message_content, message_role, timestamp, client_time, tenant_id,
-            severity, category,
-            vital_hr, vital_spo2, vital_bp_sys, vital_bp_dia,
-            vital_rr, vital_temp, vital_etco2, vital_rhythm,
-            room
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                  ?, ?,
-                  ?, ?, ?, ?, ?, ?, ?, ?,
-                  ?)
-    `;
-
-    const stmt = dbAdapter.prepare(sql);
-    let inserted = 0;
-    let dropped = 0;
-    const droppedReasons = {
-        cross_tenant: 0,
-        not_owner: 0,
-        missing_required_field: 0,
-        unknown_verb: 0,
-        invalid_metadata: 0,
-        db_error: 0,
-    };
-
-    // Codex round-3 finding 2: prepare + finalize wrapped so a thrown
-    // promise (DB error during a run, JSON.stringify on a circular
-    // context, etc.) cannot leak the prepared statement nor leave the
-    // request without a terminal response.
-    try {
-        const runPromises = [];
-        for (const event of events) {
-            if (!event.verb || !event.object_type) {
-                dropped++;
-                droppedReasons.missing_required_field++;
-                continue;
-            }
-            // Same whitelist as the single-event route. These two paths used
-            // to disagree — /learning-events rejected any verb outside the
-            // hardcoded array while /batch accepted anything with a verb
-            // field, so whether an event was validated depended on which code
-            // path the client happened to take.
-            if (!LEARNING_VERBS.includes(event.verb)) {
-                dropped++;
-                droppedReasons.unknown_verb++;
-                continue;
-            }
-
-            // Same enum guard as the single-event route. An out-of-enum value
-            // would fail the CHECK constraint at INSERT and be counted as a
-            // db_error, which hides a client bug behind an infrastructure
-            // reason — so it is rejected by name instead.
-            const meta = resolveEventMetadata(event.verb, event);
-            if (!meta.ok) {
-                dropped++;
-                droppedReasons.invalid_metadata++;
-                continue;
-            }
-
-            let user_id;
-            let case_id;
-            if (event.session_id) {
-                const trinity = trinityCache.get(event.session_id);
-                if (!trinity || !trinity.found) {
-                    dropped++;
-                    // A forged session id and a foreign-tenant one are different
-                    // failures: one is a client pointing at a stale session, the
-                    // other is a caller reaching for someone else's. Counting
-                    // them apart is what makes the second visible.
-                    if (trinity?.reason === 'not_owner') {
-                        droppedReasons.not_owner++;
-                    } else {
-                        droppedReasons.cross_tenant++;
-                    }
-                    continue;
-                }
-                user_id = trinity.user_id;
-                case_id = trinity.case_id;
-            } else {
-                user_id = principalUserId;
-                case_id = null;
-            }
-
-            runPromises.push(
-                stmt.run([
-                    event.session_id || null,
-                    user_id,
-                    case_id,
-                    event.verb,
-                    event.object_type,
-                    event.object_id || null,
-                    event.object_name || null,
-                    event.component || null,
-                    event.parent_component || null,
-                    event.result || null,
-                    event.duration_ms || null,
-                    event.context ? JSON.stringify(event.context) : null,
-                    event.message_content || null,
-                    event.message_role || null,
-                    // The server's clock is the anchor; the device's reading is
-                    // kept beside it, never instead of it. `offset_ms` is how
-                    // long before this flush the event happened, so subtracting
-                    // it preserves the SPACING between a session's events exactly
-                    // while the anchor stays on a clock rohy controls. See
-                    // anchorToServer() in server/shared/time.js.
-                    anchorToServer(receivedMs, event.offset_ms),
-                    toIsoZ(event.client_time ?? event.timestamp),
-                    reqTenantId,
-                    meta.severity,
-                    meta.category,
-                    event.vital_hr ?? null,
-                    event.vital_spo2 ?? null,
-                    event.vital_bp_sys ?? null,
-                    event.vital_bp_dia ?? null,
-                    event.vital_rr ?? null,
-                    event.vital_temp ?? null,
-                    event.vital_etco2 ?? null,
-                    event.vital_rhythm ?? null,
-                    event.room || null,
-                ]).then(() => { inserted++; }, () => {
-                    dropped++;
-                    droppedReasons.db_error++;
-                })
-            );
-        }
-
-        await Promise.all(runPromises);
-    } finally {
-        try { await stmt.finalize(); } catch { /* finalize errors don't change the response */ }
-    }
-
-    // A batch carrying events for a session the caller doesn't own is either a
-    // client bug pointing at a stale id or someone probing the id space. Either
-    // way it is worth a line: dropped counts alone are returned to the caller
-    // and never reach an operator.
-    if (droppedReasons.not_owner > 0) {
-        req.log?.warn('learning-events batch contained events for sessions the caller does not own', {
-            user_id: principalUserId,
-            dropped: droppedReasons.not_owner,
-            session_ids: distinctSessionIds.filter((sid) => trinityCache.get(sid)?.reason === 'not_owner'),
-        });
-    }
-
+    // The clock is read ONCE per batch inside the core: reading it per event
+    // would spread a single flush across however many milliseconds the loop
+    // took, indistinguishable from real spacing afterwards.
+    const out = await ingestEvents({
+        tenantId: tenantId(req),
+        principal: req.user,
+        events,
+        source: 'batch',
+        req,
+    });
     res.json({
-        inserted,
-        dropped,
-        total: events.length,
-        dropped_reasons: droppedReasons,
+        inserted: out.inserted,
+        dropped: out.dropped,
+        quarantined: out.quarantined,
+        total: out.total,
+        // The six legacy keys are always present; the new ones are appended.
+        dropped_reasons: Object.fromEntries(DROP_REASONS.map((k) => [k, out.dropped_reasons[k] || 0])),
+        stripped_reasons: out.stripped_reasons,
     });
 });
 
@@ -1111,9 +891,80 @@ router.get('/learning-events/analytics/summary', authenticateToken, async (req, 
     });
 });
 
-// GET /api/learning-events/verbs - Get list of valid verbs
-router.get('/learning-events/verbs', (req, res) => {
-    res.json({ verbs: LEARNING_VERBS });
+// GET /api/learning-events/verbs - the registry as a client sees it.
+// Authenticated: the list names every installed plugin's vocabulary, which
+// is not an anonymous concern. `verbs` stays first-class for older callers;
+// `metadata` carries every facet, `aliases` the historical names.
+router.get('/learning-events/verbs', authenticateToken, (req, res) => {
+    res.json({ verbs: LEARNING_VERBS, metadata: VERB_FACETS, aliases: VERB_ALIASES });
+});
+
+// GET /api/analytics/rejected-events - the learning-event quarantine.
+// Every event the ingest core could not insert, with its reason. Tenant-scoped.
+router.get('/analytics/rejected-events', authenticateToken, requireAdmin, async (req, res) => {
+    const tenant = tenantId(req);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const clauses = ['tenant_id = ?'];
+    const params = [tenant];
+    if (req.query.reason) { clauses.push('reason = ?'); params.push(String(req.query.reason)); }
+    if (req.query.source) { clauses.push('source = ?'); params.push(String(req.query.source)); }
+    if (req.query.verb) { clauses.push('verb = ?'); params.push(String(req.query.verb)); }
+    if (req.query.session_id) { clauses.push('session_id = ?'); params.push(Number(req.query.session_id)); }
+    if (req.query.from) { clauses.push('received_at >= ?'); params.push(toIsoZ(req.query.from) ?? String(req.query.from)); }
+    if (req.query.to) { clauses.push('received_at <= ?'); params.push(toIsoZ(req.query.to) ?? String(req.query.to)); }
+    const where = `WHERE ${clauses.join(' AND ')}`;
+    try {
+        // `where` is built above from fixed column predicates with `?`
+        // placeholders only — every caller value is in `params`. Kept on its
+        // own line so the SQL static guard can see no value is interpolated.
+        const [rows, totalRow, byReason] = await Promise.all([
+            dbAdapter.all(`SELECT * FROM learning_events_rejected
+                ${where}
+                ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?`, [...params, limit, offset]),
+            dbAdapter.get(`SELECT COUNT(*) AS n FROM learning_events_rejected
+                ${where}`, params),
+            dbAdapter.all(`SELECT reason, COUNT(*) AS n FROM learning_events_rejected
+                ${where}
+                GROUP BY reason`, params),
+        ]);
+        res.json({
+            rejected: (rows || []).map(redactRow),
+            total: totalRow?.n ?? 0,
+            by_reason: Object.fromEntries((byReason || []).map((r) => [r.reason, r.n])),
+            limit,
+            offset,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/analytics/sessions/:id/reconcile - do the two event stores agree?
+// `patient_record_events` (the narrative encounter record the discussant
+// reads) and `learning_events` (analytics) are written by different code
+// paths; this answers "did every recorded clinical act produce a learning
+// event", per verb, plus how many of this session's events were quarantined.
+router.get('/analytics/sessions/:id/reconcile', authenticateToken, requireEducator, async (req, res) => {
+    const sessionId = Number(req.params.id);
+    const ok = await verifySessionOwnership(sessionId, req.user, res, { requireSession: true });
+    if (!ok) return;
+    const tenant = tenantId(req);
+    try {
+        const [learningRows, recordRows, rejectedRow] = await Promise.all([
+            dbAdapter.all('SELECT verb, object_type, timestamp FROM learning_events WHERE session_id = ? AND tenant_id = ?', [sessionId, tenant]),
+            dbAdapter.all('SELECT verb, time_elapsed, item, category, source FROM patient_record_events WHERE session_id = ?', [sessionId]),
+            dbAdapter.get('SELECT COUNT(*) AS n FROM learning_events_rejected WHERE session_id = ? AND tenant_id = ?', [sessionId, tenant]),
+        ]);
+        res.json({
+            session_id: sessionId,
+            ...reconcileSession(learningRows || [], recordRows || []),
+            rejected: rejectedRow?.n ?? 0,
+            expectations: RECORD_VERB_EXPECTATIONS,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/learning-events/recent - Get recent events across all sessions (for current user)
@@ -1146,6 +997,10 @@ router.get('/learning-events/recent', authenticateToken, (req, res) => {
 
 // GET /api/learning-events/all - Get ALL events across all users and sessions (admin) or user's events
 router.get('/learning-events/all', authenticateToken, (req, res) => {
+    // Deprecated in favour of GET /analytics/events, which applies the same
+    // server-side filter as every aggregate endpoint. Kept for one release.
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/analytics/events>; rel="successor-version"');
     const canReview = canReadAcrossUsers(req.user);
     const limit = parseInt(req.query.limit) || 500;
 
@@ -1257,12 +1112,16 @@ function fetchEnrichedMoments(req, limit) {
             LIMIT ?
         `;
 
-        // Chat turns live in `interactions` (they are NOT dual-written to
-        // learning_events), so the per-turn chat log is fetched separately
-        // and mapped into pseudo-event rows: verb SENT_MESSAGE (user) /
-        // RECEIVED_MESSAGE (assistant) / SYSTEM_MESSAGE, object_type
-        // 'chat_message', message_role/message_content filled, everything
-        // clinical (vitals, result, …) null. Timestamps are normalised from
+        // Chat turns live in `interactions` AND, since ChatInterface started
+        // calling EventLogger.messageSent/messageReceived, in learning_events
+        // too. The `interactions` rows are therefore a FALLBACK for sessions
+        // that predate the dual-write: for any session that already has a
+        // SENT_MESSAGE / RECEIVED_MESSAGE learning event in this window, the
+        // pseudo-rows below are dropped (per-session source election), or
+        // every turn would be counted twice in the affect-per-action stats.
+        // Pseudo-rows: verb SENT_MESSAGE (user) / RECEIVED_MESSAGE
+        // (assistant) / SYSTEM_MESSAGE, object_type 'chat_message',
+        // message_role/message_content filled, everything clinical null. Timestamps are normalised from
         // SQLite's `YYYY-MM-DD HH:MM:SS` UTC shape to ISO `…T…Z` so the
         // window join compares apples to apples (see server/sqliteTime.js).
         const CHAT_VERBS = { user: 'SENT_MESSAGE', assistant: 'RECEIVED_MESSAGE', system: 'SYSTEM_MESSAGE' };
@@ -1335,7 +1194,15 @@ function fetchEnrichedMoments(req, limit) {
             // One merged, newest-first stream capped at `limit` overall so a
             // chatty session can't starve the clinical events (both sources
             // were fetched newest-first with the same cap).
-            const eventRows = [...(eventRowsRaw || []).map(r => ({ ...r, source: 'event' })), ...chatRows]
+            const CHAT_EVENT_VERBS = new Set(['SENT_MESSAGE', 'RECEIVED_MESSAGE']);
+            const sessionsWithChatEvents = new Set(
+                (eventRowsRaw || [])
+                    .filter((r) => CHAT_EVENT_VERBS.has(normalizeVerb(r.verb)) && (r.object_type === 'chat_message' || r.object_type == null))
+                    .map((r) => r.session_id)
+                    .filter((id) => id != null),
+            );
+            const electedChatRows = chatRows.filter((r) => !sessionsWithChatEvents.has(r.session_id));
+            const eventRows = [...(eventRowsRaw || []).map(r => ({ ...r, source: 'event' })), ...electedChatRows]
                 .sort((a, b) => (parseTimestampMs(b.timestamp) ?? 0) - (parseTimestampMs(a.timestamp) ?? 0))
                 .slice(0, limit);
 
@@ -1914,7 +1781,10 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
                 le.timestamp, le.user_id, u.username, le.case_id, c.name AS case_name,
                 le.session_id, le.verb, le.object_type, le.object_id, le.object_name,
                 le.component, le.parent_component, le.result, le.duration_ms,
-                le.message_role, le.message_content, le.severity, le.category, le.context
+                le.message_role, le.message_content, le.severity, le.category, le.context,
+                le.room, le.client_time, le.plugin_id, le.plugin_version,
+                le.vital_hr, le.vital_spo2, le.vital_bp_sys, le.vital_bp_dia,
+                le.vital_rr, le.vital_temp, le.vital_etco2, le.vital_rhythm
             FROM learning_events le
             LEFT JOIN users u ON le.user_id = u.id AND u.tenant_id = le.tenant_id
             LEFT JOIN cases c ON le.case_id = c.id AND c.tenant_id = le.tenant_id
@@ -1926,11 +1796,17 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
+        // Columns are only ever APPENDED: a stored spreadsheet template keyed
+        // on position must keep working. `verb` stays the string the client
+        // emitted; `verb_canonical` is how the registry reads it today.
         const headers = [
             'timestamp', 'user_id', 'username', 'case_id', 'case_name', 'session_id',
             'verb', 'object_type', 'object_id', 'object_name',
             'component', 'parent_component', 'result', 'duration_ms',
             'message_role', 'message_content', 'severity', 'category', 'context_json',
+            'verb_canonical',
+            'room', 'client_time', 'plugin_id', 'plugin_version',
+            'vital_hr', 'vital_spo2', 'vital_bp_sys', 'vital_bp_dia', 'vital_rr', 'vital_temp', 'vital_etco2', 'vital_rhythm',
         ];
         res.write(headers.join(',') + '\n');
 
@@ -1952,6 +1828,9 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
                     r.verb, r.object_type, r.object_id, r.object_name,
                     r.component, r.parent_component, r.result, r.duration_ms,
                     r.message_role, r.message_content, r.severity, r.category, r.context,
+                    normalizeVerb(r.verb),
+                    r.room, r.client_time, r.plugin_id, r.plugin_version,
+                    r.vital_hr, r.vital_spo2, r.vital_bp_sys, r.vital_bp_dia, r.vital_rr, r.vital_temp, r.vital_etco2, r.vital_rhythm,
                 ].map(csvEscape);
                 res.write(cells.join(',') + '\n');
             }
@@ -2054,12 +1933,12 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
             WHERE le.tenant_id = ?
               AND (
                   le.category = 'COMMUNICATION'
-                  OR le.verb IN ('EXPRESSED_EMOTION', 'STT_RESULT', 'STT_ERROR', 'TTS_PLAYED', 'SENT_MESSAGE', 'RECEIVED_MESSAGE', 'COPIED_MESSAGE', 'EDITED_MESSAGE')
-                  OR le.object_type IN ('voice', 'audio', 'message', 'chat')
+                  OR le.verb IN (${COMMUNICATION_VERB_MARKERS})
+                  OR le.object_type IN ('voice', 'audio', 'message', 'chat', 'speech', 'agent_message')
               )
               ${f.clause} ${sessionWhere('le.session_id')}
             ORDER BY le.timestamp DESC LIMIT ?
-        `, [tenant, ...f.params, ...sessionParam(), limit]);
+        `, [tenant, ...COMMUNICATION_VERBS, ...f.params, ...sessionParam(), limit]);
     });
 
     // 2b. agent_conversations → multi-agent chat threads (consultant, lab,
@@ -2262,6 +2141,11 @@ const EXPORT_SOURCES = {
     learning: {
         table: 'learning_events',
         dateCol: 'timestamp',
+        tenant: true,
+    },
+    rejected: {
+        table: 'learning_events_rejected',
+        dateCol: 'received_at',
         tenant: true,
     },
     chat: {
@@ -3006,16 +2890,70 @@ router.post('/alarms/config', authenticateToken, requireAdmin, (req, res) => {
 // exactly as before — behaviour is unchanged (regression-locked by
 // tests/server/analytics-tna.test.js).
 function buildLearningEventWhere(req, { alias = '', includeUser = true } = {}) {
-    const { case_id, course_id, user_id, start_date, end_date } = req.query || {};
+    const { case_id, course_id, user_id, session_id, room, start_date, end_date } = req.query || {};
     return buildEventFilter({
         tenantId: tenantId(req),
         caseId: case_id,
         courseId: course_id,
         userId: includeUser ? user_id : undefined,
+        // Both were accepted by buildEventFilter and forwarded by nothing —
+        // which is why the admin dashboard could never narrow to a session or
+        // a room server-side.
+        sessionId: session_id,
+        room,
         startDate: start_date,
         endDate: end_date,
         alias,
     });
+}
+
+// GET /api/analytics/events — the server-filtered, paged event set behind the
+// admin dashboard. Uses the SAME filter object as every aggregate endpoint,
+// which is the whole point: the stat cards and the sequence networks then
+// describe one population. Replaces `/learning-events/all?limit=`, which took
+// only a limit and left every filter to the client over the newest N rows.
+router.get('/analytics/events', authenticateToken, async (req, res) => {
+    const canReview = canReadAcrossUsers(req.user);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 2000, 1), 5000);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    // A learner sees their own rows only, whatever they ask for.
+    const filter = canReview
+        ? buildLearningEventWhere(req, { alias: 'le.' })
+        : buildEventFilter({ ...filterArgsFrom(req), userId: req.user.id, alias: 'le.' });
+    try {
+        const [rows, totalRow] = await Promise.all([
+            dbAdapter.all(
+                `SELECT le.*,
+                        s.case_id AS session_case_id,
+                        c.name AS case_name,
+                        u.username,
+                        ${COURSE_META_SQL('le.user_id', 'le.tenant_id')}
+                   FROM learning_events le
+                   LEFT JOIN sessions s ON le.session_id = s.id
+                   LEFT JOIN cases c ON COALESCE(s.case_id, le.case_id) = c.id
+                   LEFT JOIN users u ON le.user_id = u.id
+                   ${filter.where}
+                  ORDER BY le.timestamp DESC, le.id DESC
+                  LIMIT ? OFFSET ?`,
+                [...filter.params, limit, offset],
+            ),
+            dbAdapter.get(`SELECT COUNT(*) AS n FROM learning_events le
+                ${filter.where}`, filter.params),
+        ]);
+        res.json({
+            events: redactRows(rows || []),
+            total: totalRow?.n ?? 0,
+            limit,
+            offset,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+function filterArgsFrom(req) {
+    const { case_id, course_id, session_id, room, start_date, end_date } = req.query || {};
+    return { tenantId: tenantId(req), caseId: case_id, courseId: course_id, sessionId: session_id, room, startDate: start_date, endDate: end_date };
 }
 
 // GET /api/analytics/tna-sequences — LAILA-shaped TNA sequence builder
@@ -3046,10 +2984,11 @@ router.get('/analytics/tna-sequences', authenticateToken, requireAdmin, async (r
     const minVerbPct = Math.max(0, parseFloat(min_verb_pct) || 0);
     const skipMerges = String(skip_merges) === 'true';
     const grouping = group_by === 'actor' ? 'actor' : 'actor-session';
+    const lens = typeof req.query.lens === 'string' ? req.query.lens : 'tna';
     const filter = buildLearningEventWhere(req, { alias: 'le.' });
     try {
         const result = await aggTnaSequences(dbAdapter, filter, {
-            minLen, minVerbPct, skipMerges, grouping,
+            minLen, minVerbPct, skipMerges, grouping, lens,
         });
         res.json(result);
     } catch (err) {
@@ -3147,7 +3086,24 @@ router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, r
                         [tenantId(req), tenantId(req)],
                         (err3, users) => {
                             if (err3) return res.status(500).json({ error: err3.message });
-                            res.json({ cases: cases || [], courses: courses || [], users: users || [] });
+                            // Rooms present in the data, labelled from the one
+                            // room list (core + plugin + lessons). Indexed by
+                            // idx_learning_events_room.
+                            dbAdapter.all(
+                                `SELECT room AS id, COUNT(*) AS count FROM learning_events
+                                  WHERE tenant_id = ? AND room IS NOT NULL AND room != ''
+                                  GROUP BY room ORDER BY count DESC`,
+                                [tenantId(req)],
+                                (err4, rooms) => {
+                                    if (err4) return res.status(500).json({ error: err4.message });
+                                    res.json({
+                                        cases: cases || [],
+                                        courses: courses || [],
+                                        users: users || [],
+                                        rooms: (rooms || []).map((r) => ({ id: r.id, count: r.count, label: roomLabel(r.id), labelKey: roomLabelKey(r.id) })),
+                                    });
+                                },
+                            );
                         }
                     );
                 }

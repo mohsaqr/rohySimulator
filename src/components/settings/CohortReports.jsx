@@ -799,7 +799,10 @@ function AdvancedAnalyticsView({ cohortId }) {
                 apiGet(`${base}/timeline-series${s}`),
                 apiGet(`${base}/hourly-counts${s}`),
                 apiGet(`${base}/stats${s}`),
-                apiGet(`${base}/tna-sequences${s}`),
+                // The clinical-state lens — the SAME resolver the admin
+                // dashboard labels with — so a cohort report and the dashboard
+                // name the same act the same way.
+                apiGet(`${base}/tna-sequences${s ? `${s}&` : '?'}lens=clinical-state`),
             ]);
             if (reqId !== reqIdRef.current) return; // superseded by a newer scope
             setData({

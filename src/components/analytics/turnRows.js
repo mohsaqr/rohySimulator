@@ -15,6 +15,7 @@
 // are read — never raw gaze points.
 
 import { parseTimestampMs } from './momentsJoin.js';
+import { timeMs } from '../../../server/shared/time.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -188,6 +189,8 @@ export function turnRowsFrom(messages, windows) {
         });
     }
 
-    rows.sort((a, b) => b.ts.localeCompare(a.ts));
+    // Numeric, newest first: a string sort on a time field is exactly the
+    // trap RPS-1 §17 closed elsewhere.
+    rows.sort((a, b) => (timeMs(b.ts) ?? 0) - (timeMs(a.ts) ?? 0));
     return rows;
 }
