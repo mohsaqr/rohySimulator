@@ -54,8 +54,9 @@ export const PLUGIN_MANIFESTS = [
                 "SUBMITTED_ECG_INTERPRETATION": "documenting"
             }
         },
-        "version": "1.0.0",
+        "version": "1.1.0",
         "vocabulary": {
+            "componentPrefix": "ECG",
             "components": {
                 "CASE_AUTHOR": "ECGCaseAuthor",
                 "ECG_PAPER": "ECGPaper",
@@ -74,50 +75,90 @@ export const PLUGIN_MANIFESTS = [
             },
             "verbs": {
                 "CHANGED_ECG_LAYOUT": {
+                    "action": "Examining",
                     "category": "NAVIGATION",
+                    "clinicalState": "examining",
+                    "label": "Changed ECG layout",
                     "severity": "INFO"
                 },
                 "FOCUSED_ECG_LEAD": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Focused lead",
                     "severity": "INFO"
                 },
                 "MEASURED_ECG_AMPLITUDE": {
+                    "action": "Examining",
                     "category": "ASSESSMENT",
+                    "clinicalState": "examining",
+                    "label": "Measured amplitude",
                     "severity": "ACTION"
                 },
                 "MEASURED_ECG_INTERVAL": {
+                    "action": "Examining",
                     "category": "ASSESSMENT",
+                    "clinicalState": "examining",
+                    "label": "Measured interval",
                     "severity": "ACTION"
                 },
                 "OPENED_ECG_RECORDING": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Opened ECG",
                     "severity": "IMPORTANT"
                 },
                 "RECORDED_ECG_NOTE": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "label": "Recorded ECG note",
                     "severity": "ACTION"
                 },
                 "REQUESTED_ECG_HINT": {
+                    "action": "Debriefing",
                     "category": "ASSESSMENT",
+                    "clinicalState": "reflecting",
+                    "emitter": "planned",
+                    "emitterNote": "Rubric hints are authored but not yet shown in the reading room; `hint_requested()` is ready for the button.",
+                    "label": "Requested ECG hint",
                     "severity": "ACTION"
                 },
                 "REVEALED_ECG_EXPLANATION": {
+                    "action": "Debriefing",
                     "category": "ASSESSMENT",
+                    "clinicalState": "reflecting",
+                    "emitter": "planned",
+                    "emitterNote": "Teaching-point explanations are authored but not yet shown in the reading room; `explanation_revealed()` is ready.",
+                    "label": "Revealed ECG explanation",
                     "severity": "IMPORTANT"
                 },
                 "REVISED_ECG_INTERPRETATION": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "label": "Revised ECG read",
                     "severity": "IMPORTANT"
                 },
                 "SAVED_ECG_INTERPRETATION": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "label": "Recorded ECG read",
                     "severity": "ACTION"
                 },
                 "SUBMITTED_ECG_INTERPRETATION": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "emitter": "planned",
+                    "emitterNote": "The room has no submit button by design; a host that grades the read server-side would emit this.",
+                    "label": "Submitted ECG read",
                     "severity": "CRITICAL"
                 }
-            }
+            },
+            "version": 2
         }
     },
     {
@@ -197,70 +238,108 @@ export const PLUGIN_MANIFESTS = [
                 "SUBMITTED_REPORT": "documenting"
             }
         },
-        "version": "0.1.0",
+        "version": "0.2.0",
         "vocabulary": {
+            "componentPrefix": "Radoyon",
             "components": {
                 "REPORT": "RadoyonReport",
                 "VIEWPORT": "RadoyonViewport",
                 "WORKLIST": "RadoyonWorklist"
             },
             "objectTypes": {
-                "IMAGE": "imaging_image",
-                "MEASUREMENT": "imaging_measurement",
-                "REPORT": "imaging_report",
-                "SERIES": "imaging_series",
-                "STUDY": "imaging_study"
+                "IMAGING_IMAGE": "imaging_image",
+                "IMAGING_MEASUREMENT": "imaging_measurement",
+                "IMAGING_REPORT": "imaging_report",
+                "IMAGING_SERIES": "imaging_series",
+                "IMAGING_STUDY": "imaging_study"
             },
             "verbs": {
                 "APPLIED_PRESET": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Applied window preset",
                     "severity": "INFO"
                 },
                 "CHANGED_WINDOW": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Changed window",
                     "severity": "INFO"
                 },
                 "CLOSED_STUDY": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Closed study",
                     "severity": "INFO"
                 },
                 "DRAFTED_REPORT": {
+                    "action": "Documenting",
                     "category": "CLINICAL",
+                    "clinicalState": "documenting",
+                    "label": "Drafted report",
                     "severity": "INFO"
                 },
                 "FAILED_TO_LOAD": {
+                    "action": "Reading results",
                     "category": "ERROR",
+                    "clinicalState": "assessing",
+                    "label": "Study failed to load",
                     "severity": "IMPORTANT"
                 },
                 "MEASURED_DISTANCE": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
-                    "severity": "INFO"
+                    "clinicalState": "assessing",
+                    "label": "Measured distance",
+                    "severity": "ACTION"
                 },
                 "MEASURED_REGION": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
-                    "severity": "INFO"
+                    "clinicalState": "assessing",
+                    "label": "Measured region",
+                    "severity": "ACTION"
                 },
                 "OPENED_STUDY": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Opened study",
                     "severity": "INFO"
                 },
                 "REVIEWED_SERIES": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
-                    "severity": "INFO"
+                    "clinicalState": "assessing",
+                    "label": "Reviewed whole series",
+                    "severity": "ACTION"
                 },
                 "SCROLLED_SERIES": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Scrolled series",
                     "severity": "INFO"
                 },
                 "SELECTED_SERIES": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Selected series",
                     "severity": "INFO"
                 },
                 "SUBMITTED_REPORT": {
+                    "action": "Documenting",
                     "category": "CLINICAL",
-                    "severity": "INFO"
+                    "clinicalState": "documenting",
+                    "label": "Filed report",
+                    "severity": "IMPORTANT"
                 }
-            }
+            },
+            "version": 2
         }
     },
     {
@@ -500,14 +579,15 @@ export const PLUGIN_MANIFESTS = [
                 "ZOOMED_SLIDE": "examining"
             }
         },
-        "version": "1.0.0",
+        "version": "1.1.0",
         "vocabulary": {
+            "componentPrefix": "Pathology",
             "components": {
                 "PATHOLOGY_ROOM": "PathologyRoom",
-                "REPORT_PANEL": "ReportPanel",
-                "SLIDE_CANVAS": "SlideCanvas",
-                "SLIDE_EMBED": "SlideEmbed",
-                "SPECIMEN_TRAY": "SpecimenTray"
+                "REPORT_PANEL": "PathologyReportPanel",
+                "SLIDE_CANVAS": "PathologySlideCanvas",
+                "SLIDE_EMBED": "PathologySlideEmbed",
+                "SPECIMEN_TRAY": "PathologySpecimenTray"
             },
             "objectTypes": {
                 "PATHOLOGY_REPORT": "pathology_report",
@@ -522,105 +602,182 @@ export const PLUGIN_MANIFESTS = [
             },
             "verbs": {
                 "ANNOTATED_SLIDE": {
+                    "action": "Documenting",
                     "category": "CLINICAL",
+                    "clinicalState": "documenting",
+                    "label": "Annotated slide",
                     "severity": "ACTION"
                 },
                 "CHANGED_OBJECTIVE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Changed objective",
                     "severity": "INFO"
                 },
                 "CLOSED_SLIDE": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Closed slide",
                     "severity": "INFO"
                 },
                 "COMPLETED_SLIDE_TASK": {
+                    "action": "Session",
                     "category": "ASSESSMENT",
+                    "clinicalState": "regulating",
+                    "label": "Completed slide task",
                     "severity": "IMPORTANT"
                 },
                 "COUNTED_FEATURE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Counted features",
                     "severity": "ACTION"
                 },
                 "DWELLED_REGION": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Dwelled on region",
                     "severity": "DEBUG"
                 },
                 "EXPORTED_ANNOTATIONS": {
+                    "action": "Documenting",
                     "category": "CLINICAL",
+                    "clinicalState": "documenting",
+                    "label": "Exported annotations",
                     "severity": "ACTION"
                 },
                 "MEASURED_SLIDE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Measured on slide",
                     "severity": "ACTION"
                 },
                 "MISSED_ROI": {
+                    "action": "Examining",
                     "category": "ASSESSMENT",
+                    "clinicalState": "examining",
+                    "label": "Missed key region",
                     "severity": "IMPORTANT"
                 },
                 "OPENED_PLATE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Opened gross plate",
                     "severity": "INFO"
                 },
                 "OPENED_SLIDE": {
+                    "action": "Reading results",
                     "category": "CLINICAL",
+                    "clinicalState": "assessing",
+                    "label": "Opened slide",
                     "severity": "IMPORTANT"
                 },
                 "PANNED_SLIDE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Panned slide",
                     "severity": "DEBUG"
                 },
                 "REACHED_ROI": {
+                    "action": "Examining",
                     "category": "ASSESSMENT",
+                    "clinicalState": "examining",
+                    "label": "Reached key region",
                     "severity": "IMPORTANT"
                 },
                 "RECEIVED_FEEDBACK": {
+                    "action": "Debriefing",
                     "category": "ASSESSMENT",
+                    "clinicalState": "reflecting",
+                    "label": "Received read feedback",
                     "severity": "INFO"
                 },
                 "REQUESTED_HINT": {
+                    "action": "Debriefing",
                     "category": "ASSESSMENT",
+                    "clinicalState": "reflecting",
+                    "label": "Requested hint",
                     "severity": "ACTION"
                 },
                 "REQUESTED_SECOND_OPINION": {
+                    "action": "Consulting",
                     "category": "COMMUNICATION",
+                    "clinicalState": "communicating",
+                    "emitter": "planned",
+                    "emitterNote": "No consultation channel exists in the room; a host that pages a consultant from the slide would emit this.",
+                    "label": "Requested second opinion",
                     "severity": "IMPORTANT"
                 },
                 "REVISED_DIAGNOSIS": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "emitter": "planned",
+                    "emitterNote": "Pairs with SUBMITTED_DIAGNOSIS; no structured diagnosis field exists in the room today.",
+                    "label": "Revised diagnosis",
                     "severity": "IMPORTANT"
                 },
                 "SAVED_REPORT": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "label": "Saved report draft",
                     "severity": "ACTION"
                 },
                 "SIGNED_REPORT": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "label": "Signed report",
                     "severity": "CRITICAL"
                 },
                 "STARTED_SLIDE_TASK": {
+                    "action": "Session",
                     "category": "ASSESSMENT",
+                    "clinicalState": "regulating",
+                    "label": "Started slide task",
                     "severity": "IMPORTANT"
                 },
                 "SUBMITTED_DIAGNOSIS": {
+                    "action": "Documenting",
                     "category": "ASSESSMENT",
+                    "clinicalState": "documenting",
+                    "emitter": "planned",
+                    "emitterNote": "The diagnosis box was replaced by the signed report (SIGNED_REPORT); a host with a structured diagnosis field would emit this.",
+                    "label": "Submitted diagnosis",
                     "severity": "CRITICAL"
                 },
                 "VIEWED_SPECIMEN": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Viewed specimen",
                     "severity": "INFO"
                 },
                 "ZOOMED_SLIDE": {
+                    "action": "Examining",
                     "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Zoomed slide",
                     "severity": "DEBUG"
                 }
-            }
+            },
+            "version": 2
         }
     },
     {
         "capabilities": [
             "case",
             "conversation",
-            "drawer"
+            "drawer",
+            "vitals"
         ],
         "id": "room3d",
         "minRole": "student",
@@ -635,16 +792,84 @@ export const PLUGIN_MANIFESTS = [
         },
         "states": {
             "interpretations": {},
-            "objectOverrides": {},
-            "verbFallbacks": {}
+            "objectOverrides": {
+                "room3d_body_map": "examining",
+                "room3d_exam_wheel": "examining",
+                "room3d_patient_line": "communicating",
+                "room3d_status": "monitoring"
+            },
+            "verbFallbacks": {
+                "CLOSED_BODY_MAP": "examining",
+                "OBSERVED_PATIENT_STATUS": "monitoring",
+                "OPENED_BODY_MAP": "examining",
+                "OPENED_EXAM_WHEEL": "examining",
+                "SELECTED_BEDSIDE_PROP": "navigating",
+                "VOICED_PATIENT_LINE": "communicating"
+            }
         },
         "version": "1.0.0",
         "vocabulary": {
+            "componentPrefix": "Room3D",
             "components": {
+                "EXAM_WHEEL": "Room3DExamWheel",
+                "MANIKIN": "Room3DManikin",
                 "ROOM3D": "Room3D"
             },
-            "objectTypes": {},
-            "verbs": {}
+            "coreVerbs": [
+                "PERFORMED_PHYSICAL_EXAM"
+            ],
+            "objectTypes": {
+                "BODY_MAP": "room3d_body_map",
+                "EXAM_WHEEL": "room3d_exam_wheel",
+                "PATIENT_LINE": "room3d_patient_line",
+                "PROP": "room3d_prop",
+                "STATUS": "room3d_status"
+            },
+            "verbs": {
+                "CLOSED_BODY_MAP": {
+                    "action": "Examining",
+                    "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Closed body map",
+                    "severity": "DEBUG"
+                },
+                "OBSERVED_PATIENT_STATUS": {
+                    "action": "Monitoring",
+                    "category": "MONITORING",
+                    "clinicalState": "monitoring",
+                    "label": "Observed patient status",
+                    "severity": "INFO"
+                },
+                "OPENED_BODY_MAP": {
+                    "action": "Examining",
+                    "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Opened body map",
+                    "severity": "INFO"
+                },
+                "OPENED_EXAM_WHEEL": {
+                    "action": "Examining",
+                    "category": "CLINICAL",
+                    "clinicalState": "examining",
+                    "label": "Opened exam wheel",
+                    "severity": "INFO"
+                },
+                "SELECTED_BEDSIDE_PROP": {
+                    "action": "Navigating",
+                    "category": "NAVIGATION",
+                    "clinicalState": "navigating",
+                    "label": "Selected bedside prop",
+                    "severity": "INFO"
+                },
+                "VOICED_PATIENT_LINE": {
+                    "action": "Communicating",
+                    "category": "COMMUNICATION",
+                    "clinicalState": "communicating",
+                    "label": "Voiced patient line",
+                    "severity": "INFO"
+                }
+            },
+            "version": 2
         }
     }
 ];

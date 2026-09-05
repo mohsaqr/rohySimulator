@@ -8,7 +8,7 @@ below is reused, not reimplemented:
 
 | Need | Rohy already provides | This package adds |
 |---|---|---|
-| Structured logging | `learning_events` (xAPI: verb / object_type / component / result / duration_ms / context / severity / category / room) | 20 pathology verbs, 8 object types |
+| Structured logging | `learning_events` (xAPI: verb / object_type / component / result / duration_ms / context / severity / category / room / plugin_id) | 23 pathology verbs (20 emitted, 3 planned), 9 object types, `Pathology*` components |
 | Analytics / TNA | `analytics-routes`, `learningEventAggregates.js`, `clinicalStates.js` | rows for the three published extension maps |
 | Assessment | `surveys`, `survey_questions`, `survey_responses` | read-process scoring, which surveys cannot express |
 | Cohort tracking | `cohorts`, `cohort_members`, `cohort_cases`, `lesson_progress` | nothing — pathology cases attach as cohort cases |
@@ -88,6 +88,14 @@ npm i openseadragon        # and copy its images/ to public/openseadragon/images
 ```
 
 ### 2. Merge the event vocabulary — `src/services/eventLogger.js`
+
+> **Superseded (RPS-1 1.6).** rohy folds the vocabulary through the plugin
+> manifest (`src/plugins/pathology/manifest.js`, `vocabulary.version: 2`) into
+> the shared registry `server/shared/learningVerbs.js`; nothing is merged into
+> `eventLogger.js` by hand, and the room logs through `ctx.log`. The snippet
+> below describes the pre-RPS-1 wiring and is kept for the history of the
+> design. Upstream's `tests/vocabulary.test.js` and `tests/logger-contract.test.js`
+> pin the vocabulary and the call shape.
 
 ```js
 import { PATHOLOGY_VERBS, PATHOLOGY_OBJECT_TYPES, PATHOLOGY_COMPONENTS,

@@ -61,8 +61,9 @@ export { defaultResolveRef, pictureOf, previewSeries, studyActions } from './cas
 
 // Vocabulary, for the host's manifest.
 export {
-    RADOYON_COMPONENTS, RADOYON_OBJECT_TYPES, RADOYON_ROOM,
-    RADOYON_VERBS, RADOYON_VERB_METADATA,
+    RADOYON_COMPONENTS, RADOYON_COMPONENT_PREFIX, RADOYON_OBJECT_TYPES, RADOYON_ROOM,
+    RADOYON_VERBS, RADOYON_VERB_METADATA, RADOYON_VOCABULARY_VERSION, REVIEWED_COVERAGE,
+    createRadoyonLogger, reportShape,
 } from './radoyonEvents.js';
 export {
     RADOYON_INTERPRETATIONS, RADOYON_OBJECT_OVERRIDES, RADOYON_VERB_FALLBACKS,

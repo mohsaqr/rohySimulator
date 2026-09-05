@@ -35,40 +35,17 @@
  *   regulating    Task start/stop — session control, matching LOADED_CASE.
  */
 
-// The acts that are "looking at tissue". Isolated so a future 'screening'
-// state is a one-token change rather than a hunt through three maps.
-const SCREENING_STATE = 'examining';
+import { PATHOLOGY_SCREENING_STATE, PATHOLOGY_VERB_METADATA } from './pathologyEvents.js';
 
-export const PATHOLOGY_VERB_FALLBACKS = {
-    OPENED_SLIDE: 'assessing',
-    CLOSED_SLIDE: 'assessing',
+// The acts that are "looking at tissue" resolve to this state. It lives on
+// each verb's own facet row (pathologyEvents.js, RPS-1 1.6) and this map is
+// DERIVED from those rows, so the two cannot disagree. A future 'screening'
+// state is still a one-token change: PATHOLOGY_SCREENING_STATE.
+const SCREENING_STATE = PATHOLOGY_SCREENING_STATE;
 
-    PANNED_SLIDE: SCREENING_STATE,
-    ZOOMED_SLIDE: SCREENING_STATE,
-    CHANGED_OBJECTIVE: SCREENING_STATE,
-    DWELLED_REGION: SCREENING_STATE,
-    REACHED_ROI: SCREENING_STATE,
-    MISSED_ROI: SCREENING_STATE,
-    COUNTED_FEATURE: SCREENING_STATE,
-    MEASURED_SLIDE: SCREENING_STATE,
-    VIEWED_SPECIMEN: SCREENING_STATE,
-    OPENED_PLATE: SCREENING_STATE,
-
-    ANNOTATED_SLIDE: 'documenting',
-    EXPORTED_ANNOTATIONS: 'documenting',
-    SUBMITTED_DIAGNOSIS: 'documenting',
-    REVISED_DIAGNOSIS: 'documenting',
-    SAVED_REPORT: 'documenting',
-    SIGNED_REPORT: 'documenting',
-
-    REQUESTED_SECOND_OPINION: 'communicating',
-
-    REQUESTED_HINT: 'reflecting',
-    RECEIVED_FEEDBACK: 'reflecting',
-
-    STARTED_SLIDE_TASK: 'regulating',
-    COMPLETED_SLIDE_TASK: 'regulating',
-};
+export const PATHOLOGY_VERB_FALLBACKS = Object.fromEntries(
+    Object.entries(PATHOLOGY_VERB_METADATA).map(([verb, meta]) => [verb, meta.clinicalState]),
+);
 
 export const PATHOLOGY_OBJECT_OVERRIDES = {
     slide: 'assessing',

@@ -96,9 +96,13 @@ vi.mock('../../services/apiClient.js', () => ({
 const { mountPatientRoom } = await import('rohy-3d-patient-room');
 const { startEcgMirror } = await import('./ecgMirror.js');
 
+// The room takes the narrowed plugin logger and the live-vitals getter as
+// props (RPS-1 1.6); the tests hand it a spy and the EventLogger field the
+// host's grant reads, so setCurrentVitals() drives the room exactly as in App.
+const log = vi.fn();
 const renderRoom = (props = {}) => render(
     <VoiceProvider>
-        <Exam3DScreen {...props} />
+        <Exam3DScreen log={log} vitals={() => EventLogger.currentVitals} {...props} />
     </VoiceProvider>,
 );
 
@@ -211,18 +215,24 @@ describe('Exam3DScreen', () => {
     });
 
     it('performs wheel exams through the parity performer', () => {
-        const physicalExam = vi.spyOn(EventLogger, 'physicalExamPerformed').mockImplementation(() => {});
+        log.mockClear();
         renderRoom({ activeCase: ACTIVE_CASE, sessionId: 7 });
         const { on_exam, on_event } = mountPatientRoom.mock.calls[0][1];
 
         const result = on_exam({ region_id: 'chestAnterior', exam_id: 'auscultation', test: null });
         expect(result.finding).toBe('Widespread expiratory wheeze.');
         expect(result.abnormal).toBe(true);
-        expect(physicalExam).toHaveBeenCalledWith(
-            'chestAnterior',
-            'auscultation',
-            'Widespread expiratory wheeze.',
-            expect.objectContaining({ gender: 'Male', abnormal: true, room3d: true }),
+        // The same core verb the 2D room emits, through ctx.log, with the
+        // room's own component and the room3d marker.
+        expect(log).toHaveBeenCalledWith(
+            'PERFORMED_PHYSICAL_EXAM',
+            'physical_exam',
+            expect.objectContaining({
+                objectId: 'chestAnterior:auscultation',
+                result: 'Widespread expiratory wheeze.',
+                component: 'Room3DExamWheel',
+                context: expect.objectContaining({ gender: 'Male', abnormal: true, room3d: true }),
+            }),
         );
         expect(examined).toHaveBeenCalledWith('chestAnterior', 'auscultation', 'Widespread expiratory wheeze.');
         expect(elicited).toHaveBeenCalledWith('exam', 'Widespread expiratory wheeze.', true, {
@@ -238,7 +248,6 @@ describe('Exam3DScreen', () => {
         // The abnormal exam makes the patient answer out loud.
         on_event({ type: 'exam', region_id: 'chestAnterior', abnormal: true });
         expect(controller.say).toHaveBeenCalledWith('Ah— that is sore when you press there.');
-        physicalExam.mockRestore();
     });
 
     it("opens Rohy's examination manikin from the Body map pill", () => {
@@ -259,8 +268,24 @@ describe('Exam3DScreen', () => {
         expect(onOpenDrawer).toHaveBeenLastCalledWith('treatments');
         on_event({ type: 'selection', id: 'iv', label: 'IV equipment' });
         expect(onOpenDrawer).toHaveBeenLastCalledWith('treatments');
+        // A prop selection is the room's own verb, not a generic CLICKED.
+        expect(log).toHaveBeenLastCalledWith(
+            'SELECTED_BEDSIDE_PROP', 'room3d_prop',
+            expect.objectContaining({ objectId: 'iv', objectName: 'IV equipment' }),
+        );
         on_event({ type: 'selection', id: 'patient', label: 'Assess' });
         expect(onOpenDrawer).toHaveBeenCalledTimes(3);
+        // A region selection opens the exam wheel: examining intent.
+        on_event({ type: 'selection', kind: 'region', id: 'chestAnterior', label: 'Chest' });
+        expect(log).toHaveBeenLastCalledWith(
+            'OPENED_EXAM_WHEEL', 'room3d_exam_wheel',
+            expect.objectContaining({ objectId: 'chestAnterior', component: 'Room3DExamWheel' }),
+        );
+        on_event({ type: 'status', status: 'deteriorating' });
+        expect(log).toHaveBeenLastCalledWith(
+            'OBSERVED_PATIENT_STATUS', 'room3d_status',
+            expect.objectContaining({ objectId: 'deteriorating', context: expect.objectContaining({ actor: 'system' }) }),
+        );
     });
 
     it('feeds EventLogger.currentVitals into the room once per second', () => {

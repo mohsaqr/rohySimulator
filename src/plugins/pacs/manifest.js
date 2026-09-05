@@ -24,7 +24,8 @@
  * therefore crosses the same boundary a clinician does.
  */
 import {
-    RADOYON_COMPONENTS, RADOYON_OBJECT_TYPES, RADOYON_ROOM, RADOYON_VERB_METADATA,
+    RADOYON_COMPONENTS, RADOYON_COMPONENT_PREFIX, RADOYON_OBJECT_TYPES, RADOYON_ROOM,
+    RADOYON_VERB_METADATA, RADOYON_VOCABULARY_VERSION,
 } from '../../components/pacs/radoyonEvents.js';
 import {
     RADOYON_INTERPRETATIONS, RADOYON_OBJECT_OVERRIDES, RADOYON_VERB_FALLBACKS,
@@ -32,7 +33,9 @@ import {
 
 export const manifest = {
     id: RADOYON_ROOM,
-    version: '0.1.0',
+    // The ADAPTER's version (stamped on every row as plugin_version); the
+    // package's own is in src/components/pacs/.vendor.json.
+    version: '0.2.0',
     room: {
         key: RADOYON_ROOM,
         labelKey: 'room_pacs',
@@ -46,12 +49,16 @@ export const manifest = {
         order: 55,
     },
     vocabulary: {
-        // Already keyed by verb with {severity, category}; the standard uses
-        // that shape verbatim so a plugin never restates its own vocabulary in
-        // two formats.
+        // v2 (RPS-1 1.6): the package's rows carry the full facet set —
+        // severity, category, clinicalState, action, label — so every
+        // analytics lens labels PACS rows without a host-side guess (R33).
+        // The standard uses the package's shape verbatim so a plugin never
+        // restates its own vocabulary in two formats.
+        version: RADOYON_VOCABULARY_VERSION,
         verbs: RADOYON_VERB_METADATA,
         objectTypes: RADOYON_OBJECT_TYPES,
         components: RADOYON_COMPONENTS,
+        componentPrefix: RADOYON_COMPONENT_PREFIX,
     },
     states: {
         verbFallbacks: RADOYON_VERB_FALLBACKS,

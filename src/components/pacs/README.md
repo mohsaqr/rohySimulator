@@ -29,7 +29,11 @@ Then in rohy: `npm run plugins:gen && npx vitest run && npm run build`.
 
 Nothing under this folder imports anything only rohy can satisfy. rohy's
 services arrive as **props** — `loadSeries`, `eventLogger`, `t`, the persistence
-callbacks — never via import. `portability.test.js` enforces that, and also
+callbacks — never via import. `eventLogger` is `{ log: ctx.log }` (RPS-1 1.6);
+the package wraps it in its own `createRadoyonLogger` and speaks
+`log(verb, objectType, options)`. Radoyon 0.3 spoke the one-object form and
+every PACS row was lost at ingest — `tests/client/plugins/pacs-room.test.jsx`
+now pins the positional shape at the sink. `portability.test.js` enforces that, and also
 enforces that no DICOM or imaging library creeps in: the parser, the modality
 LUT and the VOI transform are the package's own, which is what keeps it off a
 WASM codec and out of rohy's bundle weight.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Map, Volume2, VolumeX } from 'lucide-react';
 import { mountPatientRoom } from 'rohy-3d-patient-room';
-import EventLogger from '../../services/eventLogger';
+import { ROOM3D_VERBS, ROOM3D_OBJECT_TYPES, ROOM3D_COMPONENTS } from './manifest.js';
 import { casePatient, mapVitals, rhythmLabel } from './caseBinding.js';
 import { startEcgMirror } from './ecgMirror.js';
 import { SUPINE_REGIONS_3D } from './examRegions3d.js';
@@ -91,7 +91,7 @@ const REACTION_KEYS = {
     abdomen: 'reaction_abdomen',
 };
 
-export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conversation: conversationBus = null }) {
+export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conversation: conversationBus = null, log = null, vitals = null }) {
     // Order matters to the i18n extractor, which files every `t(` call under
     // the LAST namespace named in the file: the room's and the monitor's
     // translators are not extracted (their keys are maintained by hand), so
@@ -235,6 +235,13 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     // App passes an inline callback and performExam changes identity with
     // the patient record context; route both through refs so a new function
     // identity per render never remounts (and re-loads) the whole room.
+    // The narrowed logger and the vitals getter arrive as props; refs keep the
+    // mount effect from re-running when a parent re-renders with a new
+    // function identity.
+    const logRef = useRef(log);
+    const vitalsRef = useRef(vitals);
+    useEffect(() => { logRef.current = log; }, [log]);
+    useEffect(() => { vitalsRef.current = vitals; }, [vitals]);
     const openDrawerRef = useRef(onOpenDrawer);
     const performExamRef = useRef(performExam);
     useEffect(() => {
@@ -268,32 +275,64 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
             on_exam: ({ region_id, exam_id, test }) => {
                 const entry = performExamRef.current(region_id, exam_id, test);
                 // Analytics stays with the screen, as it does for the 2D
-                // room — the hook records to the patient record only.
-                EventLogger.physicalExamPerformed(region_id, exam_id, entry.finding, {
-                    gender: activeCase?.config?.demographics?.gender ?? activeCase?.patient_gender,
-                    abnormal: entry.abnormal,
-                    room3d: true,
+                // room — the hook records to the patient record only. The
+                // same core verb the 2D room emits, through the plugin's
+                // narrowed logger, so the row carries room/plugin = room3d.
+                logRef.current?.('PERFORMED_PHYSICAL_EXAM', 'physical_exam', {
+                    objectId: `${region_id}:${exam_id}`,
+                    objectName: `${exam_id} - ${region_id}`,
+                    component: ROOM3D_COMPONENTS.EXAM_WHEEL,
+                    result: entry.finding,
+                    context: {
+                        gender: activeCase?.config?.demographics?.gender ?? activeCase?.patient_gender,
+                        abnormal: entry.abnormal,
+                        room3d: true,
+                    },
                 });
                 // setState identity is stable, so this needs no ref.
                 setFinding(entry);
                 return { finding: entry.finding, abnormal: entry.abnormal };
             },
             on_event: (event) => {
+                const emit = logRef.current;
                 if (event.type === 'selection') {
-                    EventLogger.buttonClicked(`room3d:${event.id}`, 'Room3D', { label: event.label });
-                    // A region selection opens the room's own exam wheel.
-                    if (event.kind === 'region') return;
+                    // A region selection opens the room's own exam wheel —
+                    // examining intent, not a generic click.
+                    if (event.kind === 'region') {
+                        emit?.(ROOM3D_VERBS.OPENED_EXAM_WHEEL, ROOM3D_OBJECT_TYPES.EXAM_WHEEL, {
+                            objectId: String(event.id), objectName: event.label ?? String(event.id),
+                            component: ROOM3D_COMPONENTS.EXAM_WHEEL,
+                        });
+                        return;
+                    }
+                    emit?.(ROOM3D_VERBS.SELECTED_BEDSIDE_PROP, ROOM3D_OBJECT_TYPES.PROP, {
+                        objectId: String(event.id), objectName: event.label ?? String(event.id),
+                        component: ROOM3D_COMPONENTS.ROOM3D,
+                    });
                     if (event.id === 'chart') openDrawerRef.current?.('records');
                     if (event.id === 'iv' || event.id === 'oxygen') openDrawerRef.current?.('treatments');
                 }
                 if (event.type === 'nav') {
                     if (event.id === 'records') openDrawerRef.current?.('records');
-                    if (event.id === 'bodymap') setManikinOpen(true);
+                    if (event.id === 'bodymap') {
+                        emit?.(ROOM3D_VERBS.OPENED_BODY_MAP, ROOM3D_OBJECT_TYPES.BODY_MAP, {
+                            objectId: 'bodymap', objectName: 'Body map', component: ROOM3D_COMPONENTS.MANIKIN,
+                        });
+                        setManikinOpen(true);
+                    }
                 }
                 if (event.type === 'exam' && event.abnormal) {
+                    emit?.(ROOM3D_VERBS.VOICED_PATIENT_LINE, ROOM3D_OBJECT_TYPES.PATIENT_LINE, {
+                        objectId: String(event.region_id), objectName: 'Reaction',
+                        component: ROOM3D_COMPONENTS.ROOM3D, context: { region: event.region_id, actor: 'system' },
+                    });
                     sayRef.current(reactionLine(event.region_id));
                 }
                 if (event.type === 'status') {
+                    emit?.(ROOM3D_VERBS.OBSERVED_PATIENT_STATUS, ROOM3D_OBJECT_TYPES.STATUS, {
+                        objectId: String(event.status), objectName: String(event.status),
+                        component: ROOM3D_COMPONENTS.ROOM3D, context: { actor: 'system' },
+                    });
                     room?.addTimelineEvent(`Patient status: ${event.status}.`);
                 }
             },
@@ -303,15 +342,16 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
 
         // The room's ECG canvas carries the monitor's real signal — the same
         // generator PatientMonitor draws with, driven by the live hr + rhythm.
-        const stopEcg = startEcgMirror(room.ecg_canvas, () => EventLogger.currentVitals);
+        const stopEcg = startEcgMirror(room.ecg_canvas, () => vitalsRef.current?.() ?? null);
 
         const pushVitals = (elapsed_seconds) => {
-            const vitals = mapVitals(EventLogger.currentVitals);
-            if (!vitals) return;
+            const live = vitalsRef.current?.() ?? null;
+            const mapped = mapVitals(live);
+            if (!mapped) return;
             // null clears the label override, so a conversion back to sinus
             // returns the monitor to its heart-rate-derived rhythm text.
-            const rhythm = rhythmLabel(EventLogger.currentVitals?.rhythm, tMonitor);
-            room.update(vitals, null, elapsed_seconds, { rhythm });
+            const rhythm = rhythmLabel(live?.rhythm, tMonitor);
+            room.update(mapped, null, elapsed_seconds, { rhythm });
         };
         let elapsed_seconds = 0;
         pushVitals(0);
@@ -388,8 +428,14 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
             {manikinOpen && (
                 <ManikinOverlay
                     activeCase={activeCase}
+                    log={log}
                     onExamPerformed={handleManikinExam}
-                    onClose={() => setManikinOpen(false)}
+                    onClose={() => {
+                        logRef.current?.(ROOM3D_VERBS.CLOSED_BODY_MAP, ROOM3D_OBJECT_TYPES.BODY_MAP, {
+                            objectId: 'bodymap', objectName: 'Body map', component: ROOM3D_COMPONENTS.MANIKIN,
+                        });
+                        setManikinOpen(false);
+                    }}
                 />
             )}
             <FindingPanel entry={finding} onClose={() => setFinding(null)} />

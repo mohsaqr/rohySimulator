@@ -22,5 +22,9 @@ export default {
         sessionId: ctx.session.id,
         onOpenDrawer: ctx.capabilities.openDrawer ?? null,
         conversation: ctx.capabilities.conversation ?? null,
+        // The narrowed logger and the live vitals getter (RPS-1 1.6): the
+        // screen no longer imports the EventLogger singleton.
+        log: ctx.log,
+        vitals: ctx.capabilities.vitals ?? null,
     }),
 };

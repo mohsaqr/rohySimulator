@@ -1,5 +1,11 @@
 export const ECG_ROOM = 'ecg';
 
+/** RPS-1 vocabulary contract version this package declares (1.6, R33). */
+export const ECG_VOCABULARY_VERSION = 2;
+
+/** Every component name starts with this (RPS-1 R34). */
+export const ECG_COMPONENT_PREFIX = 'ECG';
+
 export const ECG_VERBS = Object.freeze({
   OPENED_ECG_RECORDING: 'OPENED_ECG_RECORDING',
   FOCUSED_ECG_LEAD: 'FOCUSED_ECG_LEAD',
@@ -32,18 +38,48 @@ export const ECG_COMPONENTS = Object.freeze({
   CASE_AUTHOR: 'ECGCaseAuthor',
 });
 
+/**
+ * The facet row per verb (RPS-1 1.6, R33). `clinicalState` and `action` are
+ * what a host's analytics lenses resolve; `label` is the curated fine-grained
+ * name. The state map in ecgStates.js is DERIVED from `clinicalState` so the
+ * two cannot disagree.
+ *
+ * Three verbs are declared but have no surface yet, and say so with
+ * `emitter: 'planned'` rather than pretending: the room deliberately has no
+ * submit button (an ECG is one investigation inside a case, and the case is
+ * where a diagnosis is committed), and the rubric's hints and explanations
+ * are not yet shown to a learner. A host's emission gate (R36) exempts a
+ * planned verb; the note is what it prints instead.
+ */
+const READ = Object.freeze({ clinicalState: 'assessing', action: 'Reading results' });
+const EXAMINE = Object.freeze({ clinicalState: 'examining', action: 'Examining' });
+const DOCUMENT = Object.freeze({ clinicalState: 'documenting', action: 'Documenting' });
+const REFLECT = Object.freeze({ clinicalState: 'reflecting', action: 'Debriefing' });
+
 export const ECG_VERB_METADATA = Object.freeze({
-  OPENED_ECG_RECORDING: { severity: 'IMPORTANT', category: 'CLINICAL' },
-  FOCUSED_ECG_LEAD: { severity: 'INFO', category: 'CLINICAL' },
-  CHANGED_ECG_LAYOUT: { severity: 'INFO', category: 'NAVIGATION' },
-  MEASURED_ECG_INTERVAL: { severity: 'ACTION', category: 'ASSESSMENT' },
-  MEASURED_ECG_AMPLITUDE: { severity: 'ACTION', category: 'ASSESSMENT' },
-  RECORDED_ECG_NOTE: { severity: 'ACTION', category: 'ASSESSMENT' },
-  SAVED_ECG_INTERPRETATION: { severity: 'ACTION', category: 'ASSESSMENT' },
-  SUBMITTED_ECG_INTERPRETATION: { severity: 'CRITICAL', category: 'ASSESSMENT' },
-  REVISED_ECG_INTERPRETATION: { severity: 'IMPORTANT', category: 'ASSESSMENT' },
-  REQUESTED_ECG_HINT: { severity: 'ACTION', category: 'ASSESSMENT' },
-  REVEALED_ECG_EXPLANATION: { severity: 'IMPORTANT', category: 'ASSESSMENT' },
+  OPENED_ECG_RECORDING: { severity: 'IMPORTANT', category: 'CLINICAL', ...READ, label: 'Opened ECG' },
+  FOCUSED_ECG_LEAD: { severity: 'INFO', category: 'CLINICAL', ...EXAMINE, label: 'Focused lead' },
+  CHANGED_ECG_LAYOUT: { severity: 'INFO', category: 'NAVIGATION', ...EXAMINE, label: 'Changed ECG layout' },
+  MEASURED_ECG_INTERVAL: { severity: 'ACTION', category: 'ASSESSMENT', ...EXAMINE, label: 'Measured interval' },
+  MEASURED_ECG_AMPLITUDE: { severity: 'ACTION', category: 'ASSESSMENT', ...EXAMINE, label: 'Measured amplitude' },
+  RECORDED_ECG_NOTE: { severity: 'ACTION', category: 'ASSESSMENT', ...DOCUMENT, label: 'Recorded ECG note' },
+  SAVED_ECG_INTERPRETATION: { severity: 'ACTION', category: 'ASSESSMENT', ...DOCUMENT, label: 'Recorded ECG read' },
+  SUBMITTED_ECG_INTERPRETATION: {
+    severity: 'CRITICAL', category: 'ASSESSMENT', ...DOCUMENT, label: 'Submitted ECG read',
+    emitter: 'planned',
+    emitterNote: 'The room has no submit button by design; a host that grades the read server-side would emit this.',
+  },
+  REVISED_ECG_INTERPRETATION: { severity: 'IMPORTANT', category: 'ASSESSMENT', ...DOCUMENT, label: 'Revised ECG read' },
+  REQUESTED_ECG_HINT: {
+    severity: 'ACTION', category: 'ASSESSMENT', ...REFLECT, label: 'Requested ECG hint',
+    emitter: 'planned',
+    emitterNote: 'Rubric hints are authored but not yet shown in the reading room; `hint_requested()` is ready for the button.',
+  },
+  REVEALED_ECG_EXPLANATION: {
+    severity: 'IMPORTANT', category: 'ASSESSMENT', ...REFLECT, label: 'Revealed ECG explanation',
+    emitter: 'planned',
+    emitterNote: 'Teaching-point explanations are authored but not yet shown in the reading room; `explanation_revealed()` is ready.',
+  },
 });
 
 /** Bind ECG-native events to Rohy's injected logger. */
@@ -140,6 +176,14 @@ export function create_ecg_logger(logger) {
     explanation_revealed: (activity_id) => emit(ECG_VERBS.REVEALED_ECG_EXPLANATION, ECG_OBJECT_TYPES.ECG_TEACHING_POINT, {
       object_id: activity_id,
       object_name: 'ECG explanation',
+      component: ECG_COMPONENTS.INTERPRETATION_PANEL,
+    }),
+    // Logged BEFORE the hint is shown: asking is the act, and it is logged
+    // even if the hint text never renders. `hint_index` is 1-based.
+    hint_requested: (activity_id, hint_index) => emit(ECG_VERBS.REQUESTED_ECG_HINT, ECG_OBJECT_TYPES.ECG_TEACHING_POINT, {
+      object_id: activity_id,
+      object_name: 'ECG hint',
+      result: `hint_${hint_index}`,
       component: ECG_COMPONENTS.INTERPRETATION_PANEL,
     }),
   };

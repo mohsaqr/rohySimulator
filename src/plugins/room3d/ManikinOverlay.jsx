@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import ManikinPanel from '../../components/examination/ManikinPanel';
-import EventLogger from '../../services/eventLogger';
+import { ROOM3D_COMPONENTS } from './manifest.js';
 
 // The 3D room's manikin surface: Rohy's REAL ManikinPanel (the 2D
 // examination room's workspace — stylized body figure with its clickable
@@ -15,10 +15,10 @@ import EventLogger from '../../services/eventLogger';
 // what made it unreadable.
 //
 // Logging parity with the 2D room is by construction: ManikinPanel records
-// to PatientRecord itself, and this wrapper adds the same
-// EventLogger.physicalExamPerformed call that App makes for
-// PhysicalExamScreen — the only difference being the room3d marker.
-export default function ManikinOverlay({ activeCase, onExamPerformed, onClose }) {
+// to PatientRecord itself, and this wrapper emits the same
+// PERFORMED_PHYSICAL_EXAM row App emits for PhysicalExamScreen — through
+// the plugin's narrowed logger, so it carries room/plugin = room3d.
+export default function ManikinOverlay({ activeCase, onExamPerformed, onClose, log = null }) {
     const { t: tRoom } = useTranslation('room3d');
     useEffect(() => {
         const handleKey = (event) => {
@@ -35,10 +35,16 @@ export default function ManikinOverlay({ activeCase, onExamPerformed, onClose })
         .toLowerCase();
 
     const handleExam = (entry) => {
-        EventLogger.physicalExamPerformed(entry.regionId, entry.examType, entry.finding, {
-            gender: activeCase?.config?.demographics?.gender,
-            abnormal: entry.abnormal,
-            room3d: true,
+        log?.('PERFORMED_PHYSICAL_EXAM', 'physical_exam', {
+            objectId: `${entry.regionId}:${entry.examType}`,
+            objectName: `${entry.examType} - ${entry.regionId}`,
+            component: ROOM3D_COMPONENTS.MANIKIN,
+            result: entry.finding,
+            context: {
+                gender: activeCase?.config?.demographics?.gender,
+                abnormal: entry.abnormal,
+                room3d: true,
+            },
         });
         onExamPerformed?.(entry);
     };

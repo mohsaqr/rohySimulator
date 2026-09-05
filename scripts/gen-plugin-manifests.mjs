@@ -16,20 +16,20 @@
 import { readdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { validateManifest } from '../server/shared/pluginRegistry.js';
+import { validateManifest, assertShippedManifest, canonicalManifest } from '../server/shared/pluginRegistry.js';
+// Loading the registry registers rohy's core verb names with pluginRegistry,
+// which validateManifest needs to check a manifest's `vocabulary.coreVerbs`.
+// (learningVerbs folds the PREVIOUS generated manifests; that is fine — the
+// fresh ones are validated individually below.)
+import '../server/shared/learningVerbs.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PLUGIN_DIR = path.join(ROOT, 'src', 'plugins');
 const OUT_DIR = path.join(ROOT, 'server', 'shared', 'plugins');
 
-/** Stable key order, so a regenerated file is byte-identical or genuinely different. */
-const sortDeep = (value) => {
-    if (Array.isArray(value)) return value.map(sortDeep);
-    if (value && typeof value === 'object') {
-        return Object.fromEntries(Object.keys(value).sort().map((k) => [k, sortDeep(value[k])]));
-    }
-    return value;
-};
+/** Stable key order, so a regenerated file is byte-identical or genuinely different.
+ *  The same canonicaliser the runtime drift guard uses, so the two cannot disagree. */
+const sortDeep = canonicalManifest;
 
 async function collect() {
     const ids = readdirSync(PLUGIN_DIR, { withFileTypes: true })
@@ -48,7 +48,8 @@ async function collect() {
 
     return Promise.all(ids.map(async (id) => {
         const mod = await import(pathToFileURL(path.join(PLUGIN_DIR, id, 'manifest.js')).href);
-        const manifest = validateManifest(mod.manifest ?? mod.default);
+        // Valid, AND fit to ship (R33/R34 — see assertShippedManifest).
+        const manifest = assertShippedManifest(validateManifest(mod.manifest ?? mod.default));
         if (manifest.id !== id) {
             throw new Error(`src/plugins/${id}/ declares id '${manifest.id}' — the directory name is the id`);
         }
