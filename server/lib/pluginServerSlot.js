@@ -59,8 +59,9 @@ import {
     authenticateToken, requireAdmin, requireEducator, requireReviewer, requireStudent,
 } from '../middleware/auth.js';
 import { tenantId, auditSuccess } from '../routes/_helpers.js';
-import { LEARNING_VERBS, resolveEventMetadata } from '../shared/learningVerbs.js';
-import { nowIso, SQL_NOW } from '../shared/time.js';
+import { LEARNING_VERBS } from '../shared/learningVerbs.js';
+import { ingestEvents } from './learningEventIngest.js';
+import { nowIso } from '../shared/time.js';
 
 const log = logger('plugin-server-slot');
 const SLOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
@@ -257,34 +258,37 @@ export function buildServerContext(manifest) {
                     `run \`npm run plugins:gen\``
                 );
             }
-            const meta = resolveEventMetadata(verb);
-            let resolvedUser = userId;
-            let resolvedCase = null;
-            if (sessionId != null) {
-                const row = await dbAdapter.get(
-                    'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ?',
-                    [sessionId, tid]
-                );
-                // The trinity is derived, never accepted — the same rule the
-                // ingest route follows. A session id from another tenant
-                // resolves to nothing rather than to that tenant's user.
-                if (!row) {
-                    throw new Error(`plugin '${pluginId}' cannot emit for session ${sessionId}: not in tenant ${tid}`);
-                }
-                resolvedUser = row.user_id;
-                resolvedCase = row.case_id;
+            // Through the one write path (server/lib/learningEventIngest.js):
+            // the trinity is derived from the session, never accepted — a
+            // session id from another tenant resolves to nothing rather than
+            // to that tenant's user — severity/category come from the
+            // registry, the timestamp is the server's clock, and a row that
+            // cannot be written lands in the quarantine instead of vanishing.
+            const out = await ingestEvents({
+                tenantId: tid,
+                principal: null,
+                source: `plugin:${pluginId}`,
+                allowServerOnly: false,
+                events: [{
+                    session_id: sessionId,
+                    user_id: userId,
+                    verb,
+                    object_type: objectType,
+                    object_id: objectId,
+                    object_name: objectName,
+                    component: `plugin:${pluginId}`,
+                    result,
+                    duration_ms: durationMs,
+                    context,
+                    room: pluginId,
+                    plugin_id: pluginId,
+                    plugin_version: manifest.version ?? null,
+                }],
+            });
+            if (out.inserted !== 1) {
+                const why = out.firstReason === 'cross_tenant' ? `not in tenant ${tid}` : out.firstReason;
+                throw new Error(`plugin '${pluginId}' cannot emit '${verb}' for session ${sessionId}: ${why}`);
             }
-            await dbAdapter.run(
-                `INSERT INTO learning_events (
-                    session_id, user_id, case_id, verb, object_type, object_id, object_name,
-                    component, result, duration_ms, context, tenant_id, severity, category,
-                    room, timestamp
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [sessionId, resolvedUser, resolvedCase, verb, objectType, objectId, objectName,
-                 `plugin:${pluginId}`, result, durationMs,
-                 context ? JSON.stringify(context) : null,
-                 tid, meta.severity, meta.category, pluginId]
-            );
         },
 
 

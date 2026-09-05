@@ -306,6 +306,9 @@ export const HARD_DELETE_ON_PURGE_TABLES = [
 export const RETENTION_TABLES = [
     { table: 'event_log', column: 'timestamp', userColumn: 'user_id' },
     { table: 'learning_events', column: 'timestamp', userColumn: 'user_id' },
+    // The quarantine (0056): diagnostic, not evidentiary — same horizon, same
+    // anonymise-on-purge contract (user_id is the principal who posted).
+    { table: 'learning_events_rejected', column: 'received_at', userColumn: 'user_id' },
     { table: 'interactions', column: 'timestamp', userColumn: null },
     { table: 'system_audit_log', column: 'timestamp', userColumn: 'user_id' },
     { table: 'alarm_events', column: 'triggered_at', userColumn: null },

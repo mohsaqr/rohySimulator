@@ -43,7 +43,7 @@ const COMPONENT_COLOR = {
 // already exposes via EXPORT_SOURCES; the chip color comes from the
 // component badge map above.
 const EXPORT_SOURCES = [
-    'auth', 'admin', 'config', 'learning', 'chat', 'alarm',
+    'auth', 'admin', 'config', 'learning', 'rejected', 'chat', 'alarm',
     'llm', 'tts', 'emotion', 'oyon', 'vitals', 'scenario', 'client',
 ];
 
