@@ -118,12 +118,12 @@ describe('eventLogger — xAPI verb mapping (5+ representative verbs)', () => {
         expect(notify.mock.calls[0][0].data.verb).toBe('ANSWERED');
     });
 
-    it('forwards ERROR_OCCURRED verb with critical severity mapping', async () => {
+    it('forwards RAISED_ERROR verb with critical severity mapping', async () => {
         const notify = mountCenter();
         const { default: log, VERBS, OBJECT_TYPES } = await loadFreshLogger();
-        log.log(VERBS.ERROR_OCCURRED, OBJECT_TYPES.COMPONENT, { result: 'boom' });
+        log.log(VERBS.RAISED_ERROR, OBJECT_TYPES.COMPONENT, { result: 'boom' });
         const payload = notify.mock.calls[0][0];
-        expect(payload.data.verb).toBe('ERROR_OCCURRED');
+        expect(payload.data.verb).toBe('RAISED_ERROR');
         // SEVERITY.CRITICAL → 'critical' on the wire.
         expect(payload.severity).toBe('critical');
     });
@@ -157,22 +157,22 @@ describe('eventLogger — xAPI verb mapping (5+ representative verbs)', () => {
         expect(payloads.map(p => p.data.verb)).toEqual([
             'LOST_FOCUS',
             'RESUMED_FOCUS',
-            'UNLOAD',
-            'STT_RESULT',
-            'STT_ERROR',
-            'TTS_PLAYED',
+            'UNLOADED_APP',
+            'RECOGNIZED_SPEECH',
+            'FAILED_SPEECH_RECOGNITION',
+            'PLAYED_TTS',
         ]);
         expect(payloads.find(p => p.data.verb === 'LOST_FOCUS').severity).toBe('debug');
         expect(payloads.find(p => p.data.verb === 'RESUMED_FOCUS').data.category).toBe('NAVIGATION');
-        expect(payloads.find(p => p.data.verb === 'UNLOAD').data.category).toBe('SESSION');
-        expect(payloads.find(p => p.data.verb === 'STT_RESULT').data.context).toMatchObject({
+        expect(payloads.find(p => p.data.verb === 'UNLOADED_APP').data.category).toBe('SESSION');
+        expect(payloads.find(p => p.data.verb === 'RECOGNIZED_SPEECH').data.context).toMatchObject({
             finalLength: 4,
             interimLength: 2,
             isFinal: true,
             lang: 'en-US',
         });
-        expect(payloads.find(p => p.data.verb === 'STT_ERROR').severity).toBe('warning');
-        expect(payloads.find(p => p.data.verb === 'TTS_PLAYED').data.context).toMatchObject({
+        expect(payloads.find(p => p.data.verb === 'FAILED_SPEECH_RECOGNITION').severity).toBe('warning');
+        expect(payloads.find(p => p.data.verb === 'PLAYED_TTS').data.context).toMatchObject({
             voice: 'voice-a',
             provider: 'piper',
         });
@@ -192,7 +192,7 @@ describe('eventLogger — app lifecycle window wiring', () => {
         expect(notify.mock.calls.map(c => c[0].data.verb)).toEqual([
             'LOST_FOCUS',
             'RESUMED_FOCUS',
-            'UNLOAD',
+            'UNLOADED_APP',
         ]);
 
         cleanup();
@@ -222,17 +222,21 @@ describe('eventLogger — session status transitions', () => {
         expect(notify.mock.calls[0][0].data.verb).toBe('RESUMED_SESSION');
     });
 
-    it('sessionEnded fires one event and clears context', async () => {
+    it('sessionEnded fires one event, carries the reason, and KEEPS the session context', async () => {
         const notify = mountCenter();
         const { default: log } = await loadFreshLogger();
         log.sessionStarted(42, 7, 'Sepsis');
-        log.sessionEnded(1234);
+        log.sessionEnded(1234, 'explicit');
         expect(notify).toHaveBeenCalledTimes(2);
         expect(notify.mock.calls[1][0].data.verb).toBe('ENDED_SESSION');
         expect(notify.mock.calls[1][0].data.durationMs).toBe(1234);
-        // Context cleared after end.
-        expect(log.getStatus().sessionId).toBeNull();
-        expect(log.getStatus().caseId).toBeNull();
+        expect(notify.mock.calls[1][0].data.result).toBe('explicit');
+        // Regression lock: the debrief, the end-of-session questionnaire and
+        // the case summary all run AFTER the session ends and must still land
+        // on this session — clearing the context here made their rows
+        // session-less. App.jsx clears it when the next case loads.
+        expect(log.getStatus().sessionId).toBe(42);
+        expect(log.getStatus().caseId).toBe(7);
     });
 });
 

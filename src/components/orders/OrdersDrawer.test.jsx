@@ -73,7 +73,7 @@ vi.mock('../investigations/ClinicalRecordsPanel', () => ({
 vi.mock('../treatments', () => ({
     TreatmentPanel: () => <div data-testid="treatment-panel-stub" />,
 }));
-vi.mock('../../services/eventLogger', () => ({
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: {
         drawerOpened: vi.fn(),
         drawerClosed: vi.fn(),

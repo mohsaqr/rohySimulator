@@ -65,7 +65,7 @@ const examPanelOpened = vi.fn();
 const examPanelClosed = vi.fn();
 const componentOpened = vi.fn();
 const componentClosed = vi.fn();
-vi.mock('../../services/eventLogger', () => ({
+vi.mock('../../services/eventLogger', async (importOriginal) => ({ ...(await importOriginal()),
     default: {
         examPanelOpened: (...a) => examPanelOpened(...a),
         examPanelClosed: (...a) => examPanelClosed(...a),

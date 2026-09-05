@@ -38,11 +38,15 @@
 
 import { validateSettingsSchema } from './pluginSettings.js';
 
-/** Clinical states a plugin verb may resolve to. Mirrors clinicalStates.js. */
-export const CLINICAL_STATES = [
-    'assessing', 'examining', 'investigating', 'treating', 'communicating',
-    'documenting', 'monitoring', 'regulating', 'reflecting', 'navigating',
-];
+// The enums a manifest is validated against live in learningVerbFacets.js
+// (so the registry, the ingest path and every analytics consumer read ONE
+// list). Re-exported here because this module is the one plugins and tests
+// have always imported them from.
+import {
+    CLINICAL_STATES, SEVERITIES, CATEGORIES, completeFacets, validateFacets,
+} from './learningVerbFacets.js';
+
+export { CLINICAL_STATES, SEVERITIES, CATEGORIES };
 
 // 'orders' is the session's INVESTIGATION ORDERS, narrowed. A plugin room that
 // shows the result of something the learner ordered in a core room (PACS shows
@@ -68,7 +72,10 @@ export const CLINICAL_STATES = [
 // 'drawer' opens the host's orders drawer on a tab (`openDrawer('records')`),
 // so a plugin's chart or IV pole can lead to the real records / treatments
 // surfaces instead of re-implementing them.
-export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote', 'orders', 'case', 'conversation', 'drawer'];
+// 'vitals' is the live physiology snapshot as a read-only getter — what a
+// room that mirrors the monitor's signal needs, without a reference to the
+// EventLogger singleton whose field used to carry it.
+export const CAPABILITIES = ['llm', 'uploads', 'notify', 'persist', 'remote', 'orders', 'case', 'conversation', 'drawer', 'vitals'];
 
 /**
  * A plugin's remote-content declaration (`manifest.remote`), which is what the
@@ -105,14 +112,6 @@ export const CORE_ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consu
 /** How a plugin room is presented by the host; see validateManifest. */
 export const ROOM_PRESENTATIONS = ['replace', 'overlay'];
 
-/** These mirror the CHECK constraints on learning_events (migration 0001).
- *  A verb declaring anything else does not fail loudly — the INSERT is
- *  rejected by sqlite and the event is simply lost. */
-export const SEVERITIES = ['DEBUG', 'INFO', 'ACTION', 'IMPORTANT', 'CRITICAL'];
-export const CATEGORIES = [
-    'SESSION', 'NAVIGATION', 'CLINICAL', 'COMMUNICATION',
-    'MONITORING', 'CONFIGURATION', 'ASSESSMENT', 'ERROR',
-];
 
 const REQUIRED = ['id', 'room', 'vocabulary'];
 
@@ -191,6 +190,38 @@ export function validateManifest(manifest) {
         throw new Error(`Plugin '${manifest.id}' declares room.presentation '${manifest.room.presentation}'; it must be one of ${ROOM_PRESENTATIONS.join(', ')} or absent`);
     }
     const verbs = manifest.vocabulary.verbs || {};
+    // R35: `coreVerbs` names rohy verbs the plugin emits on its own behalf
+    // (a room that performs a physical exam emits PERFORMED_PHYSICAL_EXAM).
+    // They must exist, and must not also be declared as the plugin's own.
+    const coreVerbs = manifest.vocabulary.coreVerbs || [];
+    if (!Array.isArray(coreVerbs)) {
+        throw new Error(`Plugin '${manifest.id}' vocabulary.coreVerbs must be an array of rohy verb names`);
+    }
+    coreVerbs.forEach((verb) => {
+        if (!BASE_VERB_NAMES.has(verb)) {
+            throw new Error(`Plugin '${manifest.id}' lists '${verb}' under vocabulary.coreVerbs, but rohy has no such core verb`);
+        }
+        if (verb in (manifest.vocabulary.verbs || {})) {
+            throw new Error(`Plugin '${manifest.id}' declares '${verb}' both as its own verb and as a core verb`);
+        }
+    });
+    // `componentPrefix`: PascalCase, and every declared component value starts
+    // with it (R34 — enforced as a gate once every vendored package carries
+    // one; until then a manifest that declares a prefix is held to it).
+    const prefix = manifest.vocabulary.componentPrefix;
+    if (prefix !== undefined) {
+        if (typeof prefix !== 'string' || !/^[A-Z][A-Za-z0-9]{2,}$/.test(prefix)) {
+            throw new Error(`Plugin '${manifest.id}' vocabulary.componentPrefix must be PascalCase (got '${prefix}')`);
+        }
+        Object.values(manifest.vocabulary.components || {}).forEach((name) => {
+            if (typeof name !== 'string' || !name.startsWith(prefix)) {
+                throw new Error(`Plugin '${manifest.id}' component '${name}' does not start with its componentPrefix '${prefix}'`);
+            }
+        });
+    }
+
+    const states = manifest.states || {};
+    const fallbacks = states.verbFallbacks || {};
     Object.entries(verbs).forEach(([verb, meta]) => {
         if (!meta || !meta.severity || !meta.category) {
             throw new Error(`Plugin '${manifest.id}' verb ${verb} has no severity/category — it would throw at emit time`);
@@ -205,12 +236,9 @@ export function validateManifest(manifest) {
         if (!CATEGORIES.includes(meta.category)) {
             throw new Error(`Plugin '${manifest.id}' verb ${verb} declares category '${meta.category}'; learning_events only accepts ${CATEGORIES.join(', ')}`);
         }
-    });
-
-    const states = manifest.states || {};
-    const fallbacks = states.verbFallbacks || {};
-    Object.keys(verbs).forEach((verb) => {
-        const state = fallbacks[verb];
+        // A v2 row carries its state on the verb; a v1 vocabulary says it in
+        // states.verbFallbacks. Either is the mapping — but there must be one.
+        const state = fallbacks[verb] ?? meta.clinicalState;
         // A verb with NO mapping does not error anywhere — it falls through to
         // resolveClinicalState's literal `${verb}_${objectType}` bucket and
         // quietly pollutes every TNA model with a state nobody declared.
@@ -220,6 +248,18 @@ export function validateManifest(manifest) {
         if (!CLINICAL_STATES.includes(state)) {
             throw new Error(`Plugin '${manifest.id}' verb ${verb} maps to '${state}', which is not a clinical state`);
         }
+        // R35: a plugin may not re-declare a core verb as its own — it would
+        // redefine that verb's facets for the whole host.
+        if (BASE_VERB_NAMES.has(verb)) {
+            throw new Error(`Plugin '${manifest.id}' declares '${verb}', which is a rohy core verb; list it under vocabulary.coreVerbs instead`);
+        }
+        // Facets (RPS-1 R33). A v2 vocabulary declares the full row; a v1
+        // vocabulary — every vendored package before its upstream ships
+        // facets — derives action/label/domain/tnaMerge/pulseBucket from the
+        // state it already declares, so its rows label correctly in every
+        // lens today instead of falling to 'Other'. Either way the completed
+        // row must validate, so a plugin cannot invent a lens value.
+        validateFacets(verb, manifestVerbFacets(manifest, verb), `plugin '${manifest.id}'`);
     });
 
     // Ownership. mergeNamespace catches a plugin OVERWRITING an existing key,
@@ -390,6 +430,161 @@ export function validateManifest(manifest) {
     return manifest;
 }
 
+/** Stable key order, so two manifests compare by content. */
+export function canonicalManifest(value) {
+    if (Array.isArray(value)) return value.map(canonicalManifest);
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.keys(value).sort().map((k) => [k, canonicalManifest(value[k])]));
+    }
+    return value;
+}
+
+/** JSON of the canonical form — what `npm run plugins:gen` writes and what the runtime guard compares. */
+export function canonicalJson(manifest) {
+    return JSON.stringify(canonicalManifest(manifest));
+}
+
+/**
+ * The first path at which two manifests differ, or null when they are the
+ * same. Used by the runtime drift guard to name WHAT drifted: the old guard
+ * compared verb NAMES only, so a changed severity, state or object type
+ * mounted silently while the server persisted the old value.
+ */
+export function firstDifference(a, b, path = '') {
+    if (a === b) return null;
+    const ta = a === null ? 'null' : Array.isArray(a) ? 'array' : typeof a;
+    const tb = b === null ? 'null' : Array.isArray(b) ? 'array' : typeof b;
+    if (ta !== tb) return path || '(root)';
+    if (ta === 'array') {
+        if (a.length !== b.length) return `${path}.length`;
+        for (let i = 0; i < a.length; i++) {
+            const d = firstDifference(a[i], b[i], `${path}[${i}]`);
+            if (d) return d;
+        }
+        return null;
+    }
+    if (ta === 'object') {
+        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+        for (const k of [...keys].sort()) {
+            const d = firstDifference(a[k], b[k], path ? `${path}.${k}` : k);
+            if (d) return d;
+        }
+        return null;
+    }
+    return path || '(root)';
+}
+
+/** Which facet fields a v2 vocabulary must declare on every verb. */
+export const MANIFEST_FACET_FIELDS = ['severity', 'category', 'clinicalState', 'action', 'label'];
+
+/** The vocabulary contract version every SHIPPED manifest must declare (RPS-1 1.6). */
+export const SHIPPED_VOCABULARY_VERSION = 2;
+
+/**
+ * The gates a manifest must pass to SHIP in rohy, over and above being valid.
+ *
+ * `validateManifest` accepts a v1 vocabulary because a test, or a package
+ * mid-migration, may still build one. The generator (`npm run plugins:gen`,
+ * and `plugins:check` in prebuild and CI) runs this on every manifest under
+ * src/plugins/ instead, so the repository cannot carry a plugin whose rows
+ * would be labelled by a guess:
+ *
+ *   R33  `vocabulary.version >= 2` — every verb declares its full facet row
+ *        (validateManifest has already checked each row against the enums)
+ *   R34  `vocabulary.componentPrefix` is declared, so every component name is
+ *        namespaced (validateManifest has already checked the values)
+ *   R35  `coreVerbs` ⊂ rohy's base verbs (validateManifest)
+ *   R36  every verb is emitted, server-only, or planned with a note — checked
+ *        by scripts/check-plugin-emissions.mjs, which needs the source tree
+ *
+ * @param {object} manifest  a manifest validateManifest has accepted
+ * @returns {object} the same manifest
+ */
+export function assertShippedManifest(manifest) {
+    const version = manifest.vocabulary?.version ?? 1;
+    if (version < SHIPPED_VOCABULARY_VERSION) {
+        throw new Error(`Plugin '${manifest.id}' declares vocabulary.version ${version}; a shipped plugin must declare ${SHIPPED_VOCABULARY_VERSION} with a full facet row per verb (RPS-1 R33)`);
+    }
+    if (typeof manifest.vocabulary?.componentPrefix !== 'string') {
+        throw new Error(`Plugin '${manifest.id}' declares no vocabulary.componentPrefix; a shipped plugin namespaces its components (RPS-1 R34)`);
+    }
+    return manifest;
+}
+
+/**
+ * The completed facet row for one manifest verb.
+ *
+ * `vocabulary.version` gates how much the manifest must say. v1 (the default,
+ * and every vendored package until its upstream ships facets) declares
+ * severity/category on the verb and a clinical state in `states.verbFallbacks`;
+ * the rest derives. v2 must declare the full row (R33) — a missing field is an
+ * error, not a default — because a plugin that says nothing about its lens
+ * labels is a plugin whose rows will be mislabelled by whoever guessed.
+ */
+export function manifestVerbFacets(manifest, verb) {
+    const meta = manifest.vocabulary?.verbs?.[verb] || {};
+    const version = manifest.vocabulary?.version ?? 1;
+    if (version >= 2) {
+        MANIFEST_FACET_FIELDS.forEach((field) => {
+            if (meta[field] === undefined) {
+                throw new Error(`Plugin '${manifest.id}' verb ${verb} declares vocabulary.version ${version} but has no '${field}' facet`);
+            }
+        });
+    }
+    const clinicalState = meta.clinicalState ?? manifest.states?.verbFallbacks?.[verb];
+    return completeFacets(verb, { ...meta, clinicalState, emitter: meta.emitter ?? 'plugin' });
+}
+
+/** Verbs the HOST emits on a plugin's behalf and therefore stamps with that plugin's id. */
+export const HOST_DELEGABLE_VERBS = Object.freeze([
+    'RAISED_ERROR', 'UNDECLARED_VERB', 'OPENED_PLUGIN_EDITOR', 'EDITED_PLUGIN_DOCUMENT', 'SAVED_PLUGIN_DOCUMENT',
+    'PERFORMED_PHYSICAL_EXAM', 'SENT_MESSAGE', 'RECEIVED_MESSAGE', 'CLICKED', 'OPENED', 'CLOSED', 'VIEWED',
+]);
+
+const PLUGIN_ID_RE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/**
+ * May this plugin claim this verb? Attribution is metadata, so a bad claim is
+ * reported for STRIPPING — the caller inserts the row without it — never for
+ * dropping the learner's action over a provenance label.
+ *
+ * @param {string} pluginId
+ * @param {string|null|undefined} pluginVersion  the client's claim
+ * @param {string} verb  canonical verb
+ * @param {object[]} [manifests=PLUGIN_MANIFESTS_REF]  injectable for tests
+ * @returns {{ok:true, pluginId:string, pluginVersion:string|null, versionMismatch:boolean}
+ *          |{ok:false, reason:'unknown_plugin'|'plugin_verb_mismatch'}}
+ */
+export function resolvePluginAttribution(pluginId, pluginVersion, verb, manifests = PLUGIN_MANIFESTS_REF) {
+    if (typeof pluginId !== 'string' || !PLUGIN_ID_RE.test(pluginId)) return { ok: false, reason: 'unknown_plugin' };
+    const manifest = manifests.find((m) => m.id === pluginId);
+    if (!manifest) return { ok: false, reason: 'unknown_plugin' };
+    const own = manifest.vocabulary?.verbs || {};
+    const core = manifest.vocabulary?.coreVerbs || [];
+    if (!(verb in own) && !core.includes(verb) && !HOST_DELEGABLE_VERBS.includes(verb)) {
+        return { ok: false, reason: 'plugin_verb_mismatch' };
+    }
+    // A version the host does not ship is unverifiable: stored as NULL and
+    // counted, never as the client's word.
+    const shipped = manifest.version ?? null;
+    const versionMismatch = pluginVersion != null && String(pluginVersion) !== String(shipped);
+    return { ok: true, pluginId, pluginVersion: versionMismatch ? null : (pluginVersion == null ? null : String(pluginVersion)), versionMismatch };
+}
+
+// The generated manifests are imported lazily by name to keep this module
+// free of a hard dependency on the generated file for the tests that build
+// manifests of their own; `setPluginManifests` is how the registry learns
+// what is installed.
+let PLUGIN_MANIFESTS_REF = [];
+export function setPluginManifests(list) { PLUGIN_MANIFESTS_REF = Array.isArray(list) ? list : []; }
+
+// The core verb names, registered by learningVerbs.js at load (this module
+// cannot import it — learningVerbs imports THIS module). Empty until then,
+// which only matters for a test that validates a manifest before the
+// registry loads; foldManifests is always called by learningVerbs after.
+let BASE_VERB_NAMES = new Set();
+export function setCoreVerbNames(names) { BASE_VERB_NAMES = new Set(names || []); }
+
 /**
  * Fold a list of manifests into the merged vocabulary/state maps rohy uses.
  * Every merge goes through mergeNamespace, so two plugins that collide with
@@ -399,6 +594,7 @@ export function foldManifests(manifests, base = {}) {
     const out = {
         verbs: { ...(base.verbs || {}) },
         verbMetadata: { ...(base.verbMetadata || {}) },
+        verbFacets: { ...(base.verbFacets || {}) },
         objectTypes: { ...(base.objectTypes || {}) },
         components: { ...(base.components || {}) },
         verbFallbacks: { ...(base.verbFallbacks || {}) },
@@ -413,6 +609,8 @@ export function foldManifests(manifests, base = {}) {
         const verbNames = Object.fromEntries(Object.keys(v.verbs || {}).map((k) => [k, k]));
         out.verbs = mergeNamespace(out.verbs, verbNames, { label: 'VERBS', source: src });
         out.verbMetadata = mergeNamespace(out.verbMetadata, v.verbs || {}, { label: 'VERB_METADATA', source: src });
+        const facets = Object.fromEntries(Object.keys(v.verbs || {}).map((verb) => [verb, manifestVerbFacets(m, verb)]));
+        out.verbFacets = mergeNamespace(out.verbFacets, facets, { label: 'VERB_FACETS', source: src });
         out.objectTypes = mergeNamespace(out.objectTypes, v.objectTypes || {}, { label: 'OBJECT_TYPES', source: src });
         out.components = mergeNamespace(out.components, v.components || {}, { label: 'COMPONENTS', source: src });
         out.verbFallbacks = mergeNamespace(out.verbFallbacks, s.verbFallbacks || {}, { label: 'VERB_FALLBACKS', source: src });

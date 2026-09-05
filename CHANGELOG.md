@@ -9,6 +9,38 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.10] — 2026-09-05
+
+### Added
+
+- **One learning-event registry with analytics facets.** `server/shared/learningVerbs.js`
+  is the single source for every verb: severity, category, clinical state,
+  action, fine-grained label, emitter, domain, TNA merge target and pulse bucket
+  per verb (`BASE_VERB_FACETS`); enums and derivation tables in
+  `learningVerbFacets.js`, object types in `learningObjectTypes.js`, rooms in
+  `rooms.js`. Every consumer — the TNA merge map, the seven client lenses, the
+  cohort pulse buckets, the room labels — resolves through `eventFacets.js`;
+  `clinicalStates.js` and `activityMappings.js` are shims over it. Plugin
+  manifests fold their facets in through `pluginRegistry.js` (v1 derived, v2
+  declared). A new clinical state `studying` covers the lessons room.
+- **Verb aliases.** Forty-four historical verb names are read through
+  `VERB_ALIASES` — combined families such as `ORDERED_TREATMENT` + object type,
+  `VIEWED_RECORD` + object id, `VIEWED_RESULT`, `CANCELLED_ORDER`, `TOGGLED`,
+  `ANSWERED`, `RAISED_ERROR` / `FAILED_REQUEST` / `FAILED_VALIDATION`. Read-time
+  only: stored rows are never rewritten. `tests/server/derived-maps-parity.test.js`
+  pins that every old name keeps its clinical state, action and TNA bucket.
+- `EventLogger` helpers rewritten around the canonical vocabulary (combined
+  treatment, record, result, search, toggle helpers; agent, alarm, debrief,
+  content, tour, consent, capture helpers) with an undeclared-verb guard
+  (throws in dev/test, `UNDECLARED_VERB` in production); `sessionEnded` no
+  longer clears the session context, so debrief rows keep their session.
+
+### Changed
+
+- Aggregates merge on the canonical verb; date bounds are normalised to the
+  stored ISO shape (an un-normalised `start_date` skipped rows in a string
+  sort); `buildEventFilter` accepts `room`; `tnaSequences` takes a `lens`.
+
 ## [3.0.0-beta.9] — 2026-09-03
 
 ### Fixed

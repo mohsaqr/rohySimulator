@@ -19,6 +19,9 @@
 // is allowlisted in tests/server/sql-injection-guard.test.js on exactly
 // that basis.
 
+import { TNA_MERGE_MAP, normalizeVerb, tnaMergeTarget, activityLabel, LENSES } from '../shared/eventFacets.js';
+import { toIsoZ } from '../shared/time.js';
+
 function isDateOnly(value) {
     return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -37,7 +40,11 @@ function isDateOnly(value) {
 //              yields 1=0 so an empty cohort returns zero rows instead
 //              of (wrongly) the whole tenant.
 //   startDate / endDate — timestamp window; a date-only endDate is
-//              treated as inclusive of that whole day (< next day).
+//              treated as inclusive of that whole day (< next day). A full
+//              instant is normalised to the contract shape (RPS-1 §17) so a
+//              bound like '2026-05-01T09:00:00Z' compares correctly against
+//              stored '…T09:00:00.000Z' rows.
+//   room       filter by le.room (a core room key or a plugin id)
 //   alias      table alias prefix, e.g. 'le.' for joined queries.
 function buildEventFilter({
     tenantId,
@@ -48,6 +55,7 @@ function buildEventFilter({
     memberIds,
     startDate,
     endDate,
+    room,
     alias = '',
 } = {}) {
     const prefix = alias ? (alias.endsWith('.') ? alias : `${alias}.`) : '';
@@ -91,17 +99,22 @@ function buildEventFilter({
             params.push(...memberIds);
         }
     }
+    if (room) {
+        clauses.push(`${col('room')} = ?`);
+        params.push(String(room));
+    }
     if (startDate) {
         clauses.push(`${col('timestamp')} >= ?`);
-        params.push(startDate);
+        params.push(isDateOnly(startDate) ? startDate : (toIsoZ(startDate) ?? startDate));
     }
     if (endDate) {
         if (isDateOnly(endDate)) {
             clauses.push(`${col('timestamp')} < date(?, '+1 day')`);
+            params.push(endDate);
         } else {
             clauses.push(`${col('timestamp')} <= ?`);
+            params.push(toIsoZ(endDate) ?? endDate);
         }
-        params.push(endDate);
     }
 
     return { where: `WHERE ${clauses.join(' AND ')}`, params };
@@ -166,16 +179,40 @@ async function hourlyCounts(dbAdapter, filter) {
     return { hourly: grid };
 }
 
+/**
+ * Fold grouped rows whose verb is a historical alias into the canonical
+ * verb's row, summing the count. Done in JS after the GROUP BY rather than
+ * as a CASE inside it: a generated CASE in GROUP BY defeats
+ * idx_learning_events_verb and grows with every alias, while a post-merge
+ * over a few hundred grouped rows is free.
+ *
+ * @param {Array<object>} rows   grouped rows
+ * @param {string} verbKey       the field holding the verb ('verb' or 'label')
+ * @param {string} countKey      the field holding the count ('n' or 'count')
+ * @param {string[]} [alsoKey]   extra fields forming the group (e.g. ['day'])
+ */
+function mergeByCanonicalVerb(rows, verbKey, countKey, alsoKey = []) {
+    const merged = new Map();
+    for (const r of rows) {
+        const canonical = normalizeVerb(r[verbKey]);
+        const key = [canonical, ...alsoKey.map((k) => r[k])].join('\u0000');
+        const existing = merged.get(key);
+        if (existing) existing[countKey] += r[countKey];
+        else merged.set(key, { ...r, [verbKey]: canonical });
+    }
+    return [...merged.values()];
+}
+
 // GET /analytics/timeline-series contract — top 10 verbs by total,
 // remainder folded into a synthetic 'OTHER' series.
 async function timelineSeries(dbAdapter, filter) {
     const { where, params } = filter;
-    const rows = await dbAdapter.all(
+    const rows = mergeByCanonicalVerb(await dbAdapter.all(
         `SELECT date(timestamp) AS day, verb, COUNT(*) AS n
            FROM learning_events ${where}
           GROUP BY day, verb ORDER BY day, verb`,
         params
-    );
+    ), 'verb', 'n', ['day']);
     if (!rows.length) return { days: [], verbs: [], series: {} };
 
     const dayIdx = new Map();
@@ -208,12 +245,12 @@ async function timelineSeries(dbAdapter, filter) {
 // GET /analytics/stats contract — verb + object_type frequency.
 async function stats(dbAdapter, filter) {
     const { where, params } = filter;
-    const verbs = await dbAdapter.all(
+    const verbs = mergeByCanonicalVerb(await dbAdapter.all(
         `SELECT verb AS label, COUNT(*) AS count
            FROM learning_events ${where}
           GROUP BY verb ORDER BY count DESC`,
         params
-    );
+    ) || [], 'label', 'count').sort((a, b) => b.count - a.count);
     const objectTypes = await dbAdapter.all(
         `SELECT object_type AS label, COUNT(*) AS count
            FROM learning_events ${where}
@@ -239,87 +276,13 @@ async function topResources(dbAdapter, filter, limit = 10) {
     return { resources: rows || [] };
 }
 
-// Verb-merge map for TNA sequence construction. Lifted verbatim from the
-// admin route so both scopes collapse the same way. `null` means "drop
-// this event from the sequence" (system/config noise).
-const TNA_VERB_MERGE_MAP = {
-    // Navigation
-    'VIEWED': 'NAVIGATION',
-    'OPENED': 'NAVIGATION',
-    'CLOSED': 'NAVIGATION',
-    'NAVIGATED': 'NAVIGATION',
-    'SWITCHED_TAB': 'NAVIGATION',
-    'CLICKED': 'NAVIGATION',
-    'SELECTED': 'NAVIGATION',
-    'DESELECTED': 'NAVIGATION',
-    'TOGGLED': 'NAVIGATION',
-    'EXPANDED': 'NAVIGATION',
-    'COLLAPSED': 'NAVIGATION',
-    'SCROLLED': 'NAVIGATION',
-    // Lab/Investigation
-    'ORDERED_LAB': 'ORDERED_LAB',
-    'SEARCHED_LABS': 'ORDERED_LAB',
-    'FILTERED_LABS': 'ORDERED_LAB',
-    'CANCELLED_LAB': 'ORDERED_LAB',
-    // Lab results
-    'VIEWED_LAB_RESULT': 'VIEWED_LAB_RESULT',
-    'LAB_RESULT_READY': 'VIEWED_LAB_RESULT',
-    // Treatment
-    'ORDERED_MEDICATION': 'TREATMENT',
-    'ADMINISTERED_MEDICATION': 'TREATMENT',
-    'CANCELLED_MEDICATION': 'TREATMENT',
-    'ORDERED_TREATMENT': 'TREATMENT',
-    'PERFORMED_INTERVENTION': 'TREATMENT',
-    'ORDERED_IV_FLUID': 'TREATMENT',
-    'STARTED_OXYGEN': 'TREATMENT',
-    'STOPPED_OXYGEN': 'TREATMENT',
-    'ORDERED_NURSING': 'TREATMENT',
-    'DISCONTINUED_TREATMENT': 'TREATMENT',
-    'CONTRAINDICATED_TREATMENT_ORDERED': 'TREATMENT',
-    'EXPECTED_TREATMENT_GIVEN': 'TREATMENT',
-    'EXPECTED_TREATMENT_MISSED': 'TREATMENT',
-    // Examination
-    'PERFORMED_PHYSICAL_EXAM': 'EXAMINATION',
-    'OPENED_EXAM_PANEL': 'EXAMINATION',
-    'CLOSED_EXAM_PANEL': 'EXAMINATION',
-    // Communication
-    'SENT_MESSAGE': 'SENT_MESSAGE',
-    'RECEIVED_MESSAGE': 'RECEIVED_MESSAGE',
-    'COPIED_MESSAGE': 'SENT_MESSAGE',
-    'EDITED_MESSAGE': 'SENT_MESSAGE',
-    // Monitoring
-    'ADJUSTED_VITAL': 'MONITORING',
-    'VIEWED_TRENDS': 'MONITORING',
-    // Alarm response
-    'ACKNOWLEDGED_ALARM': 'ALARM_RESPONSE',
-    'SILENCED_ALARM': 'ALARM_RESPONSE',
-    'ALARM_TRIGGERED': 'ALARM_RESPONSE',
-    // Patient records
-    'VIEWED_PATIENT_SUMMARY': 'REVIEWED_RECORDS',
-    'VIEWED_HISTORY': 'REVIEWED_RECORDS',
-    'VIEWED_MEDICATIONS': 'REVIEWED_RECORDS',
-    'VIEWED_ALLERGIES': 'REVIEWED_RECORDS',
-    'VIEWED_PATIENT_INFO': 'REVIEWED_RECORDS',
-    'VIEWED_RECORDS': 'REVIEWED_RECORDS',
-    // System/config verbs excluded (mapped to null)
-    'STARTED_SESSION': null,
-    'ENDED_SESSION': null,
-    'RESUMED_SESSION': null,
-    'IDLE_TIMEOUT': null,
-    'CHANGED_SETTING': null,
-    'SAVED_SETTING': null,
-    'RESET_SETTING': null,
-    'LOADED_CASE': null,
-    'STARTED_SCENARIO': null,
-    'PAUSED_SCENARIO': null,
-    'RESUMED_SCENARIO': null,
-    'SUBMITTED': null,
-    'ANSWERED': null,
-    'ATTEMPTED': null,
-    'TREATMENT_EFFECT_STARTED': null,
-    'TREATMENT_EFFECT_PEAKED': null,
-    'TREATMENT_EFFECT_ENDED': null,
-};
+// Verb-merge map for TNA sequence construction, derived from the verb
+// registry's `tnaMerge` facet (server/shared/eventFacets.js) so plugin verbs
+// merge like rohy's own instead of surviving as rare singletons that the
+// minVerbPct pass then collapses to 'OTHER'. `null` means "drop this event
+// from the sequence" (session control, config, heartbeats). Exported under
+// the name of the literal it replaced.
+const TNA_VERB_MERGE_MAP = TNA_MERGE_MAP;
 
 // GET /analytics/tna-sequences contract. Pipeline (order matters):
 //   1. SELECT rows (filtered) joined to cases for the title.
@@ -330,14 +293,24 @@ const TNA_VERB_MERGE_MAP = {
 //   6. P95 chunking so one runaway tab can't blow up the distance matrix.
 //
 // `filter` must have been built with alias 'le.' (joined query).
+//
+// `lens` selects how each row is LABELLED before grouping:
+//   'tna'            (default) the historical merge map + rare-verb collapse —
+//                    byte-identical to the pre-lens behaviour
+//   any LENSES value  the shared activity resolver (server/shared/eventFacets.js)
+//                    — the SAME function the client dashboards label with, so
+//                    a cohort report and the admin dashboard agree. A curated
+//                    lens has no long tail, so the rare-verb collapse is skipped.
 async function tnaSequences(dbAdapter, filter, {
     minLen = 2,
     minVerbPct = 0.05,
     skipMerges = false,
     grouping = 'actor-session',
+    lens = 'tna',
 } = {}) {
+    const useLens = lens !== 'tna' && LENSES.includes(lens);
     const rows = await dbAdapter.all(
-        `SELECT le.user_id, le.session_id, le.verb, le.object_type, le.timestamp,
+        `SELECT le.user_id, le.session_id, le.verb, le.object_type, le.object_id, le.result, le.timestamp,
                 c.name AS case_title
            FROM learning_events le
            LEFT JOIN cases c ON c.id = le.case_id AND c.tenant_id = le.tenant_id
@@ -365,20 +338,31 @@ async function tnaSequences(dbAdapter, filter, {
     // 1. Apply verb merge unless skipped. Null mapping ⇒ drop event.
     const merged = [];
     for (const row of rows) {
-        let v = row.verb;
-        if (!skipMerges && Object.prototype.hasOwnProperty.call(TNA_VERB_MERGE_MAP, v)) {
-            v = TNA_VERB_MERGE_MAP[v];
-            if (v === null) continue;
+        if (useLens) {
+            merged.push({ ...row, verb: activityLabel(row.verb, row.object_type, lens, undefined, { objectId: row.object_id, result: row.result }) });
+            continue;
+        }
+        // Historical verb strings are read as their canonical name; a verb
+        // the registry has never heard of passes through raw so it stays
+        // visible rather than vanishing. The object type can refine a bare
+        // UI verb's target (a SEARCHED on a lab_test is ordering work).
+        let v = normalizeVerb(row.verb);
+        if (!skipMerges) {
+            const target = tnaMergeTarget(row.verb, row.object_type);
+            if (target !== undefined) {
+                if (target === null) continue;
+                v = target;
+            }
         }
         merged.push({ ...row, verb: v });
     }
 
-    // 2. Rare-verb collapsing.
+    // 2. Rare-verb collapsing (the 'tna' lens only).
     const verbCounts = Object.create(null);
     for (const m of merged) verbCounts[m.verb] = (verbCounts[m.verb] || 0) + 1;
     const totalEvents = merged.length;
     const rareVerbs = new Set();
-    if (minVerbPct > 0 && totalEvents > 0) {
+    if (!useLens && minVerbPct > 0 && totalEvents > 0) {
         for (const [v, count] of Object.entries(verbCounts)) {
             if (count / totalEvents < minVerbPct) rareVerbs.add(v);
         }
@@ -451,6 +435,7 @@ async function tnaSequences(dbAdapter, filter, {
             totalSequences: sequences.length,
             totalEvents,
             groupBy: grouping,
+            lens,
             uniqueVerbs: [...uniqueVerbs].sort(),
             uniqueObjectTypes: [...uniqueObjectTypes].sort(),
             caseTitle,
@@ -461,6 +446,7 @@ async function tnaSequences(dbAdapter, filter, {
 
 export {
     buildEventFilter,
+    mergeByCanonicalVerb,
     summary,
     dailyCounts,
     hourlyCounts,
