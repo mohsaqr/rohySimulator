@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.18] — 2026-09-05
+
+### Fixed
+
+- The strict plugin logger (dev/test) rejected the host's own `PluginAuthor` and `PluginRoom` component stamps, so every plugin authoring surface crashed with "Something went wrong in this view". `HOST_COMPONENTS` now pass the component gate; regression lock in `tests/client/plugins/plugin-logger.test.js`.
+
 ## [3.0.0-beta.17] — 2026-09-05
 
 ### Fixed

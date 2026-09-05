@@ -127,6 +127,13 @@ function byteLength(value) {
  * @param {boolean} [args.strict]     throw on a violation (default: dev/test)
  * @returns {(verb:string, objectType:string, options?:object) => object|null}
  */
+// Components the HOST owns and stamps on rows it writes about a plugin — the
+// generic room mount and the authoring slot. They are not in any plugin's
+// vocabulary because no plugin renders them, so the soft gate must not read
+// them as undeclared: in strict mode that threw inside PluginAuthor's effect
+// and took the whole editor down with "Something went wrong in this view".
+export const HOST_COMPONENTS = new Set(['PluginRoom', 'PluginAuthor']);
+
 export function createPluginLogger({ manifest, eventLogger, sessionId = null, surface = 'room', strict = isStrictByDefault() }) {
     const pluginId = manifest?.id ?? 'unknown';
     const pluginVersion = manifest?.version ?? null;
@@ -182,7 +189,7 @@ export function createPluginLogger({ manifest, eventLogger, sessionId = null, su
             context._undeclared = { ...(context._undeclared || {}), objectType };
         }
         let component = options.component ?? defaultComponent;
-        if (declaredComponents.length && !declaredComponents.includes(component)) {
+        if (declaredComponents.length && !declaredComponents.includes(component) && !HOST_COMPONENTS.has(component)) {
             fail(`component '${component}' is not declared in its manifest`);
             context._undeclared = { ...(context._undeclared || {}), component };
         }

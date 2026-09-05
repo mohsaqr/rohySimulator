@@ -162,6 +162,18 @@ describe('ctx.log — strict (dev/test)', () => {
         expect(() => log('DID_A_THING', 'demo_thing', { context: { answer: 'x' } })).toThrow(/prose keys \(answer\)/);
         expect(() => log('DID_A_THING', 'demo_thing', { objectName: 'a\nb' })).toThrow(/newline/);
     });
+    // Regression lock: the host stamps its own component on the rows it writes
+    // about a plugin (OPENED_PLUGIN_EDITOR from PluginAuthor, RAISED_ERROR from
+    // PluginRoom). Those names are in no plugin vocabulary, and the strict gate
+    // threw on them — which crashed every plugin's authoring surface in dev.
+    it('accepts the host-owned components without the plugin declaring them', () => {
+        const { log, eventLogger } = make({ strict: true, surface: 'author' });
+        expect(() => log('RAISED_ERROR', 'plugin_document', { component: 'PluginAuthor' })).not.toThrow();
+        expect(() => log('RAISED_ERROR', 'plugin_state', { component: 'PluginRoom' })).not.toThrow();
+        const [, , options] = lastCall(eventLogger);
+        expect(options.component).toBe('PluginRoom');
+        expect(options.context._undeclared).toBeUndefined();
+    });
     it('a clean call goes through', () => {
         const { log, eventLogger } = make({ strict: true });
         expect(() => log('DID_A_THING', 'demo_thing', { objectId: '1', context: { count: 2 } })).not.toThrow();
