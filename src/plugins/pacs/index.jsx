@@ -101,7 +101,9 @@ export default {
         // learner who has ordered something pays for it.
         needsCatalogue: imagingOrders(ctx).length > 0,
 
-        eventLogger: ctx.eventLogger,
+        // The narrowed logger (RPS-1 1.6). Radoyon 0.4 wraps it in its own
+        // createRadoyonLogger and speaks log(verb, objectType, options).
+        eventLogger: { log: ctx.log },
         // Upstream takes `t` as a prop rather than calling useTranslation()
         // itself, which would make the package unable to render outside a host
         // that had already mounted an i18n provider. This is the seam the
@@ -148,7 +150,9 @@ export default {
         // directly and know nothing about `remote:`.
         resolveRef: (uri) => resolveRemoteRef(uri, ctx.pluginId),
 
-        eventLogger: ctx.eventLogger,
+        // The narrowed logger (RPS-1 1.6). Radoyon 0.4 wraps it in its own
+        // createRadoyonLogger and speaks log(verb, objectType, options).
+        eventLogger: { log: ctx.log },
         t: ctx.t,
     }),
 };

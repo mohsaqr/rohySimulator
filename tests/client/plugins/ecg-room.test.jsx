@@ -31,7 +31,9 @@ const CASE_DOCUMENT = create_case_document({
 const ctx = {
     pluginId: 'ecg',
     data: CASE_DOCUMENT,
-    eventLogger: { log: vi.fn() },
+    // The narrowed logger (RPS-1 1.6): the adapter hands `{ log: ctx.log }` to
+    // create_ecg_logger.
+    log: vi.fn(),
     t: (key, fallback) => fallback ?? key,
     session: { examMode: false },
 };

@@ -8,13 +8,14 @@
  *
  * One deliberate difference. The workstation loads modules with dynamic
  * import() in a try/catch, so a deleted directory is a runtime miss. Rohy is
- * bundled by Vite, where a static import of a deleted file is a BUILD failure.
+ * bundled by Vite, where a static import { canonicalManifest, firstDifference } from '../../server/shared/pluginRegistry.js';
+import of a deleted file is a BUILD failure.
  * Discovery therefore uses import.meta.glob (src/plugins/index.js), which
  * resolves at build time against whatever directories actually exist — so
  * deleting a plugin folder still leaves a bootable app, and the property is
  * preserved rather than lost to the bundler.
  */
-import { roleAllows, validateManifest } from '../../server/shared/pluginRegistry.js';
+import { roleAllows, validateManifest, canonicalManifest, firstDifference } from '../../server/shared/pluginRegistry.js';
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 
 class PluginRegistry {
@@ -63,11 +64,13 @@ class PluginRegistry {
                 + `Its events would be rejected by the server.`
             );
         }
-        const declared = Object.keys(manifest.vocabulary?.verbs ?? {}).sort().join(',');
-        const shipped = Object.keys(frozen.vocabulary?.verbs ?? {}).sort().join(',');
-        if (declared !== shipped) {
+        // The WHOLE manifest, not the verb names: a re-vendor that changed a
+        // severity, a clinical state or an object type used to mount silently
+        // while the server persisted the old value.
+        const drift = firstDifference(canonicalManifest(manifest), canonicalManifest(frozen));
+        if (drift) {
             throw new Error(
-                `Plugin '${manifest.id}' vocabulary has drifted from the generated manifest — run \`npm run plugins:gen\`.`
+                `Plugin '${manifest.id}' has drifted from the generated manifest at '${drift}' — run \`npm run plugins:gen\`.`
             );
         }
         this.plugins.set(manifest.id, {

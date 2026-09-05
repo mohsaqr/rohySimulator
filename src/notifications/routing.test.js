@@ -36,18 +36,22 @@ describe('routeNotification', () => {
     expect(surfaces).toEqual(expect.arrayContaining([SURFACES.AUDIO, SURFACES.HISTORY, SURFACES.BACKEND]));
   });
 
-  it('still suppresses clinical critical when explicitly acked or snoozed', () => {
+  it('an acked or snoozed clinical critical is silenced on every surface but still recorded', () => {
+    // Regression lock: "stop shouting at me" is not "stop recording". The
+    // acked/snoozed branches used to return [] and the alarm rows a learner
+    // had already acknowledged vanished from learning_events — the one
+    // place a tutor looks to see that the alarm fired again.
     expect(routeNotification(
       notification(),
       DEFAULT_PREFS,
       transient({ acked: new Set(['alarm:hr_high']) })
-    )).toEqual([]);
+    )).toEqual([SURFACES.BACKEND]);
 
     expect(routeNotification(
       notification(),
       DEFAULT_PREFS,
       transient({ snoozed: new Map([['alarm:hr_high', Date.now() + 60_000]]) })
-    )).toEqual([]);
+    )).toEqual([SURFACES.BACKEND]);
   });
 
   it('suppresses non-critical notifications under blanket DND and severity rules', () => {
@@ -112,18 +116,18 @@ describe('routeNotification', () => {
     expect(surfaces).toEqual([SURFACES.BACKEND]);
   });
 
-  it('still suppresses everything, BACKEND included, for an acked or snoozed key', () => {
+  it('keeps BACKEND, and only BACKEND, for an acked or snoozed telemetry key', () => {
     expect(routeNotification(
       debugTelemetry(),
       DEFAULT_PREFS,
       transient({ acked: new Set(['telemetry:NAVIGATED:room:lab']) }),
-    )).toEqual([]);
+    )).toEqual([SURFACES.BACKEND]);
 
     expect(routeNotification(
       debugTelemetry(),
       DEFAULT_PREFS,
       transient({ snoozed: new Map([['telemetry:NAVIGATED:room:lab', Date.now() + 60_000]]) }),
-    )).toEqual([]);
+    )).toEqual([SURFACES.BACKEND]);
   });
 
   it('leaves a blanket-muted notification with no BACKEND route fully silent', () => {

@@ -104,7 +104,7 @@ export default {
         pathologyCase: learnerCase(ctx.data),
         caseTitle: readCaseDocument(ctx.data)?.manifest?.title ?? undefined,
 
-        eventLogger: ctx.eventLogger,
+        eventLogger: { log: ctx.log },
         examMode: ctx.session.examMode,
 
         // Upstream used to call `useTranslation()` itself, which quietly made

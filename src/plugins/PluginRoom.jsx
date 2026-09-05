@@ -100,7 +100,7 @@ export function PluginRoom({
         // the learner reloaded and found their work gone.
         Promise.resolve(base.store.set('state', state)).then((ok) => {
             if (ok === false) {
-                base.eventLogger?.log?.('ERROR_OCCURRED', 'plugin_state', {
+                base.log('RAISED_ERROR', 'plugin_state', {
                     objectId: base.pluginId,
                     result: 'persist_failed',
                     severity: 'IMPORTANT',
@@ -126,7 +126,7 @@ export function PluginRoom({
         <ErrorBoundary
             scope={`plugin:${pluginId}`}
             onError={(error) => {
-                ctx?.eventLogger?.log?.('ERROR_OCCURRED', 'plugin_render', {
+                ctx?.log?.('RAISED_ERROR', 'plugin_render', {
                     objectId: pluginId,
                     result: error?.message ?? 'render error',
                     severity: 'IMPORTANT',

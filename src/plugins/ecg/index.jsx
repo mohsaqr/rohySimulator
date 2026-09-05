@@ -25,7 +25,8 @@ export default {
   },
   props: (ctx, persist) => ({
     ecg_case: learner_case(ctx.data),
-    event_logger: ctx.eventLogger,
+    // The narrowed logger (RPS-1 1.6); create_ecg_logger wraps `{log}`.
+    event_logger: { log: ctx.log },
     exam_mode: ctx.session.examMode,
     initial_work: persist.state,
     on_work_change: (next) => persist.save(next),

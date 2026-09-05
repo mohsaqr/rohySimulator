@@ -13,8 +13,12 @@
  * The same reasoning applies to identity. `log()` and `store` CLOSE OVER the
  * session id — a plugin never passes one, so it cannot log into another
  * learner's session, and inheriting the session is automatic rather than a
- * parameter someone can get wrong.
+ * parameter someone can get wrong. `log` is the narrowed logger from
+ * ./logger.js; the raw EventLogger singleton is no longer handed over.
  */
+
+import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
+import { createPluginLogger, deprecatedEventLoggerProxy } from './logger.js';
 
 /**
  * Async key/value store scoped to one plugin, one session.
@@ -185,10 +189,18 @@ export function frozenCopy(value) {
     return freeze(copy);
 }
 
-export function createPluginContext({ manifest, session, caseConfig, eventLogger, notify, t, navigate, grants = {} }) {
+export function createPluginContext({ manifest, session, caseConfig, eventLogger, notify, t, navigate, grants = {}, surface = 'room' }) {
     const id = manifest.id;
     const requested = manifest.capabilities ?? [];
     const capabilities = {};
+
+    // The narrowed logger (RPS-1 1.6 §6). Closes over the plugin, the session
+    // and the surface; refuses undeclared verbs; stamps room/plugin on every
+    // row. The FROZEN manifest is what the server validates against, so it is
+    // what the logger checks against too — a runtime descriptor that drifted
+    // would otherwise pass here and fail at ingest.
+    const frozen = PLUGIN_MANIFESTS.find((m) => m.id === id) ?? manifest;
+    const log = createPluginLogger({ manifest: frozen, eventLogger, sessionId: session?.id ?? null, surface });
 
     if (requested.includes('llm') && typeof grants.complete === 'function') {
         capabilities.llm = { complete: grants.complete };
@@ -202,6 +214,12 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
     // drawer state; the plugin names a tab and nothing more.
     if (requested.includes('drawer') && typeof grants.openDrawer === 'function') {
         capabilities.openDrawer = grants.openDrawer;
+    }
+    // Live vitals, read-only, as a getter: the 3D room mirrors the monitor's
+    // signal at 1 Hz and used to read the EventLogger singleton's field for
+    // it — the one host reference RPS-1 §6 forbids. A frozen copy per call.
+    if (requested.includes('vitals') && typeof grants.vitals === 'function') {
+        capabilities.vitals = () => frozenCopy(grants.vitals() ?? null);
     }
     if (requested.includes('notify') && typeof notify === 'function') {
         // `source` LAST: spreading payload last let a plugin overwrite the
@@ -240,9 +258,15 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
         data: requested.includes('remote')
             ? resolveRemoteRefs(caseConfig?.[id] ?? null, id)
             : (caseConfig?.[id] ?? null),
-        // The host's logger, unwrapped. The plugin's own createXLogger()
-        // helper (if it ships one) wraps this to enforce its vocabulary.
-        eventLogger,
+        // The narrowed logger: `log(verb, objectType, options)`. A plugin's
+        // own createXLogger() helper wraps THIS.
+        log,
+        surface,
+        // DEPRECATED (removed in 1.7): the raw singleton is gone. This shim
+        // forwards `log` to ctx.log and throws on the methods that mutated
+        // global state, so a vendored package written against the old
+        // contract keeps working for one release while the leak is closed.
+        eventLogger: deprecatedEventLoggerProxy(log, id),
         capabilities,
         store,
         t,

@@ -92,7 +92,7 @@ function stubNetwork({ catalog = ARCHIVE, catalogStatus = 200, radiologyStatus =
 const ctx = {
     pluginId: 'pacs',
     data: null,
-    eventLogger: { log: vi.fn() },
+    log: vi.fn(),
     t: (key, fallback) => fallback ?? key,
 };
 
