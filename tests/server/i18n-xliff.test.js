@@ -140,7 +140,16 @@ describe('i18n:status', () => {
         expect(res.code).toBe(0);
         const status = readJson(join(root, '.status', 'it.json'));
         expect(Object.keys(status)).toEqual(['chat.bp_label', 'chat.items', 'chat.plain', 'common.patient_count', 'common.save']);
-        expect(status['chat.bp_label']).toEqual({ src: hash(EN.chat.bp_label), state: 'machine', reviewed_at: null, reviewer: null, risk: 'clinical' });
+        expect(status['chat.bp_label']).toEqual({
+            src: hash(EN.chat.bp_label),
+            tgt: hash(IT.chat.bp_label),
+            state: 'machine',
+            origin: 'machine',
+            locked: false,
+            reviewed_at: null,
+            reviewer: null,
+            risk: 'clinical'
+        });
         expect(status['common.save'].risk).toBe('low');
         // Idempotent and preserves per-key overrides.
         status['common.save'].risk = 'clinical';
@@ -504,5 +513,194 @@ describe('real locale tree (read-only smoke)', () => {
             expect(['new', 'machine', 'reviewed', 'approved'], id).toContain(e.state);
             expect(['low', 'clinical'], id).toContain(e.risk);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 0 — "written in stone": tgt hashing, i18n:lock, i18n:verify, and the
+// hold-back that stops the machine pass overwriting a human's translation.
+
+/** Run scripts/translate-locales.mjs (one level up from scripts/i18n). */
+function runTranslate(args, root) {
+    try {
+        const stdout = execFileSync(process.execPath, [join(REPO, 'scripts', 'translate-locales.mjs'), ...args, `--root=${root}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        return { code: 0, stdout, stderr: '' };
+    } catch (err) {
+        return { code: err.status, stdout: err.stdout ?? '', stderr: err.stderr ?? '' };
+    }
+}
+
+const statusOf = (root, lang = 'it') => readJson(join(root, '.status', `${lang}.json`));
+const putStatus = (root, status, lang = 'it') => writeJson(join(root, '.status', `${lang}.json`), status);
+
+describe('i18n:verify', () => {
+    beforeEach(() => { run('status.mjs', ['--bootstrap'], root); });
+
+    it('passes on an untouched tree and records tgt for every bootstrapped key', () => {
+        const res = run('verify.mjs', ['it'], root);
+        expect(res.code).toBe(0);
+        expect(res.stdout).toContain('every recorded translation still matches its hash');
+        expect(statusOf(root)['chat.plain'].tgt).toBe(hash(IT.chat.plain));
+    });
+
+    it('FAILS when an approved translation is overwritten, and names the key', () => {
+        const status = statusOf(root);
+        status['chat.plain'] = { ...status['chat.plain'], state: 'approved', reviewer: 'M. Rossi' };
+        putStatus(root, status);
+        const cat = readJson(join(root, 'it', 'chat.json'));
+        cat.plain = 'Testo sostituito dalla macchina';
+        writeJson(join(root, 'it', 'chat.json'), cat);
+
+        const res = run('verify.mjs', ['it'], root);
+        expect(res.code).toBe(1);
+        expect(res.stdout).toContain('TAMPERED chat.plain');
+        expect(res.stderr).toContain('i18n:verify FAILED');
+    });
+
+    it('reports an edited machine string as drift, not failure, and points at i18n:lock', () => {
+        const cat = readJson(join(root, 'it', 'chat.json'));
+        cat.plain = 'Ciao a tutti';
+        writeJson(join(root, 'it', 'chat.json'), cat);
+
+        const res = run('verify.mjs', ['it'], root);
+        expect(res.code).toBe(0);
+        expect(res.stdout).toContain('machine drift        : 1');
+        expect(res.stdout).toContain('npm run i18n:lock');
+    });
+
+    it('--backfill stamps entries written before tgt existed', () => {
+        const status = statusOf(root);
+        delete status['chat.plain'].tgt;          // an entry from the old shape
+        putStatus(root, status);
+
+        expect(run('verify.mjs', ['it'], root).stdout).toContain('unstamped (no tgt)   : 1');
+        const res = run('verify.mjs', ['it', '--backfill'], root);
+        expect(res.code).toBe(0);
+        expect(res.stdout).toContain('backfilled 1');
+        expect(statusOf(root)['chat.plain'].tgt).toBe(hash(IT.chat.plain));
+    });
+});
+
+describe('i18n:lock', () => {
+    beforeEach(() => { run('status.mjs', ['--bootstrap'], root); });
+
+    it('marks named keys human + locked at the current text, recording the reviewer', () => {
+        const res = run('lock.mjs', ['it', 'chat.plain', '--reviewer=M. Rossi'], root);
+        expect(res.code).toBe(0);
+        const entry = statusOf(root)['chat.plain'];
+        expect(entry).toMatchObject({
+            state: 'reviewed', origin: 'human', locked: true, reviewer: 'M. Rossi',
+            src: hash(EN.chat.plain), tgt: hash(IT.chat.plain)
+        });
+        expect(entry.reviewed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('--all-changed picks up hand edits and nothing else', () => {
+        const cat = readJson(join(root, 'it', 'chat.json'));
+        cat.plain = 'Salve!';
+        writeJson(join(root, 'it', 'chat.json'), cat);
+
+        const res = run('lock.mjs', ['it', '--all-changed', '--reviewer=M. Rossi'], root);
+        expect(res.code).toBe(0);
+        expect(res.stdout).toContain('chat.plain');
+        const status = statusOf(root);
+        expect(status['chat.plain']).toMatchObject({ origin: 'human', locked: true, tgt: hash('Salve!') });
+        expect(status['chat.bp_label'].locked).toBe(false);   // untouched key stays machine
+    });
+
+    it('--dry-run writes nothing; --unlock releases the key again', () => {
+        const before = JSON.stringify(statusOf(root));
+        expect(run('lock.mjs', ['it', 'chat.plain', '--dry-run'], root).stdout).toContain('[dry-run]');
+        expect(JSON.stringify(statusOf(root))).toBe(before);
+
+        run('lock.mjs', ['it', 'chat.plain', '--state=approved'], root);
+        expect(statusOf(root)['chat.plain']).toMatchObject({ state: 'approved', locked: true });
+        run('lock.mjs', ['it', 'chat.plain', '--unlock'], root);
+        expect(statusOf(root)['chat.plain'].locked).toBe(false);
+    });
+
+    it('rejects an unknown key and a language outside the registry', () => {
+        expect(run('lock.mjs', ['it', 'chat.nope'], root).code).toBe(2);
+        expect(run('lock.mjs', ['zz', 'chat.plain'], root).code).toBe(2);
+    });
+});
+
+describe('translate-locales: protected keys are never overwritten', () => {
+    /** en moves under an existing translation — the case that used to clobber it. */
+    function moveEnglishUnder(key = 'plain') {
+        run('status.mjs', ['--bootstrap'], root);
+        // .en-hashes.json records the en each translation was made from.
+        const hashes = {};
+        for (const [ns, obj] of Object.entries(EN)) {
+            hashes[ns] = Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, hash(v)]));
+        }
+        writeJson(join(root, '.en-hashes.json'), hashes);
+        const en = readJson(join(root, 'en', 'chat.json'));
+        en[key] = `${EN.chat[key]} (reworded)`;
+        writeJson(join(root, 'en', 'chat.json'), en);
+    }
+
+    // Regression lock: an approved translation must survive the English moving.
+    // Before this, computeDeltas() sent the key back to the LLM and the
+    // reviewer's words were overwritten on disk with no trace.
+    it('holds back an approved key instead of queueing it for retranslation', () => {
+        moveEnglishUnder();
+        const status = statusOf(root);
+        status['chat.plain'] = { ...status['chat.plain'], state: 'approved', reviewer: 'M. Rossi' };
+        putStatus(root, status);
+
+        const res = runTranslate(['it', '--check'], root);
+        expect(res.stdout).toContain('Held back 1 key(s)');
+        expect(res.stdout).toContain('it: chat(1)');
+        // chat.new_key is genuinely absent from IT and stays a delta; the point
+        // is that chat.plain did NOT join it.
+        expect(res.stderr).toContain('it/chat: 1 key(s)');
+    });
+
+    it('queues the same key when it is only machine-translated', () => {
+        moveEnglishUnder();
+        const res = runTranslate(['it', '--check'], root);
+        expect(res.stdout).not.toContain('Held back');
+        expect(res.stderr).toContain('it/chat: 2 key(s)');   // new_key + plain
+    });
+
+    it('--force-stale releases reviewed keys but still refuses a locked one', () => {
+        moveEnglishUnder();
+        run('lock.mjs', ['it', 'chat.plain'], root);          // reviewed + locked
+        expect(runTranslate(['it', '--check', '--force-stale'], root).stdout).toContain('Held back 1 key(s)');
+
+        run('lock.mjs', ['it', 'chat.plain', '--unlock'], root);  // reviewed, not locked
+        const res = runTranslate(['it', '--check', '--force-stale'], root);
+        expect(res.stdout).not.toContain('Held back');
+        expect(res.stderr).toContain('it/chat: 2 key(s)');
+    });
+});
+
+describe('translate-locales: unreviewed clinical glossary', () => {
+    // A glossary constrains every other string in a language. Shipping ~4,400
+    // strings built on renderings no clinician has agreed is the expensive
+    // mistake, and it is not visible in any diff — so the pass refuses.
+    it('refuses a language whose glossary is still a draft, before spending anything', () => {
+        mkdirSync(join(root, 'fr'), { recursive: true });
+        writeJson(join(root, 'fr', 'chat.json'), {});
+        const res = runTranslate(['fr'], root);
+        expect(res.code).toBe(3);
+        expect(res.stderr).toContain('Refusing to translate into a language with an unreviewed glossary');
+        expect(res.stdout + res.stderr).toContain('DRAFT');
+    });
+
+    it('--accept-draft-glossary proceeds past the refusal (and then needs credentials)', () => {
+        mkdirSync(join(root, 'fr'), { recursive: true });
+        writeJson(join(root, 'fr', 'chat.json'), {});
+        const res = runTranslate(['fr', '--accept-draft-glossary'], root);
+        // Past the glossary gate; stops at the token step, which is the next
+        // thing a real run needs. Exit 3 would mean the gate never opened.
+        expect(res.code).toBe(2);
+        expect(res.stderr).toContain('ROHY_TOKEN');
+    });
+
+    it('a reviewed-glossary language is not gated', () => {
+        const res = runTranslate(['it', '--check'], root);
+        expect(res.stdout + res.stderr).not.toContain('unreviewed glossary');
     });
 });

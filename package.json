@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "3.0.0-beta.23",
+  "version": "3.0.0-beta.24",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -54,10 +54,12 @@
     "i18n:pseudo": "node scripts/generate-pseudo-locale.mjs",
     "i18n:translate": "node scripts/translate-locales.mjs",
     "i18n:status": "node scripts/i18n/status.mjs",
+    "i18n:lock": "node scripts/i18n/lock.mjs",
+    "i18n:verify": "node scripts/i18n/verify.mjs",
     "i18n:xliff:export": "node scripts/i18n/xliff-export.mjs",
     "i18n:xliff:import": "node scripts/i18n/xliff-import.mjs",
     "plugins:gen": "node scripts/gen-plugin-manifests.mjs",
-    "plugins:check": "node scripts/gen-plugin-manifests.mjs --check && node scripts/check-plugin-emissions.mjs --check",
+    "plugins:check": "node scripts/gen-plugin-manifests.mjs --check && node scripts/check-plugin-emissions.mjs --check && node scripts/check-plugin-locales.mjs --check",
     "plugins:emissions": "node scripts/check-plugin-emissions.mjs",
     "vendor": "node scripts/vendor-plugins.mjs",
     "vendor:check": "node scripts/vendor-plugins.mjs --check",
@@ -66,7 +68,9 @@
     "starter-content": "node scripts/build-starter-content.mjs",
     "setup:content": "node scripts/setup-content.mjs",
     "pack:content": "node scripts/pack-content.mjs",
-    "website:gaze-screens": "node website/export-gaze-screens.mjs"
+    "website:gaze-screens": "node website/export-gaze-screens.mjs",
+    "plugins:locales": "node scripts/check-plugin-locales.mjs",
+    "i18n:glossary": "node scripts/i18n/glossary-check.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

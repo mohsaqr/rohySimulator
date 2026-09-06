@@ -24,7 +24,10 @@ a spreadsheet. This is the maintainer + reviewer companion to
 ```json
 "orders.give_dose": {
   "src": "f914c04d377f",
+  "tgt": "811a0eb6a207",
   "state": "reviewed",
+  "origin": "xliff",
+  "locked": false,
   "reviewed_at": "2026-08-16T09:12:00.000Z",
   "reviewer": "M. Rossi",
   "risk": "clinical"
@@ -34,9 +37,18 @@ a spreadsheet. This is the maintainer + reviewer companion to
 - `src` — `sha256(english value)[:12]`, the same hash `translate-locales.mjs`
   records. When English changes, the stored hash no longer matches and the
   string is **stale** regardless of its state.
+- `tgt` — `sha256(translation)[:12]`. Where `src` says the **English**
+  moved, `tgt` says the **translation** moved. Without it a reviewed string
+  could be overwritten — by the machine pass, a bad merge, a stray edit — and
+  nothing in the tree would know. `npm run i18n:verify` holds the tree to it.
 - `state` — `machine` (LLM-translated, never seen by a human), `reviewed`
   (a native reviewer accepted or rewrote it), `approved` (signed off), `new`
   (reserved; not written by the tools today).
+- `origin` — where the text came from: `machine`, `human` (`i18n:lock`),
+  `xliff` (an imported round-trip), `plugin` (shipped by a plugin package),
+  `upstream`, or `db` (reserved for the backend language editor).
+- `locked` — written in stone. `i18n:translate` refuses the key even under
+  `--force-stale`; only `i18n:lock --unlock` clears it.
 - `risk` — `clinical` for the namespaces where a wrong word can change a
   dose or a diagnosis (`orders`, `treatments`, `monitor`, `investigations`,
   `examination`, `patient`, `chat`, `authoring_meds`, `authoring_labs`,
@@ -45,6 +57,54 @@ a spreadsheet. This is the maintainer + reviewer companion to
 
 The initial bootstrap marked every existing translation `machine` — that is
 honest: they were produced by `i18n:translate` and no human has signed them.
+
+### What the machine pass will not touch
+
+`translate-locales.mjs` reads the sidecar before it queues anything. A key
+whose state is `reviewed` or `approved`, or which is `locked`, is **held
+back** and reported rather than retranslated:
+
+```
+Held back 3 key(s) — reviewed/approved/locked translations whose English changed:
+  it: orders(2) chat(1)
+  Re-export these for review (npm run i18n:xliff:export) rather than retranslating.
+```
+
+The English moving underneath a human's translation is a reason to re-export
+it for review, never a licence to discard their words. `--force-stale` opts
+into retranslating `reviewed`/`approved` keys; nothing releases a `locked`
+one but an explicit unlock.
+
+### Claiming a string without a round-trip — `npm run i18n:lock`
+
+The XLIFF round-trip is the formal path, but it is not the only way a string
+becomes a person's words: someone edits `src/locales/it/chat.json` directly,
+or fixes a phrase in review. Those edits used to leave no trace — the sidecar
+still said `machine`, and the next pass would overwrite them.
+
+```bash
+npm run i18n:lock -- it chat.send_button common.save --reviewer="M. Saqr"
+npm run i18n:lock -- it --all-changed --reviewer="M. Saqr"   # every hand edit since the last stamp
+npm run i18n:lock -- it --all-changed --dry-run
+npm run i18n:lock -- it chat.send_button --unlock
+```
+
+`--all-changed` finds them by comparing each translation against its recorded
+`tgt`: text that no longer hashes to what the tools wrote was edited by a
+person.
+
+### Holding the tree to it — `npm run i18n:verify`
+
+```bash
+npm run i18n:verify                 # every language
+npm run i18n:verify -- it --json
+npm run i18n:verify -- --backfill   # stamp tgt on entries predating it
+npm run i18n:verify -- --strict     # machine drift fails too
+```
+
+Exit 1 when a protected string no longer matches its hash. A **machine**
+string that changed is reported as drift, not failure — that is usually a
+hand edit, and the fix is to record it with `i18n:lock`, not revert it.
 
 Every script accepts `--root=<dir>` (or `ROHY_LOCALES_ROOT`) to operate on
 another locale tree; the tests use it so they never write the real
