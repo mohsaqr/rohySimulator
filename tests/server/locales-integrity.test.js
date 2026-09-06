@@ -20,7 +20,38 @@ import { fileURLToPath } from 'node:url';
 import { parse } from '@formatjs/icu-messageformat-parser';
 
 const LOCALES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'locales');
-const TRANSLATED = ['it', 'fi', 'sv', 'de', 'es'];
+// Locales held to FULL parity with English. Deliberately a list, not
+// Object.keys(LANGUAGES): a language joins the registry before it is
+// translated, and holding a half-seeded locale to "every English namespace"
+// would fail for the whole time it is being filled in.
+//
+// Every registry language is now held to full parity — fr and kk both joined
+// on 2026-09-06 once all 28 namespaces landed. A language belongs here the
+// moment its catalogue is complete; until then it is the one locale nothing
+// checks, so do not leave a new one out for long.
+const TRANSLATED = ['it', 'fi', 'sv', 'de', 'es', 'fr', 'kk'];
+
+/**
+ * Namespaces a locale may not carry in full yet — a RATCHET, not an excuse.
+ *
+ * English keys land in the repo before they are translated: the translation
+ * pass needs a live server and `/api/proxy/llm`, so there is a real window
+ * with no green state. Seeding the English verbatim instead is worse — it
+ * would satisfy the key-set check while tripping (or, for non-plural strings,
+ * silently defeating) the "no English leftovers" locks below, which exist
+ * precisely to catch a copied English shell.
+ *
+ * So the gap is declared, bounded and visible. A locale may be MISSING up to
+ * N keys of the named namespace and never more, and may NEVER carry a key
+ * English does not have. Lower the number as translation lands; raising it
+ * takes a deliberate edit that shows up in review.
+ */
+const AWAITING_TRANSLATION = {
+    // Empty, and that is the point: every namespace is fully translated in
+    // every locale held to parity. The oyon allowance opened at 383 on
+    // 2026-09-06 and closed the same day. Add an entry only for a namespace
+    // genuinely mid-translation, and delete it the moment it lands.
+};
 const GENERATED = ['en-XA'];
 
 const readNs = (lng, file) => JSON.parse(readFileSync(join(LOCALES_DIR, lng, file), 'utf8'));
@@ -60,10 +91,15 @@ describe.each([...TRANSLATED, ...GENERATED])('locale %s', (lng) => {
         }
     });
 
-    it.each(enFiles)('%s: key set identical to en', (file) => {
+    it.each(enFiles)('%s: key set matches en, within any declared translation allowance', (file) => {
         const en = Object.keys(readNs('en', file)).sort();
         const target = Object.keys(readNs(lng, file)).sort();
-        expect(target).toEqual(en);
+        // An EXTRA key is always a defect: nothing can ever render it.
+        expect(target.filter(k => !en.includes(k)), `${lng}/${file} has keys en does not`).toEqual([]);
+        const missing = en.filter(k => !target.includes(k));
+        const allowance = AWAITING_TRANSLATION[file] ?? 0;
+        expect(missing.length, `${lng}/${file}: ${missing.length} key(s) missing, allowance ${allowance}`)
+            .toBeLessThanOrEqual(allowance);
     });
 
     it.each(enFiles)('%s: every string compiles as ICU with en-matching arguments', (file) => {
@@ -109,11 +145,12 @@ const MUST_BE_TRANSLATED = {
     'common.json': [
         'radoyon_worklist_empty', 'radoyon_author_intro', 'radoyon_studies_count',
         'radoyon_tools_label', 'radoyon_status_pending', 'room_pacs_sub', 'room_pacs_author',
-        'error_boundary_title', 'oyon_press_camera',
+        'error_boundary_title',
     ],
     'discussion.json': ['tutor_reply_failed'],
     'examination.json': ['section_demographics', 'no_labs_returned', 'debrief_total_points'],
     'first_run.json': ['case_card_error'],
+    'oyon.json': ['press_camera', 'reconsent_title', 'card_toggle'],
     'help.json': ['drawer_title', 'tour_student_welcome_body', 'article_getting_started', 'group_using', 'support_intro'],
     'investigations.json': ['radiologist_credentials'],
     'profile.json': ['field_label_name', 'field_label_grade'],
