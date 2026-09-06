@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.31] — 2026-09-06
+
+### Changed
+
+- Regenerated `docs/reference/config/index.md`. Line-number drift only, from the i18n script edits — `docs:check` compares the generated reference against what is committed, so it has to land in the same series.
+
 ## [3.0.0-beta.30] — 2026-09-06
 
 ### Changed
