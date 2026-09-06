@@ -42,18 +42,18 @@ describe('OyonConsentUpdate', () => {
     it('asks a learner who accepted only the older contract', async () => {
         mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' } });
         render(<OyonConsentUpdate />);
-        await waitFor(() => expect(screen.getByText('oyon_reconsent_title')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('reconsent_title')).toBeInTheDocument());
         // The added data classes are named, not summarised away.
-        expect(screen.getByText('oyon_reconsent_item_typing')).toBeInTheDocument();
-        expect(screen.getByText('oyon_reconsent_item_interaction')).toBeInTheDocument();
-        expect(screen.getByText('oyon_reconsent_item_discourse')).toBeInTheDocument();
+        expect(screen.getByText('reconsent_item_typing')).toBeInTheDocument();
+        expect(screen.getByText('reconsent_item_interaction')).toBeInTheDocument();
+        expect(screen.getByText('reconsent_item_discourse')).toBeInTheDocument();
     });
 
     it('stays silent once the learner is on the current contract', async () => {
         mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v2' } });
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-        expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 
     // Declining is an answer, not an absence of one.
@@ -61,7 +61,7 @@ describe('OyonConsentUpdate', () => {
         mockApi({ onboarding: { oyon_consent: false, oyon_consent_version: 'oyon-consent-v1' } });
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-        expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 
     // Someone who never answered belongs to the first-run card, not here.
@@ -69,23 +69,23 @@ describe('OyonConsentUpdate', () => {
         mockApi({ onboarding: {} });
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-        expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 
     it('says nothing when the tenant runs no Oyon', async () => {
         mockApi({ enabled: false, onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' } });
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-        expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 
     it('records the version it displayed, and dismisses', async () => {
         mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' } });
         render(<OyonConsentUpdate />);
-        await waitFor(() => expect(screen.getByText('oyon_reconsent_title')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('reconsent_title')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('oyon_reconsent_accept'));
-        await waitFor(() => expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument());
+        fireEvent.click(screen.getByText('reconsent_accept'));
+        await waitFor(() => expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument());
 
         const put = apiFetch.mock.calls.find(([url, opts]) => url === '/users/preferences' && opts?.method === 'PUT');
         expect(put[1].json.onboarding_settings).toEqual({
@@ -98,10 +98,10 @@ describe('OyonConsentUpdate', () => {
     it('records a refusal so the prompt does not return', async () => {
         mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' } });
         render(<OyonConsentUpdate />);
-        await waitFor(() => expect(screen.getByText('oyon_reconsent_title')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('reconsent_title')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('oyon_reconsent_decline'));
-        await waitFor(() => expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument());
+        fireEvent.click(screen.getByText('reconsent_decline'));
+        await waitFor(() => expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument());
 
         const put = apiFetch.mock.calls.find(([url, opts]) => url === '/users/preferences' && opts?.method === 'PUT');
         expect(put[1].json.onboarding_settings.oyon_consent).toBe(false);
@@ -114,6 +114,6 @@ describe('OyonConsentUpdate', () => {
         apiFetch.mockRejectedValue(new Error('offline'));
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-        expect(screen.queryByText('oyon_reconsent_title')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 });

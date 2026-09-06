@@ -51,15 +51,18 @@ export function fmtTime(ts) {
 // Quality verdict for a per-student rollup. Surfaces uncertainty before the
 // educator reads the values — high missingness or low confidence means the
 // model didn't have a strong signal, full stop. Returns one of:
-//   { level: 'green' | 'amber' | 'red', label: string }
+//   { level: 'green' | 'amber' | 'red', labelKey: string }
+// `labelKey` names a key in the `oyon` catalogue (the five quality_* entries)
+// rather than English prose, so the verdict stays a pure, language-free fact
+// and the view does the translating.
 export function qualityVerdict({ mean_confidence, mean_missing_face_ratio }) {
    const conf = Number(mean_confidence);
    const miss = Number(mean_missing_face_ratio);
-   if (Number.isFinite(conf) && conf < 0.3) return { level: 'red', label: 'low signal' };
-   if (Number.isFinite(miss) && miss > 0.4) return { level: 'red', label: 'face often missing' };
-   if (Number.isFinite(conf) && conf < 0.5) return { level: 'amber', label: 'borderline confidence' };
-   if (Number.isFinite(miss) && miss > 0.2) return { level: 'amber', label: 'partial face tracking' };
-   return { level: 'green', label: 'good signal' };
+   if (Number.isFinite(conf) && conf < 0.3) return { level: 'red', labelKey: 'quality_low_signal' };
+   if (Number.isFinite(miss) && miss > 0.4) return { level: 'red', labelKey: 'quality_face_often_missing' };
+   if (Number.isFinite(conf) && conf < 0.5) return { level: 'amber', labelKey: 'quality_borderline_confidence' };
+   if (Number.isFinite(miss) && miss > 0.2) return { level: 'amber', labelKey: 'quality_partial_face_tracking' };
+   return { level: 'green', labelKey: 'quality_good_signal' };
 }
 
 // ──────────────────────────────────────────────────────────────────────

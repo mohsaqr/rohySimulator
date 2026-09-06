@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.26] — 2026-09-06
+
+### Added
+
+- **The Oyon analytics module has its own `oyon` namespace** — 407 keys, translated into German, Spanish, Finnish, Italian and Swedish. It had 22 `t()` calls and ~380 hardcoded strings; it now has 381.
+
+### Changed
+
+- The 24 pre-existing `oyon_*` keys moved out of `app`, `common` and `first_run` into the new namespace, carrying their five translations **and their review state** — the `.status` entries were renamed with their `src`/`tgt` hashes intact, so nothing lost its provenance. Call sites outside the module (`TopBarControls.jsx`, `StudentFirstRun.jsx`) were updated with them.
+- Every `count === 1` ternary in the module became an ICU plural. Picking between a singular and a plural key in JavaScript is wrong in Finnish and Swedish, which is the reason the repo mandates ICU for all messages.
+- `emotionLogShared.qualityVerdict()` returns a `labelKey` instead of English prose, so the rollup itself is language-free.
+
 ## [3.0.0-beta.25] — 2026-09-06
 
 ### Added

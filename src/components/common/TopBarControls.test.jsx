@@ -95,7 +95,7 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
         const menu = screen.getByRole('menu');
         // Regression lock: the pre-existing entry must survive the addition.
         expect(within(menu).getByText('emotion_analytics')).toBeInTheDocument();
-        expect(within(menu).getByText('oyon_dashboard')).toBeInTheDocument();
+        expect(within(menu).getByText('oyon:dashboard')).toBeInTheDocument();
     });
 
     it('invokes onOpenOyonDashboard, leaving the emotion-analytics handler alone', () => {
@@ -103,7 +103,7 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
         const onOpenEmotionAnalytics = vi.fn();
         setup({ canSeeOyonAnalytics: true, onOpenOyonDashboard, onOpenEmotionAnalytics });
         openMenu();
-        fireEvent.click(screen.getByText('oyon_dashboard'));
+        fireEvent.click(screen.getByText('oyon:dashboard'));
         expect(onOpenOyonDashboard).toHaveBeenCalledTimes(1);
         expect(onOpenEmotionAnalytics).not.toHaveBeenCalled();
     });
@@ -111,7 +111,7 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
     it('hides the Oyon dashboard entry from users without Oyon read access', () => {
         setup({ canSeeOyonAnalytics: false });
         openMenu();
-        expect(screen.queryByText('oyon_dashboard')).not.toBeInTheDocument();
+        expect(screen.queryByText('oyon:dashboard')).not.toBeInTheDocument();
     });
 });
 

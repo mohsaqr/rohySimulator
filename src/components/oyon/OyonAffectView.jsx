@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Smile } from 'lucide-react';
 import EdgeBundling from '../analytics/charts/EdgeBundling';
 import { affectAnalytics } from './affectAnalytics';
@@ -28,6 +29,7 @@ const INSTABILITY_COLOR = '#d97706';
 const PLANE_CAP = 200;
 
 export default function OyonAffectView({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const { summary, timeline, plane, distribution, dynamics } = useMemo(
       () => affectAnalytics(records),
       [records],
@@ -37,7 +39,7 @@ export default function OyonAffectView({ records, loading }) {
    if (loading && summary.windows === 0) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            Loading affect data…
+            {t('affect_loading')}
          </div>
       );
    }
@@ -46,9 +48,7 @@ export default function OyonAffectView({ records, loading }) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Smile className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-            No windows in the current selection. Affect appears once emotion
-            windows have been captured — run a capture (or widen the filters),
-            then refresh.
+            {t('affect_empty')}
          </div>
       );
    }
@@ -57,52 +57,48 @@ export default function OyonAffectView({ records, loading }) {
       <div className="rohy-admin-light space-y-5">
          {/* KPI chips — the element's summary row */}
          <div className="flex flex-wrap gap-2">
-            <Stat label="Windows" value={String(summary.windows)} />
-            <Stat label="Latest state" value={summary.latestState ?? '—'} accent capitalizeValue />
+            <Stat label={t('stat_windows')} value={String(summary.windows)} />
+            <Stat label={t('stat_latest_state')} value={summary.latestState ?? '—'} accent capitalizeValue />
             <Stat
-               label="Latest quality"
+               label={t('stat_latest_quality')}
                value={pct(summary.latestQuality)}
-               hint="1 − missing-face ratio of the newest window."
+               hint={t('hint_latest_quality')}
             />
-            <Stat label="Analyzed" value={String(summary.analyzedWindows)} hint="Windows with dynamics (stored or computed)." />
+            <Stat label={t('stat_analyzed')} value={String(summary.analyzedWindows)} hint={t('hint_analyzed')} />
             <Stat
-               label="Affect speed"
+               label={t('stat_affect_speed')}
                value={fmtNum(summary.affectSpeed)}
-               hint="Velocity across the valence–arousal plane at the newest window (units/s)."
+               hint={t('hint_affect_speed')}
             />
             <Stat
-               label="Instability"
+               label={t('stat_instability')}
                value={fmtNum(summary.instability)}
-               hint="0–1 composite of affect speed, volatility, entropy, missingness and label switching."
+               hint={t('hint_instability')}
             />
          </div>
 
          {/* Capture timeline */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Capture timeline</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               Dominant expression per window — bar color is the emotion, bar height its
-               probability. Newest on the right.
-            </p>
-            <EmotionStrip points={timeline} height={150} ariaLabel="Capture timeline" />
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_capture_timeline')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('capture_timeline_hint')}</p>
+            <EmotionStrip points={timeline} height={150} ariaLabel={t('section_capture_timeline')} />
          </section>
 
          {/* Affect plane */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Affect plane</h3>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_affect_plane')}</h3>
             <p className="mb-3 text-xs text-gray-500">
-               Valence × arousal — recent windows fade into a trail (newest is the halo dot
-               {plane.length > PLANE_CAP ? `; last ${PLANE_CAP} of ${plane.length} shown` : ''}).
+               {plane.length > PLANE_CAP
+                  ? t('affect_plane_hint_capped', { cap: PLANE_CAP, total: plane.length })
+                  : t('affect_plane_hint')}
             </p>
-            <AffectPlane points={plane} />
+            <AffectPlane points={plane} t={t} />
          </section>
 
          {/* Emotion distribution */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Emotion distribution</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               Count of windows per dominant expression (top 10).
-            </p>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_emotion_distribution')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('emotion_distribution_hint')}</p>
             <DistributionBars rows={distribution} total={summary.windows} />
          </section>
 
@@ -111,17 +107,17 @@ export default function OyonAffectView({ records, loading }) {
              weight = number of people sharing the pair (pure
              coEmotionNetwork module). */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Co-occurring emotions</h3>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_co_emotions')}</h3>
             <div className="mb-3 grid gap-2 sm:grid-cols-3">
-               <MiniMetric label="Model channels" value={coEmotion.stats.modelChannelCount || '—'} />
-               <MiniMetric label="Dominant labels" value={coEmotion.stats.observedDominantCount || '—'} />
-               <MiniMetric label="Linked pairs" value={coEmotion.stats.edgeCount || 0} />
+               <MiniMetric label={t('metric_model_channels')} value={coEmotion.stats.modelChannelCount || '—'} />
+               <MiniMetric label={t('metric_dominant_labels')} value={coEmotion.stats.observedDominantCount || '—'} />
+               <MiniMetric label={t('metric_linked_pairs')} value={coEmotion.stats.edgeCount || 0} />
             </div>
             {coEmotion.stats.reason ? (
                <p className="text-sm text-gray-500">
                   {coEmotion.stats.reason === 'no-emotions'
-                     ? 'No estimated emotions in this selection yet.'
-                     : 'No co-occurring emotions yet — only one emotion, or one person, is present. Widen the filters.'}
+                     ? t('co_emotions_none')
+                     : t('co_emotions_single')}
                </p>
             ) : (
                <EdgeBundling
@@ -135,15 +131,12 @@ export default function OyonAffectView({ records, loading }) {
 
          {/* Dynamics timeline */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Dynamics timeline</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               Affect speed and instability per window (clamped to 0–1, the element's
-               scale). Gaps mark windows where a signal could not be derived.
-            </p>
-            <DynamicsChart dynamics={dynamics} />
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_dynamics_timeline')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('dynamics_timeline_hint')}</p>
+            <DynamicsChart dynamics={dynamics} t={t} />
             <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-gray-500">
-               <LegendItem label="Affect speed" color={SPEED_COLOR} />
-               <LegendItem label="Instability" color={INSTABILITY_COLOR} />
+               <LegendItem label={t('stat_affect_speed')} color={SPEED_COLOR} />
+               <LegendItem label={t('stat_instability')} color={INSTABILITY_COLOR} />
             </div>
          </section>
       </div>
@@ -195,14 +188,12 @@ const clampAffect = (v) => Math.max(-1, Math.min(1, v));
 // SVG port of the element's AffectPad canvas: cross grid, axis labels,
 // fading trail, latest halo dot. Per-point <title> tooltips add the emotion
 // and circumplex quadrant.
-function AffectPlane({ points }) {
+function AffectPlane({ points, t }) {
    const all = Array.isArray(points) ? points : [];
    const trail = all.slice(Math.max(0, all.length - PLANE_CAP));
    if (trail.length === 0) {
       return (
-         <p className="text-sm text-gray-500">
-            No valence/arousal samples in these windows — the capture model may not emit V/A.
-         </p>
+         <p className="text-sm text-gray-500">{t('plane_no_samples_va')}</p>
       );
    }
    const S = 320;
@@ -219,31 +210,38 @@ function AffectPlane({ points }) {
          height={S}
          className="mx-auto block h-auto max-w-full rounded border border-gray-200 bg-gray-100"
          role="img"
-         aria-label="Valence–arousal plane"
+         aria-label={t('aria_valence_arousal_plane')}
       >
          {/* Cross grid */}
          <line x1={S / 2} x2={S / 2} y1={0} y2={S} stroke="#d1d5db" strokeWidth={1} />
          <line x1={0} x2={S} y1={S / 2} y2={S / 2} stroke="#d1d5db" strokeWidth={1} />
          {/* Axis labels */}
-         <text x={S / 2} y={12} textAnchor="middle" fontSize={10} fill="#6b7280">high arousal</text>
-         <text x={S / 2} y={S - 5} textAnchor="middle" fontSize={10} fill="#6b7280">low arousal</text>
-         <text x={5} y={S / 2 - 5} textAnchor="start" fontSize={10} fill="#6b7280">negative</text>
-         <text x={S - 5} y={S / 2 - 5} textAnchor="end" fontSize={10} fill="#6b7280">positive</text>
+         <text x={S / 2} y={12} textAnchor="middle" fontSize={10} fill="#6b7280">{t('plane_high_arousal')}</text>
+         <text x={S / 2} y={S - 5} textAnchor="middle" fontSize={10} fill="#6b7280">{t('plane_low_arousal')}</text>
+         <text x={5} y={S / 2 - 5} textAnchor="start" fontSize={10} fill="#6b7280">{t('plane_negative')}</text>
+         <text x={S - 5} y={S / 2 - 5} textAnchor="end" fontSize={10} fill="#6b7280">{t('plane_positive')}</text>
          {/* Trail line */}
          <path d={path} fill="none" stroke="#0f766e" strokeWidth={1.5} opacity={0.35} strokeLinejoin="round" />
          {/* Trail dots — older = smaller + dimmer */}
          {trail.map((p, i) => {
-            const t = (i + 1) / trail.length;
+            const fade = (i + 1) / trail.length;
             return (
                <circle
                   key={i}
                   cx={toX(p.v)}
                   cy={toY(p.a)}
-                  r={2 + t * 4}
+                  r={2 + fade * 4}
                   fill="#0f766e"
-                  opacity={0.15 + t * 0.85}
+                  opacity={0.15 + fade * 0.85}
                >
-                  <title>{`${p.emotion} · v ${isNum(p.v) ? p.v.toFixed(2) : '—'} · a ${isNum(p.a) ? p.a.toFixed(2) : '—'} · ${p.quadrant ?? '—'}`}</title>
+                  <title>
+                     {t('plane_point_tooltip', {
+                        emotion: p.emotion,
+                        valence: isNum(p.v) ? p.v.toFixed(2) : '—',
+                        arousal: isNum(p.a) ? p.a.toFixed(2) : '—',
+                        quadrant: p.quadrant ?? '—',
+                     })}
+                  </title>
                </circle>
             );
          })}
@@ -257,11 +255,11 @@ function AffectPlane({ points }) {
 // Two-series 0..1 line chart (SVG) — port of legacy drawDynamics: affect
 // speed + instability per window, both clamped into the unit interval; a
 // null breaks the pen so underivable windows show as gaps.
-function DynamicsChart({ dynamics }) {
+function DynamicsChart({ dynamics, t }) {
    const rows = Array.isArray(dynamics) ? dynamics : [];
    const hasData = rows.some((d) => isNum(d.speed) || isNum(d.instability));
    if (!hasData) {
-      return <p className="text-sm text-gray-500">No dynamics — needs at least two consecutive windows with valence/arousal.</p>;
+      return <p className="text-sm text-gray-500">{t('dynamics_none')}</p>;
    }
    const W = 600;
    const H = 170;
@@ -294,12 +292,12 @@ function DynamicsChart({ dynamics }) {
    ];
 
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Dynamics timeline">
-         {[0, 0.5, 1].map((t) => (
-            <g key={t}>
-               <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#d1d5db" strokeWidth={0.5} />
-               <text x={padL - 4} y={y(t) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
-                  {t.toFixed(1)}
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={t('section_dynamics_timeline')}>
+         {[0, 0.5, 1].map((tick) => (
+            <g key={tick}>
+               <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#d1d5db" strokeWidth={0.5} />
+               <text x={padL - 4} y={y(tick) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
+                  {tick.toFixed(1)}
                </text>
             </g>
          ))}

@@ -29,7 +29,7 @@ const PAGE = 200;
 const CAP = 1000;
 
 export default function OyonDashboardRoom({ onClose }) {
-   const { t } = useTranslation('app');
+   const { t } = useTranslation('oyon');
    const [records, setRecords] = useState(null);
    const [modalities, setModalities] = useState([]);
    const [truncated, setTruncated] = useState(false);
@@ -124,17 +124,17 @@ export default function OyonDashboardRoom({ onClose }) {
    return (
       <div className="h-screen w-screen overflow-hidden flex flex-col bg-slate-950">
          <header className="flex items-center gap-3 px-4 py-2 border-b border-slate-800 shrink-0">
-            <h1 className="text-sm font-semibold text-slate-100">{t('oyon_dashboard')}</h1>
+            <h1 className="text-sm font-semibold text-slate-100">{t('dashboard')}</h1>
             {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
             {records && (
                <span className="text-xs text-slate-400">
-                  {t('oyon_dashboard_window_count', { count: records.length })}
-                  {truncated ? ` · ${t('oyon_dashboard_truncated')}` : ''}
+                  {t('dashboard_window_count', { count: records.length })}
+                  {truncated ? ` · ${t('dashboard_truncated')}` : ''}
                </span>
             )}
             {sessions.length > 0 && (
                <label className="flex items-center gap-1.5 text-xs text-slate-400">
-                  {t('oyon_dashboard_session')}
+                  {t('dashboard_session')}
                   <select
                      value={activeSession || ''}
                      onChange={(e) => setPickedSession(e.target.value)}
@@ -164,7 +164,7 @@ export default function OyonDashboardRoom({ onClose }) {
                type="button"
                onClick={onClose}
                className="ml-auto p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-100"
-               aria-label={t('close')}
+               aria-label={t('common:close')}
             >
                <X className="w-4 h-4" />
             </button>
@@ -174,7 +174,7 @@ export default function OyonDashboardRoom({ onClose }) {
             <div className="m-4 rounded-md border border-red-500/30 bg-red-950/40 px-3 py-3 text-sm text-red-200">
                <div className="flex items-center gap-2 font-semibold">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {t('oyon_dashboard_load_failed')}
+                  {t('dashboard_load_failed')}
                </div>
                <div className="mt-1 text-red-300/80">{error}</div>
             </div>

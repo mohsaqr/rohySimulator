@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download } from 'lucide-react';
 import LogGrid, { CopyableCell } from '../analytics/LogGrid';
 import { buildCsv, downloadCsv } from '../analytics/csvExport';
@@ -85,84 +86,90 @@ function gazeLogRows(records) {
       });
 }
 
-const COLUMNS = [
-   {
-      accessorKey: 'ts',
-      header: 'time',
-      size: 165,
-      cell: (info) => (
-         <CopyableCell value={info.getValue()} className="font-mono text-neutral-400 whitespace-nowrap">
-            {fmtTime(info.getValue())}
-         </CopyableCell>
-      ),
-   },
-   { accessorKey: 'username', header: 'user', size: 110,
-     cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
-   { accessorKey: 'case_title', header: 'case', size: 150,
-     cell: (info) => (
-        <div className="truncate max-w-[150px]" title={info.getValue() ?? ''}>
-           <CopyableCell value={info.getValue()} className="text-neutral-300" />
-        </div>
-     ) },
-   { accessorKey: 'session_id', header: 'session', size: 80,
-     cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400" /> },
-   { accessorKey: 'room', header: 'room', size: 110,
-     meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.room) },
-     cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-300" /> },
-   { accessorKey: 'n_points', header: 'points', size: 70,
-     cell: (info) => <span className="font-mono text-neutral-300">{info.getValue() ?? '—'}</span> },
-   { accessorKey: 'dominant_zone', header: 'zone', size: 120,
-     meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.dominant_zone) },
-     cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
-   { accessorKey: 'looking_at', header: 'looking at', size: 110,
-     meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.looking_at) },
-     cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
-   { accessorKey: 'zones_top', header: 'top zones', size: 260,
-     cell: (info) => (
-        <div className="truncate max-w-[260px]" title={info.getValue() ?? ''}>
-           <CopyableCell value={info.getValue()} className="text-neutral-400" />
-        </div>
-     ) },
-   { accessorKey: 'focus', header: 'focus', size: 70,
-     cell: (info) => <span className="font-mono text-neutral-300">{fix2(info.getValue())}</span> },
-   { accessorKey: 'off_screen', header: 'off-screen', size: 85,
-     cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
-   { accessorKey: 'patient_gaze', header: 'patient', size: 80,
-     cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
-   { accessorKey: 'dispersion', header: 'dispersion', size: 90,
-     cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue(), 3)}</span> },
-   { accessorKey: 'dominant_emotion', header: 'emotion', size: 95,
-     meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.dominant_emotion) },
-     cell: (info) => {
-        const v = info.getValue();
-        if (!v) return <span className="text-neutral-600">—</span>;
-        return (
-           <span
-              className="px-1.5 py-0.5 rounded font-medium text-[11px] text-neutral-900"
-              style={{ background: emotionColor(v) }}
-           >
-              {v}
-           </span>
-        );
-     } },
-   { accessorKey: 'centroid_x', header: 'cx', size: 70,
-     cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue())}</span> },
-   { accessorKey: 'centroid_y', header: 'cy', size: 70,
-     cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue())}</span> },
-   { accessorKey: 'gaze_entropy', header: 'entropy', size: 80,
-     cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue(), 3)}</span> },
-   { accessorKey: 'calibration_quality', header: 'calib', size: 80,
-     cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
-   { accessorKey: 'record_id', header: 'record', size: 160,
-     cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
-   { accessorKey: 'user_id', header: 'user id', size: 80,
-     cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
-   { accessorKey: 'case_id', header: 'case id', size: 80,
-     cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
-];
+// Column headers are literal catalogue keys; the CSV keeps the raw field
+// names (CSV_FIELDS) so a download never changes shape with the UI language.
+function buildColumns(t) {
+   return [
+      {
+         accessorKey: 'ts',
+         header: t('gazelog_col_time'),
+         size: 165,
+         cell: (info) => (
+            <CopyableCell value={info.getValue()} className="font-mono text-neutral-400 whitespace-nowrap">
+               {fmtTime(info.getValue())}
+            </CopyableCell>
+         ),
+      },
+      { accessorKey: 'username', header: t('gazelog_col_user'), size: 110,
+        cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
+      { accessorKey: 'case_title', header: t('gazelog_col_case'), size: 150,
+        cell: (info) => (
+           <div className="truncate max-w-[150px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-300" />
+           </div>
+        ) },
+      { accessorKey: 'session_id', header: t('gazelog_col_session'), size: 80,
+        cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-400" /> },
+      { accessorKey: 'room', header: t('gazelog_col_room'), size: 110,
+        meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.room) },
+        cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-300" /> },
+      { accessorKey: 'n_points', header: t('gazelog_col_points'), size: 70,
+        cell: (info) => <span className="font-mono text-neutral-300">{info.getValue() ?? '—'}</span> },
+      { accessorKey: 'dominant_zone', header: t('gazelog_col_zone'), size: 120,
+        meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.dominant_zone) },
+        cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
+      { accessorKey: 'looking_at', header: t('gazelog_col_looking_at'), size: 110,
+        meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.looking_at) },
+        cell: (info) => <CopyableCell value={info.getValue()} className="text-neutral-200" /> },
+      { accessorKey: 'zones_top', header: t('gazelog_col_top_zones'), size: 260,
+        cell: (info) => (
+           <div className="truncate max-w-[260px]" title={info.getValue() ?? ''}>
+              <CopyableCell value={info.getValue()} className="text-neutral-400" />
+           </div>
+        ) },
+      { accessorKey: 'focus', header: t('gazelog_col_focus'), size: 70,
+        cell: (info) => <span className="font-mono text-neutral-300">{fix2(info.getValue())}</span> },
+      { accessorKey: 'off_screen', header: t('gazelog_col_off_screen'), size: 85,
+        cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
+      { accessorKey: 'patient_gaze', header: t('gazelog_col_patient'), size: 80,
+        cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
+      { accessorKey: 'dispersion', header: t('gazelog_col_dispersion'), size: 90,
+        cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue(), 3)}</span> },
+      { accessorKey: 'dominant_emotion', header: t('gazelog_col_emotion'), size: 95,
+        meta: { filterOptions: (rows) => uniqueValues(rows, (r) => r.dominant_emotion) },
+        cell: (info) => {
+           const v = info.getValue();
+           if (!v) return <span className="text-neutral-600">—</span>;
+           return (
+              <span
+                 className="px-1.5 py-0.5 rounded font-medium text-[11px] text-neutral-900"
+                 style={{ background: emotionColor(v) }}
+              >
+                 {v}
+              </span>
+           );
+        } },
+      { accessorKey: 'centroid_x', header: t('gazelog_col_cx'), size: 70,
+        cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue())}</span> },
+      { accessorKey: 'centroid_y', header: t('gazelog_col_cy'), size: 70,
+        cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue())}</span> },
+      { accessorKey: 'gaze_entropy', header: t('gazelog_col_entropy'), size: 80,
+        cell: (info) => <span className="font-mono text-neutral-300">{num(info.getValue(), 3)}</span> },
+      { accessorKey: 'calibration_quality', header: t('gazelog_col_calib'), size: 80,
+        cell: (info) => <span className="font-mono text-neutral-300">{pct(info.getValue())}</span> },
+      { accessorKey: 'record_id', header: t('gazelog_col_record'), size: 160,
+        cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
+      { accessorKey: 'user_id', header: t('gazelog_col_user_id'), size: 80,
+        cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
+      { accessorKey: 'case_id', header: t('gazelog_col_case_id'), size: 80,
+        cell: (info) => <CopyableCell value={info.getValue()} className="font-mono text-neutral-500" /> },
+   ];
+}
 
 export default function OyonGazeLogView({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const rows = useMemo(() => gazeLogRows(records), [records]);
+   const columns = useMemo(() => buildColumns(t), [t]);
 
    const exportCsv = useCallback((exportRows) => {
       downloadCsv(
@@ -176,21 +183,21 @@ export default function OyonGazeLogView({ records, loading }) {
          onClick={() => exportCsv(visibleRows)}
          disabled={visibleRows.length === 0}
          className="px-2 py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded text-xs text-white flex items-center gap-1 disabled:opacity-50"
-         title="Download the currently listed gaze rows as CSV (all gaze fields)"
+         title={t('gazelog_csv_title')}
       >
-         <Download className="w-3 h-3" /> CSV
+         <Download className="w-3 h-3" /> {t('export_csv')}
       </button>
-   ), [exportCsv]);
+   ), [exportCsv, t]);
 
    return (
       <LogGrid
-         columns={COLUMNS}
+         columns={columns}
          data={rows}
          loading={loading}
          initialSorting={[{ id: 'ts', desc: true }]}
          initialColumnVisibility={INITIAL_HIDDEN}
          headerActions={headerActions}
-         emptyMessage="No gaze windows match the current filters."
+         emptyMessage={t('gazelog_empty')}
          storageKey="loggrid.oyon.gaze"
       />
    );

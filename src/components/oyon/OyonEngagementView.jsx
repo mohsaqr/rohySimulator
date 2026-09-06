@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Gauge } from 'lucide-react';
 import { engagementAnalytics, meanGazeEntropy, focusTone } from './engagementAnalytics';
 import { fix2 } from './emotionLogShared';
@@ -24,6 +25,13 @@ import { fix2 } from './emotionLogShared';
 const FOCUS_COLOR = '#0f766e';
 const EYE_COLOR = '#0891b2';
 
+// Focus-tone → catalogue key for the chip's hint (enum lookup, literal keys).
+const FOCUS_HINT_KEYS = {
+   ok: 'hint_focus_ok',
+   warn: 'hint_focus_warn',
+   bad: 'hint_focus_bad',
+};
+
 const TONE_STYLES = {
    ok:   { box: 'border-emerald-600/50 bg-emerald-950/40', text: 'text-emerald-200' },
    warn: { box: 'border-amber-600/50 bg-amber-950/40',     text: 'text-amber-200' },
@@ -31,6 +39,7 @@ const TONE_STYLES = {
 };
 
 export default function OyonEngagementView({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const { summary, series } = useMemo(() => engagementAnalytics(records), [records]);
    const avgEntropy = useMemo(() => meanGazeEntropy(records), [records]);
    const tone = focusTone(summary.avgFocus);
@@ -38,7 +47,7 @@ export default function OyonEngagementView({ records, loading }) {
    if (loading && summary.windows === 0) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            Loading engagement data…
+            {t('engagement_loading')}
          </div>
       );
    }
@@ -47,9 +56,7 @@ export default function OyonEngagementView({ records, loading }) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Gauge className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-            No engagement data in the current selection. Engagement arrives with
-            windows captured by the v2 pill (mediapipe engine, on by default) —
-            run a capture, then refresh.
+            {t('engagement_empty')}
          </div>
       );
    }
@@ -60,41 +67,38 @@ export default function OyonEngagementView({ records, loading }) {
       <div className="rohy-admin-light space-y-5">
          {/* Summary chips — the element's Metric row */}
          <div className="flex flex-wrap gap-2">
-            <Stat label="Windows" value={String(summary.windows)} />
-            <Stat label="Engagement windows" value={`${summary.engagementWindows} / ${summary.windows}`} />
+            <Stat label={t('stat_windows')} value={String(summary.windows)} />
+            <Stat label={t('stat_engagement_windows')} value={`${summary.engagementWindows} / ${summary.windows}`} />
             <Stat
-               label="Mean focus"
+               label={t('stat_mean_focus')}
                value={fix2(summary.avgFocus)}
                tone={tone}
-               hint={tone === null
-                  ? 'No focus data in these windows.'
-                  : `0–1 focus score; ${tone === 'ok' ? 'good (> 0.6)' : tone === 'warn' ? 'borderline (0.4–0.6)' : 'poor (≤ 0.4)'}.`}
+               hint={tone === null ? t('hint_focus_none') : t(FOCUS_HINT_KEYS[tone])}
             />
             <Stat
-               label="Mean blink"
+               label={t('stat_mean_blink')}
                value={Number.isFinite(summary.avgBlinkHz) ? `${summary.avgBlinkHz.toFixed(2)} Hz` : '—'}
             />
-            <Stat label="Mean openness" value={fix2(summary.avgEyeOpenness)} hint="Mean eye-openness (0–1) over the windows that carry it." />
-            <Stat label="Mean entropy" value={fix2(avgEntropy)} hint="Mean gaze entropy — higher means gaze scattered over more of the screen." />
+            <Stat label={t('stat_mean_openness')} value={fix2(summary.avgEyeOpenness)} hint={t('hint_mean_openness')} />
+            <Stat label={t('stat_mean_entropy')} value={fix2(avgEntropy)} hint={t('hint_mean_entropy')} />
          </div>
 
          {/* Focus & openness over time — the element's EngagementTimeline */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Focus &amp; openness over time</h3>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_focus_openness')}</h3>
             <p className="mb-3 text-xs text-gray-500">
-               Per-window focus score and eye openness (0–1). Gaps mean no engagement
-               block for that window.
+               {t('focus_openness_hint')}
                {summary.sessions > 1 && (
-                  <> Windows from {summary.sessions} sessions are concatenated
-                  chronologically — filter to a single session for a true timeline
-                  (the Attention tab adds the lapse strip there).</>
+                  <> {t('focus_openness_multi_session', { count: summary.sessions })}</>
                )}
             </p>
-            <EngagementTimeline series={series} />
+            <EngagementTimeline series={series} t={t} />
             <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-               <LegendItem label="Focus" color={FOCUS_COLOR} />
-               <LegendItem label="Eye openness" color={EYE_COLOR} />
-               <span className="ml-auto tabular-nums">{withEngagement}/{summary.windows} windows with engagement</span>
+               <LegendItem label={t('legend_focus')} color={FOCUS_COLOR} />
+               <LegendItem label={t('legend_eye_openness')} color={EYE_COLOR} />
+               <span className="ml-auto tabular-nums">
+                  {t('windows_with_engagement', { count: withEngagement, total: summary.windows })}
+               </span>
             </div>
          </section>
       </div>
@@ -128,11 +132,11 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 // Two-series 0..1 line chart (SVG) — port of the element's
 // EngagementTimeline canvas: focus + eye openness share one axis; a null
 // breaks the pen so sensing gaps show as gaps, never interpolated lines.
-function EngagementTimeline({ series }) {
+function EngagementTimeline({ series, t }) {
    const rows = Array.isArray(series) ? series : [];
    const usable = rows.filter((p) => isNum(p.focus) || isNum(p.eyeOpenness));
    if (usable.length === 0) {
-      return <p className="text-sm text-gray-500">No engagement data in these windows.</p>;
+      return <p className="text-sm text-gray-500">{t('engagement_no_data_windows')}</p>;
    }
    const W = 600;
    const H = 190;
@@ -165,12 +169,12 @@ function EngagementTimeline({ series }) {
    ];
 
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Engagement timeline">
-         {[0, 0.5, 1].map((t) => (
-            <g key={t}>
-               <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#d1d5db" strokeWidth={0.5} />
-               <text x={padL - 4} y={y(t) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
-                  {t.toFixed(1)}
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={t('aria_engagement_timeline')}>
+         {[0, 0.5, 1].map((tick) => (
+            <g key={tick}>
+               <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#d1d5db" strokeWidth={0.5} />
+               <text x={padL - 4} y={y(tick) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
+                  {tick.toFixed(1)}
                </text>
             </g>
          ))}
