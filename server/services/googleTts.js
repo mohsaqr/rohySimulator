@@ -102,6 +102,17 @@ export const GOOGLE_VOICES = [
     { filename: 'sv-SE-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (SV male)',        gender: 'male',   language: 'sv-SE' },
 
     // Spanish (Spain)
+    { filename: 'fr-FR-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (FR female)',     gender: 'female', language: 'fr-FR' },
+    { filename: 'fr-FR-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (FR female)',      gender: 'female', language: 'fr-FR' },
+    { filename: 'fr-FR-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (FR male)',      gender: 'male',   language: 'fr-FR' },
+    { filename: 'fr-FR-Chirp3-HD-Puck',      displayName: 'Chirp3 HD-Puck (FR male)',        gender: 'male',   language: 'fr-FR' },
+
+    // Kazakh is deliberately absent: Google Cloud TTS publishes no kk-KZ voice
+    // in any family. Kazakh speech comes from Piper instead, and the
+    // never-mute audit reports the gap until a .onnx is installed. See the
+    // NO_GOOGLE_VOICE exemption in tests/server/services/googleTts.test.js —
+    // inventing an id here would fail at synthesis, not at boot.
+
     { filename: 'es-ES-Chirp3-HD-Aoede',     displayName: 'Chirp3 HD-Aoede (ES female)',     gender: 'female', language: 'es-ES' },
     { filename: 'es-ES-Chirp3-HD-Kore',      displayName: 'Chirp3 HD-Kore (ES female)',      gender: 'female', language: 'es-ES' },
     { filename: 'es-ES-Chirp3-HD-Charon',    displayName: 'Chirp3 HD-Charon (ES male)',      gender: 'male',   language: 'es-ES' },

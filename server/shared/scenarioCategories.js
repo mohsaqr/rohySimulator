@@ -75,7 +75,7 @@ export const SCENARIO_CATEGORY_LABEL_KEYS = Object.fromEntries(
  * `tests/server/scenario-language.test.js` reads every locale's `category_*`
  * value and asserts it resolves; add the label here when you add a language.
  */
-export const SCENARIO_CATEGORY_ALIASES = {
+const CORE_ALIASES = {
     Cardiac: [
         'Cardiovascular', 'Cardiology', 'Heart', 'Kardial', 'Kardiologie',
         'Kardiologisch', 'Cardíaco', 'Cardíaca', 'Cardiaco', 'Cardiaca', 'Cardiología', 'Cardiologico', 'Cardiologica',
@@ -121,6 +121,36 @@ export const SCENARIO_CATEGORY_ALIASES = {
         'Lapset', 'Pediatrisk', 'Pediatrik',
     ],
 };
+
+/**
+ * French and Kazakh spellings, added when those two languages joined the
+ * registry.
+ *
+ * Their own block rather than edits inside CORE_ALIASES, because a Cyrillic
+ * label shares no letters with its canonical id: `foldSpelling` lowercases
+ * and strips punctuation but does NOT transliterate, so 'Сепсис' has to be
+ * listed even though the id is already 'Sepsis'. Every catalogue LABEL in
+ * src/locales/{fr,kk}/authoring_scenarios.json appears here — a label that
+ * does not resolve means a scenario authored in that UI language fails on
+ * import (tests/server/scenario-language.test.js pins exactly that).
+ */
+const LATER_LANGUAGE_ALIASES = {
+    Cardiac: ['Cardiaque', 'Cardiologie', 'Cardio', 'Кардиологиялық', 'Кардиология', 'Жүрек'],
+    Respiratory: ['Respiratoire', 'Pneumologie', 'Poumon', 'Респираторлық', 'Пульмонология', 'Тыныс алу', 'Өкпе'],
+    Sepsis: ['Septique', 'Infection', 'Сепсис', 'Септикалық', 'Инфекция'],
+    Metabolic: ['Métabolique', 'Métabolisme', 'Endocrinologie', 'Метаболикалық', 'Метаболизм', 'Эндокринология'],
+    Neurological: ['Neurologique', 'Neurologie', 'Неврологиялық', 'Неврология', 'Жүйке'],
+    Trauma: ['Traumatisme', 'Травма', 'Жарақат'],
+    Toxicology: ['Toxicologie', 'Intoxication', 'Токсикология', 'Улану'],
+    General: ['Général', 'Générale', 'Жалпы'],
+    Recovery: ['Récupération', 'Réadaptation', 'Convalescence', 'Қалпына келтіру', 'Оңалту'],
+    Pediatric: ['Pédiatrie', 'Pédiatrique', 'Педиатрия', 'Балалар'],
+};
+
+/** Every spelling of every category, in one map. */
+export const SCENARIO_CATEGORY_ALIASES = Object.fromEntries(
+    Object.entries(CORE_ALIASES).map(([id, spellings]) => [id, [...spellings, ...(LATER_LANGUAGE_ALIASES[id] || [])]])
+);
 
 // Built once: folded id or alias → canonical id.
 const LOOKUP = buildLookup(SCENARIO_CATEGORY_IDS, SCENARIO_CATEGORY_ALIASES, foldSpelling);

@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { auditPersonaAndCaseVoices } from '../../../server/healthChecks/voiceCatalogueAudit.js';
+import { LANGUAGES } from '../../../server/shared/languages.js';
 
 function makeDbAdapter({ settings = {}, rows = [] }) {
     return {
@@ -56,9 +57,13 @@ describe('auditPersonaAndCaseVoices (Voice 2.0)', () => {
         const adapter = makeDbAdapter({ settings: {}, rows: [] });
         const result = await auditPersonaAndCaseVoices(adapter, log);
         const unset = result.defaults.filter(d => d.status === 'unset').map(d => d.language).sort();
-        expect(unset).toEqual(['de', 'en', 'es', 'fi', 'it', 'sv']);
+        // Derived from the registry, not hardcoded: the audit's contract is
+        // "every registry language or none", so adding a language must extend
+        // the gap report automatically rather than silently narrow it.
+        const registryLanguages = Object.keys(LANGUAGES).sort();
+        expect(unset).toEqual(registryLanguages);
         const warned = log.warn.mock.calls.filter(c => c[0] === 'no default voice for language');
-        expect(warned.length).toBe(6);
+        expect(warned.length).toBe(registryLanguages.length);
     });
 
     it('a playable default (kokoro af_bella) audits ok; the German gap is still named', async () => {

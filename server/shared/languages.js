@@ -74,6 +74,28 @@ export const LANGUAGES = {
         sttLabel: 'Spanish',
         llmDirective: 'Always respond in Spanish (español), regardless of the language the student writes in. Responde siempre en español.',
         dir: 'ltr'
+    },
+    fr: {
+        name: 'French',
+        native: 'Français',
+        flag: '🇫🇷',
+        stt: 'fr-FR',
+        sttLabel: 'French',
+        llmDirective: 'Always respond in French (français), regardless of the language the student writes in. Réponds toujours en français.',
+        dir: 'ltr'
+    },
+    // Kazakh is written here in CYRILLIC, which is what Kazakhstan uses today.
+    // The official Latin transition is scheduled but not complete; switching
+    // script later is a content decision affecting every string, not a config
+    // change, so it is recorded explicitly rather than left implicit.
+    kk: {
+        name: 'Kazakh',
+        native: 'Қазақша',
+        flag: '🇰🇿',
+        stt: 'kk-KZ',
+        sttLabel: 'Kazakh',
+        llmDirective: 'Always respond in Kazakh (қазақша), using the Cyrillic script, regardless of the language the student writes in. Әрқашан қазақ тілінде жауап беріңіз.',
+        dir: 'ltr'
     }
 };
 
@@ -84,8 +106,7 @@ export const LANGUAGES = {
 export const STT_DIALECTS = [
     { code: 'en-GB', label: 'English (UK)' },
     { code: 'tr-TR', label: 'Turkish' },
-    { code: 'ar-SA', label: 'Arabic (Saudi)' },
-    { code: 'fr-FR', label: 'French' }
+    { code: 'ar-SA', label: 'Arabic (Saudi)' }
 ];
 
 export function isKnownLanguage(code) {
