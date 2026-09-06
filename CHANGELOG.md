@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.28] — 2026-09-06
+
+### Added
+
+- **The full French catalogue** — all 28 namespaces, 4,211 keys, 84 ICU plurals. Verified independently of the translation itself: namespace coverage, key parity, on-disk sort order, ICU argument-set parity against English, ICU parse, plural rendering in-locale, no byte-identical plural copies, no empty values. Zero defects on every axis.
+
+### Notes for the reviewing clinician
+
+The French glossary is still a **draft**. Four independent passes flagged the same defect: `BP` is pinned to `TA` while `blood pressure` is pinned to `pression artérielle` — two different French traditions (*tension* vs *pression*, abbreviated `TA` vs `PA`). Both are real usage; the pair as pinned is not internally consistent. Also unpinned: no term for "lab test", so the catalogue standardises *analyse* (laboratory) against *examen* (imaging) — worth pinning before later namespaces drift.
+
 ## [3.0.0-beta.27] — 2026-09-06
 
 ### Added
