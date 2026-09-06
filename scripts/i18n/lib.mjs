@@ -8,7 +8,10 @@
 //   src/locales/en/<ns>.json                 canonical English (flat key → string)
 //   src/locales/<lang>/<ns>.json             target catalogues (same shape)
 //   src/locales/.status/<lang>.json          committed per-string review status:
-//     { "<ns>.<key>": { src, state, reviewed_at, reviewer, risk } }
+//     { "<ns>.<key>": { src, tgt, state, origin, locked, reviewed_at, reviewer, risk } }
+//     src = hash of the English it was translated from; tgt = hash of the
+//     translation itself, so an overwrite of reviewed text is DETECTABLE
+//     (i18n:verify) rather than merely discouraged.
 //   src/locales/.en-hashes.json              translate-locales.mjs sidecar (gitignored)
 //
 // Every script accepts `--root=<dir>` (or ROHY_LOCALES_ROOT) so tests run
@@ -30,6 +33,31 @@ export const STATUS_DIR = '.status';
 
 export const STATES = ['new', 'machine', 'reviewed', 'approved'];
 export const RISKS = ['low', 'clinical'];
+
+/**
+ * Where a translation's text came from. Only `machine` is the LLM pass's to
+ * rewrite; every other origin is text a person supplied or a package shipped.
+ * `db` is reserved for the backend language editor (layer 0) so the sidecar
+ * shape does not change when it lands.
+ */
+export const ORIGINS = ['machine', 'human', 'xliff', 'plugin', 'upstream', 'db'];
+
+/** States whose text a machine pass must never overwrite. */
+export const PROTECTED_STATES = new Set(['reviewed', 'approved']);
+
+/**
+ * Is this string written in stone?
+ *
+ * `locked` is the hard flag — nothing but an explicit unlock clears it, not
+ * even --force-stale. `reviewed`/`approved` are the soft form: a human read
+ * this exact text, so the English moving underneath it is a reason to
+ * RE-EXPORT for review, never a licence to discard their words.
+ *
+ * @param {object|undefined} entry  A status sidecar entry, or undefined.
+ * @returns {boolean}
+ */
+export const isProtected = (entry) =>
+    Boolean(entry) && (entry.locked === true || PROTECTED_STATES.has(entry.state));
 
 /** Namespaces whose strings carry clinical meaning (dose, vitals, orders …). */
 export const CLINICAL_NAMESPACES = new Set([
@@ -176,15 +204,34 @@ export function writeStatus(root, lang, status) {
 function normaliseEntry(e) {
     return {
         src: e.src,
+        tgt: e.tgt ?? null,
         state: e.state,
+        origin: ORIGINS.includes(e.origin) ? e.origin : 'machine',
+        locked: e.locked === true,
         reviewed_at: e.reviewed_at ?? null,
         reviewer: e.reviewer ?? null,
         risk: e.risk
     };
 }
 
-export const machineEntry = (enValue, ns) => ({
-    src: hash(enValue), state: 'machine', reviewed_at: null, reviewer: null, risk: riskForNamespace(ns)
+/**
+ * A fresh `machine` status entry.
+ *
+ * @param {string} enValue      The English the translation was made from.
+ * @param {string} ns           Namespace, for the default risk.
+ * @param {string} [targetValue] The translated text, hashed into `tgt` so a
+ *   later overwrite is detectable. Omitted for a target that is not on disk yet.
+ * @returns {object} Status entry.
+ */
+export const machineEntry = (enValue, ns, targetValue) => ({
+    src: hash(enValue),
+    tgt: typeof targetValue === 'string' ? hash(targetValue) : null,
+    state: 'machine',
+    origin: 'machine',
+    locked: false,
+    reviewed_at: null,
+    reviewer: null,
+    risk: riskForNamespace(ns)
 });
 
 /**
@@ -203,7 +250,7 @@ export function bootstrapStatus(root, lang) {
             if (en[key] === undefined) continue;
             const id = `${ns}.${key}`;
             if (status[id]) continue;
-            status[id] = machineEntry(en[key], ns);
+            status[id] = machineEntry(en[key], ns, target[key]);
             added += 1;
         }
     }
@@ -306,10 +353,27 @@ export function bracesBalanced(message) {
     return depth === 0;
 }
 
+const glossaryPath = () => process.env.ROHY_I18N_GLOSSARY || join(REPO_ROOT, 'scripts', 'i18n-glossary.json');
+
 export function loadGlossary() {
-    const p = process.env.ROHY_I18N_GLOSSARY || join(REPO_ROOT, 'scripts', 'i18n-glossary.json');
-    const raw = readJson(p);
-    return Object.fromEntries(Object.entries(raw).filter(([k]) => !k.startsWith('_')));
+    // `_`-prefixed keys are metadata (_comment, _unreviewed), not languages —
+    // stripping them is what stops "_comment" being treated as a locale. Read
+    // the metadata with the helpers below, NOT off this object.
+    return Object.fromEntries(Object.entries(readJson(glossaryPath())).filter(([k]) => !k.startsWith('_')));
+}
+
+/**
+ * Languages whose glossary is a DRAFT no native clinician has signed off.
+ *
+ * Its own reader because `loadGlossary()` strips every `_`-prefixed key, which
+ * silently made `_unreviewed` invisible to callers that reached for it there —
+ * the draft warning never printed, on exactly the languages it existed for.
+ *
+ * @returns {string[]} Registry language codes, or [] when none are marked.
+ */
+export function unreviewedGlossaries() {
+    const raw = readJson(glossaryPath())._unreviewed;
+    return Array.isArray(raw) ? raw : [];
 }
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

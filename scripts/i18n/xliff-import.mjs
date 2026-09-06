@@ -153,7 +153,14 @@ for (const [ns, ws] of byNs) {
         const reviewedNow = w.state !== 'machine' && (w.changed || w.state !== prev.state || prev.src !== w.src);
         status[w.id] = {
             src: w.src,
+            // Hash the text we are about to write, not what was there before —
+            // this is the value i18n:verify will hold the tree to.
+            tgt: hash(w.value),
             state: w.state,
+            origin: 'xliff',
+            // A lock survives an import: it is the operator's standing
+            // instruction, not a property of any one round-trip.
+            locked: prev.locked === true,
             reviewed_at: reviewedNow ? now : (prev.reviewed_at ?? null),
             reviewer: reviewedNow ? (reviewer ?? prev.reviewer ?? null) : (prev.reviewer ?? null),
             risk: prev.risk || w.risk

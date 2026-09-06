@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.24] — 2026-09-06
+
+### Added
+
+- **Reviewed translations are written in stone.** The status sidecar now records `tgt` — a hash of the translation itself — beside `src`, the hash of the English. `src` detects that the English moved; only `tgt` detects that the *translation* moved, so an overwrite of reviewed text is now visible instead of silent. Entries also carry `origin` (`machine|human|xliff|plugin|upstream|db`) and `locked`.
+- **`npm run i18n:verify`** fails when a protected translation no longer matches its hash; `--backfill`, `--strict`, `--json`.
+- **`npm run i18n:lock`** claims hand-edited strings without an XLIFF round-trip — named ids or `--all-changed`, plus `--unlock`, `--dry-run`, `--state=`, `--reviewer=`.
+- **`npm run i18n:glossary`** checks clinical glossary adherence against catalogues **on disk**. `xliff-import` validated renderings on the way in, so anything written straight into `src/locales/` bypassed it — which is exactly the path a machine pass takes.
+
+### Fixed
+
+- **`scripts/translate-locales.mjs` never read the status sidecar.** When an English string changed it sent the key back to the LLM and overwrote the human's text, leaving `state` and `reviewer` intact so the file still claimed the string was approved. It now holds back `reviewed`/`approved`/`locked` keys and reports them; `--force-stale` opts into reviewed/approved but never `locked`.
+- The pass also stamps its own writes into `.status/`, honours `--root`/`ROHY_LOCALES_ROOT` like every other script in the pipeline, and reads each catalogue once per language instead of once per key.
+
 ## [3.0.0-beta.23] — 2026-09-05
 
 ### Added
