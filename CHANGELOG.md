@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.27] — 2026-09-06
+
+### Added
+
+- **French (`fr`) and Kazakh (`kk`) join the language registry.** Kazakh is recorded as **Cyrillic** — Kazakhstan's Latin transition is scheduled but not complete, and switching script later is a content decision affecting every string, so it is written down rather than left implicit.
+- Four `fr-FR-Chirp3-HD-*` Google voices. **Kazakh is deliberately absent**: Google publishes no `kk-KZ` voice in any family, so Kazakh speech comes from Piper. The coverage test gains a named `NO_GOOGLE_VOICE` exemption plus a ratchet that fails the day Google ships one — inventing a voice id would move the failure from CI to a learner's first spoken reply.
+- Draft 24-term clinical glossaries for both, marked `_unreviewed`. `npm run i18n:translate` now **refuses** (exit 3) to translate into a language whose glossary is a draft, unless `--accept-draft-glossary` is passed.
+
+### Changed
+
+- `scenarioCategories.js` gains `LATER_LANGUAGE_ALIASES` with French and Kazakh spellings for all 10 categories. Needed because `foldSpelling()` does not transliterate: `'Сепсис'` shares no letters with the id `'Sepsis'`, so a scenario authored in Kazakh would not resolve on import without an explicit alias.
+- `voiceCatalogueAudit.test.js` derives its expected language list from the registry instead of hardcoding six, so it cannot go stale on the next language.
+
 ## [3.0.0-beta.26] — 2026-09-06
 
 ### Added
