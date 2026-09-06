@@ -164,6 +164,89 @@ export function mergeNamespace(base, additions, { label, source }) {
     return { ...base, ...additions };
 }
 
+// ---- Plugin locales (layer 2) ---------------------------------------------
+//
+// A plugin ships its own translations so it works on install without rohy
+// translating anything. Resolution is LAYERED, not merged:
+//
+//   1. src/locales/<lang>/<ns>.json          rohy's catalogue — reviewed, locked, wins
+//   2. src/plugins/<id>/locales/<lang>.json  what the plugin shipped
+//   3. t(key, 'English') in the code         the inline fallback, always present
+//
+// The MANIFEST carries only the namespace declaration, never the strings:
+// manifests.generated.js is imported by the SERVER, which renders no UI, and
+// inlining seven languages of every plugin would put thousands of strings
+// into a bundle that never reads them. The catalogues are plain JSON files
+// the client code-splits per language, exactly like rohy's own locales.
+//
+// Deliberately NOT mergeNamespace(): that throws on any collision, which is
+// right for verbs and object types (a silent overwrite there changes what
+// analytics rows MEAN) and wrong here — rohy shadowing a plugin's string is
+// the intended act, not an error. Two PLUGINS colliding is still an error,
+// because nothing decides which of them should win.
+
+export const LOCALE_NAMESPACE_SHAPE = /^[a-z][a-z0-9_]*$/;
+
+/** The i18next namespace a plugin's strings land in (defaults to its id). */
+export const localeNamespaceOf = (manifest) => manifest?.locales?.namespace || manifest?.id;
+
+/**
+ * Validate a manifest's `locales` declaration. Structure only — the strings
+ * live on disk, and their ICU validity and parity against English are the
+ * build gate's job (scripts/check-plugin-locales.mjs), which keeps this
+ * shared module free of intl-messageformat.
+ *
+ * @param {object} manifest
+ * @throws {Error} when the declaration's shape or namespace is wrong.
+ * @returns {void}
+ */
+export function validatePluginLocales(manifest) {
+    const locales = manifest.locales;
+    if (locales === undefined) return;
+    if (typeof locales !== 'object' || locales === null || Array.isArray(locales)) {
+        throw new Error(`Plugin '${manifest.id}' locales must be an object`);
+    }
+    if (locales.catalogues !== undefined) {
+        throw new Error(
+            `Plugin '${manifest.id}' puts catalogues in its manifest. Ship them as `
+            + `src/plugins/${manifest.id}/locales/<lang>.json instead — the manifest is read by the server, which renders no strings.`
+        );
+    }
+    const ns = localeNamespaceOf(manifest);
+    if (!LOCALE_NAMESPACE_SHAPE.test(ns)) {
+        throw new Error(`Plugin '${manifest.id}' locales.namespace '${ns}' must be lower_snake_case — it becomes an i18next namespace`);
+    }
+}
+
+/**
+ * Collapse what several plugins shipped for ONE language into
+ * `{ namespace: { key: value } }`, ready to add UNDER rohy's own bundles.
+ *
+ * @param {{id: string, namespace: string, table: Record<string, string>}[]} entries
+ * @returns {Record<string, Record<string, string>>} Namespace → key → string.
+ * @throws {Error} when two plugins ship the same key in the same namespace.
+ */
+export function resolveLocaleLayers(entries) {
+    const out = {};
+    const owner = {};   // "ns.key" → plugin id that shipped it
+    (entries || []).forEach(({ id, namespace, table }) => {
+        if (!table) return;
+        out[namespace] ??= {};
+        Object.entries(table).forEach(([key, value]) => {
+            const slot = `${namespace}.${key}`;
+            if (owner[slot] && owner[slot] !== id) {
+                throw new Error(
+                    `Plugins '${owner[slot]}' and '${id}' both ship string '${slot}'. `
+                    + 'Give one of them its own locales.namespace — nothing here decides which should win.'
+                );
+            }
+            owner[slot] = id;
+            out[namespace][key] = value;
+        });
+    });
+    return out;
+}
+
 /** Validate a manifest at registration time rather than at first render. */
 export function validateManifest(manifest) {
     REQUIRED.forEach((field) => {
@@ -219,6 +302,8 @@ export function validateManifest(manifest) {
             }
         });
     }
+
+    validatePluginLocales(manifest);
 
     const states = manifest.states || {};
     const fallbacks = states.verbFallbacks || {};

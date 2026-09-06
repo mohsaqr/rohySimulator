@@ -215,6 +215,49 @@ export function verify(entry) {
     return { id: entry.id, ok: true, reason: 'matches its stamp', stamp, stale };
 }
 
+/**
+ * The i18n boundary: a vendored package may NOT carry its own catalogues or
+ * bind to rohy's i18next instance.
+ *
+ * The vendored tree is copied wholesale into src/components/<mod>, so a
+ * locale file under upstream `src/` would land in rohy as a SECOND catalogue
+ * competing with src/locales — two sources of truth for the same string, with
+ * no review state and nothing to say which wins. And a `react-i18next` import
+ * couples the package to rohy's instance, which breaks the standalone app and
+ * makes the module un-embeddable anywhere else.
+ *
+ * The supported shapes are: inline English fallbacks in the code
+ * (`t(key, 'English')` with `t` injected as a prop), and shipped translations
+ * at src/plugins/<id>/locales/<lang>.json, which rohy layers UNDER its own.
+ *
+ * @param {string} src  The upstream directory about to be copied.
+ * @param {object} entry  The vendor entry, for the message.
+ * @throws {Error} listing every offending file.
+ * @returns {void}
+ */
+export function assertNoVendoredI18n(src, entry) {
+    const offenders = [];
+    for (const rel of walk(src)) {
+        if (/(^|\/)locales?\//.test(rel) && rel.endsWith('.json')) {
+            offenders.push(`${rel} — a catalogue inside the vendored tree`);
+            continue;
+        }
+        if (!/\.(js|jsx|ts|tsx)$/.test(rel)) continue;
+        const text = readFileSync(join(src, rel), 'utf8');
+        if (/from\s+['"]react-i18next['"]|require\(['"]react-i18next['"]\)/.test(text)) {
+            offenders.push(`${rel} — imports react-i18next`);
+        }
+    }
+    if (offenders.length) {
+        throw new Error(
+            `${entry.package} cannot be vendored: it owns i18n state that belongs to the host.\n`
+            + offenders.map(o => `    ${o}`).join('\n')
+            + `\n    Take \`t\` as an injected prop with an English fallback — \`t = (key, fallback) => fallback ?? key\` —`
+            + `\n    and ship translations as src/plugins/${entry.id}/locales/<lang>.json instead.`
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 function install(entry, { force = false } = {}) {
@@ -230,6 +273,7 @@ function install(entry, { force = false } = {}) {
     if (!existsSync(join(src, entry.sentinel))) {
         throw new Error(`${src} has no ${entry.sentinel} — that is not the package.\n    Refusing to rsync --delete from it.`);
     }
+    assertNoVendoredI18n(src, entry);
 
     let commit = null;
     let dirty = false;
