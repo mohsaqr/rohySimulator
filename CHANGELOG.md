@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.30] — 2026-09-06
+
+### Changed
+
+- **Every registry language is now held to full parity.** `fr` and `kk` join `TRANSLATED` in `locales-integrity.test.js`, which grows from 381 to 499 tests. A language belongs there the moment its catalogue is complete; until then it is the one locale nothing checks.
+- `AWAITING_TRANSLATION` is introduced and left empty. English keys land before they are translated — the pass needs a live server — and seeding the English verbatim would satisfy the key-set check while defeating the "no English leftovers" locks that exist to catch exactly that. So the gap is declared, bounded and visible: a locale may be missing up to N keys of a named namespace and never more, and may never carry a key English lacks. The Oyon allowance opened at 383 and closed the same day.
+- `.status/` gains ~19,000 entries across seven languages, so every machine translation carries a `tgt` hash and is itself protected from silent overwrite.
+
+### Fixed
+
+- `loadGlossary()` strips every `_`-prefixed key — correct, so `_comment` is not read as a language — which silently made `_unreviewed` invisible to the glossary checker. The "glossary is a DRAFT" banner had **never** printed, on precisely the two languages it exists for. Metadata inside a data file now has its own reader, `unreviewedGlossaries()`.
+- `kk/investigations.json#radiologist_credentials` was left as `"MD, FRCR"` under the "keep abbreviations unchanged" rule. It is a report signature line, not an international standard, and every other locale renders its own credential.
+
 ## [3.0.0-beta.29] — 2026-09-06
 
 ### Added
