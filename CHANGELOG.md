@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.25] — 2026-09-06
+
+### Added
+
+- **Plugins can ship their own translations.** Locale resolution is now three layers, deliberately layered rather than merged: rohy's `src/locales/<lang>/<ns>.json` wins, a plugin's `src/plugins/<id>/locales/<lang>.json` fills the gaps, and the inline `t(key, 'English')` in the package is the floor. A plugin therefore works on install without rohy translating anything, and rohy can still override any string — only its override goes through review and locking.
+- `npm run plugins:locales` (also inside `plugins:check`) validates plugin catalogues: ICU compiles, argument sets match English, `en.json` is required as the key set, and no two plugins ship the same string. It also reports keys a plugin duplicates from rohy's `common`/`app`, where one copy renders and the other silently drifts.
+
+### Changed
+
+- `mergeNamespace()` is deliberately NOT used for locales. It throws on any collision, which is right for verbs and object types — a silent overwrite there changes what analytics rows mean — and wrong here, where rohy shadowing a plugin is the intended act. Two *plugins* colliding still throws, because nothing decides which should win.
+- Manifests declare only `locales.namespace`; embedding catalogues is refused with a message naming where they belong, since `manifests.generated.js` is imported by the server, which renders no strings.
+- `npm run vendor` now refuses a package that carries locale files or imports `react-i18next` — either would create a second source of truth inside rohy.
+
 ## [3.0.0-beta.24] — 2026-09-06
 
 ### Added

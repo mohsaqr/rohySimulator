@@ -25,6 +25,16 @@ export default {
         // defaultValue-based i18n and is English-only for the initial port —
         // same treatment as analytics/ above. Its own catalogues get added later.
         '!src/components/lessons/**',
+        // Vendored plugin packages own their own key set. Their strings live
+        // in the package as inline fallbacks — t('key', 'English') with `t`
+        // injected — and ship as src/plugins/<id>/locales/<lang>.json, which
+        // rohy layers UNDER src/locales (server/shared/pluginRegistry.js).
+        // Extracting them here would write a SECOND English catalogue for the
+        // same keys, with rohy's parser as its source of truth instead of the
+        // package. (src/components/pacs is deliberately NOT listed: radoyon
+        // predates this contract and its 211 radoyon_* keys live in common.)
+        '!src/components/ecg/**',
+        '!src/components/pathology/**',
         '!src/i18n/**',
         '!src/locales/**'
     ],
