@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.29] — 2026-09-06
+
+### Added
+
+- **The full Kazakh catalogue, in Cyrillic** — all 28 namespaces, 4,211 keys, 84 ICU plurals, verified on the same axes as French with zero defects. Every plural uses only the `other` category: a Kazakh noun stays singular after a numeral (`3 талдау`), so one form is correct and ICU falls back `one`→`other`. This is a deliberate choice, **not** a CLDR fact — `Intl.PluralRules('kk')` does report `['one','other']`.
+
+### Notes for the reviewing clinician
+
+Kazakh had no existing catalogue to anchor to, so the clinical register was established from scratch and is itself the thing to review. Three or more independent passes converged on the same four glossary defects, which is what makes them credible rather than stylistic:
+
+- **`administer` → `енгізу`** means *insert/inject*. It renders "insert paracetamol PO", and is also the everyday word for "enter data". Suggested: `беру`, or a route-aware pin.
+- **`Peak` → `шыңы`** is a mountain summit, and *inflected* — as a bare pharmacokinetics column header it reads "its summit". Suggested: `пик`.
+- **`vital signs` → `өмірлік маңызды көрсеткіштер`** is 28–30 characters against 11 in English and truncates in monitor gauges. Suggested: `өмірлік көрсеткіштер`.
+- **`BP` → `АҚҚ`** expands to *артериялық қан қысымы*, but the phrase is pinned as plain `қан қысымы`. Pin them as a matched pair.
+
 ## [3.0.0-beta.28] — 2026-09-06
 
 ### Added
