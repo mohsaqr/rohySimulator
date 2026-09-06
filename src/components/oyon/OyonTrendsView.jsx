@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TrendingUp } from 'lucide-react';
 import { trendsAnalytics } from './trendsAnalytics';
 
@@ -12,20 +13,36 @@ import { trendsAnalytics } from './trendsAnalytics';
  * no chart dependency, matching the gaze view's idiom.
  */
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// Explicit key maps: weekday index / month number are enums, so each label is
+// a literal catalogue key looked up by position.
+const WEEKDAY_KEYS = [
+   'weekday_mon', 'weekday_tue', 'weekday_wed', 'weekday_thu',
+   'weekday_fri', 'weekday_sat', 'weekday_sun',
+];
+const MONTH_KEYS = [
+   null, 'month_1', 'month_2', 'month_3', 'month_4', 'month_5', 'month_6',
+   'month_7', 'month_8', 'month_9', 'month_10', 'month_11', 'month_12',
+];
 const VALENCE_COLOR = '#0f766e';
 const AROUSAL_COLOR = '#f59e0b'; // amber, contrasts on the dark theme
 
 export default function OyonTrendsView({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const { summary, daily, heatmap, byRoom } = useMemo(
       () => trendsAnalytics(records),
       [records],
    );
+   // "2026-06-01" → "Jun 1", both halves from the catalogue.
+   const shortDay = useCallback((day) => {
+      const [, m, d] = String(day).split('-').map(Number);
+      const key = MONTH_KEYS[m];
+      return t('short_day', { month: key ? t(key) : m, day: d });
+   }, [t]);
 
    if (loading && summary.windows === 0) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            Loading trends…
+            {t('trends_loading')}
          </div>
       );
    }
@@ -34,9 +51,7 @@ export default function OyonTrendsView({ records, loading }) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <TrendingUp className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-            No windows in the current selection. Trends appear once emotion
-            windows have been captured — run a capture (or widen the filters),
-            then refresh.
+            {t('trends_empty')}
          </div>
       );
    }
@@ -51,63 +66,59 @@ export default function OyonTrendsView({ records, loading }) {
       <div className="rohy-admin-light space-y-5">
          {/* Aggregate stat chips */}
          <div className="flex flex-wrap gap-2">
-            <Stat label="Days active" value={String(summary.daysActive)} hint={daySpan} />
-            <Stat label="Windows" value={String(summary.windows)} />
-            <Stat label="Sessions" value={String(summary.sessions)} />
+            <Stat label={t('stat_days_active')} value={String(summary.daysActive)} hint={daySpan} />
+            <Stat label={t('stat_windows')} value={String(summary.windows)} />
+            <Stat label={t('stat_sessions')} value={String(summary.sessions)} />
             <Stat
-               label="Avg valence"
+               label={t('stat_avg_valence')}
                value={signedOrDash(summary.avgValence)}
-               hint="Mean valence over all windows with a measured value (−1 negative … +1 positive)."
+               hint={t('hint_avg_valence')}
                accent
             />
             <Stat
-               label="Avg arousal"
+               label={t('stat_avg_arousal')}
                value={signedOrDash(summary.avgArousal)}
-               hint="Mean arousal over all windows with a measured value (−1 calm … +1 activated)."
+               hint={t('hint_avg_arousal')}
             />
          </div>
 
          {/* Affect over time */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Affect over time</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               Daily mean valence &amp; arousal (−1…+1). Gaps mark days where a
-               dimension was not measured.
-            </p>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_affect_over_time')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('affect_over_time_hint')}</p>
             <TrendChart
                series={[
-                  { name: 'valence', color: VALENCE_COLOR, values: daily.map((d) => d.avgValence) },
-                  { name: 'arousal', color: AROUSAL_COLOR, values: daily.map((d) => d.avgArousal) },
+                  { name: t('legend_valence'), color: VALENCE_COLOR, values: daily.map((d) => d.avgValence) },
+                  { name: t('legend_arousal'), color: AROUSAL_COLOR, values: daily.map((d) => d.avgArousal) },
                ]}
                xLabels={daily.map((d) => shortDay(d.day))}
+               t={t}
             />
             <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-gray-500">
-               <LegendItem label="valence" color={VALENCE_COLOR} />
-               <LegendItem label="arousal" color={AROUSAL_COLOR} />
+               <LegendItem label={t('legend_valence')} color={VALENCE_COLOR} />
+               <LegendItem label={t('legend_arousal')} color={AROUSAL_COLOR} />
             </div>
          </section>
 
          {/* Activity heatmap */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Activity heatmap</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               When windows are captured — weekday × hour of day, cell intensity ∝ count.
-            </p>
-            <ActivityHeatmap grid={heatmap.grid} max={heatmap.max} />
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_activity_heatmap')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('activity_heatmap_hint')}</p>
+            <ActivityHeatmap grid={heatmap.grid} max={heatmap.max} t={t} />
          </section>
 
          {/* Per-room valence */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-800">Valence by room</h3>
+            <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_valence_by_room')}</h3>
             {byRoom.length === 0 ? (
-               <p className="text-sm text-gray-500">No room-stamped windows yet.</p>
+               <p className="text-sm text-gray-500">{t('trends_no_room_windows')}</p>
             ) : (
                <table className="w-full text-left text-xs">
                   <thead>
                      <tr className="border-b border-gray-200 text-gray-500">
-                        <th className="py-1.5 pr-3 font-semibold">Room</th>
-                        <th className="py-1.5 pr-3 font-semibold">Windows</th>
-                        <th className="py-1.5 pr-3 font-semibold">Avg valence</th>
+                        <th className="py-1.5 pr-3 font-semibold">{t('col_room')}</th>
+                        <th className="py-1.5 pr-3 font-semibold">{t('col_windows')}</th>
+                        <th className="py-1.5 pr-3 font-semibold">{t('col_avg_valence')}</th>
                      </tr>
                   </thead>
                   <tbody>
@@ -150,7 +161,7 @@ function LegendItem({ label, color }) {
 // Port of chatoyon's TrendChart, fixed to the affect domain [-1, 1] with a
 // dashed zero line. Nulls break the line at unmeasured days; single-day
 // pools render a centered dot.
-function TrendChart({ series, xLabels }) {
+function TrendChart({ series, xLabels, t }) {
    const W = 600;
    const H = 170;
    const padL = 30;
@@ -178,12 +189,12 @@ function TrendChart({ series, xLabels }) {
    const labelStep = Math.max(1, Math.ceil(n / 6)); // ~6 x labels max
 
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Daily affect trend">
-         {[-1, 0, 1].map((t) => (
-            <g key={t}>
-               <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#d1d5db" strokeWidth={0.5} />
-               <text x={padL - 4} y={y(t) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
-                  {t.toFixed(1)}
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={t('aria_daily_affect_trend')}>
+         {[-1, 0, 1].map((tick) => (
+            <g key={tick}>
+               <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#d1d5db" strokeWidth={0.5} />
+               <text x={padL - 4} y={y(tick) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
+                  {tick.toFixed(1)}
                </text>
             </g>
          ))}
@@ -194,7 +205,9 @@ function TrendChart({ series, xLabels }) {
                <path d={pathFor(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                {s.values.map((v, i) => (v != null && Number.isFinite(v) ? (
                   <circle key={i} cx={x(i)} cy={y(v)} r={2.5} fill={s.color}>
-                     <title>{`${xLabels[i]} · ${s.name} ${v.toFixed(2)}`}</title>
+                     <title>
+                        {t('trend_point_tooltip', { day: xLabels[i], series: s.name, value: v.toFixed(2) })}
+                     </title>
                   </circle>
                ) : null))}
             </g>
@@ -210,9 +223,9 @@ function TrendChart({ series, xLabels }) {
 
 // Port of chatoyon's ActivityHeatmap as one SVG: 7 Mon..Sun rows × 24 hour
 // columns, cell intensity ∝ count/max, per-cell <title> tooltips.
-function ActivityHeatmap({ grid, max }) {
+function ActivityHeatmap({ grid, max, t }) {
    if (!grid.length || max <= 0) {
-      return <p className="text-sm text-gray-500">No timestamped windows in range.</p>;
+      return <p className="text-sm text-gray-500">{t('heatmap_empty')}</p>;
    }
    const CELL = 20;
    const GAP = 2;
@@ -222,7 +235,7 @@ function ActivityHeatmap({ grid, max }) {
    const H = 7 * (CELL + GAP) + LABEL_H;
    const hourLabels = [0, 6, 12, 18, 23];
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Activity heatmap">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={t('aria_activity_heatmap')}>
          {grid.map((row, wd) => (
             <g key={wd}>
                <text
@@ -232,7 +245,7 @@ function ActivityHeatmap({ grid, max }) {
                   fontSize={10}
                   fill="#6b7280"
                >
-                  {WEEKDAYS[wd]}
+                  {t(WEEKDAY_KEYS[wd])}
                </text>
                {row.map((v, hr) => (
                   <rect
@@ -244,7 +257,13 @@ function ActivityHeatmap({ grid, max }) {
                      rx={3}
                      fill={v > 0 ? `rgba(168, 85, 247, ${(0.15 + 0.85 * (v / max)).toFixed(3)})` : '#f3f4f6'}
                   >
-                     <title>{`${WEEKDAYS[wd]} ${String(hr).padStart(2, '0')}:00 — ${v} window${v === 1 ? '' : 's'}`}</title>
+                     <title>
+                        {t('heatmap_tooltip', {
+                           weekday: t(WEEKDAY_KEYS[wd]),
+                           hour: String(hr).padStart(2, '0'),
+                           count: v,
+                        })}
+                     </title>
                   </rect>
                ))}
             </g>
@@ -263,14 +282,6 @@ function ActivityHeatmap({ grid, max }) {
          ))}
       </svg>
    );
-}
-
-// "2026-06-01" → "Jun 1" by splitting the string — never via new Date(day),
-// which parses as UTC and can shift the label a day (see trendsAnalytics.js).
-function shortDay(day) {
-   const [, m, d] = String(day).split('-').map(Number);
-   const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-   return `${months[m] ?? m} ${d}`;
 }
 
 function signedOrDash(v) {

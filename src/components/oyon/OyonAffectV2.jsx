@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, GitBranch, Smile, Sparkles } from 'lucide-react';
 import EdgeBundling from '../analytics/charts/EdgeBundling';
 import { affectAnalytics } from './affectAnalytics';
@@ -9,6 +10,7 @@ import { OYON_EMOTION_LABELS, observedDominantLabels, probabilityChannelLabels }
 const PLANE_CAP = 200;
 
 export default function OyonAffectV2({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const analytics = useMemo(() => affectAnalytics(records), [records]);
    const coEmotion = useMemo(() => buildCoEmotionNetwork(records), [records]);
    const modelChannels = useMemo(() => probabilityChannelLabels(records), [records]);
@@ -21,14 +23,14 @@ export default function OyonAffectV2({ records, loading }) {
    }, [distribution]);
    const fullCoEmotion = useMemo(() => fullEmotionNetwork(coEmotion.edges), [coEmotion.edges]);
 
-   if (loading && summary.windows === 0) return <EmptyState text="Loading affect data..." />;
+   if (loading && summary.windows === 0) return <EmptyState text={t('affect_v2_loading')} />;
 
    if (summary.windows === 0) {
       return (
          <EmptyState
             icon={<Smile className="h-6 w-6" />}
-            text="No affect windows in the current selection."
-            detail="Affect appears once Oyon emotion windows have been captured."
+            text={t('affect_v2_empty_text')}
+            detail={t('affect_v2_empty_detail')}
          />
       );
    }
@@ -38,23 +40,23 @@ export default function OyonAffectV2({ records, loading }) {
          <section className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between gap-3 border-b border-gray-100 pb-2">
                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">Affect 2</h2>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">{t('affect_v2_title')}</h2>
                </div>
                <div className="flex flex-wrap justify-end gap-2">
-                  <HeaderChip icon={<Activity className="h-4 w-4" />} label="Windows" value={summary.windows} />
-                  <HeaderChip icon={<Sparkles className="h-4 w-4" />} label="Dominant" value={`${observedLabels.length}/8`} />
-                  <HeaderChip icon={<GitBranch className="h-4 w-4" />} label="Links" value={coEmotion.stats.edgeCount || 0} />
+                  <HeaderChip icon={<Activity className="h-4 w-4" />} label={t('chip_windows')} value={summary.windows} />
+                  <HeaderChip icon={<Sparkles className="h-4 w-4" />} label={t('chip_dominant')} value={`${observedLabels.length}/8`} />
+                  <HeaderChip icon={<GitBranch className="h-4 w-4" />} label={t('chip_links')} value={coEmotion.stats.edgeCount || 0} />
                </div>
             </div>
             <div className="grid grid-cols-1 gap-2 text-xs text-gray-500 sm:grid-cols-3">
-               <InlineFact label="Model channels" value={modelChannels.length || OYON_EMOTION_LABELS.length} />
-               <InlineFact label="Latest state" value={summary.latestState ?? '—'} capitalize />
-               <InlineFact label="Latest quality" value={pct(summary.latestQuality)} />
+               <InlineFact label={t('metric_model_channels')} value={modelChannels.length || OYON_EMOTION_LABELS.length} />
+               <InlineFact label={t('stat_latest_state')} value={summary.latestState ?? '—'} capitalize />
+               <InlineFact label={t('stat_latest_quality')} value={pct(summary.latestQuality)} />
             </div>
          </section>
 
          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
-            <Panel title="8-Emotion Co-occurrence Map">
+            <Panel title={t('panel_co_occurrence_map')}>
                <EdgeBundling
                   nodes={fullCoEmotion.nodes}
                   edges={fullCoEmotion.edges}
@@ -64,19 +66,19 @@ export default function OyonAffectV2({ records, loading }) {
                   colorFor={emotionColor}
                />
             </Panel>
-            <Panel title="Emotion Heat Strip">
-               <EmotionHeatStrip timeline={timeline} rows={fullDistribution} total={summary.windows} />
+            <Panel title={t('panel_emotion_heat_strip')}>
+               <EmotionHeatStrip timeline={timeline} rows={fullDistribution} total={summary.windows} t={t} />
             </Panel>
          </div>
 
          <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
-            <Panel title="Affect Plane">
-               <AffectPlane points={plane} />
+            <Panel title={t('panel_affect_plane')}>
+               <AffectPlane points={plane} t={t} />
             </Panel>
-            <Panel title="Dynamics & Arousal-Valence Mix">
+            <Panel title={t('panel_dynamics_mix')}>
                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.25fr_1fr]">
-                  <DynamicsChart dynamics={dynamics} />
-                  <QuadrantMix points={plane} />
+                  <DynamicsChart dynamics={dynamics} t={t} />
+                  <QuadrantMix points={plane} t={t} />
                </div>
             </Panel>
          </div>
@@ -117,7 +119,7 @@ function InlineFact({ label, value, capitalize = false }) {
    );
 }
 
-function EmotionHeatStrip({ timeline, rows, total }) {
+function EmotionHeatStrip({ timeline, rows, total, t }) {
    const buckets = useMemo(() => bucketEmotionTimeline(timeline, 32), [timeline]);
    const max = Math.max(...rows.map((r) => r.count), 1);
    const sum = Number(total) > 0 ? Number(total) : rows.reduce((n, r) => n + r.count, 0);
@@ -143,7 +145,7 @@ function EmotionHeatStrip({ timeline, rows, total }) {
                                     background: count > 0 ? emotionColor(emotion) : '#e5e7eb',
                                     opacity: count > 0 ? Math.max(0.42, Math.min(1, 0.35 + prob)) : 0.65,
                                  }}
-                                 title={`${emotion} · bucket ${i + 1}: ${count} window${count === 1 ? '' : 's'}`}
+                                 title={t('heat_bucket_tooltip', { emotion, bucket: i + 1, count })}
                               />
                            );
                         })}
@@ -153,7 +155,7 @@ function EmotionHeatStrip({ timeline, rows, total }) {
             </div>
          </div>
          <div className="border-t border-gray-100 pt-2">
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Totals</div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{t('heat_totals')}</div>
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
          {rows.map((r) => {
             const share = sum > 0 ? r.count / sum : 0;
@@ -223,29 +225,36 @@ function fullEmotionNetwork(edges) {
    };
 }
 
-function AffectPlane({ points }) {
+function AffectPlane({ points, t }) {
    const all = Array.isArray(points) ? points : [];
    const trail = all.slice(Math.max(0, all.length - PLANE_CAP));
-   if (trail.length === 0) return <EmptyPanelText>No valence/arousal samples in these windows.</EmptyPanelText>;
+   if (trail.length === 0) return <EmptyPanelText>{t('plane_no_samples')}</EmptyPanelText>;
    const S = 260;
    const toX = (v) => ((clampAffect(v) + 1) / 2) * S;
    const toY = (a) => ((1 - clampAffect(a)) / 2) * S;
    const path = trail.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.v).toFixed(1)} ${toY(p.a).toFixed(1)}`).join(' ');
    const last = trail[trail.length - 1];
    return (
-      <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto block h-auto w-full max-w-[330px] rounded-md border border-gray-200 bg-gray-50" role="img" aria-label="Affect 2 valence-arousal plane">
+      <svg viewBox={`0 0 ${S} ${S}`} className="mx-auto block h-auto w-full max-w-[330px] rounded-md border border-gray-200 bg-gray-50" role="img" aria-label={t('aria_affect_v2_plane')}>
          <line x1={S / 2} x2={S / 2} y1={0} y2={S} stroke="#d1d5db" />
          <line x1={0} x2={S} y1={S / 2} y2={S / 2} stroke="#d1d5db" />
-         <text x={S / 2} y={14} textAnchor="middle" fontSize={10} fill="#6b7280">high arousal</text>
-         <text x={S / 2} y={S - 6} textAnchor="middle" fontSize={10} fill="#6b7280">low arousal</text>
-         <text x={6} y={S / 2 - 6} fontSize={10} fill="#6b7280">negative</text>
-         <text x={S - 6} y={S / 2 - 6} textAnchor="end" fontSize={10} fill="#6b7280">positive</text>
+         <text x={S / 2} y={14} textAnchor="middle" fontSize={10} fill="#6b7280">{t('plane_high_arousal')}</text>
+         <text x={S / 2} y={S - 6} textAnchor="middle" fontSize={10} fill="#6b7280">{t('plane_low_arousal')}</text>
+         <text x={6} y={S / 2 - 6} fontSize={10} fill="#6b7280">{t('plane_negative')}</text>
+         <text x={S - 6} y={S / 2 - 6} textAnchor="end" fontSize={10} fill="#6b7280">{t('plane_positive')}</text>
          <path d={path} fill="none" stroke="#0f766e" strokeWidth={1.5} opacity={0.32} strokeLinejoin="round" />
          {trail.map((p, i) => {
-            const t = (i + 1) / trail.length;
+            const fade = (i + 1) / trail.length;
             return (
-               <circle key={i} cx={toX(p.v)} cy={toY(p.a)} r={2 + t * 4} fill={emotionColor(p.emotion)} opacity={0.2 + t * 0.8}>
-                  <title>{`${p.emotion} · v ${fmtNum(p.v)} · a ${fmtNum(p.a)} · ${p.quadrant ?? '—'}`}</title>
+               <circle key={i} cx={toX(p.v)} cy={toY(p.a)} r={2 + fade * 4} fill={emotionColor(p.emotion)} opacity={0.2 + fade * 0.8}>
+                  <title>
+                     {t('plane_point_tooltip', {
+                        emotion: p.emotion,
+                        valence: fmtNum(p.v),
+                        arousal: fmtNum(p.a),
+                        quadrant: p.quadrant ?? '—',
+                     })}
+                  </title>
                </circle>
             );
          })}
@@ -255,7 +264,7 @@ function AffectPlane({ points }) {
    );
 }
 
-function QuadrantMix({ points }) {
+function QuadrantMix({ points, t }) {
    const rows = Array.isArray(points) ? points : [];
    const counts = rows.reduce((acc, p) => {
       const key = p?.quadrant || 'unknown';
@@ -264,13 +273,13 @@ function QuadrantMix({ points }) {
    }, {});
    const total = rows.length;
    const items = [
-      { key: 'positive-activated', label: 'Positive · active', color: '#10b981' },
-      { key: 'positive-calm', label: 'Positive · calm', color: '#0891b2' },
-      { key: 'negative-activated', label: 'Negative · active', color: '#d97706' },
-      { key: 'negative-calm', label: 'Negative · calm', color: '#3b82f6' },
+      { key: 'positive-activated', label: t('quadrant_positive_active'), color: '#10b981' },
+      { key: 'positive-calm', label: t('quadrant_positive_calm'), color: '#0891b2' },
+      { key: 'negative-activated', label: t('quadrant_negative_active'), color: '#d97706' },
+      { key: 'negative-calm', label: t('quadrant_negative_calm'), color: '#3b82f6' },
    ].map((item) => ({ ...item, count: counts[item.key] ?? 0 }));
 
-   if (!total) return <EmptyPanelText>No valence/arousal samples in these windows.</EmptyPanelText>;
+   if (!total) return <EmptyPanelText>{t('plane_no_samples')}</EmptyPanelText>;
 
    return (
       <div className="grid grid-cols-1 gap-2">
@@ -296,10 +305,10 @@ function QuadrantMix({ points }) {
    );
 }
 
-function DynamicsChart({ dynamics }) {
+function DynamicsChart({ dynamics, t }) {
    const rows = Array.isArray(dynamics) ? dynamics : [];
    const hasData = rows.some((d) => isNum(d.speed) || isNum(d.instability));
-   if (!hasData) return <EmptyPanelText>No dynamics yet. This needs at least two consecutive windows with valence/arousal.</EmptyPanelText>;
+   if (!hasData) return <EmptyPanelText>{t('affect_v2_no_dynamics')}</EmptyPanelText>;
    const W = 640;
    const H = 170;
    const padL = 34;
@@ -324,16 +333,16 @@ function DynamicsChart({ dynamics }) {
       return d.trim();
    };
    const series = [
-      { key: 'speed', label: 'Affect speed', color: '#db2777' },
-      { key: 'instability', label: 'Instability', color: '#d97706' },
+      { key: 'speed', label: t('stat_affect_speed'), color: '#db2777' },
+      { key: 'instability', label: t('stat_instability'), color: '#d97706' },
    ];
    return (
       <div>
-         <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Affect 2 dynamics timeline">
-            {[0, 0.5, 1].map((t) => (
-               <g key={t}>
-                  <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#e5e7eb" />
-                  <text x={padL - 5} y={y(t) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{t.toFixed(1)}</text>
+         <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={t('aria_affect_v2_dynamics')}>
+            {[0, 0.5, 1].map((tick) => (
+               <g key={tick}>
+                  <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#e5e7eb" />
+                  <text x={padL - 5} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick.toFixed(1)}</text>
                </g>
             ))}
             {series.map((s) => <path key={s.key} d={pathFor(s.key)} fill="none" stroke={s.color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />)}

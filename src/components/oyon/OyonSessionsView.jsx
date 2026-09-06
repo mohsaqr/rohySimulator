@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, Download } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import {
@@ -16,6 +17,7 @@ import {
  */
 
 export default function OyonSessionsView({ records }) {
+   const { t } = useTranslation('oyon');
    const rows = useMemo(() => (Array.isArray(records) ? records : []), [records]);
    const [selectedSessionId, setSelectedSessionId] = useState(null);
    const [sessionDetail, setSessionDetail] = useState(null);
@@ -31,15 +33,16 @@ export default function OyonSessionsView({ records }) {
          if (!m.has(key)) {
             m.set(key, {
                session_id: r.session_id,
-               student_label: r.username || r.student_name_snapshot || r.user_id || 'unknown',
-               case_label: r.case_title_snapshot || (r.case_id ? `case ${r.case_id}` : 'unknown case'),
+               student_label: r.username || r.student_name_snapshot || r.user_id || t('unknown_student'),
+               case_label: r.case_title_snapshot
+                  || (r.case_id ? t('case_fallback', { id: r.case_id }) : t('unknown_case')),
                windows: [],
             });
          }
          m.get(key).windows.push(r);
       }
       return Array.from(m.values());
-   }, [rows]);
+   }, [rows, t]);
 
    const openSession = async (sessionId) => {
       if (selectedSessionId === sessionId) {
@@ -57,7 +60,7 @@ export default function OyonSessionsView({ records }) {
          if (requestedIdRef.current === sessionId) setSessionDetail(detail);
       } catch (e) {
          if (requestedIdRef.current === sessionId) {
-            setSessionDetail({ error: e?.message || 'Could not load session detail' });
+            setSessionDetail({ error: e?.message || t('session_detail_failed') });
          }
       }
    };
@@ -66,7 +69,7 @@ export default function OyonSessionsView({ records }) {
       <div className="rohy-admin-light space-y-3">
          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-600">
-               {rows.length} window{rows.length === 1 ? '' : 's'} across {grouped.length} session{grouped.length === 1 ? '' : 's'}
+               {t('sessions_summary', { windows: rows.length, sessions: grouped.length })}
             </span>
             <span className="ml-auto inline-flex gap-2">
                <button
@@ -74,19 +77,19 @@ export default function OyonSessionsView({ records }) {
                   disabled={!rows.length}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-900 hover:bg-gray-100 text-sm disabled:opacity-50"
                >
-                  <Download className="w-4 h-4" /> CSV
+                  <Download className="w-4 h-4" /> {t('export_csv')}
                </button>
                <button
                   onClick={() => exportRecordsJson(rows, 'oyon-sessions')}
                   disabled={!rows.length}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-900 hover:bg-gray-100 text-sm disabled:opacity-50"
                >
-                  <Download className="w-4 h-4" /> JSON
+                  <Download className="w-4 h-4" /> {t('export_json')}
                </button>
             </span>
          </div>
 
-         {!grouped.length && <Empty msg="No sessions match the current filters." />}
+         {!grouped.length && <Empty msg={t('sessions_empty')} />}
 
          <div className="grid gap-2">
             {grouped.map(g => (
@@ -96,18 +99,18 @@ export default function OyonSessionsView({ records }) {
                      className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-gray-50"
                   >
                      <ChevronRight className={`w-4 h-4 transition-transform ${selectedSessionId === g.session_id ? 'rotate-90' : ''}`} />
-                     <span className="font-semibold text-gray-900">Session {g.session_id}</span>
+                     <span className="font-semibold text-gray-900">{t('session_label', { id: g.session_id })}</span>
                      <span className="text-gray-600">·</span>
                      <span className="text-gray-800">{g.student_label}</span>
                      <span className="text-gray-600">·</span>
                      <span className="text-gray-800">{g.case_label}</span>
-                     <span className="ml-auto text-xs text-gray-500">{g.windows.length} windows</span>
+                     <span className="ml-auto text-xs text-gray-500">{t('session_window_count', { count: g.windows.length })}</span>
                   </button>
                   {selectedSessionId === g.session_id && (
                      <div className="border-t border-gray-200 p-3">
                         {sessionDetail?.error && <div className="text-sm text-red-300">{sessionDetail.error}</div>}
-                        {!sessionDetail && <div className="text-sm text-gray-500">Loading…</div>}
-                        {sessionDetail && !sessionDetail.error && <SessionTimeline detail={sessionDetail} />}
+                        {!sessionDetail && <div className="text-sm text-gray-500">{t('loading')}</div>}
+                        {sessionDetail && !sessionDetail.error && <SessionTimeline detail={sessionDetail} t={t} />}
                      </div>
                   )}
                </div>
@@ -117,9 +120,9 @@ export default function OyonSessionsView({ records }) {
    );
 }
 
-function SessionTimeline({ detail }) {
+function SessionTimeline({ detail, t }) {
    const windows = detail.oyon_windows || [];
-   if (!windows.length) return <div className="text-sm text-gray-500">No estimated-expression windows captured for this session.</div>;
+   if (!windows.length) return <div className="text-sm text-gray-500">{t('session_no_windows')}</div>;
 
    const startMs = Math.min(
       ...windows.map(w => Date.parse(w.window_start + (w.window_start.endsWith('Z') ? '' : 'Z'))).filter(Number.isFinite)
@@ -131,7 +134,7 @@ function SessionTimeline({ detail }) {
 
    return (
       <div className="space-y-2">
-         <div className="text-xs text-gray-600 mb-1">Estimated dominant per window</div>
+         <div className="text-xs text-gray-600 mb-1">{t('session_dominant_per_window')}</div>
          <div className="relative h-6 rounded bg-gray-100 overflow-hidden">
             {windows.map((w, i) => {
                const a = Math.max(0, (Date.parse(w.window_start + 'Z') - startMs) / totalMs);
@@ -146,32 +149,34 @@ function SessionTimeline({ detail }) {
                         background: emotionColor(w.dominant_emotion),
                         opacity: Number.isFinite(w.confidence) ? Math.max(0.3, w.confidence) : 0.5,
                      }}
-                     title={`${fmtTime(w.window_start)}  ·  ${w.dominant_emotion || '—'}  ·  conf ${pct(w.confidence)}  ·  miss ${pct(w.missing_face_ratio)}`}
+                     title={t('session_window_tooltip', {
+                        time: fmtTime(w.window_start),
+                        emotion: w.dominant_emotion || '—',
+                        confidence: pct(w.confidence),
+                        missing: pct(w.missing_face_ratio),
+                     })}
                   />
                );
             })}
          </div>
 
-         <div className="text-xs text-gray-600 mt-3 mb-1">Valence (estimate)</div>
-         <ValenceLine windows={windows} startMs={startMs} totalMs={totalMs} />
+         <div className="text-xs text-gray-600 mt-3 mb-1">{t('session_valence_estimate')}</div>
+         <ValenceLine windows={windows} startMs={startMs} totalMs={totalMs} t={t} />
 
          <div className="text-[11px] text-gray-500 italic mt-3 leading-snug">
-            Oyon-only timeline. Each row carries <code className="text-gray-600">session_id</code>,
-            <code className="text-gray-600 ml-1">user_id</code>, and
-            <code className="text-gray-600 ml-1">case_id</code> — combine with Rohy's session
-            log offline (export → join) for behaviour-aligned analyses.
+            {t('session_note')}
          </div>
       </div>
    );
 }
 
-function ValenceLine({ windows, startMs, totalMs }) {
+function ValenceLine({ windows, startMs, totalMs, t }) {
    const W = 800, H = 60, PAD = 4;
    const points = windows
       .filter(w => Number.isFinite(w.valence))
       .map(w => {
-         const t = Date.parse(w.window_start + 'Z');
-         const x = PAD + ((t - startMs) / totalMs) * (W - 2 * PAD);
+         const ts = Date.parse(w.window_start + 'Z');
+         const x = PAD + ((ts - startMs) / totalMs) * (W - 2 * PAD);
          const y = PAD + (1 - (Math.max(-1, Math.min(1, w.valence)) + 1) / 2) * (H - 2 * PAD);
          return `${x.toFixed(1)},${y.toFixed(1)}`;
       });
@@ -182,7 +187,7 @@ function ValenceLine({ windows, startMs, totalMs }) {
             <polyline fill="none" stroke="#0f766e" strokeWidth="2" points={points.join(' ')} />
          )}
          {!points.length && (
-            <text x={W/2} y={H/2 + 4} fontSize="10" fill="#6b7280" textAnchor="middle">no valence estimates</text>
+            <text x={W/2} y={H/2 + 4} fontSize="10" fill="#6b7280" textAnchor="middle">{t('session_no_valence')}</text>
          )}
       </svg>
    );

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
    emotionColor, pct, signed, fix2, signedColor, fmtTime, qualityVerdict,
 } from './emotionLogShared';
@@ -15,24 +16,25 @@ import { studentAggregates } from './recordAggregates';
  */
 
 export default function OyonStudentsView({ records }) {
+   const { t } = useTranslation('oyon');
    const students = useMemo(() => studentAggregates(records), [records]);
-   if (!students.length) return <Empty msg="No students match the current filters." />;
+   if (!students.length) return <Empty msg={t('students_empty')} />;
    return (
       <div className="rohy-admin-light max-h-[70vh] overflow-auto rounded-lg border border-gray-200">
          <table className="min-w-[1040px] w-full text-sm">
             <thead className="sticky top-0 z-10 bg-white shadow-lg text-gray-600 text-xs uppercase">
                <tr>
-                  <th className="text-left px-3 py-2">Student</th>
-                  <th className="text-left px-3 py-2">Role</th>
-                  <th className="text-right px-3 py-2">Sessions</th>
-                  <th className="text-right px-3 py-2">Cases</th>
-                  <th className="text-right px-3 py-2">Windows</th>
-                  <th className="text-left px-3 py-2">Top estimate</th>
-                  <th className="text-right px-3 py-2">Mean valence</th>
-                  <th className="text-right px-3 py-2">Mean arousal</th>
-                  <th className="text-right px-3 py-2">Mean confidence</th>
-                  <th className="text-left px-3 py-2">Quality</th>
-                  <th className="text-left px-3 py-2">Range</th>
+                  <th className="text-left px-3 py-2">{t('col_student')}</th>
+                  <th className="text-left px-3 py-2">{t('col_role')}</th>
+                  <th className="text-right px-3 py-2">{t('col_sessions')}</th>
+                  <th className="text-right px-3 py-2">{t('col_cases')}</th>
+                  <th className="text-right px-3 py-2">{t('col_windows')}</th>
+                  <th className="text-left px-3 py-2">{t('col_top_estimate')}</th>
+                  <th className="text-right px-3 py-2">{t('col_mean_valence')}</th>
+                  <th className="text-right px-3 py-2">{t('col_mean_arousal')}</th>
+                  <th className="text-right px-3 py-2">{t('col_mean_confidence')}</th>
+                  <th className="text-left px-3 py-2">{t('col_quality')}</th>
+                  <th className="text-left px-3 py-2">{t('col_range')}</th>
                </tr>
             </thead>
             <tbody>
@@ -42,7 +44,7 @@ export default function OyonStudentsView({ records }) {
                      <tr key={`${s.user_id ?? 'anon'}-${i}`} className="border-t border-gray-200 hover:bg-gray-50">
                         <td className="px-3 py-1.5">
                            <span className="font-semibold text-gray-900">{s.username || s.student_label}</span>
-                           {s.user_id ? null : <span className="ml-1 text-xs text-gray-500">(anonymised)</span>}
+                           {s.user_id ? null : <span className="ml-1 text-xs text-gray-500">{t('anonymised_note')}</span>}
                         </td>
                         <td className="px-3 py-1.5 text-gray-600">{s.user_role || '—'}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{s.sessions_count}</td>
@@ -58,7 +60,7 @@ export default function OyonStudentsView({ records }) {
                         <td className="px-3 py-1.5 text-right tabular-nums">{fix2(s.mean_arousal)}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{pct(s.mean_confidence)}</td>
                         <td className="px-3 py-1.5">
-                           <QualityBadge verdict={q} />
+                           <QualityBadge verdict={q} t={t} />
                         </td>
                         <td className="px-3 py-1.5 text-xs text-gray-600">
                            {fmtTime(s.first_window)} → {fmtTime(s.last_window)}
@@ -72,7 +74,10 @@ export default function OyonStudentsView({ records }) {
    );
 }
 
-function QualityBadge({ verdict }) {
+// `verdict.labelKey` is one of the five literal `quality_*` keys listed in
+// qualityVerdict() (emotionLogShared.js) — the enum-style lookup the i18n
+// convention allows, with the catalogue entries kept by keepRemoved.
+function QualityBadge({ verdict, t }) {
    const colors = {
       green: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
       amber: 'bg-amber-900/30 text-amber-300 border-amber-700/40',
@@ -80,7 +85,7 @@ function QualityBadge({ verdict }) {
    };
    return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs ${colors[verdict.level]}`}>
-         {verdict.label}
+         {t(verdict.labelKey)}
       </span>
    );
 }

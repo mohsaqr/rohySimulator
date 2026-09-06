@@ -1,34 +1,54 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
    Activity, AlertTriangle, BarChart3, Download, Eye, Gauge, ScanEye, Timer, Users,
 } from 'lucide-react';
 import { engagementAnalytics } from './engagementAnalytics';
 import { emotionColor } from './emotionLogShared';
 
+// Explicit key map: CSV field name → catalogue key for its column header.
+// The exported CSV keeps the raw field names in every language.
 const CROSS_TAB_COLUMNS = [
-   ['emotion', 'Emotion'],
-   ['windows', 'Windows'],
-   ['avgFocus', 'Focus'],
-   ['avgBlinkHz', 'Blink'],
-   ['avgEyeOpenness', 'Eye openness'],
-   ['avgOffScreen', 'Off-screen'],
+   ['emotion', 'col_emotion'],
+   ['windows', 'col_windows'],
+   ['avgFocus', 'col_focus'],
+   ['avgBlinkHz', 'col_blink'],
+   ['avgEyeOpenness', 'col_eye_openness'],
+   ['avgOffScreen', 'col_off_screen'],
+];
+
+// Focus-signal verdict → catalogue key (enum-style lookup, literal keys).
+const FOCUS_LABEL_KEYS = {
+   none: 'focus_label_none',
+   strong: 'focus_label_strong',
+   borderline: 'focus_label_borderline',
+   low: 'focus_label_low',
+};
+
+// Signal-quality rows: catalogue key + the summary field it reads.
+const QUALITY_ROW_KEYS = [
+   'quality_engagement_coverage',
+   'quality_calibration_quality',
+   'quality_missing_face',
+   'quality_off_screen_gaze',
 ];
 
 export default function OyonAttentionV2({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const analytics = useMemo(() => engagementAnalytics(records), [records]);
    const { summary, byEmotion, series } = analytics;
    const hasWindows = summary.windows > 0;
 
    if (loading && !hasWindows) {
-      return <EmptyState text="Loading attention signals..." />;
+      return <EmptyState text={t('attention_v2_loading')} />;
    }
 
    if (!loading && summary.engagementWindows === 0) {
       return (
          <EmptyState
             icon={<Eye className="h-6 w-6" />}
-            text="No engagement data in the current selection."
-            detail="Engagement appears after Oyon capture windows include focus, eye, and gaze quality signals."
+            text={t('attention_v2_empty_text')}
+            detail={t('attention_v2_empty_detail')}
          />
       );
    }
@@ -38,8 +58,8 @@ export default function OyonAttentionV2({ records, loading }) {
          <section className="rounded-md border border-gray-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">Attention 2</h2>
-                  <p className="mt-1 text-xs text-gray-500">Focus, eye openness, off-screen gaze, and signal quality for the current filters.</p>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-700">{t('attention_v2_title')}</h2>
+                  <p className="mt-1 text-xs text-gray-500">{t('attention_v2_subtitle')}</p>
                </div>
                <button
                   onClick={() => downloadCsv(byEmotion)}
@@ -47,33 +67,33 @@ export default function OyonAttentionV2({ records, loading }) {
                   className="inline-flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                >
                   <Download className="h-4 w-4" />
-                  CSV
+                  {t('export_csv')}
                </button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-               <MetricCard icon={<Users className="h-5 w-5" />} label="Sessions" value={summary.sessions} detail={`${summary.windows} windows`} accent="cyan" />
-               <MetricCard icon={<Activity className="h-5 w-5" />} label="Engagement Windows" value={`${summary.engagementWindows} / ${summary.windows}`} detail="Usable engagement payloads" accent="green" />
-               <MetricCard icon={<Gauge className="h-5 w-5" />} label="Avg Focus" value={pct(summary.avgFocus)} detail={focusLabel(summary.avgFocus)} accent="teal" />
-               <MetricCard icon={<Eye className="h-5 w-5" />} label="Eye Openness" value={pct(summary.avgEyeOpenness)} detail="Mean tracked openness" accent="cyan" />
-               <MetricCard icon={<Timer className="h-5 w-5" />} label="Blink Rate" value={hz(summary.avgBlinkHz)} detail="Mean blink frequency" accent="amber" />
-               <MetricCard icon={<ScanEye className="h-5 w-5" />} label="Off-screen" value={pct(summary.avgOffScreen)} detail="Look-away share" accent="rose" />
-               <MetricCard icon={<BarChart3 className="h-5 w-5" />} label="Calibration" value={pct(summary.avgCalibrationQuality)} detail="Gaze calibration quality" accent="green" />
-               <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label="No Face" value={pct(summary.avgMissingFace)} detail="Missing face time" accent="slate" />
+               <MetricCard icon={<Users className="h-5 w-5" />} label={t('metric_sessions')} value={summary.sessions} detail={t('metric_windows_detail', { count: summary.windows })} accent="cyan" />
+               <MetricCard icon={<Activity className="h-5 w-5" />} label={t('metric_engagement_windows')} value={`${summary.engagementWindows} / ${summary.windows}`} detail={t('metric_engagement_windows_detail')} accent="green" />
+               <MetricCard icon={<Gauge className="h-5 w-5" />} label={t('metric_avg_focus')} value={pct(summary.avgFocus)} detail={t(FOCUS_LABEL_KEYS[focusBand(summary.avgFocus)])} accent="teal" />
+               <MetricCard icon={<Eye className="h-5 w-5" />} label={t('metric_eye_openness')} value={pct(summary.avgEyeOpenness)} detail={t('metric_eye_openness_detail')} accent="cyan" />
+               <MetricCard icon={<Timer className="h-5 w-5" />} label={t('metric_blink_rate')} value={hz(summary.avgBlinkHz)} detail={t('metric_blink_rate_detail')} accent="amber" />
+               <MetricCard icon={<ScanEye className="h-5 w-5" />} label={t('metric_off_screen')} value={pct(summary.avgOffScreen)} detail={t('metric_off_screen_detail')} accent="rose" />
+               <MetricCard icon={<BarChart3 className="h-5 w-5" />} label={t('metric_calibration')} value={pct(summary.avgCalibrationQuality)} detail={t('metric_calibration_detail')} accent="green" />
+               <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label={t('metric_no_face')} value={pct(summary.avgMissingFace)} detail={t('metric_no_face_detail')} accent="slate" />
             </div>
          </section>
 
          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Panel title="Focus and Eye Openness">
-               <FocusOverview points={series} />
+            <Panel title={t('panel_focus_eye')}>
+               <FocusOverview points={series} t={t} />
             </Panel>
-            <Panel title="Attention Lapses">
-               <LapseOverview points={series} />
+            <Panel title={t('panel_attention_lapses')}>
+               <LapseOverview points={series} t={t} />
             </Panel>
-            <Panel title="Attention by Emotion">
-               <EmotionAttentionTable rows={byEmotion} />
+            <Panel title={t('panel_attention_by_emotion')}>
+               <EmotionAttentionTable rows={byEmotion} t={t} />
             </Panel>
-            <Panel title="Signal Quality">
-               <QualityPanel summary={summary} />
+            <Panel title={t('panel_signal_quality')}>
+               <QualityPanel summary={summary} t={t} />
             </Panel>
          </div>
       </div>
@@ -117,47 +137,48 @@ function Panel({ title, children }) {
    );
 }
 
-function FocusOverview({ points }) {
+function FocusOverview({ points, t }) {
    const usable = points.filter((p) => isNum(p.focus) || isNum(p.eyeOpenness));
    if (usable.length < 2) {
-      return <EmptyPanelText>Not enough sequential engagement windows for a line view.</EmptyPanelText>;
+      return <EmptyPanelText>{t('attention_v2_not_enough_line')}</EmptyPanelText>;
    }
    return (
       <div className="space-y-3">
          <LineChart
+            ariaLabel={t('aria_attention_timeline')}
             series={[
-               { name: 'Focus', color: '#0f766e', values: points.map((p) => p.focus) },
-               { name: 'Eye openness', color: '#0891b2', values: points.map((p) => p.eyeOpenness) },
+               { name: t('legend_focus'), color: '#0f766e', values: points.map((p) => p.focus) },
+               { name: t('legend_eye_openness'), color: '#0891b2', values: points.map((p) => p.eyeOpenness) },
             ]}
          />
          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-            <LegendItem label="Focus" color="#0f766e" />
-            <LegendItem label="Eye openness" color="#0891b2" />
+            <LegendItem label={t('legend_focus')} color="#0f766e" />
+            <LegendItem label={t('legend_eye_openness')} color="#0891b2" />
          </div>
       </div>
    );
 }
 
-function LapseOverview({ points }) {
+function LapseOverview({ points, t }) {
    const hasData = points.some((p) => isNum(p.offScreen) || isNum(p.missingFace));
-   if (!hasData) return <EmptyPanelText>No off-screen or missing-face signal in these windows.</EmptyPanelText>;
+   if (!hasData) return <EmptyPanelText>{t('attention_v2_no_lapse_signal')}</EmptyPanelText>;
    return (
       <div className="space-y-5">
-         <LapseStrip label="Off-screen" values={points.map((p) => p.offScreen)} color="248, 113, 113" />
-         <LapseStrip label="No face" values={points.map((p) => p.missingFace)} color="245, 158, 11" />
+         <LapseStrip label={t('lapse_off_screen')} kind="off_screen" values={points.map((p) => p.offScreen)} color="248, 113, 113" t={t} />
+         <LapseStrip label={t('lapse_no_face')} kind="no_face" values={points.map((p) => p.missingFace)} color="245, 158, 11" t={t} />
       </div>
    );
 }
 
-function EmotionAttentionTable({ rows }) {
-   if (!rows.length) return <EmptyPanelText>No emotion-labeled windows yet.</EmptyPanelText>;
+function EmotionAttentionTable({ rows, t }) {
+   if (!rows.length) return <EmptyPanelText>{t('attention_no_emotion_windows')}</EmptyPanelText>;
    return (
       <div className="overflow-x-auto">
          <table className="w-full text-left text-xs">
             <thead>
                <tr className="border-b border-gray-200 text-gray-500">
-                  {CROSS_TAB_COLUMNS.map(([key, label]) => (
-                     <th key={key} className="py-2 pr-3 font-semibold whitespace-nowrap">{label}</th>
+                  {CROSS_TAB_COLUMNS.map(([key, labelKey]) => (
+                     <th key={key} className="py-2 pr-3 font-semibold whitespace-nowrap">{t(labelKey)}</th>
                   ))}
                </tr>
             </thead>
@@ -183,19 +204,20 @@ function EmotionAttentionTable({ rows }) {
    );
 }
 
-function QualityPanel({ summary }) {
-   const rows = [
-      ['Engagement coverage', ratio(summary.engagementWindows, summary.windows)],
-      ['Calibration quality', summary.avgCalibrationQuality],
-      ['Missing face', summary.avgMissingFace],
-      ['Off-screen gaze', summary.avgOffScreen],
+function QualityPanel({ summary, t }) {
+   const values = [
+      ratio(summary.engagementWindows, summary.windows),
+      summary.avgCalibrationQuality,
+      summary.avgMissingFace,
+      summary.avgOffScreen,
    ];
+   const rows = QUALITY_ROW_KEYS.map((labelKey, i) => [labelKey, values[i]]);
    return (
       <div className="space-y-4">
-         {rows.map(([label, value]) => (
-            <div key={label}>
+         {rows.map(([labelKey, value]) => (
+            <div key={labelKey}>
                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium text-gray-700">{label}</span>
+                  <span className="font-medium text-gray-700">{t(labelKey)}</span>
                   <span className="tabular-nums text-gray-500">{pct(value)}</span>
                </div>
                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
@@ -207,7 +229,7 @@ function QualityPanel({ summary }) {
    );
 }
 
-function LineChart({ series, height = 210 }) {
+function LineChart({ series, ariaLabel, height = 210 }) {
    const W = 640;
    const H = height;
    const padL = 34;
@@ -231,11 +253,11 @@ function LineChart({ series, height = 210 }) {
       return d.trim();
    };
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Attention timeline">
-         {[0, 0.5, 1].map((t) => (
-            <g key={t}>
-               <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#e5e7eb" />
-               <text x={padL - 5} y={y(t) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{t.toFixed(1)}</text>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={ariaLabel}>
+         {[0, 0.5, 1].map((tick) => (
+            <g key={tick}>
+               <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#e5e7eb" />
+               <text x={padL - 5} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick.toFixed(1)}</text>
             </g>
          ))}
          {series.map((s) => (
@@ -245,7 +267,7 @@ function LineChart({ series, height = 210 }) {
    );
 }
 
-function LapseStrip({ label, values, color }) {
+function LapseStrip({ label, kind, values, color, t }) {
    return (
       <div>
          <div className="mb-2 flex items-center justify-between text-xs">
@@ -260,7 +282,7 @@ function LapseStrip({ label, values, color }) {
                      key={i}
                      className="h-full flex-1"
                      style={{ background: r > 0 ? `rgba(${color}, ${(0.15 + 0.85 * r).toFixed(2)})` : '#f3f4f6' }}
-                     title={`window ${i + 1}: ${pct(r)} ${label.toLowerCase()}`}
+                     title={t('lapse_tooltip', { index: i + 1, percent: (r * 100).toFixed(0), kind })}
                   />
                );
             })}
@@ -313,11 +335,11 @@ const mean = (values) => {
 const ratio = (a, b) => (Number(b) > 0 ? Number(a) / Number(b) : null);
 const pct = (v) => (isNum(v) ? `${(v * 100).toFixed(0)}%` : '—');
 const hz = (v) => (isNum(v) ? `${v.toFixed(2)} Hz` : '—');
-const focusLabel = (v) => {
-   if (!isNum(v)) return 'No focus signal';
-   if (v > 0.6) return 'Strong signal';
-   if (v > 0.4) return 'Borderline signal';
-   return 'Low signal';
+const focusBand = (v) => {
+   if (!isNum(v)) return 'none';
+   if (v > 0.6) return 'strong';
+   if (v > 0.4) return 'borderline';
+   return 'low';
 };
 
 function downloadCsv(rows) {

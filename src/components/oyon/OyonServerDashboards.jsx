@@ -1,8 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { loadOyonElement } from './loadOyonElement';
 import { recordsToWindows } from './serverWindows';
 import { OYON_ASSET_BASE } from './captureBridge';
+
+// Sentinel for "the element itself would not load" — the only error message
+// Rohy authors here (any other one is upstream text passed through verbatim).
+const LOAD_FAILED = Symbol('oyon-dashboards-load-failed');
 
 /*
  * The Oyon v2 Analyze dashboards (emotion trends, gaze tiles, engagement
@@ -18,6 +23,7 @@ import { OYON_ASSET_BASE } from './captureBridge';
  * coexists with the capture pill in the Patient Monitor.
  */
 export default function OyonServerDashboards({ records, loading, sessionId = null }) {
+   const { t } = useTranslation('oyon');
    const hostRef = useRef(null);
    const elRef = useRef(null);
    // Latest records, readable from the mount effect — so the element gets its
@@ -60,7 +66,10 @@ export default function OyonServerDashboards({ records, loading, sessionId = nul
             setReady(true);
          })
          .catch((e) => {
-            if (!cancelled) setLoadError(e?.message || 'Could not load the Oyon dashboards');
+            // A sentinel, not prose: this effect must not depend on `t`, or a
+            // language switch would remount the 5 MB element. Resolved to the
+            // catalogue string at render, exactly as OyonCaptureWidget does.
+            if (!cancelled) setLoadError(e?.message || LOAD_FAILED);
          });
       return () => {
          cancelled = true;
@@ -90,14 +99,12 @@ export default function OyonServerDashboards({ records, loading, sessionId = nul
       return (
          <div className="rounded-md border border-red-500/30 bg-red-950/40 px-3 py-3 text-sm text-red-200 space-y-1">
             <div className="flex items-center gap-2 font-semibold">
-               <AlertTriangle className="w-4 h-4 shrink-0" /> The Oyon analytics viewer failed to load
+               <AlertTriangle className="w-4 h-4 shrink-0" /> {t('dashboards_failed_title')}
             </div>
-            <p className="text-red-200/80">{loadError}</p>
-            <p className="text-xs text-red-200/60">
-               Check that the Oyon add-on assets are reachable (they are served from
-               <code className="mx-1">/oyon/standalone</code> by the Rohy backend), then use
-               Refresh above or reload the page to retry.
+            <p className="text-red-200/80">
+               {loadError === LOAD_FAILED ? t('dashboards_failed_default') : loadError}
             </p>
+            <p className="text-xs text-red-200/60">{t('dashboards_failed_hint')}</p>
          </div>
       );
    }
@@ -105,9 +112,7 @@ export default function OyonServerDashboards({ records, loading, sessionId = nul
    return (
       <div className="flex flex-col h-full min-h-0 gap-2">
          <p className="shrink-0 text-xs text-gray-500">
-            Oyon dashboards over the records matching the current filters
-            {loading ? ' — refreshing…' : ''}. Estimates from visible facial
-            signals only, aggregated in ~10&nbsp;s windows.
+            {loading ? t('dashboards_caption_refreshing') : t('dashboards_caption')}
          </p>
          {/* Light card: the element ships a light theme; don't sink it into
              the host's dark chrome. The host div stays mounted while loading —
@@ -127,7 +132,7 @@ export default function OyonServerDashboards({ records, loading, sessionId = nul
             {!ready && (
                <div className="absolute inset-0 grid place-items-center rounded-lg border border-gray-300 bg-white">
                   <div className="flex items-center gap-2 text-sm text-gray-800">
-                     <Loader2 className="w-4 h-4 animate-spin" /> Loading the Oyon dashboards…
+                     <Loader2 className="w-4 h-4 animate-spin" /> {t('dashboards_loading')}
                   </div>
                </div>
             )}

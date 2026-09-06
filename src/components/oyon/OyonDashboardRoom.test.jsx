@@ -84,7 +84,7 @@ describe('OyonDashboardRoom', () => {
 
         render(<OyonDashboardRoom onClose={() => {}} />);
         await waitFor(() => expect(screen.getByTestId('oyon-dashboards')).toBeInTheDocument());
-        expect(screen.queryByText('oyon_dashboard_load_failed')).not.toBeInTheDocument();
+        expect(screen.queryByText('dashboard_load_failed')).not.toBeInTheDocument();
     });
 
     it('reports a records-fetch failure instead of rendering an empty dashboard', async () => {
@@ -96,7 +96,7 @@ describe('OyonDashboardRoom', () => {
         });
 
         render(<OyonDashboardRoom onClose={() => {}} />);
-        await waitFor(() => expect(screen.getByText('oyon_dashboard_load_failed')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('dashboard_load_failed')).toBeInTheDocument());
         expect(screen.getByText('403 Access denied')).toBeInTheDocument();
         expect(screen.queryByTestId('oyon-dashboards')).not.toBeInTheDocument();
     });

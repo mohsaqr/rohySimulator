@@ -244,7 +244,7 @@ export default function TopBarControls({
                               className="rohy-topbar-menu-item"
                            >
                               <ScanEye className="w-4 h-4" />
-                              {t('oyon_dashboard')}
+                              {t('oyon:dashboard')}
                            </button>
                         )}
                         {isAdminUser && (

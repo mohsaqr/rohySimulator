@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, Eye } from 'lucide-react';
 import { engagementAnalytics } from './engagementAnalytics';
 import { emotionColor } from './emotionLogShared';
@@ -16,16 +17,21 @@ import { emotionColor } from './emotionLogShared';
 const FOCUS_COLOR = '#0f766e';
 const EYE_COLOR = '#0891b2';
 
+// Explicit key map: the CSV field order is the table's column order, and the
+// header of each column is a literal catalogue key (never t(variable-derived
+// prose)). The CSV keeps the raw field names — a downloaded file must not
+// change shape with the reader's UI language.
 const CROSS_TAB_COLUMNS = [
-   ['emotion', 'Emotion'],
-   ['windows', 'Windows'],
-   ['avgFocus', 'Focus'],
-   ['avgBlinkHz', 'Blink (Hz)'],
-   ['avgEyeOpenness', 'Eye openness'],
-   ['avgOffScreen', 'Off-screen'],
+   ['emotion', 'col_emotion'],
+   ['windows', 'col_windows'],
+   ['avgFocus', 'col_focus'],
+   ['avgBlinkHz', 'col_blink_hz'],
+   ['avgEyeOpenness', 'col_eye_openness'],
+   ['avgOffScreen', 'col_off_screen'],
 ];
 
 export default function OyonAttentionView({ records, loading }) {
+   const { t } = useTranslation('oyon');
    const analytics = useMemo(() => engagementAnalytics(records), [records]);
    const { summary, byEmotion, series } = analytics;
    const singleSession = summary.sessions === 1;
@@ -33,7 +39,7 @@ export default function OyonAttentionView({ records, loading }) {
    if (loading && summary.windows === 0) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            Loading engagement data…
+            {t('engagement_loading')}
          </div>
       );
    }
@@ -42,9 +48,7 @@ export default function OyonAttentionView({ records, loading }) {
       return (
          <div className="rohy-admin-light rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
             <Eye className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-            No engagement data in the current selection. Engagement arrives with
-            windows captured by the v2 pill (mediapipe engine, on by default) —
-            run a capture, then refresh.
+            {t('engagement_empty')}
          </div>
       );
    }
@@ -53,35 +57,33 @@ export default function OyonAttentionView({ records, loading }) {
       <div className="rohy-admin-light space-y-5">
          {/* Quality + headline attention stat chips */}
          <div className="flex flex-wrap gap-2">
-            <Stat label="Sessions" value={String(summary.sessions)} />
-            <Stat label="Engagement windows" value={`${summary.engagementWindows} / ${summary.windows}`} />
-            <Stat label="Avg focus" value={pctOrDash(summary.avgFocus)} accent />
-            <Stat label="Eye openness" value={pctOrDash(summary.avgEyeOpenness)} />
+            <Stat label={t('stat_sessions')} value={String(summary.sessions)} />
+            <Stat label={t('stat_engagement_windows')} value={`${summary.engagementWindows} / ${summary.windows}`} />
+            <Stat label={t('stat_avg_focus')} value={pctOrDash(summary.avgFocus)} accent />
+            <Stat label={t('stat_eye_openness')} value={pctOrDash(summary.avgEyeOpenness)} />
             <Stat
-               label="Blink rate"
+               label={t('stat_blink_rate')}
                value={Number.isFinite(summary.avgBlinkHz) ? `${summary.avgBlinkHz.toFixed(2)} Hz` : '—'}
             />
-            <Stat label="Off-screen" value={pctOrDash(summary.avgOffScreen)} hint="Share of tracked gaze pointing away from the screen." />
+            <Stat label={t('stat_off_screen')} value={pctOrDash(summary.avgOffScreen)} hint={t('hint_off_screen')} />
             <Stat
-               label="Calibration"
+               label={t('stat_calibration')}
                value={pctOrDash(summary.avgCalibrationQuality)}
-               hint={`No-face: ${pctOrDash(summary.avgMissingFace)} of window time had no detectable face.`}
+               hint={t('hint_calibration', { value: pctOrDash(summary.avgMissingFace) })}
             />
          </div>
 
          {/* How attention moved — only meaningful for a single session */}
          <section className="rounded-lg border border-gray-200 bg-white p-4">
-            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">Engagement over time</h3>
-            <p className="mb-3 text-xs text-gray-500">
-               Focus + eye openness per window, and the attention-lapse strip (off-screen / no face).
-            </p>
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_engagement_over_time')}</h3>
+            <p className="mb-3 text-xs text-gray-500">{t('engagement_over_time_hint')}</p>
             {singleSession ? (
                <div className="space-y-3">
-                  <FocusTimeline points={series} />
-                  <AttentionLapseStrip points={series} />
+                  <FocusTimeline points={series} t={t} />
+                  <AttentionLapseStrip points={series} t={t} />
                </div>
             ) : (
-               <p className="text-sm text-gray-500">Filter to a single session to see the focus timeline.</p>
+               <p className="text-sm text-gray-500">{t('attention_single_session_only')}</p>
             )}
          </section>
 
@@ -89,27 +91,25 @@ export default function OyonAttentionView({ records, loading }) {
          <section className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="mb-3 flex items-center justify-between">
                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-gray-800">Attention by emotion</h3>
-                  <p className="text-xs text-gray-500">
-                     Mean attention signals across the windows each emotion labels.
-                  </p>
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-gray-800">{t('section_attention_by_emotion')}</h3>
+                  <p className="text-xs text-gray-500">{t('attention_by_emotion_hint')}</p>
                </div>
                <button
                   onClick={() => downloadCsv(byEmotion)}
                   disabled={byEmotion.length === 0}
                   className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:opacity-50"
                >
-                  <Download className="h-4 w-4" /> CSV
+                  <Download className="h-4 w-4" /> {t('export_csv')}
                </button>
             </div>
             {byEmotion.length === 0 ? (
-               <p className="text-sm text-gray-500">No emotion-labeled windows yet.</p>
+               <p className="text-sm text-gray-500">{t('attention_no_emotion_windows')}</p>
             ) : (
                <table className="w-full text-left text-xs">
                   <thead>
                      <tr className="border-b border-gray-200 text-gray-500">
-                        {CROSS_TAB_COLUMNS.map(([key, label]) => (
-                           <th key={key} className="py-1.5 pr-3 font-semibold whitespace-nowrap">{label}</th>
+                        {CROSS_TAB_COLUMNS.map(([key, labelKey]) => (
+                           <th key={key} className="py-1.5 pr-3 font-semibold whitespace-nowrap">{t(labelKey)}</th>
                         ))}
                      </tr>
                   </thead>
@@ -161,18 +161,18 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 // they share a y-axis). Dense — no per-point labels; nulls break the line at
 // sensing gaps. Blink rate is a different scale (Hz) and stays in the chips
 // and cross-tab to keep this axis honest.
-function FocusTimeline({ points }) {
+function FocusTimeline({ points, t }) {
    const usable = points.filter((p) => isNum(p.focus) || isNum(p.eyeOpenness));
    if (usable.length < 2) {
-      return <p className="text-sm text-gray-500">Not enough engagement data for a timeline.</p>;
+      return <p className="text-sm text-gray-500">{t('attention_not_enough_timeline')}</p>;
    }
    const series = [
-      { name: 'Focus', color: FOCUS_COLOR, values: points.map((p) => p.focus) },
-      { name: 'Eye openness', color: EYE_COLOR, values: points.map((p) => p.eyeOpenness) },
+      { name: t('legend_focus'), color: FOCUS_COLOR, values: points.map((p) => p.focus) },
+      { name: t('legend_eye_openness'), color: EYE_COLOR, values: points.map((p) => p.eyeOpenness) },
    ];
    return (
       <div className="space-y-1">
-         <LineChart series={series} />
+         <LineChart series={series} ariaLabel={t('aria_focus_timeline')} />
          <div className="flex flex-wrap gap-3 px-1 text-[11px] text-gray-500">
             {series.map((s) => (
                <span key={s.name} className="inline-flex items-center gap-1">
@@ -186,7 +186,7 @@ function FocusTimeline({ points }) {
 
 // Multi-series 0..1 line chart with y gridlines; a null breaks the pen so
 // sensing gaps show as gaps, never interpolated lines.
-function LineChart({ series, height = 150 }) {
+function LineChart({ series, ariaLabel, height = 150 }) {
    const W = 600;
    const H = height;
    const padL = 30;
@@ -212,12 +212,12 @@ function LineChart({ series, height = 150 }) {
    };
 
    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Focus timeline">
-         {[0, 0.5, 1].map((t) => (
-            <g key={t}>
-               <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#d1d5db" strokeWidth={0.5} />
-               <text x={padL - 4} y={y(t) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
-                  {t.toFixed(1)}
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={ariaLabel}>
+         {[0, 0.5, 1].map((tick) => (
+            <g key={tick}>
+               <line x1={padL} x2={W - padR} y1={y(tick)} y2={y(tick)} stroke="#d1d5db" strokeWidth={0.5} />
+               <text x={padL - 4} y={y(tick) + 3} textAnchor="end" fontSize={9} fill="#6b7280" className="tabular-nums">
+                  {tick.toFixed(1)}
                </text>
             </g>
          ))}
@@ -234,12 +234,12 @@ function LineChart({ series, height = 150 }) {
 // A ribbon over the window index where gaze went off-screen or a face was
 // missing. Cell intensity ∝ ratio, so dark red bands mark attention lapses
 // (look-aways, leaving frame).
-function AttentionLapseStrip({ points }) {
+function AttentionLapseStrip({ points, t }) {
    const hasData = points.some((p) => isNum(p.offScreen) || isNum(p.missingFace));
-   if (!hasData) return <p className="text-sm text-gray-500">No attention-lapse data.</p>;
+   if (!hasData) return <p className="text-sm text-gray-500">{t('lapse_none')}</p>;
    const rows = [
-      { label: 'Off-screen', key: 'offScreen' },
-      { label: 'No face', key: 'missingFace' },
+      { label: t('lapse_off_screen'), kind: 'off_screen', key: 'offScreen' },
+      { label: t('lapse_no_face'), kind: 'no_face', key: 'missingFace' },
    ];
    return (
       <div className="space-y-1">
@@ -255,7 +255,11 @@ function AttentionLapseStrip({ points }) {
                            key={i}
                            className="h-full flex-1"
                            style={{ background: r > 0 ? `rgba(248, 113, 113, ${(0.15 + 0.85 * r).toFixed(2)})` : '#f3f4f6' }}
-                           title={`window ${i + 1}: ${(r * 100).toFixed(0)}% ${row.label.toLowerCase()}`}
+                           title={t('lapse_tooltip', {
+                              index: i + 1,
+                              percent: (r * 100).toFixed(0),
+                              kind: row.kind,
+                           })}
                         />
                      );
                   })}

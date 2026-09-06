@@ -224,7 +224,7 @@ export default function StudentFirstRun({ onDone }) {
                 {/* Emotion-capture consent — only when the tenant runs Oyon */}
                 {oyonConfig && (
                     <section className={cardClass}>
-                        <CardTitle icon={ScanFace}>{t('oyon_card_title')}</CardTitle>
+                        <CardTitle icon={ScanFace}>{t('oyon:card_title')}</CardTitle>
                         <label className="flex items-start gap-3 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -232,10 +232,10 @@ export default function StudentFirstRun({ onDone }) {
                                 onChange={e => setOyonConsent(e.target.checked)}
                                 className="w-4 h-4 mt-0.5 accent-blue-500"
                             />
-                            <span className="text-sm text-neutral-200">{t('oyon_card_toggle')}</span>
+                            <span className="text-sm text-neutral-200">{t('oyon:card_toggle')}</span>
                         </label>
                         <p className="text-xs text-neutral-500 mt-2">
-                            {t('oyon_card_note', { version: oyonConfig.consent_version || '' })}
+                            {t('oyon:card_note', { version: oyonConfig.consent_version || '' })}
                         </p>
                     </section>
                 )}

@@ -25,7 +25,7 @@ import EventLogger from '../../services/eventLogger';
  * gates only the newly-described signals on the newer version.
  */
 export default function OyonConsentUpdate() {
-   const { t } = useTranslation('app');
+   const { t } = useTranslation('oyon');
    const [state, setState] = useState(null); // { requiredVersion } once needed
    const [busy, setBusy] = useState(false);
 
@@ -92,19 +92,19 @@ export default function OyonConsentUpdate() {
          <div className="w-full max-w-lg rounded-lg border border-neutral-700 bg-neutral-900 p-5 space-y-4">
             <div className="flex items-center gap-2">
                <ScanFace className="w-5 h-5 text-blue-400" />
-               <h2 className="text-base font-semibold text-neutral-100">{t('oyon_reconsent_title')}</h2>
+               <h2 className="text-base font-semibold text-neutral-100">{t('reconsent_title')}</h2>
             </div>
 
-            <p className="text-sm text-neutral-300">{t('oyon_reconsent_body')}</p>
+            <p className="text-sm text-neutral-300">{t('reconsent_body')}</p>
 
             <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-1">
-               <li>{t('oyon_reconsent_item_typing')}</li>
-               <li>{t('oyon_reconsent_item_interaction')}</li>
-               <li>{t('oyon_reconsent_item_discourse')}</li>
+               <li>{t('reconsent_item_typing')}</li>
+               <li>{t('reconsent_item_interaction')}</li>
+               <li>{t('reconsent_item_discourse')}</li>
             </ul>
 
             <p className="text-xs text-neutral-500">
-               {t('oyon_reconsent_note', { version: state.requiredVersion || '' })}
+               {t('reconsent_note', { version: state.requiredVersion || '' })}
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-1">
@@ -114,7 +114,7 @@ export default function OyonConsentUpdate() {
                   onClick={() => answer(false)}
                   className="px-3 py-1.5 rounded text-sm text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
                >
-                  {t('oyon_reconsent_decline')}
+                  {t('reconsent_decline')}
                </button>
                <button
                   type="button"
@@ -123,7 +123,7 @@ export default function OyonConsentUpdate() {
                   className="px-3 py-1.5 rounded text-sm bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 flex items-center gap-2"
                >
                   {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {t('oyon_reconsent_accept')}
+                  {t('reconsent_accept')}
                </button>
             </div>
          </div>
