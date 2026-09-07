@@ -35,6 +35,38 @@ export const MEASUREMENT_LABELS = Object.freeze([
 
 export const MEASUREMENT_LABEL_IDS = Object.freeze(MEASUREMENT_LABELS.map(({ id }) => id));
 
+/**
+ * Translation key per span name and per range verdict.
+ *
+ * `MEASUREMENT_LABELS` is module-scope data and cannot take a `t` prop, so the
+ * `label` above is the English fallback and the panel translates from the id.
+ * The keys are written out literally because `t(MEASUREMENT_LABEL_KEYS[id])` is
+ * invisible to a key extractor.
+ */
+export const MEASUREMENT_LABEL_KEYS = Object.freeze({
+  rr: 'measurement_rr',
+  pr: 'measurement_pr',
+  qrs: 'measurement_qrs',
+  qt: 'measurement_qt',
+  p_duration: 'measurement_p_duration',
+  st_level: 'measurement_st_level',
+  amplitude: 'measurement_amplitude',
+  other: 'measurement_other',
+});
+
+/** Translation key per `measurement_verdict()` result. */
+export const MEASUREMENT_VERDICT_KEYS = Object.freeze({
+  short: 'verdict_short',
+  normal: 'verdict_normal',
+  long: 'verdict_long',
+});
+
+MEASUREMENT_LABEL_IDS.forEach((id) => {
+  if (!MEASUREMENT_LABEL_KEYS[id]) {
+    throw new RangeError(`measurements.js: label '${id}' has no translation key`);
+  }
+});
+
 /** Label definitions by id, so a lookup is not a scan per row per render. */
 const LABEL_BY_ID = Object.freeze(Object.fromEntries(
   MEASUREMENT_LABELS.map((definition) => [definition.id, definition]),

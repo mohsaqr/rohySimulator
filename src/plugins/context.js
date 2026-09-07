@@ -18,6 +18,7 @@
  */
 
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
+import { localeNamespaceOf } from '../../server/shared/pluginRegistry.js';
 import { createPluginLogger, deprecatedEventLoggerProxy } from './logger.js';
 
 /**
@@ -269,7 +270,15 @@ export function createPluginContext({ manifest, session, caseConfig, eventLogger
         eventLogger: deprecatedEventLoggerProxy(log, id),
         capabilities,
         store,
-        t,
+        // The plugin's translator: its own namespace first (what it shipped under
+        // src/plugins/<id>/locales, or what rohy shadows there), then common.
+        // Packages call t(key, fallback[, values]) — i18next's own overload —
+        // with PLAIN keys, so the namespace has to be bound here, by the host.
+        t: (key, fallback, values) => t(key, {
+            ns: [localeNamespaceOf(manifest), 'common'],
+            defaultValue: fallback ?? key,
+            ...(values && typeof values === 'object' ? values : {}),
+        }),
         navigate,
         // The 'orders' capability (RPS-1): what this learner has ordered in a
         // CORE room, narrowed by the host in src/plugins/hostOrders.js. Absent

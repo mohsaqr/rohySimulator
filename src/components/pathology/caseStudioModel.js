@@ -155,6 +155,23 @@ export function studioIssues(document, options = {}) {
 }
 
 /**
+ * One translation key per lifecycle transition, written out LITERALLY.
+ *
+ * `studioTransitions()` is a plain function returning module-shaped data with
+ * no access to a `t` prop, so each transition keeps its English `label` as the
+ * fallback and the EDITOR translates from the stable `id`. Spelled out because
+ * a key assembled from a variable cannot be extracted.
+ */
+export const TRANSITION_LABEL_KEYS = {
+    saveDraft: 'transition_save_draft',
+    submitForReview: 'transition_submit_for_review',
+    returnToDraft: 'transition_return_to_draft',
+    publish: 'transition_publish',
+    fork: 'transition_fork',
+    retire: 'transition_retire',
+};
+
+/**
  * What this revision can do next, and why it cannot do the rest.
  *
  * The lifecycle is a state machine — draft -> review -> published -> retired —

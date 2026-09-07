@@ -47,6 +47,7 @@ export * from './formatAdapters.js';
 export * from './geojson.js';
 export * from './grading.js';
 export * from './hostDocument.js';
+export * from './i18n.js';
 export * from './imageAdjustments.js';
 export * from './imageEmbed.js';
 export * from './keymap.js';

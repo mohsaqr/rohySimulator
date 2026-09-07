@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
+import { format_message, identity_t } from '../i18n.js';
+import { fnv1a } from '../recordIds.js';
+import { DIFFICULTY_KEYS, DIFFICULTY_LABELS } from '../presets.js';
 import { recording_source_kind } from '../recordingSource.js';
 import { ECGCasePreview } from './ECGCasePreview.jsx';
 
+/** `[filter id, translation key, English label]` per source facet. */
 const SOURCE_FILTERS = Object.freeze([
-  ['all', 'All'],
-  ['library', 'Library'],
-  ['uploaded', 'Uploaded'],
+  ['all', 'facet_all', 'All'],
+  ['library', 'facet_library', 'Library'],
+  ['uploaded', 'facet_uploaded', 'Uploaded'],
 ]);
 
 const case_manifest = (ecg_case) => ecg_case?.manifest ?? ecg_case ?? {};
@@ -87,12 +91,7 @@ export function filter_ecg_cases(cases, {
  * @returns {string} accession of the form ECG-XXXXXX
  */
 export function case_accession(ecg_case) {
-  const id = case_id(ecg_case);
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
+  const hash = fnv1a(case_id(ecg_case));
   return `ECG-${hash.toString(36).toUpperCase().padStart(6, '0').slice(-6)}`;
 }
 
@@ -111,32 +110,38 @@ export function case_accession(ecg_case) {
  * disagree with itself, which is how the accessible name kept the title after
  * the visible one had dropped it.
  *
+ * Authored text (a title, a presentation, a recording's own name) is CASE
+ * material and is returned as authored — it is translated wherever the case is
+ * written, not here. `t` only supplies this package's own wording, the neutral
+ * names a case that carries none falls back to.
+ *
  * @param {object} ecg_case case document or learner manifest
  * @param {boolean} reveal whether authored titles may be shown
+ * @param {(key: string, fallback?: string, values?: object) => string} [t] host translator
  * @returns {{name:string, line:string, history:string|null}} display text
  */
-export function case_display(ecg_case, reveal) {
+export function case_display(ecg_case, reveal, t = identity_t) {
   const manifest = case_manifest(ecg_case);
   const recording = first_recording(ecg_case);
   if (!reveal) {
-    return { name: case_accession(ecg_case), line: neutral_line(ecg_case), history: null };
+    return { name: case_accession(ecg_case), line: neutral_line(ecg_case, t), history: null };
   }
   return {
     name: manifest.title || case_id(ecg_case),
     line: manifest.patient?.presentation || manifest.purpose
-      || recording?.title || '12-lead ECG',
+      || recording?.title || t('twelve_lead_ecg_short', '12-lead ECG'),
     history: manifest.patient?.history ?? null,
   };
 }
 
-function neutral_line(ecg_case) {
+function neutral_line(ecg_case, t) {
   const recording = first_recording(ecg_case);
   const seconds = Number(recording?.render_spec?.acquisition?.duration_seconds
     ?? recording?.sample_source?.duration_seconds);
   const rate = Number(recording?.render_spec?.acquisition?.sample_rate_hz
     ?? recording?.sample_source?.sample_rate_hz);
   return [
-    recording?.title || 'Resting 12-lead ECG',
+    recording?.title || t('resting_twelve_lead_ecg', 'Resting 12-lead ECG'),
     Number.isFinite(seconds) ? `${seconds} s` : null,
     Number.isFinite(rate) ? `${rate} Hz` : null,
   ].filter(Boolean).join(' · ');
@@ -156,7 +161,21 @@ function Facet({ active, count = null, label, on_click }) {
   );
 }
 
-function CaseRow({ ecg_case, active, on_select, on_open, reveal }) {
+/**
+ * A difficulty as a reader should see it.
+ *
+ * A case may carry a level this package has never heard of, so the catalogue
+ * key is used when there is one and the authored value is title-cased when
+ * there is not — inventing a key for unknown data would print a raw key.
+ */
+const difficulty_text = (difficulty, t) => {
+  const level = String(difficulty ?? '').toLowerCase();
+  return DIFFICULTY_KEYS[level]
+    ? t(DIFFICULTY_KEYS[level], DIFFICULTY_LABELS[level])
+    : title_case(difficulty);
+};
+
+function CaseRow({ ecg_case, active, on_select, on_open, reveal, t }) {
   const manifest = case_manifest(ecg_case);
   const recording = first_recording(ecg_case);
   const source = ecg_case_source_group(ecg_case);
@@ -164,19 +183,20 @@ function CaseRow({ ecg_case, active, on_select, on_open, reveal }) {
   // One decision, used for the visible name, the accessible name and the
   // thumbnail alike — announcing a title a screen reader can hear but the page
   // does not show would hide the giveaway from sighted readers only.
-  const { name, line } = case_display(ecg_case, reveal);
+  const { name, line } = case_display(ecg_case, reveal, t);
   return (
     <li>
       <button
         type="button"
         className={`ecg-library-row${active ? ' is-active' : ''}`}
         aria-pressed={active}
-        aria-label={`Inspect ${name}`}
+        // The case's name is data, so the translated verb wraps it.
+        aria-label={`${t('inspect', 'Inspect')} ${name}`}
         onClick={() => on_select(id, ecg_case)}
         onDoubleClick={() => on_open(ecg_case)}
       >
         <span className="ecg-library-row-thumb">
-          <ECGCasePreview recording_document={recording} title={name} />
+          <ECGCasePreview recording_document={recording} title={name} t={t} />
         </span>
         <span className="ecg-library-row-body">
           <strong>{name}</strong>
@@ -185,11 +205,11 @@ function CaseRow({ ecg_case, active, on_select, on_open, reveal }) {
         <span className="ecg-library-row-meta">
           {manifest.difficulty && (
             <span className={`ecg-tag ecg-tag-${String(manifest.difficulty).toLowerCase()}`}>
-              {title_case(manifest.difficulty)}
+              {difficulty_text(manifest.difficulty, t)}
             </span>
           )}
           <span className={`ecg-tag ecg-tag-source-${source}`}>
-            {source === 'uploaded' ? 'Uploaded' : 'Library'}
+            {source === 'uploaded' ? t('facet_uploaded', 'Uploaded') : t('facet_library', 'Library')}
           </span>
         </span>
       </button>
@@ -197,7 +217,15 @@ function CaseRow({ ecg_case, active, on_select, on_open, reveal }) {
   );
 }
 
-function CaseDetail({ ecg_case, choose_label, on_choose, on_remove, reveal }) {
+/** Translation key and English name per recording source kind. */
+const FORMAT_TEXT = Object.freeze({
+  generated: ['format_generated', 'Interactive waveform'],
+  samples: ['format_samples', 'Samples'],
+  image: ['format_image', 'Image'],
+  pdf: ['format_pdf', 'PDF'],
+});
+
+function CaseDetail({ ecg_case, choose_label, on_choose, on_remove, reveal, t }) {
   const [remove_pending, set_remove_pending] = useState(false);
   const manifest = case_manifest(ecg_case);
   const recording = first_recording(ecg_case);
@@ -207,34 +235,43 @@ function CaseDetail({ ecg_case, choose_label, on_choose, on_remove, reveal }) {
     ?? recording?.sample_source?.duration_seconds);
   const sample_rate = Number(recording?.render_spec?.acquisition?.sample_rate_hz
     ?? recording?.sample_source?.sample_rate_hz);
-  const { name, line, history } = case_display(ecg_case, reveal);
+  const { name, line, history } = case_display(ecg_case, reveal, t);
+  const format = FORMAT_TEXT[source_kind];
+  // `[row key, translated term, value]` — the key is what React lists on, so a
+  // translation that happens to repeat a term cannot collapse two rows.
   const details = [
-    ['Source', source === 'uploaded' ? 'Uploaded' : 'ECG library'],
-    ['Format', source_kind === 'generated' ? 'Interactive waveform' : title_case(source_kind)],
-    ['Duration', Number.isFinite(duration) ? `${duration} s` : null],
-    ['Sampling', Number.isFinite(sample_rate) ? `${sample_rate} Hz` : null],
-    ['Level', manifest.difficulty ? title_case(manifest.difficulty) : null],
-  ].filter(([, value]) => value);
+    ['source', t('detail_source', 'Source'),
+      source === 'uploaded' ? t('facet_uploaded', 'Uploaded') : t('detail_ecg_library', 'ECG library')],
+    ['format', t('detail_format', 'Format'),
+      format ? t(format[0], format[1]) : title_case(source_kind)],
+    ['duration', t('detail_duration', 'Duration'), Number.isFinite(duration) ? `${duration} s` : null],
+    ['sampling', t('detail_sampling', 'Sampling'), Number.isFinite(sample_rate) ? `${sample_rate} Hz` : null],
+    ['level', t('detail_level', 'Level'), manifest.difficulty ? difficulty_text(manifest.difficulty, t) : null],
+  ].filter(([, , value]) => value);
 
   return (
-    <aside className="ecg-library-detail" aria-label={`Selected ECG: ${name}`}>
+    <aside className="ecg-library-detail" aria-label={`${t('selected_ecg', 'Selected ECG')}: ${name}`}>
       <div className="ecg-library-detail-preview">
-        <ECGCasePreview recording_document={recording} title={name} />
+        <ECGCasePreview recording_document={recording} title={name} t={t} />
       </div>
       <div className="ecg-library-detail-content">
-        <p className="ecg-eyebrow">Selected ECG</p>
+        <p className="ecg-eyebrow">{t('selected_ecg', 'Selected ECG')}</p>
         <h3>{name}</h3>
         <p>{line}</p>
         {history && (
-          <p className="ecg-library-detail-history"><strong>History</strong> {history}</p>
+          <p className="ecg-library-detail-history">
+            <strong>{t('history', 'History')}</strong> {history}
+          </p>
         )}
         <dl className="ecg-library-detail-facts">
-          {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          {details.map(([row_key, term, value]) => (
+            <div key={row_key}><dt>{term}</dt><dd>{value}</dd></div>
+          ))}
         </dl>
       </div>
       <div className="ecg-library-detail-actions">
         <button type="button" className="ecg-button ecg-button-primary" onClick={() => on_choose(ecg_case)}>
-          {choose_label}
+          {choose_label ?? t('open_ecg', 'Open ECG')}
         </button>
         {source === 'uploaded' && typeof on_remove === 'function' && (
           <button
@@ -249,11 +286,13 @@ function CaseDetail({ ecg_case, choose_label, on_choose, on_remove, reveal }) {
               }
             }}
           >
-            {remove_pending ? 'Confirm removal' : 'Remove upload'}
+            {remove_pending ? t('confirm_removal', 'Confirm removal') : t('remove_upload', 'Remove upload')}
           </button>
         )}
         {remove_pending && (
-          <p className="ecg-library-remove-note" role="status">Select “Confirm removal” to remove this upload.</p>
+          <p className="ecg-library-remove-note" role="status">
+            {t('confirm_removal_note', 'Select “Confirm removal” to remove this upload.')}
+          </p>
         )}
       </div>
     </aside>
@@ -275,7 +314,9 @@ function CaseDetail({ ecg_case, choose_label, on_choose, on_remove, reveal }) {
  * @param {(id: string, ecg_case: object) => void} props.on_select inspection handler
  * @param {(ecg_case: object) => void} props.on_choose open handler
  * @param {((ecg_case: object) => void)|null} [props.on_remove] removal handler for uploads
- * @param {string} [props.choose_label] label of the open action
+ * @param {string|null} [props.choose_label] label of the open action; null takes
+ *   the package's own translated wording
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @param {boolean} [props.reveal_titles] show authored titles and presentations.
  *   Defaults to FALSE — a title like "Syncope with profound bradycardia" beside
  *   a complete-heart-block strip states the reading before it is made, so an
@@ -289,8 +330,9 @@ export function ECGLibrary({
   on_select,
   on_choose,
   on_remove = null,
-  choose_label = 'Open ECG',
+  choose_label = null,
   reveal_titles = false,
+  t = identity_t,
 }) {
   if (!Array.isArray(cases)) throw new TypeError('ECGLibrary: cases must be an array');
   if (typeof on_select !== 'function') throw new TypeError('ECGLibrary: on_select must be a function');
@@ -320,23 +362,33 @@ export function ECGLibrary({
   );
   const selected_case = cases.find((ecg_case) => case_id(ecg_case) === String(selected_id ?? '')) ?? null;
   const filtered = query !== '' || source !== 'all' || difficulty !== 'all';
+  const shown_values = { shown: filtered_cases.length, total: counts.all };
 
   return (
-    <section className="ecg-library-browser" aria-label="ECG library">
+    <section className="ecg-library-browser" aria-label={t('ecg_library', 'ECG library')}>
       <header className="ecg-library-bar">
         <div className="ecg-library-bar-title">
-          <h2>Choose an ECG</h2>
-          <p>{filtered_cases.length} of {counts.all} tracings{filtered ? ' match' : ''}</p>
+          <h2>{t('choose_an_ecg', 'Choose an ECG')}</h2>
+          {/* One sentence, one key. Splitting this into `{n} of {m} tracings`
+              made "of" a translatable unit, which it is not: in Finnish and
+              Kazakh the relation is a case ending on the noun, not a separate
+              word, and word order and agreement differ besides. The counts ride
+              in as values so a translator can move them anywhere. */}
+          <p>
+            {filtered
+              ? format_message(t, 'library_showing_filtered', '{shown} of {total} tracings match', shown_values)
+              : format_message(t, 'library_showing', '{shown} of {total} tracings', shown_values)}
+          </p>
         </div>
         <label className="ecg-library-search">
-          <span className="ecg-visually-hidden">Search ECGs</span>
+          <span className="ecg-visually-hidden">{t('search_ecgs', 'Search ECGs')}</span>
           <input
             type="search"
             value={query}
             onChange={(event) => set_query(event.target.value)}
             placeholder={reveal_titles
-              ? 'Search cases, presentation, or files…'
-              : 'Search by accession…'}
+              ? t('search_placeholder_clinical', 'Search cases, presentation, or files…')
+              : t('search_placeholder_accession', 'Search by accession…')}
           />
         </label>
         {filtered && (
@@ -345,25 +397,36 @@ export function ECGLibrary({
             className="ecg-library-clear"
             onClick={() => { set_query(''); set_source('all'); set_difficulty('all'); }}
           >
-            Clear filters
+            {t('clear_filters', 'Clear filters')}
           </button>
         )}
       </header>
 
       <div className="ecg-library-frame">
-        <nav className="ecg-library-facets" aria-label="Library filters">
-          <p className="ecg-library-facet-title">Source</p>
-          {SOURCE_FILTERS.map(([id, label]) => (
-            <Facet key={id} active={source === id} count={counts[id]} label={label} on_click={() => set_source(id)} />
+        <nav className="ecg-library-facets" aria-label={t('library_filters', 'Library filters')}>
+          <p className="ecg-library-facet-title">{t('detail_source', 'Source')}</p>
+          {SOURCE_FILTERS.map(([id, label_key, label]) => (
+            <Facet
+              key={id}
+              active={source === id}
+              count={counts[id]}
+              label={t(label_key, label)}
+              on_click={() => set_source(id)}
+            />
           ))}
-          <p className="ecg-library-facet-title">Level</p>
-          <Facet active={difficulty === 'all'} count={counts.all} label="All levels" on_click={() => set_difficulty('all')} />
+          <p className="ecg-library-facet-title">{t('detail_level', 'Level')}</p>
+          <Facet
+            active={difficulty === 'all'}
+            count={counts.all}
+            label={t('facet_all_levels', 'All levels')}
+            on_click={() => set_difficulty('all')}
+          />
           {difficulties.map((value) => (
             <Facet
               key={value}
               active={difficulty === value}
               count={difficulty_counts[value]}
-              label={title_case(value)}
+              label={difficulty_text(value, t)}
               on_click={() => set_difficulty(value)}
             />
           ))}
@@ -371,11 +434,11 @@ export function ECGLibrary({
 
         {filtered_cases.length === 0 ? (
           <div className="ecg-library-empty">
-            <strong>No ECGs match</strong>
-            <span>Try a different search, or clear the filters.</span>
+            <strong>{t('no_ecgs_match', 'No ECGs match')}</strong>
+            <span>{t('no_ecgs_match_hint', 'Try a different search, or clear the filters.')}</span>
           </div>
         ) : (
-          <ul className="ecg-library-list" aria-label="ECG tracings">
+          <ul className="ecg-library-list" aria-label={t('ecg_tracings', 'ECG tracings')}>
             {filtered_cases.map((ecg_case) => (
               <CaseRow
                 key={case_id(ecg_case)}
@@ -384,6 +447,7 @@ export function ECGLibrary({
                 on_select={on_select}
                 on_open={on_choose}
                 reveal={reveal_titles}
+                t={t}
               />
             ))}
           </ul>
@@ -397,12 +461,13 @@ export function ECGLibrary({
             on_choose={on_choose}
             on_remove={on_remove}
             reveal={reveal_titles}
+            t={t}
           />
         ) : (
           <aside className="ecg-library-detail ecg-library-detail-empty">
             <span className="ecg-library-detail-empty-mark" aria-hidden="true">ECG</span>
-            <h3>Select a tracing</h3>
-            <p>Choose a row to inspect the ECG and its case details.</p>
+            <h3>{t('select_a_tracing', 'Select a tracing')}</h3>
+            <p>{t('select_a_tracing_hint', 'Choose a row to inspect the ECG and its case details.')}</p>
           </aside>
         )}
       </div>

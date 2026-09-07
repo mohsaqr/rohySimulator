@@ -67,3 +67,97 @@ export const FINDING_CATALOG = Object.freeze([
 ]);
 
 export const FINDING_IDS = Object.freeze(FINDING_CATALOG.map(({ id }) => id));
+
+/**
+ * Translation key per finding.
+ *
+ * The catalogue above is module-scope data: it cannot take a `t` prop, so its
+ * `label` stays the English fallback and the CONSUMER translates at render time
+ * from the stable id. `t(FINDING_KEYS[id], label)` would be invisible to a key
+ * extractor — `t(variable)` cannot be read statically — so every key is written
+ * out literally here instead. One entry per `FINDING_CATALOG` id, checked below.
+ */
+export const FINDING_KEYS = Object.freeze({
+  sinus_rhythm: 'finding_sinus_rhythm',
+  sinus_bradycardia: 'finding_sinus_bradycardia',
+  sinus_tachycardia: 'finding_sinus_tachycardia',
+  atrial_fibrillation: 'finding_atrial_fibrillation',
+  atrial_flutter: 'finding_atrial_flutter',
+  supraventricular_tachycardia: 'finding_supraventricular_tachycardia',
+  premature_ventricular_complexes: 'finding_premature_ventricular_complexes',
+  ventricular_tachycardia: 'finding_ventricular_tachycardia',
+  st_elevation_anterior: 'finding_st_elevation_anterior',
+  st_elevation_inferior: 'finding_st_elevation_inferior',
+  st_elevation_lateral: 'finding_st_elevation_lateral',
+  st_depression: 'finding_st_depression',
+  t_wave_inversion: 'finding_t_wave_inversion',
+  pathological_q_waves: 'finding_pathological_q_waves',
+  diffuse_st_elevation: 'finding_diffuse_st_elevation',
+  pr_depression: 'finding_pr_depression',
+  left_bundle_branch_block: 'finding_left_bundle_branch_block',
+  right_bundle_branch_block: 'finding_right_bundle_branch_block',
+  wide_qrs: 'finding_wide_qrs',
+  first_degree_av_block: 'finding_first_degree_av_block',
+  pre_excitation: 'finding_pre_excitation',
+  left_ventricular_hypertrophy: 'finding_left_ventricular_hypertrophy',
+  strain_pattern: 'finding_strain_pattern',
+  peaked_t_waves: 'finding_peaked_t_waves',
+  prominent_u_waves: 'finding_prominent_u_waves',
+  prolonged_qt: 'finding_prolonged_qt',
+  low_voltage: 'finding_low_voltage',
+  poor_r_wave_progression: 'finding_poor_r_wave_progression',
+});
+
+/** English rhythm names, the fallback behind `RHYTHM_KEYS`. */
+export const RHYTHM_LABELS = Object.freeze({
+  sinus: 'Sinus rhythm',
+  atrial_fibrillation: 'Atrial fibrillation',
+  atrial_flutter: 'Atrial flutter',
+  svt: 'Supraventricular tachycardia',
+  complete_heart_block: 'Complete heart block',
+  ventricular_tachycardia: 'Ventricular tachycardia',
+  ventricular_fibrillation: 'Ventricular fibrillation',
+  asystole: 'Asystole',
+});
+
+/** Translation key per recordable rhythm. */
+export const RHYTHM_KEYS = Object.freeze({
+  sinus: 'rhythm_sinus',
+  atrial_fibrillation: 'rhythm_atrial_fibrillation',
+  atrial_flutter: 'rhythm_atrial_flutter',
+  complete_heart_block: 'rhythm_complete_heart_block',
+  svt: 'rhythm_svt',
+  ventricular_tachycardia: 'rhythm_ventricular_tachycardia',
+  ventricular_fibrillation: 'rhythm_ventricular_fibrillation',
+  asystole: 'rhythm_asystole',
+});
+
+/** English axis names, the fallback behind `AXIS_KEYS`. */
+export const AXIS_LABELS = Object.freeze({
+  normal: 'Normal axis',
+  left: 'Left axis deviation',
+  right: 'Right axis deviation',
+  extreme: 'Extreme axis',
+  indeterminate: 'Indeterminate',
+});
+
+/** Translation key per frontal-axis category. */
+export const AXIS_KEYS = Object.freeze({
+  normal: 'axis_normal',
+  left: 'axis_left',
+  right: 'axis_right',
+  extreme: 'axis_extreme',
+  indeterminate: 'axis_indeterminate',
+});
+
+// A catalogue entry with no key would silently fall back to its raw id in every
+// language, so the omission is caught at load rather than in a screenshot.
+FINDING_IDS.forEach((id) => {
+  if (!FINDING_KEYS[id]) throw new RangeError(`constants.js: finding '${id}' has no translation key`);
+});
+RHYTHM_IDS.forEach((id) => {
+  if (!RHYTHM_KEYS[id]) throw new RangeError(`constants.js: rhythm '${id}' has no translation key`);
+});
+AXIS_CATEGORIES.forEach((id) => {
+  if (!AXIS_KEYS[id]) throw new RangeError(`constants.js: axis '${id}' has no translation key`);
+});

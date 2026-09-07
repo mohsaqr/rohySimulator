@@ -33,6 +33,70 @@ export const PRESET_CATALOG = Object.freeze(PRESET_ENTRIES.map(([id, label, diff
 
 export const PRESET_IDS = Object.freeze(PRESET_CATALOG.map(({ id }) => id));
 
+/**
+ * Translation keys for the curated catalogue.
+ *
+ * `PRESET_CATALOG` is module-scope data, so its `label` is the English fallback
+ * and the studio translates from the stable preset id. Category and difficulty
+ * get their own small vocabularies because they are also shown on their own —
+ * the library's level facet renders a difficulty with no preset in sight. Keys
+ * are written out literally because `t(PRESET_LABEL_KEYS[id])` cannot be read
+ * by an extractor.
+ */
+export const PRESET_LABEL_KEYS = Object.freeze({
+  normal_sinus: 'preset_normal_sinus',
+  atrial_fibrillation: 'preset_atrial_fibrillation',
+  atrial_flutter: 'preset_atrial_flutter',
+  frequent_pvcs: 'preset_frequent_pvcs',
+  first_degree_av_block: 'preset_first_degree_av_block',
+  complete_heart_block: 'preset_complete_heart_block',
+  right_bundle_branch_block: 'preset_right_bundle_branch_block',
+  left_bundle_branch_block: 'preset_left_bundle_branch_block',
+  anterior_injury_pattern: 'preset_anterior_injury_pattern',
+  inferior_injury_pattern: 'preset_inferior_injury_pattern',
+  acute_pericarditis_pattern: 'preset_acute_pericarditis_pattern',
+  hyperkalemia_pattern: 'preset_hyperkalemia_pattern',
+});
+
+/** Translation key per pattern category. */
+export const PRESET_CATEGORY_KEYS = Object.freeze({
+  rhythm: 'preset_category_rhythm',
+  conduction: 'preset_category_conduction',
+  ischemia: 'preset_category_ischemia',
+  inflammation: 'preset_category_inflammation',
+  electrolyte: 'preset_category_electrolyte',
+});
+
+/** English category names, the fallback behind `PRESET_CATEGORY_KEYS`. */
+export const PRESET_CATEGORY_LABELS = Object.freeze({
+  rhythm: 'Rhythm',
+  conduction: 'Conduction',
+  ischemia: 'Ischemia',
+  inflammation: 'Inflammation',
+  electrolyte: 'Electrolyte',
+});
+
+/** Translation key per difficulty level. */
+export const DIFFICULTY_KEYS = Object.freeze({
+  foundation: 'difficulty_foundation',
+  intermediate: 'difficulty_intermediate',
+  advanced: 'difficulty_advanced',
+});
+
+/** English difficulty names, the fallback behind `DIFFICULTY_KEYS`. */
+export const DIFFICULTY_LABELS = Object.freeze({
+  foundation: 'Foundation',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+});
+
+// A catalogue entry with no key would fall back to its raw id in every language.
+PRESET_CATALOG.forEach(({ id, category, difficulty }) => {
+  if (!PRESET_LABEL_KEYS[id]) throw new RangeError(`presets.js: preset '${id}' has no translation key`);
+  if (!PRESET_CATEGORY_KEYS[category]) throw new RangeError(`presets.js: category '${category}' has no translation key`);
+  if (!DIFFICULTY_KEYS[difficulty]) throw new RangeError(`presets.js: difficulty '${difficulty}' has no translation key`);
+});
+
 const degrees_to_radians = (degrees) => degrees * Math.PI / 180;
 const project_vector = (magnitude, vector_degrees, lead_degrees) =>
   magnitude * Math.cos(degrees_to_radians(vector_degrees - lead_degrees));

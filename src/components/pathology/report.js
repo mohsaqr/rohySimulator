@@ -80,6 +80,43 @@ export function createReport({
 }
 
 /**
+ * Every reason a submit can be refused, as a STABLE CODE with its English.
+ *
+ * The reason is shown to the reader, so it has to be translatable; a function
+ * that returns only a sentence gives a host nothing to translate FROM. The
+ * code is the stable id, the English here is the fallback, and the key map
+ * below is written out literally so an extractor can see every key.
+ */
+export const SUBMIT_BLOCKED_REASONS = {
+    no_report: 'There is no report to submit.',
+    already_submitted: 'This report has already been submitted.',
+    no_title: 'Give the report a title before submitting it.',
+    no_body: 'The report has no findings written in it yet.',
+};
+
+/** One translation key per blocked reason. */
+export const SUBMIT_BLOCKED_KEYS = {
+    no_report: 'submit_blocked_no_report',
+    already_submitted: 'submit_blocked_already_submitted',
+    no_title: 'submit_blocked_no_title',
+    no_body: 'submit_blocked_no_body',
+};
+
+/**
+ * Which reason blocks this report's submission, or null when none does.
+ *
+ * @param {object} report
+ * @returns {string|null} a `SUBMIT_BLOCKED_REASONS` code
+ */
+export function submitBlockedCode(report) {
+    if (!report) return 'no_report';
+    if (report.status === REPORT_STATUS.SUBMITTED) return 'already_submitted';
+    if (report.title.trim().length === 0) return 'no_title';
+    if (report.body.trim().length === 0) return 'no_body';
+    return null;
+}
+
+/**
  * Why a report cannot be submitted yet, or null when it can.
  *
  * Returns a REASON rather than a boolean so the button can say what is
@@ -90,11 +127,25 @@ export function createReport({
  * @returns {string|null}
  */
 export function submitBlockedBecause(report) {
-    if (!report) return 'There is no report to submit.';
-    if (report.status === REPORT_STATUS.SUBMITTED) return 'This report has already been submitted.';
-    if (report.title.trim().length === 0) return 'Give the report a title before submitting it.';
-    if (report.body.trim().length === 0) return 'The report has no findings written in it yet.';
-    return null;
+    const code = submitBlockedCode(report);
+    return code === null ? null : SUBMIT_BLOCKED_REASONS[code];
+}
+
+/**
+ * The two counts the report list summarises, unformatted.
+ *
+ * Returned as NUMBERS rather than as a sentence so the caller can render them
+ * through ICU: "1 word" versus "2 words" is an English rule, and picking
+ * between two keys on `count === 1` is wrong in Finnish, Swedish and Kazakh.
+ *
+ * @param {object} report
+ * @returns {{words:number, findings:number}}
+ */
+export function reportCounts(report) {
+    return {
+        words: report.body.trim().split(/\s+/).filter(Boolean).length,
+        findings: report.findings.length,
+    };
 }
 
 /**

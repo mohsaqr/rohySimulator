@@ -16,7 +16,7 @@ import { plateScaleBar } from './specimenGeometry.js';
  *    width it spans) rather than scanner metadata, so it stays true at any
  *    zoom — which a ruler baked into the photograph cannot do.
  */
-export function SpecimenTray({ specimens, logger }) {
+export function SpecimenTray({ specimens, logger, t = (key, fallback) => fallback ?? key }) {
     const [activePart, setActivePart] = useState(specimens?.[0]?.part ?? null);
     const [activePlateId, setActivePlateId] = useState(null);
     const [bar, setBar] = useState(null);
@@ -95,14 +95,14 @@ export function SpecimenTray({ specimens, logger }) {
     if (!specimens || specimens.length === 0) {
         return (
             <p className="m-auto max-w-sm p-6 text-center text-sm text-slate-500">
-                No gross specimen has been photographed for this case.
+                {t('gross_none_for_case', 'No gross specimen has been photographed for this case.')}
             </p>
         );
     }
 
     return (
         <div className="flex min-h-0 flex-1 overflow-hidden">
-            <nav aria-label="Specimen parts" className="flex w-56 shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3">
+            <nav aria-label={t('specimen_parts', 'Specimen parts')} className="flex w-56 shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3">
                 {specimens.map((s) => {
                     const active = s.part === activePart;
                     return (
@@ -116,7 +116,7 @@ export function SpecimenTray({ specimens, logger }) {
                                     : 'text-slate-300 ring-slate-800 hover:bg-slate-800/50'
                             }`}
                         >
-                            <span className="text-[13px] font-semibold">{s.name ?? `Part ${s.part}`}</span>
+                            <span className="text-[13px] font-semibold">{s.name ?? t('specimen_part_n', `Part ${s.part}`, { part: s.part })}</span>
                             <span className="line-clamp-2 text-[11px] text-slate-500">{s.description}</span>
                         </button>
                     );
@@ -131,7 +131,11 @@ export function SpecimenTray({ specimens, logger }) {
                         like a viewer that failed to start. */}
                     {plates.length === 0 && (
                         <p className="absolute inset-0 m-auto flex max-w-sm items-center justify-center p-6 text-center text-sm text-slate-500">
-                            No gross photograph was taken of {specimen.name ?? `Part ${specimen.part}`}.
+                            {t(
+                                'gross_none_for_part',
+                                `No gross photograph was taken of ${specimen.name ?? `Part ${specimen.part}`}.`,
+                                { part: specimen.name ?? t('specimen_part_n', `Part ${specimen.part}`, { part: specimen.part }) },
+                            )}
                         </p>
                     )}
                     {bar && (
@@ -145,7 +149,7 @@ export function SpecimenTray({ specimens, logger }) {
                     {plate && !plate.scaleMm && (
                         // Silence would imply the absent bar is a rendering bug.
                         <p className="pointer-events-none absolute left-3 top-3 rounded-md bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-200 ring-1 ring-amber-500/30">
-                            No scale declared for this plate
+                            {t('plate_no_scale', 'No scale declared for this plate')}
                         </p>
                     )}
                 </div>
@@ -170,16 +174,16 @@ export function SpecimenTray({ specimens, logger }) {
             </main>
 
             <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-800/80 bg-slate-950/40 p-4 max-xl:w-72">
-                <h2 className="text-sm font-semibold text-slate-100">{specimen.name ?? `Part ${specimen.part}`}</h2>
+                <h2 className="text-sm font-semibold text-slate-100">{specimen.name ?? t('specimen_part_n', `Part ${specimen.part}`, { part: specimen.part })}</h2>
                 <p className="mt-1 text-[13px] leading-relaxed text-slate-400">{specimen.description}</p>
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
                     {[
-                        ['Dimensions', specimen.dimensions || 'not recorded'],
-                        ['Weight', specimen.weight || 'not recorded'],
-                        ['Plates', String(plates.length)],
-                        ['Scale', plate?.scaleMm ? `${plate.scaleMm} mm across` : '—'],
-                    ].map(([label, value]) => (
-                        <div key={label} className="rounded-lg bg-slate-950/50 px-2.5 py-2">
+                        ['dimensions', t('dimensions', 'Dimensions'), specimen.dimensions || t('not_recorded', 'not recorded')],
+                        ['weight', t('weight', 'Weight'), specimen.weight || t('not_recorded', 'not recorded')],
+                        ['plates', t('plates', 'Plates'), String(plates.length)],
+                        ['scale', t('scale', 'Scale'), plate?.scaleMm ? t('plate_width_mm', `${plate.scaleMm} mm across`, { mm: plate.scaleMm }) : '—'],
+                    ].map(([key, label, value]) => (
+                        <div key={key} className="rounded-lg bg-slate-950/50 px-2.5 py-2">
                             <dt className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</dt>
                             <dd className="text-sm font-bold text-slate-100">{value}</dd>
                         </div>

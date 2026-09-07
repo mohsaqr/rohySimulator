@@ -110,6 +110,19 @@ function roiOnScreen(roi, sample) {
 }
 
 /**
+ * One translation key per miss reason, written out LITERALLY.
+ *
+ * `missReason` is a stable code on a scored result, not a sentence — the
+ * feedback panel translates it from that code and falls back to the English
+ * here. The map is spelled out because `t(variable)` cannot be extracted.
+ */
+export const MISS_REASON_KEYS = {
+    never_on_screen: 'miss_never_on_screen',
+    insufficient_magnification: 'miss_insufficient_magnification',
+    insufficient_dwell: 'miss_insufficient_dwell',
+};
+
+/**
  * Score one slide read.
  *
  * @param {Array} samples    viewport samples, time-ordered

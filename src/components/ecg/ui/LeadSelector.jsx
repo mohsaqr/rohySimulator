@@ -5,12 +5,16 @@ import {
 } from '../patientFigure.js';
 import {
   FRONTAL_LEADS,
+  LEAD_ANATOMY_KEYS,
   LIMB_ELECTRODES,
+  LIMB_ELECTRODE_KEYS,
   PRECORDIAL_POSITIONS,
+  TERRITORY_KEYS,
   TERRITORY_LABELS,
   frontal_lead_endpoint,
   lead_topography,
 } from '../leadTopography.js';
+import { identity_t } from '../i18n.js';
 
 const HEXAXIAL = Object.freeze({ center_x: 50, center_y: 50, radius: 33 });
 
@@ -21,7 +25,7 @@ const activate_on_key = (on_activate) => (event) => {
   on_activate();
 };
 
-function PatientFigure() {
+function PatientFigure({ t }) {
   return (
     <g className="ecg-manikin-body" aria-hidden="true">
       {/* The figure is stored as ink coverage, so the panel paints it with its
@@ -40,8 +44,8 @@ function PatientFigure() {
       <line className="ecg-manikin-landmark" x1="113" y1="70" x2="113" y2="150" />
       <line className="ecg-manikin-landmark" x1="88" y1="128" x2="172" y2="128" />
       <line className="ecg-manikin-landmark" x1="88" y1="140" x2="172" y2="140" />
-      <text className="ecg-manikin-landmark-label" x="85" y="130.5">4th</text>
-      <text className="ecg-manikin-landmark-label" x="85" y="142.5">5th</text>
+      <text className="ecg-manikin-landmark-label" x="85" y="130.5">{t('intercostal_fourth', '4th')}</text>
+      <text className="ecg-manikin-landmark-label" x="85" y="142.5">{t('intercostal_fifth', '5th')}</text>
     </g>
   );
 }
@@ -57,9 +61,9 @@ function PatientFigure() {
 const LABEL_ROW_Y = 178;
 const LABEL_X = Object.freeze({ V1: 92, V2: 110, V3: 128, V4: 146, V5: 164, V6: 182 });
 
-function ElectrodeTarget({ position, selected, note_count, on_select }) {
+function ElectrodeTarget({ position, selected, note_count, on_select, t }) {
   const { lead, x, y, anatomy } = position;
-  const label = `Lead ${lead} — ${anatomy}`;
+  const label = `${t('lead', 'Lead')} ${lead} — ${t(LEAD_ANATOMY_KEYS[lead], anatomy)}`;
   const label_x = LABEL_X[lead];
   return (
     <g
@@ -89,19 +93,20 @@ function ElectrodeTarget({ position, selected, note_count, on_select }) {
   );
 }
 
-function LimbElectrode({ electrode }) {
+function LimbElectrode({ electrode, t }) {
   return (
     <g className={`ecg-manikin-electrode${electrode.ground ? ' is-ground' : ''}`} aria-hidden="true">
-      <title>{electrode.label}</title>
+      <title>{t(LIMB_ELECTRODE_KEYS[electrode.electrode], electrode.label)}</title>
       <circle cx={electrode.x} cy={electrode.y} r="7" />
       <text x={electrode.x} y={electrode.y + 2.5}>{electrode.electrode}</text>
     </g>
   );
 }
 
-function FrontalTarget({ lead, selected, note_count, on_select }) {
+function FrontalTarget({ lead, selected, note_count, on_select, t }) {
   const { x, y, angle_degrees } = frontal_lead_endpoint(lead, HEXAXIAL);
-  const label = `Lead ${lead} — ${angle_degrees > 0 ? '+' : ''}${angle_degrees} degrees in the frontal plane`;
+  const label = `${t('lead', 'Lead')} ${lead} — ${angle_degrees > 0 ? '+' : ''}${angle_degrees} `
+    + `${t('degrees_in_frontal_plane', 'degrees in the frontal plane')}`;
   return (
     <g
       className={`ecg-lead-target ecg-lead-target-frontal${selected ? ' is-selected' : ''}`}
@@ -141,27 +146,43 @@ function FrontalTarget({ lead, selected, note_count, on_select }) {
  * @param {string} props.value currently focused lead
  * @param {(lead: string) => void} props.on_change selection handler
  * @param {Record<string, number>} [props.note_counts] notes anchored per lead
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @returns {JSX.Element} the selector
  */
-export function LeadSelector({ value = 'II', on_change, note_counts = {} }) {
+export function LeadSelector({
+  value = 'II',
+  on_change,
+  note_counts = {},
+  t = identity_t,
+}) {
   if (typeof on_change !== 'function') throw new TypeError('LeadSelector: on_change must be a function');
   const topography = lead_topography(value);
-  const territory = topography.territory ? TERRITORY_LABELS[topography.territory] : null;
+  const territory = topography.territory
+    ? t(TERRITORY_KEYS[topography.territory], TERRITORY_LABELS[topography.territory])
+    : null;
+  // A frontal lead's origin is a derivation, an angle and a plane. The angle is
+  // a number, so the sentence is rebuilt from its translated parts here rather
+  // than shipped pre-glued from `lead_topography()`.
+  const anatomy = topography.kind === 'frontal'
+    ? `${t(topography.anatomy_key, topography.derivation)} · `
+      + `${topography.angle_degrees > 0 ? '+' : ''}${topography.angle_degrees}° `
+      + `${t('in_the_frontal_plane', 'in the frontal plane')}`
+    : t(topography.anatomy_key, topography.anatomy);
 
   return (
-    <section className="ecg-lead-selector" aria-label="Lead selection by anatomy">
+    <section className="ecg-lead-selector" aria-label={t('lead_selection', 'Lead selection by anatomy')}>
       <div className="ecg-lead-selector-charts">
         <figure className="ecg-lead-selector-figure">
-          <figcaption>Chest electrodes</figcaption>
+          <figcaption>{t('chest_electrodes', 'Chest electrodes')}</figcaption>
           <svg
             viewBox={`0 0 ${PATIENT_FIGURE_WIDTH} ${PATIENT_FIGURE_HEIGHT}`}
             className="ecg-manikin"
             role="radiogroup"
-            aria-label="Precordial leads by electrode position"
+            aria-label={t('precordial_leads_group', 'Precordial leads by electrode position')}
           >
-            <PatientFigure />
+            <PatientFigure t={t} />
             {LIMB_ELECTRODES.map((electrode) => (
-              <LimbElectrode key={electrode.electrode} electrode={electrode} />
+              <LimbElectrode key={electrode.electrode} electrode={electrode} t={t} />
             ))}
             {PRECORDIAL_POSITIONS.map((position) => (
               <ElectrodeTarget
@@ -170,18 +191,19 @@ export function LeadSelector({ value = 'II', on_change, note_counts = {} }) {
                 selected={position.lead === value}
                 note_count={note_counts[position.lead] ?? 0}
                 on_select={on_change}
+                t={t}
               />
             ))}
           </svg>
         </figure>
 
         <figure className="ecg-lead-selector-figure">
-          <figcaption>Frontal plane</figcaption>
+          <figcaption>{t('frontal_plane', 'Frontal plane')}</figcaption>
           <svg
             viewBox="0 0 100 100"
             className="ecg-hexaxial"
             role="radiogroup"
-            aria-label="Frontal leads by hexaxial angle"
+            aria-label={t('frontal_leads_group', 'Frontal leads by hexaxial angle')}
           >
             <circle
               className="ecg-hexaxial-ring"
@@ -197,6 +219,7 @@ export function LeadSelector({ value = 'II', on_change, note_counts = {} }) {
                 selected={lead === value}
                 note_count={note_counts[lead] ?? 0}
                 on_select={on_change}
+                t={t}
               />
             ))}
           </svg>
@@ -205,7 +228,7 @@ export function LeadSelector({ value = 'II', on_change, note_counts = {} }) {
 
       <p className="ecg-lead-selector-caption">
         <strong>{value}</strong>
-        <span>{topography.anatomy}</span>
+        <span>{anatomy}</span>
         {territory && <span className={`ecg-territory ecg-territory-${topography.territory}`}>{territory}</span>}
       </p>
     </section>

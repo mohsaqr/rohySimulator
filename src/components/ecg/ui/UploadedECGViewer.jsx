@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { identity_t } from '../i18n.js';
 
 const clamp_zoom = (value) => Math.min(220, Math.max(50, value));
 
@@ -8,9 +9,14 @@ const clamp_zoom = (value) => Math.min(220, Math.max(50, value));
  * @param {object} props component properties
  * @param {{data_url:string,mime_type:string,file_name:string}} props.asset uploaded ECG asset
  * @param {string} [props.title] accessible display title
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @returns {import('react').ReactElement}
  */
-export function UploadedECGViewer({ asset, title = 'Uploaded 12-lead ECG' }) {
+export function UploadedECGViewer({
+  asset,
+  title = 'Uploaded 12-lead ECG',
+  t = identity_t,
+}) {
   if (!asset || typeof asset.data_url !== 'string' || typeof asset.mime_type !== 'string') {
     throw new TypeError('UploadedECGViewer requires an ECG asset with data_url and mime_type');
   }
@@ -23,25 +29,25 @@ export function UploadedECGViewer({ asset, title = 'Uploaded 12-lead ECG' }) {
 
   return (
     <section className="ecg-uploaded-viewer" aria-label={title}>
-      <div className="ecg-uploaded-toolbar" aria-label="Uploaded ECG controls">
+      <div className="ecg-uploaded-toolbar" aria-label={t('uploaded_controls', 'Uploaded ECG controls')}>
         <div>
           <strong>{asset.file_name || title}</strong>
-          <span>{is_pdf ? 'PDF document' : 'ECG image'}</span>
+          <span>{is_pdf ? t('uploaded_pdf_document', 'PDF document') : t('uploaded_image', 'ECG image')}</span>
         </div>
         {!is_pdf && (
           <div className="ecg-uploaded-tools">
-            <button type="button" onClick={() => zoom(-25)} aria-label="Zoom out">−</button>
-            <output aria-label="Zoom level">{zoom_percent}%</output>
-            <button type="button" onClick={() => zoom(25)} aria-label="Zoom in">+</button>
-            <button type="button" onClick={rotate}>Rotate</button>
-            <button type="button" onClick={fit}>Fit</button>
+            <button type="button" onClick={() => zoom(-25)} aria-label={t('zoom_out', 'Zoom out')}>−</button>
+            <output aria-label={t('zoom_level', 'Zoom level')}>{zoom_percent}%</output>
+            <button type="button" onClick={() => zoom(25)} aria-label={t('zoom_in', 'Zoom in')}>+</button>
+            <button type="button" onClick={rotate}>{t('rotate', 'Rotate')}</button>
+            <button type="button" onClick={fit}>{t('fit', 'Fit')}</button>
           </div>
         )}
       </div>
       <div className="ecg-uploaded-canvas">
         {is_pdf ? (
           <object data={asset.data_url} type="application/pdf" aria-label={title}>
-            <a href={asset.data_url}>Open the uploaded ECG PDF</a>
+            <a href={asset.data_url}>{t('open_uploaded_pdf', 'Open the uploaded ECG PDF')}</a>
           </object>
         ) : (
           <img

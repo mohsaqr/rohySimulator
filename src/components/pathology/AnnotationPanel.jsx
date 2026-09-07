@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
 import { Minus, Plus, Target, Trash2 } from 'lucide-react';
+import { plural } from './i18n.js';
 import {
     ANNOTATION_CLASSES,
+    ANNOTATION_CLASS_KEYS,
     ANNOTATION_KINDS,
+    ANNOTATION_KIND_KEYS,
     annotationBounds,
     annotationColor,
     annotationLabel,
@@ -36,24 +39,27 @@ export function AnnotationPanel({
     onDelete,
     onAdjustTally,
     onGoTo,
+    t = (key, fallback) => fallback ?? key,
 }) {
     const summary = useMemo(() => summarise(annotations, slide), [annotations, slide]);
 
     if (!slide) return null;
 
     return (
-        <section className="flex min-h-0 flex-1 flex-col" aria-label="Annotations">
+        <section className="flex min-h-0 flex-1 flex-col" aria-label={t('annotations', 'Annotations')}>
             <header className="flex shrink-0 items-baseline justify-between px-3 py-2">
                 <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Annotations
+                    {t('annotations', 'Annotations')}
                 </h3>
                 <span className="text-[11px] tabular-nums text-slate-500">{annotations.length}</span>
             </header>
 
             {annotations.length === 0 ? (
                 <p className="px-3 pb-3 text-[11px] leading-relaxed text-slate-500">
-                    Nothing marked yet. Pick a tool above — <strong className="text-slate-400">M</strong> measures a
-                    distance, <strong className="text-slate-400">C</strong> places a counting frame of known area.
+                    {t(
+                        'annotations_empty',
+                        'Nothing marked yet. Pick a tool above — M measures a distance, C places a counting frame of known area.',
+                    )}
                 </p>
             ) : (
                 <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
@@ -63,6 +69,7 @@ export function AnnotationPanel({
                             annotation={a}
                             slide={slide}
                             annotations={annotations}
+                            t={t}
                             selected={a.id === selectedId}
                             onSelect={onSelect}
                             onUpdate={onUpdate}
@@ -77,7 +84,7 @@ export function AnnotationPanel({
             {summary.length > 0 && (
                 <footer className="shrink-0 border-t border-slate-800/80 px-3 py-2">
                     <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Area by class
+                        {t('area_by_class', 'Area by class')}
                     </h4>
                     <ul className="space-y-0.5">
                         {summary.map((row) => (
@@ -86,7 +93,7 @@ export function AnnotationPanel({
                                     className="h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-slate-950/50"
                                     style={{ backgroundColor: row.color }}
                                 />
-                                <span className="truncate">{row.name}</span>
+                                <span className="truncate">{row.name === UNCLASSIFIED ? t('unclassified', 'Unclassified') : t(ANNOTATION_CLASS_KEYS[row.name] ?? row.name, row.name)}</span>
                                 <span className="ml-auto shrink-0 tabular-nums text-slate-400">
                                     {formatArea(row.areaUm2)}
                                 </span>
@@ -104,6 +111,7 @@ export function AnnotationPanel({
 
 function AnnotationRow({
     annotation, slide, annotations, selected, onSelect, onUpdate, onDelete, onAdjustTally, onGoTo,
+    t = (key, fallback) => fallback ?? key,
 }) {
     const m = measureAnnotation(annotation, slide);
     const color = annotationColor(annotation);
@@ -136,25 +144,25 @@ function AnnotationRow({
                     <button
                         type="button"
                         onClick={() => onGoTo(annotationBounds(annotation))}
-                        title="Show me this"
+                        title={t('go_to_annotation', 'Show me this')}
                         className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-700/60 hover:text-slate-100"
                     >
                         <Target className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span className="sr-only">Go to {annotationLabel(annotation)}</span>
+                        <span className="sr-only">{t('go_to_named', `Go to ${annotationLabel(annotation)}`, { name: annotationLabel(annotation) })}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => onDelete(annotation.id)}
-                        title="Delete"
+                        title={t('delete', 'Delete')}
                         className="shrink-0 rounded p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300"
                     >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span className="sr-only">Delete {annotationLabel(annotation)}</span>
+                        <span className="sr-only">{t('delete_named', `Delete ${annotationLabel(annotation)}`, { name: annotationLabel(annotation) })}</span>
                     </button>
                 </div>
 
                 <p className="mt-0.5 pl-4 text-[11px] tabular-nums text-slate-400">
-                    {annotation.kind.replace(/_/g, ' ')}
+                    {t(ANNOTATION_KIND_KEYS[annotation.kind] ?? annotation.kind, annotation.kind.replace(/_/g, ' '))}
                     {m.lengthUm !== null && ` · ${formatLength(m.lengthUm)}`}
                     {m.areaUm2 !== null && ` · ${formatArea(m.areaUm2)}`}
                 </p>
@@ -162,18 +170,18 @@ function AnnotationRow({
                 {selected && (
                     <div className="mt-2 space-y-2 pl-4">
                         <label className="block">
-                            <span className="sr-only">Label</span>
+                            <span className="sr-only">{t('label', 'Label')}</span>
                             <input
                                 type="text"
                                 value={annotation.text}
-                                placeholder="Add a note…"
+                                placeholder={t('add_a_note', 'Add a note…')}
                                 onChange={(e) => onUpdate(annotation.id, { text: e.target.value })}
                                 className="w-full rounded-md bg-slate-950/60 px-2 py-1 text-[11px] text-slate-100 ring-1 ring-slate-700 placeholder:text-slate-600 focus:outline-none focus:ring-fuchsia-500/50"
                             />
                         </label>
 
                         <label className="block">
-                            <span className="sr-only">Classification</span>
+                            <span className="sr-only">{t('classification', 'Classification')}</span>
                             <select
                                 value={annotation.classification?.name ?? ''}
                                 onChange={(e) => onUpdate(annotation.id, {
@@ -181,9 +189,9 @@ function AnnotationRow({
                                 })}
                                 className="w-full rounded-md bg-slate-950/60 px-2 py-1 text-[11px] text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-fuchsia-500/50"
                             >
-                                <option value="">Unclassified</option>
+                                <option value="">{t('unclassified', 'Unclassified')}</option>
                                 {ANNOTATION_CLASSES.map((c) => (
-                                    <option key={c.name} value={c.name}>{c.name}</option>
+                                    <option key={c.name} value={c.name}>{t(ANNOTATION_CLASS_KEYS[c.name] ?? c.name, c.name)}</option>
                                 ))}
                             </select>
                         </label>
@@ -195,10 +203,10 @@ function AnnotationRow({
                                         type="button"
                                         onClick={() => onAdjustTally(annotation.id, -1)}
                                         className="rounded p-1 text-slate-300 hover:bg-slate-700"
-                                        title="One fewer  (Shift+Space)"
+                                        title={t('count_decrement_hint', 'One fewer  (Shift+Space)')}
                                     >
                                         <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-                                        <span className="sr-only">Decrease count</span>
+                                        <span className="sr-only">{t('count_decrement', 'Decrease count')}</span>
                                     </button>
                                     <span className="min-w-8 text-center text-lg font-semibold tabular-nums text-slate-100">
                                         {annotation.tally}
@@ -207,26 +215,30 @@ function AnnotationRow({
                                         type="button"
                                         onClick={() => onAdjustTally(annotation.id, 1)}
                                         className="rounded p-1 text-slate-300 hover:bg-slate-700"
-                                        title="One more  (Space)"
+                                        title={t('count_increment_hint', 'One more  (Space)')}
                                     >
                                         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                                        <span className="sr-only">Increase count</span>
+                                        <span className="sr-only">{t('count_increment', 'Increase count')}</span>
                                     </button>
                                     <span className="ml-auto text-right text-[11px] tabular-nums text-slate-300">
                                         {m.perMm2 !== null ? `${m.perMm2.toFixed(1)} /mm²` : '—'}
                                     </span>
                                 </div>
                                 <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                                    {annotation.tally} in {formatArea(m.areaUm2)}
-                                    {annotation.targetAreaMm2 && ` · placed as ${annotation.targetAreaMm2} mm²`}
+                                    {t('tally_in_area', `${annotation.tally} in ${formatArea(m.areaUm2)}`, { count: annotation.tally, area: formatArea(m.areaUm2) })}
+                                    {annotation.targetAreaMm2 && t('frame_placed_as', ` · placed as ${annotation.targetAreaMm2} mm²`, { area: annotation.targetAreaMm2 })}
                                 </p>
                                 {/* The cross-check is shown ONLY when it disagrees. A
                                     permanent "0 markers placed" line would train the
                                     reader to ignore the row that matters. */}
                                 {marks !== annotation.tally && (
                                     <p className="mt-1 text-[10px] leading-snug text-amber-300">
-                                        {marks} marker{marks === 1 ? '' : 's'} placed inside this frame —
-                                        the counter says {annotation.tally}.
+                                        {plural(
+                                            t,
+                                            'frame_count_disagrees',
+                                            '{marks, plural, one {# marker} other {# markers}} placed inside this frame — the counter says {tally}.',
+                                            { marks, tally: annotation.tally },
+                                        )}
                                     </p>
                                 )}
                             </div>
@@ -237,6 +249,11 @@ function AnnotationRow({
         </li>
     );
 }
+
+// The summary's bucket for anything the reader left unclassified. A sentinel
+// rather than the English word, so the row can be translated at render time
+// without string-matching a display label.
+const UNCLASSIFIED = '\u0000unclassified';
 
 /**
  * Total annotated area per class, largest first.
@@ -255,7 +272,7 @@ function summarise(annotations, slide) {
     annotations
         .filter((a) => isAreal(a.kind))
         .forEach((a) => {
-            const name = a.classification?.name ?? 'Unclassified';
+            const name = a.classification?.name ?? UNCLASSIFIED;
             const row = totals.get(name) ?? { name, color: annotationColor(a), areaUm2: 0, count: 0 };
             row.areaUm2 += measureAnnotation(a, slide).areaUm2;
             row.count += 1;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PanelHeader } from './PanelHeader.jsx';
 import { MAX_NOTE_LENGTH } from '../notes.js';
+import { identity_t } from '../i18n.js';
 
 const format_stamp = (iso) => {
   if (!iso) return null;
@@ -10,7 +11,7 @@ const format_stamp = (iso) => {
     : at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 };
 
-function NoteCard({ note, on_edit, on_remove }) {
+function NoteCard({ note, on_edit, on_remove, t }) {
   const [draft, set_draft] = useState(null);
   const stamp = format_stamp(note.created_at);
 
@@ -21,18 +22,20 @@ function NoteCard({ note, on_edit, on_remove }) {
           value={draft}
           rows="3"
           maxLength={MAX_NOTE_LENGTH}
-          aria-label={`Edit note ${note.id}`}
+          aria-label={`${t('edit_note', 'Edit note')} ${note.id}`}
           onChange={(event) => set_draft(event.target.value)}
         />
         <div className="ecg-note-actions">
-          <button type="button" className="ecg-chip-button" onClick={() => set_draft(null)}>Cancel</button>
+          <button type="button" className="ecg-chip-button" onClick={() => set_draft(null)}>
+            {t('cancel', 'Cancel')}
+          </button>
           <button
             type="button"
             className="ecg-chip-button is-primary"
             disabled={draft.trim() === ''}
             onClick={() => { on_edit(note.id, draft); set_draft(null); }}
           >
-            Save note
+            {t('save_note', 'Save note')}
           </button>
         </div>
       </li>
@@ -52,8 +55,12 @@ function NoteCard({ note, on_edit, on_remove }) {
       </div>
       <p className="ecg-note-text">{note.text}</p>
       <div className="ecg-note-actions">
-        <button type="button" className="ecg-chip-button" onClick={() => set_draft(note.text)}>Edit</button>
-        <button type="button" className="ecg-chip-button is-quiet" onClick={() => on_remove(note.id)}>Delete</button>
+        <button type="button" className="ecg-chip-button" onClick={() => set_draft(note.text)}>
+          {t('edit', 'Edit')}
+        </button>
+        <button type="button" className="ecg-chip-button is-quiet" onClick={() => on_remove(note.id)}>
+          {t('delete', 'Delete')}
+        </button>
       </div>
     </li>
   );
@@ -77,6 +84,7 @@ function NoteCard({ note, on_edit, on_remove }) {
  * @param {(id: string) => void} props.on_remove removal handler
  * @param {string|null} [props.current_lead] lead offered as the anchor
  * @param {object|null} [props.last_measurement] caliper reading offered for attachment
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @returns {JSX.Element} the notes panel
  */
 export function NotesPanel({
@@ -86,6 +94,7 @@ export function NotesPanel({
   on_remove,
   current_lead = null,
   last_measurement = null,
+  t = identity_t,
 }) {
   if (typeof on_add !== 'function') throw new TypeError('NotesPanel: on_add must be a function');
   const [text, set_text] = useState('');
@@ -104,16 +113,16 @@ export function NotesPanel({
   };
 
   return (
-    <section className="ecg-notes" aria-label="Reading notes">
-      <PanelHeader title="Notes" count={notes.length} />
+    <section className="ecg-notes" aria-label={t('reading_notes', 'Reading notes')}>
+      <PanelHeader title={t('notes', 'Notes')} count={notes.length} />
 
       <div className="ecg-note-composer">
         <textarea
           value={text}
           rows="3"
           maxLength={MAX_NOTE_LENGTH}
-          placeholder="What do you see, and where?"
-          aria-label="New note"
+          placeholder={t('note_placeholder', 'What do you see, and where?')}
+          aria-label={t('new_note', 'New note')}
           onChange={(event) => set_text(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit();
@@ -123,7 +132,9 @@ export function NotesPanel({
           {current_lead && (
             <label className="ecg-anchor-toggle">
               <input type="checkbox" checked={anchor_lead} onChange={() => set_anchor_lead((on) => !on)} />
-              <span>Anchor to {current_lead}</span>
+              {/* A lead name is a symbol, identical in every language, so the
+                  translated verb is composed around it. */}
+              <span>{t('anchor_to', 'Anchor to')} {current_lead}</span>
             </label>
           )}
           {last_measurement && (
@@ -134,7 +145,7 @@ export function NotesPanel({
                 onChange={() => set_attach_measurement((on) => !on)}
               />
               <span>
-                Attach {Math.round(last_measurement.duration_ms)} ms · {last_measurement.amplitude_mv.toFixed(2)} mV
+                {t('attach', 'Attach')} {Math.round(last_measurement.duration_ms)} ms · {last_measurement.amplitude_mv.toFixed(2)} mV
               </span>
             </label>
           )}
@@ -144,19 +155,20 @@ export function NotesPanel({
             disabled={text.trim() === ''}
             onClick={submit}
           >
-            Add note
+            {t('add_note', 'Add note')}
           </button>
         </div>
       </div>
 
       {notes.length === 0 ? (
         <p className="ecg-notes-empty">
-          No notes yet. Measure something, or point at a lead, and write down what it shows.
+          {t('notes_empty',
+            'No notes yet. Measure something, or point at a lead, and write down what it shows.')}
         </p>
       ) : (
         <ul className="ecg-note-list">
           {notes.map((note) => (
-            <NoteCard key={note.id} note={note} on_edit={on_edit} on_remove={on_remove} />
+            <NoteCard key={note.id} note={note} on_edit={on_edit} on_remove={on_remove} t={t} />
           ))}
         </ul>
       )}

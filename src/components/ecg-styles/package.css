@@ -3,7 +3,7 @@
    The application-level globals (html/body sizing, :root look, bare element
    rules) live in standalone.css, which only the standalone app imports. */
 
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) {
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #e8eef5;
@@ -23,13 +23,13 @@
   --ecg-line: rgba(151, 176, 203, 0.18);
 }
 
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser),
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) * { box-sizing: border-box; }
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) :is(button, input, select, textarea) { font: inherit; }
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) :is(button, select) { min-height: 40px; }
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) button { cursor: pointer; }
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) button:disabled { cursor: not-allowed; opacity: 0.45; }
-:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser) :focus-visible { outline: 3px solid #70dfcf; outline-offset: 2px; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import),
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) * { box-sizing: border-box; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) :is(button, input, select, textarea) { font: inherit; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) :is(button, select) { min-height: 40px; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) button { cursor: pointer; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) button:disabled { cursor: not-allowed; opacity: 0.45; }
+:is(.ecg-screen, .ecg-author, .ecg-author-preview, .ecg-library-browser, .ecg-import) :focus-visible { outline: 3px solid #70dfcf; outline-offset: 2px; }
 
 .ecg-eyebrow {
   margin: 0 0 8px;
@@ -581,4 +581,82 @@
   .ecg-screen, .ecg-room, .ecg-workspace, .ecg-workspace-body { display: block; height: auto; min-height: 0; overflow: visible; padding: 0; background: white; }
   .ecg-paper-shell { border: 0; box-shadow: none; }
   .ecg-paper-meta { color: #422; background: white; }
+}
+
+
+/* --- Import and audit -------------------------------------------------- */
+/* Scoped like every other root above so the shared box-sizing, control font
+   and button sizing apply; the panel is authoring surface, never learner
+   chrome, so it is free to state names and licences the room never shows. */
+.ecg-import {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  color: var(--ecg-cream);
+}
+.ecg-import-head h2 { margin: 0 0 6px; font-size: 1.3rem; }
+.ecg-import-intro { margin: 0; color: var(--ecg-slate-300); max-width: 62ch; line-height: 1.5; }
+.ecg-import-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.ecg-import .ecg-field { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+.ecg-import .ecg-field > span { font-size: 0.82rem; color: var(--ecg-slate-500); }
+.ecg-import :is(input, select, textarea) {
+  background: var(--ecg-navy-900);
+  border: 1px solid var(--ecg-line);
+  border-radius: 8px;
+  color: var(--ecg-cream);
+  padding: 8px 10px;
+}
+.ecg-import-text { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+.ecg-import-actions { display: flex; gap: 10px; }
+.ecg-import-error { color: var(--ecg-red-soft); margin: 0; }
+.ecg-import-accepted { color: var(--ecg-teal); margin: 0; }
+
+.ecg-import-result, .ecg-import-audit, .ecg-import-sources {
+  background: var(--ecg-navy-900);
+  border: 1px solid var(--ecg-line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.ecg-import-result h3, .ecg-import-audit h3, .ecg-import-sources h3 { margin: 0 0 12px; font-size: 1rem; }
+.ecg-import-facts { display: flex; flex-wrap: wrap; gap: 24px; margin: 0 0 16px; }
+.ecg-import-facts dt { font-size: 0.75rem; color: var(--ecg-slate-500); margin-bottom: 4px; }
+.ecg-import-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.ecg-import-algebra { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ecg-import-algebra li { display: flex; justify-content: space-between; gap: 16px; font-size: 0.85rem; }
+.ecg-import-algebra code { color: var(--ecg-slate-300); }
+/* Never colour alone: the marker carries the state as a glyph as well. */
+.ecg-import-algebra li[data-holds="yes"] > span { color: var(--ecg-teal); }
+.ecg-import-algebra li[data-holds="no"] > span { color: var(--ecg-red-soft); }
+.ecg-import-algebra li[data-holds="no"] > span::before { content: "! "; }
+
+.ecg-import-audit ul, .ecg-import-sources ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.ecg-import-audit li { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; align-items: start; }
+.ecg-import-audit li > strong {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-align: center;
+}
+.ecg-import-audit li[data-severity="blocker"] > strong { color: var(--ecg-navy-950); background: var(--ecg-red-soft); }
+.ecg-import-audit li[data-severity="review"] > strong { color: var(--ecg-navy-950); background: var(--ecg-amber); }
+.ecg-import-audit li > span { color: var(--ecg-slate-300); line-height: 1.5; }
+
+.ecg-import-sources li { border-top: 1px solid var(--ecg-line); padding-top: 12px; }
+.ecg-import-sources li:first-child { border-top: 0; padding-top: 0; }
+.ecg-import-sources h4 { margin: 0 0 4px; font-size: 0.95rem; }
+.ecg-import-sources p { margin: 0 0 4px; color: var(--ecg-slate-300); line-height: 1.5; font-size: 0.86rem; }
+.ecg-import-citation { font-style: italic; }
+.ecg-import-caveat { color: var(--ecg-slate-500) !important; }
+.ecg-import-sources a { color: var(--ecg-teal); }
+
+@media (max-width: 720px) {
+  .ecg-import { padding: 16px; }
+  .ecg-import-controls { flex-direction: column; align-items: stretch; }
+  .ecg-import-audit li { grid-template-columns: 1fr; gap: 4px; }
+  .ecg-import-audit li > strong { justify-self: start; }
 }

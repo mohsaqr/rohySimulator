@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.32] — 2026-09-07
+
+### Changed
+
+- **Plugins now render the catalogues they ship.** `createPluginContext` binds `ctx.t` to `[<plugin namespace>, 'common']`. Until now every plugin received rohy's bare default-namespace translator, while a shipped catalogue is loaded under the plugin's own namespace — so a package asking for a plain key (`slide_label`) looked up `common:slide_label`, missed, and rendered its inline English. The ~780 ECG and pathology keys were validated by `plugins:check` and reached by nothing. Prefixed keys a plugin keeps in `common` (`radoyon_*`) still resolve, second in line. Regression lock: `tests/client/plugin-context-translator.test.js`.
+- Re-vendored **cardoyon 0.5.2** (`548d1d95`, was 0.3.0) and **pathoyon 0.3.0** (`278656ec`, was 0.2.0), the i18n-capable releases: both take `t(key, fallback[, values])` as an injected prop and ship plain ICU keys. The ECG adapter now passes `t` to the room and the author surface (it never had); the ECG plugin catalogue grows 334 → 360 keys. `vendor:check` is green for all five entries.
+- `ecg-room.test.jsx`: the summary label is always `ecg_summary_recordings` — the plural lives inside the ICU message now, not in a key choice made by `count === 1`.
+
+The shipped catalogues are English only; translating ECG (360) and pathology (419) into the other eight locales is the next step.
+
 ## [3.0.0-beta.31] — 2026-09-06
 
 ### Changed

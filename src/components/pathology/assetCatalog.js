@@ -387,6 +387,43 @@ export function materializeSlideAsset(slide, asset, options = {}) {
 }
 
 /**
+ * The action a not-ready asset offers, as a STABLE CODE with its English.
+ *
+ * `catalogAssetNextAction()` returns the English sentence for a caller that
+ * has no translator; a caller that has one asks `catalogAssetNextActionCode()`
+ * and looks the code up in the literal key map here. Two functions rather than
+ * one because the string form is part of this module's published contract.
+ */
+export const NEXT_ACTION_LABELS = {
+    remove: 'Remove',
+    calibrate: 'Add calibration',
+    process: 'Process slide',
+};
+
+/** One translation key per next action. */
+export const NEXT_ACTION_KEYS = {
+    remove: 'asset_action_remove',
+    calibrate: 'asset_action_calibrate',
+    process: 'asset_action_process',
+};
+
+/**
+ * Which action an asset offers, or null when there is nothing to do.
+ *
+ * @param {object} asset
+ * @param {{remove?:boolean, calibrate?:boolean, process?:boolean}} [can]
+ * @returns {string|null} a `NEXT_ACTION_LABELS` code
+ */
+export function catalogAssetNextActionCode(asset, can = {}) {
+    if (asset?.status === 'failed') return can.remove ? 'remove' : null;
+    if (asset?.status === 'needs_calibration') return can.calibrate ? 'calibrate' : null;
+    // Still working: there is nothing for an author to do but wait.
+    if (asset?.status === 'importing') return null;
+    if (asset?.status === 'discovered') return can.process ? 'process' : null;
+    return null;
+}
+
+/**
  * The one action offered on a card for an asset that is not ready.
  *
  * Each not-ready state has a different next step, and offering the wrong one is
@@ -403,10 +440,6 @@ export function materializeSlideAsset(slide, asset, options = {}) {
  * @returns {'Remove'|'Add calibration'|'Process slide'|null}
  */
 export function catalogAssetNextAction(asset, can = {}) {
-    if (asset?.status === 'failed') return can.remove ? 'Remove' : null;
-    if (asset?.status === 'needs_calibration') return can.calibrate ? 'Add calibration' : null;
-    // Still working: there is nothing for an author to do but wait.
-    if (asset?.status === 'importing') return null;
-    if (asset?.status === 'discovered') return can.process ? 'Process slide' : null;
-    return null;
+    const code = catalogAssetNextActionCode(asset, can);
+    return code === null ? null : NEXT_ACTION_LABELS[code];
 }

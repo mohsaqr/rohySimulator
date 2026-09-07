@@ -17,6 +17,7 @@ import { InterpretationPanel } from './InterpretationPanel.jsx';
 import { LeadSelector } from './LeadSelector.jsx';
 import { NotesPanel } from './NotesPanel.jsx';
 import { UploadedECGViewer } from './UploadedECGViewer.jsx';
+import { identity_t } from '../i18n.js';
 
 const create_noop_logger = () => ({ log: () => null });
 
@@ -66,10 +67,14 @@ const DEFAULT_DISPLAY = Object.freeze({
  *   and no answer key in the room, there is nothing here for it to hide.
  * @param {object|null} [props.initial_work] previously persisted work
  * @param {(work: object) => void|null} [props.on_work_change] persistence handler
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator. The
+ *   identity default returns the English fallback, so the room renders in English
+ *   with no i18n dependency; the same `t` is passed down to every child rather
+ *   than reached for through a context this package would have to own.
  * @returns {JSX.Element} the room
  */
 export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode = false,
-  initial_work = null, on_work_change = null }) {
+  initial_work = null, on_work_change = null, t = identity_t }) {
   if (!ecg_case || typeof ecg_case !== 'object') throw new TypeError('ECGRoom requires a learner ECG case');
   const recording_document = ecg_case.recordings?.[0];
   const recording = useMemo(() => recording_from_document(recording_document), [recording_document]);
@@ -205,25 +210,26 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
   const rail_tabs = [
     {
       id: 'read',
-      label: 'Systematic read',
+      label: t('tab_systematic_read', 'Systematic read'),
       count: 0,
-      render: () => <InterpretationPanel value={interpretation} on_change={edit_interpretation} />,
+      render: () => <InterpretationPanel value={interpretation} on_change={edit_interpretation} t={t} />,
     },
     {
       id: 'measurements',
-      label: 'Measure',
+      label: t('tab_measure', 'Measure'),
       count: measurements.length,
       render: () => (
         <MeasurementsPanel
           measurements={measurements}
           on_label={(id, label_id) => commit_measurements(label_measurement(measurements, id, label_id))}
           on_remove={(id) => commit_measurements(remove_measurement(measurements, id))}
+          t={t}
         />
       ),
     },
     {
       id: 'notes',
-      label: 'Notes',
+      label: t('tab_notes', 'Notes'),
       count: notes.length,
       render: () => (
         <NotesPanel
@@ -233,6 +239,7 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
           on_add={create_note}
           on_edit={(id, text) => commit_notes(update_note(notes, id, text))}
           on_remove={(id) => commit_notes(remove_note(notes, id))}
+          t={t}
         />
       ),
     },
@@ -243,10 +250,14 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
       <section className="ecg-workspace">
         {is_signal ? (
           <>
-            <div className="ecg-view-toolbar" aria-label="ECG display controls">
+            <div className="ecg-view-toolbar" aria-label={t('display_controls', 'ECG display controls')}>
               <div className="ecg-segmented-control">
-                <button type="button" aria-pressed={view_mode === 'standard'} onClick={() => change_view('standard')}>12-lead</button>
-                <button type="button" aria-pressed={view_mode === 'focus'} onClick={() => change_view('focus')}>Lead focus</button>
+                <button type="button" aria-pressed={view_mode === 'standard'} onClick={() => change_view('standard')}>
+                  {t('view_twelve_lead', '12-lead')}
+                </button>
+                <button type="button" aria-pressed={view_mode === 'focus'} onClick={() => change_view('focus')}>
+                  {t('view_lead_focus', 'Lead focus')}
+                </button>
               </div>
               <button
                 type="button"
@@ -254,7 +265,7 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
                 aria-pressed={lead_map_open}
                 onClick={() => set_lead_map_open((open) => !open)}
               >
-                Lead map · {focused_lead}
+                {t('lead_map', 'Lead map')} · {focused_lead}
               </button>
               <DisplayControls
                 gain_mm_per_mv={display.gain_mm_per_mv}
@@ -268,6 +279,7 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
                 spotlight={display.spotlight}
                 march={display.march}
                 on_change={(patch) => set_display((current) => ({ ...current, ...patch }))}
+                t={t}
               />
               {last_measurement && (
                 <output className="ecg-measurement-readout">
@@ -288,22 +300,26 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
                 snap_mm={display.snap_mm}
                 march={display.march}
                 spotlight={display.spotlight}
+                t={t}
               />
               {lead_map_open && (
-                <LeadSelector value={focused_lead} on_change={focus_lead} note_counts={note_counts} />
+                <LeadSelector value={focused_lead} on_change={focus_lead} note_counts={note_counts} t={t} />
               )}
             </div>
           </>
         ) : (
           <UploadedECGViewer
             asset={recording_document.asset}
-            title={recording_document.title || '12-lead ECG'}
+            // An authored recording title is case material, not package copy —
+            // it is translated where the case is authored, not here.
+            title={recording_document.title || t('twelve_lead_ecg_short', '12-lead ECG')}
+            t={t}
           />
         )}
       </section>
 
-      <aside className="ecg-side-rail" aria-label="ECG record">
-        <div className="ecg-rail-tabs" role="tablist" aria-label="Record views">
+      <aside className="ecg-side-rail" aria-label={t('ecg_record', 'ECG record')}>
+        <div className="ecg-rail-tabs" role="tablist" aria-label={t('record_views', 'Record views')}>
           {rail_tabs.map(({ id, label, count }) => (
             <button
               key={id}
@@ -321,7 +337,7 @@ export function ECGRoom({ ecg_case, event_logger = null, exam_mode: _exam_mode =
           {(rail_tabs.find(({ id }) => id === rail_tab) ?? rail_tabs[0]).render()}
         </div>
         <p className="ecg-rail-footer" role="status">
-          Recorded to the case as you work. This ECG is one part of the picture.
+          {t('rail_footer', 'Recorded to the case as you work. This ECG is one part of the picture.')}
         </p>
       </aside>
     </main>
