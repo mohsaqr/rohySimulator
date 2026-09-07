@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.33] — 2026-09-07
+
+### Added
+
+- **The ECG and pathology rooms speak all seven languages.** `src/plugins/ecg/locales/` and `src/plugins/pathology/locales/` gain `de`, `es`, `fi`, `fr`, `it`, `sv` and `kk` (Cyrillic) — 5,453 strings, 779 keys per language. Translated by seven language agents, one per locale, from the glossary and rohy's own `common`/`examination`/`authoring_radiology` catalogues so shared terms (slide, report, accession, room names) match what the host already shows. Verified mechanically, never from the agents' reports: key parity and sort order, ICU argument parity, brace balance, every plural rendered in-locale at 1/2/5, Kazakh carrying no `one` branch anywhere. `plugins:check` now checks 16 catalogues.
+- `tests/client/plugin-context-translator.test.js` also locks that a shipped non-English catalogue resolves through `ctx.t` once its language is loaded.
+
+### Changed
+
+- `plugin-locale-layering.test.js` used `kk` as its "language no plugin ships" fixture; that is now `en-XA`, which rohy generates and no plugin ever ships.
+
+### Notes for reviewers
+
+Keys left byte-identical to English per locale are all units, interval names, file formats or genuine cognates (de 28, es 19, fi 13, fr 48, it 20, sv 25, kk 13). The agents independently flagged the same English-source defects, all upstream: Pathoyon `gross_and_slide_counts`, `slides_across_blocks` and `report_summary` lack a `one` plural branch ("1 blocks"); Cardoyon `import_max_error` writes "uV" for µV and `finding_strain_pattern` is labelled "Lateral strain pattern" under a territory-neutral key. The Kazakh glossary's "Peak" → «шыңы» is a drug-level term and was not applied to peaked T waves.
+
 ## [3.0.0-beta.32] — 2026-09-07
 
 ### Changed

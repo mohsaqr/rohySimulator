@@ -9,11 +9,13 @@
 // keys resolve from the plugin's catalogue and prefixed keys a plugin keeps in
 // rohy's common catalogue (radoyon_*) still resolve.
 import { describe, it, expect, beforeAll } from 'vitest';
-import i18n from '../../src/i18n/index.js';
+import i18n, { setAppLanguage } from '../../src/i18n/index.js';
 import { createPluginContext } from '../../src/plugins/context.js';
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 import pathologyEn from '../../src/plugins/pathology/locales/en.json';
 import ecgEn from '../../src/plugins/ecg/locales/en.json';
+import pathologyDe from '../../src/plugins/pathology/locales/de.json';
+import ecgKk from '../../src/plugins/ecg/locales/kk.json';
 
 const ctxFor = (id) => createPluginContext({
     manifest: PLUGIN_MANIFESTS.find((m) => m.id === id),
@@ -58,5 +60,14 @@ describe('createPluginContext binds t to the plugin namespace', () => {
         const key = Object.keys(ecgEn).find((k) => /\{[a-z_]+\}/.test(ecgEn[k]) && !/plural/.test(ecgEn[k]));
         const arg = ecgEn[key].match(/\{([a-z_]+)\}/)[1];
         expect(ctxFor('ecg').t(key, 'FALLBACK', { [arg]: 'XYZ' })).toContain('XYZ');
+    });
+    it('a shipped non-English catalogue resolves once that language is loaded', async () => {
+        await setAppLanguage('de');
+        const key = unshadowedKey(pathologyDe);
+        expect(ctxFor('pathology').t(key, 'FALLBACK')).toBe(pathologyDe[key]);
+        await setAppLanguage('kk');
+        const kkKey = unshadowedKey(ecgKk);
+        expect(ctxFor('ecg').t(kkKey, 'FALLBACK')).toBe(ecgKk[kkKey]);
+        await setAppLanguage('en');
     });
 });

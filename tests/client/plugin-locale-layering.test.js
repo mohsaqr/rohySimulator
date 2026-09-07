@@ -29,7 +29,8 @@ describe('plugin locale layering (real glob)', () => {
     it('returns nothing for a language no plugin ships, rather than throwing', async () => {
         // The fallback chain handles this: rohy's catalogue, then the inline
         // English in the package. An empty layer is a normal state.
-        await expect(loadPluginLocales('kk')).resolves.toEqual({});
+        // en-XA is the pseudo-locale: rohy generates it, no plugin ships it.
+        await expect(loadPluginLocales('en-XA')).resolves.toEqual({});
     });
 
     // Regression lock: rohy's own strings must win. If these were added with
