@@ -1,8 +1,19 @@
 import { LEAD_NAMES } from './constants.js';
 import { validate_render_spec } from './presets.js';
-import { generate_twelve_lead_ecg } from './waveform.js';
+import { derive_limb_leads, generate_twelve_lead_ecg } from './waveform.js';
+import { DELTA_VARINT_ENCODING, INDEPENDENT_CHANNELS, decode_sample_channels } from './sampleCodec.js';
 
 export const SAMPLE_SOURCE_ENCODING = 'int32-le-base64';
+
+/**
+ * Sample encodings a stored recording may use.
+ *
+ * `int32-le-base64` stores all twelve leads at four bytes a sample and is kept
+ * because cases already exist in it. `delta-varint-base64` stores the eight
+ * independent channels as deltas and derives the rest — the only one of the two
+ * that fits a host case-config cap. See `sampleCodec.js` for why.
+ */
+export const SAMPLE_SOURCE_ENCODINGS = Object.freeze([SAMPLE_SOURCE_ENCODING, DELTA_VARINT_ENCODING]);
 export const MIN_ECG_SAMPLE_RATE_HZ = 50;
 export const MAX_ECG_SAMPLE_RATE_HZ = 2000;
 export const STATIC_ECG_MIME_TYPES = Object.freeze([
@@ -100,8 +111,8 @@ const validated_sample_source = (sample_source) => {
   if (!is_plain_object(sample_source) || sample_source.kind !== 'samples') {
     throw new TypeError("The ECG sample source must have kind 'samples'.");
   }
-  if (sample_source.encoding !== SAMPLE_SOURCE_ENCODING) {
-    throw new TypeError(`The ECG sample encoding must be '${SAMPLE_SOURCE_ENCODING}'.`);
+  if (!SAMPLE_SOURCE_ENCODINGS.includes(sample_source.encoding)) {
+    throw new TypeError(`The ECG sample encoding must be one of ${SAMPLE_SOURCE_ENCODINGS.join(', ')}.`);
   }
   if (sample_source.units !== 'microvolts') {
     throw new TypeError("Encoded ECG sample units must be 'microvolts'.");
@@ -122,6 +133,15 @@ const validated_sample_source = (sample_source) => {
       || sample_source.lead_names.length !== LEAD_NAMES.length
       || !LEAD_NAMES.every((lead, index) => sample_source.lead_names[index] === lead)) {
     throw new TypeError('Encoded ECG samples must list all 12 standard leads in conventional order.');
+  }
+  if (sample_source.encoding === DELTA_VARINT_ENCODING) {
+    if (!is_plain_object(sample_source.channels)) {
+      throw new TypeError(`Delta-varint ECG samples must carry the ${INDEPENDENT_CHANNELS.length} independent channels.`);
+    }
+    const stored = decode_sample_channels(sample_source.channels, sample_source.sample_count);
+    // Derived here rather than stored, so Einthoven and Goldberger hold by
+    // construction instead of depending on what a writer serialised.
+    return { ...sample_source, leads: { ...stored, ...derive_limb_leads(stored.I, stored.II) } };
   }
   if (!is_plain_object(sample_source.leads)
       || !LEAD_NAMES.every((lead) => typeof sample_source.leads[lead] === 'string')) {

@@ -28,6 +28,21 @@ export const ADJUSTMENT_CONTROLS = [
 ];
 
 /**
+ * The translation key for each slider, written out LITERALLY.
+ *
+ * `ADJUSTMENT_CONTROLS` is module-scope data and cannot take a `t` prop, so it
+ * keeps its English `label` as the fallback and the consumer translates from
+ * the stable `key`. The map is spelled out rather than derived because
+ * `t(variable)` is invisible to a key extractor.
+ */
+export const ADJUSTMENT_LABEL_KEYS = {
+    brightness: 'adjustment_brightness',
+    contrast: 'adjustment_contrast',
+    gamma: 'adjustment_gamma',
+    saturation: 'adjustment_saturation',
+};
+
+/**
  * Is anything moved off neutral?
  *
  * @param {object} adjustments

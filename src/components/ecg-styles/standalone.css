@@ -31,3 +31,17 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
   :root { color-scheme: light; }
   body { background: white; }
 }
+
+/* Import screen shell — the back-to-library bar around the package's panel.
+   The panel itself is package UI and styles itself; only the host chrome
+   around it belongs here. */
+.ecg-import-screen {
+  min-height: 100vh;
+  background: #09111c;
+}
+.ecg-import-topbar {
+  display: flex;
+  padding: 16px 24px 0;
+  max-width: 900px;
+  margin: 0 auto;
+}

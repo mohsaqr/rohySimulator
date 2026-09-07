@@ -78,6 +78,68 @@ export const DEFAULT_KEYMAP = [
 ];
 
 /**
+ * The translation key for every group and every description in the table
+ * above, written out LITERALLY so extraction tooling can see them.
+ *
+ * A module-scope data table cannot take a `t` prop, so its English stays here
+ * as the fallback and the CONSUMER translates at render time from the stable
+ * id — `KEYMAP_GROUP_KEYS[row.group]`, `KEYMAP_DESCRIPTION_KEYS[row.command]`.
+ * `t(variable)` is invisible to a key extractor, which is exactly why the keys
+ * appear here as literal strings rather than being built from the ids.
+ */
+export const KEYMAP_GROUP_KEYS = {
+    Navigate: 'keymap_group_navigate',
+    Magnify: 'keymap_group_magnify',
+    Draw: 'keymap_group_draw',
+    Edit: 'keymap_group_edit',
+};
+
+/** One key per COMMAND — two bindings of the same command share a row. */
+export const KEYMAP_DESCRIPTION_KEYS = {
+    'pan.left': 'keymap_pan_left',
+    'pan.right': 'keymap_pan_right',
+    'pan.up': 'keymap_pan_up',
+    'pan.down': 'keymap_pan_down',
+    'pan.left.fast': 'keymap_pan_left_fast',
+    'pan.right.fast': 'keymap_pan_right_fast',
+    'pan.up.fast': 'keymap_pan_up_fast',
+    'pan.down.fast': 'keymap_pan_down_fast',
+    'view.fit': 'keymap_view_fit',
+    'view.rotateLeft': 'keymap_view_rotate_left',
+    'view.rotateRight': 'keymap_view_rotate_right',
+    'view.flip': 'keymap_view_flip',
+    'view.toggleNavigator': 'keymap_view_toggle_navigator',
+    'view.bookmark': 'keymap_view_bookmark',
+    'objective.1': 'keymap_objective_1',
+    'objective.2': 'keymap_objective_2',
+    'objective.4': 'keymap_objective_4',
+    'objective.10': 'keymap_objective_10',
+    'objective.20': 'keymap_objective_20',
+    'objective.40': 'keymap_objective_40',
+    'objective.up': 'keymap_objective_up',
+    'objective.down': 'keymap_objective_down',
+    'tool.navigate': 'keymap_tool_navigate',
+    'tool.select': 'keymap_tool_select',
+    'tool.line': 'keymap_tool_line',
+    'tool.arrow': 'keymap_tool_arrow',
+    'tool.rectangle': 'keymap_tool_rectangle',
+    'tool.ellipse': 'keymap_tool_ellipse',
+    'tool.polygon': 'keymap_tool_polygon',
+    'tool.freehand': 'keymap_tool_freehand',
+    'tool.polyline': 'keymap_tool_polyline',
+    'tool.point': 'keymap_tool_point',
+    'tool.countingFrame': 'keymap_tool_counting_frame',
+    'edit.undo': 'keymap_edit_undo',
+    'edit.redo': 'keymap_edit_redo',
+    'edit.delete': 'keymap_edit_delete',
+    'edit.cancel': 'keymap_edit_cancel',
+    'edit.finish': 'keymap_edit_finish',
+    'count.increment': 'keymap_count_increment',
+    'count.decrement': 'keymap_count_decrement',
+    'help.toggle': 'keymap_help_toggle',
+};
+
+/**
  * Split a binding string into its modifier flags and its key.
  *
  * @param {string} binding  e.g. "Mod+Shift+z"
@@ -167,7 +229,7 @@ export function isTypingTarget(target) {
  * on one line rather than listing the same action twice.
  *
  * @param {Array<object>} [keymap=DEFAULT_KEYMAP]
- * @returns {Array<{group:string, rows:Array<{bindings:Array<string>, description:string}>}>}
+ * @returns {Array<{group:string, rows:Array<{command:string, bindings:Array<string>, description:string}>}>}
  */
 export function keymapByGroup(keymap = DEFAULT_KEYMAP) {
     const groups = [];
@@ -179,7 +241,7 @@ export function keymapByGroup(keymap = DEFAULT_KEYMAP) {
         }
         const row = group.rows.find((r) => r.description === entry.description);
         if (row) row.bindings.push(entry.binding);
-        else group.rows.push({ bindings: [entry.binding], description: entry.description });
+        else group.rows.push({ command: entry.command, bindings: [entry.binding], description: entry.description });
     });
     return groups;
 }

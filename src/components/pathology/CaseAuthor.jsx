@@ -15,6 +15,7 @@ export function CaseAuthor({
     onSubmitReview,
     onPublish,
     resolveRef = null,
+    t = (key, fallback) => fallback ?? key,
 }) {
     // What shape does this host speak? A host that handed us a legacy flat
     // case gets one back, because that is the contract it was written against.
@@ -35,6 +36,7 @@ export function CaseAuthor({
 
     return (
         <CaseStudio
+            t={t}
             document={document}
             onChange={change}
             assetService={assetService}

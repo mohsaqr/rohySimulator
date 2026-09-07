@@ -66,7 +66,7 @@ describe('ECG room — the end-to-end thin slice', () => {
 
     it('validates and summarises the authored document', () => {
         expect(descriptor.validate(CASE_DOCUMENT).filter((i) => i.level === 'error')).toEqual([]);
-        expect(descriptor.summarize(CASE_DOCUMENT)).toEqual({ count: 1, labelKey: 'ecg_summary_recording' });
+        expect(descriptor.summarize(CASE_DOCUMENT)).toEqual({ count: 1, labelKey: 'ecg_summary_recordings' });
     });
 
     it('the rubric never leaves the host', () => {

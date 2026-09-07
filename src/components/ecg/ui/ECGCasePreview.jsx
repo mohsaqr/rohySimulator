@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { recording_from_document, recording_source_kind } from '../recordingSource.js';
+import { identity_t } from '../i18n.js';
 
 const PREVIEW_WIDTH = 360;
 const PREVIEW_HEIGHT = 104;
@@ -74,23 +75,49 @@ const grid_lines = (spacing, class_name, axis) => Array.from(
   ? <line key={`${class_name}-x-${position}`} className={class_name} x1={position} y1="0" x2={position} y2={PREVIEW_HEIGHT} />
   : <line key={`${class_name}-y-${position}`} className={class_name} x1="0" y1={position} x2={PREVIEW_WIDTH} y2={position} />);
 
-/** Compact preview for generated, sampled, image, and PDF ECG material. */
-export function ECGCasePreview({ recording_document, title = 'ECG preview' }) {
+/**
+ * Compact preview for generated, sampled, image, and PDF ECG material.
+ *
+ * The case's own name arrives already resolved in `title` — it is authored case
+ * material, not package copy. Each accessible name here is a translated noun
+ * placed beside that name, which is a naming convention rather than a sentence:
+ * "<case> thumbnail", "<case>, PDF document". Nothing here needs a word order
+ * of its own, so nothing here needs a `values` template.
+ *
+ * @param {object} props component props
+ * @param {object|null} props.recording_document recording to preview
+ * @param {string} [props.title] display name of the case
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
+ * @returns {JSX.Element} the preview
+ */
+export function ECGCasePreview({
+  recording_document,
+  title = 'ECG preview',
+  t = identity_t,
+}) {
   const preview = useMemo(() => recording_preview(recording_document), [recording_document]);
 
   if (preview?.source_kind === 'image') {
     return (
       <div className="ecg-case-preview ecg-case-preview-asset">
-        <img src={preview.recording.asset.data_url} alt={`${title} thumbnail`} draggable={false} />
+        <img
+          src={preview.recording.asset.data_url}
+          alt={`${title} ${t('preview_thumbnail', 'thumbnail')}`}
+          draggable={false}
+        />
       </div>
     );
   }
 
   if (preview?.source_kind === 'pdf') {
     return (
-      <div className="ecg-case-preview ecg-case-preview-pdf" role="img" aria-label={`${title}, PDF document`}>
+      <div
+        className="ecg-case-preview ecg-case-preview-pdf"
+        role="img"
+        aria-label={`${title}, ${t('uploaded_pdf_document', 'PDF document')}`}
+      >
         <span className="ecg-case-preview-file-mark" aria-hidden="true">PDF</span>
-        <span>ECG document</span>
+        <span>{t('preview_ecg_document', 'ECG document')}</span>
       </div>
     );
   }
@@ -100,8 +127,12 @@ export function ECGCasePreview({ recording_document, title = 'ECG preview' }) {
     const path = signal_path(lead_ii);
     return (
       <div className="ecg-case-preview ecg-case-preview-signal">
-        <svg viewBox={`0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}`} role="img" aria-label={`${title}, Lead II preview`}>
-          <title>{`${title}, Lead II`}</title>
+        <svg
+          viewBox={`0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}`}
+          role="img"
+          aria-label={`${title}, ${t('preview_lead_ii', 'Lead II preview')}`}
+        >
+          <title>{`${title}, ${t('lead_ii', 'Lead II')}`}</title>
           <rect className="ecg-case-preview-paper" width={PREVIEW_WIDTH} height={PREVIEW_HEIGHT} />
           <g aria-hidden="true">
             {grid_lines(10, 'ecg-case-preview-grid-minor', 'x')}
@@ -117,9 +148,13 @@ export function ECGCasePreview({ recording_document, title = 'ECG preview' }) {
   }
 
   return (
-    <div className="ecg-case-preview ecg-case-preview-empty" role="img" aria-label={`${title}, preview unavailable`}>
+    <div
+      className="ecg-case-preview ecg-case-preview-empty"
+      role="img"
+      aria-label={`${title}, ${t('preview_unavailable_lower', 'preview unavailable')}`}
+    >
       <span aria-hidden="true">ECG</span>
-      <small>Preview unavailable</small>
+      <small>{t('preview_unavailable', 'Preview unavailable')}</small>
     </div>
   );
 }

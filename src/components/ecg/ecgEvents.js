@@ -82,6 +82,36 @@ export const ECG_VERB_METADATA = Object.freeze({
   },
 });
 
+/**
+ * Translation key per verb label.
+ *
+ * `ECG_VERB_METADATA` is module-scope data handed to a host's vocabulary
+ * registry, so it cannot take a `t` prop: `label` stays the English fallback and
+ * a host that renders the verb in an analytics view translates from the verb id.
+ * Written out literally so every key appears in the source. `severity`,
+ * `category`, `clinicalState` and `action` are machine facets a host resolves
+ * against its own vocabulary, not prose, and are deliberately not translated.
+ */
+export const ECG_VERB_LABEL_KEYS = Object.freeze({
+  OPENED_ECG_RECORDING: 'event_opened_ecg_recording',
+  FOCUSED_ECG_LEAD: 'event_focused_ecg_lead',
+  CHANGED_ECG_LAYOUT: 'event_changed_ecg_layout',
+  MEASURED_ECG_INTERVAL: 'event_measured_ecg_interval',
+  MEASURED_ECG_AMPLITUDE: 'event_measured_ecg_amplitude',
+  RECORDED_ECG_NOTE: 'event_recorded_ecg_note',
+  SAVED_ECG_INTERPRETATION: 'event_saved_ecg_interpretation',
+  SUBMITTED_ECG_INTERPRETATION: 'event_submitted_ecg_interpretation',
+  REVISED_ECG_INTERPRETATION: 'event_revised_ecg_interpretation',
+  REQUESTED_ECG_HINT: 'event_requested_ecg_hint',
+  REVEALED_ECG_EXPLANATION: 'event_revealed_ecg_explanation',
+});
+
+Object.keys(ECG_VERB_METADATA).forEach((verb) => {
+  if (!ECG_VERB_LABEL_KEYS[verb]) {
+    throw new RangeError(`ecgEvents.js: verb '${verb}' has no translation key`);
+  }
+});
+
 /** Bind ECG-native events to Rohy's injected logger. */
 export function create_ecg_logger(logger) {
   if (!logger || typeof logger.log !== 'function') {

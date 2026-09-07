@@ -1,18 +1,26 @@
 import { useState } from 'react';
 import { FILTER_CHAIN_IDS } from '../filters.js';
+import { identity_t } from '../i18n.js';
 
-/** Sensitivities a 12-lead cart offers, in mm/mV. */
+/**
+ * Sensitivities a 12-lead cart offers, in mm/mV.
+ *
+ * `label` is a numeral — the same in every language — so only the hint carries a
+ * key. Every catalogue below states its keys as literal strings so an extractor
+ * can read them; `t(option.hint_key, option.hint)` at the call site could not be
+ * read statically on its own.
+ */
 export const GAIN_OPTIONS = Object.freeze([
-  { value: 5, label: '5', hint: 'Half standard — for a tracing that clips' },
-  { value: 10, label: '10', hint: 'Standard' },
-  { value: 20, label: '20', hint: 'Double standard — for low voltage' },
+  { value: 5, label: '5', hint: 'Half standard — for a tracing that clips', hint_key: 'gain_hint_half' },
+  { value: 10, label: '10', hint: 'Standard', hint_key: 'gain_hint_standard' },
+  { value: 20, label: '20', hint: 'Double standard — for low voltage', hint_key: 'gain_hint_double' },
 ]);
 
 /** Paper speeds a 12-lead cart offers, in mm/s. */
 export const SPEED_OPTIONS = Object.freeze([
-  { value: 12.5, label: '12.5', hint: 'Half standard — more beats, less detail' },
-  { value: 25, label: '25', hint: 'Standard' },
-  { value: 50, label: '50', hint: 'Double standard — for separating close deflections' },
+  { value: 12.5, label: '12.5', hint: 'Half standard — more beats, less detail', hint_key: 'speed_hint_half' },
+  { value: 25, label: '25', hint: 'Standard', hint_key: 'speed_hint_standard' },
+  { value: 50, label: '50', hint: 'Double standard — for separating close deflections', hint_key: 'speed_hint_double' },
 ]);
 
 /**
@@ -24,13 +32,16 @@ export const SPEED_OPTIONS = Object.freeze([
  * needs to resolve a stored measurement's chain need not import any UI.
  */
 export const FILTER_PRESETS = Object.freeze([
-  { id: 'raw', label: 'Raw', hint: 'Unfiltered as acquired' },
-  { id: 'diagnostic', label: 'Diagnostic',
-    hint: '0.05–150 Hz — the band a 12-lead should be reported from' },
-  { id: 'monitor', label: 'Monitor',
-    hint: '0.5–40 Hz — steadier, but can create ST change. Not for reporting' },
-  { id: 'mains_50', label: '50 Hz', hint: 'Diagnostic band plus a 50 Hz mains notch' },
-  { id: 'mains_60', label: '60 Hz', hint: 'Diagnostic band plus a 60 Hz mains notch' },
+  { id: 'raw', label: 'Raw', label_key: 'filter_raw',
+    hint: 'Unfiltered as acquired', hint_key: 'filter_raw_hint' },
+  { id: 'diagnostic', label: 'Diagnostic', label_key: 'filter_diagnostic',
+    hint: '0.05–150 Hz — the band a 12-lead should be reported from', hint_key: 'filter_diagnostic_hint' },
+  { id: 'monitor', label: 'Monitor', label_key: 'filter_monitor',
+    hint: '0.5–40 Hz — steadier, but can create ST change. Not for reporting', hint_key: 'filter_monitor_hint' },
+  { id: 'mains_50', label: '50 Hz', label_key: 'filter_mains_50',
+    hint: 'Diagnostic band plus a 50 Hz mains notch', hint_key: 'filter_mains_50_hint' },
+  { id: 'mains_60', label: '60 Hz', label_key: 'filter_mains_60',
+    hint: 'Diagnostic band plus a 60 Hz mains notch', hint_key: 'filter_mains_60_hint' },
 ]);
 
 // Every offered preset must name a chain that exists, or the control silently
@@ -43,16 +54,22 @@ FILTER_PRESETS.forEach(({ id }) => {
 
 /** Caliper behaviours. */
 export const CALIPER_MODES = Object.freeze([
-  { id: 'interval', label: 'Interval', hint: 'Time between two points' },
-  { id: 'amplitude', label: 'Amplitude', hint: 'Height between two points' },
-  { id: 'rate', label: 'Rate', hint: 'Read one RR span as beats per minute' },
+  { id: 'interval', label: 'Interval', label_key: 'caliper_interval',
+    hint: 'Time between two points', hint_key: 'caliper_interval_hint' },
+  { id: 'amplitude', label: 'Amplitude', label_key: 'caliper_amplitude',
+    hint: 'Height between two points', hint_key: 'caliper_amplitude_hint' },
+  { id: 'rate', label: 'Rate', label_key: 'caliper_rate',
+    hint: 'Read one RR span as beats per minute', hint_key: 'caliper_rate_hint' },
 ]);
 
 /** Grid step the calipers snap to. */
 export const SNAP_OPTIONS = Object.freeze([
-  { value: 0, label: 'Free', hint: 'No snapping' },
-  { value: 0.5, label: '½ mm', hint: 'Half a small square' },
-  { value: 1, label: '1 mm', hint: 'One small square — how paper is read' },
+  { value: 0, label: 'Free', label_key: 'snap_free',
+    hint: 'No snapping', hint_key: 'snap_free_hint' },
+  { value: 0.5, label: '½ mm', label_key: 'snap_half_mm',
+    hint: 'Half a small square', hint_key: 'snap_half_mm_hint' },
+  { value: 1, label: '1 mm', label_key: 'snap_one_mm',
+    hint: 'One small square — how paper is read', hint_key: 'snap_one_mm_hint' },
 ]);
 
 /** Magnifier powers offered once the lens is on. */
@@ -64,7 +81,7 @@ export const ZOOM_STOPS = Object.freeze([1, 1.5, 2.5, 4]);
 /** The default power the lens comes back at, so the toggle is one click. */
 export const DEFAULT_LENS_POWER = 3;
 
-function Segments({ label, options, value, on_change, hide_label = false }) {
+function Segments({ label, options, value, on_change, hide_label = false, t }) {
   return (
     <div className={`ecg-control-group${hide_label ? ' ecg-tool-inline' : ''}`}>
       <span className={hide_label ? 'ecg-visually-hidden' : 'ecg-control-label'}>{label}</span>
@@ -76,10 +93,13 @@ function Segments({ label, options, value, on_change, hide_label = false }) {
               key={option_value}
               type="button"
               aria-pressed={option_value === value}
-              title={option.hint}
+              // A catalogue entry carries its own key; an entry whose label is a
+              // numeral (gain, speed) has none, and stays as it is in every
+              // language rather than being routed through a key that says '25'.
+              title={option.hint_key ? t(option.hint_key, option.hint) : option.hint}
               onClick={() => on_change(option_value)}
             >
-              {option.label}
+              {option.label_key ? t(option.label_key, option.label) : option.label}
             </button>
           );
         })}
@@ -112,6 +132,7 @@ function LensGlyph() {
  *
  * @param {object} props component props
  * @param {(next: object) => void} props.on_change partial-settings change handler
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @returns {JSX.Element} the tool bar
  */
 export function DisplayControls({
@@ -126,6 +147,7 @@ export function DisplayControls({
   spotlight = false,
   march = false,
   on_change,
+  t = identity_t,
 }) {
   if (typeof on_change !== 'function') throw new TypeError('DisplayControls: on_change must be a function');
   const [cart_open, set_cart_open] = useState(false);
@@ -141,16 +163,16 @@ export function DisplayControls({
         type="button"
         className={`ecg-tool-button${lens_power > 0 ? ' is-active' : ''}`}
         aria-pressed={lens_power > 0}
-        title="Magnifier — hover the paper to enlarge the trace and the grid under the pointer"
+        title={t('lens_hint', 'Magnifier — hover the paper to enlarge the trace and the grid under the pointer')}
         onClick={() => on_change({ lens_power: lens_power > 0 ? 0 : DEFAULT_LENS_POWER })}
       >
         <LensGlyph />
-        <span>Lens</span>
+        <span>{t('lens', 'Lens')}</span>
         {lens_power > 0 && <span className="ecg-tool-badge">{lens_power}×</span>}
       </button>
 
       {lens_power > 0 && (
-        <div className="ecg-control-segments ecg-tool-inline" role="group" aria-label="Lens power">
+        <div className="ecg-control-segments ecg-tool-inline" role="group" aria-label={t('lens_power', 'Lens power')}>
           {LENS_POWERS.map((power) => (
             <button
               key={power}
@@ -164,28 +186,29 @@ export function DisplayControls({
         </div>
       )}
 
-      <div className="ecg-zoom-stepper" role="group" aria-label="Zoom">
-        <button type="button" aria-label="Zoom out" disabled={zoom_index <= 0} onClick={() => step_zoom(-1)}>−</button>
-        <output>{zoom === 1 ? 'Fit' : `${Math.round(zoom * 100)}%`}</output>
-        <button type="button" aria-label="Zoom in" disabled={zoom_index >= ZOOM_STOPS.length - 1} onClick={() => step_zoom(1)}>+</button>
+      <div className="ecg-zoom-stepper" role="group" aria-label={t('zoom', 'Zoom')}>
+        <button type="button" aria-label={t('zoom_out', 'Zoom out')} disabled={zoom_index <= 0} onClick={() => step_zoom(-1)}>−</button>
+        <output>{zoom === 1 ? t('fit', 'Fit') : `${Math.round(zoom * 100)}%`}</output>
+        <button type="button" aria-label={t('zoom_in', 'Zoom in')} disabled={zoom_index >= ZOOM_STOPS.length - 1} onClick={() => step_zoom(1)}>+</button>
       </div>
 
       <button
         type="button"
         className={`ecg-tool-button${spotlight ? ' is-active' : ''}`}
         aria-pressed={spotlight}
-        title="Dim every lead but the one under the pointer"
+        title={t('isolate_hint', 'Dim every lead but the one under the pointer')}
         onClick={() => on_change({ spotlight: !spotlight })}
       >
-        <span>Isolate</span>
+        <span>{t('isolate', 'Isolate')}</span>
       </button>
 
       <Segments
-        label="Caliper"
+        label={t('caliper', 'Caliper')}
         hide_label
         options={CALIPER_MODES}
         value={caliper_mode}
         on_change={(value) => on_change({ caliper_mode: value })}
+        t={t}
       />
 
       <div className="ecg-cart">
@@ -193,47 +216,51 @@ export function DisplayControls({
           type="button"
           className={`ecg-tool-button${cart_open ? ' is-active' : ''}`}
           aria-expanded={cart_open}
-          title="Gain, paper speed, filters, and caliper behaviour"
+          title={t('cart_hint', 'Gain, paper speed, filters, and caliper behaviour')}
           onClick={() => set_cart_open((open) => !open)}
         >
-          <span>Cart</span>
+          <span>{t('cart', 'Cart')}</span>
           <span className="ecg-tool-caret" aria-hidden="true">{cart_open ? '▴' : '▾'}</span>
         </button>
         {cart_open && (
-          <div className="ecg-cart-panel" aria-label="Recording settings">
+          <div className="ecg-cart-panel" aria-label={t('recording_settings', 'Recording settings')}>
             <Segments
-              label="Gain mm/mV"
+              label={t('gain_label', 'Gain mm/mV')}
               options={GAIN_OPTIONS}
               value={gain_mm_per_mv}
               on_change={(value) => on_change({ gain_mm_per_mv: value })}
+              t={t}
             />
             <Segments
-              label="Speed mm/s"
+              label={t('speed_label', 'Speed mm/s')}
               options={SPEED_OPTIONS}
               value={paper_speed_mm_per_second}
               on_change={(value) => on_change({ paper_speed_mm_per_second: value })}
+              t={t}
             />
             <Segments
-              label="Filter"
+              label={t('filter_label', 'Filter')}
               options={FILTER_PRESETS}
               value={filter_preset_id}
               on_change={(value) => on_change({ filter_preset_id: value })}
+              t={t}
             />
             <Segments
-              label="Caliper snap"
+              label={t('caliper_snap', 'Caliper snap')}
               options={SNAP_OPTIONS}
               value={snap_mm}
               on_change={(value) => on_change({ snap_mm: value })}
+              t={t}
             />
             <div className="ecg-control-group">
-              <span className="ecg-control-label">Paper</span>
+              <span className="ecg-control-label">{t('paper', 'Paper')}</span>
               <div className="ecg-control-segments">
                 <button type="button" aria-pressed={show_grid}
-                  title="Draw the 1 mm and 5 mm grid"
-                  onClick={() => on_change({ show_grid: !show_grid })}>Grid</button>
+                  title={t('grid_hint', 'Draw the 1 mm and 5 mm grid')}
+                  onClick={() => on_change({ show_grid: !show_grid })}>{t('grid', 'Grid')}</button>
                 <button type="button" aria-pressed={march}
-                  title="Repeat the measured span along the sheet, to walk out a rhythm"
-                  onClick={() => on_change({ march: !march })}>March</button>
+                  title={t('march_hint', 'Repeat the measured span along the sheet, to walk out a rhythm')}
+                  onClick={() => on_change({ march: !march })}>{t('march', 'March')}</button>
               </div>
             </div>
           </div>

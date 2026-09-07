@@ -69,6 +69,10 @@ export function PathologyRoom({
     // hosts resolve references before the case ever reaches this component; a
     // host that does not passes the rule in here instead.
     resolveRef = null,
+    // TRANSLATION IS INJECTED, NOT IMPORTED — see PathologyScreen.jsx. The
+    // default returns the English the call site already carries, so the room
+    // renders correctly with no host translator at all.
+    t = (key, fallback) => fallback ?? key,
 }) {
     const logger = useMemo(() => createPathologyLogger(eventLogger), [eventLogger]);
     const viewerCase = useMemo(() => {
@@ -429,7 +433,7 @@ export function PathologyRoom({
     if (!viewerCase) {
         return (
             <p className="m-auto max-w-sm p-6 text-center text-sm text-slate-500">
-                No pathology material is attached to this case.
+                {t('no_material', 'No pathology material is attached to this case.')}
             </p>
         );
     }
@@ -448,13 +452,13 @@ export function PathologyRoom({
                 photographs, not by parts, so a part with no pictures does not
                 conjure a tab that leads nowhere. */}
             {slides.length > 0 && specimens.some((entry) => (entry.images?.length ?? 0) > 0) && (
-                <div role="tablist" aria-label="Pathology modules" className="flex shrink-0 gap-1 border-b border-slate-800/80 bg-slate-950/60 px-3 py-1.5">
+                <div role="tablist" aria-label={t('pathology_modules', 'Pathology modules')} className="flex shrink-0 gap-1 border-b border-slate-800/80 bg-slate-950/60 px-3 py-1.5">
                     {/* Both tabs count the same kind of thing: the evidence
                         behind them. Counting specimen PARTS here read as
                         "Gross 2" for two parts holding no photograph at all. */}
                     {[
-                        ['microscopy', 'Microscopy', slides.length],
-                        ['gross', 'Gross', specimens.reduce((total, entry) => total + (entry.images?.length ?? 0), 0)],
+                        ['microscopy', t('module_microscopy', 'Microscopy'), slides.length],
+                        ['gross', t('module_gross', 'Gross'), specimens.reduce((total, entry) => total + (entry.images?.length ?? 0), 0)],
                     ].map(([key, label, count]) => (
                         <button
                             key={key}
@@ -474,10 +478,11 @@ export function PathologyRoom({
             )}
 
             {showGross ? (
-                <SpecimenTray specimens={specimens} logger={logger} />
+                <SpecimenTray specimens={specimens} logger={logger} t={t} />
             ) : (
                 <>
                     <ViewerToolbar
+                        t={t}
                         tool={tool}
                         onTool={setTool}
                         activeClass={activeClass}
@@ -506,7 +511,7 @@ export function PathologyRoom({
                     />
 
                     <div className="flex min-h-0 flex-1 overflow-hidden">
-                        <nav aria-label="Slides" className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3">
+                        <nav aria-label={t('slides', 'Slides')} className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3">
                             <div className="flex flex-col gap-1.5">
                                 {slides.map((s) => {
                                     const active = s.id === activeSlideId;
@@ -526,7 +531,7 @@ export function PathologyRoom({
                                         </button>
                                     );
                                 })}
-                                {slides.length === 0 && <p className="p-2 text-xs text-slate-500">No slides in this case.</p>}
+                                {slides.length === 0 && <p className="p-2 text-xs text-slate-500">{t('no_slides', 'No slides in this case.')}</p>}
                             </div>
 
                             {/* Bookmarked fields. A reader who finds something at
@@ -536,7 +541,7 @@ export function PathologyRoom({
                             {bookmarks.length > 0 && (
                                 <div className="mt-4 border-t border-slate-800/80 pt-3">
                                     <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                        Bookmarked fields
+                                        {t('bookmarked_fields', 'Bookmarked fields')}
                                     </h3>
                                     <ul className="space-y-1">
                                         {bookmarks.map((b) => (
@@ -562,6 +567,7 @@ export function PathologyRoom({
                         <main className="flex min-w-0 flex-1 flex-col">
                             {slide ? (
                                 <SlideCanvas
+                                    t={t}
                                     slide={slide}
                                     onSample={onSample}
                                     onViewer={attachViewer}
@@ -570,6 +576,7 @@ export function PathologyRoom({
                                     showNavigator={showNavigator}
                                 >
                                     <AnnotationCanvas
+                                        t={t}
                                         viewer={viewer}
                                         slide={slide}
                                         tool={tool}
@@ -585,13 +592,13 @@ export function PathologyRoom({
                                     />
                                 </SlideCanvas>
                             ) : (
-                                <p className="m-auto text-sm text-slate-500">Select a slide.</p>
+                                <p className="m-auto text-sm text-slate-500">{t('select_a_slide', 'Select a slide.')}</p>
                             )}
                         </main>
 
                         <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-l border-slate-800/80 bg-slate-950/40 max-xl:w-72">
-                            <div role="tablist" aria-label="Side panel" className="flex shrink-0 gap-1 border-b border-slate-800/80 px-2 py-1.5">
-                                {[['annotations', 'Marks', PenSquare], ['report', 'Report', FileText]].map(([key, label, Icon]) => (
+                            <div role="tablist" aria-label={t('side_panel', 'Side panel')} className="flex shrink-0 gap-1 border-b border-slate-800/80 px-2 py-1.5">
+                                {[['annotations', t('marks', 'Marks'), PenSquare], ['report', t('report', 'Report'), FileText]].map(([key, label, Icon]) => (
                                         <button
                                             key={key}
                                             type="button"
@@ -611,12 +618,13 @@ export function PathologyRoom({
 
                             {importError && (
                                 <p role="alert" className="m-2 rounded-lg bg-rose-500/10 p-2 text-[11px] text-rose-300 ring-1 ring-rose-500/30">
-                                    That file could not be imported: {importError}
+                                    {t('import_failed', `That file could not be imported: ${importError}`, { reason: importError })}
                                 </p>
                             )}
 
                             {sidePanel === 'annotations' ? (
                                 <AnnotationPanel
+                                    t={t}
                                     annotations={annotations.annotations}
                                     slide={slide}
                                     selectedId={annotations.selectedId}
@@ -628,6 +636,7 @@ export function PathologyRoom({
                                 />
                             ) : (
                                 <ReportPanel
+                                    t={t}
                                     reports={reports}
                                     activeId={activeReportId}
                                     onSelect={setActiveReportId}
@@ -647,7 +656,7 @@ export function PathologyRoom({
                 </>
             )}
 
-            <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+            <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} t={t} />
 
             <input
                 ref={fileInputRef}

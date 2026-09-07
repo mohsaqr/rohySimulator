@@ -319,11 +319,40 @@ export function case_document_is_servable(stored) {
 }
 
 /**
+ * Translation key per issue code.
+ *
+ * An issue is produced by a plain function, not a component, so it cannot take a
+ * `t` prop: `message` stays the English fallback and the studio translates from
+ * the stable `code`. Keys are written out literally because a key looked up by a
+ * variable is invisible to extraction tooling. A message that names a value
+ * carries it in `values` rather than baked into the prose, so a translation can
+ * place it wherever its own grammar wants it.
+ */
+export const CASE_ISSUE_KEYS = Object.freeze({
+  unreadable_document: 'issue_unreadable_document',
+  schema_version: 'issue_schema_version',
+  case_id: 'issue_case_id',
+  title: 'issue_title',
+  activity: 'issue_activity',
+  recording: 'issue_recording',
+  no_recording: 'issue_no_recording',
+});
+
+/**
  * Return actionable authoring/publication issues without throwing on bad data.
+ *
+ * Every message carries a stable `code`, and `CASE_ISSUE_KEYS` maps that code to
+ * a translation key. A message that names a value is a TEMPLATE carrying
+ * `{name}` placeholders plus a `values` object; the rest carry no `values` at
+ * all. Render one with `interpolate(issue.message, issue.values)` from
+ * `i18n.js`, or with `format_message(t, CASE_ISSUE_KEYS[issue.code],
+ * issue.message, issue.values)` to translate it — the studio does the latter.
+ * Keeping the value out of the prose is what lets a translation keep it: the
+ * expected schema version belongs in the sentence, not dropped from it.
  *
  * @param {*} stored host document
  * @param {{for_publication?: boolean}} options validation mode
- * @returns {Array<{level:string,code:string,path:string,message:string}>}
+ * @returns {Array<{level:string,code:string,path:string,message:string,values?:object}>}
  */
 export function case_document_issues(stored, { for_publication = true } = {}) {
   if (stored === null || stored === undefined) return [];
@@ -332,7 +361,13 @@ export function case_document_issues(stored, { for_publication = true } = {}) {
   const { manifest, rubric } = document;
   const issues = [
     ...(manifest.schema_version !== CASE_SCHEMA_VERSION
-      ? [{ level: 'error', code: 'schema_version', path: '$.manifest.schema_version', message: `Expected ECG case schema ${CASE_SCHEMA_VERSION}.` }]
+      ? [{
+        level: 'error',
+        code: 'schema_version',
+        path: '$.manifest.schema_version',
+        message: 'Expected ECG case schema {expected}.',
+        values: { expected: CASE_SCHEMA_VERSION },
+      }]
       : []),
     ...(typeof manifest.id !== 'string' || !/^[a-z0-9][a-z0-9_-]{2,63}$/.test(manifest.id)
       ? [{ level: 'error', code: 'case_id', path: '$.manifest.id', message: 'Add a stable lower-case case id.' }]
@@ -374,7 +409,11 @@ export function case_document_summary(stored) {
     count: recordings,
     recordings,
     activities,
-    label_key: recordings === 1 ? 'ecg_summary_recording' : recordings > 1 ? 'ecg_summary_recordings' : 'ecg_summary_empty',
+    // One key, pluralised by the host's ICU rules from `count`. Choosing the
+    // key by `recordings === 1` was a two-form assumption: it is wrong in
+    // Finnish and Swedish (and in Kazakh, which has a single form), and it is
+    // the host's message format that knows those rules, not this module.
+    label_key: recordings === 0 ? 'ecg_summary_empty' : 'ecg_summary_recordings',
   };
 }
 

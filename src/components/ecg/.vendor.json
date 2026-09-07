@@ -1,11 +1,11 @@
 {
   "package": "cardoyon",
-  "version": "0.3.0",
-  "commit": "2752f14ecb32c4299357729fa569f3d5ba0c5eb0",
-  "vendoredAt": "2026-09-05",
+  "version": "0.5.2",
+  "commit": "548d1d956256a1d457e3bb8189b136b62f1e46d9",
+  "vendoredAt": "2026-09-07",
   "from": "src",
-  "files": 30,
-  "sha256": "9ecd40481a4fa4cfa7649c1d4928c9b64105ffd424af1878e17b5e1d4b7af956",
+  "files": 35,
+  "sha256": "fc1ccf888fb2b4bc791fca20b34ecf33b6fb9fc0aa63ab05b3bdd2eb5369b7db",
   "hostOwned": [
     "README.md",
     "portability.test.js"

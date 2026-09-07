@@ -34,7 +34,7 @@ export function PathologyScreen({
     examMode = false,
     topBarControls = null,
     roomNav,
-    t = (key, fallback) => fallback,
+    t = (key, fallback) => fallback ?? key,
     resolveRef = null,
 }) {
     return (
@@ -60,6 +60,7 @@ export function PathologyScreen({
             </header>
 
             <PathologyRoom
+                t={t}
                 resolveRef={resolveRef}
                 pathologyCase={pathologyCase}
                 rubric={rubric}

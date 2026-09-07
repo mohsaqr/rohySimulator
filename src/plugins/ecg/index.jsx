@@ -28,11 +28,13 @@ export default {
     // The narrowed logger (RPS-1 1.6); create_ecg_logger wraps `{log}`.
     event_logger: { log: ctx.log },
     exam_mode: ctx.session.examMode,
+    t: ctx.t,
     initial_work: persist.state,
     on_work_change: (next) => persist.save(next),
   }),
   authorComponent: EcgCaseAuthor,
-  authorProps: (_ctx, draft) => ({
+  authorProps: (ctx, draft) => ({
+    t: ctx.t,
     initial_document: draft.value ?? undefined,
     on_change: draft.save,
   }),

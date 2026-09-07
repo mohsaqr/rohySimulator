@@ -7,6 +7,7 @@ import {
   measure_paper_points,
   snap_paper_point,
 } from '../paperGeometry.js';
+import { format_message, identity_t } from '../i18n.js';
 
 /** How close a pointer must come, in paper millimetres, to grab a caliper leg. */
 const HANDLE_GRAB_MM = 3.5;
@@ -26,14 +27,29 @@ const CALIPER_HINTS = Object.freeze({
   rate: 'Click two consecutive R waves to read the rate they imply.',
 });
 
-/** State the filter chain the way a recording would print it. */
-function describe_chain(chain) {
-  if (!chain) return 'unfiltered';
+/** Translation key per caliper hint, written out so an extractor can read them. */
+const CALIPER_HINT_KEYS = Object.freeze({
+  interval: 'caliper_hint_interval',
+  amplitude: 'caliper_hint_amplitude',
+  rate: 'caliper_hint_rate',
+});
+
+/**
+ * State the filter chain the way a recording would print it.
+ *
+ * The frequencies are numbers and the units are symbols, so only the two words
+ * around them are translated — a band written "0.05–150 Hz" reads the same in
+ * every language, and turning it into a sentence would make it unrecognisable
+ * against the cart it is copied from.
+ */
+function describe_chain(chain, t) {
+  const unfiltered = t('chain_unfiltered', 'unfiltered');
+  if (!chain) return unfiltered;
   const band = chain.high_pass_hz && chain.low_pass_hz
     ? `${chain.high_pass_hz}–${chain.low_pass_hz} Hz`
     : chain.low_pass_hz ? `≤${chain.low_pass_hz} Hz`
-      : chain.high_pass_hz ? `≥${chain.high_pass_hz} Hz` : 'unfiltered';
-  return chain.notch_hz ? `${band} · ${chain.notch_hz} Hz notch` : band;
+      : chain.high_pass_hz ? `≥${chain.high_pass_hz} Hz` : unfiltered;
+  return chain.notch_hz ? `${band} · ${chain.notch_hz} Hz ${t('chain_notch', 'notch')}` : band;
 }
 
 const distance_mm = (a, b) => Math.hypot(a.x_mm - b.x_mm, a.y_mm - b.y_mm);
@@ -157,11 +173,12 @@ function Calipers({ points, height_mm, width_mm, mode, reading, march }) {
  * @param {number} [props.snap_mm] grid step the calipers snap to; 0 disables
  * @param {boolean} [props.march] repeat the measured span along the sheet
  * @param {boolean} [props.spotlight] dim every lead but the one under the pointer
+ * @param {(key: string, fallback?: string, values?: object) => string} [props.t] host translator
  * @returns {JSX.Element} the paper
  */
 export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on_measurement = null,
   show_grid = true, caliper_mode = 'interval', zoom = 1, lens_power = 0, snap_mm = 0,
-  march = false, spotlight = false }) {
+  march = false, spotlight = false, t = identity_t }) {
   const svg_ref = useRef(null);
   const unique = useId().replace(/:/g, '');
   const content_id = `ecg-content-${unique}`;
@@ -245,16 +262,20 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
   const hovered = spotlight && mode === 'standard' && pointer ? locate_paper_cell(model, pointer) : null;
 
   return (
-    <section className="ecg-paper-shell" aria-label="12-lead electrocardiogram">
+    <section className="ecg-paper-shell" aria-label={t('twelve_lead_ecg', '12-lead electrocardiogram')}>
       {/* A recording states the settings it was made under. Reading a tracing
           without them is guessing, and these are adjustable. */}
       <div className="ecg-paper-meta">
         <span>{recording.paper_speed_mm_per_second} mm/s</span>
         <span>{recording.gain_mm_per_mv} mm/mV</span>
         <span>{recording.sample_rate_hz} Hz</span>
-        <span>{describe_chain(recording.filter_chain)}</span>
-        {zoom !== 1 && <span>{Math.round(zoom * 100)}% view</span>}
+        <span>{describe_chain(recording.filter_chain, t)}</span>
+        {zoom !== 1 && <span>{Math.round(zoom * 100)}% {t('view', 'view')}</span>}
       </div>
+      {/* A lead name is a symbol, not a word — "V2" is V2 in every language.
+          Where the lead only trails a label ("Lead V2") it is appended; where it
+          sits inside a phrase, the phrase is one key with a `{lead}` value, so a
+          translation can put it wherever its own grammar wants it. */}
       <div className="ecg-paper-scroll">
         <svg
           ref={svg_ref}
@@ -262,13 +283,19 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
           style={{ width: `${zoom * 100}%` }}
           viewBox={`0 0 ${width_mm} ${height_mm}`}
           role="img"
-          aria-label={mode === 'focus' ? `Ten-second ECG, lead ${focused_lead}` : 'Standard 3 by 4 12-lead ECG with lead II rhythm strip'}
+          aria-label={mode === 'focus'
+            ? `${t('focus_sheet_label', 'Ten-second ECG, lead')} ${focused_lead}`
+            : t('standard_sheet_label', 'Standard 3 by 4 12-lead ECG with lead II rhythm strip')}
           onPointerDown={handle_down}
           onPointerMove={handle_move}
           onPointerUp={handle_up}
           onPointerLeave={() => set_pointer(null)}
         >
-          <title>{mode === 'focus' ? `ECG lead ${focused_lead}` : 'Standard 12-lead ECG'}</title>
+          <title>
+            {mode === 'focus'
+              ? `${t('ecg_lead', 'ECG lead')} ${focused_lead}`
+              : t('standard_sheet_title', 'Standard 12-lead ECG')}
+          </title>
           <GridDefinitions />
           <g id={content_id}>
             <rect
@@ -289,7 +316,10 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
                 ))}
                 <g className={hovered && hovered.lead !== model.rhythm.lead ? 'ecg-cell is-dimmed' : 'ecg-cell'}>
                   <text className="ecg-lead-label" x={model.data_origin_x_mm + 1.5} y={model.rhythm.baseline_mm - 10.5}>
-                    {model.rhythm.lead} rhythm
+                    {/* One sentence, one key. "rhythm" on its own is not a
+                        translatable unit, and the lead must be free to move
+                        within the phrase. */}
+                    {format_message(t, 'rhythm_lead_strip', '{lead} rhythm', { lead: model.rhythm.lead })}
                   </text>
                   <path className="ecg-trace" d={model.rhythm.path} />
                 </g>
@@ -299,7 +329,7 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
               </>
             ) : (
               <>
-                <text className="ecg-lead-label ecg-lead-label-focus" x="11.5" y="8">Lead {model.lead}</text>
+                <text className="ecg-lead-label ecg-lead-label-focus" x="11.5" y="8">{t('lead', 'Lead')} {model.lead}</text>
                 <path className="ecg-trace" d={model.path} />
                 <path className="ecg-calibration" d={model.calibration_path} />
               </>
@@ -326,7 +356,12 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
         </svg>
       </div>
       <div className="ecg-caliper-bar">
-        <span>{CALIPER_HINTS[caliper_mode] ?? CALIPER_HINTS.interval}</span>
+        <span>
+          {t(
+            CALIPER_HINT_KEYS[caliper_mode] ?? CALIPER_HINT_KEYS.interval,
+            CALIPER_HINTS[caliper_mode] ?? CALIPER_HINTS.interval,
+          )}
+        </span>
         {reading && (
           <output className="ecg-caliper-detail">
             {Math.round(reading.duration_ms)} ms · {reading.amplitude_mv.toFixed(2)} mV
@@ -335,7 +370,7 @@ export function ECGPaper({ recording, mode = 'standard', focused_lead = 'II', on
           </output>
         )}
         <button type="button" onClick={() => set_caliper_points([])} disabled={caliper_points.length === 0}>
-          Clear calipers
+          {t('clear_calipers', 'Clear calipers')}
         </button>
       </div>
     </section>

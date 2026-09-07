@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { keymapByGroup } from './keymap.js';
+import { KEYMAP_DESCRIPTION_KEYS, KEYMAP_GROUP_KEYS, keymapByGroup } from './keymap.js';
 
 /**
  * The shortcut sheet.
@@ -12,7 +12,7 @@ import { keymapByGroup } from './keymap.js';
  * "Ctrl+Z" to a Mac user is a small thing that makes the whole sheet feel like
  * it was written for someone else's computer.
  */
-export function KeyboardHelp({ open, onClose }) {
+export function KeyboardHelp({ open, onClose, t = (key, fallback) => fallback ?? key }) {
     if (!open) return null;
     const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 
@@ -21,7 +21,7 @@ export function KeyboardHelp({ open, onClose }) {
             className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-6 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
-            aria-label="Keyboard shortcuts"
+            aria-label={t('keyboard_shortcuts', 'Keyboard shortcuts')}
             onClick={onClose}
         >
             <div
@@ -29,14 +29,14 @@ export function KeyboardHelp({ open, onClose }) {
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="mb-4 flex items-baseline justify-between">
-                    <h2 className="text-sm font-semibold text-slate-100">Keyboard shortcuts</h2>
+                    <h2 className="text-sm font-semibold text-slate-100">{t('keyboard_shortcuts', 'Keyboard shortcuts')}</h2>
                     <button
                         type="button"
                         onClick={onClose}
                         className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                     >
                         <X className="h-4 w-4" aria-hidden="true" />
-                        <span className="sr-only">Close</span>
+                        <span className="sr-only">{t('close', 'Close')}</span>
                     </button>
                 </div>
 
@@ -44,7 +44,7 @@ export function KeyboardHelp({ open, onClose }) {
                     {keymapByGroup().map((group) => (
                         <section key={group.group}>
                             <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-300">
-                                {group.group}
+                                {t(KEYMAP_GROUP_KEYS[group.group] ?? group.group, group.group)}
                             </h3>
                             <dl className="space-y-1">
                                 {group.rows.map((row) => (
@@ -59,7 +59,7 @@ export function KeyboardHelp({ open, onClose }) {
                                                 </kbd>
                                             ))}
                                         </dt>
-                                        <dd className="min-w-0 flex-1 text-slate-400">{row.description}</dd>
+                                        <dd className="min-w-0 flex-1 text-slate-400">{t(KEYMAP_DESCRIPTION_KEYS[row.command] ?? row.command, row.description)}</dd>
                                     </div>
                                 ))}
                             </dl>
@@ -68,8 +68,10 @@ export function KeyboardHelp({ open, onClose }) {
                 </div>
 
                 <p className="mt-4 border-t border-slate-800 pt-3 text-[11px] leading-relaxed text-slate-500">
-                    Shortcuts are ignored while you are typing in a text box, so a diagnosis can
-                    contain the letter <strong className="text-slate-400">r</strong> without drawing a rectangle.
+                    {t(
+                        'shortcuts_typing_note',
+                        'Shortcuts are ignored while you are typing in a text box, so a diagnosis can contain the letter r without drawing a rectangle.',
+                    )}
                 </p>
             </div>
         </div>

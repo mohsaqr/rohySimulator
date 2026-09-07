@@ -99,6 +99,61 @@ export const TERRITORY_LABELS = Object.freeze({
 });
 
 /**
+ * Translation keys for every piece of prose this module carries.
+ *
+ * The coordinates are data and the prose beside them is data too, so neither
+ * can take a `t` prop. The English above stays as the fallback and the selector
+ * translates from the stable lead, electrode or territory id. Keys are spelled
+ * out literally because a key read out of an object by a variable is invisible
+ * to extraction tooling.
+ */
+export const TERRITORY_KEYS = Object.freeze({
+  lateral: 'territory_lateral',
+  inferior: 'territory_inferior',
+  septal: 'territory_septal',
+  anterior: 'territory_anterior',
+  cavity: 'territory_cavity',
+});
+
+/** Where each precordial electrode goes, by lead. */
+export const LEAD_ANATOMY_KEYS = Object.freeze({
+  V1: 'lead_anatomy_v1',
+  V2: 'lead_anatomy_v2',
+  V3: 'lead_anatomy_v3',
+  V4: 'lead_anatomy_v4',
+  V5: 'lead_anatomy_v5',
+  V6: 'lead_anatomy_v6',
+});
+
+/** What each limb electrode is, by electrode code. */
+export const LIMB_ELECTRODE_KEYS = Object.freeze({
+  RA: 'electrode_ra',
+  LA: 'electrode_la',
+  RL: 'electrode_rl',
+  LL: 'electrode_ll',
+});
+
+/** How each frontal lead is derived from the limb electrodes. */
+export const LEAD_DERIVATION_KEYS = Object.freeze({
+  I: 'lead_derivation_i',
+  II: 'lead_derivation_ii',
+  III: 'lead_derivation_iii',
+  aVR: 'lead_derivation_avr',
+  aVL: 'lead_derivation_avl',
+  aVF: 'lead_derivation_avf',
+});
+
+/** English derivation sentences, the fallback behind `LEAD_DERIVATION_KEYS`. */
+export const LEAD_DERIVATIONS = Object.freeze({
+  I: 'Left arm minus right arm',
+  II: 'Left leg minus right arm',
+  III: 'Left leg minus left arm',
+  aVR: 'Right arm against the average of the others',
+  aVL: 'Left arm against the average of the others',
+  aVF: 'Left leg against the average of the others',
+});
+
+/**
  * Endpoint of a frontal lead axis on the hexaxial circle.
  *
  * SVG y grows downward and ECG frontal angles are positive downward, so the
@@ -129,8 +184,14 @@ export function frontal_lead_endpoint(lead, { center_x = 50, center_y = 50, radi
  * Human-readable origin of one lead, for the selector's caption and its
  * accessible name.
  *
+ * `anatomy` is the assembled English sentence and stays the fallback; the parts
+ * it was assembled from come back beside it (`anatomy_key`, `derivation`,
+ * `angle_degrees`) so a translated host can rebuild the same sentence in its own
+ * word order instead of receiving one pre-glued English string.
+ *
  * @param {string} lead any of the twelve standard leads
- * @returns {{lead:string,kind:'precordial'|'frontal',anatomy:string,territory:string|null}}
+ * @returns {{lead:string,kind:'precordial'|'frontal',anatomy:string,anatomy_key:string,
+ *   derivation:string|null,angle_degrees:number|null,territory:string|null}}
  */
 export function lead_topography(lead) {
   const precordial = PRECORDIAL_POSITIONS.find((position) => position.lead === lead);
@@ -139,23 +200,22 @@ export function lead_topography(lead) {
       lead,
       kind: 'precordial',
       anatomy: precordial.anatomy,
+      anatomy_key: LEAD_ANATOMY_KEYS[lead],
+      derivation: null,
+      angle_degrees: null,
       territory: LEAD_TERRITORIES[lead] ?? null,
     };
   }
   const angle = FRONTAL_LEAD_ANGLES[lead];
   if (!Number.isFinite(angle)) throw new RangeError(`lead_topography(lead): unknown lead '${lead}'`);
-  const derivation = {
-    I: 'Left arm minus right arm',
-    II: 'Left leg minus right arm',
-    III: 'Left leg minus left arm',
-    aVR: 'Right arm against the average of the others',
-    aVL: 'Left arm against the average of the others',
-    aVF: 'Left leg against the average of the others',
-  }[lead];
+  const derivation = LEAD_DERIVATIONS[lead];
   return {
     lead,
     kind: 'frontal',
     anatomy: `${derivation} · ${angle > 0 ? '+' : ''}${angle}° in the frontal plane`,
+    anatomy_key: LEAD_DERIVATION_KEYS[lead],
+    derivation,
+    angle_degrees: angle,
     territory: LEAD_TERRITORIES[lead] ?? null,
   };
 }

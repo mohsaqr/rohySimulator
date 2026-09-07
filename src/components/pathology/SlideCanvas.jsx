@@ -41,6 +41,7 @@ export function SlideCanvas({
     filter = 'none',
     showNavigator = true,
     children,
+    t = (key, fallback) => fallback ?? key,
 }) {
     const hostRef = useRef(null);
     const viewerRef = useRef(null);
@@ -211,11 +212,11 @@ export function SlideCanvas({
                 aria-live="polite"
             >
                 <span className={hud?.uncalibrated ? `${chip} text-amber-300` : chip}>
-                    {hud?.uncalibrated ? 'no calibration' : (hud ? formatObjective(hud.objective) : '—')}
+                    {hud?.uncalibrated ? t('no_calibration', 'no calibration') : (hud ? formatObjective(hud.objective) : '—')}
                     {/* Never let an interpolated view pass as optical resolution. */}
                     {hud?.interpolating && (
-                        <em className="not-italic font-normal text-amber-300" title="Digitally enlarged beyond the scanned resolution">
-                            interpolated
+                        <em className="not-italic font-normal text-amber-300" title={t('interpolated_hint', 'Digitally enlarged beyond the scanned resolution')}>
+                            {t('interpolated', 'interpolated')}
                         </em>
                     )}
                 </span>
@@ -228,8 +229,8 @@ export function SlideCanvas({
                 {/* The field-of-view area is what makes a count reportable:
                     "14 in 2.03 mm²" is a finding, "14 per 10 HPF" is not. */}
                 {fov !== null && (
-                    <span className={`${chip} max-lg:hidden`} title="Area of tissue currently on screen">
-                        {formatArea(fov * 1e6)} field
+                    <span className={`${chip} max-lg:hidden`} title={t('field_area_hint', 'Area of tissue currently on screen')}>
+                        {t('field_area', `${formatArea(fov * 1e6)} field`, { area: formatArea(fov * 1e6) })}
                     </span>
                 )}
                 {calibrated && (
@@ -242,7 +243,7 @@ export function SlideCanvas({
                 {calibrated && (hud.rotation !== 0 || hud.flipped) && (
                     <span className={`${chip} text-amber-300`}>
                         {hud.rotation !== 0 && `${Math.round(hud.rotation)}°`}
-                        {hud.flipped && ' flipped'}
+                        {hud.flipped && ` ${t('flipped', 'flipped')}`}
                     </span>
                 )}
             </div>

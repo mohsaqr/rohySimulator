@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import OpenSeadragon from 'openseadragon';
 import {
+    ANNOTATION_CLASS_KEYS,
     ANNOTATION_KINDS,
+    ANNOTATION_KIND_KEYS,
     annotationColor,
     annotationLabel,
     annotationVertices,
@@ -54,6 +56,7 @@ export function AnnotationCanvas({
     onUpdate,
     onDelete,
     controlsRef,
+    t = (key, fallback) => fallback ?? key,
 }) {
     const canvasRef = useRef(null);
     // The floating action bar for the selected mark. Positioned IMPERATIVELY
@@ -76,7 +79,7 @@ export function AnnotationCanvas({
     useEffect(() => {
         stateRef.current = {
             ...stateRef.current,
-            slide, tool, activeClass, frameAreaMm2, annotations, selectedId, showLabels,
+            slide, tool, activeClass, frameAreaMm2, annotations, selectedId, showLabels, t,
         };
         callbacksRef.current = { onSelect, onAdd, onUpdate, onDelete };
     });
@@ -149,6 +152,7 @@ export function AnnotationCanvas({
             selected: a.id === s.selectedId,
             showLabels: s.showLabels,
             slide: s.slide,
+            t: s.t,
         }));
 
         const draft = draftRef.current;
@@ -159,6 +163,7 @@ export function AnnotationCanvas({
                 showLabels: s.showLabels,
                 slide: s.slide,
                 pending: true,
+                t: s.t,
             });
         }
 
@@ -453,11 +458,11 @@ export function AnnotationCanvas({
                            rounded-lg bg-slate-950/90 px-1.5 py-1 text-[10px] font-semibold text-slate-300
                            shadow-lg shadow-black/40 ring-1 ring-slate-700/70 backdrop-blur"
             >
-                <span className="pointer-events-none px-1 text-slate-400">drag to move</span>
+                <span className="pointer-events-none px-1 text-slate-400">{t('drag_to_move', 'drag to move')}</span>
                 <button
                     type="button"
                     className="pointer-events-auto rounded p-1 text-slate-300 transition-colors hover:bg-rose-500/25 hover:text-rose-200"
-                    title="Delete this mark  (Del)"
+                    title={t('delete_mark_hint', 'Delete this mark  (Del)')}
                     onClick={() => {
                         const { selectedId } = stateRef.current;
                         if (selectedId) callbacksRef.current.onDelete?.(selectedId);
@@ -466,11 +471,31 @@ export function AnnotationCanvas({
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                         <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span className="sr-only">Delete the selected mark</span>
+                    <span className="sr-only">{t('delete_selected_mark', 'Delete the selected mark')}</span>
                 </button>
             </div>
         </>
     );
+}
+
+/**
+ * An annotation's drawn name, in the reader's language.
+ *
+ * The reader's own note is never touched — it is their words. Only the two
+ * DERIVED names are translated: the class they picked from the palette, and
+ * the shape's own kind, both of which are stable ids with a key beside them.
+ *
+ * @param {object} annotation
+ * @param {Function} t
+ * @returns {string} the label to paint
+ */
+function translatedLabel(annotation, t) {
+    if (annotation.text) return annotation.text;
+    if (annotation.classification) {
+        const name = annotation.classification.name;
+        return t(ANNOTATION_CLASS_KEYS[name] ?? name, name);
+    }
+    return t(ANNOTATION_KIND_KEYS[annotation.kind] ?? annotation.kind, annotationLabel(annotation));
 }
 
 /**
@@ -504,7 +529,7 @@ const HANDLE_PX = 4;
 const POINT_RADIUS_PX = 6;
 const ARROW_HEAD_PX = 14;
 
-function paint(ctx, annotation, { toElement, selected, showLabels, slide, pending = false }) {
+function paint(ctx, annotation, { toElement, selected, showLabels, slide, pending = false, t = (key, fallback) => fallback ?? key }) {
     const color = annotationColor(annotation);
     const screen = annotationVertices(annotation).map(toElement);
     if (screen.length === 0) return;
@@ -538,7 +563,7 @@ function paint(ctx, annotation, { toElement, selected, showLabels, slide, pendin
     }
 
     if (selected) paintHandles(ctx, annotation.points.map(toElement));
-    if (showLabels) paintLabel(ctx, annotation, screen, slide, color);
+    if (showLabels) paintLabel(ctx, annotation, screen, slide, color, t);
     ctx.restore();
 }
 
@@ -645,8 +670,8 @@ function paintHandles(ctx, points) {
  * drew. Counting frames additionally carry the per-mm² rate, which is the
  * number the report actually needs.
  */
-function paintLabel(ctx, annotation, screen, slide, color) {
-    let text = annotationLabel(annotation);
+function paintLabel(ctx, annotation, screen, slide, color, t) {
+    let text = translatedLabel(annotation, t);
     if (slide?.nativeMpp) {
         const m = measureAnnotation(annotation, slide);
         if (annotation.kind === ANNOTATION_KINDS.COUNTING_FRAME) {

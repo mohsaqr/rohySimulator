@@ -2,11 +2,15 @@ import { useState } from 'react';
 import {
     ChevronLeft, FileText, Lightbulb, ListPlus, Lock, Plus, Save, Send,
 } from 'lucide-react';
+import { plural } from './i18n.js';
+import { MISS_REASON_KEYS } from './readAssessment.js';
 import {
+    SUBMIT_BLOCKED_KEYS,
+    SUBMIT_BLOCKED_REASONS,
     findingsAsText,
     isLocked,
-    reportSummary,
-    submitBlockedBecause,
+    reportCounts,
+    submitBlockedCode,
 } from './report.js';
 
 /**
@@ -39,20 +43,22 @@ export function ReportPanel({
     logger,
     readResult,
     examMode = false,
+    t = (key, fallback) => fallback ?? key,
 }) {
     const active = reports.find((r) => r.id === activeId) ?? null;
 
     if (!active) {
         return (
             <div className="flex min-h-0 flex-1 flex-col">
-                <TaskBrief task={task} logger={logger} examMode={examMode} />
-                <ReportList reports={reports} activeId={activeId} onSelect={onSelect} onAdd={onAdd} />
+                <TaskBrief task={task} logger={logger} examMode={examMode} t={t} />
+                <ReportList reports={reports} activeId={activeId} onSelect={onSelect} onAdd={onAdd} t={t} />
             </div>
         );
     }
 
     return (
         <ReportEditor
+            t={t}
             report={active}
             reportCount={reports.length}
             onBack={() => onSelect(null)}
@@ -65,25 +71,27 @@ export function ReportPanel({
     );
 }
 
-function ReportList({ reports, activeId, onSelect, onAdd }) {
+function ReportList({ reports, activeId, onSelect, onAdd, t }) {
     return (
-        <section className="flex min-h-0 flex-1 flex-col" aria-label="Reports">
+        <section className="flex min-h-0 flex-1 flex-col" aria-label={t('reports', 'Reports')}>
             <header className="flex shrink-0 items-center justify-between px-3 py-2">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Reports</h3>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('reports', 'Reports')}</h3>
                 <button
                     type="button"
                     onClick={onAdd}
                     className="flex items-center gap-1 rounded-lg bg-fuchsia-500/15 px-2 py-1 text-[11px] font-semibold text-fuchsia-200 ring-1 ring-fuchsia-500/30 transition-colors hover:bg-fuchsia-500/25"
                 >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    Add report
+                    {t('add_report', 'Add report')}
                 </button>
             </header>
 
             {reports.length === 0 ? (
                 <p className="px-3 pb-3 text-[11px] leading-relaxed text-slate-500">
-                    No report yet. <strong className="text-slate-400">Add report</strong> opens a blank
-                    one — give it a title, write your findings, then save it as a draft or submit it.
+                    {t(
+                        'reports_empty',
+                        'No report yet. Add report opens a blank one — give it a title, write your findings, then save it as a draft or submit it.',
+                    )}
                 </p>
             ) : (
                 <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
@@ -100,12 +108,17 @@ function ReportList({ reports, activeId, onSelect, onAdd }) {
                                         ? <Lock className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
                                         : <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />}
                                     <span className="truncate text-[12px] font-medium text-slate-100">
-                                        {r.title || 'Untitled report'}
+                                        {r.title || t('untitled_report', 'Untitled report')}
                                     </span>
                                 </span>
                                 <span className="mt-0.5 block pl-[22px] text-[10px] tabular-nums text-slate-500">
                                     {/* Status carries an icon AND a word — never colour alone. */}
-                                    {isLocked(r) ? 'Submitted' : 'Draft'} · {reportSummary(r)}
+                                    {isLocked(r) ? t('status_submitted', 'Submitted') : t('status_draft', 'Draft')} · {plural(
+                                        t,
+                                        'report_summary',
+                                        '{words, plural, one {# word} other {# words}}{findings, plural, =0 {} other { · # findings}}',
+                                        reportCounts(r),
+                                    )}
                                 </span>
                             </button>
                         </li>
@@ -116,17 +129,20 @@ function ReportList({ reports, activeId, onSelect, onAdd }) {
     );
 }
 
-function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit, findings, readResult }) {
+function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit, findings, readResult, t }) {
     const [error, setError] = useState(null);
     const locked = isLocked(report);
-    const blocked = submitBlockedBecause(report);
+    const blockedCode = submitBlockedCode(report);
+    const blocked = blockedCode === null
+        ? null
+        : t(SUBMIT_BLOCKED_KEYS[blockedCode], SUBMIT_BLOCKED_REASONS[blockedCode]);
 
     const field = 'w-full rounded-md bg-slate-950/60 px-2 py-1.5 text-[12px] text-slate-100 ring-1 '
         + 'ring-slate-700 placeholder:text-slate-600 focus:outline-none focus:ring-fuchsia-500/50 '
         + 'disabled:text-slate-400 disabled:ring-slate-800';
 
     return (
-        <section className="flex min-h-0 flex-1 flex-col" aria-label="Report">
+        <section className="flex min-h-0 flex-1 flex-col" aria-label={t('report', 'Report')}>
             <header className="flex shrink-0 items-center gap-1 px-2 py-2">
                 {reportCount > 1 || locked ? (
                     <button
@@ -135,17 +151,17 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
                         className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
                     >
                         <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                        All reports
+                        {t('all_reports', 'All reports')}
                     </button>
                 ) : (
                     <span className="px-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                        Report
+                        {t('report', 'Report')}
                     </span>
                 )}
                 {locked && (
                     <span className="ml-auto flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30">
                         <Lock className="h-3 w-3" aria-hidden="true" />
-                        Submitted
+                        {t('status_submitted', 'Submitted')}
                     </span>
                 )}
             </header>
@@ -153,13 +169,13 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pb-3">
                 <label className="block">
                     <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Title
+                        {t('title', 'Title')}
                     </span>
                     <input
                         type="text"
                         value={report.title}
                         disabled={locked}
-                        placeholder="e.g. Core biopsy, left breast"
+                        placeholder={t('report_title_placeholder', 'e.g. Core biopsy, left breast')}
                         onChange={(e) => onChange(report.id, { title: e.target.value })}
                         className={field}
                     />
@@ -167,13 +183,13 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
 
                 <label className="block">
                     <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Report
+                        {t('report', 'Report')}
                     </span>
                     <textarea
                         value={report.body}
                         disabled={locked}
                         rows={14}
-                        placeholder={'Describe what you examined and what you found, then state your conclusion.'}
+                        placeholder={t('report_body_placeholder', 'Describe what you examined and what you found, then state your conclusion.')}
                         onChange={(e) => onChange(report.id, { body: e.target.value })}
                         className={`${field} resize-y font-normal leading-relaxed`}
                     />
@@ -190,14 +206,19 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
                         className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-800/70 px-2 py-1.5 text-[11px] font-semibold text-slate-200 ring-1 ring-slate-700 transition-colors hover:bg-slate-700/70"
                     >
                         <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                        Insert {findings.length} measurement{findings.length === 1 ? '' : 's'}
+                        {plural(
+                            t,
+                            'insert_measurements',
+                            'Insert {count, plural, one {# measurement} other {# measurements}}',
+                            { count: findings.length },
+                        )}
                     </button>
                 )}
 
                 {report.findings.length > 0 && (
                     <div className="rounded-lg bg-slate-950/50 p-2 ring-1 ring-slate-800">
                         <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            Findings attached to this report
+                            {t('findings_attached', 'Findings attached to this report')}
                         </h4>
                         <ul className="space-y-0.5">
                             {report.findings.map((f) => (
@@ -213,7 +234,7 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
                 {/* The read assessment: how the slide was examined, which is
                     independent of anything written above. Shown only after
                     submission, so it cannot be used to fish for the answer. */}
-                {locked && readResult && <ReadFeedback result={readResult} />}
+                {locked && readResult && <ReadFeedback result={readResult} t={t} />}
             </div>
 
             {!locked && (
@@ -230,7 +251,7 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
                             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-2 py-2 text-[11px] font-semibold text-slate-200 ring-1 ring-slate-700 transition-colors hover:bg-slate-700"
                         >
                             <Save className="h-3.5 w-3.5" aria-hidden="true" />
-                            Save draft
+                            {t('save_draft', 'Save draft')}
                         </button>
                         <button
                             type="button"
@@ -250,11 +271,11 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
                             }`}
                         >
                             <Send className="h-3.5 w-3.5" aria-hidden="true" />
-                            Submit report
+                            {t('submit_report', 'Submit report')}
                         </button>
                     </div>
                     <p id="submit-blocked" className="text-[10px] leading-snug text-slate-500">
-                        A submitted report is locked and time-stamped. Saving keeps it editable.
+                        {t('submit_note', 'A submitted report is locked and time-stamped. Saving keeps it editable.')}
                     </p>
                 </footer>
             )}
@@ -269,22 +290,22 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
  * resolved, at what power, and how much of the tissue was actually screened.
  * It is the one thing an answer-only assessment cannot see.
  */
-function ReadFeedback({ result }) {
+function ReadFeedback({ result, t }) {
     const rows = [
-        ['Key findings reached', `${result.roiReached}/${result.roiTotal}`],
-        ['Critical findings', `${result.criticalReached}/${result.criticalTotal}`],
-        ['Slide screened', `${Math.round(result.slideCoverage * 100)}%`],
-        ['Highest power used', `${result.maxObjective.toFixed(1)}x`],
-        ['Time on the slide', `${(result.totalTimeMs / 1000).toFixed(0)}s`],
+        ['read_key_findings', t('read_key_findings', 'Key findings reached'), `${result.roiReached}/${result.roiTotal}`],
+        ['read_critical_findings', t('read_critical_findings', 'Critical findings'), `${result.criticalReached}/${result.criticalTotal}`],
+        ['read_slide_screened', t('read_slide_screened', 'Slide screened'), `${Math.round(result.slideCoverage * 100)}%`],
+        ['read_highest_power', t('read_highest_power', 'Highest power used'), `${result.maxObjective.toFixed(1)}x`],
+        ['read_time_on_slide', t('read_time_on_slide', 'Time on the slide'), `${(result.totalTimeMs / 1000).toFixed(0)}s`],
     ];
     return (
         <div className="rounded-lg bg-slate-950/50 p-2 ring-1 ring-slate-800">
             <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                How this slide was read
+                {t('how_slide_was_read', 'How this slide was read')}
             </h4>
             <dl className="space-y-0.5">
-                {rows.map(([label, value]) => (
-                    <div key={label} className="flex gap-2 text-[11px]">
+                {rows.map(([key, label, value]) => (
+                    <div key={key} className="flex gap-2 text-[11px]">
                         <dt className="text-slate-400">{label}</dt>
                         <dd className="ml-auto tabular-nums text-slate-200">{value}</dd>
                     </div>
@@ -292,7 +313,7 @@ function ReadFeedback({ result }) {
             </dl>
             {result.perRoi?.filter((r) => !r.reached).map((r) => (
                 <p key={r.id} className="mt-1 text-[10px] leading-snug text-amber-300">
-                    Missed{r.critical ? ' (key)' : ''}: {r.label} — {r.missReason.replace(/_/g, ' ')}
+                    {r.critical ? t('missed_key', 'Missed (key)') : t('missed', 'Missed')}: {r.label} — {t(MISS_REASON_KEYS[r.missReason] ?? r.missReason, r.missReason.replace(/_/g, ' '))}
                 </p>
             ))}
         </div>
@@ -306,13 +327,13 @@ function ReadFeedback({ result }) {
  * answer. In `examMode` the hints are absent entirely — the caller strips
  * them before they reach this component, so there is nothing here to reveal.
  */
-function TaskBrief({ task, logger, examMode }) {
+function TaskBrief({ task, logger, examMode, t }) {
     const [shown, setShown] = useState(0);
     if (!task) return null;
     const hints = task.hints ?? [];
 
     return (
-        <section className="shrink-0 border-b border-slate-800/80 px-3 py-2.5" aria-label="Task">
+        <section className="shrink-0 border-b border-slate-800/80 px-3 py-2.5" aria-label={t('task', 'Task')}>
             <h3 className="text-[12px] font-semibold text-slate-100">{task.prompt}</h3>
             {task.instructions && (
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{task.instructions}</p>
@@ -338,7 +359,7 @@ function TaskBrief({ task, logger, examMode }) {
                     className="mt-2 flex items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-semibold text-slate-400 ring-1 ring-slate-800 transition-colors hover:bg-slate-800/60 hover:text-slate-200"
                 >
                     <Lightbulb className="h-3 w-3" aria-hidden="true" />
-                    Hint {shown + 1} of {hints.length}
+                    {t('hint_n_of_m', `Hint ${shown + 1} of ${hints.length}`, { n: shown + 1, total: hints.length })}
                 </button>
             )}
         </section>

@@ -84,6 +84,39 @@ export const ANNOTATION_CLASSES = [
     { name: 'Artefact', color: '#F0E442' },
 ];
 
+/**
+ * The translation key for each class name, and for each annotation kind,
+ * written out LITERALLY.
+ *
+ * Both catalogues are module-scope data with no access to a `t` prop, so the
+ * English stays here as the fallback and the consumer translates from the
+ * stable id (`ANNOTATION_CLASS_KEYS[c.name]`, `ANNOTATION_KIND_KEYS[a.kind]`).
+ * Spelled out, not generated: a key built from a variable cannot be extracted.
+ */
+export const ANNOTATION_CLASS_KEYS = {
+    Tumour: 'annotation_class_tumour',
+    Stroma: 'annotation_class_stroma',
+    Necrosis: 'annotation_class_necrosis',
+    Normal: 'annotation_class_normal',
+    Inflammation: 'annotation_class_inflammation',
+    Vessel: 'annotation_class_vessel',
+    Mitosis: 'annotation_class_mitosis',
+    Artefact: 'annotation_class_artefact',
+};
+
+/** One key per annotation kind, for the shape's name in a list or a label. */
+export const ANNOTATION_KIND_KEYS = {
+    point: 'annotation_kind_point',
+    line: 'annotation_kind_line',
+    arrow: 'annotation_kind_arrow',
+    rectangle: 'annotation_kind_rectangle',
+    ellipse: 'annotation_kind_ellipse',
+    polygon: 'annotation_kind_polygon',
+    freehand: 'annotation_kind_freehand',
+    polyline: 'annotation_kind_polyline',
+    counting_frame: 'annotation_kind_counting_frame',
+};
+
 /** Drawn colour for an annotation the reader has not classified yet. */
 export const UNCLASSIFIED_COLOR = '#F1F5F9';
 

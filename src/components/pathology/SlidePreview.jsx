@@ -37,30 +37,30 @@ export function slideThumbnail(dziUrl) {
  * @param {string|null} props.imageUrl  a plain image to use instead (a gross plate)
  * @returns {import('react').ReactElement} the picture, a skeleton, or a refusal
  */
-export function SlidePreview({ dziUrl, imageUrl = null, alt, className = 'h-32' }) {
+export function SlidePreview({ dziUrl, imageUrl = null, alt, className = 'h-32', t = (key, fallback) => fallback ?? key }) {
     const [url, setUrl] = useState(imageUrl);
     const [failed, setFailed] = useState('');
 
     useEffect(() => {
         if (imageUrl) { setUrl(imageUrl); setFailed(''); return undefined; }
-        if (!dziUrl) { setUrl(null); setFailed('No DZI preview is configured.'); return undefined; }
+        if (!dziUrl) { setUrl(null); setFailed(t('preview_no_dzi', 'No DZI preview is configured.')); return undefined; }
         let live = true;
         setUrl(null);
         setFailed('');
         slideThumbnail(dziUrl).then(
             (found) => { if (live) setUrl(found); },
-            (error) => { if (live) setFailed(error?.message ?? 'Preview request failed.'); },
+            (error) => { if (live) setFailed(error?.message ?? t('preview_request_failed', 'Preview request failed.')); },
         );
         return () => { live = false; };
-    }, [dziUrl, imageUrl]);
+    }, [dziUrl, imageUrl, t]);
 
     if (failed) {
         return (
             <div title={failed} className={`flex ${className} w-full items-center justify-center gap-2 bg-slate-950 text-[11px] text-slate-600`}>
-                <ImageOff className="h-5 w-5" aria-hidden="true" />No preview
+                <ImageOff className="h-5 w-5" aria-hidden="true" />{t('no_preview', 'No preview')}
             </div>
         );
     }
     if (!url) return <div className={`${className} w-full animate-pulse bg-slate-800/60`} aria-hidden="true" />;
-    return <img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed('Preview image failed to load.')} className={`${className} w-full bg-slate-950 object-cover`} />;
+    return <img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(t('preview_image_failed', 'Preview image failed to load.'))} className={`${className} w-full bg-slate-950 object-cover`} />;
 }
