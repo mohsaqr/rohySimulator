@@ -27709,6 +27709,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "monitor.pause_simulation": {
+    "src": "0c0bd326e1c4",
+    "tgt": "4dcec899e297",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "monitor.primary_rhythm": {
     "src": "b6b3ce126b5b",
     "tgt": "8463abfcc637",
@@ -27802,6 +27812,16 @@
   "monitor.resume_scenario": {
     "src": "cb4564b4a0a3",
     "tgt": "acdae29c9ad8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "monitor.resume_simulation": {
+    "src": "1ce31bb28405",
+    "tgt": "5b3b878b19f0",
     "state": "machine",
     "origin": "machine",
     "locked": false,

@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.38] — 2026-09-10
+
+### Fixed
+
+- **The two monitor keys added in beta.34 reach the pseudo-locale and the translation status sidecars.** `pause_simulation` and `resume_simulation` were added to the eight shipping locales but not regenerated into `en-XA`, and the five sidecars under `src/locales/.status/` had no entry for them — so `locales-integrity` and the `i18n-xliff` bootstrap lock failed in CI (six failures) even though lint, `i18n:check`, `docs:check` and the build were all green. Regenerated with `npm run i18n:pseudo` and `npm run i18n:status -- --bootstrap <lang>`.
+
+### Notes for reviewers
+
+Adding a key to `src/locales/en/` is not finished at `i18n:check`. Two further gates live in the SERVER vitest project and are easy to miss when running filtered suites: `locales-integrity.test.js` holds every locale including `en-XA` to key parity, and `i18n-xliff.test.js` requires a committed status entry per translated key. Run `npx vitest run --project=server locales-integrity i18n-xliff` after touching any catalogue.
+
 ## [3.0.0-beta.37] — 2026-09-10
 
 ### Fixed
