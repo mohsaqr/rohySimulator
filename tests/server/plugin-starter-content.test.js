@@ -207,6 +207,14 @@ describe('an operator can refuse the starter bundle', () => {
             headers: { authorization: `Bearer ${token}` },
         });
         expect(res.status).toBe(503);
-        expect((await res.json()).code).toBe('plugin_remote_not_configured');
+        const body = await res.json();
+        expect(body.code).toBe('plugin_remote_not_configured');
+        // QA-0025: the message used to name ROHY_PLUGIN_ORIGINS and nothing
+        // else, sending operators after a variable they did not need while the
+        // learner sat in an empty PACS workstation. Bundled starter content is
+        // the ordinary route (`npm run setup:content`, INSTALL.md); the remote
+        // origin is the alternative. Both have to be in the sentence.
+        expect(body.error).toContain('npm run setup:content');
+        expect(body.error).toContain('ROHY_PLUGIN_ORIGINS');
     });
 });

@@ -67,6 +67,31 @@ function nameKey(name) {
 }
 
 /**
+ * Ordered studies that another ROOM owns, so PACS must not claim them.
+ *
+ * QA-0025: `ecg_12lead` is orderable from rohy's radiology catalogue with
+ * modality 'Cardiac', so it counted as an imaging order — it opened the PACS
+ * room and then sat in the worklist as "no images for this study", because a
+ * 12-lead ECG is a trace and the archive holds no DICOM for it, ever. The room
+ * that does own it, the ECG plugin, stayed hidden meanwhile, because its gate
+ * reads an authored recording rather than an order. The ordered study still
+ * appears in the core Radiology room either way; what this stops is PACS
+ * claiming a study it can never serve.
+ *
+ * Matched by NAME because that is the only join available: an order row carries
+ * `case_investigations.id`, a per-case row id, and no catalogue key survives
+ * onto it — which is why `mergeOrderedStudies` below also joins on the name. An
+ * author who renames the study in their case falls back to the old behaviour, a
+ * dead worklist row, rather than to anything worse.
+ *
+ * Only studies another room owns belong here. The other trace and procedure
+ * entries in the Cardiac group (Holter, event monitor, tilt table, EPS) have no
+ * room of their own, so PACS keeps listing them rather than making the order
+ * vanish from every surface.
+ */
+export const STUDY_NAMES_OWNED_ELSEWHERE = Object.freeze(new Set(['12-lead ecg']));
+
+/**
  * The imaging orders on a plugin context, as a plain array.
  *
  * Total: a context built before the host granted the capability, or by a test
@@ -78,7 +103,8 @@ function nameKey(name) {
  */
 export function imagingOrders(ctx) {
     const imaging = ctx?.orders?.imaging;
-    return Array.isArray(imaging) ? imaging : [];
+    if (!Array.isArray(imaging)) return [];
+    return imaging.filter((order) => !STUDY_NAMES_OWNED_ELSEWHERE.has(nameKey(order?.studyName)));
 }
 
 /**

@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.37] — 2026-09-10
+
+### Fixed
+
+- **PACS no longer claims a study it can never serve (QA-0025).** Reported by the external pilot against 3.0.0-beta9: "PACS radiology and 12-lead ECG are not visible from the patient simulation room ... when opening a radiology exam the PACS room appears but the images attached to the ordered exam cannot be loaded". `ecg_12lead` is orderable from rohy's radiology catalogue with modality `Cardiac`, so ordering a 12-lead ECG counted as an imaging order: it opened the PACS room, which holds no DICOM for a trace and never will, and left a dead "no images for this study" row — while the ECG room that owns it stayed hidden, its gate reading an authored recording rather than an order. The ordered study still appears in the core Radiology room.
+- **The empty-PACS 503 names the step an operator actually needs (QA-0025).** It said only "Set ROHY_PLUGIN_ORIGINS", sending operators after a variable they did not need while the learner sat in an empty workstation. Installing the bundled starter content (`npm run setup:content`, documented in INSTALL.md) is the ordinary route and is now named first.
+
+### Notes for reviewers
+
+The exclusion matches the study by NAME because no catalogue key survives onto an order row — `investigation_id` is a per-case `case_investigations.id`, and that table has no catalogue-key column — which is the same join `mergeOrderedStudies` already makes. A test pins the literal against the shipped catalogue so a rename in the data breaks the build rather than silently disabling the fix. Only studies another ROOM owns belong in the set: the other trace and procedure entries in the Cardiac group (Holter, event monitor, tilt table, EPS) have no room of their own, so PACS keeps listing them rather than making the order vanish from every surface.
+
+The visibility gating itself is by design (RPS-1 R20) and is unchanged. Two further causes of "images will not load" are not code and are untouched: the shipped PACS archive covers 30 of 74 orderable studies, and `server/plugin-content/` is gitignored and built by `npm run setup:content`, which the Dockerfile never runs — so a deployment that skipped that step answers 503 on every image, which the corrected message now explains. An educator's image attached to a radiology study is still deliberately withheld from plugins (see the header of `src/plugins/hostOrders.js`); reversing that is an answer-key decision.
+
 ## [3.0.0-beta.36] — 2026-09-10
 
 ### Fixed

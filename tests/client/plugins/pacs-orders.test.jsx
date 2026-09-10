@@ -20,7 +20,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 import descriptor from '../../../src/plugins/pacs/index.jsx';
 import { manifest } from '../../../src/plugins/pacs/manifest.js';
-import { mergeOrderedStudies, imagingOrders } from '../../../src/plugins/pacs/hostImagingOrders.js';
+import { mergeOrderedStudies, imagingOrders, STUDY_NAMES_OWNED_ELSEWHERE } from '../../../src/plugins/pacs/hostImagingOrders.js';
 import { createPluginContext } from '../../../src/plugins/context.js';
 import { SOURCE_KIND, SUBSTITUTION_SCOPE } from '../../../src/components/pacs/caseDocument.js';
 
@@ -342,5 +342,85 @@ describe('mergeOrderedStudies', () => {
         const authored = [{ id: 'w1', studyId: 'ct_chest_noncon', available: true }];
         expect(mergeOrderedStudies({ authored, doc: { worklist: [] }, archive: ARCHIVE, orders: [] }))
             .toEqual(authored);
+    });
+});
+
+// ===========================================================================
+// QA-0025 — PACS must not claim a study another room owns
+// ===========================================================================
+// External pilot, v3.0.0-beta9: "PACS radiology and 12-lead ECG are not visible
+// from the patient simulation room ... when opening a radiology exam the PACS
+// room appears but the images attached to the ordered exam cannot be loaded."
+//
+// `ecg_12lead` is orderable from the radiology catalogue with modality
+// 'Cardiac', so it counted as an imaging order: it opened PACS, which has no
+// DICOM for a 12-lead trace and never will, and then sat in the worklist as
+// "no images for this study" — while the ECG room, which owns it, stayed
+// hidden because its gate reads an authored recording rather than an order.
+describe('imagingOrders — a study another room owns is not PACS work (QA-0025)', () => {
+    const order = (studyName) => ({
+        id: `${studyName}-1`, studyName, modality: 'Cardiac', ready: true,
+    });
+
+    it('drops a 12-lead ECG order', () => {
+        expect(imagingOrders({ imaging: undefined, orders: { imaging: [order('12-Lead ECG')] } })).toEqual([]);
+        // Matched case- and whitespace-insensitively, like every other name
+        // join in this module.
+        expect(imagingOrders({ orders: { imaging: [order('  12-LEAD ecg ')] } })).toEqual([]);
+    });
+
+    it('keeps the cardiac studies that really are imaging', () => {
+        const orders = {
+            imaging: [
+                order('12-Lead ECG'),
+                order('Coronary CT Angiography (CCTA)'),
+                order('Cardiac MRI'),
+                order('Stress Echocardiogram (Exercise)'),
+            ],
+        };
+        expect(imagingOrders({ orders }).map(o => o.studyName)).toEqual([
+            'Coronary CT Angiography (CCTA)',
+            'Cardiac MRI',
+            'Stress Echocardiogram (Exercise)',
+        ]);
+    });
+
+    it('so an ECG order alone does not open the PACS room', () => {
+        expect(descriptor.available({ data: null, orders: { imaging: [order('12-Lead ECG')] } })).toBe(false);
+        // ...while any real imaging order still does.
+        expect(descriptor.available({
+            data: null, orders: { imaging: [order('Coronary CT Angiography (CCTA)')] },
+        })).toBe(true);
+    });
+
+    // The exclusion is a literal name, and the name lives in a data file. If an
+    // editor renames the study, this fix stops working silently — so pin it.
+    it('the excluded name still names a real study in the shipped catalogue', async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const db = JSON.parse(fs.readFileSync(
+            path.resolve(process.cwd(), 'server/data/radiology_database.json'), 'utf8'));
+        const studies = [];
+        const walk = (node) => {
+            if (Array.isArray(node)) return node.forEach(walk);
+            if (node && typeof node === 'object') {
+                if (typeof node.id === 'string' && 'modality' in node) studies.push(node);
+                Object.values(node).forEach(walk);
+            }
+        };
+        walk(db);
+        const ecg = studies.find((study) => study.id === 'ecg_12lead');
+        expect(ecg).toBeTruthy();
+        expect(STUDY_NAMES_OWNED_ELSEWHERE.has(ecg.name.trim().toLowerCase())).toBe(true);
+    });
+
+    // A row whose name the host could not read must not be silently swallowed —
+    // `available()` is required never to throw, and an unnamed study is still
+    // imaging as far as PACS knows.
+    it('keeps an order whose study name is missing', () => {
+        expect(imagingOrders({ orders: { imaging: [{ id: 9, studyName: 'Chest X-Ray' }] } }))
+            .toHaveLength(1);
+        expect(imagingOrders({})).toEqual([]);
+        expect(imagingOrders(undefined)).toEqual([]);
     });
 });
