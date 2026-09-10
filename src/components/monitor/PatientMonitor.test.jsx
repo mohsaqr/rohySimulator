@@ -718,8 +718,74 @@ describe('PatientMonitor — caseEnded freezes the monitor (ISSUE-0015)', () => 
         const path = await import('node:path');
         const src = fs.readFileSync(path.resolve(__dirname, 'PatientMonitor.jsx'), 'utf8');
         expect(src).toMatch(/if \(!activeScenario \|\| !scenarioPlaying \|\| caseEnded\) return;/);
-        expect(src).toMatch(/if \(caseEnded\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{\s*const p = simulationParams\.current;/);
+        // The jitter loop also holds while the learner has paused (ISSUE-0021).
+        expect(src).toMatch(/if \(caseEnded \|\| !isPlaying\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{\s*const p = simulationParams\.current;/);
         expect(src).toMatch(/if \(isPlaying && !caseEnded\) \{/);
+    });
+});
+
+// =======================================================================
+// ISSUE-0021 — pause must mean paused, and must survive a room switch
+// =======================================================================
+// Regression lock, external pilot v2.9.140: "when pausing a simulation in the
+// patient monitor, if you open another room and then go back to the patient
+// room, the simulation is not in pause anymore and the timer shows the exact
+// time (i.e. it measures time even when it seems to be on pause)."
+//
+// Two defects behind one report: `isPlaying` was component state in a component
+// App.jsx unmounts on every room switch, and it gated only the waveform draw,
+// so the case clock ran straight through a pause. Both tests below fail against
+// the un-fixed component.
+describe('PatientMonitor — pause is session state (ISSUE-0021)', () => {
+    beforeEach(() => localStorage.clear());
+
+    const PAUSE = 'Pause simulation';
+    const RESUME = 'Resume simulation';
+
+    it('stops the case clock while paused, and resumes without swallowing the gap', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+        const { getByLabelText, findByText } = mount({ sessionId: null });
+
+        await act(async () => { vi.advanceTimersByTime(3000); });
+        expect(await findByText('0:03')).toBeTruthy();
+
+        await act(async () => { fireEvent.click(getByLabelText(PAUSE)); });
+        await act(async () => { vi.advanceTimersByTime(5000); });
+        // The un-fixed clock reads 0:08 here — it never knew about the pause.
+        expect(await findByText('0:03')).toBeTruthy();
+
+        await act(async () => { fireEvent.click(getByLabelText(RESUME)); });
+        await act(async () => { vi.advanceTimersByTime(2000); });
+        // 3s before the pause + 2s after it. The 5s spent paused is gone, not
+        // merely hidden: resuming must not snap the clock forward.
+        expect(await findByText('0:05')).toBeTruthy();
+    });
+
+    it('is still paused after the remount a room switch causes', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+        const first = mount({ sessionId: 77 });
+        await act(async () => { vi.advanceTimersByTime(1000); });
+        await act(async () => { fireEvent.click(first.getByLabelText(PAUSE)); });
+        expect(first.getByLabelText(RESUME)).toBeTruthy();
+
+        // Leaving the chat room unmounts the monitor; coming back mounts a new
+        // one. The un-fixed component came back playing.
+        first.unmount();
+        await act(async () => { vi.advanceTimersByTime(4000); });
+        const second = mount({ sessionId: 77 });
+        await act(async () => { vi.advanceTimersByTime(0); });
+        expect(second.getByLabelText(RESUME)).toBeTruthy();
+    });
+
+    it('a different session starts running, whatever the last one was doing', async () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+        const first = mount({ sessionId: 77 });
+        await act(async () => { fireEvent.click(first.getByLabelText(PAUSE)); });
+        first.unmount();
+
+        const second = mount({ sessionId: 78 });
+        await act(async () => { vi.advanceTimersByTime(0); });
+        expect(second.getByLabelText(PAUSE)).toBeTruthy();
     });
 });
 
