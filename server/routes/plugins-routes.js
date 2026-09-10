@@ -702,7 +702,14 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     const starter = origin ? null : starterContentDir(pluginId);
     if (!origin && !starter) {
         return res.status(503).json({
-            error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`,
+            // ISSUE-0025: bundled starter content is the ordinary way this
+            // deployment gets imaging (`npm run setup:content`, INSTALL.md);
+            // a remote origin is the alternative. Naming only the alternative
+            // sent operators hunting for a variable they did not need, while
+            // learners saw an empty PACS workstation.
+            error: `Plugin '${pluginId}' has no content on this deployment. `
+                + 'Install the bundled starter content with `npm run setup:content`, '
+                + 'or point the plugin at a remote origin with ROHY_PLUGIN_ORIGINS.',
             code: 'plugin_remote_not_configured',
         });
     }
