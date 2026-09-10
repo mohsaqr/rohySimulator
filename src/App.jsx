@@ -41,6 +41,7 @@ import AgentPersonaEditor from './components/settings/AgentPersonaEditor';
 import OyonCaptureWidget from './components/oyon/OyonCaptureWidget';
 import { useSignalCapture } from './components/oyon/useSignalCapture';
 import { useOyonSignalGate } from './components/oyon/useOyonSignalGate';
+import { oyonPillPlacement } from './components/oyon/pillPlacement';
 import AoiRegion from './components/oyon/AoiRegion';
 import { HelpCenter, OnboardingTour } from './help';
 import FirstRunGate, { useSetup } from './components/setup/FirstRunGate';
@@ -804,6 +805,19 @@ function MainApp() {
    // reserves a matching slot via --oyon-pill-w. Everywhere else it keeps
    // the historical viewport top-center spot.
    const oyonDockedOverMonitor = oyonRoom === 'chat';
+   // ISSUE-0023: the immersive bedside room puts its own camera-nudge wheel
+   // dead centre of a 90px top bar, and the pill's historical top-centre spot
+   // landed straight on it at z-80, leaving three of its four pan directions
+   // unclickable. An overlay room is a pinned package drawing its own chrome
+   // full-bleed, so the HOST overlay is the piece that moves: below the bar and
+   // on the left edge, clear of the package's top-centre notices and above the
+   // band its side wheel occupies. Keyed off `presentation: 'overlay'` rather
+   // than a plugin id, so the host still knows nothing about which plugins
+   // exist and an uninstalled one takes nothing with it.
+   const oyonPlacement = oyonPillPlacement({
+      overOverlayRoom: overlayPlugin !== null,
+      dockedOverMonitor: oyonDockedOverMonitor,
+   });
    // Re-consent prompt for a widened Oyon contract. Rendered beside the capture
    // pill so it reaches every surface, and self-suppressing — it returns null
    // unless this learner previously accepted an older contract.
@@ -815,12 +829,8 @@ function MainApp() {
       // consent + a session exist.
       <div
          ref={oyonPillRef}
-         className="fixed top-2 -translate-x-1/2 z-[80]"
-         style={{
-            left: oyonDockedOverMonitor
-               ? 'calc(max(35vw, 350px) + (100vw - max(35vw, 350px)) / 2)'
-               : '50vw',
-         }}
+         className={`fixed z-[80] ${oyonPlacement.centred ? '-translate-x-1/2' : ''}`}
+         style={oyonPlacement.style}
       >
          <OyonCaptureWidget
             sessionId={sessionId}
