@@ -999,6 +999,11 @@ function MainApp() {
    return (
       <>
       {oyonPill}
+      {/* ISSUE-0019: the re-consent prompt was rendered in every settings and
+          analytics branch but not here, so a learner sitting in a case — the
+          one place the signal capture actually runs — could never answer it,
+          and the consent that gates typing and voice stayed stale forever. */}
+      {oyonConsentUpdate}
       <PatientRecordProvider
          sessionId={sessionId}
          caseId={activeCase?.id}

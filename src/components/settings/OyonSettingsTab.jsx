@@ -3,6 +3,7 @@ import { Camera, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTri
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { VALENCE_GRAPH_PREF_KEY, CONSENT_PREF_KEY } from '../oyon/OyonCaptureWidget';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
 
 // Analytics is an in-app surface: ConfigPanel's "Oyon — Learning Analytics"
@@ -61,13 +62,39 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
 
    const toggleDefaultConsent = (next) => {
       setDefaultConsent(next);
-      try { localStorage.setItem(CONSENT_PREF_KEY, next ? '1' : '0'); } catch { /* storage blocked */ }
+      // ISSUE-0019: record WHICH contract was accepted, not just that one was.
+      // A grant stored without any version reads as v1 everywhere downstream
+      // AND told needsConsentUpgrade nobody had answered, so the state was
+      // permanent: the signal gate stayed shut and the re-consent prompt, the
+      // only repair path, stayed silent.
+      //
+      // The version recorded here is the CAMERA-ONLY contract, deliberately,
+      // and never the tenant's current one. This checkbox says "capture
+      // emotions during my simulation sessions ... with the camera pill" and
+      // describes nothing else; typing rhythm, interaction and discourse are
+      // named only by the re-consent prompt, which exists precisely so those
+      // are asked about rather than assumed. Stamping the tenant's current
+      // version here would record agreement to a scope this control never
+      // showed. A learner who ticks this is then correctly seen as "consented
+      // under v1", the prompt asks about the rest, and accepting it there
+      // records v2 — which is the chain that makes typing capture start.
+      const version = OYON_CONSENT_CAMERA_ONLY;
+      try {
+         localStorage.setItem(CONSENT_PREF_KEY, next ? '1' : '0');
+         if (next) localStorage.setItem(OYON_CONSENT_VERSION_LS_KEY, version);
+         else localStorage.removeItem(OYON_CONSENT_VERSION_LS_KEY);
+      } catch { /* storage blocked */ }
       // Mirror server-side (merge PUT; onboarding keys are shallow-merged so
       // this can't erase first_run_done) — the choice must follow the user
       // across devices, not stay parked in one browser.
       apiFetch('/users/preferences', {
          method: 'PUT',
-         json: { onboarding_settings: { oyon_consent: next } },
+         json: {
+            onboarding_settings: {
+               oyon_consent: next,
+               oyon_consent_version: next ? version : null,
+            },
+         },
       }).catch(() => { /* local flag still applies on this device */ });
    };
 

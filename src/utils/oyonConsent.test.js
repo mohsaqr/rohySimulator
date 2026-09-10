@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    consentRank, consentSatisfies, needsConsentUpgrade, acceptableVersion,
-    OYON_CONSENT_CAMERA_ONLY,
+    consentRank, consentSatisfies, needsConsentUpgrade, acceptableVersion, OYON_CONSENT_CAMERA_ONLY,
 } from './oyonConsent.js';
 
 describe('oyonConsent version logic', () => {
@@ -47,10 +46,42 @@ describe('oyonConsent version logic', () => {
         });
 
         // Never answered → the first-run card handles them, not this prompt.
+        // "Never answered" is the ABSENCE of a grant, which the `granted` check
+        // already covers; it is not a grant with a missing version.
         it('stays out of the way of a learner who has never answered', () => {
             expect(needsConsentUpgrade({
-                granted: true, acceptedVersion: null, requiredVersion: 'oyon-consent-v2',
+                granted: false, acceptedVersion: null, requiredVersion: 'oyon-consent-v2',
             })).toBe(false);
+            expect(needsConsentUpgrade({
+                granted: undefined, acceptedVersion: null, requiredVersion: 'oyon-consent-v2',
+            })).toBe(false);
+        });
+
+        // Regression lock (QA-0019, external pilot v2.9.140): "the typing
+        // monitor does not start even if typing monitoring is enabled".
+        //
+        // A grant stored WITHOUT a version — which is exactly what Settings →
+        // Oyon wrote — used to return false here. That made the state
+        // permanent: the signal gate read the missing version as v1 and refused
+        // the widened scope, so typing and voice never captured, while this
+        // prompt, the only path that could have repaired the record, declined
+        // to ask. A stored grant is an answer, and a missing version means it
+        // was given under v1 — precisely who this prompt exists for.
+        it('prompts a learner whose grant predates versioning', () => {
+            expect(needsConsentUpgrade({
+                granted: true, acceptedVersion: null, requiredVersion: 'oyon-consent-v2',
+            })).toBe(true);
+            expect(needsConsentUpgrade({
+                granted: true, acceptedVersion: undefined, requiredVersion: 'oyon-consent-v2',
+            })).toBe(true);
+        });
+
+        // ...and the same record must still be read as NOT covering the signal
+        // scope until it is repaired. Opening the gate on a versionless grant
+        // would be consenting on the learner's behalf.
+        it('a versionless grant does not satisfy the widened contract', () => {
+            expect(consentSatisfies(null, 'oyon-consent-v2')).toBe(false);
+            expect(consentSatisfies(undefined, 'oyon-consent-v2')).toBe(false);
         });
 
         it('is quiet once the learner is current', () => {
@@ -58,6 +89,31 @@ describe('oyonConsent version logic', () => {
                 granted: true, acceptedVersion: 'oyon-consent-v2', requiredVersion: 'oyon-consent-v2',
             })).toBe(false);
         });
+    });
+
+    // The whole QA-0019 repair path, in the order it happens. Each step is a
+    // separate unit above; this pins the SEQUENCE, which is the part that was
+    // broken — every individual rule was defensible on its own.
+    it('the repair path: camera grant → prompt → widened grant → gate opens', () => {
+        const required = 'oyon-consent-v2';
+
+        // 1. The learner ticks the camera checkbox in Settings. It describes
+        //    the camera and nothing else, so it records the camera contract.
+        let accepted = OYON_CONSENT_CAMERA_ONLY;
+        //    That does NOT cover typing, and must not.
+        expect(consentSatisfies(accepted, required)).toBe(false);
+
+        // 2. So the re-consent prompt has something to ask about. This is the
+        //    step that used to return false and strand the learner forever.
+        expect(needsConsentUpgrade({ granted: true, acceptedVersion: accepted, requiredVersion: required })).toBe(true);
+
+        // 3. The learner reads the widened contract and accepts it.
+        accepted = acceptableVersion(required);
+        expect(accepted).toBe('oyon-consent-v2');
+
+        // 4. The signal gate opens, and the prompt goes quiet.
+        expect(consentSatisfies(accepted, required)).toBe(true);
+        expect(needsConsentUpgrade({ granted: true, acceptedVersion: accepted, requiredVersion: required })).toBe(false);
     });
 
     it('never offers to accept a contract it cannot render', () => {

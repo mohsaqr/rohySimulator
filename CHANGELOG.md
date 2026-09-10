@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.35] — 2026-09-10
+
+### Fixed
+
+- **Typing dynamics can start at all (QA-0019).** Reported by the external pilot against 2.9.140: "the typing monitor does not start even if typing monitoring is enabled in Settings → Oyon → Signals → Typing dynamics". The setting was on; the consent RECORD was unusable. Settings → Oyon wrote `oyon_consent: true` with no `oyon_consent_version`, and every reader treats a missing version as v1, the camera-only contract — so `useOyonSignalGate` refused the widened signal scope, `useSignalCapture` never imported the capture chunk, the chat composer was never attached, and `oyon_signal_windows` stayed empty. Three coordinated fixes, none of which loosens the gate: the settings toggle records which contract was accepted, `needsConsentUpgrade` treats a versionless grant as the v1 grant it is rather than as "never answered" (which made the state permanent, since the re-consent prompt was the only repair path), and that prompt is now rendered on the case screen, where the learner actually is.
+
+### Notes for reviewers
+
+The version the settings toggle records is the camera-only contract, deliberately, and never the tenant's current one. That checkbox says "capture emotions during my simulation sessions ... with the camera pill" and describes nothing else; typing rhythm, interaction and discourse are named only by the re-consent prompt, which exists so they are asked about rather than assumed. Recording the tenant's current version there would be consenting on the learner's behalf to a scope the control never showed — and it also made the written version depend on an async config fetch that has not necessarily landed when the box is clicked. The repair path is camera grant → prompt → widened grant → gate opens, and `oyonConsent.test.js` pins that sequence.
+
 ## [3.0.0-beta.34] — 2026-09-10
 
 ### Fixed
