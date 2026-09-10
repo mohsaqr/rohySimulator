@@ -54,11 +54,18 @@ export function consentSatisfies(accepted, required) {
  * Only when the learner previously said YES to an older contract. Someone who
  * declined has already made a choice — re-asking on every load would be
  * nagging, and they can opt in from Settings → Oyon whenever they want. Someone
- * who has never answered gets the first-run card instead, not this.
+ * who has never answered has no `granted` flag at all and is handled by the
+ * first-run card, so the `granted` check alone keeps them out.
+ *
+ * ISSUE-0019: a grant carrying NO version used to return false here, which
+ * made that state permanent — the gate read the missing version as v1 and
+ * refused the signal scope, and this prompt, the only repair path, declined
+ * to ask. A stored `granted` is an answer; a missing version means it was
+ * given under v1, which is exactly who this prompt exists for. The reading
+ * matches consentSatisfies, where a missing accepted version is also v1.
  */
 export function needsConsentUpgrade({ granted, acceptedVersion, requiredVersion }) {
     if (!granted) return false;
-    if (!acceptedVersion) return false;
     return !consentSatisfies(acceptedVersion, requiredVersion);
 }
 
