@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.36] — 2026-09-10
+
+### Fixed
+
+- **The Oyon pill no longer covers the bedside room's pan control (QA-0023).** Reported by the external pilot against 3.0.0-beta9: "the pan control in the 3D patient bedside room overlaps with the oyon pill so three over four commands of the pan tool (up, left, right) are not reachable; the pan tool is anchored and does not relocate when changing the size of the view". The immersive room centres a 74px camera-nudge wheel in a 90px top bar; the pill's historical viewport-top-centre spot sat on top of it at z-80, and the pill is the only host overlay that stacks above a plugin room. The room is a pinned package that owns its own chrome, so the host overlay is the piece that moves: below the bar and on the left edge, clear of the package's top-centre notices and above the band its side wheel occupies.
+
+### Changed
+
+- The pill's placement moves out of `App.jsx` into `src/components/oyon/pillPlacement.js`, a pure function, so it can be tested without mounting the application shell. It keys off `presentation: 'overlay'` rather than a plugin id, so the host still knows nothing about which plugins exist and an uninstalled one takes nothing with it.
+
 ## [3.0.0-beta.35] — 2026-09-10
 
 ### Fixed
