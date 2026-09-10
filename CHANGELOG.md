@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.34] — 2026-09-10
+
+### Fixed
+
+- **Pause now means paused, and survives leaving the room (QA-0021).** Reported by the external pilot against 2.9.140: "when pausing a simulation in the patient monitor, if you open another room and then go back to the patient room, the simulation is not in pause anymore and the timer shows the exact time". Two defects behind one report. The monitor's pause button was a bare `useState` inside `PatientMonitor`, which `App.jsx` unmounts on every room switch, so pausing, stepping into Laboratory and coming back returned a running case; and it gated only the waveform draw, so the case clock counted real time straight through a pause. Pause is now a wall-clock anchor persisted per session (`rohy_session_pause`), the same pattern the scenario timeline already used: the clock subtracts every millisecond spent paused, the vitals jitter holds, and a running scenario trajectory freezes and resumes with the button. A trajectory the educator paused by hand is not restarted by it.
+
+### Added
+
+- The pause button gains an accessible name (`pause_simulation` / `resume_simulation`, all eight locales). It was an icon-only control that screen readers announced as "button", and that nothing could address by role.
+
+### Notes for reviewers
+
+This changes what pause DOES. Treatment pharmacokinetics and alarms still run: pausing those is a larger decision about what a frozen case means for an infusion in progress, and is not taken here. `rohy_session_pause` is keyed by session id with no user discriminator, exactly as `rohy_scenario_anchor` already is, and both are cleared on logout.
+
 ## [3.0.0-beta.33] — 2026-09-07
 
 ### Added

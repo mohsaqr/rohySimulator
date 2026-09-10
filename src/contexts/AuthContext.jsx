@@ -196,6 +196,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('rohy_chat_history');
             localStorage.removeItem('rohy_view');
             localStorage.removeItem('rohy_scenario_anchor');
+            localStorage.removeItem('rohy_session_pause');
             // Per-session debrief keys are tagged with the session id; we
             // don't have it in scope here, but they'll be overwritten on
             // the next session and never read without a matching active

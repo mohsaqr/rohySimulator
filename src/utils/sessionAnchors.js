@@ -48,3 +48,59 @@ export const writeScenarioAnchor = (anchor) => {
 // flows from startMs; paused, it holds at offsetSec.
 export const anchorSeconds = (anchor) =>
    anchor.playing ? anchor.offsetSec + (Date.now() - anchor.startMs) / 1000 : anchor.offsetSec;
+
+export const PAUSE_ANCHOR_KEY = 'rohy_session_pause';
+
+// Anchor shape: { sessionId, pausedAtMs, pausedTotalMs, resumeScenario }.
+//
+// ISSUE-0021: pause used to be a bare useState inside PatientMonitor, so a
+// room switch unmounted it and the case came back running; and it gated only
+// the waveform draw, so the case clock kept counting while the learner
+// believed the case was frozen. Pause is session state, and it has to
+// subtract from the clock, so it gets the same treatment as the scenario
+// timeline: a wall-clock anchor persisted per session.
+//
+// `pausedAtMs` is the wall clock at which the learner paused, or null while
+// running. `pausedTotalMs` is the time already spent paused earlier in the
+// session. `resumeScenario` records that engaging this pause also froze a
+// running scenario, so resuming puts the trajectory back in motion.
+export const readPauseAnchor = (sessionId) => {
+   try {
+      const raw = localStorage.getItem(PAUSE_ANCHOR_KEY);
+      if (!raw) return null;
+      const anchor = JSON.parse(raw);
+      return anchor && sessionId != null && anchor.sessionId === sessionId ? anchor : null;
+   } catch {
+      return null;
+   }
+};
+
+export const writePauseAnchor = (anchor) => {
+   try {
+      if (anchor) localStorage.setItem(PAUSE_ANCHOR_KEY, JSON.stringify(anchor));
+      else localStorage.removeItem(PAUSE_ANCHOR_KEY);
+   } catch { /* storage full/blocked — pause just won't survive a refresh */ }
+};
+
+export const isAnchorPaused = (anchor) => !!anchor && anchor.pausedAtMs != null;
+
+// Milliseconds this session has spent paused, counting the pause in progress.
+// Pass the same `nowMs` used for the elapsed calculation so a paused clock
+// reads as a constant rather than drifting by a millisecond a tick.
+export const pausedMs = (anchor, nowMs = Date.now()) => {
+   if (!anchor) return 0;
+   const total = Number.isFinite(anchor.pausedTotalMs) ? anchor.pausedTotalMs : 0;
+   if (anchor.pausedAtMs == null) return total;
+   return total + Math.max(0, nowMs - anchor.pausedAtMs);
+};
+
+// The anchor that results from pressing pause/resume at `nowMs`. Resuming
+// banks the pause that just ended into pausedTotalMs, so the subtraction is
+// cumulative across however many times the learner pauses.
+export const togglePauseAnchor = (anchor, sessionId, nowMs = Date.now(), resumeScenario = false) => {
+   const base = anchor ?? { sessionId: sessionId ?? null, pausedAtMs: null, pausedTotalMs: 0 };
+   if (base.pausedAtMs != null) {
+      return { ...base, pausedAtMs: null, pausedTotalMs: pausedMs(base, nowMs), resumeScenario: false };
+   }
+   return { ...base, sessionId: base.sessionId ?? sessionId ?? null, pausedAtMs: nowMs, resumeScenario };
+};

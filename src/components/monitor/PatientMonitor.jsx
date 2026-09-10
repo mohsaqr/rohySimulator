@@ -26,6 +26,11 @@ import {
    readScenarioAnchor,
    writeScenarioAnchor,
    anchorSeconds,
+   readPauseAnchor,
+   writePauseAnchor,
+   isAnchorPaused,
+   pausedMs,
+   togglePauseAnchor,
 } from '../../utils/sessionAnchors';
 import { RHYTHM_IDS, RHYTHM_LABEL_KEYS, resolveRhythm } from '../../services/rhythms';
 // Waveform physiology lives in one module, shared with the 3D room.
@@ -243,7 +248,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    const respBuffer = useRef(new Array(ECG_BUFFER_LEN).fill(0));
    
    // --- Simulation State ---
-   const [isPlaying, setIsPlaying] = useState(true);
+   // ISSUE-0021: pause is SESSION state. As component state it died on every
+   // room switch (App.jsx renders this component only in the chat room), so a
+   // paused case came back running. The anchor is persisted per session, the
+   // same way the scenario timeline is — see src/utils/sessionAnchors.js.
+   const pauseAnchorRef = useRef(readPauseAnchor(sessionId));
+   const [isPlaying, setIsPlaying] = useState(() => !isAnchorPaused(pauseAnchorRef.current));
 
    // Load saved settings on mount
    const savedSettings = loadSavedSettings();
@@ -275,6 +285,16 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    const [elapsedTime, setElapsedTime] = useState(0);
    const sessionStartMsRef = useRef(null);
    const mountStartMsRef = useRef(Date.now());
+
+   // Elapsed case time = wall clock since the session's start, minus every
+   // millisecond the learner has held the case paused (ISSUE-0021). Both the
+   // one-second tick and the pause button compute it here so the display can
+   // never disagree with the anchor.
+   const computeElapsedSec = () => {
+      const nowMs = caseEnded && caseEndedAt != null ? caseEndedAt : Date.now();
+      const startMs = sessionStartMsRef.current ?? mountStartMsRef.current;
+      return Math.max(0, Math.floor((nowMs - startMs - pausedMs(pauseAnchorRef.current, nowMs)) / 1000));
+   };
 
    // Platform settings for monitor visibility
    const [monitorSettings, setMonitorSettings] = useState({
@@ -395,17 +415,22 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // Session timer — recomputes from the anchor each second (never
    // increments), so a remount or refresh resumes at the true elapsed time.
    useEffect(() => {
-      const compute = () => Math.max(0, Math.floor(
-         ((caseEnded && caseEndedAt != null ? caseEndedAt : Date.now())
-            - (sessionStartMsRef.current ?? mountStartMsRef.current)) / 1000
-      ));
-      setElapsedTime(compute());
+      setElapsedTime(computeElapsedSec());
       // Case over → the clock shows the elapsed time at the moment of ending
       // and stops. No interval, nothing to tick.
       if (caseEnded) return undefined;
-      const timer = setInterval(() => setElapsedTime(compute()), 1000);
+      const timer = setInterval(() => setElapsedTime(computeElapsedSec()), 1000);
       return () => clearInterval(timer);
    }, [sessionId, caseEnded, caseEndedAt]);
+
+   // Pause follows the SESSION, not this component's lifetime (ISSUE-0021).
+   // Re-read on every session change so a remount restores the learner's
+   // pause and a brand-new session starts running.
+   useEffect(() => {
+      const saved = readPauseAnchor(sessionId);
+      pauseAnchorRef.current = saved;
+      setIsPlaying(!isAnchorPaused(saved));
+   }, [sessionId]);
 
    // Load platform settings for monitor visibility
    useEffect(() => {
@@ -468,6 +493,28 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       applyScenarioAnchor(anchor.playing
          ? { ...anchor, playing: false, offsetSec: anchorSeconds(anchor) }
          : { ...anchor, playing: true, startMs: Date.now(), offsetSec: anchor.offsetSec });
+   };
+
+   // The header pause/resume button (ISSUE-0021). "Paused" has to mean the
+   // case is frozen, so one press does three things: banks the paused time so
+   // the case clock stops advancing, holds the waveform and the vitals
+   // jitter, and freezes a running scenario trajectory at its current
+   // position. Resuming puts back only the scenario that this pause stopped,
+   // so a trajectory the educator paused deliberately stays paused.
+   const togglePlaying = () => {
+      const scenarioAnchor = scenarioAnchorRef.current;
+      const freezingScenario = !isPlaying ? false : !!scenarioAnchor?.playing;
+      const next = togglePauseAnchor(pauseAnchorRef.current, sessionId, Date.now(), freezingScenario);
+      const resumeScenario = isAnchorPaused(next) ? false : !!pauseAnchorRef.current?.resumeScenario;
+      pauseAnchorRef.current = next;
+      writePauseAnchor(next);
+      setIsPlaying(!isAnchorPaused(next));
+      setElapsedTime(computeElapsedSec());
+      if (freezingScenario) {
+         applyScenarioAnchor({ ...scenarioAnchor, playing: false, offsetSec: anchorSeconds(scenarioAnchor) });
+      } else if (resumeScenario && scenarioAnchor && !scenarioAnchor.playing) {
+         applyScenarioAnchor({ ...scenarioAnchor, playing: true, startMs: Date.now(), offsetSec: scenarioAnchor.offsetSec });
+      }
    };
 
    // Load Scenarios into State (to allow custom additions)
@@ -993,8 +1040,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       // If scenario is driving, we still want jitter ON TOP of the scenario path?
       // Yes, scenario sets the "Target" params, this loop adds noise to "Display".
 
-      // Case over → hold the last displayed values; no jitter, no drift.
-      if (caseEnded) return undefined;
+      // Case over, or the learner paused → hold the last displayed values;
+      // no jitter, no drift. A "paused" monitor whose numbers keep wandering
+      // is not paused (ISSUE-0021).
+      if (caseEnded || !isPlaying) return undefined;
 
       const interval = setInterval(() => {
          const p = simulationParams.current;
@@ -1046,7 +1095,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
       }, 2000);
       return () => clearInterval(interval);
-   }, [rhythm, caseEnded]); // Restart if Rhythm changes
+   }, [rhythm, caseEnded, isPlaying]); // Restart if Rhythm changes
 
 
 
@@ -1390,8 +1439,13 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="text-xs text-neutral-500">{formatDate(new Date())}</div>
                </div>
 
+               {/* The control at the centre of ISSUE-0021. It had no accessible
+                   name at all — an icon-only button the screen reader announced
+                   as "button", and nothing a test could address by role. */}
                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={togglePlaying}
+                  aria-label={isPlaying ? t('pause_simulation') : t('resume_simulation')}
+                  title={isPlaying ? t('pause_simulation') : t('resume_simulation')}
                   className={`p-2 rounded-full transition-colors ${isPlaying ? 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700' : 'bg-green-900/40 text-green-400 animate-pulse'}`}
                >
                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}

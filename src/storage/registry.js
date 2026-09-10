@@ -138,6 +138,15 @@ export const STORAGE_REGISTRY = Object.freeze({
             + 'sessionId-scoped, so a stale value from an ended session is inert.',
         lifetime: 'logout',
     },
+    rohy_session_pause: {
+        owner: 'src/utils/sessionAnchors.js (used by PatientMonitor.jsx)',
+        purpose: 'Wall-clock anchor {sessionId, pausedAtMs, pausedTotalMs, resumeScenario} '
+            + 'behind the monitor\'s pause button (ISSUE-0021), so pausing survives the '
+            + 'remount every room switch causes and the case clock can subtract the time '
+            + 'spent paused. Reads are sessionId-scoped, so a stale value from an ended '
+            + 'session is inert.',
+        lifetime: 'logout',
+    },
     rohy_alarm_fire_state: {
         keyBuilder: (sessionId) => `rohy_alarm_fire_state:${sessionId}`,
         owner: 'src/hooks/useAlarms.js',
