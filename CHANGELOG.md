@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.43] — 2026-09-16
+
+### Fixed
+
+- **The generated config reference documents `EXTRA_CORS_ORIGINS`.** `36e05c6` added the variable to `server/server.js` without regenerating `docs/reference/config/index.md`, so `npm run docs:check` has been failing on `main` since that commit (the drift also included a line-number shift for `ROHY_SHUTDOWN_GRACE_MS`). Regenerated.
+
+### Notes for reviewers
+
+`docs:check` compares the generated reference against the **committed** file, not the working tree — running the `docs:gen:*` scripts does not clear the failure until the result is committed.
+
 ## [3.0.0-beta.42] — 2026-09-16
 
 ### Added
