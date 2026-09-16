@@ -61,6 +61,11 @@ const ALLOWLIST = [
         file: 'server/routes/catalogue.js',
         why: 'Drug/lab catalogue routes share one handler factory; the interpolated table/FK names are constant strings selected from a hardcoded { drug, lab } map at line ~510, never from req.*. Reviewer: confirm `config` is built from a constant before adding any new interpolation here.',
     },
+    {
+        file: 'server/routes/oyon-routes.js',
+        lineSubstring: 'FROM oyon_signal_events r WHERE ${whereSql}',
+        why: 'whereSql comes from buildSignalWindowsWhere: fixed fragments joined with AND, every value bound as ? in `params`; its timeColumn is the literal \'occurred_at\' at this call site, never req.*.',
+    },
     // Route modules — line-specific allowlist (NOT a blanket pass).
     // Each entry pins a substring; the substring must literally appear on
     // the flagged line. NEW interpolation in route files will fail until

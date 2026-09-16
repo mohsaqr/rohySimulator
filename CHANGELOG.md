@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.63] — 2026-09-16
+
+### Fixed
+
+- The static SQL-injection guard flagged the signal-events count query added in beta.57. The interpolated `whereSql` is built by `buildSignalWindowsWhere` from fixed fragments with every value bound as `?`, so the line is added to the guard's line-specific allowlist with that justification, as the guard prescribes.
+
 ## [3.0.0-beta.62] — 2026-09-16
 
 ### Fixed
