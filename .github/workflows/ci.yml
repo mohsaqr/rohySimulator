@@ -133,13 +133,80 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-  # Playwright E2E removed from CI (2026-05-17): the suite is a
-  # pre-existing brittle/flaky UI harness (many specs maintainer-marked
-  # "SKIP … brittle"; failures span unrelated files; render timeouts;
-  # several pass only on retry). It was red on main before this branch
-  # and provided no reliable signal as a blocking gate. Run it locally
-  # with `npm run test:e2e` when working on UI flows. Tracked for a
-  # dedicated stabilisation effort.
+  # Playwright E2E was removed from CI on 2026-05-17 as a brittle/flaky UI
+  # harness that was red on main and gave no reliable signal. It is back as
+  # of 2026-09-16, because the largest single cause was found and fixed: the
+  # suite was building with `npm run build`, which is pinned to
+  # `--base=/rohy/`, while the test server serves from `/`. Every asset 404'd,
+  # the SPA never mounted, and every UI spec failed with "element(s) not
+  # found" — which reads as a broken app rather than a wrong base path. The
+  # job below uses `npm run build:e2e` (`--base=/`), and the suite has run
+  # 109 passed / 14 skipped / 0 failed repeatedly since.
+  #
+  # It also posts results to Prova (https://prova.lacarm.com) as the automated
+  # half of rohy's test battery; the manual half is prova/rohy-cases.yaml.
+  # Without the PROVA_* secrets the reporter does nothing and the job is a
+  # plain e2e run, so forks and secret-less PRs still work.
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+        # The Prova reporter records the commit and whether the tree was dirty,
+        # and the release gate counts a result only when dirty = 0. A shallow
+        # checkout still reports the right SHA, but fetch-depth 0 keeps
+        # `git status --porcelain` meaningful if a step ever writes into the tree.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      # See the Build job for why the sibling clones exist.
+      - name: Clone dynajs sibling
+        run: |
+          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+      - name: Clone 3D patient room sibling
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: bash scripts/clone-room3d.sh ../3D
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npm run test:e2e:install
+      # MUST be build:e2e, not build — see the comment above this job and the
+      # header of playwright.config.js. `npm run build` produces a /rohy/-based
+      # bundle that 404s every asset when served at /.
+      - name: Build the SPA for the e2e base path
+        run: npm run build:e2e
+      # No --reporter flag: passing one on the command line REPLACES the
+      # reporter array from playwright.config.js, which silently drops the
+      # Prova reporter and posts nothing.
+      - name: Run Playwright and report to Prova
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
+          PROVA_LABEL: ci
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.node-version }}
+          path: playwright-report/
+          if-no-files-found: warn
+      - name: Upload e2e JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-e2e-${{ matrix.node-version }}
+          path: test-results.e2e.junit.xml
+          if-no-files-found: warn
 
   audit:
     name: HTTP audit scripts
