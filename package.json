@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "3.0.0-beta.39",
+  "version": "3.0.0-beta.40",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -26,6 +26,7 @@
     "prebuild": "npm run verify:oyon && npm run verify:room3d && npm run license:sync && npm run plugins:check",
     "production": "NODE_ENV=production node server/server.js",
     "build": "{ npm run docs:build || echo '[build] docs:build failed — continuing without the docs site'; } && vite build --base=/rohy/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
+    "build:e2e": "vite build --base=/ && rm -rf frontend && mkdir -p frontend && cp -rf dist/. frontend/",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run --reporter=default",
