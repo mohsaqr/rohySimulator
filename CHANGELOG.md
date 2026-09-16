@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.57] — 2026-09-16
+
+### Added
+
+- **Oyon's typing and voice state log is stored** (migration 0058, `oyon_signal_events`). Windows summarise a message or a turn; sequence analysis needs the states themselves, in order — insert, pause, delete, submit; speech, silence, pause. Oyon's capture already produced that log and Rohy discarded it. `useSignalCapture` now batches it (50 events or 2 s, flushed when capture stops) to `POST /api/addons/oyon/signal-events`, and educators read it from `GET /api/addons/oyon/signal-events`. This is the data the Network, Patterns, Process Map and Clusters tabs will use for typing and voice.
+- The ingest applies the window rules per event: only the session owner writes, consent must be granted, and the accepted contract must name the modality (typing v2, voice v3) — anything else is dropped and counted. `detail` keeps only offset, length, edit kind and playback phase, so a client cannot store anything else, text included. Retried batches store nothing twice.
+
+### Fixed
+
+- **Each signal capture now has its own `capture_id`.** Rohy started captures without one, and Oyon does not generate it. Windows did not need it; the event log does, because its position counter restarts at 0 on every capture — without an id, a second capture in a session would collide with the first and be dropped as a retry.
+
 ## [3.0.0-beta.56] — 2026-09-16
 
 ### Added

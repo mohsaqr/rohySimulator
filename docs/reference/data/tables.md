@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**96 tables.**
+**97 tables.**
 
 ## `active_sessions`
 
@@ -1295,6 +1295,38 @@ Stores oyon settings records.
 | `discourse_enabled` | INTEGER | NOT NULL DEFAULT 1 | `0041_oyon_consent_v2_signals.sql` |
 | `ai_assist_enabled` | INTEGER | NOT NULL DEFAULT 1 | `0041_oyon_consent_v2_signals.sql` |
 | `voice_enabled` | INTEGER | NOT NULL DEFAULT 0 | `0057_oyon_voice_consent_v3.sql` |
+
+## `oyon_signal_events`
+
+Stores oyon signal events records.
+
+**Introduced by:** migration `0058_oyon_signal_events.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (created_at)` · `snapshot (student_name_snapshot, case_title_snapshot)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | TEXT | NOT NULL | — |
+| `user_id` | TEXT | NOT NULL | — |
+| `session_id` | TEXT | NOT NULL | — |
+| `case_id` | TEXT | — | — |
+| `student_name_snapshot` | TEXT | — | — |
+| `case_title_snapshot` | TEXT | — | — |
+| `so` | a | sequence is (session_id, capture_id) ordered by sequence_index. capture_id TEXT NOT NULL | — |
+| `sequence_index` | INTEGER | NOT NULL | — |
+| `modality` | TEXT | NOT NULL CHECK (modality IN ('typing', 'voice')) | — |
+| `state` | TEXT | NOT NULL | — |
+| `source` | TEXT | NOT NULL CHECK (source IN ('user', 'ai', 'system')) | — |
+| `state_vocabulary` | TEXT | — | — |
+| `occurred_at` | DATETIME | NOT NULL | — |
+| `length` | (untyped) | — | — |
+| `op` | (untyped) | — | — |
+| `phase` | (untyped) | . detail_json TEXT | — |
+| `same` | semantics | as oyon_signal_windows. admin_can_view INTEGER NOT NULL DEFAULT 1 | — |
+| `educator_can_view` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `consent_version` | TEXT | NOT NULL | — |
+| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
 
 ## `oyon_signal_windows`
 

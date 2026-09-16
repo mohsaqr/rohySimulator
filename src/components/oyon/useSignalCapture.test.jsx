@@ -105,7 +105,7 @@ describe('useSignalCapture — lifecycle', () => {
         await waitFor(() => expect(result.current.capture).not.toBeNull());
 
         expect(h.imported).toBe(1);
-        expect(h.instances[0].started).toEqual({ session_id: 's1' });
+        expect(h.instances[0].started).toMatchObject({ session_id: 's1' });
         expect(h.instances[0].options.settings).toEqual({
             voice_enabled: false,
             typing_enabled: true,
@@ -137,7 +137,7 @@ describe('useSignalCapture — lifecycle', () => {
         rerender({ ...PROPS, sessionId: 's2' });
         await waitFor(() => expect(h.instances).toHaveLength(2));
         expect(h.instances[0].stopped).toBe(1);
-        expect(h.instances[1].started).toEqual({ session_id: 's2' });
+        expect(h.instances[1].started).toMatchObject({ session_id: 's2' });
     });
 
     // Regression lock: room and case are read at SEND time by the transport.
@@ -151,6 +151,20 @@ describe('useSignalCapture — lifecycle', () => {
 
         expect(h.instances).toHaveLength(1);
         expect(h.instances[0].stopped).toBe(0);
+    });
+
+    // Regression lock: without a capture_id every event is refused (400), and
+    // two captures sharing one would collide on the server's dedup key.
+    it('starts each capture under its own capture_id and sends events to the event transport', async () => {
+        const first = renderHook(props => useSignalCapture(props), { initialProps: PROPS });
+        await waitFor(() => expect(first.result.current.capture).not.toBeNull());
+        first.rerender({ ...PROPS, sessionId: 's2' });
+        await waitFor(() => expect(h.instances).toHaveLength(2));
+
+        const ids = h.instances.map(i => i.started?.capture_id);
+        expect(ids.every(id => typeof id === 'string' && id.length > 4)).toBe(true);
+        expect(new Set(ids).size).toBe(2);
+        expect(typeof h.instances[0].options.onEvent).toBe('function');
     });
 
     // The transport reads context lazily so a room hop reaches the next batch

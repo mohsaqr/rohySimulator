@@ -62,6 +62,15 @@ function typingPost(page) {
     );
 }
 
+function typingEventsPost(page) {
+    return page.waitForResponse(
+        (r) => r.url().includes('/api/addons/oyon/signal-events')
+            && r.request().method() === 'POST'
+            && (r.request().postData() || '').includes('"modality":"typing"'),
+        { timeout: 30_000 },
+    );
+}
+
 test.describe('oyon typing capture', () => {
     test.beforeAll(async ({ baseURL }) => {
         await completeSetup(baseURL);
@@ -74,6 +83,7 @@ test.describe('oyon typing capture', () => {
 
         const composer = await openComposer(studentPage);
         const posted = typingPost(studentPage);
+        const eventsPosted = typingEventsPost(studentPage);
 
         await composer.click();
         // Real keystrokes with real gaps: the adapter measures timing, so a
@@ -89,6 +99,17 @@ test.describe('oyon typing capture', () => {
 
         // The privacy promise on the consent card: rhythm, never the words.
         expect(res.request().postData()).not.toContain('Where does it hurt');
+
+        // The per-event state log, for sequence analysis: one row per edit, so
+        // a 19-character message yields at least that many stored events.
+        const eventsRes = await eventsPosted;
+        expect(eventsRes.status(), await eventsRes.text()).toBe(200);
+        const eventsBody = await eventsRes.json();
+        expect(eventsBody.consent_blocked).toBe(0);
+        const sentEvents = JSON.parse(eventsRes.request().postData()).events;
+        expect(sentEvents.filter((e) => e.state === 'insert').length).toBeGreaterThanOrEqual(1);
+        expect(eventsBody.inserted).toBe(sentEvents.length);
+        expect(eventsRes.request().postData()).not.toContain('Where does it hurt');
     });
 
     test('nothing is captured for a learner on the camera-only contract', async ({ studentPage, baseURL }) => {
@@ -98,7 +119,7 @@ test.describe('oyon typing capture', () => {
 
         const typingRequests = [];
         studentPage.on('request', (r) => {
-            if (r.url().includes('/api/addons/oyon/emotion-records') && (r.postData() || '').includes('"modality":"typing"')) {
+            if (/\/api\/addons\/oyon\/(emotion-records|signal-events)/.test(r.url()) && (r.postData() || '').includes('"modality":"typing"')) {
                 typingRequests.push(r);
             }
         });

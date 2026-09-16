@@ -47,7 +47,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:800",
+        "x-rohy-source": "server/routes/oyon-routes.js:993",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -81,7 +81,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:820",
+        "x-rohy-source": "server/routes/oyon-routes.js:1013",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -115,7 +115,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:659",
+        "x-rohy-source": "server/routes/oyon-routes.js:852",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -149,7 +149,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:728",
+        "x-rohy-source": "server/routes/oyon-routes.js:921",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -183,7 +183,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:611",
+        "x-rohy-source": "server/routes/oyon-routes.js:804",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -399,6 +399,72 @@
         ]
       }
     },
+    "/api/addons/oyon/signal-events": {
+      "get": {
+        "summary": "Get /addons/oyon/signal-events",
+        "tags": [
+          "oyon"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/oyon-routes.js:754",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create /addons/oyon/signal-events",
+        "tags": [
+          "oyon"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/oyon-routes.js:663",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/addons/oyon/signal-windows": {
       "get": {
         "summary": "Get /addons/oyon/signal-windows",
@@ -453,7 +519,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:784",
+        "x-rohy-source": "server/routes/oyon-routes.js:977",
         "x-rohy-auth": [
           "authenticateToken"
         ],
