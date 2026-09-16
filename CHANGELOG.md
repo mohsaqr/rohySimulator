@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.68] — 2026-09-16
+
+### Changed
+
+- **Signal-analytics end-to-end data looks like real use.** The seeded typing episodes and voice turns in `tests/e2e/oyon-signal-analytics.spec.js` had identical values per turn, which drew flat lines and identical bars. They now vary speed, pauses, pause locations, bursts, turn length, silences and pitch, and the writing-process message has an uneven rhythm with a typo fixed on the spot. Every asserted figure was recomputed by hand and the assertions stay pointed at the two honesty rules: the cohort speed (172) differs from the pooled one (150), so each learner counts once; the speaking share (56%) would read 55% if the unmeasurable turn leaked in.
+- The spec now photographs the whole Text and Voice tabs and both network sources by growing the viewport to the dashboard's scroll height, and checks the Text tab at phone width for sideways overflow.
+
 ## [3.0.0-beta.67] — 2026-09-16
 
 ### Fixed
