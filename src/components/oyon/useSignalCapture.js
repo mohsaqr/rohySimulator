@@ -18,20 +18,80 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createSignalTransport } from './signalTransport';
+import { apiUrl } from '../../config/api';
 import { oyonClientLog } from './clientLogger';
 
-// Rohy never drives Oyon's microphone path. `VoiceService` already owns the
-// mic, and voice capture needs its own consent surface and a single-mic-owner
-// design — so voice is forced off here rather than left to a default, which
-// keeps a stray tenant flag from reaching getUserMedia.
-const VOICE_ALWAYS_OFF = { voice_enabled: false };
-
+// Voice reaches getUserMedia, so it has three gates and none may be defaulted:
+//   1. the tenant's voice_enabled (migration 0057, off by default);
+//   2. the learner's contract naming it — oyon-consent-v3 — which
+//      useOyonSignalGate's coveredRuntime has already applied, so runtime's
+//      voice_enabled is false for anyone who has not accepted v3;
+//   3. a learner-initiated voice turn, which the patient chat starts in its
+//      click handler (ChatInterface.startVoiceTurn).
+// There is no single mic owner to share with: Rohy's STT is the browser's
+// SpeechRecognition, which captures internally and exposes no MediaStream. So
+// Oyon opens its own measurement stream for the length of the turn and releases
+// it when the turn ends.
 const MODALITY_FLAGS = Object.freeze([
     'typing_enabled',
     'interaction_enabled',
     'discourse_enabled',
     'ai_assist_enabled',
+    'voice_enabled',
 ]);
+
+/**
+ * Where the voice worker loads its speech detector (Silero VAD) and the ONNX
+ * runtime wasm — from THIS server, never a third party.
+ *
+ * Left unset, Oyon's defaults are raw.githubusercontent.com for the model and
+ * cdn.jsdelivr.net for the runtime: fetched from the learner's browser every
+ * time they speak, which sends their traffic to GitHub and jsDelivr during a
+ * voice turn and simply fails on an air-gapped or firewalled install. It failed
+ * silently in testing too — the detector never ran, every voice window reported
+ * `vad_coverage: 0` and `poor_vad_coverage`, and nothing logged an error.
+ *
+ * Both files are already served: the model from OyonR/standalone/models/vad/ and
+ * the wasm from OyonR/standalone/vendor/onnxruntime-web/ (installed by
+ * download-models.sh), under /api/addons/oyon/assets. The vendored wasm is
+ * onnxruntime-web 1.27.0, the same version Rohy bundles — ORT refuses a wasm
+ * from a different build, so bumping one means bumping the other.
+ *
+ * Absolute URLs: the analyzer runs in a Web Worker, which resolves a relative
+ * URL against the worker script rather than the page. apiUrl() applies the
+ * deployment's base path, so a /rohy/-prefixed install still resolves.
+ */
+export function voiceAssetOptions(origin = globalThis.location?.origin || '') {
+    // apiUrl() prepends the base path AND `/api` — so the path passed to it
+    // must NOT start with /api, or the URL doubles to /api/api/… and 404s.
+    const asset = (path) => `${origin}${apiUrl(`/addons/oyon/assets/${path}`)}`;
+    return {
+        analyzerOptions: {
+            // OFF unless asked. WorkerVoiceAnalyzer only builds a speech detector
+            // when `vadEnabled === true` (or a `vad` instance is injected); left
+            // unset the worker runs DSP-only and speechProbability stays null, so
+            // every window reports vad_coverage 0, speech_ratio 0 and is flagged
+            // insufficient. The URLs below matter BECAUSE of this switch: with the
+            // detector on and no paths, it would fetch from GitHub and jsDelivr.
+            vadEnabled: true,
+            modelUrl: asset('models/vad/silero_vad.onnx'),
+            // The exact files, not the directory. Given only a directory,
+            // onnxruntime-web 1.27.0 asks for its JSEP glue — which
+            // download-models.sh deliberately does not install (it copies
+            // ort.min.mjs plus the plain and asyncify simd pairs, from Rohy's own
+            // node_modules, so they always match the bundled version). On a fresh
+            // install that request 404s; on a machine holding an older download
+            // it found a stale 1.20.1 JSEP file and died with `t.getValue is not
+            // a function`. Naming the plain simd pair works on both. It runs
+            // single-threaded (the adapter sets numThreads = 1), so no
+            // cross-origin isolation is needed.
+            wasmPaths: {
+                mjs: asset('vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs'),
+                wasm: asset('vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm'),
+            },
+        },
+    };
+}
 
 /** Does the tenant config turn on any modality we are prepared to capture? */
 export function anyModalityEnabled(runtimeConfig) {
@@ -47,10 +107,14 @@ export function anyModalityEnabled(runtimeConfig) {
  */
 export function captureSettings(runtimeConfig) {
     const cfg = runtimeConfig && typeof runtimeConfig === 'object' ? runtimeConfig : {};
-    const out = { ...VOICE_ALWAYS_OFF };
+    const out = {};
     for (const key of MODALITY_FLAGS) {
         if (typeof cfg[key] === 'boolean') out[key] = cfg[key];
     }
+    // Always explicit. createOyonSettings merges over Oyon's own defaults, so an
+    // OMITTED voice_enabled would be "no opinion" and could open the microphone.
+    // Only an explicit `true` — tenant on AND contract accepted — turns it on.
+    out.voice_enabled = cfg.voice_enabled === true;
     return out;
 }
 
@@ -58,7 +122,7 @@ export function captureSettings(runtimeConfig) {
  * Start one signal capture for the current session and tear it down cleanly.
  *
  * Returns `{ capture, error }`. `capture` is Oyon's handle — `capture.typing`,
- * `capture.interaction`, `capture.discourse`, `capture.ai_assist` — or null
+ * `capture.interaction`, `capture.discourse`, `capture.ai_assist`, `capture.voice` — or null
  * while inactive. A modality the tenant disabled is `null` on the handle, not
  * a no-op stub, so callers should branch on it rather than call into silence.
  *
@@ -103,6 +167,8 @@ export function useSignalCapture({ enabled, persist, runtimeConfig, sessionId, c
 
                 started = createSignalCapture({
                     settings: JSON.parse(settingsKey),
+                    // Self-hosted speech detector — see voiceAssetOptions.
+                    voice: voiceAssetOptions(),
                     // Transport only — no IndexedDB store. The camera path keeps
                     // a local copy because the element owns one already; adding a
                     // second client-side store here would be an unasked-for copy

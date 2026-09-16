@@ -115,6 +115,25 @@ export default defineConfig({
         {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
+            // The voice spec needs a microphone, which only its own project has.
+            testIgnore: /oyon-voice\.spec\.js/,
+        },
+        {
+            // Oyon voice capture, end to end. Plain headless Chromium refuses
+            // getUserMedia (NotSupportedError, measured); Chromium's fake-device
+            // flags grant a real audio track and auto-accept the permission
+            // prompt. Kept to its own project so no other spec runs with a
+            // microphone. Prova records it as its own run (check keys
+            // `rohy:chromium-voice::…`), on the same `chrome` platform.
+            name: 'chromium-voice',
+            testMatch: /oyon-voice\.spec\.js/,
+            use: {
+                ...devices['Desktop Chrome'],
+                permissions: ['microphone'],
+                launchOptions: {
+                    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+                },
+            },
         },
     ],
     webServer: {

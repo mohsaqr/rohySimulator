@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.55] — 2026-09-16
+
+### Added
+
+- **Oyon voice capture.** When a learner who has accepted consent v3 speaks to the patient in voice mode, Oyon measures the turn — pitch, loudness, pauses, spectral shape and speech activity — and stores those measurements, never the recording. Three gates, none defaulted: the tenant's new **Voice** switch in Settings → Oyon (off by default), the learner's v3 contract, and a learner-initiated voice turn.
+- `tests/e2e/oyon-voice.spec.js`, under a new `chromium-voice` Playwright project with a fake microphone (plain headless Chromium refuses `getUserMedia`, measured). It asserts a v3 learner's turn is stored **and that the speech detector actually ran**, that nothing leaves for a third-party CDN, that no raw audio is sent, and that a v2 learner has nothing captured.
+
+### Fixed
+
+- **The Silero speech detector now runs.** Voice stored windows from the start, but four separate defects kept the detector off, each silently — every window reported `vad_coverage: 0`, `speech_ratio: 0` and `poor_vad_coverage`, and nothing logged an error:
+  1. Rohy never set `vadEnabled: true`; unset, Oyon's worker runs DSP-only.
+  2. `onnxruntime-web` is aliased to a stub to keep ~48.7 MB out of the bundle, justified by "voice is disabled, so the VAD never runs". The stub now loads the **real** runtime at run time — but only inside a Web Worker — from the vendored copy this server already serves for the camera. The alias, and its size saving, are unchanged; a normal page load still fetches no ONNX (verified).
+  3. Asset URLs doubled to `/api/api/…`: `apiUrl()` already prepends `/api`.
+  4. Given only the runtime directory, onnxruntime-web 1.27.0 requests JSEP glue that `download-models.sh` never installs. The single-threaded simd pair is now named explicitly.
+- **The detector loads from this server, not from GitHub and jsDelivr.** Oyon's defaults fetch the model from `raw.githubusercontent.com` and the runtime from `cdn.jsdelivr.net`, in the learner's browser, on every voice turn — sending learner traffic to both and failing outright on air-gapped installs.
+
+### Notes for reviewers
+
+Rohy's speech recognition is the browser's `SpeechRecognition`, which captures internally and exposes no `MediaStream`, so there is no single microphone owner to share. Oyon opens its own measurement stream for the length of the learner's turn and releases it when listening stops. The turn starts inside the click handler, because Chrome suspends an `AudioContext` created outside a user gesture. Only the conversation with the **patient** is measured — the consent card says "while you speak to the patient" — so the debrief is deliberately not captured.
+
 ## [3.0.0-beta.54] — 2026-09-16
 
 ### Fixed

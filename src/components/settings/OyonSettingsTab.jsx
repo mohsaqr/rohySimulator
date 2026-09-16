@@ -146,6 +146,7 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                interaction_enabled: settings.interaction_enabled,
                discourse_enabled: settings.discourse_enabled,
                ai_assist_enabled: settings.ai_assist_enabled,
+               voice_enabled: settings.voice_enabled,
             },
          });
          setSettings(res?.settings || settings);
@@ -520,8 +521,14 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                               onChange={v => updateSetting({ discourse_enabled: v })}
                            />
                            <ToggleRow
+                              label="Voice"
+                              hint="Pitch, loudness and pauses while a learner speaks to the patient in voice mode — measurements only, never the recording. Uses the microphone for the length of each spoken turn. Needs learner consent v3; turning it on asks every learner for v3 on their next visit."
+                              checked={!!settings.voice_enabled}
+                              onChange={v => updateSetting({ voice_enabled: v })}
+                           />
+                           <ToggleRow
                               label="AI-assistance cycles"
-                              hint="Suggestion request / accept / reject timing. Needs learner consent v2."
+                              hint="Suggestion request / accept / reject timing. Rohy has no AI-suggestion cycle today, so this records nothing. Needs learner consent v3."
                               checked={!!settings.ai_assist_enabled}
                               onChange={v => updateSetting({ ai_assist_enabled: v })}
                            />
