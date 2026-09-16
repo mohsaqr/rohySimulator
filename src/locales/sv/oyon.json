@@ -406,7 +406,7 @@
   "zone_top_center": "övre mitten",
   "zone_top_left": "övre vänster",
   "zone_top_right": "övre höger",
-  "reconsent_item_voice": "Hur du låter när du talar med patienten — tonhöjd, ljudstyrka och pauser, mätt ögonblick för ögonblick. Själva ljudinspelningen sparas inte.",
+  "reconsent_item_voice": "Hur du låter när du talar med patienten — tonhöjd, ljudstyrka och pauser, sammanfattade för varje replik, samt när du under repliken talar eller tystnar. Själva ljudinspelningen sparas inte.",
   "reconsent_item_ai_assist": "När appen erbjuder dig ett AI-förslag, om du accepterar, avvisar eller stänger det.",
   "reconsent_note_voice": "Analysen körs lokalt i din webbläsare. Mätvärden sparas, aldrig ljudinspelningen ({version}). Mikrofonen används bara medan du talar. Ett nej lämnar ditt nuvarande val oförändrat; du kan ändra det under Inställningar → Oyon."
 }
