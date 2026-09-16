@@ -10,8 +10,9 @@
  *     This is the dev convenience the audit flagged — pre-prod smoke
  *     should run with NODE_ENV=production to catch drift.
  *   - Production: only origins in the static allowlist + FRONTEND_URL
- *     are accepted; unknown origins are rejected with a console warning
- *     so the rejection is observable in logs.
+ *     + EXTRA_CORS_ORIGINS (comma-separated, for first-party tools such as
+ *     Prova reading /api/health) are accepted; unknown origins are rejected
+ *     with a console warning so the rejection is observable in logs.
  */
 
 const STATIC_DEV_ORIGINS = [
@@ -32,13 +33,24 @@ function toOrigin(url) {
     try { return new URL(url).origin; } catch { return null; }
 }
 
-export function buildAllowedOrigins({ frontendUrl } = {}) {
-    return [...STATIC_DEV_ORIGINS, toOrigin(frontendUrl)].filter(Boolean);
+// Other first-party tools that read Rohy from a browser — today Prova (test management) fetching
+// /api/health to learn the running build. Comma-separated full origins in EXTRA_CORS_ORIGINS,
+// set in /etc/rohy/env, so adding one needs no code change:
+//   EXTRA_CORS_ORIGINS=https://prova.lacarm.com
+function extraOrigins(value) {
+    return String(value ?? '')
+        .split(',')
+        .map((entry) => toOrigin(entry.trim()))
+        .filter(Boolean);
 }
 
-export function buildCorsOptions({ nodeEnv, frontendUrl, logger = console } = {}) {
+export function buildAllowedOrigins({ frontendUrl, extraOrigins: extra } = {}) {
+    return [...STATIC_DEV_ORIGINS, toOrigin(frontendUrl), ...extraOrigins(extra)].filter(Boolean);
+}
+
+export function buildCorsOptions({ nodeEnv, frontendUrl, extraOrigins: extra, logger = console } = {}) {
     const isDev = nodeEnv !== 'production';
-    const allowed = buildAllowedOrigins({ frontendUrl });
+    const allowed = buildAllowedOrigins({ frontendUrl, extraOrigins: extra });
 
     return {
         origin: (origin, callback) => {

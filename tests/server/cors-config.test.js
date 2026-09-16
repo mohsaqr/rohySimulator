@@ -33,6 +33,20 @@ describe('buildAllowedOrigins', () => {
         expect(list).not.toContain('https://rohy.example.com/rohy');
     });
 
+    it('appends EXTRA_CORS_ORIGINS (comma-separated, normalised, blanks dropped)', () => {
+        const list = buildAllowedOrigins({ extraOrigins: 'https://prova.lacarm.com, https://other.example/path ,, not a url' });
+        expect(list).toContain('https://prova.lacarm.com');
+        expect(list).toContain('https://other.example');
+        expect(list).not.toContain('https://other.example/path');
+        expect(list).not.toContain('not a url');
+    });
+
+    it('in production, an EXTRA_CORS_ORIGINS origin is allowed and an unknown one is not', async () => {
+        const opts = buildCorsOptions({ nodeEnv: 'production', extraOrigins: 'https://prova.lacarm.com', logger: { warn: () => {} } });
+        await expect(checkOrigin(opts, 'https://prova.lacarm.com')).resolves.toBe(true);
+        await expect(checkOrigin(opts, 'https://evil.example')).rejects.toThrow(/Not allowed by CORS/);
+    });
+
     it('drops empty / undefined FRONTEND_URL silently', () => {
         const list = buildAllowedOrigins({ frontendUrl: '' });
         expect(list).not.toContain('');
