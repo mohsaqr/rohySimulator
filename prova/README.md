@@ -7,7 +7,13 @@ platforms chrome, edge, firefox, safari; required environment field `device`; bu
 | Half | Lives in | Reaches Prova by |
 |---|---|---|
 | Manual — what only a person can judge | `prova/rohy-cases.yaml` | catalogue import |
-| Automated — what a machine can judge | `tests/e2e/**` | Prova's Playwright reporter |
+| Automated — what a machine can judge | `tests/e2e/**` | Prova's Playwright reporter, on every CI push |
+| Deployed — what must hold of a live instance | `tests/smoke/**` | the same reporter, via `scripts/smoke-deployed.sh` |
+
+The deployed smoke is the upgrade hook: `scripts/post-verify-rohy.sh` runs it after `tech-test.sh`,
+so `bin/rohy-update apply` verifies and records every upgrade. Everything in `tests/smoke/` is
+read-only and unauthenticated, which is what makes it safe to aim at production — the e2e suite is
+not, and must never be.
 
 `rohy-cases.yaml` is the manual half. Where a case is also covered by automation it lists the
 automated check keys under `covers:`, which is what makes Prova's coverage matrix show a case as
@@ -88,11 +94,12 @@ Current shape:
 
 | | |
 |---|---|
-| Features | 44 (18 core, 21 extended, 5 optional) |
-| Cases | 92 (69 manual, 12 both, 11 automated) |
+| Features | 53 (22 core, 26 extended, 5 optional) |
+| Cases | 101 (66 manual, 15 both, 20 automated) |
 | Cases needing a human pass | 81 |
 | …of those, gate-blocking (core) | 40 |
-| Coverage patterns into `tests/e2e` | 32, all verified to match a real test |
+| Coverage patterns | 55, all verified to match a real test |
+| Automated checks mapped to a case | 112 of 127 |
 
 ## Running the battery
 
