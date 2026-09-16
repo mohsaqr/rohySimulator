@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
+import { oyonClientLog } from '../oyon/clientLogger';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
 import { buildPersonaBlocks } from '../../utils/personaBlocks';
@@ -1203,6 +1204,22 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         };
     }, [signalCapture, composerEl, activeTab]);
 
+    // End the Oyon voice turn when listening stops — by the learner tapping
+    // again, the recogniser's onEnd, an STT error, or any other stop site. They
+    // all funnel through setListening, so one transition catches every exit
+    // and the measurement microphone is never left open. Only the patient
+    // chat's startVoiceTurn STARTS a turn; `listening` is shared context, and a
+    // stop with no active turn is a no-op in Oyon, so other surfaces toggling it
+    // cannot misfire this.
+    const wasListeningRef = useRef(listening);
+    useEffect(() => {
+        const wasListening = wasListeningRef.current;
+        wasListeningRef.current = listening;
+        if (wasListening && !listening) {
+            try { signalCapture?.voice?.stopTurn('turn_end'); } catch { /* never block the conversation */ }
+        }
+    }, [listening, signalCapture]);
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || loading || !sessionId) return;
@@ -1658,6 +1675,26 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setSpeaking(false);
         setVisemes({ viseme_sil: 1 });
         setListening(true);
+
+        // Oyon voice measurement for this turn. Started HERE, inside the click
+        // handler, not in an effect: Chrome suspends an AudioContext created
+        // outside a user gesture, and a suspended context delivers no frames —
+        // every voice window would be empty. `signalCapture.voice` is null unless
+        // the tenant enabled voice AND the learner accepted consent v3. Never
+        // allowed to block or delay speech recognition. The turn is ended by the
+        // `listening` effect below, whichever way listening stops.
+        const voice = signalCapture?.voice;
+        if (voice) {
+            voice.startTurn({ userAction: true, targetKind: 'voice_control', targetId: 'patient' })
+                .then((result) => {
+                    if (result && result.ok === false) {
+                        oyonClientLog('warn', 'voice turn refused', { reason: result.reason || null });
+                    }
+                })
+                .catch((err) => oyonClientLog('warn', 'voice turn failed to start', {
+                    error: err?.message || String(err),
+                }));
+        }
 
         let sawError = false;
 

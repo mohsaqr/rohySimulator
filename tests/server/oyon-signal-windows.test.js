@@ -611,6 +611,32 @@ describe('consent v3 gate for voice', () => {
         await setV3Flags({ voice: false });
     });
 
+    // The admin toggle has to work through the real PUT, and PUT /settings is a
+    // KEY-PRESENCE merge for signal flags: sending only voice_enabled must turn
+    // voice on and leave every other signal exactly as it was.
+    it('lets an admin turn voice on without disturbing the other signals', async () => {
+        const adminTok = tokenFor({ id: 1, username: 'admin', role: 'admin', tenant_id: 1 }, 'v3-admin');
+        await setV3Flags({ voice: false });
+        const db0 = await openDb(server.dbPath);
+        await dbRun(db0, 'UPDATE oyon_settings SET typing_enabled = 1 WHERE tenant_id = ?', ['1']);
+        await dbClose(db0);
+
+        const res = await fetch(`${server.baseUrl}/api/addons/oyon/settings`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${adminTok}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emotion_capture_enabled: true, voice_enabled: true }),
+        });
+        expect(res.status).toBe(200);
+
+        const db = await openDb(server.dbPath);
+        const row = await dbGet(db, 'SELECT voice_enabled, typing_enabled FROM oyon_settings WHERE tenant_id = ?', ['1']);
+        await dbClose(db);
+        expect(row.voice_enabled).toBe(1);
+        expect(row.typing_enabled).toBe(1);
+        expect((await getConfig()).consent_version).toBe('oyon-consent-v3');
+        await setV3Flags({ voice: false });
+    });
+
     // Regression lock: 0057's UPDATE only turns off rows that EXIST. A tenant
     // row created afterwards takes ai_assist_enabled's column DEFAULT of 1 — so
     // ensureSettings names both flags explicitly. Delete the row and let the

@@ -33,7 +33,7 @@ vi.mock('oyon/signal-capture', () => {
 vi.mock('./clientLogger', () => ({ oyonClientLog: vi.fn() }));
 vi.mock('./signalTransport', () => ({ createSignalTransport: vi.fn(fn => ({ send: fn })) }));
 
-const { useSignalCapture, captureSettings, anyModalityEnabled } = await import('./useSignalCapture.js');
+const { useSignalCapture, captureSettings, anyModalityEnabled, voiceAssetOptions } = await import('./useSignalCapture.js');
 
 const CONFIG = { typing_enabled: true, interaction_enabled: true, discourse_enabled: false, ai_assist_enabled: false };
 const PROPS = { enabled: true, persist: true, runtimeConfig: CONFIG, sessionId: 's1', caseId: 'c1', room: 'chat' };
@@ -52,10 +52,27 @@ describe('captureSettings', () => {
             .toEqual({ voice_enabled: false, discourse_enabled: false });
     });
 
-    // Rohy's VoiceService owns the microphone. A stray tenant flag must not be
-    // able to reach getUserMedia through Oyon.
-    it('forces voice off even when a config asks for it', () => {
-        expect(captureSettings({ voice_enabled: true }).voice_enabled).toBe(false);
+    // Voice reaches getUserMedia, so only an EXPLICIT true opens it. Before
+    // consent v3 this forced voice off unconditionally; the tenant flag and the
+    // accepted contract now decide, and coveredRuntime has already switched it
+    // off for anyone who has not accepted v3.
+    it('turns voice on only for an explicit true', () => {
+        expect(captureSettings({ voice_enabled: true }).voice_enabled).toBe(true);
+    });
+
+    // An omitted or truthy-but-not-boolean flag is "no opinion" to Oyon's
+    // settings merge, which could fall back to Oyon's own default and open the
+    // microphone. Every such value must read as OFF.
+    it('keeps voice off for a missing, 0/1 or string flag', () => {
+        expect(captureSettings({}).voice_enabled).toBe(false);
+        expect(captureSettings({ voice_enabled: 1 }).voice_enabled).toBe(false);
+        expect(captureSettings({ voice_enabled: 'true' }).voice_enabled).toBe(false);
+        expect(captureSettings({ voice_enabled: false }).voice_enabled).toBe(false);
+    });
+
+    it('counts voice as a modality that starts capture', () => {
+        expect(anyModalityEnabled({ voice_enabled: true })).toBe(true);
+        expect(anyModalityEnabled({ voice_enabled: 1 })).toBe(false);
     });
 
     it('survives a missing or malformed config', () => {
@@ -158,5 +175,45 @@ describe('useSignalCapture — lifecycle', () => {
         await act(async () => {});
         await act(async () => {});
         expect(h.instances).toHaveLength(0);
+    });
+});
+
+// Regression lock: where the voice worker loads its speech detector from.
+//
+// Four defects each left voice storing windows while the Silero detector never
+// ran (vad_coverage 0). tests/e2e/oyon-voice.spec.js catches all four in a real
+// browser, but needs installed models; these pin the URL decisions cheaply, in
+// every CI run.
+describe('voiceAssetOptions', () => {
+    const { analyzerOptions } = voiceAssetOptions('https://rohy.example');
+
+    it('turns the speech detector ON — left unset the worker runs DSP-only', () => {
+        expect(analyzerOptions.vadEnabled).toBe(true);
+    });
+
+    it('loads the model from this server, never raw.githubusercontent.com', () => {
+        expect(analyzerOptions.modelUrl)
+            .toBe('https://rohy.example/api/addons/oyon/assets/models/vad/silero_vad.onnx');
+    });
+
+    // apiUrl() already prepends /api; passing a path that starts with /api too
+    // produced /api/api/… and a 404 for every file.
+    it('never doubles /api', () => {
+        const all = [analyzerOptions.modelUrl, analyzerOptions.wasmPaths.mjs, analyzerOptions.wasmPaths.wasm];
+        for (const url of all) expect(url).not.toContain('/api/api/');
+    });
+
+    // Given only a directory, onnxruntime-web 1.27.0 asks for JSEP glue the
+    // installer never ships. Naming the plain simd pair is what makes it load.
+    it('pins the exact single-threaded simd pair, not a directory and not JSEP', () => {
+        expect(analyzerOptions.wasmPaths).toEqual({
+            mjs: 'https://rohy.example/api/addons/oyon/assets/vendor/onnxruntime-web/ort-wasm-simd-threaded.mjs',
+            wasm: 'https://rohy.example/api/addons/oyon/assets/vendor/onnxruntime-web/ort-wasm-simd-threaded.wasm',
+        });
+        expect(JSON.stringify(analyzerOptions.wasmPaths)).not.toMatch(/jsep|jspi|webgpu/);
+    });
+
+    it('never points at a third-party CDN', () => {
+        expect(JSON.stringify(analyzerOptions)).not.toMatch(/jsdelivr|githubusercontent|unpkg|cdn\./);
     });
 });
