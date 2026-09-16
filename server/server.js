@@ -75,6 +75,7 @@ app.use(securityHeaders({ nodeEnv: process.env.NODE_ENV }));
 app.use(cors(buildCorsOptions({
     nodeEnv: process.env.NODE_ENV,
     frontendUrl: process.env.FRONTEND_URL,
+    extraOrigins: process.env.EXTRA_CORS_ORIGINS,
 })));
 app.use(requestLoggerMiddleware());
 // Body-size limits: most JSON endpoints carry small payloads. The 10mb
