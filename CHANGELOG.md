@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.67] — 2026-09-16
+
+### Fixed
+
+- **Network pages show whole state names.** A long state such as "Patient speaking" was cut to "Patient spe…" in its node and in the centrality chart. Nodes now break a two-word name onto two lines at the space that balances them, and shorten only a single word that still does not fit (the node's tooltip always has the full name). The centrality and state-frequency charts size their label column to the longest name, and the state-distribution legend no longer clips.
+- **Centrality measure labels read "In-strength", "Out-strength", "Closeness", "Betweenness"** instead of "Sna.m in strength". The beta-era regression lock tested the bare keys, but the charts pass namespaced ones (`courses:sna.m_in_strength`), which the translation shim did not resolve; it now looks up the bare key too, and a new regression lock tests the keys as the charts pass them.
+- The centrality table's first column is headed "State" for state sources (Typing, Voice, emotions, rooms, gaze) instead of "Verb".
+
 ## [3.0.0-beta.66] — 2026-09-16
 
 ### Changed

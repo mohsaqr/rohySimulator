@@ -16,7 +16,8 @@ const TnaFrequencyChart = ({ sequences, labels, colorMap: externalColorMap }) =>
   const svgWidth = 600;
   const barHeight = 28;
   const gap = 4;
-  const margin = { top: 10, right: 60, bottom: 10, left: 100 };
+  const longest = Math.max(0, ...sortedVerbs.map((v) => String(v.label).length));
+  const margin = { top: 10, right: 60, bottom: 10, left: Math.max(100, 16 + Math.round(longest * 7)) };
   const plotW = svgWidth - margin.left - margin.right;
   const svgHeight = margin.top + margin.bottom + sortedVerbs.length * (barHeight + gap);
   return <div className="overflow-x-auto">

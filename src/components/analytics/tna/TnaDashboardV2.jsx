@@ -1211,7 +1211,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                         </div>
                         {analysis.centralityData && (
                             <Panel title="Centrality table">
-                                <TnaCentralityTable centralityData={analysis.centralityData} colorMap={analysis.colorMap} />
+                                <TnaCentralityTable centralityData={analysis.centralityData} colorMap={analysis.colorMap} labelHeader={isRecordsSource || isSignalEventSource ? 'State' : null} />
                             </Panel>
                         )}
                     </div>

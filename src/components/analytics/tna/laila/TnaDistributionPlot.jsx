@@ -18,7 +18,9 @@ const TnaDistributionPlot = ({ sequences, labels, colorMap: externalColorMap }) 
   if (maxTimestep === 0) return null;
   const svgWidth = 700;
   const svgHeight = 350;
-  const margin = { top: 20, right: 120, bottom: 40, left: 50 };
+  // The legend sits in the right margin; size it to the longest state name.
+  const longest = Math.max(0, ...labels.map((l) => String(l).length));
+  const margin = { top: 20, right: Math.max(120, 36 + Math.round(longest * 6)), bottom: 40, left: 50 };
   const plotW = svgWidth - margin.left - margin.right;
   const plotH = svgHeight - margin.top - margin.bottom;
   const barWidth = Math.max(plotW / maxTimestep - 1, 2);

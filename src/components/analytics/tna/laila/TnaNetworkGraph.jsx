@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { createColorMap } from "./colorFix";
+import { nodeLabelLines } from "./nodeLabel.js";
 const EDGE_COLOR = "#2B4C7E";
 const ARROW_COLOR = "#2B4C7E";
 const EDGE_LABEL_COLOR = "#2B4C7E";
@@ -296,18 +297,21 @@ const TnaNetworkGraph = ({
     >
                 <title>{`${label} (init: ${((inits[i] ?? 0) * 100).toFixed(1)}%)`}</title>
               </circle>
-              <text
+              {(() => {
+    const { lines, fontSize } = nodeLabelLines(label);
+    return <text
       y={1}
       textAnchor="middle"
       dominantBaseline="middle"
       fill="#ffffff"
-      fontSize={label.length > 10 ? 8 : label.length > 7 ? 9 : 11}
+      fontSize={fontSize}
       fontWeight={600}
       pointerEvents="none"
       style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.3)", strokeWidth: 2, strokeLinejoin: "round" }}
     >
-                {label.length > 12 ? label.slice(0, 11) + "\u2026" : label}
-              </text>
+                {lines.length === 1 ? lines[0] : lines.map((line, j) => <tspan key={j} x={0} dy={j === 0 ? "-0.55em" : "1.1em"}>{line}</tspan>)}
+              </text>;
+  })()}
             </g>;
   })}
       </svg>
