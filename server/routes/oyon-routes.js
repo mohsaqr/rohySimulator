@@ -131,6 +131,15 @@ function requiredConsentVersion(settings) {
     return CONSENT_VERSION_ORDER[rank];
 }
 const MAX_EMOTION_EVENT_JSON_LENGTH = 20_000;
+/*
+ * A typing window carries one keystroke interval and one revision location per
+ * edit — about 107 bytes each — so a 20 KB ceiling rejected every message over
+ * roughly 180 keystrokes, and with it the whole batch. The client caps an
+ * episode at 2000 retained edits (TYPING_MAX_INTERVALS in useSignalCapture.js),
+ * which bounds a window at ~214 KB; this sits just above that and below the
+ * 256 KB JSON body limit in server.js.
+ */
+const MAX_TYPING_WINDOW_JSON_LENGTH = 240_000;
 const POST_SESSION_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const ALLOWED_MODEL_PROFILES = new Set([
@@ -1112,7 +1121,8 @@ async function latestConsent(req, sessionId) {
 
 function validateServerEvent(event, session) {
     const errors = [];
-    if (JSON.stringify(event).length > MAX_EMOTION_EVENT_JSON_LENGTH) errors.push('Emotion event is too large');
+    const maxLength = event?.modality === 'typing' ? MAX_TYPING_WINDOW_JSON_LENGTH : MAX_EMOTION_EVENT_JSON_LENGTH;
+    if (JSON.stringify(event).length > maxLength) errors.push('Emotion event is too large');
     if (event.capture_mode !== 'local-browser') errors.push('capture_mode must be local-browser');
     if (!event.consent_version) errors.push('consent_version is required');
     if (!timestampWithinSession(event.window_start, event.window_end, session)) {

@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.59] — 2026-09-16
+
+### Fixed
+
+- **Long messages no longer lose their typing data.** A typing window keeps one keystroke interval and one revision location per edit, about 107 bytes each, and the ingest refused any window over 20 KB — so every message longer than about 180 keystrokes was rejected, along with everything else in its batch. Typing windows now have their own 240 KB ceiling, and the client caps retained edits at 2000 per message (`TYPING_MAX_INTERVALS`), which holds the largest window at about 214 KB — under the server's 256 KB body limit. Past the cap Oyon flags the window truncated; its counts and rates still cover the whole message. Sizes were measured with Oyon's own aggregator, and a regression test posts the largest window the client can produce.
+
 ## [3.0.0-beta.58] — 2026-09-16
 
 ### Added
