@@ -492,7 +492,19 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     let catalog = { schemaVersion: '1.0.0', version: 1, [shape.collection]: [] };
     let bundleUnavailable = (origin || starter)
         ? null
-        : { status: 503, error: `No remote origin is configured for plugin '${pluginId}'. Set ROHY_PLUGIN_ORIGINS.`, code: 'plugin_remote_not_configured' };
+        // ISSUE-0025, second call site. The content proxy below was reworded in
+        // beta.37 but this one — the route a plugin ROOM calls first, so the one
+        // an operator actually meets — still named only ROHY_PLUGIN_ORIGINS,
+        // sending them after a variable they did not need while the learner sat
+        // in an empty workstation. Installing the bundled starter content is the
+        // ordinary route and is named first. Keep the two messages in step.
+        : {
+            status: 503,
+            error: `Plugin '${pluginId}' has no content on this deployment. `
+                + 'Install the bundled starter content with `npm run setup:content`, '
+                + 'or point the plugin at a remote origin with ROHY_PLUGIN_ORIGINS.',
+            code: 'plugin_remote_not_configured',
+        };
 
     if (origin) {
         const bundle = await fetchBundleCatalog(origin, pluginId, shape);

@@ -191,7 +191,7 @@ describe('a configured origin always wins over the starter bundle', () => {
 });
 
 describe('an operator can refuse the starter bundle', () => {
-    let server; let token;
+    let server; let token; let authorToken;
     beforeAll(async () => {
         server = await startTestServer({
             seed: false,
@@ -199,6 +199,11 @@ describe('an operator can refuse the starter bundle', () => {
         });
         await seedUser(server.dbPath, 'nostarter-reader', 'student');
         token = await login(server.baseUrl, 'nostarter-reader');
+        // The catalogue route admits an AUTHOR, or a learner only when the plugin
+        // exposes learner keys — pathology's catalogue is an authoring library, so
+        // a student gets 403 there and never reaches the 503 being asserted.
+        await seedUser(server.dbPath, 'nostarter-author', 'admin');
+        authorToken = await login(server.baseUrl, 'nostarter-author');
     }, 90_000);
     afterAll(async () => { await server?.close(); });
 
@@ -214,6 +219,23 @@ describe('an operator can refuse the starter bundle', () => {
         // learner sat in an empty PACS workstation. Bundled starter content is
         // the ordinary route (`npm run setup:content`, INSTALL.md); the remote
         // origin is the alternative. Both have to be in the sentence.
+        expect(body.error).toContain('npm run setup:content');
+        expect(body.error).toContain('ROHY_PLUGIN_ORIGINS');
+    });
+
+    // Regression lock: the QA-0025 rewording landed on the content proxy above
+    // and MISSED the catalogue route, which kept the old "Set ROHY_PLUGIN_ORIGINS"
+    // sentence until 2026-09-16. That route is the one a plugin ROOM calls first,
+    // so it is the message an operator actually meets — and the one test that
+    // existed only covered the proxy, which is why the miss survived.
+    // Both 503 sites must carry the same actionable sentence.
+    it('gives the catalogue route the same honest 503 as the content proxy', async () => {
+        const res = await fetch(`${server.baseUrl}/api/plugins/pathology/catalog`, {
+            headers: { authorization: `Bearer ${authorToken}` },
+        });
+        expect(res.status).toBe(503);
+        const body = await res.json();
+        expect(body.code).toBe('plugin_remote_not_configured');
         expect(body.error).toContain('npm run setup:content');
         expect(body.error).toContain('ROHY_PLUGIN_ORIGINS');
     });
