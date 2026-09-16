@@ -17,7 +17,15 @@ export const OYON_CONSENT_VERSION_LS_KEY = 'oyon.consentVersion';
 export const OYON_CONSENT_VERSIONS = Object.freeze([
     'oyon-consent-v1',
     'oyon-consent-v2',
+    'oyon-consent-v3',
 ]);
+
+/**
+ * The first contract that names voice and AI-assistance capture. Must match the
+ * server's MODALITY_MIN_CONSENT in server/routes/oyon-routes.js — that is the
+ * authority, and it refuses these modalities at ingest below v3.
+ */
+export const OYON_CONSENT_VOICE = 'oyon-consent-v3';
 
 /** The contract that covered camera-derived affect only. */
 export const OYON_CONSENT_CAMERA_ONLY = 'oyon-consent-v1';

@@ -405,5 +405,8 @@
   "zone_tooltip": "{zone}: {percent}%",
   "zone_top_center": "in alto al centro",
   "zone_top_left": "in alto a sinistra",
-  "zone_top_right": "in alto a destra"
+  "zone_top_right": "in alto a destra",
+  "reconsent_item_voice": "Come suoni mentre parli con il paziente: tono, volume e pause, misurati momento per momento. La registrazione audio in sé non viene conservata.",
+  "reconsent_item_ai_assist": "Quando l'app ti offre un suggerimento dell'IA, se lo accetti, lo rifiuti o lo ignori.",
+  "reconsent_note_voice": "L'analisi avviene localmente nel tuo browser. Vengono salvate le misurazioni, mai la registrazione audio ({version}). Il microfono viene usato solo mentre parli. Un no lascia invariata la tua scelta attuale; puoi modificarla da Impostazioni → Oyon."
 }
