@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.42] — 2026-09-16
+
+### Added
+
+- **The manual half of rohy's test battery, as a Prova catalogue** (`prova/rohy-cases.yaml`): 44 features / 92 cases covering the clinical spine, the plugin rooms, auth, language, voice, layout, accessibility and the educator surfaces. Each case is one observable expectation in at most six steps, written for someone who has not read the code.
+- **Prova's shipped Playwright reporter is wired in** (`playwright.config.js`). It is attached only when the sibling Prova checkout is present, and does nothing at all without `PROVA_URL` + `PROVA_TOKEN`, so local runs stay silent and never contact the server.
+- **`prova/validate-catalog.mjs`** — validates the catalogue offline using Prova's *own* parser and validators against a throwaway server. Must be run with `--apply`: field, tier, kind and case-id rules are checked when the plan is built, but `covers:` patterns are only validated when it is applied.
+- **`prova/dump-check-keys.mjs` + `prova/check-coverage-links.mjs`** — prove every `covers:` pattern matches a Playwright test that actually exists, and exit non-zero on an orphan. Currently 32/32, with 68 of 123 automated checks mapped to a case.
+
+### Notes for reviewers
+
+`tier` is a **feature** property and the gate rule is `core_cases_on_platforms` over chrome+edge+firefox+safari, so tier is a budget rather than a label: a `core` case with an explicit browser list demands a human pass on all four browsers, while `platforms: [any]` is satisfied by one, and `kind: both` demands a manual *and* an automated pass. The catalogue therefore uses `[any]` almost everywhere and reserves browser lists for cases where the engine is itself under test. Tiering is set so **40** core cases block a release; if that is still too expensive per build, the lever is the gate rule (`kinds: [automated, both]`) rather than the catalogue.
+
+A coverage pattern that matches nothing is worse than no pattern: Prova validates a pattern's syntax on import but cannot know whether a check key matches it, so a renamed test leaves a case looking automated while no machine watches it. That is what the link check exists to catch.
+
 ## [3.0.0-beta.41] — 2026-09-16
 
 ### Added

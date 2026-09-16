@@ -1,0 +1,1408 @@
+# Rohy — the manual half of the test battery.
+#
+# Import:  curl -X POST "$PROVA_URL/api/v1/catalog/import" \
+#            -H "Authorization: Bearer $PROVA_ADMIN_TOKEN" \
+#            -H 'Content-Type: application/yaml' --data-binary @prova/rohy-cases.yaml
+#
+# These are the checks only a person can make: whether the AI patient is clinically plausible,
+# whether a room reads as a room, whether a debrief is fair. The machine half lives in tests/e2e
+# and reports into the same Prova product; where a case is also covered by automation it names the
+# check keys under `covers:`.
+#
+# Conventions this file must keep (enforced by Prova, server/lib/catalog.mjs):
+#   - feature id  AREA.NAME, upper case, no underscores
+#   - case id     <FEATURE>.NN, at least two digits, and a case id NEVER moves between features
+#   - kind        manual | automated | both        (NOT "auto")
+#   - tier        core | extended | optional
+#   - covers      "rohy:<suite>::<label>", "*" only as the final character
+#   - block-style YAML only; the reader rejects flow mappings like {a: b}
+#
+# Tier means something specific here. The gate rule is core_cases_on_platforms over
+# chrome+edge+firefox+safari, so a `core` case with an explicit browser list must be passed by a
+# person on ALL FOUR browsers before a build can ship. `platforms: [any]` is satisfied by one pass,
+# and is the default. Explicit browser lists are reserved for cases where the browser engine IS the
+# thing under test, and those are `extended` so a four-browser sweep is a decision, not a block.
+#
+# Tester preconditions, once, for the whole catalogue:
+#   - A disposable instance. NEVER point this battery at the production database.
+#   - Seeded accounts on a fresh install: admin / admin123 and student / student123.
+#   - Seeded cases: an English STEMI case, plus natively authored de, es and it cases.
+#   - On a first run for a role the onboarding tour covers the room navigator — skip it first.
+#   - Build under test should be the `advanced` channel, because that is what production serves.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# The learner's clinical spine
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: BOOT.HEALTH
+  title: The build boots and knows what it is
+  products: [rohy]
+  tier: core
+  cases:
+    - id: BOOT.HEALTH.01
+      title: Health answers with the version this build actually is
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Request `/api/health` on the instance under test.
+      expected: |-
+        200 with a `version` that matches the build being tested. This is what ties a manual run and
+        an automated run to the same build in Prova — if they disagree, the two halves of the battery
+        land on different builds and the coverage matrix quietly splits in two.
+      covers:
+        - "rohy:chromium::boot-health.spec.js › boot and health › health answers 200 with the version this build actually is"
+    - id: BOOT.HEALTH.02
+      title: Readiness reports the database and the applied migrations
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Request `/api/ready` — note the path is `/api/ready`, NOT `/api/health/ready`.
+      expected: |-
+        200 when healthy (or 503 when a dependency is unhappy), naming each probe: `db`, `migrations`,
+        `ingest` and `timestamps`. A healthy build reports the database answering and the migration
+        it has reached.
+      covers:
+        - "rohy:chromium::boot-health.spec.js › boot and health › readiness reports the database and the applied migrations"
+    - id: BOOT.HEALTH.03
+      title: The SPA shell is served rather than an empty directory
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Request `/` and check the document mounts the application.
+      expected: |-
+        200 with the app's root element present and its scripts referenced at a path the server
+        actually serves. A bundle built for one base path and served at another 404s every asset:
+        the shell loads, the app never mounts, and every downstream check fails as "element not
+        found".
+      covers:
+        - "rohy:chromium::boot-health.spec.js › boot and health › the SPA shell is served, not an empty static directory"
+
+- feature: SESSION.START
+  title: Starting and resuming a case
+  products: [rohy]
+  tier: core
+  cases:
+    - id: SESSION.START.01
+      title: Loading a case puts the learner in a live consultation
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Log in as `student`.
+        2. Note what the patient pane says before any case is chosen.
+        3. Open the top-bar menu and choose Settings; it opens on the **Select Case** tab.
+        4. Choose the English chest-pain (STEMI) case.
+      expected: |-
+        Before the case the pane reads "No Case Selected."; after choosing it the consultation is
+        already running with no separate Start button — the room bar appears along the bottom, the
+        monitor is tracing, and if the case has a greeting the patient has already spoken.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 1. load case*"]
+    - id: SESSION.START.02
+      title: A reloaded page comes back to the same moment, not the beginning
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. In a running case, go to the Examination room and perform one examination.
+        2. Read the "Session time" clock on the patient room's monitor.
+        3. Press F5 to reload the page.
+      expected: |-
+        The learner lands back in the Examination room (not the patient room), the session clock
+        continues from where it was rather than restarting at 0:00, and the earlier conversation and
+        the examination log are still there.
+
+- feature: NAV.ROOMS
+  title: The room navigator
+  products: [rohy]
+  tier: core
+  cases:
+    - id: NAV.ROOMS.01
+      title: Every room in the bar opens and the case stays live
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Start the English STEMI case as `student` and skip the onboarding tour.
+        2. Click each room button in the bottom bar in turn, left to right.
+        3. Return to Patient.
+      expected: |-
+        Every button opens its room, the active one is visibly marked, nothing is hidden behind the
+        bar or off the bottom of the screen, and back in the patient room the conversation and the
+        session clock have carried on rather than restarting.
+    - id: NAV.ROOMS.02
+      title: Ready results are advertised on the Laboratory and Radiology buttons
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. In the Laboratory room order any test with **Order instantly**.
+        2. Go to the Patient room and wait up to fifteen seconds without opening Laboratory.
+        3. Open Laboratory and click the ready result.
+      expected: |-
+        A green count badge appears on the Laboratory button while the result is unread and
+        disappears once it has been opened. No badge ever appears on a room that has no results.
+    - id: NAV.ROOMS.03
+      title: Visiting the Consultant mid-case does not end the case
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. In a running case, click **Consultant** in the room bar.
+        2. Click **Back to patient**.
+      expected: |-
+        The case is still live: the monitor is tracing, the session clock is still counting, the
+        "End & Debrief" button is still offered, and no "case ended" state has appeared.
+
+- feature: CASE.INTERVIEW
+  title: Interviewing the virtual patient
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.INTERVIEW.01
+      title: The patient answers an open question in character
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Start the English chest-pain case.
+        2. In the composer, ask "What brings you in today?" and send it.
+      expected: |-
+        Within a few seconds a reply arrives in the patient's own voice, consistent with the
+        presenting complaint. It contains no system or instruction text, does not read as a textbook
+        entry, and does not announce a diagnosis the patient could not know.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 2. patient speaks*"]
+    - id: CASE.INTERVIEW.02
+      title: The patient stays in their own language whatever the learner writes
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Keep the interface in English and start the natively authored **German** case.
+        2. Ask the patient a question in English.
+      expected: |-
+        The patient answers in German. The interface around it stays in English — the case's language
+        is a property of the case, not of the learner's interface.
+    - id: CASE.INTERVIEW.03
+      title: The patient does not hand over the diagnosis when asked outright
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. In the chest-pain case, ask the patient "What is wrong with me? What is the diagnosis?"
+      expected: |-
+        The patient responds as a person would — describing what they feel or what they have been
+        told — without naming the underlying diagnosis or quoting the case's teaching material.
+    - id: CASE.INTERVIEW.04
+      title: A second question while the patient is mid-answer is refused clearly
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Send a question to the patient.
+        2. While the reply is still being composed, try to send a second message.
+      expected: |-
+        The composer is disabled and shows a waiting state while the patient answers; attempting a
+        second send produces a plain message saying the patient is still answering, and the first
+        answer still arrives normally.
+    - id: CASE.INTERVIEW.05
+      title: A failed reply is reported honestly, not swallowed
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Have an admin point the platform model at an unreachable provider (Settings ▸ Platform ▸ AI).
+        2. As a learner, send a message to the patient.
+      expected: |-
+        The chat shows a visible error for that turn saying the reply could not be obtained. The
+        message is not silently dropped, no fabricated patient answer appears, and the app stays
+        usable.
+
+- feature: CASE.EXAM
+  title: Physical examination
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.EXAM.01
+      title: Examining a region returns a finding and records it in the log
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Open the Examination room.
+        2. Click the chest on the body map.
+        3. Choose **Auscultation**.
+      expected: |-
+        A finding appears for that region and technique, badged either Normal or Abnormal, and a row
+        naming the region and the technique is added to the Examination Log with the counters
+        updated.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 5. exam findings*"]
+    - id: CASE.EXAM.02
+      title: Repeating the same examination does not duplicate the log
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Perform the same region-and-technique examination a second time.
+        2. Read the Examination Log and its "examinations performed" count.
+      expected: |-
+        The technique is marked as already done, the same finding is shown again, and the log still
+        holds one row for that region-and-technique pair rather than two.
+    - id: CASE.EXAM.03
+      title: The body map offers both aspects and both figures
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. In the Examination room, switch between Anterior and Posterior.
+        2. Switch the figure between the male and female silhouette.
+        3. Use the **General** and **Neuro** shortcuts.
+      expected: |-
+        Each toggle redraws the body map with regions that are clickable in the new view, and the
+        shortcuts open their grouped examinations. No control leaves the pane blank.
+
+- feature: CASE.LABS
+  title: Ordering laboratory tests
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.LABS.01
+      title: A lab order waits its turnaround and then produces a report
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Open the Laboratory room and search for troponin.
+        2. Tick it and press the order button.
+        3. Watch the worklist on the right without leaving the room.
+        4. When the row becomes ready, click it.
+      expected: |-
+        The order appears under Pending with a visibly decreasing countdown, moves to Ready by itself,
+        and clicking it opens a readable report in the centre column which then counts as Viewed.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 4. labs ordered*"]
+    - id: CASE.LABS.02
+      title: The catalogue offers the full list, not only what the case expects
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Open the Laboratory room as a learner on the chest-pain case.
+        2. Search for several tests that are clinically irrelevant to chest pain.
+      expected: |-
+        The irrelevant tests are all present and orderable. The catalogue is not narrowed to the
+        case's expected work-up — narrowing it would tell the learner the answer.
+    - id: CASE.LABS.03
+      title: Order instantly skips the wait
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Tick a test in the Laboratory catalogue.
+        2. Press **Order instantly** rather than the ordinary order button.
+      expected: |-
+        The result is in the worklist as Ready straight away with no countdown, and the confirmation
+        says the order was instant.
+
+- feature: CASE.IMAGING
+  title: Ordering imaging
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.IMAGING.01
+      title: A radiology order produces a report with findings and an impression
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Open the Radiology room and order a chest X-ray.
+        2. Open it from the worklist when ready.
+      expected: |-
+        A structured report opens showing at least the clinical indication, findings and an
+        impression, laid out as a report rather than as raw data.
+    - id: CASE.IMAGING.02
+      title: Ordering imaging opens the PACS room
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. On a case with no PACS button in the room bar, order any imaging study in Radiology.
+        2. Look at the room bar again.
+        3. Open the radiology report and use **View images in PACS**.
+      expected: |-
+        The PACS room appears in the bar once an imaging study has been ordered, and the report's
+        PACS link opens that room on the study.
+
+- feature: CASE.TREAT
+  title: Giving a treatment
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.TREAT.01
+      title: An administered drug visibly changes the patient
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Open the orders drawer from the patient room and choose **Treatments**.
+        2. Order a medication with a dose and an IV route.
+        3. Press **Administer** on the resulting order.
+        4. Watch the vitals column for the next two to three minutes.
+      expected: |-
+        The order moves to an administered state, an "Active treatments" panel appears listing the
+        drug with its effect on the vital signs, and the numbers on the monitor move in the direction
+        that panel claims.
+    - id: CASE.TREAT.02
+      title: A contraindicated order is challenged rather than accepted silently
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Order a treatment the case marks as contraindicated (ask the case's author which one).
+      expected: |-
+        The order is accepted but a clearly visible warning explains the contraindication in clinical
+        terms. It is not refused without explanation, and it is not accepted with no comment at all.
+    - id: CASE.TREAT.03
+      title: A treatment can be stopped
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Administer a continuous infusion.
+        2. Discontinue it from the treatments list.
+        3. Watch the active-treatments panel.
+      expected: |-
+        The order is shown as discontinued and its contribution to the vital signs stops growing and
+        then fades, rather than continuing as though it were still running.
+
+- feature: MONITOR.VITALS
+  title: The patient monitor
+  products: [rohy]
+  tier: core
+  cases:
+    - id: MONITOR.VITALS.01
+      title: The monitor reads as a monitor
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. In the patient room, watch the monitor column for thirty seconds without touching it.
+      expected: |-
+        Three traces scroll steadily right to left (ECG, plethysmograph and respiration), the numeric
+        boxes carry sensible clinical values with their units, and the digits drift slightly rather
+        than standing perfectly still.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 3. vitals tick*"]
+    - id: MONITOR.VITALS.02
+      title: The session clock is the real elapsed time
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Note the "Session time" reading and the real time.
+        2. Move to the Laboratory room, wait two minutes, and come back to the patient room.
+      expected: |-
+        The session clock reads about two minutes further on — it tracks elapsed time rather than
+        restarting when the room is re-entered.
+    - id: MONITOR.VITALS.03
+      title: A rhythm change is visible in the trace, not only in the numbers
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, open the monitor's controls and set the rhythm to atrial fibrillation.
+        2. Watch the ECG trace.
+      expected: |-
+        The trace itself changes shape — the beat-to-beat spacing becomes irregular — rather than only
+        the heart-rate number changing.
+
+- feature: MONITOR.PAUSE
+  title: Pausing the simulation
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: MONITOR.PAUSE.01
+      title: Pause stops the case, not just the moving line
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Press the pause control on the monitor.
+        2. Note the session clock and the vital-sign numbers, then wait a full minute.
+        3. Switch to the Laboratory room and back to the patient room.
+        4. Reload the page.
+      expected: |-
+        While paused the traces stop, the numbers hold still and the session clock does not advance;
+        and the case is still paused after both the room change and the reload rather than quietly
+        resuming.
+    - id: MONITOR.PAUSE.02
+      title: Resuming continues rather than restarting
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. From a paused case, press the control again to resume.
+      expected: |-
+        The traces and the clock carry on from where they stopped, and the paused minute is not
+        counted as case time.
+
+- feature: ALARM.BREACH
+  title: Alarms
+  products: [rohy]
+  tier: core
+  cases:
+    - id: ALARM.BREACH.01
+      title: A vital out of range raises an alarm the learner cannot miss
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As an admin, drive one vital sign clearly outside its limits (for example SpO2 to 80%).
+        2. Watch the patient room without interacting.
+      expected: |-
+        Within a few seconds an alarm appears on the monitor naming the vital and its severity, and
+        the alarm button in the monitor header shows it is active.
+      covers: ["rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › breach + log*"]
+    - id: ALARM.BREACH.02
+      title: An alarm stays until it is acknowledged
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Raise an alarm, then bring the vital back into range without acknowledging it.
+        2. Read the alarm list.
+        3. Acknowledge it.
+      expected: |-
+        The alarm remains listed after the vital recovers — a transient breach is not erased — and it
+        clears only once acknowledged.
+    - id: ALARM.BREACH.03
+      title: Acknowledging one alarm does not pre-silence the next
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Raise an alarm and acknowledge it.
+        2. Raise a different alarm on another vital sign.
+      expected: |-
+        The second alarm announces itself fully — it does not arrive already acknowledged because of
+        the first.
+      covers: ["rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › ack on one case does not pre-ack*"]
+    - id: ALARM.BREACH.04
+      title: Ending the case does not carry an alarm into the debrief
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Leave an alarm sounding and unacknowledged.
+        2. End the case with **End & Debrief**.
+      expected: |-
+        The debrief opens quietly; no alarm tone or alarm strip follows the learner out of the case.
+
+- feature: SCENARIO.TIME
+  title: The case evolving on its own
+  products: [rohy]
+  tier: core
+  cases:
+    - id: SCENARIO.TIME.01
+      title: The patient deteriorates without the learner doing anything
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Start a case whose scenario begins automatically (the STEMI case).
+        2. Write down the vital signs.
+        3. Wait two minutes without interacting, then read them again.
+      expected: |-
+        The vital signs have moved along a clinical trajectory rather than drifting randomly, and any
+        threshold crossed on the way has raised its alarm.
+      covers: ["rohy:chromium::scenario-engine.spec.js › scenario engine › *"]
+    - id: SCENARIO.TIME.02
+      title: Time passes even while the learner is in another room
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. With a scenario running, note the vitals and go to the Radiology room.
+        2. Stay there for two minutes, then return to the patient room.
+      expected: |-
+        The patient is where the trajectory should have carried them in those two minutes — the
+        scenario does not pause or restart because nobody was watching.
+
+- feature: TEAM.CONSULT
+  title: The care team
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: TEAM.CONSULT.01
+      title: A paged colleague arrives and answers as a colleague
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. On a case with a supporting agent, open that agent's tab above the chat.
+        2. Press the call button and wait.
+        3. Ask them a clinical question about the patient.
+      expected: |-
+        The tab's status moves to indicate they are on their way and then that they have arrived, and
+        the reply reads as a colleague speaking to a doctor — not as the patient and not as a
+        narrator.
+
+- feature: SESSION.END
+  title: Ending a case
+  products: [rohy]
+  tier: core
+  cases:
+    - id: SESSION.END.01
+      title: Ending the case closes it and opens the debrief
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. In a running case press **End & Debrief** and confirm.
+        2. Once in the debrief, use **Back to patient**.
+      expected: |-
+        The debrief opens; back in the patient room the case is plainly over — the clock is frozen and
+        marked as ended, the composer no longer accepts messages, and the end button is gone.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 6. end session*"]
+    - id: SESSION.END.02
+      title: Ending is deliberate
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Press **End & Debrief** and then dismiss the confirmation without confirming.
+      expected: |-
+        Nothing ends: the case is still running, and no debrief has been opened.
+
+- feature: DEBRIEF.REVIEW
+  title: The debrief summary
+  products: [rohy]
+  tier: core
+  cases:
+    - id: DEBRIEF.REVIEW.01
+      title: The case summary reflects what this learner actually did
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Run a case in which you order exactly one lab, perform exactly one examination and give
+           exactly one treatment.
+        2. End the case and open the patient summary from the debrief.
+      expected: |-
+        The summary lists that one lab, that one examination and that one treatment — no invented
+        entries, and nothing the learner did left out.
+    - id: DEBRIEF.REVIEW.02
+      title: The answer key is not shown until the case is over
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. While the case is still running, reach the Consultant room from the room bar and open the
+           patient summary.
+        2. Look for the treatment debrief and anything headed "missed".
+        3. End the case and open the same summary again.
+      expected: |-
+        Mid-case the missed-treatment section is withheld or marked pending; only after the case has
+        ended does it list what was expected and missed.
+
+- feature: DEBRIEF.DISCUSS
+  title: The discussant conversation
+  products: [rohy]
+  tier: core
+  cases:
+    - id: DEBRIEF.DISCUSS.01
+      title: The discussant is a different person from the patient
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. End a case and press **Start debrief**.
+        2. Say or type an answer to the discussant's opening question.
+      expected: |-
+        The discussant is named and titled as a tutor or colleague, speaks about the case in the
+        third person, and — if voice is on — uses a different voice from the patient's.
+      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 7. debrief discussant speaks*"]
+    - id: DEBRIEF.DISCUSS.02
+      title: The debrief asks rather than lectures
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Work through three or four turns of a debrief, including one deliberately wrong answer.
+      expected: |-
+        The discussant probes the reasoning and corrects the wrong answer without either reciting the
+        whole case solution unprompted or letting a clear error pass unchallenged.
+    - id: DEBRIEF.DISCUSS.03
+      title: A failed debrief turn says so and keeps the learner's words
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. With the model provider unreachable, send a message in the debrief.
+      expected: |-
+        A visible message says the reply did not arrive and that the learner's message was not lost;
+        the transcript keeps what they said and the debrief can be retried.
+    - id: DEBRIEF.DISCUSS.04
+      title: A case with no discussant says so plainly
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Open the debrief on a case that has no discussant attached.
+      expected: |-
+        A plain message explains that no discussant is configured and where an admin would add one.
+        The room does not sit on an empty loading state or crash.
+
+- feature: DEBRIEF.RECORD
+  title: The encounter record
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: DEBRIEF.RECORD.01
+      title: The learner's own action record is off unless the educator turned it on
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As a learner, end a case whose educator has NOT enabled the encounter record and look at
+           the debrief's header controls.
+        2. Have an educator enable the encounter record for that case.
+        3. Run and end the case again as the learner.
+      expected: |-
+        In the first run there is no way for the learner to open their action record; in the second a
+        control appears and opens a read-only list of what they did.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Plugin rooms — they depend on installed content, so a red here is a decision
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: PLUGIN.PACS
+  title: The imaging reading room
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: PLUGIN.PACS.01
+      title: PACS shows the study, or says plainly that it cannot
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Order a chest X-ray, then open the PACS room from the bar.
+        2. Select the study in the worklist.
+      expected: |-
+        Either the images load and can be paged through, or the room states in plain language that
+        there are no images for this study. It never shows an endless spinner, a blank pane or a raw
+        error code.
+      covers:
+        - "rohy:chromium::plugin-rooms.spec.js › plugin content › an installed plugin serves its catalogue, or explains how to install it"
+    - id: PLUGIN.PACS.02
+      title: Images are withheld until the study has been reported
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Order an imaging study WITHOUT using "Order instantly".
+        2. Open PACS immediately and select that study.
+      expected: |-
+        While the turnaround is still running the study says the images have not been released yet,
+        rather than showing them early.
+
+- feature: PLUGIN.ECG
+  title: The 12-lead ECG room
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: PLUGIN.ECG.01
+      title: An authored ECG opens and can be read
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Start a case that has an authored 12-lead ECG and open the ECG room.
+        2. Read the trace and use whatever measurement or caliper tools the room offers.
+      expected: |-
+        The twelve leads are laid out legibly with their calibration, and the room fits the window
+        with the room bar still reachable.
+    - id: PLUGIN.ECG.02
+      title: Ordering an ECG in Radiology does not send the learner to PACS
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. On a case with no authored ECG, order a 12-lead ECG from the Radiology catalogue.
+        2. Look at the room bar and at the PACS worklist.
+      expected: |-
+        The ECG order does not make PACS treat it as an imaging study. The ECG room appears only for
+        a case that actually has an authored recording.
+      covers:
+        - "rohy:chromium::plugin-rooms.spec.js › plugin content › a 12-lead ECG is not carried in the imaging archive"
+
+- feature: PLUGIN.PATHOLOGY
+  title: The pathology room
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: PLUGIN.PATHOLOGY.01
+      title: A slide opens and can be examined at magnification
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Start a case with an authored pathology slide and open the Pathology room.
+        2. Zoom and pan across the slide.
+      expected: |-
+        The slide renders and stays sharp as it is magnified, and any gross photographs are reachable
+        alongside it.
+
+- feature: ROOM3D.BEDSIDE
+  title: The bedside room
+  products: [rohy]
+  tier: optional
+  cases:
+    - id: ROOM3D.BEDSIDE.01
+      title: The bedside reads as a ward, and every camera control is reachable
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Open the Bedside room in a running case.
+        2. Use every direction of the camera pan control, and each preset view.
+        3. Click a body region and perform one examination from the wheel.
+      expected: |-
+        The ward, the bed, the patient and the bedside monitor are all drawn; no pan direction is
+        blocked by another control sitting on top of it; and the examination produces the same
+        finding the 2D Examination room would.
+    - id: ROOM3D.BEDSIDE.02
+      title: A machine that cannot render 3D is told so
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Open the Bedside room on a machine or browser without working hardware 3D.
+      expected: |-
+        A plain message says the 3D view is unavailable and that the clinical controls remain usable,
+        rather than a black canvas or a frozen tab.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Getting in, and staying in
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: AUTH.LOGIN
+  title: Logging in and out
+  products: [rohy]
+  tier: core
+  cases:
+    - id: AUTH.LOGIN.01
+      title: A known account reaches its own workspace
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Log in as `student` / `student123` and look at what is offered.
+        2. Log out, then log in as `admin` / `admin123`.
+      expected: |-
+        Both land in the workspace; the admin sees administrative controls that the student does not,
+        and the student sees no administrative surface anywhere.
+      covers: ["rohy:chromium::auth.spec.js › auth › admin login via UI*", "rohy:chromium::auth.spec.js › auth › student login via UI*"]
+    - id: AUTH.LOGIN.02
+      title: A wrong password is refused without saying which half was wrong
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Try to log in as `student` with the wrong password.
+        2. Try to log in with a username that does not exist.
+      expected: |-
+        Both attempts are refused with the same kind of message shown on the form. Neither reveals
+        whether the username exists, and neither lets the learner through.
+      covers: ["rohy:chromium::auth.spec.js › auth › wrong password*"]
+    - id: AUTH.LOGIN.03
+      title: Logging out really ends the session
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Log in, then log out.
+        2. Press the browser's Back button.
+      expected: |-
+        The login screen is shown and Back does not restore the previous workspace or any patient
+        data.
+      covers: ["rohy:chromium::auth.spec.js › auth › logout button*"]
+
+- feature: AUTH.SESSION
+  title: Staying logged in
+  products: [rohy]
+  tier: core
+  cases:
+    - id: AUTH.SESSION.01
+      title: An expired session returns the user to the login screen
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Log in, then let the session expire (or have an admin revoke it).
+        2. Reload the page.
+      expected: |-
+        The app returns to the login screen rather than showing a half-loaded workspace or an error
+        page.
+      covers: ["rohy:chromium::auth.spec.js › auth › expired token*"]
+    - id: AUTH.SESSION.02
+      title: The same case in a second tab warns instead of corrupting
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Open a running case in one tab.
+        2. Open the same case in a second tab of the same browser.
+        3. Return to the first tab.
+      expected: |-
+        The first tab shows a plain warning that the case is open elsewhere, and stays usable. Neither
+        tab silently loses the conversation.
+      covers: ["rohy:chromium::multi-tab.spec.js › multi-tab session handling › *"]
+    - id: AUTH.SESSION.03
+      title: Closing the browser does not lose the case
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Start a case and hold a short conversation with the patient.
+        2. Close the browser entirely, reopen it and return to the site.
+      expected: |-
+        The user is still logged in and the case is still running, with the conversation and the
+        elapsed session time intact.
+
+- feature: AUTH.PASSWORD
+  title: Password rules
+  products: [rohy]
+  tier: core
+  cases:
+    - id: AUTH.PASSWORD.01
+      title: A password the form accepts is a password the server accepts
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, create a user and try the password `short1A`.
+        2. Try `alllowercase1`.
+        3. Try one that satisfies the stated rules — at least eight characters with an upper-case
+           letter, a lower-case letter and a digit.
+      expected: |-
+        The form states the rule and refuses the first two before submitting; the third is accepted
+        and the new user can log in with it. The form never accepts something the save then rejects.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Language
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: I18N.UI
+  title: Interface language
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: I18N.UI.01
+      title: Changing language translates the whole workspace
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Change the interface language to Finnish from the picker on the login screen.
+        2. Log in and walk through the patient, examination, laboratory and debrief rooms.
+      expected: |-
+        Every label, button and message in those rooms is in Finnish. Any English left behind is a
+        defect worth reporting with a screenshot naming the screen.
+      covers:
+        - "rohy:chromium::i18n-pass.spec.js › localisation › choosing a language changes the login screen"
+        - "rohy:chromium::i18n-pass.spec.js › localisation › the login screen has no hardcoded English"
+    - id: I18N.UI.02
+      title: A long language does not break the layout
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. With the interface in German or Finnish, visit each room and open the orders drawer and
+           the monitor's controls.
+      expected: |-
+        No label is clipped, truncated mid-word or pushed outside its button, and nothing overlaps.
+    - id: I18N.UI.03
+      title: The language choice survives a return visit
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Set the interface to Swedish, log out and close the tab.
+        2. Return to the site.
+      expected: |-
+        The login screen is still in Swedish — the choice belongs to the person, not to the session.
+      covers:
+        - "rohy:chromium::i18n-pass.spec.js › localisation › a language choice survives a reload"
+
+- feature: I18N.CASE
+  title: Case language
+  products: [rohy]
+  tier: core
+  cases:
+    - id: I18N.CASE.01
+      title: The case's language is independent of the interface language
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Set the interface to English.
+        2. Open the case list and look at how each case's language is shown.
+        3. Start the Italian case and talk to the patient.
+      expected: |-
+        Each case advertises its own language in the list; the Italian patient speaks Italian while
+        every room label around them stays in English.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Voice — needs engines and hardware, so these are environment-dependent
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: VOICE.OUT
+  title: The patient speaking
+  products: [rohy]
+  tier: optional
+  cases:
+    - id: VOICE.OUT.01
+      title: The patient's reply is spoken in the configured voice
+      kind: manual
+      platforms: [chrome, edge, firefox, safari]
+      severity_if_failed: major
+      steps: |-
+        1. On a case with a configured voice, ask the patient a question.
+        2. Listen to the reply.
+      expected: |-
+        The reply is spoken aloud, the audio matches the written text, and the voice suits the
+        patient as configured. Playback is not clipped at either end.
+    - id: VOICE.OUT.02
+      title: The debrief tutor does not borrow the patient's voice
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Hear the patient speak in a case with a distinctive voice.
+        2. End the case and start the debrief.
+      expected: |-
+        The discussant speaks with its own clearly different voice, not the patient's.
+
+- feature: VOICE.IN
+  title: Speaking to the patient
+  products: [rohy]
+  tier: optional
+  cases:
+    - id: VOICE.IN.01
+      title: A spoken question reaches the patient
+      kind: manual
+      platforms: [chrome, edge, firefox, safari]
+      severity_if_failed: major
+      steps: |-
+        1. Turn on voice mode in the patient room and grant microphone access.
+        2. Press to talk, ask "Where is the pain?", and stop.
+      expected: |-
+        What was said appears as the learner's turn, it is sent without a second confirmation, and the
+        patient answers it. The control shows which state it is in — listening, thinking or speaking —
+        at every moment.
+
+- feature: VOICE.SOVEREIGN
+  title: A configured voice is literal
+  products: [rohy]
+  tier: optional
+  cases:
+    - id: VOICE.SOVEREIGN.01
+      title: A voice whose engine is unavailable fails honestly
+      kind: both
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Configure a case's patient with a voice from one engine.
+        2. Have an admin turn that engine off or make it unreachable.
+        3. Ask the patient a question.
+      expected: |-
+        The failure is reported plainly. The patient is never given a different voice as a silent
+        substitute — a wrong voice is worse than a stated error.
+      covers: ["rohy:chromium::voice-runtime.spec.js › voice runtime contract › 4. voice engine routing*"]
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Fit, reach and quiet
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: LAYOUT.TABLET
+  title: Tablet layout
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: LAYOUT.TABLET.01
+      title: Every room fits a tablet with no horizontal scrolling
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. On a tablet (record the device and screen size in the run's environment), log in and start
+           a case.
+        2. Visit every room, then open the orders drawer and the monitor's controls.
+      expected: |-
+        Nothing requires sideways scrolling, the room bar stays reachable in every room, and no
+        control is cut off by the edge of the screen or hidden behind another.
+      covers: ["rohy:chromium::tablet-layout.spec.js › *"]
+    - id: LAYOUT.TABLET.02
+      title: The conversation and the monitor are both usable on a tablet
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. In the patient room on a tablet, send a message and read the vital signs.
+      expected: |-
+        The composer and the vital signs are both usable without zooming, and the on-screen keyboard
+        does not cover the message being typed.
+
+- feature: A11Y.KEYBOARD
+  title: Keyboard and labelling
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: A11Y.KEYBOARD.01
+      title: The consultation can be driven from the keyboard alone
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Put the mouse aside. From the login screen, log in using only Tab, arrow keys and Enter.
+        2. Reach the case list, start a case, send a message to the patient and move to another room.
+      expected: |-
+        Every step is reachable, the focused control is always visibly marked, and focus never gets
+        stuck inside a dialog or drawer with no way out by keyboard.
+      covers:
+        - "rohy:chromium::a11y-floor.spec.js › accessibility floor › the login form can be completed and submitted by keyboard alone"
+    - id: A11Y.KEYBOARD.02
+      title: Every control says what it is
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Tab through the patient room, the ordering catalogue and the settings forms.
+      expected: |-
+        Every field has a visible label, and every icon-only button announces its purpose on focus or
+        hover rather than being an unexplained symbol.
+      covers:
+        - "rohy:chromium::a11y-floor.spec.js › accessibility floor › every form control on the login screen has an accessible name"
+        - "rohy:chromium::a11y-floor.spec.js › accessibility floor › every button on the login screen has an accessible name"
+
+- feature: NOTIFY.CENTER
+  title: Notifications
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: NOTIFY.CENTER.01
+      title: Muting a source silences it everywhere but still records it
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Open Settings ▸ Notifications and mute one source.
+        2. Provoke a notification from that source.
+        3. Open the notification history.
+      expected: |-
+        Nothing pops up or sounds for the muted source, but the event is still listed in the history —
+        "be quieter" does not mean "stop recording".
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Educator and admin
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: AUTHOR.CASE
+  title: Authoring a case
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: AUTHOR.CASE.01
+      title: An educator can build a runnable case from start to finish
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As an educator, create a new case and work through every step of the wizard, filling in
+           demographics, the story, starting vital signs and at least one expected treatment.
+        2. Save the case.
+        3. Log in as a student and run it.
+      expected: |-
+        The wizard can be completed without any step blocking on something it never asked for, and the
+        saved case starts, talks and behaves as authored when the student runs it.
+    - id: AUTHOR.CASE.02
+      title: A student never sees the authoring title
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Author a case whose title names the diagnosis, for example "Inferior STEMI".
+        2. Run it as a student and read every room header and the case list entry.
+      expected: |-
+        Nowhere in the student's view does the diagnosis-bearing title appear — not in the case list,
+        not in a room header and not in a browser tab title.
+    - id: AUTHOR.CASE.03
+      title: Editing a case does not disturb a session already running
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Have a student start a case and leave it running.
+        2. As an educator, change that case's starting vital signs and scenario, and save.
+        3. Return to the student's running session.
+      expected: |-
+        The running session is unchanged and continues on the values it started with; the edit applies
+        to the next session, not to one already in progress.
+    - id: AUTHOR.CASE.04
+      title: A saved case can be taken back to an earlier version
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Change and save a case twice.
+        2. Restore the earlier version from the case's history.
+      expected: |-
+        The earlier content comes back in full, and running the case afterwards uses the restored
+        content.
+
+- feature: AUTHOR.VISIBILITY
+  title: What a case exposes
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: AUTHOR.VISIBILITY.01
+      title: Hiding an investigation is an explicit act
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an educator, add two specific labs to a case but hide none.
+        2. Run the case as a student and open the Laboratory catalogue.
+      expected: |-
+        The full catalogue is offered, with the case's own additions among it. Adding an expected test
+        does not quietly hide everything else, because that would hand the student the answer.
+
+- feature: AUTHOR.PLUGINS
+  title: Authoring plugin content
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: AUTHOR.PLUGINS.01
+      title: An educator attaches an ECG and the room appears for the student
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an educator, open a case's plugin step and add a 12-lead ECG recording in the editor.
+        2. Save and leave the editor.
+        3. Run the case as a student.
+      expected: |-
+        The ECG room is offered in the student's room bar and opens the recording the educator chose.
+    - id: AUTHOR.PLUGINS.02
+      title: A plugin editor that cannot accept content says why
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. In the pathology editor, try to add a slide from the bundled starter content.
+      expected: |-
+        Either the slide is added and the Pathology room then appears for a student, or the editor
+        explains in plain language why that slide cannot be used. A silent failure or a raw technical
+        error is a defect.
+
+- feature: COURSE.COHORT
+  title: Courses and enrolment
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: COURSE.COHORT.01
+      title: A student sees their course's cases and no others
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an educator, create a course, attach two cases to it and enrol one student.
+        2. Log in as that student and open the case list.
+        3. Log in as a student who is not enrolled.
+      expected: |-
+        The enrolled student is offered the course and its cases; the unenrolled student is not shown
+        that course's content.
+
+- feature: PERSONA.AGENTS
+  title: Personas and supporting agents
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: PERSONA.AGENTS.01
+      title: An edited persona reaches the next session
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, edit a patient persona so its manner is distinctly different, and save.
+        2. Start a fresh session on a case using that persona and ask two questions.
+      expected: |-
+        The new manner is audible in the answers from the first reply, without needing a restart of
+        the application.
+
+- feature: ANALYTICS.COHORT
+  title: Cohort analytics
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ANALYTICS.COHORT.01
+      title: A session that just happened is counted
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a student, complete a case including a debrief.
+        2. As the educator of that course, open the cohort report.
+      expected: |-
+        That student and that attempt are listed with what they did, and the counts include this run
+        rather than lagging a day behind.
+    - id: ANALYTICS.COHORT.02
+      title: An educator sees only their own cohort
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. With two courses owned by two different educators, log in as the first educator.
+        2. Open every analytics and reporting surface available.
+      expected: |-
+        No student, session or result from the other educator's course is reachable anywhere,
+        including through a filter, a search or an export.
+
+- feature: ADMIN.LLM
+  title: Model settings
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.LLM.01
+      title: Changing the platform model changes who answers
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, open Settings ▸ Platform ▸ AI and choose a different model from the list.
+        2. Save, then start a case and send a message.
+      expected: |-
+        The reply comes from the newly chosen model — the change takes effect for new sessions without
+        restarting the server — and the setting is still the new one after a reload.
+    - id: ADMIN.LLM.02
+      title: A learner can neither see nor set a provider key
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Log in as a student and open every settings surface available to them.
+      expected: |-
+        No provider name, endpoint, API key or model credential is shown or editable anywhere in the
+        student's view.
+
+- feature: ADMIN.VOICE
+  title: Voice settings
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.VOICE.01
+      title: The voice chosen for a case is the voice that speaks
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, set a specific voice on a case's patient and preview it in the settings.
+        2. Run that case and let the patient speak.
+      expected: |-
+        The voice heard in the case is the one previewed in the settings, at the pitch and rate that
+        were configured.
+      covers: ["rohy:chromium::voice-config-leak.spec.js › *"]
+
+- feature: ADMIN.USERS
+  title: Users and roles
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.USERS.01
+      title: A role change takes effect without the user logging in again
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. With a student logged in and working, have an admin raise them to educator.
+        2. In the student's browser, reload the page.
+      expected: |-
+        The educator surfaces are now available to them without having to log out and back in.
+    - id: ADMIN.USERS.02
+      title: A student cannot reach an administrative surface
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As a student, open Settings and list every tab offered.
+        2. Try to reach an admin-only page by its address directly.
+      expected: |-
+        No administrative tab is offered, and reaching for one directly is refused rather than
+        rendering the page with empty data.
+      covers: ["rohy:chromium::rbac.spec.js › student *"]
+
+- feature: ADMIN.FIRSTRUN
+  title: First-run setup
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.FIRSTRUN.01
+      title: A fresh install walks the admin through setup and can be dismissed
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. On a freshly installed instance, log in as the admin for the first time.
+        2. Work through part of the setup checklist, then dismiss it.
+        3. Recall it later from the menu.
+      expected: |-
+        The checklist appears on first login, shows which steps are done, can be left at any point
+        without blocking the app, and comes back with its progress intact when recalled.
+    - id: ADMIN.FIRSTRUN.02
+      title: A new student is welcomed into something runnable
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Log in as a newly created student for the first time.
+      expected: |-
+        A welcome screen offers a case in the student's own interface language and starting it leads
+        directly into a working consultation.
+
+- feature: ADMIN.RETENTION
+  title: Deleting and purging
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.RETENTION.01
+      title: A deleted case leaves the list without destroying past work
+      kind: automated
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Delete a case that has completed student sessions against it.
+        2. Look at the case list, and then at the cohort report for those sessions.
+      expected: |-
+        The case is gone from the list, but the completed sessions are still accounted for in the
+        reporting rather than vanishing with it.
+      covers: ["rohy:chromium::retention.spec.js › *"]
+
+- feature: OYON.CONSENT
+  title: Camera and signal consent
+  products: [rohy]
+  tier: optional
+  cases:
+    - id: OYON.CONSENT.01
+      title: Nothing is captured before the person agrees to that exact thing
+      kind: manual
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As a new user, open the Oyon settings and read what consent is being asked for.
+        2. Decline, and check whether any capture indicator is active.
+        3. Accept, and check again.
+      expected: |-
+        Nothing is captured while consent is declined, the consent text names every kind of signal it
+        covers rather than only the camera, and capture starts only after agreement to that text.

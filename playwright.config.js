@@ -65,6 +65,26 @@ process.once('exit', cleanup);
 process.once('SIGINT', () => { cleanup(); process.exit(130); });
 process.once('SIGTERM', () => { cleanup(); process.exit(143); });
 
+// Prova (test management, https://prova.lacarm.com) reporting.
+//
+// Prova ships the reporter — we never write another one. It is added only when
+// that file is actually present, because it lives in a SIBLING checkout that a
+// given machine may not have; without the file Playwright would fail to load
+// the config, which would break `npm run test:e2e` for everyone who has not
+// cloned Prova. With the file but without PROVA_URL + PROVA_TOKEN the reporter
+// itself does nothing, so local runs stay silent and never touch the server.
+//
+// One Prova run per Playwright project; the project's browser becomes the
+// platform (chromium → chrome). The check key a human reads in Prova is
+//   rohy:<project>::<file relative to testDir> › <describe…> › <title>
+// so test titles ARE the public interface here — prova/rohy-cases.yaml pins
+// several of them in its `covers:` patterns. Renaming a test breaks that link.
+const PROVA_REPORTER = process.env.PROVA_REPORTER
+    || path.resolve(__dirname, '../prova/reporters/playwright.mjs');
+const provaReporter = fs.existsSync(PROVA_REPORTER)
+    ? [[PROVA_REPORTER, { product: 'rohy' }]]
+    : [];
+
 export default defineConfig({
     testDir: './tests/e2e',
     globalSetup: './tests/e2e/global-setup.js',
@@ -81,6 +101,7 @@ export default defineConfig({
         ['list'],
         ['html', { open: 'never', outputFolder: 'playwright-report' }],
         ['junit', { outputFile: 'test-results.e2e.junit.xml' }],
+        ...provaReporter,
     ],
     use: {
         baseURL: BASE_URL,
