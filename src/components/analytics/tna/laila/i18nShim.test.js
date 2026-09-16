@@ -31,6 +31,15 @@ describe('i18nShim — centrality measure labels', () => {
         }
     });
 
+    it('resolves the namespaced keys the call sites actually pass', () => {
+        // Regression lock: CentralityBarChart and TnaCentralityTable call
+        // t(`courses:${key}`), which missed the un-namespaced overrides and
+        // still rendered "Sna.m in strength" as the tab label.
+        for (const [key, label] of Object.entries(EXPECTED)) {
+            expect(t(`courses:${key}`), key).toBe(label);
+        }
+    });
+
     it('still humanises an unknown key rather than rendering it raw', () => {
         // The fallback is deliberate: a new upstream key stays readable.
         expect(t('network_density_extra')).toBe('Network density extra');

@@ -85,6 +85,10 @@ function humanise(key) {
 
 export function t(key) {
     if (OVERRIDES[key]) return OVERRIDES[key];
+    // Call sites namespace their keys (`courses:sna.m_in_strength`); the
+    // overrides are keyed without the namespace, so look the bare key up too.
+    const bare = String(key ?? '').split(':').pop();
+    if (OVERRIDES[bare]) return OVERRIDES[bare];
     return humanise(key);
 }
 

@@ -32,7 +32,10 @@ const CentralityBarChart = ({ centralityData, colorMap, selectedMeasure, chartHe
     return indices;
   }, [labels, values]);
   const maxVal = useMemo(() => Math.max(...values, 1e-6), [values]);
-  const margin = { top: 10, right: 55, bottom: 10, left: 100 };
+  // Room for the longest state name (up to 24 characters) rather than cutting
+  // every name at eleven: "Patient spe…" hid what the state was.
+  const longest = Math.min(24, Math.max(0, ...labels.map((l) => String(l).length)));
+  const margin = { top: 10, right: 55, bottom: 10, left: Math.max(100, 30 + Math.round(longest * 6.4)) };
   const svgWidth = 600;
   const plotW = svgWidth - margin.left - margin.right;
   const fixedHeight = Number.isFinite(chartHeight) && chartHeight > margin.top + margin.bottom;
@@ -83,7 +86,7 @@ const CentralityBarChart = ({ centralityData, colorMap, selectedMeasure, chartHe
       className="fill-gray-700 dark:fill-gray-300"
       fontSize={11}
     >
-                    {label.length > 12 ? label.slice(0, 11) + "\u2026" : label}
+                    {label.length > 24 ? label.slice(0, 23) + "\u2026" : label}
                   </text>
                   {
       /* Bar */

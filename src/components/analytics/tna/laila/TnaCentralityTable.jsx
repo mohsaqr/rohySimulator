@@ -9,7 +9,7 @@ const MEASURE_I18N = {
   Betweenness: "sna.m_betweenness",
   Closeness: "sna.m_closeness"
 };
-const TnaCentralityTable = ({ centralityData, colorMap }) => {
+const TnaCentralityTable = ({ centralityData, colorMap, labelHeader = null }) => {
   const { t } = useTranslation(["courses", "admin"]);
   const measureKeys = useMemo(() => Object.keys(centralityData.measures).filter((k) => centralityData.measures[k]?.length > 0), [centralityData]);
   const [sortBy, setSortBy] = useState(() => measureKeys[0] ?? "InStrength");
@@ -45,7 +45,7 @@ const TnaCentralityTable = ({ centralityData, colorMap }) => {
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
             <th className="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-300">
-              {t("verb")}
+              {labelHeader ?? t("verb")}
             </th>
             {availableMeasures.map(({ key, i18nKey }) => <th
     key={key}
