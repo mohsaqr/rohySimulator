@@ -406,7 +406,7 @@
   "zone_top_center": "en haut au centre",
   "zone_top_left": "en haut à gauche",
   "zone_top_right": "en haut à droite",
-  "reconsent_item_voice": "La façon dont vous sonnez lorsque vous parlez au patient — hauteur, volume et pauses, mesurés instant par instant. L'enregistrement audio lui-même n'est pas conservé.",
+  "reconsent_item_voice": "La façon dont vous sonnez lorsque vous parlez au patient — hauteur, volume et pauses, résumés pour chaque prise de parole, ainsi que les moments où vous parlez ou vous taisez au cours de celle-ci. L'enregistrement audio lui-même n'est pas conservé.",
   "reconsent_item_ai_assist": "Lorsque l'application vous propose une suggestion d'IA, si vous l'acceptez, la refusez ou l'ignorez.",
   "reconsent_note_voice": "L'analyse s'exécute localement dans votre navigateur. Les mesures sont conservées, jamais l'enregistrement audio ({version}). Le microphone n'est utilisé que pendant que vous parlez. Refuser laisse votre choix actuel exactement tel quel, et vous pouvez le modifier dans Paramètres → Oyon."
 }

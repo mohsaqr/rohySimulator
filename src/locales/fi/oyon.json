@@ -406,7 +406,7 @@
   "zone_top_center": "ylhäällä keskellä",
   "zone_top_left": "ylhäällä vasemmalla",
   "zone_top_right": "ylhäällä oikealla",
-  "reconsent_item_voice": "Miltä kuulostat puhuessasi potilaalle — äänenkorkeus, äänenvoimakkuus ja tauot hetki hetkeltä mitattuina. Itse äänitallennetta ei säilytetä.",
+  "reconsent_item_voice": "Miltä kuulostat puhuessasi potilaalle — äänenkorkeus, äänenvoimakkuus ja tauot jokaisesta puheenvuorosta tiivistettyinä sekä se, milloin puheenvuoron aikana puhut tai olet hiljaa. Itse äänitallennetta ei säilytetä.",
   "reconsent_item_ai_assist": "Kun sovellus tarjoaa sinulle tekoälyn ehdotuksen, hyväksytkö, hylkäätkö vai ohitatko sen.",
   "reconsent_note_voice": "Analyysi tehdään paikallisesti selaimessasi. Mittaukset tallennetaan, äänitallennetta ei koskaan ({version}). Mikrofonia käytetään vain puhuessasi. Kieltäytyminen jättää nykyisen valintasi ennalleen; voit muuttaa sitä kohdassa Asetukset → Oyon."
 }

@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.62] — 2026-09-16
+
+### Fixed
+
+- **The voice consent card says what is actually kept.** It said pitch, loudness and pauses were "measured moment by moment", which implied a continuous recording of the voice over time. What is stored is a summary for each turn, and — since beta.57 — when within the turn the learner speaks or falls silent. The item now says exactly that, in all eight languages (en, de, es, fi, fr, it, kk, sv) and the pseudo-locale. The contract version is unchanged: the new wording describes less than the old one did, not more.
+
 ## [3.0.0-beta.61] — 2026-09-16
 
 ### Added
