@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.39] — 2026-09-16
+
+### Fixed
+
+- **The sign-in fields have an accessible name.** The Username and Password `<label>` elements on the sign-in card were real and translated, but unassociated with their inputs: each label is a *sibling* of its input (the input lives inside the icon-positioning `div`), with no `htmlFor`/`id` pair and no wrapping. A sighted user saw "Username" above the box; a screen reader announced an unlabelled edit box. The placeholder does not rescue it — assistive tech may skip placeholder text, and it vanishes on the first keystroke.
+
+### Notes for reviewers
+
+Found by a new accessibility check written for the Prova test battery. The regression lock lives in the **client** tier (`tests/client/auth-accessibility.test.jsx`, which resolves the name through `getByLabelText` exactly as a screen reader would) rather than in the matching e2e spec, because Playwright is not in CI — an e2e-only lock would guard nothing on a push. It was verified to fail against the un-fixed component.
+
 ## [3.0.0-beta.38] — 2026-09-10
 
 ### Fixed
