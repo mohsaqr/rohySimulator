@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.51] — 2026-09-16
+
+### Fixed
+
+- **The plugin CATALOGUE route now gives the same honest 503 as the content proxy (QA-0025, second call site).** The beta.37 rewording landed on the content proxy and missed `GET /api/plugins/:id/catalog`, which kept the old sentence — *"No remote origin is configured for plugin 'pacs'. Set ROHY_PLUGIN_ORIGINS."* That is the route a plugin ROOM calls first, so it is the message an operator actually meets, and it sent them after a variable they did not need while the learner sat in an empty workstation.
+
+### Changed
+
+- `tests/e2e/plugin-rooms.spec.js` treats "no plugin content installed" as the legitimate deployment state it is. `server/plugin-content/` is gitignored and built by `npm run setup:content`, which neither CI nor the Dockerfile runs; the checks that need real content skip themselves, and the ones that hold either way (the message, the non-oracle, auth) always run.
+
+### Notes for reviewers
+
+The miss survived because the only test covering that message probed the content proxy. There is now a sibling lock on the catalogue route in `tests/server/plugin-starter-content.test.js`, verified to fail against the un-fixed server.
+
+Found by the new CI e2e job on its first real run — CI has no plugin content, so it exercised a path no local run does.
+
 ## [3.0.0-beta.50] — 2026-09-16
 
 ### Fixed
