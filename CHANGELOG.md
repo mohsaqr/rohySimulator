@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.65] — 2026-09-16
+
+### Changed
+
+- **Text and Voice charts draw at their real size.** Every chart on the Text and Voice tabs used a fixed drawing box stretched to the panel's width, so its labels grew with the screen — huge in the voice trend panels, tiny in narrow charts. They now measure the space they have and draw in real pixels, so axis and label text stays at 11 px on a phone and on a wide monitor.
+- **Rounded axes with units.** Value axes pick round steps and print only the decimals the step needs, with the unit on the tick: "0% 50% 100%" instead of "0.0 50.0", "160 Hz", "0.5 s". The voice trend panels number their turns along the x axis; the turn-composition chart has a seconds axis and labels speech and pause spans inside the bar when they fit; silence after speaking has its own texture, so the two silences are not told apart by shade alone.
+- The burst strip marks deletions with their own legend entry, and the keystroke-interval histogram prints each bar's count.
+- What the charts show is unchanged: no gap is bridged, an unmeasurable turn stays hollow, residuals and retention caps are still disclosed.
+
 ## [3.0.0-beta.64] — 2026-09-16
 
 ### Changed
