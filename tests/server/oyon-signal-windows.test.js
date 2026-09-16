@@ -632,3 +632,114 @@ describe('consent v3 gate for voice', () => {
         expect(config.consent_version).not.toBe('oyon-consent-v3');
     });
 });
+
+// Regression lock: the session consent row records what the SERVER holds.
+//
+// POST /consent used to store `accepted_version` from the request body, which
+// the client fills from localStorage. A learner who accepted v2 on one device
+// and opened Rohy on another sent nothing, was recorded as v1, and had every
+// typing window silently dropped — while the client gate, reading server
+// preferences, kept capturing. And a client that SENT a version was believed.
+describe('session consent row is server-authoritative', () => {
+    let server, tok, userId;
+
+    // Explicit, recent bounds. The file-wide windowBounds() computes
+    // `now - (600_000 - windowSeq * 20_000)` from a counter every call bumps, so
+    // after ~30 windows its start moves INTO THE FUTURE and the server rejects
+    // the window as outside the session. Tests added at the end of this file
+    // inherit that drift; pin the bounds instead of depending on call order.
+    function recentWindow(sessionId, modality, payload) {
+        const start = new Date(Date.now() - 60_000);
+        return {
+            ...modalityWindow(sessionId, modality, payload, 'episode'),
+            window_start: start.toISOString(),
+            window_end: new Date(start.getTime() + 10_000).toISOString(),
+        };
+    }
+
+    async function setPrefs(onboarding) {
+        const db = await openDb(server.dbPath);
+        await dbRun(db, 'DELETE FROM user_preferences WHERE user_id = ?', [userId]);
+        await dbRun(db,
+            'INSERT INTO user_preferences (user_id, tenant_id, onboarding_settings) VALUES (?, 1, ?)',
+            [userId, JSON.stringify(onboarding)]);
+        await dbClose(db);
+    }
+
+    async function newSession() {
+        const db = await openDb(server.dbPath);
+        await dbRun(db,
+            `INSERT INTO sessions (user_id, case_id, start_time, tenant_id)
+             VALUES (?, 1, datetime('now', '-1 hour'), 1)`, [userId]);
+        const s = await dbGet(db, 'SELECT id FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT 1', [userId]);
+        await dbClose(db);
+        return s.id;
+    }
+
+    async function postConsent(sessionId, body = {}) {
+        const res = await fetch(`${server.baseUrl}/api/addons/oyon/consent`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: String(sessionId), consent_granted: true, ...body }),
+        });
+        expect(res.status).toBe(200);
+    }
+
+    async function recordedVersion(sessionId) {
+        const db = await openDb(server.dbPath);
+        const row = await dbGet(db,
+            'SELECT accepted_version FROM oyon_emotion_consents WHERE session_id = ? ORDER BY id DESC LIMIT 1',
+            [String(sessionId)]);
+        await dbClose(db);
+        return row.accepted_version;
+    }
+
+    beforeAll(async () => {
+        server = await startTestServer({ env: { JWT_SECRET: SECRET, OYON_ENABLED: '1' } });
+        const db = await openDb(server.dbPath);
+        const pwd = await bcrypt.hash('x', 4);
+        await dbRun(db,
+            `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
+             VALUES ('xd_stu', 'xd_stu', ?, 'xd@example.com', 'student', 'active', 1)`, [pwd]);
+        userId = (await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['xd_stu'])).id;
+        await dbClose(db);
+        tok = tokenFor({ id: userId, username: 'xd_stu', role: 'student', tenant_id: 1 }, 'xd-s');
+        await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
+    });
+
+    afterAll(async () => { if (server) await server.close(); });
+
+    it('records v2 on a device that sends no version, and keeps its typing', async () => {
+        await setPrefs({ oyon_consent: true, oyon_consent_version: 'oyon-consent-v2' });
+        const sid = await newSession();
+        await postConsent(sid);                 // a fresh device: no accepted_version in the body
+
+        expect(await recordedVersion(sid)).toBe('oyon-consent-v2');
+        const { status, body } = await postBatch(server, tok, [
+            recentWindow(sid, 'typing', { keystrokes: 30 }),
+        ]);
+        expect(status, JSON.stringify(body)).toBe(200);
+        expect(body.signals_inserted).toBe(1);
+        expect(body.signals_consent_blocked).toBe(0);
+    });
+
+    it('ignores a version the client claims but the learner never accepted', async () => {
+        await setPrefs({ oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' });
+        const sid = await newSession();
+        await postConsent(sid, { accepted_version: 'oyon-consent-v3' });
+
+        expect(await recordedVersion(sid)).toBe('oyon-consent-v1');
+        const { body } = await postBatch(server, tok, [
+            recentWindow(sid, 'voice', { speech_ratio: 0.5 }),
+        ]);
+        expect(body.signals_inserted).toBe(0);
+        expect(body.signals_consent_blocked).toBe(1);
+    });
+
+    it('records camera-only for a learner who has not said yes', async () => {
+        await setPrefs({ oyon_consent: false });
+        const sid = await newSession();
+        await postConsent(sid, { accepted_version: 'oyon-consent-v2' });
+        expect(await recordedVersion(sid)).toBe('oyon-consent-v1');
+    });
+});

@@ -67,6 +67,44 @@ function acceptedConsentVersion(value) {
     return CONSENT_VERSION_ORDER.includes(value) ? value : CONSENT_VERSION_CAMERA_ONLY;
 }
 
+/**
+ * The contract this learner accepted, read from the SERVER's own record.
+ *
+ * The session consent row used to take `accepted_version` from the request
+ * body, which the client filled from localStorage. Two failures followed:
+ *
+ *   - Cross-device. A learner who accepted v2 on one machine and opened Rohy on
+ *     another sent nothing, was recorded as v1, and had every typing window
+ *     dropped as consent_blocked — while the client gate, which reads server
+ *     preferences, happily kept capturing. Nothing on either side said so.
+ *   - Trust. A client that SENT a version was believed, whether or not the
+ *     learner had ever been shown that card.
+ *
+ * `user_preferences.onboarding_settings` is written only by the surfaces that
+ * display each contract (first-run, Settings -> Oyon, OyonConsentUpdate), and it
+ * follows the user across devices. So it, not the request, is the authority. A
+ * learner who has not said yes, or whose record cannot be read, gets the camera
+ * contract — the narrowest one, so a failure grants less, never more.
+ */
+async function recordedAcceptedVersion(req) {
+    const row = await dbGet(
+        'SELECT onboarding_settings FROM user_preferences WHERE user_id = ? AND tenant_id = ?',
+        [req.user.id, tenantId(req)],
+    );
+    let onboarding = {};
+    try {
+        onboarding = JSON.parse(row?.onboarding_settings || '{}') || {};
+    } catch (err) {
+        oyonLog.warn('onboarding settings unreadable; recording camera-only consent', {
+            user_id: req.user?.id,
+            error: err.message,
+        });
+        return CONSENT_VERSION_CAMERA_ONLY;
+    }
+    if (onboarding.oyon_consent !== true) return CONSENT_VERSION_CAMERA_ONLY;
+    return acceptedConsentVersion(onboarding.oyon_consent_version);
+}
+
 function consentCoversModality(consent, modality) {
     const required = MODALITY_MIN_CONSENT[modality];
     if (!required) return true;
@@ -280,13 +318,11 @@ router.post('/consent', authenticateToken, async (req, res) => {
             session.case_id == null ? null : String(session.case_id),
             granted ? 1 : 0,
             settings.consent_version || DEFAULT_CONSENT_VERSION,
-            // What the client actually SHOWED and the learner accepted — not
-            // what the tenant currently advertises. A client that names no
-            // version is a pre-0041 client, which can only have displayed the
-            // v1 contract, so it records v1 and cannot grant itself v2. This is
-            // the whole point of the column: consent means the contract the
-            // learner saw, never the newest one on file.
-            acceptedConsentVersion(req.body?.accepted_version),
+            // What the learner accepted, from the server's own record — never
+            // the request body and never what the tenant currently advertises.
+            // See recordedAcceptedVersion for the cross-device failure this
+            // closes. Consent means the contract the learner saw.
+            await recordedAcceptedVersion(req),
             shortText(req.body?.source_page, 200),
             shortText(req.headers['user-agent'], 500),
         ]

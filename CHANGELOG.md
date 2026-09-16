@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.54] — 2026-09-16
+
+### Fixed
+
+- **Typing capture records on every device, not just the one where the learner consented.** The session consent row took `accepted_version` from the request body, which the client filled from `localStorage`. A learner who accepted v2 on one machine and opened Rohy on another sent nothing, was recorded as v1, and had every typing window dropped as `consent_blocked` — while the client gate, which reads server preferences, kept capturing. Nothing on either side reported it. The server now reads the version from its own record (`user_preferences.onboarding_settings`), which follows the user and is written only by the surfaces that display each contract. This also stops a client from claiming a contract the learner never saw.
+- **Turning voice on no longer stops typing.** The client signal gate compared the learner's contract against the tenant's required version as a whole. Since that version is the newest any enabled modality needs, enabling voice raised it to v3 and closed the gate for every learner on v2 — although v2 names typing and the server would still accept it. The gate now passes through exactly the modalities the accepted contract names, mirroring the server.
+
+### Added
+
+- `tests/e2e/oyon-typing.spec.js`: a learner holding consent v2 types in the patient composer and the server stores a typing window; a learner on the camera-only contract has nothing captured. It also asserts the consent card's promise — the posted payload contains the rhythm, never the words.
+- The e2e server now runs with `OYON_ENABLED=1`, so the battery covers the capture learners actually get. The full suite stays green (115 passed, 0 failed).
+
+### Notes for reviewers
+
+Typing had been fully wired for months without producing a row, and every unit test of each piece passed throughout. The end-to-end spec is the first test that exercises the whole path — which is how the cross-device failure was found.
+
 ## [3.0.0-beta.53] — 2026-09-16
 
 ### Fixed

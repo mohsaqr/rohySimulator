@@ -127,4 +127,35 @@ describe('ensureSessionConsent', () => {
         await waitFor(() => expect(second.result.current.persist).toBe(true));
         expect(consentPosts()).toHaveLength(2);
     });
+
+    // Regression lock (consent v3). A tenant with voice on requires v3, the
+    // NEWEST contract any enabled modality needs. An all-or-nothing gate against
+    // that version stopped typing for every learner holding v2 — although v2
+    // names typing and the server still accepts it. Coverage is per modality.
+    it('keeps typing for a v2 learner when the tenant turns voice on', async () => {
+        mockApi({
+            consentVersion: 'oyon-consent-v3',
+            runtime: { typing_enabled: true, interaction_enabled: false, discourse_enabled: false,
+                ai_assist_enabled: false, voice_enabled: true },
+            onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v2' },
+        });
+        const { result } = renderHook(() => useOyonSignalGate('s1'));
+        await waitFor(() => expect(result.current.persist).toBe(true));
+        expect(result.current.enabled).toBe(true);
+        expect(result.current.runtimeConfig.typing_enabled).toBe(true);
+        // …and never the modality v2 does not name.
+        expect(result.current.runtimeConfig.voice_enabled).toBe(false);
+    });
+
+    it('lets voice through once the learner has accepted v3', async () => {
+        mockApi({
+            consentVersion: 'oyon-consent-v3',
+            runtime: { typing_enabled: true, voice_enabled: true },
+            onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v3' },
+        });
+        const { result } = renderHook(() => useOyonSignalGate('s1'));
+        await waitFor(() => expect(result.current.persist).toBe(true));
+        expect(result.current.runtimeConfig.typing_enabled).toBe(true);
+        expect(result.current.runtimeConfig.voice_enabled).toBe(true);
+    });
 });
