@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.41] — 2026-09-16
+
+### Added
+
+- **Four e2e specs covering the areas the battery had no automation for** (18 tests, all passing):
+  - `boot-health.spec.js` — health, readiness, the SPA shell and unknown-API-path handling. It also pins `/api/health`'s `version` to `package.json`, which is the contract that keeps a manual run and an automated run on the *same build* in Prova; if they disagree the two halves of the battery silently land on different builds.
+  - `plugin-rooms.spec.js` — a plugin serves its catalogue or explains how to install it, a 12-lead ECG is not carried in the imaging archive (the beta.37 lock), the content route serves only declared paths, and it cannot be used to enumerate installed plugins.
+  - `i18n-pass.spec.js` — every shipped language is offered before login, switching works, the choice survives a reload, and no string on the sign-in screen is hardcoded English.
+  - `a11y-floor.spec.js` — accessible names for every control and button, the keyboard path through sign-in, and the `<html lang>` attribute.
+
+### Notes for reviewers
+
+The localisation check uses the pseudo-locale rather than string matching: `?pseudo=1` renders `en-XA`, which wraps every *translated* string in brackets with accents (`"Sign In"` → `"[Šíğñ Íñ··]"`), so any plain ASCII English still on screen is a string that never went through `t()`. "Rohy" is the legitimate exception — it is a brand name.
+
+Readiness is `/api/ready`, **not** `/api/health/ready`: sub-routers in `server/routes.js` declare their own full paths and mount bare on `/api`. Probing the wrong path returns a 404 that looks like a dead build.
+
 ## [3.0.0-beta.40] — 2026-09-16
 
 ### Fixed
