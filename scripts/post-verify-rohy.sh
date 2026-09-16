@@ -73,11 +73,47 @@ print(d.get("token") or d.get("data", {}).get("token") or "")
     fi
 fi
 
-# Exec tech-test.sh. Pass through ROHY_INSECURE (already set in the
+# Run tech-test.sh. Pass through ROHY_INSECURE (already set in the
 # POST_VERIFY env). If TOKEN is empty, the contract probe section in
 # tech-test.sh detects that and skips itself.
-exec env \
+#
+# This used to `exec`. It no longer does, because the deployed smoke below runs
+# afterwards — tech-test.sh remains the gate and its exit status is still what
+# this wrapper returns by default.
+env \
     ROHY_INSECURE="${ROHY_INSECURE:-1}" \
     ROHY_TOKEN="$TOKEN" \
     ROHY_VERBOSE="${ROHY_VERBOSE:-0}" \
     "$SCRIPT_DIR/tech-test.sh" "$BASE_URL"
+TECH_STATUS=$?
+
+# ── the deployed smoke battery, recorded in Prova ──────────────────────────
+#
+# Opt-in and additive. It runs only when PROVA_URL + PROVA_TOKEN are present,
+# so an operator who has not wired Prova sees no change at all.
+#
+# By DEFAULT a smoke failure is reported but does not change this wrapper's exit
+# status, because `bin/rohy-update apply` rolls back on a failing post_verify and
+# a new check should not start reverting deploys the day it lands. Set
+# ROHY_SMOKE_BLOCKING=1 once you trust it, and a failed smoke will roll back too.
+#
+# Everything in tests/smoke/ is read-only and unauthenticated, which is what
+# makes it safe against a live deployment. Never point the e2e suite here.
+SMOKE_STATUS=0
+if [[ -n "${PROVA_URL:-}" && -n "${PROVA_TOKEN:-}" && -x "$SCRIPT_DIR/smoke-deployed.sh" ]]; then
+    echo
+    echo "==> deployed smoke battery -> $PROVA_URL"
+    "$SCRIPT_DIR/smoke-deployed.sh" "$BASE_URL"
+    SMOKE_STATUS=$?
+    if [[ $SMOKE_STATUS -ne 0 ]]; then
+        if [[ "${ROHY_SMOKE_BLOCKING:-0}" == "1" ]]; then
+            echo "  ✗ deployed smoke failed and ROHY_SMOKE_BLOCKING=1 — failing post-verify." >&2
+        else
+            echo "  ! deployed smoke failed. Not failing post-verify (set ROHY_SMOKE_BLOCKING=1 to make it a gate)." >&2
+            SMOKE_STATUS=0
+        fi
+    fi
+fi
+
+[[ $TECH_STATUS -ne 0 ]] && exit $TECH_STATUS
+exit $SMOKE_STATUS
