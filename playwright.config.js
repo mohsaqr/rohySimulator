@@ -147,6 +147,12 @@ export default defineConfig({
             // Keep the operator's piper/llm config out of e2e — tests that
             // need TTS or LLM will mock at the network layer.
             PIPER_DISABLED: '1',
+            // Oyon on, so the battery covers the signal capture learners actually
+            // get (typing today, voice next). Without it /addons/oyon/* is the
+            // disabled stub and every capture path is untestable. Typing needs no
+            // models; the camera widget degrades to an error pill in headless
+            // chromium, which has no camera — it must not break other specs.
+            OYON_ENABLED: '1',
             // server/services/kokoroTts.js statically imports `kokoro-js`
             // → `phonemizer`. Phonemizer hijacks process-level error
             // handlers and re-throws into uncaughtException, killing the

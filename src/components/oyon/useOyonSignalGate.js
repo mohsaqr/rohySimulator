@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { consentSatisfies } from '../../utils/oyonConsent';
+import { coveredRuntime } from '../../utils/oyonConsent';
 import { ensureSessionConsent } from './ensureSessionConsent';
 import { anyModalityEnabled } from './useSignalCapture';
 
@@ -27,7 +27,9 @@ import { anyModalityEnabled } from './useSignalCapture';
  */
 export function useOyonSignalGate(sessionId) {
     const [config, setConfig] = useState(null);   // { enabled, consent_version, runtime }
-    const [consentOk, setConsentOk] = useState(false);
+    // What the learner accepted, or null when they have not said yes. Kept as
+    // the version, not a boolean, because coverage is decided per modality.
+    const [acceptedVersion, setAcceptedVersion] = useState(null);
     // The session the consent row is confirmed for — not a bare boolean, so a
     // session change invalidates it by comparison rather than by a
     // synchronous reset inside the effect (which would cascade a render).
@@ -44,11 +46,13 @@ export function useOyonSignalGate(sessionId) {
                 if (cancelled) return;
                 setConfig(cfg || null);
                 const onboarding = parseOnboardingSettings(prefs);
-                // The accepted contract must cover the SIGNAL scope, not merely
-                // exist. A learner still on v1 consented to camera affect only.
-                setConsentOk(
+                // Coverage is per modality (see coveredRuntime), so record WHAT
+                // was accepted. A learner on v1 consented to camera affect only,
+                // and coveredRuntime switches every signal modality off for them.
+                setAcceptedVersion(
                     onboarding.oyon_consent === true
-                    && consentSatisfies(onboarding.oyon_consent_version, cfg?.consent_version),
+                        ? (onboarding.oyon_consent_version || 'oyon-consent-v1')
+                        : null,
                 );
             } catch {
                 // Offline, gated off, or preferences unavailable — stay closed.
@@ -57,8 +61,8 @@ export function useOyonSignalGate(sessionId) {
         return () => { cancelled = true; };
     }, []);
 
-    const runtimeConfig = config?.runtime || null;
-    const enabled = Boolean(config?.enabled) && consentOk && anyModalityEnabled(runtimeConfig);
+    const runtimeConfig = acceptedVersion ? coveredRuntime(config?.runtime || null, acceptedVersion) : null;
+    const enabled = Boolean(config?.enabled) && anyModalityEnabled(runtimeConfig);
 
     useEffect(() => {
         if (!enabled || !sessionId) return undefined;

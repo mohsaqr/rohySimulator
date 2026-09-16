@@ -27,6 +27,41 @@ export const OYON_CONSENT_VERSIONS = Object.freeze([
  */
 export const OYON_CONSENT_VOICE = 'oyon-consent-v3';
 
+/**
+ * The OLDEST contract that names each host-driven modality. Mirrors
+ * MODALITY_MIN_CONSENT in server/routes/oyon-routes.js — the server is the
+ * authority and refuses uncovered windows at ingest; this copy exists so the
+ * client does not capture what it will only have thrown away.
+ */
+export const OYON_MODALITY_MIN_CONSENT = Object.freeze({
+    typing: 'oyon-consent-v2',
+    interaction: 'oyon-consent-v2',
+    discourse: 'oyon-consent-v2',
+    ai_assist: OYON_CONSENT_VOICE,
+    voice: OYON_CONSENT_VOICE,
+});
+
+/**
+ * The runtime config with every modality the accepted contract does NOT name
+ * switched off.
+ *
+ * Gating per modality, not on the tenant's required version as a whole, is the
+ * point: that version is the NEWEST any enabled modality needs, so turning voice
+ * on raises it to v3 — and an all-or-nothing gate would then stop typing for
+ * every learner holding v2, although v2 names typing and the server would still
+ * accept it. A missing accepted version reads as v1, as everywhere else.
+ */
+export function coveredRuntime(runtime, acceptedVersion) {
+    if (!runtime || typeof runtime !== 'object') return runtime;
+    const acceptedRank = consentRank(acceptedVersion || OYON_CONSENT_CAMERA_ONLY);
+    const out = { ...runtime };
+    for (const [modality, version] of Object.entries(OYON_MODALITY_MIN_CONSENT)) {
+        const flag = `${modality}_enabled`;
+        if (flag in out && acceptedRank < consentRank(version)) out[flag] = false;
+    }
+    return out;
+}
+
 /** The contract that covered camera-derived affect only. */
 export const OYON_CONSENT_CAMERA_ONLY = 'oyon-consent-v1';
 
