@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.56] — 2026-09-16
+
+### Added
+
+- **Text and Voice tabs in Learning Analytics.** Stored Oyon typing episodes and voice turns, aggregated across the dashboard's course, case, student and date filters: cohort figures (median of per-learner medians, so each learner counts once, with the interquartile range), a pause-length chart, and breakdowns by learner, case and session. Voice turns Oyon marked as unmeasurable are counted and explained, and kept out of every figure.
+- `src/components/analytics/signals/signalAnalytics.test.js` (quantiles checked against R type 7, per-learner weighting, exclusion of unmeasurable turns) and `tests/e2e/oyon-signal-analytics.spec.js`, which seeds two learners through the real consent and ingest path and reads the figures off the screen.
+
 ## [3.0.0-beta.55] — 2026-09-16
 
 ### Added
