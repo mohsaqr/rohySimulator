@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.46] — 2026-09-16
+
+### Added
+
+- **Playwright is back in CI, and now reports to Prova.** A new `e2e` job runs the suite on every push and pull request and posts the run as the automated half of rohy's test battery. `npm run test:e2e:prova` is the same thing locally.
+
+### Notes for reviewers
+
+E2E was removed from CI on 2026-05-17 as a brittle harness that was red on main. The largest single cause has since been found and fixed: the suite built with `npm run build`, pinned to `--base=/rohy/`, while the test server serves from `/` — so every asset 404'd and every UI spec failed with "element(s) not found". The job uses `npm run build:e2e`, and the suite has run 109 passed / 14 skipped / 0 failed repeatedly since.
+
+Two things the job comments spell out because both fail silently: **never pass `--reporter` on the command line** (it replaces the array from `playwright.config.js` and drops the Prova reporter, posting nothing), and **never use `npm run build`** for e2e. Without the `PROVA_*` secrets the reporter does nothing, so forks and secret-less pull requests still run the suite normally.
+
 ## [3.0.0-beta.45] — 2026-09-16
 
 ### Added
