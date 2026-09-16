@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.52] — 2026-09-16
+
+### Fixed
+
+- **Regenerated the API reference** after the beta.51 change to `server/routes/plugins-routes.js`. The drift is line numbers only (the rewritten 503 added twelve lines, moving three route citations), but `docs/reference/**` is generated and gated, so it has to move with the source.
+
+### Notes for reviewers
+
+The repo rule is that touching `server/routes/*` means running the matching `docs:gen:*` and committing the regenerated reference **in the same change**. I split it across two, and the Docs workflow caught it — which is what that gate is for.
+
 ## [3.0.0-beta.51] — 2026-09-16
 
 ### Fixed
