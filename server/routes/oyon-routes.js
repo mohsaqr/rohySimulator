@@ -34,12 +34,26 @@ const CONSENT_VERSION_CAMERA_ONLY = 'oyon-consent-v1';
  * hand-rolled client cannot deposit these rows for a learner who never accepted
  * v2. Camera modalities are absent from this set and keep working under v1.
  */
-const CONSENT_V2_MODALITIES = new Set([
-    'typing', 'interaction', 'discourse', 'ai_assist', 'voice',
-]);
+/**
+ * The OLDEST contract that describes each host-driven modality. A learner is
+ * covered for a modality only by a contract that actually named it.
+ *
+ * v2 names typing, interaction and discourse — exactly the three items its card
+ * lists. It used to be one set that also held `voice` and `ai_assist`, which the
+ * v2 card never mentions: accepting v2 then authorized microphone capture from a
+ * card that said nothing about audio. v3 is the contract that names them.
+ * Camera modalities are absent and keep working under v1.
+ */
+const MODALITY_MIN_CONSENT = Object.freeze({
+    typing: 'oyon-consent-v2',
+    interaction: 'oyon-consent-v2',
+    discourse: 'oyon-consent-v2',
+    ai_assist: 'oyon-consent-v3',
+    voice: 'oyon-consent-v3',
+});
 
 /** Ordered consent contracts, oldest first — index doubles as the version rank. */
-const CONSENT_VERSION_ORDER = Object.freeze(['oyon-consent-v1', 'oyon-consent-v2']);
+const CONSENT_VERSION_ORDER = Object.freeze(['oyon-consent-v1', 'oyon-consent-v2', 'oyon-consent-v3']);
 
 /**
  * Whether the consent actually accepted for this session covers `modality`.
@@ -54,9 +68,29 @@ function acceptedConsentVersion(value) {
 }
 
 function consentCoversModality(consent, modality) {
-    if (!CONSENT_V2_MODALITIES.has(modality)) return true;
+    const required = MODALITY_MIN_CONSENT[modality];
+    if (!required) return true;
     const accepted = consent?.accepted_version || CONSENT_VERSION_CAMERA_ONLY;
-    return CONSENT_VERSION_ORDER.indexOf(accepted) >= CONSENT_VERSION_ORDER.indexOf('oyon-consent-v2');
+    return CONSENT_VERSION_ORDER.indexOf(accepted) >= CONSENT_VERSION_ORDER.indexOf(required);
+}
+
+/**
+ * The contract a tenant must ask for, derived from what it has switched ON.
+ *
+ * A stored constant would ask for v2 on a tenant with voice enabled: the learner
+ * accepts, and every voice window is then refused at ingest — correct, but
+ * silently, with nobody ever asked the right question. Asking for the newest
+ * contract any enabled modality needs keeps the prompt describing exactly what
+ * will be captured. With no host-driven modality on, the camera contract (v1).
+ */
+function requiredConsentVersion(settings) {
+    let rank = 0;
+    for (const [modality, version] of Object.entries(MODALITY_MIN_CONSENT)) {
+        if (boolFrom(settings?.[`${modality}_enabled`], false)) {
+            rank = Math.max(rank, CONSENT_VERSION_ORDER.indexOf(version));
+        }
+    }
+    return CONSENT_VERSION_ORDER[rank];
 }
 const MAX_EMOTION_EVENT_JSON_LENGTH = 20_000;
 const POST_SESSION_CAPTURE_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -82,7 +116,7 @@ router.get('/config', authenticateToken, async (req, res) => {
     const runtime = runtimeFromSettings(settings);
     res.json({
         enabled: Boolean(settings.emotion_capture_enabled),
-        consent_version: settings.consent_version || DEFAULT_CONSENT_VERSION,
+        consent_version: requiredConsentVersion(settings),
         views: {
             admin: Boolean(settings.admin_emotion_view_enabled),
             educator: Boolean(settings.educator_emotion_view_enabled),
@@ -153,6 +187,7 @@ router.put('/settings', authenticateToken, requireAdmin, async (req, res) => {
              interaction_enabled = ?,
              discourse_enabled = ?,
              ai_assist_enabled = ?,
+             voice_enabled = ?,
              updated_at = ${SQL_NOW}
          WHERE tenant_id = ?`,
         [
@@ -182,6 +217,7 @@ router.put('/settings', authenticateToken, requireAdmin, async (req, res) => {
             next.interaction_enabled,
             next.discourse_enabled,
             next.ai_assist_enabled,
+            next.voice_enabled,
             String(currentTenant),
         ]
     );
@@ -355,6 +391,20 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
                     accepted_version: consent?.accepted_version || CONSENT_VERSION_CAMERA_ONLY,
                 });
                 continue;
+            }
+            if (modality === 'voice') {
+                const rawAudio = findRawAudioField(event);
+                if (rawAudio) {
+                    oyonLog.warn('voice window rejected: raw audio field', {
+                        session_id: session.id,
+                        field: rawAudio,
+                    });
+                    return res.status(400).json({
+                        error: 'Voice windows carry measurements, never raw audio',
+                        code: 'oyon_raw_audio_forbidden',
+                        field: rawAudio,
+                    });
+                }
             }
             const signalResult = await insertSignalWindow(req, session, settings, consent, event, modality);
             if (signalResult?.changes === 1) signalsInserted += 1;
@@ -1015,6 +1065,34 @@ const SIGNAL_ENVELOPE_KEYS = new Set([
  * value is rejected rather than silently stored (the table has no CHECK
  * constraint by design; see migration 0039).
  */
+/**
+ * Raw-audio field names that must never arrive inside a voice window.
+ *
+ * The consent card for voice (oyon-consent-v3) promises that measurements are
+ * stored and "the audio recording never is". Oyon's own aggregator honours that
+ * — it emits pitch, loudness and voice-activity series, never samples — but
+ * Oyon's FORBIDDEN_RAW_MEDIA_FIELDS lists video and image fields and NO audio
+ * field, so nothing on the server would stop a stale or hand-rolled client from
+ * depositing a waveform. The promise is enforced here, on ingest, the same way
+ * the consent gate is. `audio` is not listed: it is the getUserMedia constraint
+ * name, and a real window carries no such key, but a guard that could reject
+ * Oyon's own output would be worse than none.
+ */
+const FORBIDDEN_RAW_AUDIO_FIELDS = new Set([
+    'waveform', 'pcm', 'raw_audio', 'audio_data', 'audio_buffer', 'audio_samples', 'wav', 'recording',
+]);
+
+/** First forbidden raw-audio key found anywhere in `value`, or null. Depth-bounded. */
+function findRawAudioField(value, depth = 0) {
+    if (!value || typeof value !== 'object' || depth > 6) return null;
+    for (const [key, child] of Object.entries(value)) {
+        if (FORBIDDEN_RAW_AUDIO_FIELDS.has(key)) return key;
+        const nested = findRawAudioField(child, depth + 1);
+        if (nested) return nested;
+    }
+    return null;
+}
+
 function resolveModality(event) {
     const declared = typeof event?.modality === 'string' ? event.modality : null;
     const fromFlag = Object.keys(MODALITY_ONLY_FLAG_NAMES)
@@ -1158,7 +1236,7 @@ function normalizeSettings(settings) {
         educator_emotion_view_enabled: Boolean(settings.educator_emotion_view_enabled),
         student_emotion_view_enabled: Boolean(settings.student_emotion_view_enabled),
         retention_days: settings.retention_days,
-        consent_version: settings.consent_version || DEFAULT_CONSENT_VERSION,
+        consent_version: requiredConsentVersion(settings),
         ...runtime,
         // The single tenant switch behind runtime's per-modality
         // `*_window_share` fan-out, so the admin form round-trips one control
@@ -1213,6 +1291,7 @@ function signalFlagsFromSettings(settings) {
         interaction_enabled: flag('interaction_enabled'),
         discourse_enabled: flag('discourse_enabled'),
         ai_assist_enabled: flag('ai_assist_enabled'),
+        voice_enabled: flag('voice_enabled'),
         // One tenant switch drives every modality's window_share, so signals
         // cannot end up split across shapes for reasons an admin can't see.
         facial_signals_window_share: share,
@@ -1249,13 +1328,17 @@ const SIGNAL_SETTING_DEFAULTS = Object.freeze({
     signal_window_share: true,
     // Host-driven modalities (migration 0041). Enabled at tenant level so they
     // are ready the moment a learner accepts consent v2 — the ingest consent
-    // gate, not these flags, is what keeps them dormant until then. `voice` is
-    // absent on purpose: it gates microphone HARDWARE and Rohy's VoiceService
-    // already owns the mic, so it is its own follow-up.
+    // gate, not these flags, is what keeps them dormant until then.
     typing_enabled: true,
     interaction_enabled: true,
     discourse_enabled: true,
-    ai_assist_enabled: true,
+    // Off (migration 0057). Rohy has no AI-suggestion cycle, so nothing emits
+    // ai_assist; left on it would raise the required contract to v3 and ask
+    // learners to consent to voice capture that does not exist.
+    ai_assist_enabled: false,
+    // Off (migration 0057). Gates microphone HARDWARE, so an administrator turns
+    // it on deliberately — and only then does the tenant ask for consent v3.
+    voice_enabled: false,
 });
 
 /*

@@ -126,8 +126,8 @@
   "dashboard_session": "Session",
   "dashboard_truncated": "capped at the most recent 1000 windows",
   "dashboard_window_count": "{count, plural, one {# window} other {# windows}}",
-  "dashboards_caption": "Oyon dashboards over the records matching the current filters. Estimates from visible facial signals only, aggregated in ~10\u00a0s windows.",
-  "dashboards_caption_refreshing": "Oyon dashboards over the records matching the current filters — refreshing…. Estimates from visible facial signals only, aggregated in ~10\u00a0s windows.",
+  "dashboards_caption": "Oyon dashboards over the records matching the current filters. Estimates from visible facial signals only, aggregated in ~10 s windows.",
+  "dashboards_caption_refreshing": "Oyon dashboards over the records matching the current filters — refreshing…. Estimates from visible facial signals only, aggregated in ~10 s windows.",
   "dashboards_failed_default": "Could not load the Oyon dashboards",
   "dashboards_failed_hint": "Check that the Oyon add-on assets are reachable (they are served from /oyon/standalone by the Rohy backend), then use Refresh above or reload the page to retry.",
   "dashboards_failed_title": "The Oyon analytics viewer failed to load",
@@ -405,5 +405,8 @@
   "zone_tooltip": "{zone}: {percent}%",
   "zone_top_center": "top center",
   "zone_top_left": "top left",
-  "zone_top_right": "top right"
+  "zone_top_right": "top right",
+  "reconsent_item_voice": "How you sound while you speak to the patient — pitch, loudness and pauses, measured moment by moment. The audio recording itself is not kept.",
+  "reconsent_item_ai_assist": "When the app offers you an AI suggestion, whether you accept, reject or dismiss it.",
+  "reconsent_note_voice": "Analysis runs locally in your browser. Measurements are stored; the audio recording never is ({version}). The microphone is only used while you are speaking. Saying no keeps your existing choice exactly as it is, and you can change it under Settings → Oyon."
 }

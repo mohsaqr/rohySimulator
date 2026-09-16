@@ -50,13 +50,20 @@ export async function ensureSettings(currentTenantId) {
             tenant_id,
             model_profile, sample_interval_ms, window_ms, min_valid_frames,
             smoothing_alpha, min_hold_ms, min_switch_confidence,
+            -- The same lesson as the runtime fields, for 0057. ai_assist_enabled
+            -- carries DEFAULT 1 from migration 0041, and 0057's UPDATE can only
+            -- turn off rows that EXIST — so a tenant created afterwards would get
+            -- ai_assist back on, raising its required contract to v3 and asking
+            -- learners to consent to voice capture that does not exist. Both
+            -- flags that must start off are named rather than defaulted.
+            ai_assist_enabled, voice_enabled,
             -- Named, not left to the DEFAULT CURRENT_TIMESTAMP: that default
             -- writes sqlite's legacy naive shape, and PUT /addons/oyon/settings
             -- now stamps updated_at as UTC ISO. A column holding both shapes
             -- sorts as a string and parses as local time in a browser
             -- (RPS-1 section 17, migrations 0050-0052).
             created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW}, ${SQL_NOW})
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ${SQL_NOW}, ${SQL_NOW})
          ON CONFLICT(tenant_id) DO NOTHING`,
         [
             String(currentTenantId),

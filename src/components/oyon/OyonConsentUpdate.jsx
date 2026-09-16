@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScanFace, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { needsConsentUpgrade, acceptableVersion, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { needsConsentUpgrade, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { CONSENT_PREF_KEY } from './OyonCaptureWidget';
 import EventLogger from '../../services/eventLogger';
 
@@ -87,6 +87,11 @@ export default function OyonConsentUpdate() {
 
    if (!state) return null;
 
+   // The card must SHOW everything the version it records covers: `answer()`
+   // records acceptableVersion(requiredVersion), so asking for v3 without
+   // naming the microphone would repeat the v2 mistake one version later.
+   const asksForVoice = consentRank(state.requiredVersion) >= consentRank(OYON_CONSENT_VOICE);
+
    return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
          <div className="w-full max-w-lg rounded-lg border border-neutral-700 bg-neutral-900 p-5 space-y-4">
@@ -101,10 +106,15 @@ export default function OyonConsentUpdate() {
                <li>{t('reconsent_item_typing')}</li>
                <li>{t('reconsent_item_interaction')}</li>
                <li>{t('reconsent_item_discourse')}</li>
+               {asksForVoice && <li>{t('reconsent_item_voice')}</li>}
+               {asksForVoice && <li>{t('reconsent_item_ai_assist')}</li>}
             </ul>
 
             <p className="text-xs text-neutral-500">
-               {t('reconsent_note', { version: state.requiredVersion || '' })}
+               {/* Voice keeps a per-frame series of measurements, not only a
+                   summary, so the typing-era note ("only summaries are stored")
+                   would be untrue once voice is in scope. */}
+               {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note', { version: state.requiredVersion || '' })}
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-1">

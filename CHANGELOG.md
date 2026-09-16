@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.53] — 2026-09-16
+
+### Fixed
+
+- **Accepting Oyon consent v2 no longer authorizes microphone capture.** The v2 card lists typing, interaction and discourse, but the server's v2 set also held `voice` and `ai_assist` — so a learner accepting it was, server-side, agreeing to audio capture from a card that never mentions audio. Latent only because the client forced voice off. Each modality now maps to the OLDEST contract that names it: typing, interaction and discourse need v2; voice and ai_assist need the new **`oyon-consent-v3`**, whose card names the microphone.
+- **The student first-run card records the consent it shows.** Its checkbox reads "Allow camera-based emotion capture during my sessions" and is pre-checked, but it recorded the tenant's ADVERTISED version. A student who clicked Start without unticking it was stored as consenting to keystroke dynamics — and, with voice on, to the microphone. It now records camera-only (v1) in both the server row and the local mirror. This also unblocks typing: a student who finishes first-run now holds v1, which is exactly the state the upgrade prompt exists to ask about.
+- **A tenant asks for the contract its enabled modalities need.** `/config` derived nothing and returned a stored constant, so a tenant with voice on would have asked for v2 and silently refused every voice window. The required version is now computed from the modalities switched on.
+- **The server enforces "the audio recording is not kept".** Oyon's raw-media denylist names video and image fields and no audio field. Voice windows carrying `waveform`, `pcm`, `raw_audio` and similar are now refused with `oyon_raw_audio_forbidden`.
+
+### Added
+
+- Migration `0057`: `oyon_settings.voice_enabled` (default off — it gates microphone hardware) and `ai_assist_enabled` turned off, because Rohy has no AI-suggestion cycle to report and the flag would otherwise raise every tenant's required contract to v3. `ensureSettings` names both flags explicitly, since the migration's `UPDATE` cannot reach a tenant created afterwards.
+- Consent-card strings for voice and AI assistance in all eight languages, with a voice-specific note: voice keeps a per-frame series of measurements, so the typing-era "only summaries are stored" would be untrue.
+
+### Notes for reviewers
+
+None of these were caught by the existing 375 Oyon tests — each is now locked, and each lock was verified to fail against its reverted fix. The status sidecars mark the new translations `machine`, unreviewed.
+
 ## [3.0.0-beta.52] — 2026-09-16
 
 ### Fixed

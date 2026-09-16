@@ -32159,6 +32159,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oyon.reconsent_item_ai_assist": {
+    "src": "560b71725911",
+    "tgt": "e842c544e1d2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oyon.reconsent_item_discourse": {
     "src": "c17490814960",
     "tgt": "b5753755479d",
@@ -32189,9 +32199,29 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oyon.reconsent_item_voice": {
+    "src": "2a016881a90a",
+    "tgt": "8cf4791e9762",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oyon.reconsent_note": {
     "src": "f52cc41b4e72",
     "tgt": "707a669e270e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.reconsent_note_voice": {
+    "src": "87371500d02f",
+    "tgt": "1b0f814fcbb1",
     "state": "machine",
     "origin": "machine",
     "locked": false,

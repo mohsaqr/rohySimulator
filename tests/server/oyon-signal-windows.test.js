@@ -493,3 +493,142 @@ describe('consent v2 gate for host-driven modalities', () => {
         expect(body.signals_consent_blocked).toBe(1);
     });
 });
+
+// Consent v3 gate for voice (migration 0057).
+//
+// Regression lock: 0041 put `voice` and `ai_assist` in the consent-v2 set, but
+// the v2 card lists only typing, interaction and discourse. Accepting v2 therefore
+// authorized microphone capture from a card that never mentions audio. Each
+// modality now maps to the oldest contract that NAMES it, and voice needs v3.
+describe('consent v3 gate for voice', () => {
+    let server, studentTok, v2Session, v3Session;
+
+    async function seedSession(db, userId, acceptedVersion) {
+        await dbRun(db,
+            `INSERT INTO sessions (user_id, case_id, start_time, tenant_id)
+             VALUES (?, 1, datetime('now', '-1 hour'), 1)`, [userId]);
+        const s = await dbGet(db,
+            'SELECT id FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT 1', [userId]);
+        await dbRun(db,
+            `INSERT INTO oyon_emotion_consents
+                (tenant_id, user_id, session_id, consent_granted, consent_version, accepted_version)
+             VALUES ('1', ?, ?, 1, ?, ?)`,
+            [String(userId), String(s.id), acceptedVersion, acceptedVersion]);
+        return s.id;
+    }
+
+    // Sets both host-driven flags that raise the contract to v3, so a test
+    // controls exactly one variable. setOyonViewFlags uses INSERT OR REPLACE
+    // with a partial column list, which rebuilds the row from COLUMN defaults
+    // (ai_assist_enabled DEFAULT 1) — bypassing ensureSettings entirely.
+    async function setV3Flags({ voice, aiAssist = false }) {
+        const db = await openDb(server.dbPath);
+        await dbRun(db,
+            'UPDATE oyon_settings SET voice_enabled = ?, ai_assist_enabled = ? WHERE tenant_id = ?',
+            [voice ? 1 : 0, aiAssist ? 1 : 0, '1']);
+        await dbClose(db);
+    }
+
+    async function getConfig() {
+        const res = await fetch(`${server.baseUrl}/api/addons/oyon/config`, {
+            headers: { Authorization: `Bearer ${studentTok}` },
+        });
+        return res.json();
+    }
+
+    beforeAll(async () => {
+        server = await startTestServer({ env: { JWT_SECRET: SECRET, OYON_ENABLED: '1' } });
+        const db = await openDb(server.dbPath);
+        const pwd = await bcrypt.hash('x', 4);
+        await dbRun(db,
+            `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
+             VALUES ('v3_stu', 'v3_stu', ?, 'v3@example.com', 'student', 'active', 1)`, [pwd]);
+        const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['v3_stu']);
+        v2Session = await seedSession(db, stu.id, 'oyon-consent-v2');
+        v3Session = await seedSession(db, stu.id, 'oyon-consent-v3');
+        await dbClose(db);
+        studentTok = tokenFor({ id: stu.id, username: 'v3_stu', role: 'student', tenant_id: 1 }, 'v3-s');
+        await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
+    });
+
+    afterAll(async () => { if (server) await server.close(); });
+
+    it('refuses voice for a learner who accepted only v2', async () => {
+        const { status, body } = await postBatch(server, studentTok, [
+            modalityWindow(v2Session, 'voice', { speech_ratio: 0.6, pitch_median_hz: 180 }, 'episode'),
+        ]);
+        expect(status).toBe(200);
+        expect(body.signals_inserted).toBe(0);
+        expect(body.signals_consent_blocked).toBe(1);
+    });
+
+    // The split must be narrow: v2 still fully covers what its card names.
+    it('still accepts typing, interaction and discourse under v2', async () => {
+        const { status, body } = await postBatch(server, studentTok, [
+            modalityWindow(v2Session, 'typing', { keystrokes: 40 }, 'episode'),
+            modalityWindow(v2Session, 'interaction', { clicks: 3 }),
+            modalityWindow(v2Session, 'discourse', { moves: 2 }),
+        ]);
+        expect(status).toBe(200);
+        expect(body.signals_inserted).toBe(3);
+        expect(body.signals_consent_blocked).toBe(0);
+    });
+
+    it('accepts voice once the learner has accepted v3', async () => {
+        const { status, body } = await postBatch(server, studentTok, [
+            modalityWindow(v3Session, 'voice', { speech_ratio: 0.6, pitch_median_hz: 180 }, 'episode'),
+        ]);
+        expect(status).toBe(200);
+        expect(body.signals_inserted).toBe(1);
+        expect(body.signals_consent_blocked).toBe(0);
+    });
+
+    // The v3 card promises the audio recording is never kept. Oyon's own raw-media
+    // denylist names video and image fields and no audio field, so this is the
+    // only thing that enforces that promise on the server.
+    it('rejects a voice window that carries raw audio, even under v3', async () => {
+        const { status, body } = await postBatch(server, studentTok, [
+            modalityWindow(v3Session, 'voice', { speech_ratio: 0.6, waveform: [0.01, -0.02, 0.03] }, 'episode'),
+        ]);
+        expect(status).toBe(400);
+        expect(body.code).toBe('oyon_raw_audio_forbidden');
+        expect(body.field).toBe('waveform');
+    });
+
+    // A tenant asks for the contract its ENABLED modalities need, so the prompt
+    // always names what will actually be captured.
+    it('asks for v2 while voice is off, and v3 once an admin turns voice on', async () => {
+        await setV3Flags({ voice: false });
+        expect((await getConfig()).consent_version).toBe('oyon-consent-v2');
+
+        await setV3Flags({ voice: true });
+        expect((await getConfig()).consent_version).toBe('oyon-consent-v3');
+    });
+
+    it('asks for v3 when ai_assist is on, since v2 does not name it either', async () => {
+        await setV3Flags({ voice: false, aiAssist: true });
+        expect((await getConfig()).consent_version).toBe('oyon-consent-v3');
+        await setV3Flags({ voice: false });
+    });
+
+    // Regression lock: 0057's UPDATE only turns off rows that EXIST. A tenant
+    // row created afterwards takes ai_assist_enabled's column DEFAULT of 1 — so
+    // ensureSettings names both flags explicitly. Delete the row and let the
+    // real inserter (via /config) recreate it, exactly as a fresh tenant would.
+    it('creates a fresh tenant with voice off and ai_assist off', async () => {
+        let db = await openDb(server.dbPath);
+        await dbRun(db, 'DELETE FROM oyon_settings WHERE tenant_id = ?', ['1']);
+        await dbClose(db);
+
+        const config = await getConfig();
+
+        db = await openDb(server.dbPath);
+        const row = await dbGet(db,
+            'SELECT voice_enabled, ai_assist_enabled FROM oyon_settings WHERE tenant_id = ?', ['1']);
+        await dbClose(db);
+        expect(row.voice_enabled).toBe(0);
+        expect(row.ai_assist_enabled).toBe(0);
+        // …and so a fresh tenant asks only for what its card can name.
+        expect(config.consent_version).not.toBe('oyon-consent-v3');
+    });
+});

@@ -1294,6 +1294,7 @@ Stores oyon settings records.
 | `interaction_enabled` | INTEGER | NOT NULL DEFAULT 1 | `0041_oyon_consent_v2_signals.sql` |
 | `discourse_enabled` | INTEGER | NOT NULL DEFAULT 1 | `0041_oyon_consent_v2_signals.sql` |
 | `ai_assist_enabled` | INTEGER | NOT NULL DEFAULT 1 | `0041_oyon_consent_v2_signals.sql` |
+| `voice_enabled` | INTEGER | NOT NULL DEFAULT 0 | `0057_oyon_voice_consent_v3.sql` |
 
 ## `oyon_signal_windows`
 

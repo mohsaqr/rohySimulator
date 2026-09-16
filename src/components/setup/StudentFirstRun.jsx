@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import {
     BookOpen, Check, Languages, Loader2, Mic, ScanFace, Stethoscope, Volume2
 } from 'lucide-react';
-import { acceptableVersion, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { apiFetch, apiPut } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -110,13 +110,13 @@ export default function StudentFirstRun({ onDone }) {
                     first_run_done: FIRST_RUN_VERSION,
                     voice_mode: wantsVoice,
                     oyon_consent: oyonConsent,
-                    // Record WHICH contract was displayed and accepted, not
-                    // whatever the tenant advertises later. Without this a
-                    // future scope increase would silently re-label this
-                    // consent as covering data never described here.
-                    oyon_consent_version: oyonConsent
-                        ? acceptableVersion(oyonConfig?.consent_version)
-                        : null,
+                    // Record the contract this card SHOWS — camera-based
+                    // emotion capture, nothing else. It used to record the
+                    // tenant's advertised version (v2), so leaving this
+                    // pre-checked box ticked granted typing, interaction and
+                    // discourse capture the card never mentioned. Those are
+                    // asked for by OyonConsentUpdate, which names them.
+                    oyon_consent_version: oyonConsent ? OYON_CONSENT_CAMERA_ONLY : null,
                 }
             });
         } catch (err) {
@@ -127,7 +127,7 @@ export default function StudentFirstRun({ onDone }) {
         try {
             localStorage.setItem(OYON_CONSENT_LS_KEY, oyonConsent ? '1' : '0');
             if (oyonConsent) {
-                localStorage.setItem(OYON_CONSENT_VERSION_LS_KEY, acceptableVersion(oyonConfig?.consent_version));
+                localStorage.setItem(OYON_CONSENT_VERSION_LS_KEY, OYON_CONSENT_CAMERA_ONLY);
             } else {
                 localStorage.removeItem(OYON_CONSENT_VERSION_LS_KEY);
             }

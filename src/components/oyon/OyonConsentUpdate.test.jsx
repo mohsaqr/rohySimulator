@@ -116,4 +116,30 @@ describe('OyonConsentUpdate', () => {
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
         expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
+
+    // Regression lock (consent v3). The card records the version it displays,
+    // so asking for v3 without naming the microphone would repeat the exact
+    // mistake v2 made: accepting a contract whose card never mentions audio.
+    it('names the microphone and AI assistance when it asks for v3', async () => {
+        mockApi({
+            consentVersion: 'oyon-consent-v3',
+            onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v2' },
+        });
+        render(<OyonConsentUpdate />);
+        await waitFor(() => expect(screen.getByText('reconsent_title')).toBeInTheDocument());
+        expect(screen.getByText('reconsent_item_voice')).toBeInTheDocument();
+        expect(screen.getByText('reconsent_item_ai_assist')).toBeInTheDocument();
+        // Voice keeps a per-frame series, so "only summaries are stored" is untrue.
+        expect(screen.getByText('reconsent_note_voice')).toBeInTheDocument();
+        expect(screen.queryByText('reconsent_note')).not.toBeInTheDocument();
+    });
+
+    it('does not mention the microphone when it asks only for v2', async () => {
+        mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' } });
+        render(<OyonConsentUpdate />);
+        await waitFor(() => expect(screen.getByText('reconsent_title')).toBeInTheDocument());
+        expect(screen.queryByText('reconsent_item_voice')).not.toBeInTheDocument();
+        expect(screen.queryByText('reconsent_item_ai_assist')).not.toBeInTheDocument();
+        expect(screen.getByText('reconsent_note')).toBeInTheDocument();
+    });
 });

@@ -405,5 +405,8 @@
   "zone_tooltip": "{zone}: {percent}%",
   "zone_top_center": "oben Mitte",
   "zone_top_left": "oben links",
-  "zone_top_right": "oben rechts"
+  "zone_top_right": "oben rechts",
+  "reconsent_item_voice": "Wie Sie klingen, während Sie mit dem Patienten sprechen — Tonhöhe, Lautstärke und Pausen, Moment für Moment gemessen. Die Audioaufnahme selbst wird nicht gespeichert.",
+  "reconsent_item_ai_assist": "Wenn Ihnen die App einen KI-Vorschlag anbietet, ob Sie ihn annehmen, ablehnen oder verwerfen.",
+  "reconsent_note_voice": "Die Analyse läuft lokal in Ihrem Browser. Gespeichert werden Messwerte, niemals die Audioaufnahme ({version}). Das Mikrofon wird nur verwendet, während Sie sprechen. Ein Nein lässt Ihre bisherige Entscheidung unverändert; Sie können sie unter Einstellungen → Oyon ändern."
 }

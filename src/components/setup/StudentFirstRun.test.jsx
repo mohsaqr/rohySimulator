@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 vi.mock('../../services/apiClient', () => ({
     apiFetch: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('../../contexts/LanguageContext', () => ({
 }));
 
 import StudentFirstRun from './StudentFirstRun.jsx';
-import { apiFetch } from '../../services/apiClient';
+import { apiFetch, apiPut } from '../../services/apiClient';
 
 const CASE = {
     id: 3,
@@ -33,13 +33,13 @@ const CASE = {
 };
 
 /** Route the component's three parallel mount fetches. */
-function routeFetches({ cases = { cases: [CASE] }, casesRejects = null } = {}) {
+function routeFetches({ cases = { cases: [CASE] }, casesRejects = null, oyon = { enabled: false } } = {}) {
     apiFetch.mockImplementation((path) => {
         if (path === '/cases') {
             return casesRejects ? Promise.reject(casesRejects) : Promise.resolve(cases);
         }
         if (path === '/platform-settings/voice') return Promise.resolve({ voice_mode_enabled: false });
-        if (path === '/addons/oyon/config') return Promise.resolve({ enabled: false });
+        if (path === '/addons/oyon/config') return Promise.resolve(oyon);
         return Promise.resolve({});
     });
 }
@@ -79,5 +79,43 @@ describe('StudentFirstRun — first case card', () => {
         );
         expect(screen.queryByText(/No case is published for you yet/i)).toBeNull();
         expect(console.error).toHaveBeenCalled();
+    });
+});
+
+// Regression lock: the emotion-capture card records the contract it SHOWS.
+//
+// Its checkbox says "Allow camera-based emotion capture during my sessions" and
+// it is pre-checked. It used to record the tenant's ADVERTISED version, so a
+// student who clicked Start without unticking it was stored as accepting v2 —
+// typing, interaction and discourse — and, on a tenant with voice on, v3:
+// microphone capture, from a card that never mentions a microphone. The
+// advertised version is set to v3 here because that is the worst case.
+describe('StudentFirstRun — emotion-capture consent', () => {
+    it('records camera-only consent, whatever version the tenant advertises', async () => {
+        routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
+        render(<StudentFirstRun onDone={() => {}} />);
+
+        const box = await screen.findByLabelText(/Allow camera-based emotion capture/i);
+        expect(box).toBeChecked();
+
+        fireEvent.click(screen.getByRole('button', { name: /Start/i }));
+
+        await waitFor(() => expect(apiPut).toHaveBeenCalled());
+        const [, body] = apiPut.mock.calls.find(([path]) => path === '/users/preferences');
+        expect(body.onboarding_settings.oyon_consent).toBe(true);
+        expect(body.onboarding_settings.oyon_consent_version).toBe('oyon-consent-v1');
+    });
+
+    it('records no version when the learner unticks the box', async () => {
+        routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
+        render(<StudentFirstRun onDone={() => {}} />);
+
+        fireEvent.click(await screen.findByLabelText(/Allow camera-based emotion capture/i));
+        fireEvent.click(screen.getByRole('button', { name: /Start/i }));
+
+        await waitFor(() => expect(apiPut).toHaveBeenCalled());
+        const [, body] = apiPut.mock.calls.find(([path]) => path === '/users/preferences');
+        expect(body.onboarding_settings.oyon_consent).toBe(false);
+        expect(body.onboarding_settings.oyon_consent_version).toBeNull();
     });
 });
