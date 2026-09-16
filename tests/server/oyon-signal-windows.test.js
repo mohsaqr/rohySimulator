@@ -19,6 +19,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
+import { TYPING_MAX_INTERVALS } from '../../src/components/oyon/useSignalCapture.js';
 
 const SECRET = 'oyon-signal-windows-tests-secret';
 
@@ -280,6 +282,43 @@ describe('Oyon 3 modality-scoped window ingest', () => {
         await dbClose(db);
         expect(episode.window_kind).toBe('episode');
         expect(JSON.parse(episode.payload_json)).toMatchObject({ keystrokes: 120, mean_iki_ms: 180 });
+    });
+
+    // Regression lock: a 20 KB ceiling for every window rejected any typing
+    // episode over ~180 keystrokes — and the whole batch with it. The window
+    // here is produced by Oyon's real aggregator at rohy's retention cap, with
+    // more keystrokes than the cap, so it is the largest window a client sends.
+    it('accepts the largest typing window the client can produce', async () => {
+        const aggregator = new TypingAggregator({ maxIntervals: TYPING_MAX_INTERVALS });
+        let t = 1000;
+        aggregator.start({ timestamp: t });
+        for (let i = 0; i < TYPING_MAX_INTERVALS + 500; i += 1) {
+            t += 90 + (i % 7) * 20;
+            aggregator.record({
+                timestamp: t, wallTimestamp: 1.79e12 + t, inputType: 'insertText',
+                previousGraphemes: i, currentGraphemes: i + 1, caretOffset: i + 1,
+                previousWords: Math.floor(i / 5), currentWords: Math.floor((i + 1) / 5),
+                boundaryContext: i % 5 === 0 ? 'word_boundary' : 'mid_word',
+            });
+        }
+        const { typing } = aggregator.finalize({ timestamp: t + 400, reason: 'submitted' });
+        // Own bounds, not windowBounds(): that shared counter steps 20 s per call
+        // and later tests in this file rely on staying inside their sessions.
+        const start = Date.now() - 5 * 60_000;
+        const window = {
+            ...ENVELOPE,
+            session_id: String(sessionId),
+            modality: 'typing',
+            window_kind: 'episode',
+            window_start: new Date(start).toISOString(),
+            window_end: new Date(start + 250_000).toISOString(),
+            typing,
+        };
+        expect(JSON.stringify(window).length).toBeGreaterThan(200_000);
+
+        const { status, body } = await postBatch(server, studentTok, [window]);
+        expect(status, JSON.stringify(body).slice(0, 300)).toBe(200);
+        expect(body.signals_inserted).toBe(1);
     });
 
     // Oyon's own validateEmotionBatch rejects an unrecognised `modality` at the

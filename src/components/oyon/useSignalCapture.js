@@ -106,6 +106,16 @@ export function anyModalityEnabled(runtimeConfig) {
  * defaults, and a 0/1 int from a SQLite row would be read as "no opinion"
  * rather than as off. Same trap `captureBridge.elementSettings` documents.
  */
+/**
+ * Keystroke timings kept per typing episode. Each costs about 107 bytes in the
+ * window (an interval plus a revision location), measured with Oyon's own
+ * aggregator. Oyon's default of 5000 makes a window of ~540 KB, past the
+ * server's 256 KB JSON body limit; 2000 holds every window at ~214 KB. Beyond
+ * it Oyon stops appending and flags the window truncated — its counts and rates
+ * still cover the whole episode.
+ */
+export const TYPING_MAX_INTERVALS = 2000;
+
 export function captureSettings(runtimeConfig) {
     const cfg = runtimeConfig && typeof runtimeConfig === 'object' ? runtimeConfig : {};
     const out = {};
@@ -116,6 +126,7 @@ export function captureSettings(runtimeConfig) {
     // OMITTED voice_enabled would be "no opinion" and could open the microphone.
     // Only an explicit `true` — tenant on AND contract accepted — turns it on.
     out.voice_enabled = cfg.voice_enabled === true;
+    out.typing_max_intervals = TYPING_MAX_INTERVALS;
     return out;
 }
 

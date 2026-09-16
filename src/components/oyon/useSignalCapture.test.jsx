@@ -49,7 +49,7 @@ describe('captureSettings', () => {
     // read as "no opinion" rather than as off.
     it('forwards only real booleans', () => {
         expect(captureSettings({ typing_enabled: 1, interaction_enabled: 'true', discourse_enabled: false }))
-            .toEqual({ voice_enabled: false, discourse_enabled: false });
+            .toEqual({ voice_enabled: false, discourse_enabled: false, typing_max_intervals: 2000 });
     });
 
     // Voice reaches getUserMedia, so only an EXPLICIT true opens it. Before
@@ -76,7 +76,7 @@ describe('captureSettings', () => {
     });
 
     it('survives a missing or malformed config', () => {
-        expect(captureSettings(null)).toEqual({ voice_enabled: false });
+        expect(captureSettings(null)).toEqual({ voice_enabled: false, typing_max_intervals: 2000 });
         expect(anyModalityEnabled(null)).toBe(false);
         expect(anyModalityEnabled({ typing_enabled: 1 })).toBe(false);
         expect(anyModalityEnabled({ typing_enabled: true })).toBe(true);
@@ -108,6 +108,7 @@ describe('useSignalCapture — lifecycle', () => {
         expect(h.instances[0].started).toMatchObject({ session_id: 's1' });
         expect(h.instances[0].options.settings).toEqual({
             voice_enabled: false,
+            typing_max_intervals: 2000,
             typing_enabled: true,
             interaction_enabled: true,
             discourse_enabled: false,
