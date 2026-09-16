@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.40] — 2026-09-16
+
+### Fixed
+
+- **`npm run test:e2e` can produce a working SPA again.** `npm run build` is pinned to `--base=/rohy/` for the path-prefix deploy, but `playwright.config.js` serves the SPA from `/`. A bundle built with the `/rohy/` base and served at `/` 404s every asset, so `index.html` loaded, `#root` stayed empty, and every UI spec failed with "element(s) not found" — a failure that reads like a broken application rather than a wrong base path. `docs/DEPLOY.md` already states the rule for deployments ("Do not mix"); it applies to the test server too. Added `npm run build:e2e`, which builds with `--base=/`.
+
+### Notes for reviewers
+
+Playwright was removed from CI in 2026-05-17 as flaky, so nothing caught this: the entire UI half of the e2e suite had been failing locally. With the correct base the suite is **109 passed / 14 skipped / 0 failed** in 1.4 min.
+
 ## [3.0.0-beta.39] — 2026-09-16
 
 ### Fixed

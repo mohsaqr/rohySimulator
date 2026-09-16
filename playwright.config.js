@@ -9,12 +9,19 @@
 //   scripts (scripts/audit-*.sh) talk to a single combined backend.
 //
 // Build prerequisite:
-//   `npm run build` must have run at least once before `npm run test:e2e`,
-//   otherwise the server returns a console error for `/` (the static
-//   middleware short-circuits when frontend/ is empty). CI runs build
-//   explicitly; locally, devs do the same. We do NOT auto-build inside
+//   A build must have run at least once before `npm run test:e2e`, otherwise
+//   the server returns a console error for `/` (the static middleware
+//   short-circuits when frontend/ is empty). We do NOT auto-build inside
 //   playwright.config.js — that would mask "did you forget to build?"
 //   regressions and add 10–30 s to every e2e run.
+//
+//   Use `npm run build:e2e`, NOT `npm run build`.
+//   `npm run build` is pinned to `--base=/rohy/` for the path-prefix deploy,
+//   but this config serves the SPA from `/`. A bundle built with the /rohy/
+//   base and served at / 404s every asset, so index.html loads, #root stays
+//   empty and EVERY UI spec fails with "element(s) not found" — a failure that
+//   reads like a broken app rather than a wrong base path. docs/DEPLOY.md:162
+//   states the same rule for deployments: "Do not mix".
 //
 // DB isolation:
 //   Each `npm run test:e2e` invocation gets ONE temp sqlite DB shared by
