@@ -1,0 +1,12 @@
+-- Keep the `quality` block Oyon sends with each signal window.
+--
+-- An episode window arrives as { typing: {...}, quality: {...} }. Ingest stored
+-- the modality block in payload_json and dropped `quality`, which carries what
+-- the measurements mean: the pause threshold the burst and pause counts were
+-- cut at, whether it was the fixed or the adaptive per-writer threshold, and
+-- whether the per-edit series hit their retention cap. Without it a chart can
+-- only assume Oyon's defaults and cannot say when a series is partial.
+--
+-- Nullable and additive: windows stored before this migration read back with
+-- `quality: null`, and every consumer treats that as "not recorded".
+ALTER TABLE oyon_signal_windows ADD COLUMN quality_json TEXT;

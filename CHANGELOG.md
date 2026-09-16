@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.60] — 2026-09-16
+
+### Added
+
+- **Writing process on the Text tab.** Pick a learner and one of their messages to see Oyon's four writing-process charts for it: **Progression** (where each edit happened over time — a drop below the leading edge is a jump back to revise), **Production curve** (message length after every edit against the mean rate), **Pause-length distribution** (keystroke intervals on a log scale, with the pause threshold the counts were cut at) and **Burst strip** (runs of typing ended by a pause or by a revision, rebuilt from the stored edits and checked against Oyon's reported counts). Ported from Oyon's Analyze · Typing page with its maths unchanged; drawn in the Okabe-Ito palette, with every edit type also told apart by shape.
+- **More cohort figures on the Text tab:** where learners pause (mid-word, between words, sentences or paragraphs), the share of typed text kept in the message, and the share of bursts ended by revising — each learner counting once.
+- `typingChartMath.test.js`, ported from Oyon, including its check that the rebuilt bursts agree with the real aggregator on 200 seeded episodes; a browser test that stores a window produced by Oyon's own aggregator and checks the charts, the burst agreement and the stored pause threshold on screen.
+
+### Fixed
+
+- **Signal windows keep Oyon's `quality` block** (migration 0059, `oyon_signal_windows.quality_json`). Ingest stored the typing measurements and dropped the block that says what they mean — the pause threshold and whether a per-edit series hit its retention cap. Windows stored earlier read back with `quality: null`, and the charts say they are using Oyon's default threshold.
+
 ## [3.0.0-beta.59] — 2026-09-16
 
 ### Fixed

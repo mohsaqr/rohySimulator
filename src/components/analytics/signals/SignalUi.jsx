@@ -60,12 +60,12 @@ export function EmptyState({ icon: Icon, title, children }) {
  * Horizontal bars for a pooled pause histogram. Each bar is labelled with its
  * bucket and its count and share, so the chart reads without colour.
  */
-export function PauseHistogram({ pauses, unit = 'pauses' }) {
+export function PauseHistogram({ pauses, unit = 'pauses', caption = null, ariaLabel = null, labelWidth = 70 }) {
     if (!pauses || pauses.total === 0) {
         return <p className="text-sm text-gray-500">No pauses recorded for this selection.</p>;
     }
     const rowH = 26;
-    const labelW = 70;
+    const labelW = labelWidth;
     const valueW = 110;
     const width = 560;
     const barMax = width - labelW - valueW;
@@ -77,7 +77,7 @@ export function PauseHistogram({ pauses, unit = 'pauses' }) {
                 viewBox={`0 0 ${width} ${height}`}
                 className="w-full max-w-2xl"
                 role="img"
-                aria-label={`Pause length distribution across ${pauses.total} ${unit}`}
+                aria-label={ariaLabel || `Pause length distribution across ${pauses.total} ${unit}`}
             >
                 {pauses.buckets.map((b, i) => {
                     const y = i * rowH;
@@ -96,7 +96,7 @@ export function PauseHistogram({ pauses, unit = 'pauses' }) {
                 })}
             </svg>
             <figcaption className="mt-1 text-xs text-gray-500">
-                {`${pauses.total} ${unit} pooled across the selection`}
+                {caption ?? `${pauses.total} ${unit} pooled across the selection`}
                 {pauses.skipped > 0 ? ` · ${pauses.skipped} window(s) with custom pause thresholds not shown` : ''}
             </figcaption>
         </figure>

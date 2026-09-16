@@ -40,6 +40,54 @@ export const isSubmitted = (w) => payloadOf(w)?.submitted === true;
 export const isAbandoned = (w) => payloadOf(w)?.abandoned === true;
 /** Any pasted text at all — a pasted message is not typed composition. */
 export const hasPaste = (w) => (num(payloadOf(w)?.pasted_graphemes) ?? 0) > 0;
+/** Share of everything typed that survived into the final message (typing-v3). */
+export const productRatioOf = (w) => num(payloadOf(w)?.product_ratio);
+/** Share of revisions made at or near the point of writing (typing-v3). */
+export const leadingEdgeRevisionOf = (w) => num(payloadOf(w)?.leading_edge_revision_ratio);
+
+/**
+ * Share of an episode's bursts that ended in a revision rather than a pause
+ * (Chenoweth & Hayes' R- vs P-bursts). Null when the episode had no bursts or
+ * predates typing-v3.
+ */
+export function revisionBurstShareOf(w) {
+    const p = num(payloadOf(w)?.p_burst_count);
+    const r = num(payloadOf(w)?.r_burst_count);
+    if (p === null || r === null || p + r === 0) return null;
+    return r / (p + r);
+}
+
+/** Where the caret sat when a pause began — keys from Oyon's typing-v3 aggregator. */
+export const PAUSE_LOCATIONS = Object.freeze([
+    { key: 'mid_word', label: 'Mid-word' },
+    { key: 'word_boundary', label: 'Between words' },
+    { key: 'sentence_boundary', label: 'Between sentences' },
+    { key: 'paragraph_boundary', label: 'Between paragraphs' },
+]);
+
+/**
+ * Pooled pause-location counts. Episodes without the field (the adapter
+ * supplied no boundary context) are counted as `unmeasured`, never as zeros.
+ */
+export function mergePauseLocations(episodes) {
+    const counts = Object.fromEntries(PAUSE_LOCATIONS.map(({ key }) => [key, 0]));
+    let measured = 0;
+    for (const w of episodes) {
+        const loc = payloadOf(w)?.pause_location_counts;
+        if (!loc || typeof loc !== 'object') continue;
+        measured += 1;
+        for (const { key } of PAUSE_LOCATIONS) counts[key] += num(loc[key]) ?? 0;
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    return {
+        total,
+        measured,
+        unmeasured: episodes.length - measured,
+        buckets: PAUSE_LOCATIONS.map(({ key, label }) => ({
+            key, label, count: counts[key], share: total > 0 ? counts[key] / total : 0,
+        })),
+    };
+}
 
 function groupRow(episodes) {
     return {
@@ -49,6 +97,8 @@ function groupRow(episodes) {
         revisionRatio: summarize(episodes.map(revisionRatioOf)),
         burstCount: summarize(episodes.map(burstCountOf)),
         firstInputLatencyMs: summarize(episodes.map(firstInputLatencyOf)),
+        productRatio: summarize(episodes.map(productRatioOf)),
+        revisionBurstShare: summarize(episodes.map(revisionBurstShareOf)),
         submittedShare: share(episodes, isSubmitted),
         abandonedShare: share(episodes, isAbandoned),
         pasteShare: share(episodes, hasPaste),
@@ -64,6 +114,7 @@ function groupRow(episodes) {
  *   byCase: object[],       one row per case, sorted by label
  *   bySession: object[],    one row per session, newest first
  *   pauses: object,         pooled pause histogram across all episodes
+ *   pauseLocations: object, pooled pause counts by caret context, with unmeasured episodes counted
  * }}
  */
 export function textAnalytics(windows) {
@@ -106,6 +157,9 @@ export function textAnalytics(windows) {
             cpm: perLearnerSummary(episodes, cpmOf),
             revisionRatio: perLearnerSummary(episodes, revisionRatioOf),
             firstInputLatencyMs: perLearnerSummary(episodes, firstInputLatencyOf),
+            productRatio: perLearnerSummary(episodes, productRatioOf),
+            revisionBurstShare: perLearnerSummary(episodes, revisionBurstShareOf),
+            leadingEdgeRevision: perLearnerSummary(episodes, leadingEdgeRevisionOf),
             submittedShare: share(episodes, isSubmitted),
             abandonedShare: share(episodes, isAbandoned),
             pasteShare: share(episodes, hasPaste),
@@ -115,5 +169,6 @@ export function textAnalytics(windows) {
         byCase,
         bySession,
         pauses: mergePauseHistograms(episodes.map((w) => payloadOf(w)?.pause_histogram)),
+        pauseLocations: mergePauseLocations(episodes),
     };
 }

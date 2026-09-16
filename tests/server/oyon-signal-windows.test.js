@@ -301,7 +301,7 @@ describe('Oyon 3 modality-scoped window ingest', () => {
                 boundaryContext: i % 5 === 0 ? 'word_boundary' : 'mid_word',
             });
         }
-        const { typing } = aggregator.finalize({ timestamp: t + 400, reason: 'submitted' });
+        const { typing, quality } = aggregator.finalize({ timestamp: t + 400, reason: 'submitted' });
         // Own bounds, not windowBounds(): that shared counter steps 20 s per call
         // and later tests in this file rely on staying inside their sessions.
         const start = Date.now() - 5 * 60_000;
@@ -313,12 +313,22 @@ describe('Oyon 3 modality-scoped window ingest', () => {
             window_start: new Date(start).toISOString(),
             window_end: new Date(start + 250_000).toISOString(),
             typing,
+            quality,
         };
         expect(JSON.stringify(window).length).toBeGreaterThan(200_000);
 
         const { status, body } = await postBatch(server, studentTok, [window]);
         expect(status, JSON.stringify(body).slice(0, 300)).toBe(200);
         expect(body.signals_inserted).toBe(1);
+
+        // Migration 0059: the quality block survives ingest — the threshold the
+        // pauses were cut at and the truncation flag the cap just set.
+        const read = await fetch(`${server.baseUrl}/api/addons/oyon/signal-windows?session_id=${sessionId}&modality=typing&limit=1`, {
+            headers: { Authorization: `Bearer ${adminTok}` },
+        });
+        const { windows } = await read.json();
+        expect(windows[0].quality.thresholds.burst_threshold_ms).toBe(quality.thresholds.burst_threshold_ms);
+        expect(windows[0].quality.intervals_truncated).toBe(true);
     });
 
     // Oyon's own validateEmotionBatch rejects an unrecognised `modality` at the
