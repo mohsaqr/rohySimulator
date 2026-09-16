@@ -63,6 +63,7 @@ import {
 import { ACTIVITY_MAPPINGS, resolveActivityLabel } from './activityMappings';
 import { recordsToEmotionSequences } from './emotionSequences';
 import { recordsToRoomSequences, recordsToGazeTargetSequences } from './windowSequences';
+import { eventsToSignalSequences } from './signalEventSequences';
 import { observedDominantLabels, probabilityChannelLabels } from '../../oyon/emotionVocabulary';
 
 const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, attention: atna };
@@ -73,6 +74,12 @@ const MODEL_BUILDERS = { relative: tna, frequency: ftna, 'co-occurrence': ctna, 
 // fits), not to the newest N rows tenant-wide as `/learning-events/all` did.
 const EVENTS_PAGE = 5000;
 const EVENTS_CAP = 20000;
+// Typing and voice state logs (GET /addons/oyon/signal-events) run to about one
+// row per keystroke, so their cap is higher than the learning-event one. Pages
+// are ordered by capture then position, so a cap cuts whole captures' tails
+// rather than scrambling them — and the dashboard says when it applied.
+const SIGNAL_EVENTS_PAGE = 5000;
+const SIGNAL_EVENTS_CAP = 50000;
 const LAYOUT_OPTIONS = [
     { value: 'circle',        label: 'Circle' },
     { value: 'fr',            label: 'Force' },
@@ -258,6 +265,9 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     const [emotionDimension, setEmotionDimension] = useState(defaultEmotionDimension);
     const [emotionRecords, setEmotionRecords] = useState(null);
     const [emotionTruncated, setEmotionTruncated] = useState(false);
+    // Stamped with the selection it was fetched for, so a stale result is never
+    // shown and "loading" is derived rather than set inside the effect.
+    const [signalEventsResult, setSignalEventsResult] = useState({ key: null, events: null, truncated: false, error: null });
 
     // --- Server data ---
     const [filterOptions, setFilterOptions] = useState({ courses: [], cases: [], users: [], rooms: [] });
@@ -286,6 +296,10 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // client-side from the same rows (unified filtering). Records sources use
     // the Oyon window fetch instead.
     const isActivitySource = seqSource === 'activity';
+    // Typing / Voice sources: Oyon's per-event state log (migration 0058), one
+    // sequence per capture — see signalEventSequences.js.
+    const signalEventModality = seqSource === 'typing-states' ? 'typing' : seqSource === 'voice-states' ? 'voice' : null;
+    const isSignalEventSource = signalEventModality !== null;
     // The Activity tab always wants the raw rows (its charts are activity-only,
     // independent of the sequence Source); the network-family tabs want them
     // only when the Source is Activity.
@@ -376,6 +390,44 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         })();
         return () => { cancelled = true; };
     }, [effCourseId, effCaseId, effUserId, effStartDate, effEndDate, wantsEmotionRecords]);
+
+    // --- Fetch typing / voice state events for the Typing and Voice sources ---
+    const wantsSignalEvents = isAnalyticsRelated && isSignalEventSource;
+    const signalEventsKey = JSON.stringify([signalEventModality, effCaseId, effUserId, effStartDate, effEndDate]);
+    useEffect(() => {
+        if (!wantsSignalEvents) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const params = new URLSearchParams({ modality: signalEventModality });
+                if (effCaseId) params.set('case_id', effCaseId);
+                if (effUserId) params.set('user_id', effUserId);
+                if (effStartDate) params.set('from', effStartDate);
+                if (effEndDate) params.set('to', effEndDate);
+                const all = [];
+                let offset = 0;
+                let total = Infinity;
+                while (offset < total && all.length < SIGNAL_EVENTS_CAP) {
+                    params.set('limit', String(SIGNAL_EVENTS_PAGE));
+                    params.set('offset', String(offset));
+                    const d = await apiFetch(`/addons/oyon/signal-events?${params}`);
+                    const rows = d?.events || [];
+                    all.push(...rows);
+                    total = Number.isFinite(d?.total) ? d.total : all.length;
+                    if (rows.length < SIGNAL_EVENTS_PAGE) break;
+                    offset += SIGNAL_EVENTS_PAGE;
+                }
+                if (!cancelled) {
+                    setSignalEventsResult({ key: signalEventsKey, events: all, truncated: total > all.length, error: null });
+                }
+            } catch (err) {
+                if (!cancelled) setSignalEventsResult({ key: signalEventsKey, events: null, truncated: false, error: err.message });
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [wantsSignalEvents, signalEventsKey, signalEventModality, effCaseId, effUserId, effStartDate, effEndDate]);
+    const signalEventsCurrent = signalEventsResult.key === signalEventsKey;
+    const signalEvents = signalEventsCurrent ? signalEventsResult.events : null;
 
     // --- Fetch activity bundle for the Activity tab ---
     useEffect(() => {
@@ -485,6 +537,21 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
 
     // --- Transform sequences by source + mode + renames + excludes ---
     const transformedData = useMemo(() => {
+        // Typing / Voice sources: per-capture state sequences, then the same
+        // renames/excludes pass as every other source.
+        if (isSignalEventSource) {
+            if (!signalEvents?.length) return null;
+            const built = eventsToSignalSequences(signalEvents, { modality: signalEventModality });
+            const seqs = built.sequences.map((seq) =>
+                seq
+                    .map((v) => verbExcludes[v] ? null : (verbRenames[v] || v))
+                    .filter((v) => v !== null)
+            ).filter((seq) => seq.length >= 2);
+            if (!seqs.length) return null;
+            const labelSet = new Set();
+            for (const seq of seqs) for (const v of seq) labelSet.add(v);
+            return { sequences: seqs, labels: [...labelSet].sort() };
+        }
         // Window-record sources (emotions / locations / gaze targets):
         // per-session sequences over the shared Oyon records, then the same
         // renames/excludes pass the activity sequences get below.
@@ -526,7 +593,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
 
         return { sequences: seqs, labels };
     }, [filteredEvents, groupBy, labelOf, verbRenames, verbExcludes,
-        isRecordsSource, seqSource, emotionRecords, emotionDimension]);
+        isRecordsSource, seqSource, emotionRecords, emotionDimension,
+        isSignalEventSource, signalEvents, signalEventModality]);
 
     // Client-computed metadata for the activity source (the header + stat cards
     // used the server's tnaData.metadata before sequences were built locally).
@@ -558,9 +626,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
     // wait on the Oyon window fetch, the activity source on the learning-event
     // fetch. Only once they have landed does "nothing to show" mean "the
     // filters matched nothing" rather than "not loaded yet".
-    const sequenceRowsPending = isRecordsSource
-        ? (loading || emotionRecords === null)
-        : activityLoading;
+    const sequenceRowsPending = isSignalEventSource
+        ? !signalEventsCurrent
+        : isRecordsSource
+            ? (loading || emotionRecords === null)
+            : activityLoading;
     const noSequencesForFilters = isSequenceTab
         && !sequenceRowsPending
         && !transformedData?.sequences?.length;
@@ -819,6 +889,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     <option value="emotions">Emotions</option>
                                     <option value="rooms">Locations</option>
                                     <option value="gaze-targets">Gaze targets</option>
+                                    <option value="typing-states">Typing</option>
+                                    <option value="voice-states">Voice</option>
                                 </select>
                             </div>
                         )}
@@ -883,6 +955,31 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                     </MetricGrid>
                     </div>
                 )}
+                {isSignalEventSource && isAnalyticsRelated && signalEvents && (
+                    <div className="mb-4">
+                        <MetricGrid cols="lg:grid-cols-5">
+                            <StatCard icon={<Users className="w-5 h-5" />} value={transformedData?.sequences.length ?? 0} label="Capture sequences" accent="cyan" />
+                            <StatCard icon={<Activity className="w-5 h-5" />} value={transformedData ? transformedData.sequences.reduce((n, s) => n + s.length, 0) : 0} label={signalEventModality === 'voice' ? 'Voice states' : 'Typing actions'} accent="green" />
+                            <StatCard icon={<Hash className="w-5 h-5" />} value={transformedData?.labels.length ?? '—'} label="States" accent="amber" />
+                            {analysis?.summaryData?.density != null && (
+                                <StatCard icon={<Network className="w-5 h-5" />} value={`${(analysis.summaryData.density * 100).toFixed(1)}%`} label="Density" accent="teal" />
+                            )}
+                            {analysis?.summaryData?.nEdges != null && (
+                                <StatCard icon={<GitBranch className="w-5 h-5" />} value={analysis.summaryData.nEdges} label="Edges" accent="rose" />
+                            )}
+                        </MetricGrid>
+                        {signalEventsResult.truncated && signalEventsCurrent && (
+                            <p className="mt-1 text-right text-xs text-gray-500">
+                                {`Capped at ${SIGNAL_EVENTS_CAP.toLocaleString()} events — narrow the filters to include the rest.`}
+                            </p>
+                        )}
+                    </div>
+                )}
+                {isSignalEventSource && isAnalyticsRelated && signalEventsCurrent && signalEventsResult.error && (
+                    <div className="mb-3 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
+                        {`Could not load ${signalEventModality} events: ${signalEventsResult.error}`}
+                    </div>
+                )}
                 {isRecordsSource && isAnalyticsRelated && emotionRecords && (
                     <div className="mb-4">
                         <MetricGrid cols={isEmotionSource ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}>
@@ -909,8 +1006,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                 )}
 
                 {/* Content — signal tabs render their own loading card below */}
-                {!isSignalTab && !isSignalWindowsTab && (isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
-                    <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading activity events…'} />
+                {!isSignalTab && !isSignalWindowsTab && (isSignalEventSource ? (isAnalyticsRelated && !signalEventsCurrent) : isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
+                    <Loading text={isSignalEventSource ? `Loading ${signalEventModality} events…` : isRecordsSource ? 'Loading capture windows…' : 'Loading activity events…'} />
                 )}
                 {noSequencesForFilters && (
                     <div className="mb-3 p-3 rounded bg-white border border-gray-200 text-sm text-gray-600">
@@ -1179,7 +1276,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     ? <TnaDistributionPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                                     : <TnaIndexPlot sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />}
                             </Panel>
-                            <Panel title={isRecordsSource ? 'State frequency' : 'Verb frequency'} bodyClassName="min-h-[320px]">
+                            <Panel title={isRecordsSource || isSignalEventSource ? 'State frequency' : 'Verb frequency'} bodyClassName="min-h-[320px]">
                                 <TnaFrequencyChart sequences={transformedData.sequences} labels={transformedData.labels} colorMap={analysis.colorMap} />
                             </Panel>
                         </div>

@@ -83,6 +83,17 @@ const routeApi = ({ emotionTotal = 3 } = {}) => {
             ].filter((e) => !caseId || e.case_id === caseId);
             return { events, total: events.length, limit: 5000, offset: 0 };
         }
+        if (url.startsWith('/addons/oyon/signal-events')) {
+            const modality = new URLSearchParams(url.split('?')[1]).get('modality');
+            const at = (i) => `2026-06-01 10:00:0${i}`;
+            const events = modality === 'typing'
+                ? ['start', 'insert', 'insert', 'pause', 'delete', 'submit'].map((state, i) => ({
+                    session_id: '7', capture_id: 'cap_1', sequence_index: i, modality, state, occurred_at: at(i),
+                    user_id: '1', student_name_snapshot: 'amina',
+                }))
+                : [];
+            return { events, total: events.length };
+        }
         if (url.startsWith('/addons/oyon/emotion-records')) {
             const params = new URLSearchParams(url.split('?')[1]);
             const limit = parseInt(params.get('limit') || '200', 10);
@@ -246,7 +257,7 @@ describe('TnaDashboardV2 activity tab charts', () => {
 });
 
 describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () => {
-    it('offers all four sources and switching to Locations uses the records fetch, not tna-sequences', async () => {
+    it('offers every source and switching to Locations uses the records fetch, not tna-sequences', async () => {
         render(<TnaDashboardV2 />);
         fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
         await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
@@ -255,7 +266,7 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
 
         const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
         expect([...sourceSelect.options].map((o) => o.value))
-            .toEqual(['activity', 'emotions', 'rooms', 'gaze-targets']);
+            .toEqual(['activity', 'emotions', 'rooms', 'gaze-targets', 'typing-states', 'voice-states']);
 
         fireEvent.change(sourceSelect, { target: { value: 'rooms' } });
         await waitFor(() => expect(apiFetchMock.mock.calls
@@ -280,6 +291,33 @@ describe('TnaDashboardV2 window-record sources (Locations / Gaze targets)', () =
         fireEvent.change(sourceSelect, { target: { value: 'gaze-targets' } });
         await waitFor(() => expect(screen.getAllByText('Gaze targets').length).toBeGreaterThan(1));
         expect(screen.getByText('Session sequences')).toBeTruthy();
+    });
+});
+
+describe('TnaDashboardV2 typing and voice sources', () => {
+    it('Typing source builds per-capture sequences from the signal-events route', async () => {
+        render(<TnaDashboardV2 />);
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
+        await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
+        const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
+        fireEvent.change(sourceSelect, { target: { value: 'typing-states' } });
+
+        await waitFor(() => expect(screen.getByText('Capture sequences')).toBeTruthy());
+        const urls = apiFetchMock.mock.calls.map((c) => c[0]).filter((u) => u.startsWith('/addons/oyon/signal-events'));
+        expect(urls.length).toBeGreaterThan(0);
+        expect(new URLSearchParams(urls[0].split('?')[1]).get('modality')).toBe('typing');
+        // start, insert, insert, pause, delete, submit → 6 actions over 5 distinct states.
+        expect(screen.getByText('Typing actions').parentElement.textContent).toContain('6');
+        expect(screen.getByText('States').parentElement.textContent).toContain('5');
+    });
+
+    it('Voice source with no stored events says the filters matched nothing', async () => {
+        render(<TnaDashboardV2 />);
+        fireEvent.click(screen.getByRole('button', { name: /^Network$/ }));
+        await waitFor(() => expect(screen.getByText('Source')).toBeTruthy());
+        const sourceSelect = screen.getByText('Source').parentElement.querySelector('select');
+        fireEvent.change(sourceSelect, { target: { value: 'voice-states' } });
+        await waitFor(() => expect(screen.getByText(/No events match the current filters/)).toBeTruthy());
     });
 });
 

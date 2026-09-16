@@ -94,8 +94,17 @@ function voiceWindow(sessionId, { speech, insufficient = false }) {
     };
 }
 
-/** One learner: consent v3 on record, a real session, the session consent row, then the windows. */
-async function seedLearner(baseURL, token, caseId, studentName, events) {
+/** A state log for one capture, timestamped inside the session. */
+function stateEvents(captureId, modality, states) {
+    const base = Date.now() - 40_000;
+    return states.map((state, i) => ({
+        capture_id: captureId, sequence_index: i, modality, state,
+        source: state === 'playback' ? 'ai' : 'user', timestamp: base + i * 100,
+    }));
+}
+
+/** One learner: consent v3 on record, a real session, the session consent row, then the windows and state log. */
+async function seedLearner(baseURL, token, caseId, studentName, events, stateLog = []) {
     const ctx = await ctxFor(baseURL, token);
     try {
         const prefs = await ctx.put('/api/users/preferences', {
@@ -118,6 +127,13 @@ async function seedLearner(baseURL, token, caseId, studentName, events) {
         expect(res.ok(), await res.text()).toBeTruthy();
         const body = await res.json();
         expect(body.signals_consent_blocked, JSON.stringify(body)).toBe(0);
+
+        const logged = await ctx.post('/api/addons/oyon/signal-events', {
+            data: { session_id: String(sessionId), events: stateLog },
+        });
+        expect(logged.ok(), await logged.text()).toBeTruthy();
+        const logBody = await logged.json();
+        expect(logBody).toMatchObject({ inserted: stateLog.length, consent_blocked: 0 });
         return body.signals_inserted;
     } finally { await ctx.dispose(); }
 }
@@ -140,6 +156,13 @@ async function openAnalyticsTab(page, label) {
 }
 
 let seededCaseId = null;
+
+/** Network tab, a Source, and this run's case. */
+async function openNetworkSource(page, source) {
+    await openAnalyticsTab(page, 'Network');
+    const sourceSelect = page.locator('select').filter({ has: page.locator('option[value="typing-states"]') }).first();
+    await sourceSelect.selectOption(source);
+}
 
 test.describe('oyon signal analytics', () => {
     test.beforeAll(async ({ baseURL }) => {
@@ -176,10 +199,16 @@ test.describe('oyon signal analytics', () => {
             voiceWindow(sid, { speech: 0.6 }),
             voiceWindow(sid, { speech: 0.8 }),
             voiceWindow(sid, { speech: 0, insufficient: true }),
+        ], [
+            ...stateEvents(`cap_a_${STAMP}`, 'typing', ['start', 'insert', 'insert', 'pause', 'delete', 'submit']),
+            ...stateEvents(`cap_a_voice_${STAMP}`, 'voice', ['start', 'speech', 'silence', 'pause', 'speech', 'end']),
         ]);
         const insertedB = await seedLearner(baseURL, tokenB, theCase.id, SECOND.name, (sid) => [
             typingWindow(sid, { cpm: 200, revision: 0.0 }),
             voiceWindow(sid, { speech: 0.4 }),
+        ], [
+            ...stateEvents(`cap_b_${STAMP}`, 'typing', ['start', 'insert', 'pause', 'insert', 'submit']),
+            ...stateEvents(`cap_b_voice_${STAMP}`, 'voice', ['start', 'speech', 'playback', 'end']),
         ]);
         expect(insertedA).toBe(5);
         expect(insertedB).toBe(2);
@@ -221,5 +250,27 @@ test.describe('oyon signal analytics', () => {
         await expect(adminPage.getByText(/Too little speech to measure/)).toBeVisible();
 
         await adminPage.screenshot({ path: path.join(SHOTS, 'analytics-voice-tab.png'), fullPage: true });
+    });
+
+    test('Network → Typing builds one sequence per capture from the stored state log', async ({ adminPage }) => {
+        await openNetworkSource(adminPage, 'typing-states');
+        const card = (label) => adminPage.getByText(label, { exact: true }).locator('xpath=..');
+        // Two captures (A, B); A has 6 actions, B 5 → 11; states: Start Insert Pause Delete Send → 5.
+        await expect(card('Capture sequences')).toContainText('2', { timeout: 20_000 });
+        await expect(card('Typing actions')).toContainText('11');
+        await expect(card('States')).toContainText('5');
+        await expect(adminPage.locator('svg text', { hasText: /^Delete$/ }).first()).toBeVisible();
+        await adminPage.screenshot({ path: path.join(SHOTS, 'analytics-network-typing.png'), fullPage: true });
+    });
+
+    test('Network → Voice builds the speech, silence and pause network', async ({ adminPage }) => {
+        await openNetworkSource(adminPage, 'voice-states');
+        const card = (label) => adminPage.getByText(label, { exact: true }).locator('xpath=..');
+        // A: 6 states, B: 4 → 10; Turn start, Speech, Silence, Pause, Turn end, Patient speaking → 6.
+        await expect(card('Capture sequences')).toContainText('2', { timeout: 20_000 });
+        await expect(card('Voice states')).toContainText('10');
+        await expect(card('States')).toContainText('6');
+        await expect(adminPage.locator('svg text', { hasText: /^Patient speaking$/ }).first()).toBeVisible();
+        await adminPage.screenshot({ path: path.join(SHOTS, 'analytics-network-voice.png'), fullPage: true });
     });
 });

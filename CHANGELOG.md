@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.58] — 2026-09-16
+
+### Added
+
+- **Typing and Voice in the Source dropdown** of Network, Patterns, Process Map and Clusters, beside Activity, Emotions, Locations and Gaze targets. Each builds one sequence per capture from the stored state log — insert, pause, delete, send; speech, silence, pause, patient speaking — under the same course, case, student and date filters, with stat cards for sequences, actions and states. Two rules follow Oyon's own Dynamics view: sequences are never joined across captures (that would invent a transition), and consecutive repeats are kept, because insert → insert is fluent typing rather than a repeated sample.
+- `signalEventSequences.test.js` (per-capture chaining as a regression lock, repeats kept, order invariance) and two browser tests that seed two learners' state logs through the real ingest and check the network's sequence, action and state counts on screen.
+
 ## [3.0.0-beta.57] — 2026-09-16
 
 ### Added
