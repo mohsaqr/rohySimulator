@@ -43,9 +43,10 @@ export function StatCard({ icon, label, value, detail = null, accent = 'cyan', t
     );
 }
 
-export function MetricGrid({ children, cols = 'lg:grid-cols-5' }) {
+/** `base` sets the small/medium breakpoints, `cols` the large one. */
+export function MetricGrid({ children, cols = 'lg:grid-cols-5', base = 'sm:grid-cols-2 md:grid-cols-3' }) {
     return (
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 ${cols}`}>
+        <div className={`grid grid-cols-1 gap-3 ${base} ${cols}`}>
             {children}
         </div>
     );

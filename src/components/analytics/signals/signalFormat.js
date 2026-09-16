@@ -24,6 +24,21 @@ export function fmtMedianIqr(s, format = (v) => fmtNum(v)) {
     return `${format(s.median)} (${format(s.q1)}–${format(s.q3)})`;
 }
 
+/**
+ * The interquartile range alone, "IQR q1–q3", for a stat card that shows the
+ * median large and its spread underneath. Null when there is no spread to show
+ * (fewer than two values, or the quartiles collapse).
+ */
+export function fmtIqr(s, format = (v) => fmtNum(v)) {
+    if (!s || s.median === null || s.n < 2 || s.q1 === null || s.q3 === null || s.q1 === s.q3) return null;
+    return `IQR ${format(s.q1)}–${format(s.q3)}`;
+}
+
+/** The median alone, or the dash when there is none. */
+export function fmtMedian(s, format = (v) => fmtNum(v)) {
+    return s && s.median !== null ? format(s.median) : DASH;
+}
+
 export function fmtDate(iso) {
     if (!iso) return DASH;
     const d = new Date(iso);

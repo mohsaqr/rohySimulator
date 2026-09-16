@@ -1,19 +1,27 @@
 // The Text tab: how learners compose their messages to the patient.
 //
-// Numbers come from textAnalytics (pure, tested). This file only lays them out.
+// Numbers come from textAnalytics (pure, tested). This file only lays them out,
+// in the dashboard's own cards and panels (ui/DashboardCards.jsx).
 // Behavioural estimates of composition from keystroke timing — never the words.
 
 import React, { useMemo } from 'react';
-import { Keyboard } from 'lucide-react';
+import {
+    ClipboardPaste, Eraser, FileCheck2, Gauge, Keyboard, MessageSquareText, RotateCcw, Send, Timer,
+} from 'lucide-react';
 import { textAnalytics } from './textAnalytics.js';
-import { BreakdownTable, EmptyState, PauseHistogram, Scope, Section, Stat } from './SignalUi.jsx';
-import { fmtDate, fmtMedianIqr, fmtNum, fmtPct, fmtSeconds } from './signalFormat.js';
+import { BreakdownTable, EmptyState, PauseHistogram, Scope, Section } from './SignalUi.jsx';
+import { SignalStat } from './SignalStat.jsx';
+import { MetricGrid } from '../ui/DashboardCards.jsx';
+import { fmtDate, fmtIqr, fmtMedian, fmtMedianIqr, fmtNum, fmtPct, fmtSeconds } from './signalFormat.js';
 import WritingProcess from './WritingProcess.jsx';
 
 const cpm = (s) => fmtMedianIqr(s, (v) => fmtNum(v));
 const ratio = (s) => fmtMedianIqr(s, (v) => fmtNum(v, 2));
 const latency = (s) => fmtMedianIqr(s, (v) => fmtSeconds(v));
-const pct = (s) => fmtMedianIqr(s, (v) => fmtPct(v));
+const toNum = (v) => fmtNum(v);
+const toRatio = (v) => fmtNum(v, 2);
+const toSeconds = (v) => fmtSeconds(v);
+const toPct = (v) => fmtPct(v);
 
 export default function OyonTextView({ windows, loading }) {
     const a = useMemo(() => textAnalytics(windows), [windows]);
@@ -59,61 +67,71 @@ export default function OyonTextView({ windows, loading }) {
     ];
 
     return (
-        <div className="rohy-admin-light space-y-5">
+        <div className="rohy-admin-light space-y-4">
             <Scope>
                 Behavioural estimates of how messages are composed, from keystroke timing and edit structure — never the
-                words typed. Cohort figures are the median across learners (each learner counts once), with the
-                interquartile range in brackets.
+                words typed. Cohort figures are the median across learners (each learner counts once); the interquartile
+                range (IQR) sits under each figure.
             </Scope>
 
-            <div className="flex flex-wrap gap-2">
-                <Stat label="Messages" value={fmtNum(summary.episodes)} hint={`${summary.learners} learners · ${summary.sessions} sessions`} />
-                <Stat label="Typing speed" value={cpm(summary.cpm)} hint="characters per active minute" accent />
-                <Stat label="Revision ratio" value={ratio(summary.revisionRatio)} hint="deleted ÷ inserted" />
-                <Stat label="Time to first key" value={latency(summary.firstInputLatencyMs)} />
-                <Stat label="Sent" value={fmtPct(summary.submittedShare)} hint={`abandoned ${fmtPct(summary.abandonedShare)}`} />
-                <Stat label="With paste" value={fmtPct(summary.pasteShare)} hint="not typed composition" />
-                <Stat label="Kept" value={pct(summary.productRatio)} hint="of typed text left in the message" />
-                <Stat label="Bursts ended by revising" value={pct(summary.revisionBurstShare)} hint="R-bursts ÷ all bursts" />
+            <MetricGrid base="sm:grid-cols-2" cols="xl:grid-cols-4">
+                <SignalStat icon={MessageSquareText} label="Messages" value={fmtNum(summary.episodes)} accent="cyan"
+                    detail={[`${summary.learners} learners`, `${summary.sessions} sessions`]} />
+                <SignalStat icon={Gauge} label="Typing speed" value={fmtMedian(summary.cpm, toNum)} unit="chars/min" accent="green"
+                    detail={[fmtIqr(summary.cpm, toNum), 'active typing time']} />
+                <SignalStat icon={Eraser} label="Revision ratio" value={fmtMedian(summary.revisionRatio, toRatio)} accent="amber"
+                    detail={[fmtIqr(summary.revisionRatio, toRatio), 'deleted ÷ inserted']} />
+                <SignalStat icon={Timer} label="Time to first key" value={fmtMedian(summary.firstInputLatencyMs, toSeconds)} accent="teal"
+                    detail={[fmtIqr(summary.firstInputLatencyMs, toSeconds), 'before typing']} />
+                <SignalStat icon={Send} label="Sent" value={fmtPct(summary.submittedShare)} accent="cyan"
+                    detail={[`abandoned ${fmtPct(summary.abandonedShare)}`]} />
+                <SignalStat icon={ClipboardPaste} label="With paste" value={fmtPct(summary.pasteShare)} accent="rose"
+                    detail={['messages with pasted text']} />
+                <SignalStat icon={FileCheck2} label="Kept" value={fmtMedian(summary.productRatio, toPct)} accent="green"
+                    detail={[fmtIqr(summary.productRatio, toPct), 'of typed text kept']} />
+                <SignalStat icon={RotateCcw} label="Bursts ended by revising" value={fmtMedian(summary.revisionBurstShare, toPct)} accent="amber"
+                    detail={[fmtIqr(summary.revisionBurstShare, toPct), 'R-bursts ÷ all bursts']} />
+            </MetricGrid>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <Section
+                    title="Pauses between keystrokes"
+                    description="How long learners pause while composing. Long pauses mid-message often mark planning or hesitation."
+                >
+                    <PauseHistogram pauses={a.pauses} unit="pauses" />
+                </Section>
+                <Section
+                    title="Where learners pause"
+                    description="Where the caret was when a pause began. Mid-word pauses suggest trouble getting words down; pauses between words and sentences suggest planning."
+                >
+                    {a.pauseLocations.measured === 0 ? (
+                        <p className="py-6 text-center text-sm text-gray-500">Not measured for these messages — they were captured without caret context.</p>
+                    ) : (
+                        <PauseHistogram
+                            pauses={a.pauseLocations}
+                            ariaLabel={`Pause locations across ${a.pauseLocations.total} pauses`}
+                            labelWidth={140}
+                            caption={`${a.pauseLocations.total} pauses from ${a.pauseLocations.measured} messages`
+                                + (a.pauseLocations.unmeasured > 0 ? ` · ${a.pauseLocations.unmeasured} messages did not record where pauses fell` : '')}
+                        />
+                    )}
+                </Section>
             </div>
-
-            <Section
-                title="Where learners pause"
-                description="The caret's position when a pause began. Mid-word pauses suggest difficulty getting words down; pauses between words and sentences suggest planning."
-            >
-                {a.pauseLocations.measured === 0 ? (
-                    <p className="text-sm text-gray-500">Not measured for these messages — they were captured without caret context.</p>
-                ) : (
-                    <PauseHistogram
-                        pauses={a.pauseLocations}
-                        ariaLabel={`Pause locations across ${a.pauseLocations.total} pauses`}
-                        labelWidth={140}
-                        caption={`${a.pauseLocations.total} pauses from ${a.pauseLocations.measured} messages`
-                            + (a.pauseLocations.unmeasured > 0 ? ` · ${a.pauseLocations.unmeasured} messages did not record where pauses fell` : '')}
-                    />
-                )}
-            </Section>
-
-            <Section
-                title="Pauses between keystrokes"
-                description="How long learners pause while composing. Long pauses mid-message often mark planning or hesitation."
-            >
-                <PauseHistogram pauses={a.pauses} unit="pauses" />
-            </Section>
 
             <WritingProcess windows={windows} />
 
-            <Section title="By learner" description="Each learner's median per message, with the interquartile range.">
+            <Section title="By learner" description="Each learner's median per message, with the interquartile range in brackets.">
                 <BreakdownTable columns={learnerColumns} rows={a.byLearner} />
             </Section>
 
-            <Section title="By case">
-                <BreakdownTable columns={caseColumns} rows={a.byCase} />
-            </Section>
-
-            <Section title="By session" description="Most recent first.">
-                <BreakdownTable columns={sessionColumns} rows={a.bySession} limit={50} />
-            </Section>
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+                <Section title="By case" description="Messages pooled within each case.">
+                    <BreakdownTable columns={caseColumns} rows={a.byCase} />
+                </Section>
+                <Section title="By session" description="Most recent first.">
+                    <BreakdownTable columns={sessionColumns} rows={a.bySession} limit={50} />
+                </Section>
+            </div>
         </div>
     );
 }
