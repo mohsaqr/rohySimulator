@@ -1379,6 +1379,7 @@ Stores oyon signal windows records.
 | `contract_version` | TEXT | — | — |
 | `schema_version` | TEXT | — | — |
 | `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+| `quality_json` | TEXT | — | `0059_oyon_signal_windows_quality.sql` |
 
 ## `panel_tests`
 

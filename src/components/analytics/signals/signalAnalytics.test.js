@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import {
     quantile, median, summarize, perLearnerSummary, mergePauseHistograms, share, OKABE_ITO,
 } from './signalStats.js';
-import { textAnalytics, cpmOf } from './textAnalytics.js';
+import { textAnalytics, cpmOf, revisionBurstShareOf, mergePauseLocations } from './textAnalytics.js';
 import { voiceAnalytics, insufficientReasons } from './voiceAnalytics.js';
 
 const TOL = 1e-9;
@@ -174,6 +174,46 @@ describe('textAnalytics', () => {
 });
 
 // ── voice ─────────────────────────────────────────────────────────────────
+
+describe('typing-v3 cohort figures', () => {
+    const v3 = (user, { p, r, product, locations }) => {
+        const w = typing({ user });
+        Object.assign(w.payload, { p_burst_count: p, r_burst_count: r, product_ratio: product, pause_location_counts: locations });
+        return w;
+    };
+
+    it('revision-burst share is r / (p + r), and null when there were no bursts', () => {
+        expect(revisionBurstShareOf(v3('a', { p: 3, r: 1 }))).toBeCloseTo(0.25, 12);
+        expect(revisionBurstShareOf(v3('a', { p: 0, r: 0 }))).toBeNull();
+        expect(revisionBurstShareOf(typing({ user: 'a' }))).toBeNull();
+    });
+
+    it('product ratio and revision-burst share give each learner one vote', () => {
+        // a: product 0.9, 0.7 → 0.8; b: 0.5 → cohort median(0.8, 0.5) = 0.65.
+        // a: R share 0.25, 0.75 → 0.5; b: 0 → cohort 0.25.
+        const rows = [
+            v3('a', { p: 3, r: 1, product: 0.9 }), v3('a', { p: 1, r: 3, product: 0.7 }),
+            v3('b', { p: 2, r: 0, product: 0.5 }),
+        ];
+        const { summary } = textAnalytics(rows);
+        expect(summary.productRatio.median).toBeCloseTo(0.65, 12);
+        expect(summary.revisionBurstShare.median).toBeCloseTo(0.25, 12);
+    });
+
+    it('pools pause locations and counts episodes that did not measure them, not as zeros', () => {
+        const rows = [
+            v3('a', { p: 1, r: 0, locations: { mid_word: 2, word_boundary: 6, sentence_boundary: 2, paragraph_boundary: 0 } }),
+            v3('b', { p: 1, r: 0, locations: { mid_word: 0, word_boundary: 0, sentence_boundary: 0, paragraph_boundary: 0 } }),
+            typing({ user: 'c' }),
+        ];
+        const loc = mergePauseLocations(rows);
+        expect(loc.total).toBe(10);
+        expect(loc.measured).toBe(2);
+        expect(loc.unmeasured).toBe(1);
+        expect(loc.buckets.map((b) => b.count)).toEqual([2, 6, 2, 0]);
+        expect(loc.buckets.reduce((a, b) => a + b.share, 0)).toBeCloseTo(1, 12);
+    });
+});
 
 describe('voiceAnalytics', () => {
     const windows = [

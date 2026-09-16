@@ -1381,7 +1381,7 @@ async function insertSignalWindow(req, session, settings, consent, event, modali
         'case_title_snapshot', 'case_category_snapshot', 'course_title_snapshot',
         'cohort_title_snapshot', 'session_type', 'attempt_number', 'started_from_page',
         'room', 'modality', 'window_kind', 'window_start', 'window_end', 'duration_ms',
-        'payload_json', 'dynamics_json', 'model_profile', 'settings_hash',
+        'payload_json', 'quality_json', 'dynamics_json', 'model_profile', 'settings_hash',
         'settings_snapshot_json', 'capture_mode', 'capture_status',
         'student_consent_enabled', 'student_can_view', 'admin_can_view',
         'educator_can_view', 'consent_version', 'consent_recorded_at',
@@ -1412,6 +1412,7 @@ async function insertSignalWindow(req, session, settings, consent, event, modali
         event.window_end,
         integerOrNull(event.duration_ms),
         jsonTextOrNull(resolveSignalPayload(event, modality)),
+        jsonTextOrNull(event.quality),
         jsonTextOrNull(event.dynamics),
         shortText(event.model_profile || event.settings_snapshot?.model_profile, 200),
         shortText(event.settings_hash || event.settings_snapshot?.settings_hash, 100),
@@ -1442,6 +1443,7 @@ function hydrateSignalWindow(row) {
     return {
         ...row,
         payload: parseJson(row.payload_json),
+        quality: parseJson(row.quality_json),
         dynamics: parseJson(row.dynamics_json),
         settings_snapshot: parseJson(row.settings_snapshot_json),
     };

@@ -31,6 +31,7 @@ import { test, expect } from './fixtures/index.js';
 import { apiAsAdmin } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
+import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
 
 const STAMP = Date.now();
 const SECOND = { username: `analytics_b_${STAMP}`, name: 'Beatrice Analytics', password: 'Analytics123' };
@@ -128,18 +129,20 @@ async function seedLearner(baseURL, token, caseId, studentName, events, stateLog
         const body = await res.json();
         expect(body.signals_consent_blocked, JSON.stringify(body)).toBe(0);
 
-        const logged = await ctx.post('/api/addons/oyon/signal-events', {
-            data: { session_id: String(sessionId), events: stateLog },
-        });
-        expect(logged.ok(), await logged.text()).toBeTruthy();
-        const logBody = await logged.json();
-        expect(logBody).toMatchObject({ inserted: stateLog.length, consent_blocked: 0 });
+        if (stateLog.length > 0) {
+            const logged = await ctx.post('/api/addons/oyon/signal-events', {
+                data: { session_id: String(sessionId), events: stateLog },
+            });
+            expect(logged.ok(), await logged.text()).toBeTruthy();
+            const logBody = await logged.json();
+            expect(logBody).toMatchObject({ inserted: stateLog.length, consent_blocked: 0 });
+        }
         return body.signals_inserted;
     } finally { await ctx.dispose(); }
 }
 
 /** Open Learning Analytics full-page on a tab. The app restores its view from `rohy_view`. */
-async function openAnalyticsTab(page, label) {
+async function openAnalyticsTab(page, label, caseId = seededCaseId) {
     await page.addInitScript(() => {
         try { window.localStorage.setItem('rohy_view', JSON.stringify({ view: 'tna' })); } catch { /* noop */ }
     });
@@ -151,11 +154,49 @@ async function openAnalyticsTab(page, label) {
     await tab.first().waitFor({ state: 'visible', timeout: 25_000 });
     await tab.first().click();
     const caseFilter = page.locator('select').filter({ has: page.locator('option', { hasText: 'All cases' }) }).first();
-    await expect(caseFilter.locator(`option[value="${seededCaseId}"]`)).toHaveCount(1, { timeout: 15_000 });
-    await caseFilter.selectOption(String(seededCaseId));
+    await expect(caseFilter.locator(`option[value="${caseId}"]`)).toHaveCount(1, { timeout: 15_000 });
+    await caseFilter.selectOption(String(caseId));
 }
 
 let seededCaseId = null;
+let processCaseId = null;
+let processWindow = null;
+
+/**
+ * A typing window exactly as Oyon's own aggregator produces it — per-edit
+ * positions, intervals, bursts and the quality block — for a scripted message:
+ * type 12 characters, pause 3 s, backspace twice, jump back to revise earlier
+ * text, then finish and send.
+ */
+function realTypingWindow(sessionId) {
+    const aggregator = new TypingAggregator();
+    let t = 1000;
+    let len = 0;
+    aggregator.start({ timestamp: t });
+    const edit = ({ gap, delta, caret }) => {
+        t += gap;
+        const prev = len;
+        len += delta;
+        aggregator.record({
+            timestamp: t, wallTimestamp: Date.now() - 30_000 + t, inputType: delta < 0 ? 'deleteContentBackward' : 'insertText',
+            previousGraphemes: prev, currentGraphemes: len, caretOffset: caret ?? len,
+            previousWords: Math.floor(prev / 5), currentWords: Math.floor(len / 5),
+            boundaryContext: len % 6 === 0 ? 'word_boundary' : 'mid_word',
+        });
+    };
+    for (let i = 0; i < 12; i += 1) edit({ gap: 140, delta: 1 });
+    edit({ gap: 3000, delta: -1 });
+    edit({ gap: 150, delta: -1 });
+    for (let i = 0; i < 3; i += 1) edit({ gap: 160, delta: 1, caret: 2 + i });
+    for (let i = 0; i < 8; i += 1) edit({ gap: 130, delta: 1 });
+    const { typing, quality } = aggregator.finalize({ timestamp: t + 600, reason: 'submitted' });
+    const start = new Date(Date.now() - 30_000);
+    return {
+        ...ENVELOPE, session_id: String(sessionId), modality: 'typing', window_kind: 'episode',
+        window_start: start.toISOString(), window_end: new Date(start.getTime() + 8_000).toISOString(),
+        typing, quality,
+    };
+}
 
 /** Network tab, a Source, and this run's case. */
 async function openNetworkSource(page, source) {
@@ -210,6 +251,25 @@ test.describe('oyon signal analytics', () => {
             ...stateEvents(`cap_b_${STAMP}`, 'typing', ['start', 'insert', 'pause', 'insert', 'submit']),
             ...stateEvents(`cap_b_voice_${STAMP}`, 'voice', ['start', 'speech', 'playback', 'end']),
         ]);
+        // A second case holding one real aggregator window, for the writing-process charts.
+        const admin3 = await apiAsAdmin(baseURL);
+        try {
+            const created = await admin3.post('/api/cases', {
+                data: {
+                    name: `Writing process ${STAMP}`,
+                    description: 'e2e: writing-process charts',
+                    system_prompt: 'You are a test patient.',
+                    config: { demographics: { name: 'Test', age: 40, gender: 'Male' } },
+                },
+            });
+            expect(created.ok(), await created.text()).toBeTruthy();
+            processCaseId = (await created.json()).id;
+        } finally { await admin3.dispose(); }
+        const insertedProcess = await seedLearner(baseURL, tokenA, processCaseId, 'Demo Student', (sid) => {
+            processWindow = realTypingWindow(sid);
+            return [processWindow];
+        });
+        expect(insertedProcess).toBe(1);
         expect(insertedA).toBe(5);
         expect(insertedB).toBe(2);
         fs.mkdirSync(SHOTS, { recursive: true });
@@ -250,6 +310,31 @@ test.describe('oyon signal analytics', () => {
         await expect(adminPage.getByText(/Too little speech to measure/)).toBeVisible();
 
         await adminPage.screenshot({ path: path.join(SHOTS, 'analytics-voice-tab.png'), fullPage: true });
+    });
+
+    test('the Text tab draws the writing process of one real message', async ({ adminPage }) => {
+        await openAnalyticsTab(adminPage, 'Text', processCaseId);
+        await expect(adminPage.getByRole('heading', { name: 'Writing process' })).toBeVisible({ timeout: 20_000 });
+
+        for (const title of ['Progression', 'Production curve', 'Pause-length distribution', 'Burst strip']) {
+            await expect(adminPage.getByText(title, { exact: true })).toBeVisible();
+        }
+        // The strip rebuilds bursts from the stored per-edit series and checks
+        // them against the counts Oyon's aggregator reported for this window.
+        const { p_burst_count: p, r_burst_count: r } = processWindow.typing;
+        expect(p + r).toBeGreaterThan(1);
+        await expect(adminPage.getByText(`Rebuilt ${p} P / ${r} R — matches the counts Oyon reported.`)).toBeVisible();
+        // The stored quality block reached the chart: its pause threshold labels the histogram.
+        const threshold = processWindow.quality.thresholds.burst_threshold_ms / 1000;
+        await expect(adminPage.getByText(`pause threshold ${threshold}s`)).toBeVisible();
+        await expect(adminPage.getByRole('heading', { name: 'Where learners pause' })).toBeVisible();
+
+        // The dashboard scrolls inside its own panel, so a tall viewport is what
+        // lets one screenshot hold the whole section.
+        await adminPage.setViewportSize({ width: 1280, height: 3200 });
+        const section = adminPage.getByRole('heading', { name: 'Writing process' }).locator('xpath=ancestor::section[1]');
+        await section.scrollIntoViewIfNeeded();
+        await section.screenshot({ path: path.join(SHOTS, 'analytics-writing-process.png') });
     });
 
     test('Network → Typing builds one sequence per capture from the stored state log', async ({ adminPage }) => {
