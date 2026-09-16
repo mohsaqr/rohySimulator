@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.61] — 2026-09-16
+
+### Added
+
+- **Turns in one session, on the Voice tab.** Pick a learner and a session to see how their speaking changed from turn to turn — speaking share, median pitch, pauses per minute and mean speech run — and where each turn's time went: silence before speaking, speech, pauses, silence after, and patient playback. Ported from Oyon's Analyze · Voice page with its derivations unchanged. A turn with no value leaves a gap the line never bridges; a turn Oyon could not measure reliably is drawn hollow and never quoted as the "latest" figure; a turn whose parts do not add up shows the residual rather than being stretched to fit.
+- Oyon's other voice charts — speech timeline, loudness envelope, pitch contour — are deliberately not included: they need a per-frame series that Oyon's capture library does not send, only its own test page records.
+
 ## [3.0.0-beta.60] — 2026-09-16
 
 ### Added
