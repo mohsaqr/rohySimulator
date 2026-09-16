@@ -32,6 +32,7 @@ import OyonAttentionV2 from '../../oyon/OyonAttentionV2';
 import OyonAffectV2 from '../../oyon/OyonAffectV2';
 import OyonGazeView from '../../oyon/OyonGazeView';
 import SignalWindowsTab from '../signals/SignalWindowsTab.jsx';
+import { MetricGrid, Panel, StatCard } from '../ui/DashboardCards.jsx';
 import OyonCompareView from '../../oyon/OyonCompareView';
 import OyonSessionsView from '../../oyon/OyonSessionsView';
 import {
@@ -95,78 +96,6 @@ const NODE_SIZE_OPTIONS = [
     { value: 'fixed',      label: 'Fixed' },
     { value: 'InStrength', label: 'In-strength' },
 ];
-
-function StatCard({ icon, label, value, accent = 'cyan' }) {
-    const colors = {
-        cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
-        green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
-        amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
-        teal:   'from-teal-50 to-white text-teal-700 ring-teal-100',
-        rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
-    };
-    return (
-        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm">
-            <div className="flex items-start gap-3">
-                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gradient-to-br ring-1 ${colors[accent] || colors.cyan}`}>
-                    {icon}
-                </div>
-                <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{label}</div>
-                    <div className="mt-1 text-2xl font-semibold leading-none tabular-nums text-gray-950">{value}</div>
-                </div>
-            </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gray-900/5 group-hover:bg-gray-900/10" />
-        </div>
-    );
-}
-
-function LandingMetricCard({ icon, label, value, detail, accent = 'cyan', title }) {
-    const colors = {
-        cyan:   'from-cyan-50 to-white text-cyan-700 ring-cyan-100',
-        green:  'from-emerald-50 to-white text-emerald-700 ring-emerald-100',
-        amber:  'from-amber-50 to-white text-amber-700 ring-amber-100',
-        teal:   'from-teal-50 to-white text-teal-700 ring-teal-100',
-        rose:   'from-rose-50 to-white text-rose-700 ring-rose-100',
-        slate:  'from-slate-50 to-white text-slate-700 ring-slate-100',
-    };
-    return (
-        <div className="group relative overflow-hidden rounded-md border border-gray-200 bg-gradient-to-br from-white to-gray-50 px-4 py-3 shadow-sm" title={title}>
-            <div className="flex items-start gap-3">
-                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gradient-to-br ring-1 ${colors[accent] || colors.cyan}`}>
-                    {icon}
-                </div>
-                <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">{label}</div>
-                    <div className="mt-1 text-2xl font-semibold leading-none tabular-nums text-gray-950">{value}</div>
-                    {detail && <div className="mt-1 truncate text-xs font-medium text-gray-500">{detail}</div>}
-                </div>
-            </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gray-900/5 group-hover:bg-gray-900/10" />
-        </div>
-    );
-}
-
-function MetricGrid({ children, cols = 'lg:grid-cols-5' }) {
-    return (
-        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 ${cols}`}>
-            {children}
-        </div>
-    );
-}
-
-function Panel({ title, actions, children, className = '', bodyClassName = '' }) {
-    return (
-        <section className={`rounded-md border border-gray-200 bg-white ${className}`}>
-            {(title || actions) && (
-                <div className="flex min-h-11 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-                    {title ? <h3 className="text-sm font-semibold text-gray-900">{title}</h3> : <span />}
-                    {actions}
-                </div>
-            )}
-            <div className={`p-4 ${bodyClassName}`}>{children}</div>
-        </section>
-    );
-}
 
 function EmptyPanelText({ children }) {
     return <div className="py-12 text-center text-sm text-gray-500">{children}</div>;
@@ -1043,9 +972,9 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                     )}
                                 </div>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                                    <LandingMetricCard icon={<Hash className="h-5 w-5" />} value={formatNumber(activityLandingStats.sessions)} label="Sessions" detail={`${formatNumber(activityLandingStats.events)} events`} accent="cyan" />
-                                    <LandingMetricCard icon={<BookOpen className="h-5 w-5" />} value={formatNumber(activityLandingStats.cases)} label="Cases Taken" detail={`${formatNumber(activityLandingStats.resources)} resources touched`} accent="green" />
-                                    <LandingMetricCard
+                                    <StatCard icon={<Hash className="h-5 w-5" />} value={formatNumber(activityLandingStats.sessions)} label="Sessions" detail={`${formatNumber(activityLandingStats.events)} events`} accent="cyan" />
+                                    <StatCard icon={<BookOpen className="h-5 w-5" />} value={formatNumber(activityLandingStats.cases)} label="Cases Taken" detail={`${formatNumber(activityLandingStats.resources)} resources touched`} accent="green" />
+                                    <StatCard
                                         icon={<Clock3 className="h-5 w-5" />}
                                         value={formatNumber(timeOnTaskStats.activeMinutes)}
                                         label="Active minutes"
@@ -1053,11 +982,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                                         title={`Sum over sessions of the gaps between consecutive events, each gap capped at ${idleCapMinutes} min (idle). The last event of a session earns nothing. Change the cap in "Time on task" below.`}
                                         accent="amber"
                                     />
-                                    <LandingMetricCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="teal" />
-                                    <LandingMetricCard icon={<Brain className="h-5 w-5" />} value={formatNumber(activityLandingStats.emotions)} label="Emotions Captured" detail={`${formatNumber(activityLandingStats.emotionLabels)} dominant labels`} accent="rose" />
-                                    <LandingMetricCard icon={<ScanEye className="h-5 w-5" />} value={formatNumber(activityLandingStats.gazeWindows)} label="Gaze Records" detail="Windows with AOI signal" accent="slate" />
-                                    <LandingMetricCard icon={<CalendarDays className="h-5 w-5" />} value={formatNumber(activityCharts?.daily?.xLabels?.length ?? 0)} label="Time Buckets" detail={activityCharts?.daily?.granularity ?? 'loading'} accent="cyan" />
-                                    <LandingMetricCard icon={<Database className="h-5 w-5" />} value={formatNumber(activityBundle?.resources?.length ?? 0)} label="Top Resources" detail="Ranked resource rows" accent="green" />
+                                    <StatCard icon={<Users className="h-5 w-5" />} value={formatNumber(activityLandingStats.users)} label="Students" detail={`${formatNumber(activityBundle?.summary?.avgPerUser ?? 0)} events / user`} accent="teal" />
+                                    <StatCard icon={<Brain className="h-5 w-5" />} value={formatNumber(activityLandingStats.emotions)} label="Emotions Captured" detail={`${formatNumber(activityLandingStats.emotionLabels)} dominant labels`} accent="rose" />
+                                    <StatCard icon={<ScanEye className="h-5 w-5" />} value={formatNumber(activityLandingStats.gazeWindows)} label="Gaze Records" detail="Windows with AOI signal" accent="slate" />
+                                    <StatCard icon={<CalendarDays className="h-5 w-5" />} value={formatNumber(activityCharts?.daily?.xLabels?.length ?? 0)} label="Time Buckets" detail={activityCharts?.daily?.granularity ?? 'loading'} accent="cyan" />
+                                    <StatCard icon={<Database className="h-5 w-5" />} value={formatNumber(activityBundle?.resources?.length ?? 0)} label="Top Resources" detail="Ranked resource rows" accent="green" />
                                 </div>
                             </div>
                         )}

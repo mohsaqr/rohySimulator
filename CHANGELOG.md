@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.64] — 2026-09-16
+
+### Changed
+
+- The Learning Analytics dashboard's stat card, metric grid and panel now live in one shared module (`src/components/analytics/ui/DashboardCards.jsx`) instead of inside `TnaDashboardV2.jsx`, so other analytics views can draw with the same pieces. The landing cards and the stat cards were the same component twice and are now one. A panel can carry a one-line description under its title. No visual change to the existing tabs.
+
 ## [3.0.0-beta.63] — 2026-09-16
 
 ### Fixed
