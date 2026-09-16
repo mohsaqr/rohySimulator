@@ -87,6 +87,11 @@ function voiceWindow(sessionId, { speech, insufficient = false }) {
         ...ENVELOPE, ...bounds(), session_id: String(sessionId), modality: 'voice', window_kind: 'episode',
         voice: {
             speech_ratio: speech, turn_duration_ms: 4000, speech_duration_ms: 4000 * speech,
+            // The turn's time split the way VoiceTurnAggregator reports it:
+            // 400 ms before speaking, speech, 300 ms of pauses, the rest after.
+            initial_silence_ms: 400, internal_pause_total_ms: 300,
+            trailing_silence_ms: Math.max(0, 4000 - 400 - 300 - 4000 * speech),
+            segment_duration_mean_ms: 900,
             pitch_median_hz: insufficient ? null : 170, internal_pause_count: 2,
             insufficient_data: insufficient,
             insufficient_reasons: insufficient ? ['insufficient_analyzable_speech'] : [],
@@ -308,6 +313,21 @@ test.describe('oyon signal analytics', () => {
 
         await expect(adminPage.getByRole('heading', { name: 'Turns that could not be measured' })).toBeVisible();
         await expect(adminPage.getByText(/Too little speech to measure/)).toBeVisible();
+
+        // One session's turns: A's session holds three turns, one not measurable.
+        await expect(adminPage.getByRole('heading', { name: 'Turns in one session' })).toBeVisible();
+        const session = adminPage.getByRole('heading', { name: 'Turns in one session' }).locator('xpath=ancestor::section[1]');
+        await session.getByLabel('Learner').selectOption({ label: 'Demo Student' });
+        await expect(session.getByText('Across turns')).toBeVisible();
+        await expect(session.getByText('Median pitch')).toBeVisible();
+        // "Latest" skips the unmeasurable turn: A's last measured speaking share is 80%, not its 0.
+        await expect(session.getByText('Speaking share', { exact: true }).locator('xpath=..')).toContainText(/80%\s*latest/);
+        // The unmeasurable turn has no pitch: a gap, stated, not a zero.
+        await expect(session.getByText('2 of 3 turns measured — the rest: too few voiced frames.')).toBeVisible();
+        await expect(session.getByText('Silence before speaking', { exact: true })).toBeVisible();
+        await adminPage.setViewportSize({ width: 1280, height: 2400 });
+        await session.scrollIntoViewIfNeeded();
+        await session.screenshot({ path: path.join(SHOTS, 'analytics-voice-session.png') });
 
         await adminPage.screenshot({ path: path.join(SHOTS, 'analytics-voice-tab.png'), fullPage: true });
     });

@@ -9,6 +9,7 @@ import { Mic } from 'lucide-react';
 import { voiceAnalytics } from './voiceAnalytics.js';
 import { BreakdownTable, EmptyState, PauseHistogram, Scope, Section, Stat } from './SignalUi.jsx';
 import { fmtDate, fmtMedianIqr, fmtNum, fmtPct, fmtSeconds } from './signalFormat.js';
+import VoiceSession from './VoiceSession.jsx';
 
 /** Oyon's machine-readable reasons, in words an educator can act on. */
 const REASON_LABELS = {
@@ -109,6 +110,8 @@ export default function OyonVoiceView({ windows, loading }) {
             >
                 <PauseHistogram pauses={a.pauses} unit="pauses" />
             </Section>
+
+            <VoiceSession windows={windows} />
 
             <Section title="By learner" description="Each learner's median per turn, with the interquartile range.">
                 <BreakdownTable columns={learnerColumns} rows={a.byLearner} />
