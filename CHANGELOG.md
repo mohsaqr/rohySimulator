@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.49] — 2026-09-16
+
+### Fixed
+
+- **`test-results.smoke.junit.xml` is gitignored**, alongside the e2e JUnit artifact it mirrors. Left tracked, a single smoke run would make `git status --porcelain` non-empty, and Prova's gate counts a result only when the build is clean — so running the deployed smoke would have quietly stopped the next e2e run from counting.
+
 ## [3.0.0-beta.48] — 2026-09-16
 
 ### Added

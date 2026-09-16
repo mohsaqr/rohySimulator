@@ -103,6 +103,7 @@ coverage/
 playwright-report/
 test-results/
 test-results.e2e.junit.xml
+test-results.smoke.junit.xml
 tests/e2e/.auth/
 
 # Local-only working notes (kept on disk, not tracked).
