@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.45] — 2026-09-16
+
+### Added
+
+- **The two teaching guardrails are now checked by machine on every build** (`tests/e2e/clinical-guardrails.spec.js`), instead of once per manual sweep:
+  - *The answer key never leaves the server while the case is live.* The consultant room is reachable mid-session, so `treatment-debrief` must withhold the "expected but not ordered" list until the session has ended. The test asserts `pending: true` with an empty `missed` while live, and `pending: false` once ended — opposite values in two states, so it cannot pass vacuously.
+  - *The investigation catalogues stay full.* Narrowing the orderable list to what a case authored hands the learner the diagnosis by elimination. The test asserts the lab catalogue still spans many groups and that clinically irrelevant tests (glucose, thyroid, vitamin) remain orderable, and the same for radiology.
+
+### Notes for reviewers
+
+Both rules have had to be defended before — "unadded tests still show" has been filed as a bug twice and is invalid both times. They back `DEBRIEF.REVIEW.02`, `CASE.LABS.02` and `AUTHOR.VISIBILITY.01` in the Prova catalogue, which now name these test titles in their `covers:` patterns.
+
 ## [3.0.0-beta.44] — 2026-09-16
 
 ### Changed
