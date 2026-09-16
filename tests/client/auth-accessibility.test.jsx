@@ -122,3 +122,30 @@ describe('the sign-up form is fillable by a password manager', () => {
         expect(field(en.create_password_placeholder).type).toBe('password');
     });
 });
+
+// Regression lock: the sign-in card's Username and Password labels were real,
+// translated <label> elements — but unassociated. Each sat as a SIBLING of its
+// input (the input lives inside the icon-positioning div), with no htmlFor/id
+// pair and no wrapping. A sighted user saw "Username" above the box; a screen
+// reader announced an unlabelled edit box. The placeholder does not rescue it:
+// it is skipped by some assistive tech and vanishes on the first keystroke.
+//
+// getByLabelText resolves the accessible name the way a screen reader does, so
+// this fails against the un-fixed component and passes against the fixed one.
+// It lives here, in the client tier, because Playwright is not in CI — the
+// matching e2e check (tests/e2e/a11y-floor.spec.js) only runs locally.
+describe('the sign-in fields are labelled, not just captioned', () => {
+    it('finds the username field by its visible label', () => {
+        render(<LoginPage policy={OPEN} />);
+        const input = screen.getByLabelText(en.username);
+        expect(input.tagName).toBe('INPUT');
+        expect(input).toBe(field(en.enter_username));
+    });
+
+    it('finds the password field by its visible label', () => {
+        render(<LoginPage policy={OPEN} />);
+        const input = screen.getByLabelText(en.password);
+        expect(input.tagName).toBe('INPUT');
+        expect(input).toBe(field(en.enter_password));
+    });
+});

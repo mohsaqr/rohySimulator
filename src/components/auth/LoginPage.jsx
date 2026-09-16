@@ -107,12 +107,19 @@ export default function LoginPage({ onSwitchToRegister, onSwitchToInvite, policy
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Username */}
                 <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    {/* htmlFor/id is what gives the input an accessible name. The
+                        label is a SIBLING of the input (the input sits inside the
+                        icon-positioning div), so without the pairing a screen
+                        reader announces an unlabelled edit box while a sighted
+                        user sees "Username". The placeholder does not count — it
+                        disappears on the first keystroke. */}
+                    <label htmlFor="login-username" className="block text-sm font-medium text-neutral-300 mb-2">
                         {t('username')}
                     </label>
                     <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
                         <input
+                            id="login-username"
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
@@ -127,12 +134,13 @@ export default function LoginPage({ onSwitchToRegister, onSwitchToInvite, policy
 
                 {/* Password */}
                 <div>
-                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    <label htmlFor="login-password" className="block text-sm font-medium text-neutral-300 mb-2">
                         {t('password')}
                     </label>
                     <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
                         <input
+                            id="login-password"
                             type={showPassword ? 'text' : 'password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
