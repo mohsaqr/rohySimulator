@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.50] — 2026-09-16
+
+### Fixed
+
+- **`playwright.smoke.config.js` is linted with node globals.** `eslint.config.js` listed `playwright.config.js` by exact name in both of its node-globals blocks, so the new smoke config got browser globals only and every `process.env` read was a `no-undef` error — 4 errors, which failed the Lint job and skipped every job that needs it. Both entries are now the glob `playwright*.config.js`, so the next config is covered too.
+
+### Notes for reviewers
+
+The failure was missed locally by reading the wrong line of ESLint's summary. `0 errors and 15 warnings potentially fixable with the --fix option` counts what `--fix` could repair; the real total is the line above it, `✖ 262 problems (4 errors, 258 warnings)`. Check the `✖` line, or just the exit code.
+
 ## [3.0.0-beta.49] — 2026-09-16
 
 ### Fixed

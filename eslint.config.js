@@ -129,7 +129,9 @@ export default defineConfig([
       'deploy/**/*.{js,mjs}',
       'vite.config.js',
       'vitest.config.js',
-      'playwright.config.js',
+      // Glob, not an exact name: playwright.smoke.config.js (the deployed
+      // smoke) needs the same node globals, and so will the next one.
+      'playwright*.config.js',
       'eslint.config.js',
       'postcss.config.js',
     ],
@@ -151,7 +153,9 @@ export default defineConfig([
       '**/*.test.{js,jsx}',
       'bench/**/*.{js,jsx}',
       'vitest.config.js',
-      'playwright.config.js',
+      // Glob, not an exact name: playwright.smoke.config.js (the deployed
+      // smoke) needs the same node globals, and so will the next one.
+      'playwright*.config.js',
     ],
     languageOptions: {
       globals: {
