@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.44] — 2026-09-16
+
+### Changed
+
+- **`WEBSITE-DOCS-PLAN.md` joins the local-only working notes in `.gitignore`**, alongside `HANDOFF.md`, `LEARNINGS.md`, `CHANGES.md` and `AGENT-NOTE-*.md`.
+
+### Notes for reviewers
+
+Not housekeeping for its own sake: an untracked file makes `git status --porcelain` non-empty, so Prova's Playwright reporter records the build as **dirty** — and the release gate counts a result only when `b.dirty = 0`. A stray scratch file in the working tree would therefore have posted a full e2e run to Prova whose results counted for nothing.
+
 ## [3.0.0-beta.43] — 2026-09-16
 
 ### Fixed
