@@ -26,11 +26,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, Settings2, Users, Activity, Hash, Network, GitBranch,
     Workflow, Layers, Eye, ScanEye, ListVideo, Smile,
-    GitCompare, CalendarDays, Clock3, BookOpen, Database, Brain,
+    GitCompare, CalendarDays, Clock3, BookOpen, Database, Brain, Keyboard, Mic,
 } from 'lucide-react';
 import OyonAttentionV2 from '../../oyon/OyonAttentionV2';
 import OyonAffectV2 from '../../oyon/OyonAffectV2';
 import OyonGazeView from '../../oyon/OyonGazeView';
+import SignalWindowsTab from '../signals/SignalWindowsTab.jsx';
 import OyonCompareView from '../../oyon/OyonCompareView';
 import OyonSessionsView from '../../oyon/OyonSessionsView';
 import {
@@ -295,6 +296,11 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
         || activeTab === 'affect'
         || activeTab === 'gaze'
         || activeTab === 'compare' || activeTab === 'sessions';
+    // Text and Voice read stored signal windows (typing episodes, voice turns),
+    // a different table from the emotion records above, and fetch them
+    // themselves — see SignalWindowsTab. They must not trigger the emotion fetch
+    // or the generic loading banner.
+    const isSignalWindowsTab = activeTab === 'text' || activeTab === 'voice';
     // The one shared emotion-records fetch fires when EITHER the Emotions
     // sequence source is active on an analytics tab (the pre-existing flow)
     // OR any signal tab is open. Collapsing both conditions into a single
@@ -677,6 +683,8 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
             { id: 'attention',  label: 'Attention',  icon: Eye },
             { id: 'affect',     label: 'Affect',     icon: Smile },
             { id: 'gaze',       label: 'Gaze',       icon: ScanEye },
+            { id: 'text',       label: 'Text',       icon: Keyboard },
+            { id: 'voice',      label: 'Voice',      icon: Mic },
             { id: 'compare',    label: 'Compare',    icon: GitCompare },
             { id: 'sessions',   label: 'Sessions',   icon: ListVideo },
             // NOTE: Trends and Engagement are deliberately absent. Their
@@ -901,7 +909,7 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                 )}
 
                 {/* Content — signal tabs render their own loading card below */}
-                {!isSignalTab && (isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
+                {!isSignalTab && !isSignalWindowsTab && (isRecordsSource ? (loading && !emotionRecords) : activityLoading) && (
                     <Loading text={isRecordsSource ? 'Loading capture windows…' : 'Loading activity events…'} />
                 )}
                 {noSequencesForFilters && (
@@ -1246,6 +1254,17 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
                             </>
                         )}
                     </div>
+                )}
+
+                {/* === TEXT / VOICE — stored Oyon signal windows, own fetch === */}
+                {isSignalWindowsTab && (
+                    <SignalWindowsTab
+                        modality={activeTab === 'voice' ? 'voice' : 'typing'}
+                        caseId={effCaseId}
+                        userId={effUserId}
+                        startDate={effStartDate}
+                        endDate={effEndDate}
+                    />
                 )}
 
                 {/* === SETTINGS TAB === */}
