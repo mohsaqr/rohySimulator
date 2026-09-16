@@ -5,9 +5,10 @@
 
 import React, { useMemo, useState } from 'react';
 import { caseLabel, learnerKey, learnerName, payloadOf } from './signalStats.js';
-import { typingEpisodes } from './textAnalytics.js';
+import { hasEditSeries, typingEpisodes } from './textAnalytics.js';
 import { fmtDate } from './signalFormat.js';
-import { Section } from './SignalUi.jsx';
+import { Picker, Pickers, Section } from './SignalUi.jsx';
+import { ChartCard } from './ChartKit.jsx';
 import {
     TypingBurstStrip, TypingIkiDistribution, TypingProductionCurve, TypingProgressionChart,
 } from './TypingCharts.jsx';
@@ -18,22 +19,11 @@ function messageLabel(w) {
     const t = payloadOf(w);
     const outcome = t?.submitted ? 'sent' : t?.abandoned ? 'abandoned' : 'open';
     const length = Number.isFinite(t?.committed_graphemes) ? `${t.committed_graphemes} characters` : 'length not recorded';
-    return `${fmtDate(w.window_start)} · ${caseLabel(w)} · ${length} · ${outcome}`;
+    const series = hasEditSeries(w) ? '' : ' · summary only';
+    return `${fmtDate(w.window_start)} · ${caseLabel(w)} · ${length} · ${outcome}${series}`;
 }
 
 const newestFirst = (a, b) => String(b.window_start ?? '').localeCompare(String(a.window_start ?? '')) || episodeKey(a).localeCompare(episodeKey(b));
-
-function ChartCard({ title, hint, children }) {
-    return (
-        <div className="rounded-md border border-gray-200 p-3">
-            <div className="mb-2">
-                <div className="text-sm font-medium text-gray-900">{title}</div>
-                <div className="text-xs text-gray-500">{hint}</div>
-            </div>
-            {children}
-        </div>
-    );
-}
 
 export default function WritingProcess({ windows }) {
     const episodes = useMemo(() => typingEpisodes(windows).sort(newestFirst), [windows]);
@@ -43,12 +33,15 @@ export default function WritingProcess({ windows }) {
         return [...seen].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
     }, [episodes]);
 
-    // Default: the most recent message overall, and its learner.
+    // Default: the most recent message that can be drawn (else the most recent
+    // overall), and its learner; within a learner, their newest drawable one.
     const [learnerChoice, setLearnerChoice] = useState(null);
     const [messageChoice, setMessageChoice] = useState(null);
-    const learner = learners.some((l) => l.key === learnerChoice) ? learnerChoice : (episodes[0] ? learnerKey(episodes[0]) : null);
+    const opening = episodes.find(hasEditSeries) ?? episodes[0];
+    const learner = learners.some((l) => l.key === learnerChoice) ? learnerChoice : (opening ? learnerKey(opening) : null);
     const messages = episodes.filter((w) => learnerKey(w) === learner);
-    const selected = messages.find((w) => episodeKey(w) === messageChoice) ?? messages[0] ?? null;
+    const selected = messages.find((w) => episodeKey(w) === messageChoice)
+        ?? messages.find(hasEditSeries) ?? messages[0] ?? null;
 
     if (episodes.length === 0) return null;
     const typing = selected ? payloadOf(selected) : null;
@@ -59,44 +52,38 @@ export default function WritingProcess({ windows }) {
             title="Writing process"
             description="One message at a time: how it was written, edit by edit. Pick a learner and one of their messages."
         >
-            <div className="mb-4 flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1 text-xs text-gray-600">
-                    Learner
-                    <select
-                        value={learner ?? ''}
-                        onChange={(e) => { setLearnerChoice(e.target.value); setMessageChoice(null); }}
-                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
-                    >
-                        {learners.map((l) => <option key={l.key} value={l.key}>{l.name}</option>)}
-                    </select>
-                </label>
-                <label className="flex min-w-[18rem] flex-1 flex-col gap-1 text-xs text-gray-600">
-                    Message
-                    <select
-                        value={selected ? episodeKey(selected) : ''}
-                        onChange={(e) => setMessageChoice(e.target.value)}
-                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900"
-                    >
-                        {messages.map((w) => <option key={episodeKey(w)} value={episodeKey(w)}>{messageLabel(w)}</option>)}
-                    </select>
-                </label>
-            </div>
+            <Pickers>
+                <Picker label="Learner" value={learner ?? ''} onChange={(e) => { setLearnerChoice(e.target.value); setMessageChoice(null); }}>
+                    {learners.map((l) => <option key={l.key} value={l.key}>{l.name}</option>)}
+                </Picker>
+                <Picker label="Message" grow value={selected ? episodeKey(selected) : ''} onChange={(e) => setMessageChoice(e.target.value)}>
+                    {messages.map((w) => <option key={episodeKey(w)} value={episodeKey(w)}>{messageLabel(w)}</option>)}
+                </Picker>
+            </Pickers>
 
-            {typing && (
-                <div className="space-y-4">
+            {typing && !hasEditSeries(selected) && (
+                <p className="rounded-md bg-gray-50 px-4 py-8 text-center text-sm text-gray-600">
+                    This message was stored as a summary only — its edit-by-edit series was not kept, so there is no
+                    writing process to draw. It still counts in every figure above.
+                    {messages.some(hasEditSeries) ? ' Pick another message to see one.' : ''}
+                </p>
+            )}
+
+            {typing && hasEditSeries(selected) && (
+                <div className="space-y-3">
                     {!quality && (
                         <p className="text-xs text-gray-500">
                             This message was stored before its capture settings were kept, so pauses are marked at
                             Oyon&apos;s default 2 s threshold.
                         </p>
                     )}
-                    <ChartCard title="Progression" hint="Where each edit happened in the message over time. A drop below the leading-edge line is the writer going back to revise earlier text.">
-                        <TypingProgressionChart typing={typing} quality={quality} />
-                    </ChartCard>
-                    <ChartCard title="Production curve" hint="Message length after every edit. Flat stretches are pauses, steps down are deletions; compare the slope with the dashed mean rate.">
-                        <TypingProductionCurve typing={typing} quality={quality} />
-                    </ChartCard>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                        <ChartCard title="Progression" hint="Where each edit happened in the message over time. A drop below the leading edge is the writer going back to revise earlier text.">
+                            <TypingProgressionChart typing={typing} quality={quality} />
+                        </ChartCard>
+                        <ChartCard title="Production curve" hint="Message length after every edit. Flat stretches are pauses, steps down are deletions; compare the slope with the dashed mean rate.">
+                            <TypingProductionCurve typing={typing} quality={quality} />
+                        </ChartCard>
                         <ChartCard title="Pause-length distribution" hint="Intervals between keystrokes on a log scale. Fluent typing sits left; the long tail is planning or hesitation.">
                             <TypingIkiDistribution typing={typing} quality={quality} />
                         </ChartCard>

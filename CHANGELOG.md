@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.66] — 2026-09-16
+
+### Changed
+
+- **The Text and Voice tabs look like the rest of Learning Analytics.** Their headline figures are the dashboard's own stat cards — icon, label, large value — in an even grid (four across for Text, five for Voice) instead of small grey boxes clustered at the left. Each card shows the median large with its unit, and the interquartile range plus a plain-words hint underneath ("IQR 152–192 · active typing time"). Sections are the dashboard's panels, the scope note carries an info icon, and tables share the Time-on-task table's spacing.
+- **Less dead space.** The pause histograms fill their panels and sit side by side on wide screens (keystroke pauses next to where learners pause; voice pauses next to the unmeasurable turns). The writing-process charts are a two-by-two grid; the four voice trend panels are shorter and sit two (or four) across.
+- **Turns that could not be measured** now open with a coverage bar ("8 of 9 turns measured"), and an unmeasurable turn in the time-composition chart says so beside its bar.
+- **Writing process opens on a message it can draw.** A message stored as a summary only (no edit-by-edit series) is marked "summary only" in the picker and shows one plain note instead of four "not drawable" cards; the picker defaults to the newest message that has a series.
+- The tabs reflow to one column at phone width without pushing the page sideways.
+
 ## [3.0.0-beta.65] — 2026-09-16
 
 ### Changed

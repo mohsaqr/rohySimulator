@@ -6,7 +6,8 @@ import React, { useMemo, useState } from 'react';
 import { caseLabel, groupBy, learnerKey, learnerName, payloadOf } from './signalStats.js';
 import { voiceTurns } from './voiceAnalytics.js';
 import { fmtDate } from './signalFormat.js';
-import { Section } from './SignalUi.jsx';
+import { Picker, Pickers, Section } from './SignalUi.jsx';
+import { ChartCard } from './ChartKit.jsx';
 import { VoiceTurnComposition, VoiceTurnTrends } from './VoiceCharts.jsx';
 
 const byStart = (a, b) => String(a.window_start ?? '').localeCompare(String(b.window_start ?? ''))
@@ -39,33 +40,23 @@ export default function VoiceSession({ windows }) {
             title="Turns in one session"
             description="How a learner's speaking changed from turn to turn, and where each turn's time went."
         >
-            <div className="mb-4 flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1 text-xs text-gray-600">
-                    Learner
-                    <select value={learner.key} onChange={(e) => { setLearnerChoice(e.target.value); setSessionChoice(null); }}
-                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900">
-                        {learners.map((l) => <option key={l.key} value={l.key}>{l.name}</option>)}
-                    </select>
-                </label>
-                <label className="flex min-w-[18rem] flex-1 flex-col gap-1 text-xs text-gray-600">
-                    Session
-                    <select value={session.key} onChange={(e) => setSessionChoice(e.target.value)}
-                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900">
-                        {learner.sessions.map((s) => (
-                            <option key={s.key} value={s.key}>{`${fmtDate(s.first.window_start)} · ${caseLabel(s.first)} · ${s.turns.length} turns`}</option>
-                        ))}
-                    </select>
-                </label>
-            </div>
-            <div className="space-y-4">
-                <div className="rounded-md border border-gray-200 p-3">
-                    <div className="mb-2 text-sm font-medium text-gray-900">Across turns</div>
+            <Pickers>
+                <Picker label="Learner" value={learner.key} onChange={(e) => { setLearnerChoice(e.target.value); setSessionChoice(null); }}>
+                    {learners.map((l) => <option key={l.key} value={l.key}>{l.name}</option>)}
+                </Picker>
+                <Picker label="Session" grow value={session.key} onChange={(e) => setSessionChoice(e.target.value)}>
+                    {learner.sessions.map((s) => (
+                        <option key={s.key} value={s.key}>{`${fmtDate(s.first.window_start)} · ${caseLabel(s.first)} · ${s.turns.length} turns`}</option>
+                    ))}
+                </Picker>
+            </Pickers>
+            <div className="space-y-3">
+                <ChartCard title="Across turns" hint="One panel per measure, turn by turn. Is the learner warming up, trailing off, or starting to hesitate?">
                     <VoiceTurnTrends turns={shaped} />
-                </div>
-                <div className="rounded-md border border-gray-200 p-3">
-                    <div className="mb-2 text-sm font-medium text-gray-900">Where each turn&apos;s time went</div>
+                </ChartCard>
+                <ChartCard title="Where each turn's time went" hint="Each bar is one turn, drawn to its real length.">
                     <VoiceTurnComposition turns={shaped} />
-                </div>
+                </ChartCard>
             </div>
         </Section>
     );

@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import {
     quantile, median, summarize, perLearnerSummary, mergePauseHistograms, share, OKABE_ITO,
 } from './signalStats.js';
-import { textAnalytics, cpmOf, revisionBurstShareOf, mergePauseLocations } from './textAnalytics.js';
+import { textAnalytics, cpmOf, revisionBurstShareOf, mergePauseLocations, hasEditSeries } from './textAnalytics.js';
 import { voiceAnalytics, insufficientReasons } from './voiceAnalytics.js';
 
 const TOL = 1e-9;
@@ -174,6 +174,17 @@ describe('textAnalytics', () => {
 });
 
 // ── voice ─────────────────────────────────────────────────────────────────
+
+describe('hasEditSeries', () => {
+    const w = (typing) => ({ modality: 'typing', payload: typing });
+    it('is true only when an episode kept positioned edits or intervals', () => {
+        expect(hasEditSeries(w({ revision_locations: [{ t: 1, offset: 0, op: 'insert' }] }))).toBe(true);
+        expect(hasEditSeries(w({ inter_event_intervals_ms: [120] }))).toBe(true);
+        expect(hasEditSeries(w({ chars_per_min: 100, revision_locations: [] }))).toBe(false);
+        expect(hasEditSeries(w(null))).toBe(false);
+        expect(hasEditSeries({})).toBe(false);
+    });
+});
 
 describe('typing-v3 cohort figures', () => {
     const v3 = (user, { p, r, product, locations }) => {

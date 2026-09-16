@@ -57,6 +57,17 @@ export function revisionBurstShareOf(w) {
     return r / (p + r);
 }
 
+/**
+ * Whether an episode kept its per-edit series (positioned edits or keystroke
+ * intervals) — what the writing-process charts draw. A summary-only episode
+ * still counts in every cohort figure; it just has no process to draw.
+ */
+export function hasEditSeries(w) {
+    const t = payloadOf(w);
+    return (Array.isArray(t?.revision_locations) && t.revision_locations.length > 0)
+        || (Array.isArray(t?.inter_event_intervals_ms) && t.inter_event_intervals_ms.length > 0);
+}
+
 /** Where the caret sat when a pause began — keys from Oyon's typing-v3 aggregator. */
 export const PAUSE_LOCATIONS = Object.freeze([
     { key: 'mid_word', label: 'Mid-word' },
