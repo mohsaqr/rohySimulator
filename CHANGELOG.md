@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.47] — 2026-09-16
+
+### Added
+
+- **A read-only smoke battery for a DEPLOYED build**, so an update is verified and recorded rather than eyeballed: `npm run test:smoke https://host` (`scripts/smoke-deployed.sh`, `playwright.smoke.config.js`, `tests/smoke/`). It checks that the instance is alive and names its version, that the database answers and migrations are applied, that the application shell and its assets actually load, and that protected endpoints refuse an anonymous caller.
+- **`scripts/post-verify-rohy.sh` runs it after `tech-test.sh`**, so `bin/rohy-update apply` exercises it on every upgrade.
+
+### Notes for reviewers
+
+Every check in `tests/smoke/` is read-only and unauthenticated — it never logs in, never writes, and never touches case or learner data. That is what makes it safe to aim at production, which the e2e suite is not and must never be.
+
+Two things that would otherwise be silently wrong:
+
+- **The build is read from the TARGET's `/api/health`**, not from the working copy. Otherwise the Prova reporter falls back to the local `package.json` and attributes a remote deployment's results to whatever version this checkout happens to sit on.
+- **Every path in the smoke is relative and the base URL carries a trailing slash.** The deploy hub verifies path-prefixed targets (`https://host/rohy`), and `new URL('/api/health', 'https://host/rohy')` resolves to `https://host/api/health` — the prefix is dropped and the smoke silently checks the wrong application.
+
+The hook is opt-in (it runs only with `PROVA_URL` + `PROVA_TOKEN`) and non-blocking by default, because `rohy-update` rolls back on a failing post-verify and a new check should not start reverting deploys on day one. Set `ROHY_SMOKE_BLOCKING=1` to make it a gate.
+
 ## [3.0.0-beta.46] — 2026-09-16
 
 ### Added

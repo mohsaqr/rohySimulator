@@ -1,7 +1,7 @@
 {
   "name": "rohy",
   "private": true,
-  "version": "3.0.0-beta.46",
+  "version": "3.0.0-beta.47",
   "description": "Virtual Patient Simulation Platform for Medical Education",
   "author": {
     "name": "Mohammed Saqr",
@@ -37,6 +37,7 @@
     "test:client": "vitest run --project=client",
     "test:e2e": "playwright test",
     "test:e2e:prova": "npm run build:e2e && playwright test",
+    "test:smoke": "bash scripts/smoke-deployed.sh",
     "test:e2e:tablet": "playwright test tests/e2e/tablet-layout.spec.js",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium",
