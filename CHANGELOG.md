@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.48] — 2026-09-16
+
+### Added
+
+- **Nine machine-checked contracts are now named cases** rather than unattributed assertions: the cookie/CSRF session lane, who may register, the role matrix, tenant isolation, what the plugin content route gives away, the text-to-speech wire contract, alarm acknowledgement, agent-template editing and the clinical note. All are `kind: automated`, so they cost a tester nothing and are satisfied by the suite that already runs.
+- `DEBRIEF.REVIEW.02`, `CASE.LABS.02` and `AUTHOR.VISIBILITY.01` become `kind: both` — the machine now checks the contract, a person still judges the surface.
+
+### Notes for reviewers
+
+Automated checks mapped to a case went from **68 of 123** to **112 of 127**. Coverage patterns went from 32 to 55, every one verified against a real check key by `prova/check-coverage-links.mjs`.
+
+The point is not the number. An assertion no case claims is invisible to the battery: nobody reading Prova can tell whether tenancy isolation is guarded or simply untested. Naming them makes the catalogue describe what is actually checked.
+
 ## [3.0.0-beta.47] — 2026-09-16
 
 ### Added

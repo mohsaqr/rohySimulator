@@ -52,6 +52,7 @@
         land on different builds and the coverage matrix quietly splits in two.
       covers:
         - "rohy:chromium::boot-health.spec.js › boot and health › health answers 200 with the version this build actually is"
+        - "rohy:chromium::boot-health.spec.js › boot and health › health reports an uptime and a start time"
     - id: BOOT.HEALTH.02
       title: Readiness reports the database and the applied migrations
       kind: automated
@@ -284,7 +285,7 @@
       covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 4. labs ordered*"]
     - id: CASE.LABS.02
       title: The catalogue offers the full list, not only what the case expects
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -293,6 +294,8 @@
       expected: |-
         The irrelevant tests are all present and orderable. The catalogue is not narrowed to the
         case's expected work-up — narrowing it would tell the learner the answer.
+      covers:
+        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the laboratory catalogue stays full, whatever the case expects"
     - id: CASE.LABS.03
       title: Order instantly skips the wait
       kind: manual
@@ -593,7 +596,7 @@
         entries, and nothing the learner did left out.
     - id: DEBRIEF.REVIEW.02
       title: The answer key is not shown until the case is over
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -604,6 +607,8 @@
       expected: |-
         Mid-case the missed-treatment section is withheld or marked pending; only after the case has
         ended does it list what was expected and missed.
+      covers:
+        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the answer key is withheld while the case is live and released when it ends"
 
 - feature: DEBRIEF.DISCUSS
   title: The discussant conversation
@@ -913,6 +918,7 @@
       covers:
         - "rohy:chromium::i18n-pass.spec.js › localisation › choosing a language changes the login screen"
         - "rohy:chromium::i18n-pass.spec.js › localisation › the login screen has no hardcoded English"
+        - "rohy:chromium::i18n-pass.spec.js › localisation › the login screen offers every shipped language"
     - id: I18N.UI.02
       title: A long language does not break the layout
       kind: manual
@@ -1169,7 +1175,7 @@
   cases:
     - id: AUTHOR.VISIBILITY.01
       title: Hiding an investigation is an explicit act
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -1178,6 +1184,9 @@
       expected: |-
         The full catalogue is offered, with the case's own additions among it. Adding an expected test
         does not quietly hide everything else, because that would hand the student the answer.
+      covers:
+        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the laboratory catalogue stays full, whatever the case expects"
+        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the radiology catalogue stays full too"
 
 - feature: AUTHOR.PLUGINS
   title: Authoring plugin content
@@ -1406,3 +1415,206 @@
       expected: |-
         Nothing is captured while consent is declined, the consent text names every kind of signal it
         covers rather than only the camera, and capture starts only after agreement to that text.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Machine-checked contracts. These cost a person nothing — the automated suite
+# reports them on every build — but they are real cases so the battery shows
+# what is actually guarded rather than leaving 55 checks unattributed.
+# ───────────────────────────────────────────────────────────────────────────────
+
+- feature: AUTH.COOKIE
+  title: The cookie session lane and CSRF
+  products: [rohy]
+  tier: core
+  cases:
+    - id: AUTH.COOKIE.01
+      title: A cookie session works without a bearer header, and a write without the CSRF token is refused
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Sign in and inspect the cookies that come back.
+        2. Make an authenticated read using only the cookie.
+        3. Make a write with, and without, the `X-CSRF-Token` header.
+        4. Sign out.
+      expected: |-
+        Sign-in sets an HttpOnly session cookie and a script-readable CSRF cookie; a cookie-only read
+        succeeds; a write without the CSRF header is refused 403 while one with a matching header
+        succeeds and rotates the session cookie; and signing out clears both cookies.
+      covers:
+        - "rohy:chromium::cookie-auth.spec.js › *"
+
+- feature: AUTH.REGISTRATION
+  title: Who may create an account
+  products: [rohy]
+  tier: core
+  cases:
+    - id: AUTH.REGISTRATION.01
+      title: Registration is closed on a fresh install and cannot be used to self-elevate
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. On a fresh install, try to register an account.
+        2. With registration opened, try to register while asking for the admin role.
+        3. Register normally with no role given.
+      expected: |-
+        A fresh install refuses registration; a request that asks for admin is refused 403; and an
+        ordinary registration produces a usable student account. Self-service sign-up can never mint
+        privilege.
+      covers:
+        - "rohy:chromium::auth.spec.js › auth › registration is closed by default on a fresh install"
+        - "rohy:chromium::auth.spec.js › auth › open registration cannot self-elevate to admin (403)"
+        - "rohy:chromium::auth.spec.js › auth › open registration without role defaults to student and returns a usable JWT"
+
+- feature: RBAC.MATRIX
+  title: What each role may reach
+  products: [rohy]
+  tier: core
+  cases:
+    - id: RBAC.MATRIX.01
+      title: Every role is held to its own boundary
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. As each of student, reviewer, educator and admin, call the endpoints that role should and
+           should not reach.
+        2. Try to raise your own role through a self-update.
+        3. Try to create a user with an invented role.
+      expected: |-
+        Each role reaches exactly its own surface: a student cannot read the audit log or another
+        user, a reviewer may read analytics but not author cases, an educator may author cases but
+        not change platform voice settings, and only an admin has all three. A self-update cannot
+        raise a role, and an unknown role is rejected outright.
+      covers:
+        - "rohy:chromium::rbac.spec.js › *"
+
+- feature: TENANT.ISOLATION
+  title: One tenant cannot see another
+  products: [rohy]
+  tier: core
+  cases:
+    - id: TENANT.ISOLATION.01
+      title: Cases and sessions never cross a tenant boundary
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Create a second tenant and an admin inside it.
+        2. From that admin, try to list the first tenant's cases, read its sessions and read its
+           active sessions.
+        3. Create a case while naming another tenant in the request body.
+      expected: |-
+        Nothing from the other tenant is readable, and naming a tenant in the body does not move the
+        row — the server decides tenancy, not the caller. The transition is recorded in the audit log.
+      covers:
+        - "rohy:chromium::tenant.spec.js › *"
+
+- feature: PLUGIN.ACCESS
+  title: What the plugin content route gives away
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: PLUGIN.ACCESS.01
+      title: The content route is an allowlist and not an inventory oracle
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Ask a plugin for a path it never declared as remote content.
+        2. Ask for a plugin that does not exist, and for an installed plugin that ships no catalogue.
+        3. Ask for plugin content without signing in.
+      expected: |-
+        An undeclared path is refused, the two "no catalogue" answers are identical so the route
+        cannot be used to enumerate which plugins are installed, and an unauthenticated caller is
+        refused.
+      covers:
+        - "rohy:chromium::plugin-rooms.spec.js › plugin content › the content route serves only the paths a plugin declared"
+        - "rohy:chromium::plugin-rooms.spec.js › plugin content › the catalogue route does not reveal which plugins are installed"
+        - "rohy:chromium::plugin-rooms.spec.js › plugin content › plugin content is refused to an unauthenticated caller"
+
+- feature: VOICE.WIRE
+  title: The text-to-speech wire contract
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: VOICE.WIRE.01
+      title: The voice that reaches the wire is the configured one, at a sane pitch
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Have the patient speak and inspect the request the client sends.
+        2. Have the discussant speak and compare.
+        3. Send an out-of-range pitch, and send none at all.
+      expected: |-
+        The voice id itself reaches the wire, pitch travels in the body in semitones and playback rate
+        is never bent to fake it, the discussant does not inherit the patient's voice, an over-range
+        pitch is clamped or refused, and an absent pitch is defaulted rather than erroring.
+      covers:
+        - "rohy:chromium::voice-runtime.spec.js › *"
+
+- feature: ALARM.ACK
+  title: Acknowledging an alarm, as a contract
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ALARM.ACK.01
+      title: An acknowledgement is idempotent and belongs to its own session
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Acknowledge an alarm, then acknowledge it again.
+        2. As a different learner, try to acknowledge an alarm bound to someone else's session, and to
+           read their alarm configuration.
+      expected: |-
+        The first acknowledgement is recorded with a timestamp and the repeat is accepted without
+        changing it; another learner can neither acknowledge nor read anything belonging to a session
+        that is not theirs.
+      covers:
+        - "rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › PUT /api/alarms/:id/acknowledge returns 200 + acknowledged_at"
+        - "rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › repeat ack is idempotent and returns already_acknowledged:true"
+        - "rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › student cannot ack an alarm bound to another user's session"
+        - "rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › student cannot read another user's alarm config"
+
+- feature: ADMIN.AGENTS
+  title: Editing the shipped agent templates
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ADMIN.AGENTS.01
+      title: A shipped template can be edited and duplicated
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, edit one of the standard agent templates.
+        2. Duplicate it.
+      expected: |-
+        The edit is accepted and persisted, and the duplicate is created as a custom template rather
+        than another standard one, so the shipped set stays recognisable.
+      covers:
+        - "rohy:chromium::admin-flows.spec.js › admin flows › edit agent template*"
+        - "rohy:chromium::admin-flows.spec.js › admin flows › duplicate agent template*"
+
+- feature: SESSION.NOTE
+  title: The clinical note
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: SESSION.NOTE.01
+      title: A clinical note survives the end of the case
+      kind: automated
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. Write a clinical note during a case.
+        2. Close the note, then end the case.
+      expected: |-
+        The note is saved against the session and is still readable afterwards — the learner's own
+        writing is not lost when the case closes.
+      covers:
+        - "rohy:chromium::case-lifecycle.spec.js › case lifecycle › 8. clinical note*"
+
