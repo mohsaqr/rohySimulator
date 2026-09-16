@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateEmotionBatch, isModalityOnlyEvent } from 'oyon/validation';
-import { OYON_MODALITIES, OYON_WINDOW_KINDS } from 'oyon/version';
+import { OYON_EVENT_SOURCES, OYON_MODALITIES, OYON_STATE_VOCABULARIES, OYON_WINDOW_KINDS } from 'oyon/version';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
 import { logger } from '../logger.js';
@@ -598,6 +598,199 @@ router.get('/signal-windows', authenticateToken, async (req, res) => {
         windows: rows.map(hydrateSignalWindow).map(r => redactRow(r)),
         total,
         modalities: modalityRows.map(r => ({ modality: r.modality, count: Number(r.count) || 0 })),
+    });
+});
+
+/*
+ * Oyon's per-event state log for typing and voice (migration 0058).
+ *
+ * Windows summarise an episode or a turn; sequence analysis needs the ordered
+ * states themselves. SignalCapture hands each one to the host through
+ * `onEvent`, and the client batches them here.
+ *
+ * The same rules as the window ingest, applied per event: the caller must own
+ * the session, the session must have granted consent, and the accepted contract
+ * must name the modality (typing v2, voice v3) — an event it does not cover is
+ * dropped and counted, never stored. `detail` is reduced to a whitelist of
+ * content-free scalars, so nothing a client adds beyond them is kept.
+ */
+const SIGNAL_EVENT_MODALITIES = new Set(['typing', 'voice']);
+const MAX_SIGNAL_EVENTS_PER_BATCH = 500;
+const SIGNAL_EVENT_INSERT_CHUNK = 50;
+const SIGNAL_EVENT_DETAIL_NUMBERS = ['offset', 'length'];
+const SIGNAL_EVENT_DETAIL_STRINGS = ['op', 'phase'];
+
+/** Keep only the content-free detail fields; null when none are present. */
+function signalEventDetail(detail) {
+    if (!detail || typeof detail !== 'object') return null;
+    const kept = {};
+    for (const key of SIGNAL_EVENT_DETAIL_NUMBERS) {
+        if (Number.isFinite(detail[key])) kept[key] = detail[key];
+    }
+    for (const key of SIGNAL_EVENT_DETAIL_STRINGS) {
+        if (typeof detail[key] === 'string' && /^[a-z_]{1,24}$/.test(detail[key])) kept[key] = detail[key];
+    }
+    return Object.keys(kept).length ? kept : null;
+}
+
+/** A typing pause carries `duration_ms`; a voice pause `silence_run_ms`. */
+function signalEventDuration(detail) {
+    const value = detail?.duration_ms ?? detail?.silence_run_ms;
+    return Number.isFinite(value) && value >= 0 ? Math.round(value) : null;
+}
+
+/** Structural errors for one event, or [] when it is well-formed. */
+function signalEventErrors(event, index, session) {
+    const at = `events[${index}]`;
+    if (!event || typeof event !== 'object') return [`${at} must be an object`];
+    const errors = [];
+    if (!SIGNAL_EVENT_MODALITIES.has(event.modality)) errors.push(`${at}.modality must be typing or voice`);
+    else if (!OYON_STATE_VOCABULARIES[event.modality]?.includes(event.state)) {
+        errors.push(`${at}.state is not a ${event.modality} state`);
+    }
+    if (!OYON_EVENT_SOURCES.includes(event.source)) errors.push(`${at}.source is invalid`);
+    if (typeof event.capture_id !== 'string' || !event.capture_id || event.capture_id.length > 100) {
+        errors.push(`${at}.capture_id is required`);
+    }
+    if (!Number.isInteger(event.sequence_index) || event.sequence_index < 0) {
+        errors.push(`${at}.sequence_index must be a non-negative integer`);
+    }
+    const iso = Number.isFinite(event.timestamp) ? new Date(event.timestamp).toISOString() : null;
+    if (!iso || !timestampWithinSession(iso, iso, session)) errors.push(`${at}.timestamp is outside session bounds`);
+    return errors;
+}
+
+router.post('/signal-events', authenticateToken, async (req, res) => {
+    const settings = await ensureSettings(tenantId(req));
+    if (!settings.emotion_capture_enabled) {
+        return res.status(403).json({ error: 'Oyon is disabled' });
+    }
+
+    const events = req.body?.events;
+    if (!Array.isArray(events) || events.length === 0 || events.length > MAX_SIGNAL_EVENTS_PER_BATCH) {
+        return res.status(400).json({
+            error: `events must be an array of 1 to ${MAX_SIGNAL_EVENTS_PER_BATCH} events`,
+            code: 'oyon_bad_event_batch',
+        });
+    }
+
+    const session = await resolveSession(req, req.body?.session_id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (String(session.user_id) !== String(req.user.id)) {
+        oyonLog.warn('signal events rejected: not session owner', {
+            user_id: req.user?.id,
+            session_owner: session.user_id,
+            session_id: session.id,
+        });
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const errors = events.flatMap((event, index) => signalEventErrors(event, index, session));
+    if (errors.length) {
+        return res.status(400).json({ error: 'Invalid signal events', code: 'oyon_bad_event_batch', details: errors.slice(0, 10) });
+    }
+
+    const consent = await latestConsent(req, session.id);
+    if (!consent?.consent_granted) {
+        return res.status(403).json({ error: 'Oyon consent required' });
+    }
+
+    const covered = events.filter(event => consentCoversModality(consent, event.modality));
+    const consentBlocked = events.length - covered.length;
+
+    const snapshot = parseJson(session.case_snapshot) || {};
+    const caseTitle = snapshot.name || session.live_case_name || null;
+    const studentName = session.student_name || req.user.username || session.username || null;
+    const consentVersion = consent.accepted_version || consent.consent_version || DEFAULT_CONSENT_VERSION;
+    const columns = [
+        'tenant_id', 'user_id', 'session_id', 'case_id', 'student_name_snapshot', 'case_title_snapshot',
+        'capture_id', 'sequence_index', 'modality', 'state', 'source', 'state_vocabulary',
+        'occurred_at', 'duration_ms', 'detail_json', 'admin_can_view', 'educator_can_view', 'consent_version',
+    ];
+    const rowSql = `(${columns.map(() => '?').join(', ')})`;
+
+    let inserted = 0;
+    for (let start = 0; start < covered.length; start += SIGNAL_EVENT_INSERT_CHUNK) {
+        const chunk = covered.slice(start, start + SIGNAL_EVENT_INSERT_CHUNK);
+        const values = chunk.flatMap(event => [
+            String(tenantId(req)),
+            String(req.user.id),
+            String(session.id),
+            session.case_id == null ? null : String(session.case_id),
+            shortText(studentName, 200),
+            shortText(caseTitle, 300),
+            event.capture_id,
+            event.sequence_index,
+            event.modality,
+            event.state,
+            event.source,
+            shortText(event.state_vocabulary, 60),
+            new Date(event.timestamp).toISOString(),
+            signalEventDuration(event.detail),
+            jsonTextOrNull(signalEventDetail(event.detail)),
+            settings.admin_emotion_view_enabled ? 1 : 0,
+            settings.educator_emotion_view_enabled ? 1 : 0,
+            consentVersion,
+        ]);
+        const result = await dbRun(
+            `INSERT INTO oyon_signal_events (${columns.join(', ')})
+             VALUES ${chunk.map(() => rowSql).join(', ')}
+             ON CONFLICT(tenant_id, session_id, capture_id, sequence_index) DO NOTHING`,
+            values,
+        );
+        inserted += result?.changes || 0;
+    }
+
+    oyonLog.info('signal events accepted', {
+        session_id: session.id,
+        received: events.length,
+        inserted,
+        skipped: covered.length - inserted,
+        consent_blocked: consentBlocked,
+    });
+    res.json({ ok: true, inserted, skipped: covered.length - inserted, consent_blocked: consentBlocked });
+});
+
+router.get('/signal-events', authenticateToken, async (req, res) => {
+    const settings = await ensureSettings(tenantId(req));
+    if (!assertOyonReadAccess(req, res, settings)) return;
+
+    const session = req.query.session_id ? await resolveSession(req, req.query.session_id) : null;
+    if (req.query.session_id && !session) return res.status(404).json({ error: 'Session not found' });
+    if (session && !canReadSession(req.user, session)) return res.status(403).json({ error: 'Access denied' });
+
+    const modality = req.query.modality ? String(req.query.modality) : null;
+    if (modality && !SIGNAL_EVENT_MODALITIES.has(modality)) {
+        return res.status(400).json({ error: 'Unknown Oyon modality', code: 'oyon_unknown_modality' });
+    }
+
+    const { whereSql, params } = buildSignalWindowsWhere(req, { session, modality, timeColumn: 'occurred_at' });
+    const countRow = await dbGet(`SELECT COUNT(*) AS total FROM oyon_signal_events r WHERE ${whereSql}`, params);
+    const total = Number(countRow?.total) || 0;
+
+    // Sequences need whole captures, so pages are large and ordered by capture
+    // then position — a page boundary never reorders a sequence.
+    const rows = await dbAll(
+        `SELECT r.id, r.user_id, r.session_id, r.case_id, r.student_name_snapshot, r.case_title_snapshot,
+                r.capture_id, r.sequence_index, r.modality, r.state, r.source, r.occurred_at,
+                r.duration_ms, r.detail_json
+         FROM oyon_signal_events r
+         WHERE ${whereSql}
+         ORDER BY r.session_id, r.capture_id, r.sequence_index
+         LIMIT ? OFFSET ?`,
+        [...params, limit(req.query.limit, 2000, 5000), offsetParam(req.query.offset)],
+    );
+
+    oyonLog.debug('signal events read', {
+        user_id: req.user.id,
+        session_id: session?.id,
+        modality,
+        returned: rows.length,
+        total,
+    });
+    res.json({
+        events: rows.map(({ detail_json: detailJson, ...row }) => redactRow({ ...row, detail: parseJson(detailJson) })),
+        total,
     });
 });
 
@@ -1482,7 +1675,7 @@ function rowVisibilityColumn(user) {
  * builder is on the hot path of every existing dashboard, and the whole point of
  * this change is that none of them shift.
  */
-function buildSignalWindowsWhere(req, { session = null, modality = null } = {}) {
+function buildSignalWindowsWhere(req, { session = null, modality = null, timeColumn = 'window_start' } = {}) {
     const params = [tenantId(req)];
     const parts = ['r.tenant_id = ?'];
 
@@ -1514,15 +1707,15 @@ function buildSignalWindowsWhere(req, { session = null, modality = null } = {}) 
 
     const dateOnly = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
     if (req.query.from) {
-        parts.push('r.window_start >= ?');
+        parts.push(`r.${timeColumn} >= ?`);
         params.push(String(req.query.from));
     }
     if (req.query.to) {
         if (dateOnly(req.query.to)) {
-            parts.push("r.window_start < date(?, '+1 day')");
+            parts.push(`r.${timeColumn} < date(?, '+1 day')`);
             params.push(String(req.query.to));
         } else {
-            parts.push('r.window_start <= ?');
+            parts.push(`r.${timeColumn} <= ?`);
             params.push(String(req.query.to));
         }
     }
@@ -1645,10 +1838,10 @@ function firstValue(events, key) {
     return null;
 }
 
-function limit(raw, fallback) {
+function limit(raw, fallback, max = 500) {
     const n = Number(raw);
     if (!Number.isInteger(n)) return fallback;
-    return Math.min(Math.max(n, 1), 500);
+    return Math.min(Math.max(n, 1), max);
 }
 
 function offsetParam(raw) {

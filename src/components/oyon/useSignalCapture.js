@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createSignalTransport } from './signalTransport';
+import { createSignalEventTransport } from './signalEventTransport';
 import { apiUrl } from '../../config/api';
 import { oyonClientLog } from './clientLogger';
 
@@ -154,6 +155,9 @@ export function useSignalCapture({ enabled, persist, runtimeConfig, sessionId, c
         // is in flight must not install a capture nobody will ever stop.
         let cancelled = false;
         let started = null;
+        // The per-event state log (typing and voice), batched to its own route
+        // for sequence analysis. Windows keep travelling through `transport`.
+        const eventTransport = createSignalEventTransport(() => contextRef.current);
 
         (async () => {
             try {
@@ -174,12 +178,18 @@ export function useSignalCapture({ enabled, persist, runtimeConfig, sessionId, c
                     // second client-side store here would be an unasked-for copy
                     // of learner data with no reader.
                     transport: createSignalTransport(() => contextRef.current),
+                    onEvent: eventTransport.write,
                     onError: (e, info) => oyonClientLog('warn', 'signal capture error', {
                         scope: info?.scope || null,
                         error: e?.message || String(e),
                     }),
                 });
-                started.start({ session_id: sessionId });
+                // A fresh capture_id per start. Oyon restarts sequence_index at 0
+                // for every capture and does not invent an id, so without one a
+                // second capture in the same session would reuse the first
+                // one's (session, index) keys and the server's dedup would drop
+                // its events as retries.
+                started.start({ session_id: sessionId, capture_id: `cap_${crypto.randomUUID()}` });
                 setCapture(started);
                 setError(null);
                 oyonClientLog('debug', 'signal capture started', {
@@ -207,6 +217,9 @@ export function useSignalCapture({ enabled, persist, runtimeConfig, sessionId, c
                 .catch(e => oyonClientLog('warn', 'signal capture stop failed', {
                     error: e?.message || String(e),
                 }))
+                // stop() emits the closing events (submit/abandon, end), so the
+                // event buffer is flushed after it and before dispose().
+                .then(() => eventTransport.flush())
                 .finally(() => started.dispose());
         };
     }, [active, sessionId, settingsKey]);

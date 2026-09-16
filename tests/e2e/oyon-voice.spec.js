@@ -132,6 +132,9 @@ test.describe('oyon voice capture', () => {
 
         const talk = await openVoiceMode(studentPage);
         const posted = studentPage.waitForResponse(isVoicePost, { timeout: 45_000 });
+        const eventsPosted = studentPage.waitForResponse((r) => r.url().includes('/api/addons/oyon/signal-events')
+            && r.request().method() === 'POST'
+            && (r.request().postData() || '').includes('"modality":"voice"'), { timeout: 45_000 });
         await speakOneTurn(studentPage, talk);
 
         const res = await posted;
@@ -156,6 +159,15 @@ test.describe('oyon voice capture', () => {
             expect(sent, `voice window carried ${raw}`).not.toContain(raw);
         }
         expect(offOrigin, 'the speech detector was loaded from a third party').toEqual([]);
+
+        // The per-event voice state log (start, speech, silence, … end) is stored too.
+        const eventsRes = await eventsPosted;
+        expect(eventsRes.status(), await eventsRes.text()).toBe(200);
+        const eventsBody = await eventsRes.json();
+        expect(eventsBody.consent_blocked).toBe(0);
+        const states = JSON.parse(eventsRes.request().postData()).events.map((e) => e.state);
+        expect(states).toContain('start');
+        expect(eventsBody.inserted).toBeGreaterThanOrEqual(1);
     });
 
     test('a learner on consent v2 has no voice captured, even with voice on', async ({ studentPage, baseURL }) => {
@@ -165,7 +177,7 @@ test.describe('oyon voice capture', () => {
 
         const voicePosts = [];
         studentPage.on('request', (r) => {
-            if (r.url().includes('/api/addons/oyon/emotion-records') && (r.postData() || '').includes('"modality":"voice"')) {
+            if (/\/api\/addons\/oyon\/(emotion-records|signal-events)/.test(r.url()) && (r.postData() || '').includes('"modality":"voice"')) {
                 voicePosts.push(r);
             }
         });
