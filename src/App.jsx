@@ -821,7 +821,7 @@ function MainApp() {
    // Re-consent prompt for a widened Oyon contract. Rendered beside the capture
    // pill so it reaches every surface, and self-suppressing — it returns null
    // unless this learner previously accepted an older contract.
-   const oyonConsentUpdate = user ? <OyonConsentUpdate role={user.role} /> : null;
+   const oyonConsentUpdate = user ? <OyonConsentUpdate /> : null;
 
    const oyonPill = user ? (
       // Rendered whenever a user is signed in, session or not: without a

@@ -113,8 +113,8 @@ export function consentSatisfies(accepted, required) {
  * Only when the learner previously said YES to an older contract. Someone who
  * declined has already made a choice — re-asking on every load would be
  * nagging, and they can opt in from Settings → Oyon whenever they want. Someone
- * who has never answered has no `granted` flag at all, so the `granted` check
- * keeps them out of THIS decision; consentPromptMode asks them separately.
+ * who has never answered has no `granted` flag at all and is handled by the
+ * first-run card, so the `granted` check alone keeps them out.
  *
  * ISSUE-0019: a grant carrying NO version used to return false here, which
  * made that state permanent — the gate read the missing version as v1 and
@@ -126,26 +126,6 @@ export function consentSatisfies(accepted, required) {
 export function needsConsentUpgrade({ granted, acceptedVersion, requiredVersion }) {
     if (!granted) return false;
     return !consentSatisfies(acceptedVersion, requiredVersion);
-}
-
-/**
- * Which consent card, if any, to show: 'upgrade', 'first', or null.
- *
- *   'upgrade' — agreed to an older contract; ask about what is new.
- *   'first'   — has NEVER answered, and no welcome page is about to ask.
- *   null      — on the current contract, declined, or awaiting the welcome page.
- *
- * 'first' closes a gap needsConsentUpgrade leaves open on purpose. The student
- * welcome page is the only place a never-answered person was asked, and admins
- * never see it (they get the platform setup wizard) — so an admin trying capture
- * on their own account was never asked, and nothing was ever recorded for them.
- * Anyone who has not finished the welcome page is left to it (`awaitingFirstRun`),
- * so nobody is asked twice.
- */
-export function consentPromptMode({ granted, acceptedVersion, requiredVersion, awaitingFirstRun = false }) {
-    if (granted === true) return needsConsentUpgrade({ granted, acceptedVersion, requiredVersion }) ? 'upgrade' : null;
-    if (granted === false) return null;
-    return awaitingFirstRun ? null : 'first';
 }
 
 /** What to send as `accepted_version` — only ever a contract we can render. */
