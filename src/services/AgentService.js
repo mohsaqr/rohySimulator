@@ -15,7 +15,6 @@
 
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from './apiClient.js';
 import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
-import { roleAnchor } from '../utils/roleAnchor.js';
 
 async function tryReturning(fallback, fn, label) {
   try {
@@ -195,9 +194,16 @@ export const AgentService = {
     }, 'getConversation');
   },
 
-  async addMessage(sessionId, agentType, role, content) {
+  // `channel` ('chat' | 'call') and `callId` are optional: a turn from the
+  // team-agent tabs sends neither and the body stays { role, content }. The
+  // on-call phone tags every turn with its channel, and call turns with the
+  // id of the call they belong to, so a transcript can tell texts from calls.
+  async addMessage(sessionId, agentType, role, content, { channel = null, callId = null } = {}) {
+    const body = { role, content };
+    if (channel) body.channel = channel;
+    if (callId) body.call_id = callId;
     try {
-      return await apiPost(`/sessions/${sessionId}/agents/${agentType}/conversation`, { role, content });
+      return await apiPost(`/sessions/${sessionId}/agents/${agentType}/conversation`, body);
     } catch (err) {
       console.error('[AgentService] addMessage error:', err);
       throw err;
@@ -312,37 +318,33 @@ export const AgentService = {
     return lines.join('\n');
   },
 
-  buildAgentSystemPrompt(agent, debriefingContext) {
-    // Role anchor leads — see src/utils/roleAnchor.js. Pre-fix agent
-    // prompts had no role anchor at all; an admin-authored agent template
-    // that opened with weak or ambiguous text (or omitted any "you are"
-    // line entirely) let the model drift into whatever role the
-    // conversation history suggested. With the anchor, a nurse stays a
-    // nurse, a consultant stays a consultant, regardless of what the
-    // learner says.
-    const anchor = roleAnchor({
-      role: agent.role_title || agent.agent_type || 'team member',
-      name: agent.name,
-    });
-    const parts = [anchor, agent.system_prompt || ''];
-    if (debriefingContext) {
-      parts.push('');
-      parts.push('--- CURRENT SITUATION ---');
-      parts.push(debriefingContext);
-    }
-    return parts.join('\n');
-  },
-
   /**
    * Send a message to an agent via the LLM proxy
    * Handles the full flow: build context, send message, log response
    */
-  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null, { caseLanguage = null } = {}) {
+  //
+  // Trailing options: `caseLanguage` (session dialogue language), `channel`
+  // ('chat' | 'call', default 'chat') and `callId` (the call a turn belongs
+  // to). channel/callId are written on BOTH the learner's and the agent's
+  // turn; they do not change what is sent to the model.
+  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null, { caseLanguage = null, channel = 'chat', callId = null } = {}) {
+    // The server builds a team agent's persona from its case agent id. Without
+    // one, /proxy/llm would have nothing to build it from, so refuse before
+    // writing the learner's turn or calling the model — an agent that answers
+    // with no persona is worse than one that says it cannot be reached.
+    if (agent?.case_agent_id == null) {
+      const err = new Error('this agent has no case agent id');
+      console.error('[AgentService] sendAgentMessage error:', err);
+      return `Error: Could not communicate with ${agent?.name}. ${err.message}`;
+    }
     try {
-      await this.addMessage(sessionId, agent.agent_type, 'user', userMessage);
+      const turnTags = { channel, callId };
+      await this.addMessage(sessionId, agent.agent_type, 'user', userMessage, turnTags);
 
-      const debriefingContext = this.buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase);
-      const systemPrompt = this.buildAgentSystemPrompt(agent, debriefingContext);
+      // Only the situation this browser can see. The server leads with the
+      // role anchor and the agent's authored prompt, which a learner's client
+      // is no longer sent (server/services/agentPersona.js).
+      const situation = this.buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase);
 
       const messages = [
         ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
@@ -352,26 +354,14 @@ export const AgentService = {
       const requestBody = {
         session_id: sessionId,
         messages,
-        system_prompt: systemPrompt
+        system_prompt: situation,
+        agent_llm_config: { case_agent_id: agent.case_agent_id }
       };
       // Session dialogue language — the server appends the registry's
       // output-language directive (systemPromptAssembly), same contract as
       // the patient chat in llmService. Without this, nurse/consultant/
       // relative replies stay English in a non-English session.
       if (caseLanguage) requestBody.case_language = caseLanguage;
-
-      // Per-persona LLM routing — send only the template id. The server
-      // (proxy-routes.js) reads the template by id and applies its LLM
-      // fields server-side; the client never forwards keys or endpoints.
-      // Previously this block also passed provider/model/api_key/endpoint
-      // from the client, but the agents API redacts api_key to "[redacted]"
-      // before it reaches the browser, so the server would have made the
-      // LLM call with that literal string — a latent failure mode if any
-      // future code path ever populated `agent.llm_provider` client-side.
-      const agentTemplateId = agent.agent_template_id || agent.id;
-      if (agentTemplateId) {
-        requestBody.agent_llm_config = { agent_template_id: agentTemplateId };
-      }
 
       let aiContent;
       try {
@@ -391,7 +381,7 @@ export const AgentService = {
         throw err;
       }
 
-      await this.addMessage(sessionId, agent.agent_type, 'assistant', aiContent);
+      await this.addMessage(sessionId, agent.agent_type, 'assistant', aiContent, turnTags);
 
       const keyPoints = this.extractKeyPoints(aiContent, agent.agent_type);
       if (keyPoints) {

@@ -258,7 +258,7 @@ describe('AgentService — module shape', () => {
             'getSessionAgents', 'pageAgent', 'arriveAgent', 'departAgent', 'getAgentStatus',
             'getConversation', 'addMessage', 'clearConversation',
             'getTeamCommunications', 'addTeamCommunication',
-            'buildDebriefingContext', 'buildAgentSystemPrompt',
+            'buildDebriefingContext',
             'sendAgentMessage', 'extractKeyPoints',
             'isAgentAvailable', 'getAgentDisplayStatus',
         ];
@@ -575,6 +575,15 @@ describe('AgentService conversations', () => {
         expect(req.body).toEqual({ role: 'user', content: 'hello' });
     });
 
+    it('addMessage: adds channel and call_id only when given', async () => {
+        await AgentService.addMessage('sess-1', 'radiologist', 'user', 'on the phone', { channel: 'call', callId: 'abc_123' });
+        const req = lastRequest({
+            method: 'POST',
+            pathEndsWith: '/api/sessions/sess-1/agents/radiologist/conversation',
+        });
+        expect(req.body).toEqual({ role: 'user', content: 'on the phone', channel: 'call', call_id: 'abc_123' });
+    });
+
     it('clearConversation: DELETE conversation', async () => {
         const out = await AgentService.clearConversation('sess-1', 'nurse');
         expect(out).toEqual({ cleared: true });
@@ -682,53 +691,6 @@ describe('AgentService.buildDebriefingContext', () => {
         expect(out).toContain('nurse stuff');
         expect(out).toContain('family update'); // relative is always allowed
         expect(out).not.toContain('doctor stuff');
-    });
-});
-
-describe('AgentService.buildAgentSystemPrompt', () => {
-    it('joins the agent system prompt with the debriefing under the CURRENT SITUATION header', () => {
-        const out = AgentService.buildAgentSystemPrompt(
-            { system_prompt: 'You are a nurse.' },
-            'PATIENT: Jane',
-        );
-        expect(out).toContain('You are a nurse.');
-        expect(out).toContain('--- CURRENT SITUATION ---');
-        expect(out).toContain('PATIENT: Jane');
-    });
-
-    it('omits the situation header when no debriefing context is supplied', () => {
-        // Post-2026-05-14 enterprise-fix: the prompt now leads with a
-        // role-anchor block (see src/utils/roleAnchor.js) before the
-        // agent's authored system_prompt. The original assertion checked
-        // an exact-equality "plain" — that was locking the absence of any
-        // structural framing, which was the prior weakness. We now assert
-        // both the anchor and the unchanged authored prose are present
-        // and that the SITUATION header is still absent.
-        const out = AgentService.buildAgentSystemPrompt(
-            { system_prompt: 'plain' },
-            '',
-        );
-        expect(out).toMatch(/## ROLE/);
-        expect(out).toMatch(/Respond ONLY as/);
-        expect(out).toContain('plain');
-        expect(out).not.toContain('--- CURRENT SITUATION ---');
-    });
-
-    it('uses agent.role_title and agent.name in the role anchor when provided', () => {
-        const out = AgentService.buildAgentSystemPrompt(
-            { system_prompt: 'You are stoic.', role_title: 'Bedside nurse', name: 'Nurse Beth' },
-            '',
-        );
-        expect(out).toMatch(/You are: Bedside nurse\./);
-        expect(out).toMatch(/Your name: Nurse Beth\./);
-    });
-
-    it('falls back to agent.agent_type when role_title is missing', () => {
-        const out = AgentService.buildAgentSystemPrompt(
-            { system_prompt: '', agent_type: 'consultant' },
-            '',
-        );
-        expect(out).toMatch(/You are: consultant\./);
     });
 });
 
@@ -843,13 +805,12 @@ describe('AgentService.getAgentDisplayStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('AgentService.sendAgentMessage', () => {
-    it('happy path: hits /api/proxy/llm with system_prompt + messages and returns assistant content', async () => {
+    it('happy path: names the case agent and sends only the situation', async () => {
         const agent = {
-            id: 'a-1',
+            case_agent_id: 7,
             agent_template_id: 'tpl-1',
             agent_type: 'nurse',
             name: 'Nurse Joy',
-            system_prompt: 'You are a triage nurse.',
             llm_provider: 'openai',
             llm_model: 'gpt-4o-mini',
         };
@@ -874,47 +835,87 @@ describe('AgentService.sendAgentMessage', () => {
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(llmReq).toBeTruthy();
         expect(llmReq.body.session_id).toBe('sess-1');
-        expect(llmReq.body.system_prompt).toContain('You are a triage nurse.');
         expect(llmReq.body.system_prompt).toContain('Case: Agent Case');
         expect(llmReq.body.system_prompt).toContain('Chief Complaint: Chest pain');
         expect(llmReq.body.messages).toEqual([
             { role: 'assistant', content: 'previous reply' },
             { role: 'user', content: 'BP is rising' },
         ]);
-        // Per-persona LLM routing (post-v2.1.0): only the template id is
-        // forwarded. The server reads the template's llm_provider /
-        // llm_model / llm_api_key / llm_endpoint from the DB. The client
-        // never sends those fields — see the comment in
-        // AgentService.sendAgentMessage for the security reason.
-        expect(llmReq.body.agent_llm_config).toEqual({ agent_template_id: 'tpl-1' });
-        expect(llmReq.body.agent_llm_config).not.toHaveProperty('provider');
-        expect(llmReq.body.agent_llm_config).not.toHaveProperty('model');
-        expect(llmReq.body.agent_llm_config).not.toHaveProperty('api_key');
-        expect(llmReq.body.agent_llm_config).not.toHaveProperty('endpoint');
+        // The server resolves persona AND routing from the case agent id; the
+        // client never sends provider/model/api_key/endpoint.
+        expect(llmReq.body.agent_llm_config).toEqual({ case_agent_id: 7 });
         expect(llmReq.headers.authorization).toBe(`Bearer ${BEARER}`);
     });
 
-    it('falls back to agent.id when agent_template_id is missing', async () => {
-        // CONTRACT: case_agents rows expose agent_template_id; raw templates
-        // expose only `id`. Either way, the dispatched payload carries one
-        // resolvable id so the server can look up the LLM config.
+    // Regression lock: the authored prompt is the server's to add. A client
+    // that still holds one (an educator's session) must not post it, or the
+    // server would receive the persona twice — once from the DB, once as
+    // "situation".
+    it('never posts the authored prompt or the role anchor, even when the agent object carries one', async () => {
         const agent = {
-            id: 'tpl-bare',
+            case_agent_id: 3,
             agent_type: 'consultant',
             name: 'Dr. Lin',
-            system_prompt: 'You are a consultant.',
+            system_prompt: 'SECRET: the answer is NSTEMI.',
         };
-        await AgentService.sendAgentMessage(
-            'sess-1', agent, 'hi', null, [], null, [],
-        );
+        await AgentService.sendAgentMessage('sess-1', agent, 'hi', null, [], null, [],
+            { name: 'Situation Case', config: {} });
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
-        expect(llmReq.body.agent_llm_config).toEqual({ agent_template_id: 'tpl-bare' });
+        expect(JSON.stringify(llmReq.body)).not.toContain('SECRET: the answer is NSTEMI.');
+        // Not vacuous: an empty system_prompt would also lack the anchor.
+        expect(typeof llmReq.body.system_prompt).toBe('string');
+        expect(llmReq.body.system_prompt).toContain('Case: Situation Case');
+        expect(llmReq.body.system_prompt).not.toMatch(/## ROLE/);
+    });
+
+    // Regression lock: an agent with no case_agent_id posted
+    // `agent_llm_config: {}` (JSON drops undefined), and the server answered
+    // as a bare model with no persona. The client must refuse instead —
+    // without writing the learner's turn and without calling the proxy.
+    it('refuses an agent with no case_agent_id without writing a turn or calling the proxy', async () => {
+        for (const caseAgentId of [undefined, null]) {
+            sentRequests.length = 0;
+            const out = await AgentService.sendAgentMessage(
+                'sess-1',
+                { case_agent_id: caseAgentId, agent_template_id: 12, agent_type: 'nurse', name: 'Nurse Joy' },
+                'hi', null, [], null, [],
+            );
+            expect(out).toMatch(/^Error: Could not communicate with Nurse Joy/);
+            expect(sentRequests).toEqual([]);
+        }
+    });
+
+    it('tags both turns with channel "chat" and no call_id by default', async () => {
+        const agent = { case_agent_id: 21, agent_type: 'pathologist', name: 'Dr. Path' };
+        const out = await AgentService.sendAgentMessage('sess-1', agent, 'what do you see?', null, [], null, []);
+        expect(out).toBe('agent reply.');
+        const turns = sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/api/sessions/sess-1/agents/pathologist/conversation'));
+        expect(turns.map(r => r.body)).toEqual([
+            { role: 'user', content: 'what do you see?', channel: 'chat' },
+            { role: 'assistant', content: 'agent reply.', channel: 'chat' },
+        ]);
+    });
+
+    it('passes channel "call" and the call id through on both turns, not to the model', async () => {
+        const agent = { case_agent_id: 22, agent_type: 'cardiologist', name: 'Dr. Heart' };
+        await AgentService.sendAgentMessage('sess-1', agent, 'is it an MI?', null, [], null, [], null,
+            { caseLanguage: 'it', channel: 'call', callId: 'call0001' });
+        const turns = sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/api/sessions/sess-1/agents/cardiologist/conversation'));
+        expect(turns.map(r => [r.body.role, r.body.channel, r.body.call_id])).toEqual([
+            ['user', 'call', 'call0001'],
+            ['assistant', 'call', 'call0001'],
+        ]);
+        const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
+        expect(llmReq.body.case_language).toBe('it');
+        expect(llmReq.body.agent_llm_config).toEqual({ case_agent_id: 22 });
+        expect(JSON.stringify(llmReq.body)).not.toContain('call0001');
     });
 
     it('LLM API failure: returns user-facing error string (does not throw)', async () => {
         // Force /proxy/llm to fail. addMessage still succeeds.
         server.use(http.post('*/api/proxy/llm', () => errJson('upstream blew up', 500)));
         const agent = {
+            case_agent_id: 9,
             agent_type: 'nurse',
             name: 'Nurse Joy',
             system_prompt: 'You are a nurse.',
