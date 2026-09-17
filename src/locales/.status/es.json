@@ -14239,6 +14239,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_persona.type_cardiologist_desc": {
+    "src": "4fad6736f87e",
+    "tgt": "95b10c0437ef",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_cardiologist_label": {
+    "src": "a80412453e00",
+    "tgt": "37254340ab50",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_persona.type_consultant_desc": {
     "src": "9ab8321a66e1",
     "tgt": "5fa2b9348831",
@@ -14319,6 +14339,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_persona.type_pathologist_desc": {
+    "src": "a7d73eb50663",
+    "tgt": "0890486dd8f7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_pathologist_label": {
+    "src": "2f8768d1c0c8",
+    "tgt": "c7dba449d889",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_persona.type_patient_desc": {
     "src": "9637b262b969",
     "tgt": "3546f2cabc53",
@@ -14352,6 +14392,26 @@
   "authoring_persona.type_pharmacist_label": {
     "src": "8bef5e3f6a15",
     "tgt": "462a7921a96d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_radiologist_desc": {
+    "src": "6a7ad80ec5e2",
+    "tgt": "df3f3b9250c6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_radiologist_label": {
+    "src": "46cf8bbbc59a",
+    "tgt": "48b2ee247b57",
     "state": "machine",
     "origin": "machine",
     "locked": false,

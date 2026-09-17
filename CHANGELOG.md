@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.83] — 2026-09-17
+
+### Added
+
+- On-call specialists, the data layer. `server/shared/specialties.js` is the registry — pathologist, cardiologist and radiologist, each its own `agent_type`, with the domain whose case document it reads and its default disclosure gate. Adding a specialty later is one entry here plus one seeded template, not a feature. Three shipped personas are seeded in `server/db.js` with conduct-only prompts: ask what the learner has looked at, teach how to look, never state the diagnosis, and discuss only the findings the server's brief provides.
+- Migration `0061_oncall_specialists.sql` (additive): `agent_conversations` gains `channel` (chat or call, enforced in code — SQLite cannot add a CHECK through ALTER), `call_id` and `case_agent_id`; `llm_request_log` gains `agent_type` and `case_agent_id`.
+
+### Changed
+
+- A learner is no longer sent a team agent's authored prompt. `GET /sessions/:id/agents` and `GET /cases/:id/agents` withhold it for every type the browser does not assemble itself (patient and discussant), the same allow list the template library already used. The session route also returns `case_agent_id` and `agent_template_id`, and hides an agent whose template was soft-deleted so the list agrees with the proxy.
+- "Add default agents" no longer attaches the specialists — they are a deliberate per-case choice. Attaching a second specialist of the same specialty is refused (409 `specialty_already_attached`), as is retyping an attached template into or out of a specialty (409 `specialty_retype_attached`), because agent state, conversations and chat tabs are keyed by agent type.
+- Disclosure overrides are validated on write: 400 `invalid_disclosure`, `invalid_config_override` or `disclosure_not_applicable`.
+
+### Fixed
+
+- `/proxy/llm` wrote no tenant to `llm_request_log`, so every row took the column default of 1. Requests now log the real tenant, plus the agent type and case agent they spoke as.
+
 ## [3.0.0-beta.82] — 2026-09-17
 
 ### Fixed

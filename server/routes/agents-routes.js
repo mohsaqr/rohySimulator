@@ -24,6 +24,8 @@ import {
     verifySessionOwnership
 } from './_helpers.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
+import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
+import { isSpecialistType, normalizeDisclosure } from '../shared/specialties.js';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
@@ -44,6 +46,56 @@ try {
 }
 
 const router = express.Router();
+
+// A case agent's `config_override.disclosure` (on-call specialists) must pass
+// the registry's validator before it is stored. Returns the error list; empty
+// when the body carries no disclosure. The merged value is not stored — the
+// override stays partial so a later change to the registry default applies.
+function disclosureErrors(configOverride) {
+    if (!configOverride || typeof configOverride !== 'object' || !Object.hasOwn(configOverride, 'disclosure')) {
+        return [];
+    }
+    return normalizeDisclosure(configOverride.disclosure).errors;
+}
+
+function isPlainObject(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Why a case agent's `config_override` may not be stored, or null if it may.
+ *
+ * The override is merged over the template config with object spread on every
+ * read, so anything but a plain object (a JSON string, an array) would be
+ * stored unvalidated and spread into index keys — a disclosure block hidden in
+ * a string skipped disclosureErrors entirely. A disclosure block only means
+ * something on a specialist; on any other type it is refused rather than
+ * silently carried.
+ *
+ * @param {*} configOverride       the body field (undefined = not sent)
+ * @param {string|null} agentType  the template's type; null skips the
+ *                                 applicability check (type not yet known)
+ * @returns {{error: string, code: string}|null}
+ */
+function configOverrideProblem(configOverride, agentType) {
+    if (configOverride === undefined || configOverride === null) return null;
+    if (!isPlainObject(configOverride)) {
+        return { error: 'config_override must be an object or null', code: 'invalid_config_override' };
+    }
+    const errors = disclosureErrors(configOverride);
+    if (errors.length > 0) {
+        return { error: `Invalid disclosure: ${errors.join('; ')}`, code: 'invalid_disclosure' };
+    }
+    if (agentType !== null && Object.hasOwn(configOverride, 'disclosure') && !isSpecialistType(agentType)) {
+        return {
+            error: `A disclosure block applies only to an on-call specialist, not a ${agentType}`,
+            code: 'disclosure_not_applicable'
+        };
+    }
+    return null;
+}
 
 // --- Who may see what in the agent template library -------------------------
 //
@@ -72,13 +124,32 @@ const router = express.Router();
 // reads — no LLM routing, no memory access, no authorship, no timestamps, and
 // no template of any other type (nurse, consultant, relative, …), whose
 // prompts a learner has no runtime reason to hold.
-const LEARNER_VISIBLE_AGENT_TYPES = Object.freeze(['patient', 'discussant']);
+// The same list the server-built persona reads (services/agentPersona.js):
+// the types whose prompt the browser still assembles.
+const LEARNER_VISIBLE_AGENT_TYPES = CLIENT_BUILT_PROMPT_TYPES;
 const LEARNER_TEMPLATE_FIELDS = Object.freeze([
     'id', 'agent_type', 'name', 'role_title', 'avatar_url',
     'system_prompt', 'context_filter', 'communication_style',
 ]);
 
 const isEducatorOrAbove = (user) => hasRoleAtLeast(user, ROLE_RANKS.educator);
+
+/**
+ * The authored prompt of a case agent, as the caller may receive it.
+ *
+ * The per-case routes follow the template library's rule: an educator gets
+ * the prompt; a learner gets it only for a type their browser still
+ * assembles. Every other type is built server-side from `case_agent_id`
+ * (services/agentPersona.js), so its prompt has no reason to leave.
+ *
+ * @param {object} user        req.user
+ * @param {string} agentType
+ * @param {string|null} prompt override or template prompt
+ * @returns {string|null}      the prompt, or null when withheld
+ */
+function casePromptFor(user, agentType, prompt) {
+    return isEducatorOrAbove(user) || learnerMayHoldPrompt(agentType) ? prompt : null;
+}
 
 /**
  * One agent_templates row, projected for the caller's role.
@@ -272,6 +343,26 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
             return res.status(400).json({
                 error: 'Cannot change agent_type on a standard template. Duplicate it first if you want a different type.'
             });
+        }
+        // Retyping into or out of a specialty while the template is attached
+        // would bypass the checks POST /cases/:caseId/agents makes on attach:
+        // one specialist per specialty per case, and a disclosure block only
+        // on a specialist. A nurse attached twice and then retyped to
+        // pathologist gives a case two pathologists sharing one runtime state.
+        // Detach first, or duplicate the template.
+        if (req.body.agent_type !== undefined
+            && req.body.agent_type !== existing.agent_type
+            && (isSpecialistType(req.body.agent_type) || isSpecialistType(existing.agent_type))) {
+            const attached = await dbAdapter.get(
+                'SELECT 1 AS attached FROM case_agents WHERE agent_template_id = ? AND tenant_id = ? LIMIT 1',
+                [id, tenantId(req)]
+            );
+            if (attached) {
+                return res.status(409).json({
+                    error: 'This template is attached to a case. Remove it from every case before changing its type to or from a specialty.',
+                    code: 'specialty_retype_attached'
+                });
+            }
         }
 
         const {
@@ -799,6 +890,11 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
     try {
         const { caseId } = req.params;
 
+        // Deliberately NO `at.deleted_at IS NULL` here, unlike
+        // GET /sessions/:id/agents. This is the educator's case editor: an
+        // attachment whose template was soft-deleted must stay visible so it
+        // can be seen and removed. The runtime list and the proxy
+        // (services/agentPersona.js) both drop it, so it never answers.
         const agents = await new Promise((resolve, reject) => {
             dbAdapter.all(
                 `SELECT ca.*, at.name as template_name, at.role_title as template_role_title,
@@ -828,7 +924,7 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             name: a.name_override || a.template_name,
             role_title: a.template_role_title,
             avatar_url: a.template_avatar,
-            system_prompt: a.system_prompt_override || a.template_system_prompt,
+            system_prompt: casePromptFor(req.user, a.agent_type, a.system_prompt_override || a.template_system_prompt),
             context_filter: a.template_context_filter,
             communication_style: a.template_communication_style,
             // Availability config
@@ -877,6 +973,12 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
         if (!agent_template_id) {
             return res.status(400).json({ error: 'agent_template_id is required' });
         }
+        // Shape and disclosure validity first; whether a disclosure applies
+        // needs the template's type, checked once the template is loaded.
+        const addShapeProblem = configOverrideProblem(config_override, null);
+        if (addShapeProblem) {
+            return res.status(400).json(addShapeProblem);
+        }
 
         // Case must belong to caller's tenant; otherwise educators in
         // tenant A could attach agents to tenant B's cases.
@@ -892,7 +994,7 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
 
         // Check if template exists
         const template = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT id FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [agent_template_id, tenantId(req)], (err, row) => {
+            dbAdapter.get('SELECT id, agent_type FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [agent_template_id, tenantId(req)], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -901,25 +1003,47 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
         if (!template) {
             return res.status(404).json({ error: 'Agent template not found' });
         }
+        const addTypeProblem = configOverrideProblem(config_override, template.agent_type);
+        if (addTypeProblem) {
+            return res.status(400).json(addTypeProblem);
+        }
 
+        // One specialist per specialty per case: runtime state and
+        // conversations are keyed by agent_type, so a second pathologist would
+        // share the first one's state. The guard is inside the INSERT so two
+        // concurrent requests cannot both pass it. A disabled case agent still
+        // counts — re-enable it rather than attaching a second.
+        const specialist = isSpecialistType(template.agent_type);
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
                 `INSERT INTO case_agents
                  (case_id, tenant_id, agent_template_id, enabled, name_override, system_prompt_override,
                   availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
                   response_time_min, response_time_max, config_override)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                 WHERE ? = 0 OR NOT EXISTS (
+                   SELECT 1 FROM case_agents ca
+                   JOIN agent_templates t ON t.id = ca.agent_template_id
+                   WHERE ca.case_id = ? AND ca.tenant_id = ? AND t.agent_type = ?
+                 )`,
                 [
                     caseId, tenantId(req), agent_template_id, enabled ? 1 : 0, name_override, system_prompt_override,
                     availability_type, available_from_minute, auto_arrive_minute, depart_at_minute,
-                    response_time_min, response_time_max, config_override ? JSON.stringify(config_override) : null
+                    response_time_min, response_time_max, config_override ? JSON.stringify(config_override) : null,
+                    specialist ? 1 : 0, caseId, tenantId(req), template.agent_type
                 ],
                 function(err) {
                     if (err) reject(err);
-                    else resolve({ id: this.lastID });
+                    else resolve({ id: this.lastID, changes: this.changes });
                 }
             );
         });
+        if (result.changes === 0) {
+            return res.status(409).json({
+                error: `This case already has a ${template.agent_type}`,
+                code: 'specialty_already_attached'
+            });
+        }
 
         auditSuccess(req, {
             action: 'add_case_agent',
@@ -952,6 +1076,31 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, requireEducator,
             config_override
         } = req.body;
 
+        // Existence first: a caller naming another case's (or tenant's) agent
+        // learns only that it is not there, never which body field was wrong.
+        const existing = await new Promise((resolve, reject) => {
+            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ? AND tenant_id = ?', [agentId, caseId, tenantId(req)], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Case agent not found' });
+        }
+
+        if (config_override !== undefined && config_override !== null) {
+            // The type is read without `deleted_at IS NULL`: a template's type
+            // does not change when it is soft-deleted.
+            const template = await dbAdapter.get(
+                'SELECT agent_type FROM agent_templates WHERE id = ? AND tenant_id = ?',
+                [existing.agent_template_id, tenantId(req)]
+            );
+            const updateProblem = configOverrideProblem(config_override, template?.agent_type ?? null);
+            if (updateProblem) {
+                return res.status(400).json(updateProblem);
+            }
+        }
+
         const updates = [];
         const params = [];
 
@@ -968,16 +1117,6 @@ router.put('/cases/:caseId/agents/:agentId', authenticateToken, requireEducator,
 
         if (updates.length === 0) {
             return res.status(400).json({ error: 'No fields to update' });
-        }
-
-        const existing = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM case_agents WHERE id = ? AND case_id = ? AND tenant_id = ?', [agentId, caseId, tenantId(req)], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-        if (!existing) {
-            return res.status(404).json({ error: 'Case agent not found' });
         }
 
         params.push(agentId, caseId, tenantId(req));
@@ -1072,9 +1211,12 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, requireEduc
             });
         });
 
-        // Insert each default agent for the case
+        // Insert each default agent for the case. On-call specialists are
+        // excluded: a specialist is attached to a case deliberately, when the
+        // case has material for it to discuss (and at most one per specialty),
+        // never as part of the generic team.
         let addedCount = 0;
-        for (const template of defaults) {
+        for (const template of defaults.filter((t) => !isSpecialistType(t.agent_type))) {
             const config = JSON.parse(template.config || '{}');
             try {
                 await new Promise((resolve, reject) => {
@@ -1166,6 +1308,7 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
                  JOIN agent_templates at ON ca.agent_template_id = at.id
                  LEFT JOIN agent_session_state ass ON ass.session_id = ? AND ass.agent_type = at.agent_type AND ass.tenant_id = ?
                  WHERE ca.case_id = ? AND ca.tenant_id = ? AND at.tenant_id = ? AND ca.enabled = 1
+                   AND at.deleted_at IS NULL
                  ORDER BY at.agent_type ASC`,
                 [sessionId, tenantId(req), session.case_id, tenantId(req), tenantId(req)],
                 (err, rows) => {
@@ -1176,6 +1319,13 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
         });
 
         const parsed = agents.map(a => ({
+            // The case agent id is how the client names this agent to
+            // /proxy/llm; the template id is the routing fallback. Both were
+            // missing, so `agent.agent_template_id || agent.id` was undefined
+            // and no agent request carried a template: per-agent LLM settings
+            // and the encounter record never applied to team agents.
+            case_agent_id: a.id,
+            agent_template_id: a.agent_template_id,
             agent_type: a.agent_type,
             // The query already filters `ca.enabled = 1`, so this is always
             // true — but the client checks `agent.enabled` explicitly, and an
@@ -1185,7 +1335,7 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             name: a.name_override || a.template_name,
             role_title: a.role_title,
             avatar_url: a.avatar_url,
-            system_prompt: a.system_prompt_override || a.template_system_prompt,
+            system_prompt: casePromptFor(req.user, a.agent_type, a.system_prompt_override || a.template_system_prompt),
             context_filter: a.context_filter,
             communication_style: a.communication_style,
             availability_type: a.availability_type,
@@ -1447,7 +1597,7 @@ router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateTo
             dbAdapter.all(
                 `SELECT * FROM agent_conversations
                  WHERE session_id = ? AND tenant_id = ? AND agent_type = ?
-                 ORDER BY created_at ASC`,
+                 ORDER BY created_at ASC, id ASC`,
                 [sessionId, tenantId(req), agentType],
                 (err, rows) => {
                     if (err) reject(err);
@@ -1463,22 +1613,51 @@ router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateTo
     }
 });
 
+// A conversation message arrives by typed chat or on a specialist phone call
+// (migration 0061). The column has no CHECK constraint, so this list is the
+// enforcement.
+const CONVERSATION_CHANNELS = Object.freeze(['chat', 'call']);
+// Client-generated call ids group the turns of one call; opaque, bounded.
+const CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
 // POST /api/sessions/:sessionId/agents/:agentType/conversation - Add message to conversation
 router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
     try {
         const { sessionId, agentType } = req.params;
-        const { role, content } = req.body;
+        const { role, content, channel, call_id: callId } = req.body;
 
         if (!role || !content) {
             return res.status(400).json({ error: 'role and content are required' });
         }
+        if (channel !== undefined && channel !== null && !CONVERSATION_CHANNELS.includes(channel)) {
+            return res.status(400).json({ error: `channel must be one of ${CONVERSATION_CHANNELS.join(', ')}`, code: 'invalid_channel' });
+        }
+        if (callId !== undefined && callId !== null && !(typeof callId === 'string' && CALL_ID_PATTERN.test(callId))) {
+            return res.status(400).json({ error: 'call_id must be 1-64 characters of letters, digits, _ or -', code: 'invalid_call_id' });
+        }
         if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+
+        // Attribution: the case agent of this type on the session's case,
+        // resolved here rather than taken from the body. Same liveness rules
+        // as the proxy (agentPersona.loadSessionCaseAgent): enabled, template
+        // not soft-deleted, same tenant. NULL when the case has none.
+        const caseAgentRow = await dbAdapter.get(
+            `SELECT ca.id FROM case_agents ca
+               JOIN agent_templates at
+                 ON at.id = ca.agent_template_id AND at.tenant_id = ca.tenant_id
+                AND at.deleted_at IS NULL
+               JOIN sessions s
+                 ON s.case_id = ca.case_id AND s.tenant_id = ca.tenant_id
+              WHERE s.id = ? AND ca.tenant_id = ? AND at.agent_type = ? AND ca.enabled = 1
+              ORDER BY ca.id ASC LIMIT 1`,
+            [sessionId, tenantId(req), agentType]
+        );
 
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
-                `INSERT INTO agent_conversations (session_id, tenant_id, agent_type, role, content)
-                 VALUES (?, ?, ?, ?, ?)`,
-                [sessionId, tenantId(req), agentType, role, content],
+                `INSERT INTO agent_conversations (session_id, tenant_id, agent_type, role, content, channel, call_id, case_agent_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [sessionId, tenantId(req), agentType, role, content, channel || 'chat', callId ?? null, caseAgentRow?.id ?? null],
                 function(err) {
                     if (err) reject(err);
                     else resolve({ id: this.lastID });
