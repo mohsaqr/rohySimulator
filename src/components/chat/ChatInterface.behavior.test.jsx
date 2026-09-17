@@ -603,14 +603,17 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
 // message as an abandoned draft.
 
 function fakeTypingCapture() {
+    // Models Oyon's handle: attach starts an episode, submit/abandon end it.
     const calls = { attach: [], submit: 0, abandon: 0 };
+    let active = false;
     return {
         calls,
         capture: {
             typing: {
-                attach: (element, opts) => { calls.attach.push({ element, opts }); },
-                submit: () => { calls.submit += 1; },
-                abandon: () => { calls.abandon += 1; },
+                get active() { return active; },
+                attach: (element, opts) => { calls.attach.push({ element, opts, value: element.value }); active = true; },
+                submit: () => { calls.submit += 1; active = false; },
+                abandon: () => { calls.abandon += 1; active = false; },
             },
         },
     };
@@ -642,6 +645,26 @@ describe('Oyon typing capture wiring', () => {
         fireEvent.click(input.parentElement.querySelector('button[type="submit"]'));
 
         await waitFor(() => expect(calls.submit).toBe(1));
+    });
+
+    // Regression lock (Prova PRV-6): submit() ends the episode and removes the
+    // adapter's listeners, and nothing started the next one — so only the first
+    // message on a page was ever captured. The next episode must start once the
+    // composer is EMPTY: its value is the adapter's baseline length.
+    it('starts a new episode for the next message, on the emptied composer', async () => {
+        const { calls, capture } = fakeTypingCapture();
+        mount(caseFixture, { props: { signalCapture: capture } });
+
+        const input = await screen.findByPlaceholderText(/message alice original/i);
+        await waitFor(() => expect(calls.attach.length).toBe(1));
+        fireEvent.change(input, { target: { value: 'Does it hurt?' } });
+        fireEvent.click(input.parentElement.querySelector('button[type="submit"]'));
+
+        await waitFor(() => expect(calls.submit).toBe(1));
+        await waitFor(() => expect(calls.attach.length).toBe(2));
+        expect(calls.attach[1].element).toBe(input);
+        expect(calls.attach[1].value).toBe('');
+        expect(capture.typing.active).toBe(true);
     });
 
     // A tenant with typing disabled gets a null handle, not a stub.
