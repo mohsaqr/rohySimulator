@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.81] — 2026-09-17
+
+### Fixed
+
+- `oyon-typing.spec.js` waited for the first typing-event upload and expected keystrokes in it. The event transport also flushes on a 2-second timer, so under CI's timing the episode's lone "start" event was uploaded by itself while onboarding dialogs were still being dismissed (CI failed on beta.80). The test now waits for the upload that contains the keystrokes.
+
 ## [3.0.0-beta.80] — 2026-09-17
 
 ### Fixed

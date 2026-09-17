@@ -66,7 +66,11 @@ function typingEventsPost(page) {
     return page.waitForResponse(
         (r) => r.url().includes('/api/addons/oyon/signal-events')
             && r.request().method() === 'POST'
-            && (r.request().postData() || '').includes('"modality":"typing"'),
+            // The batch holding the keystrokes, not merely the first typing batch:
+            // the transport flushes on a 2 s timer, so the episode's lone "start"
+            // can go out on its own while onboarding dialogs are still being
+            // dismissed (seen in CI).
+            && (r.request().postData() || '').includes('"state":"insert"'),
         { timeout: 30_000 },
     );
 }
