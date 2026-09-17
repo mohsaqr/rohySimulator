@@ -184,7 +184,21 @@ export const PLUGIN_MANIFESTS = [
         },
         "document": {
             "learnerOmit": [
-                "rubric"
+                "rubric",
+                "worklist[].rubric"
+            ],
+            "learnerOmitWhen": [
+                {
+                    "omit": [
+                        "findings",
+                        "impression",
+                        "reportedBy"
+                    ],
+                    "path": "worklist[].report",
+                    "when": {
+                        "released": false
+                    }
+                }
             ]
         },
         "id": "pacs",
