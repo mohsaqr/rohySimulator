@@ -1317,6 +1317,29 @@
         unmeasurable turn is counted and explained but moves no figure.
       covers: ["rohy:chromium::oyon-signal-analytics.spec.js › *"]
 
+- feature: TERMS.ACCEPT
+  title: Terms of use
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: TERMS.ACCEPT.01
+      title: When acceptance is required, a person accepts the terms once before Rohy opens
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Signed out, open the Terms of use link under the login card and read the agreement.
+        2. As an admin, turn on Require acceptance in Settings ▸ Platform ▸ Users ▸ Terms of use.
+        3. Sign in as a learner who has not accepted. Try Decline and sign out, then sign in again,
+           read to the end, tick the box and choose Agree and continue.
+        4. Reload, then publish a new version as the admin and reload again as the learner.
+      expected: |-
+        The agreement is readable before signing in. With acceptance required, Rohy does not open until
+        it is accepted; declining signs out; the tick box unlocks only after reading to the end. After
+        agreeing, Rohy opens and the step does not return — until a new version is published, when it
+        is asked again. The admin sees how many accounts have accepted the current version.
+      covers: ["rohy:chromium::terms-of-use.spec.js › *"]
+
 - feature: ADMIN.LLM
   title: Model settings
   products: [rohy]
