@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.80] — 2026-09-17
+
+### Fixed
+
+- The analytics journey test counted typing and voice state events per batch and treated a batch holding both kinds as an error. The event transport batches by time, not modality, so under CI's timing a message sent just before a voice turn shared a batch with it, and the voice count fell short (CI failed on beta.79). Events are now counted one by one, and every sent event must be stored with none refused by consent.
+
 ## [3.0.0-beta.79] — 2026-09-17
 
 ### Changed
