@@ -45,6 +45,7 @@ import { oyonPillPlacement } from './components/oyon/pillPlacement';
 import AoiRegion from './components/oyon/AoiRegion';
 import { HelpCenter, OnboardingTour } from './help';
 import FirstRunGate, { useSetup } from './components/setup/FirstRunGate';
+import TermsGate from './components/terms/TermsGate';
 
 // Persistence rule: a session ends ONLY through the Exit or End buttons
 // (or an explicit case-switch). Refresh, tab close, idle time — none of
@@ -1486,11 +1487,14 @@ function AuthenticatedApp() {
       return <AuthGate />;
    }
 
-   // Show main app if authenticated — behind the first-run gate (admin
+   // Show main app if authenticated — behind the terms-of-use step (only when
+   // an admin has made acceptance required) and then the first-run gate (admin
    // setup wizard / student first-run screen, each shown until completed).
    return (
-      <FirstRunGate>
-         <MainApp />
-      </FirstRunGate>
+      <TermsGate>
+         <FirstRunGate>
+            <MainApp />
+         </FirstRunGate>
+      </TermsGate>
    );
 }

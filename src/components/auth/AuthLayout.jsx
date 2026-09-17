@@ -31,7 +31,7 @@ const FEATURES = [
  * this panel exists, so they remain testable without the layout and reusable
  * inside it.
  */
-export default function AuthLayout({ children }) {
+export default function AuthLayout({ children, onOpenTerms = null }) {
     const { t } = useTranslation('auth');
     const { uiLanguage, setUiLanguage } = useLanguage();
 
@@ -128,7 +128,17 @@ export default function AuthLayout({ children }) {
                         {' · '}
                         <a href="mailto:saqr@saqr.me" className="hover:text-neutral-400 transition-colors">saqr@saqr.me</a>
                     </p>
-                    <p>Carm Research License v1.0 · © 2025–2026</p>
+                    <p>
+                        Carm Research License v1.4 · © 2025–2026
+                        {onOpenTerms && (
+                            <>
+                                {' · '}
+                                <button type="button" onClick={onOpenTerms} className="underline-offset-2 hover:text-neutral-400 hover:underline transition-colors">
+                                    {t('terms_link')}
+                                </button>
+                            </>
+                        )}
+                    </p>
                 </footer>
             </div>
         </div>
