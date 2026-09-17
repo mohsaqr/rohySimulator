@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.77] — 2026-09-17
+
+### Added
+
+- **Terms of use in the app**, ported from chatoyon+'s licence gate:
+  - **Sign-in step.** When an admin requires acceptance, a person who has not accepted the current version meets a full page after signing in; Rohy does not open behind it. The tick box unlocks after reading to the end. Choices are Decline and sign out, or Agree and continue. A version published while the page is open is shown instead of being accepted blindly.
+  - **Public page.** A Terms of use link under the login card opens the agreement before signing in.
+  - **Admin editor.** Settings → Platform → Users → Terms of use: require acceptance, title, version, text (with a copy of the default to edit, and a preview), and how many active accounts have accepted.
+  - **Languages.** Interface text is in all eight languages. The agreement itself is shown as the administrator writes it.
+- **Login footer** now names the Carm Research License v1.4, matching the repository's `LICENSE` (it said v1.0).
+
 ## [3.0.0-beta.76] — 2026-09-17
 
 ### Added

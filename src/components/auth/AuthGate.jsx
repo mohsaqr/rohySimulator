@@ -9,6 +9,7 @@ import {
     FAILSAFE_POLICY,
 } from '../../services/registrationService';
 import { baseUrl } from '../../config/api';
+import TermsPublicPage from '../terms/TermsPublicPage';
 
 /**
  * The logged-out surface: login, or register when the platform allows it.
@@ -45,6 +46,8 @@ export default function AuthGate() {
     // but with the code field already open — the holder of a code must never
     // have to hunt for where it goes.
     const [startWithCode, setStartWithCode] = useState(false);
+    // The terms of use, readable before signing in (link in the layout footer).
+    const [showTerms, setShowTerms] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -92,12 +95,17 @@ export default function AuthGate() {
         return () => { cancelled = true; };
     }, [inviteToken]);
 
+    if (showTerms) {
+        return <TermsPublicPage onBack={() => setShowTerms(false)} />;
+    }
+    const openTerms = () => setShowTerms(true);
+
     // Hold the CARD until we know — but show the brand panel immediately, so
     // the wait reads as the product loading, not a blank screen. Flashing a
     // login card without the register link and then popping it in reads as a bug.
     if (!policy || invitePending) {
         return (
-            <AuthLayout>
+            <AuthLayout onOpenTerms={openTerms}>
                 <div className="text-center py-16">
                     <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-neutral-400">{t('loading')}</p>
@@ -112,7 +120,7 @@ export default function AuthGate() {
 
     if (showRegister && canRegister) {
         return (
-            <AuthLayout>
+            <AuthLayout onOpenTerms={openTerms}>
                 <RegisterPage
                     policy={policy}
                     invite={invite}
@@ -130,7 +138,7 @@ export default function AuthGate() {
     }
 
     return (
-        <AuthLayout>
+        <AuthLayout onOpenTerms={openTerms}>
             <LoginPage
                 policy={policy}
                 onSwitchToRegister={canRegister ? () => setShowRegister(true) : null}

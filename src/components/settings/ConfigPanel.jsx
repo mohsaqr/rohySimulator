@@ -26,6 +26,7 @@ import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import UsersWorkspace from './users/UsersWorkspace';
 import RegistrationPolicySettings from './RegistrationPolicySettings';
+import TermsSettings from './TermsSettings';
 import MedicationManager from './MedicationManager';
 import TreatmentsLibraryManager from './TreatmentsLibraryManager';
 import AgentTemplateManager from './AgentTemplateManager';
@@ -1600,6 +1601,7 @@ function PlatformSettings({ cases, setCases }) {
             {activeSection === 'users' && (
                 <div className="space-y-6">
                     <RegistrationPolicySettings />
+                    <TermsSettings />
                     <UserFieldConfiguration />
                 </div>
             )}
