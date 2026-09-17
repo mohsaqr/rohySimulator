@@ -35,6 +35,7 @@ import { mergeCameraPatch, resolveCamera } from '../../utils/avatarFraming.js';
 import { resolveVoice } from '../../utils/voiceResolver.js';
 import { useAllVoices, VoiceEngineOptions, VoiceSubstitutionNote } from './VoiceEngineOptions.jsx';
 import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
+import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
 
 // Heavy three.js head viewer — lazy so admins who never open the editor
 // don't pay the bundle cost.
@@ -47,7 +48,9 @@ const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 // i18n at render time (keys `type_<value>_label` etc.) rather than stored
 // here, so the same value token drives both the server contract and the
 // translated display.
-const AGENT_TYPES = ['patient', 'discussant', 'nurse', 'consultant', 'relative', 'pharmacist', 'technician', 'other'];
+// The on-call specialist types come from the specialty registry
+// (server/shared/specialties.js), never a hand-copied list.
+const AGENT_TYPES = ['patient', 'discussant', 'nurse', 'consultant', ...SPECIALIST_TYPES, 'relative', 'pharmacist', 'technician', 'other'];
 
 const CONTEXT_FILTERS = ['full', 'history', 'vitals', 'minimal'];
 

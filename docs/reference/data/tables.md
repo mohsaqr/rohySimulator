@@ -72,6 +72,9 @@ Stores agent conversations records.
 | `content` | TEXT | NOT NULL | — |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `channel` | TEXT | NOT NULL DEFAULT 'chat' | `0061_oncall_specialists.sql` |
+| `call_id` | TEXT | — | `0061_oncall_specialists.sql` |
+| `case_agent_id` | INTEGER | — | `0061_oncall_specialists.sql` |
 
 ## `agent_session_state`
 
@@ -1044,6 +1047,8 @@ Stores llm request log records.
 | `request_timestamp` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `response_time_ms` | INTEGER | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
+| `agent_type` | TEXT | — | `0061_oncall_specialists.sql` |
+| `case_agent_id` | INTEGER | — | `0061_oncall_specialists.sql` |
 
 ## `llm_usage`
 
