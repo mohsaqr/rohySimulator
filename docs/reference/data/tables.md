@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**97 tables.**
+**98 tables.**
 
 ## `active_sessions`
 
@@ -2079,6 +2079,26 @@ Stores tenants records.
 | `name` | TEXT | NOT NULL | — |
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `is_default` | BOOLEAN | DEFAULT 0 | — |
+
+## `terms_acceptances`
+
+Stores terms acceptances records.
+
+**Introduced by:** migration `0060_terms_acceptances.sql`
+
+**Cross-cutting:** `tenant-scoped`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL | — |
+| `user_id` | INTEGER | NOT NULL | — |
+| `version` | TEXT | NOT NULL | — |
+| `title` | TEXT | NOT NULL | — |
+| `body` | TEXT | NOT NULL | — |
+| `accepted_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+| `ip_address` | TEXT | — | — |
+| `user_agent` | TEXT | — | — |
 
 ## `treatment_effects`
 

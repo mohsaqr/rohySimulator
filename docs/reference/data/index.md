@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**97 tables** in the durable data model.
+**98 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **58 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **59 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -86,6 +86,7 @@ Parsed **58 migration files** beyond the base schema (`0001_initial.sql`).
 | `0057_oyon_voice_consent_v3.sql` | additive | Voice gets a tenant switch and a consent contract that names it. 0041 put `voice` and `ai_assist` in the consent-v2 set, but the v2 card lists only typing, interaction and discourse — so accepting v2 authorized microphone capture from a card that never mentions audio. The fix is in `server/routes/oyon-routes.js` (each modality maps to the oldest contract that names it; voice and ai_assist need `oyon-consent-v3`; a tenant asks for the newest version any ENABLED modality needs). This migration adds `oyon_settings.voice_enabled INTEGER NOT NULL DEFAULT 0` (microphone hardware, so off until an admin turns it on) and turns `ai_assist_enabled` off, because Rohy has no AI-suggestion cycle to report and the flag would otherwise raise every tenant's required contract to v3. The `UPDATE` changes stored data but loses nothing: the column keeps its meaning, and an admin can turn it back on. Nobody was using Oyon signal capture at this release. |
 | `0058_oyon_signal_events.sql` | additive | Oyon's per-event state log for typing and voice, for sequence analysis (Network, Patterns, Process Map, Clusters). `oyon_signal_windows` holds one summary per episode or turn, which cannot build a transition network; this new `oyon_signal_events(tenant_id, user_id, session_id, case_id, capture_id, sequence_index, modality, state, source, occurred_at, duration_ms, detail_json, admin_can_view, educator_can_view, consent_version, …)` holds one row per state. `modality` is CHECKed to typing/voice, dedup is unique on `(tenant_id, session_id, capture_id, sequence_index)` so retries are no-ops, plus tenant+modality/case/user time indexes. Content-free: the ingest route (`POST /api/addons/oyon/signal-events`) whitelists `detail` to offset/length/op/phase and applies the same per-modality consent gate as windows (typing v2, voice v3). Strictly additive: a new table referenced by nothing pre-existing. |
 | `0059_oyon_signal_windows_quality.sql` | additive | Adds nullable `oyon_signal_windows.quality_json`. Oyon sends each episode window as `{ typing: {...}, quality: {...} }`; ingest kept only the modality block, dropping `quality` — the pause threshold the burst/pause counts were cut at (fixed or adaptive) and whether the per-edit series hit their retention cap. The Text tab's writing-process charts need both to draw pause bands at the right threshold and to say when a series is partial. Rows stored before this read back with `quality: null`. Strictly additive: one nullable column. |
+| `0060_terms_acceptances.sql` | additive | The terms-of-use agreement. New `terms_acceptances(tenant_id, user_id, version, title, body, accepted_at, ip_address, user_agent)`, unique on `(user_id, version)`, indexed on `(tenant_id, version)`. Each row snapshots the exact title and body accepted, so a later edit cannot rewrite what a past acceptance was for. The agreement itself lives in `platform_settings` (`terms_required`, `terms_title`, `terms_body`, `terms_version`; default text in `server/shared/terms.js`, not required until an administrator turns it on). Read and written by `server/routes/terms-routes.js`. Strictly additive: one new table referenced by nothing pre-existing. |
 
 ## Tables by concern
 
@@ -147,7 +148,7 @@ Parsed **58 migration files** beyond the base schema (`0001_initial.sql`).
 
 ### Other
 
-`cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`
+`cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`, `terms_acceptances`
 
 ---
 

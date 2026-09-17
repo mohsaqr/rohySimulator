@@ -22,6 +22,7 @@ import lessonsRoutes from './routes/lessons-routes.js';
 import surveysRoutes from './routes/surveys-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import helpRoutes from './routes/help-routes.js';
+import termsRoutes from './routes/terms-routes.js';
 import pluginsRoutes, { pluginContentProxy } from './routes/plugins-routes.js';
 import { mountPluginServerSlots } from './lib/pluginServerSlot.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
@@ -129,6 +130,7 @@ router.use(cohortsRoutes);
 router.use(lessonsRoutes);
 router.use(surveysRoutes);
 router.use(helpRoutes);
+router.use(termsRoutes);
 router.use(pluginsRoutes);
 
 // RPS-1 1.4 — a plugin's own server module, under /plugins/<id>/.
