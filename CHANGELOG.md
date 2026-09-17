@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.74] — 2026-09-17
+
+### Fixed
+
+- **The browser tests' built-in admin and student accounts answer the Oyon consent question in global setup.** Since beta.73 an account that has never answered is asked with a modal card, which covered every screen those tests drive; the full Playwright run failed across the auth, multi-tab, tablet-layout and signal-analytics specs. The accounts now record "no", which keeps their earlier behaviour (capture off). The Oyon specs still set their own consent. Full suite: 127 passed, 14 skipped.
+
 ## [3.0.0-beta.73] — 2026-09-17
 
 ### Fixed
