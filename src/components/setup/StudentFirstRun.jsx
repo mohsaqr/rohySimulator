@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import {
     BookOpen, Check, Languages, Loader2, Mic, ScanFace, Stethoscope, Volume2
 } from 'lucide-react';
-import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
 import { apiFetch, apiPut } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -133,6 +133,7 @@ export default function StudentFirstRun({ onDone }) {
             }
         } catch { /* private mode */ }
         setSaving(false);
+        announceOyonConsentChanged();
         EventLogger.tourEnded('first_run:student', 'completed', 'StudentFirstRun');
         onDone();
     };

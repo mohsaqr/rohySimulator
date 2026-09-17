@@ -46,6 +46,30 @@ describe('useOyonSignalGate', () => {
         expect(consentPosts()).toHaveLength(1);
     });
 
+    // Regression lock (Prova PRV-5): the gate used to read consent once, at
+    // mount. A learner who accepted the consent prompt on this page — every
+    // new learner does, straight after the welcome page — got no typing or
+    // voice capture until a reload.
+    it('opens without a reload when consent is accepted on this page', async () => {
+        let onboarding = { oyon_consent: true, oyon_consent_version: 'oyon-consent-v1' };
+        apiFetch.mockImplementation((url, opts) => {
+            if (url === '/addons/oyon/config') return Promise.resolve({ enabled: true, consent_version: 'oyon-consent-v3', runtime: RUNTIME });
+            if (url === '/users/preferences') return Promise.resolve({ onboarding_settings: onboarding });
+            if (url === '/addons/oyon/consent' && opts?.method === 'POST') return Promise.resolve({});
+            return Promise.resolve({});
+        });
+        const { result } = renderHook(() => useOyonSignalGate('s1'));
+        await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/users/preferences'));
+        await act(async () => {});
+        expect(result.current.enabled).toBe(false);
+
+        onboarding = { oyon_consent: true, oyon_consent_version: 'oyon-consent-v3' };
+        const { announceOyonConsentChanged } = await import('../../utils/oyonConsent.js');
+        await act(async () => { announceOyonConsentChanged(); });
+        await waitFor(() => expect(result.current.persist).toBe(true));
+        expect(result.current.runtimeConfig).toEqual(RUNTIME);
+    });
+
     // v1 was camera-only. A learner still on it consented to affect capture,
     // not to keystroke dynamics.
     it('stays shut for a learner still on the camera-only contract', async () => {

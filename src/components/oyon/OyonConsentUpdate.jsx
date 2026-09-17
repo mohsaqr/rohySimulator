@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScanFace, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { needsConsentUpgrade, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { needsConsentUpgrade, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
 import { CONSENT_PREF_KEY } from './OyonCaptureWidget';
 import EventLogger from '../../services/eventLogger';
 
@@ -83,6 +83,7 @@ export default function OyonConsentUpdate() {
       } catch { /* private mode */ }
       setState(null);
       setBusy(false);
+      announceOyonConsentChanged();
    };
 
    if (!state) return null;

@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { coveredRuntime } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CHANGED_EVENT, coveredRuntime } from '../../utils/oyonConsent';
 import { ensureSessionConsent } from './ensureSessionConsent';
 import { anyModalityEnabled } from './useSignalCapture';
 
@@ -34,6 +34,16 @@ export function useOyonSignalGate(sessionId) {
     // session change invalidates it by comparison rather than by a
     // synchronous reset inside the effect (which would cascade a render).
     const [rowReadyFor, setRowReadyFor] = useState(null);
+    // Bumped when a consent surface saves a new choice, so the read below runs
+    // again. Reading once at mount left capture off for the rest of the page
+    // after a learner accepted the consent prompt (Prova PRV-5).
+    const [consentRevision, setConsentRevision] = useState(0);
+
+    useEffect(() => {
+        const onChange = () => setConsentRevision((n) => n + 1);
+        window.addEventListener(OYON_CONSENT_CHANGED_EVENT, onChange);
+        return () => window.removeEventListener(OYON_CONSENT_CHANGED_EVENT, onChange);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -59,7 +69,7 @@ export function useOyonSignalGate(sessionId) {
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [consentRevision]);
 
     const runtimeConfig = acceptedVersion ? coveredRuntime(config?.runtime || null, acceptedVersion) : null;
     const enabled = Boolean(config?.enabled) && anyModalityEnabled(runtimeConfig);
