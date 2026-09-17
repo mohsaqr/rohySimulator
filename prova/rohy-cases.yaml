@@ -1453,6 +1453,19 @@
       expected: |-
         Nothing is captured while consent is declined, the consent text names every kind of signal it
         covers rather than only the camera, and capture starts only after agreement to that text.
+    - id: OYON.CONSENT.02
+      title: An account that has never answered is asked, and capture starts once it agrees
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. With Oyon on for the tenant, sign in as an admin account that has never answered the consent
+           question (admins get the setup wizard, not the welcome page).
+        2. Accept the consent card, type a message to the patient, then reload.
+      expected: |-
+        The card asks, naming the camera and the signals it covers; agreeing records the tenant's contract,
+        the typed message is captured without a reload, and the card does not return.
+      covers: ["rohy:chromium::oyon-consent-first-ask.spec.js › *"]
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Machine-checked contracts. These cost a person nothing — the automated suite

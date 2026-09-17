@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { ScanFace, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { needsConsentUpgrade, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import { consentPromptMode, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
 import { CONSENT_PREF_KEY } from './OyonCaptureWidget';
 import EventLogger from '../../services/eventLogger';
+import { FIRST_RUN_VERSION } from '../setup/StudentFirstRun';
 
 /*
  * Re-consent prompt for an Oyon contract that has grown in scope.
@@ -14,19 +15,20 @@ import EventLogger from '../../services/eventLogger';
  * gated behind `first_run_done`, so every EXISTING learner would never see it —
  * and they are exactly the people whose consent predates the new contract.
  *
- * Shown only to a learner who previously said YES to an older contract.
+ * Shown to a learner who previously said YES to an older contract ('upgrade'),
+ * and to anyone who has NEVER answered and has no welcome page coming to ask
+ * them — admins, and anyone past the welcome page without an answer ('first').
  * Declining is already an answer, so someone who said no is not re-asked (they
- * can opt in from Settings → Oyon); someone who never answered gets the
- * first-run card instead.
+ * can opt in from Settings → Oyon). See consentPromptMode.
  *
  * Declining here is a real choice, not a dismissal: it records the refusal so
  * the prompt does not return. Camera-derived capture is unaffected either way —
  * it is covered by the contract the learner already accepted, and the server
  * gates only the newly-described signals on the newer version.
  */
-export default function OyonConsentUpdate() {
+export default function OyonConsentUpdate({ role = null }) {
    const { t } = useTranslation('oyon');
-   const [state, setState] = useState(null); // { requiredVersion } once needed
+   const [state, setState] = useState(null); // { requiredVersion, mode } once needed
    const [busy, setBusy] = useState(false);
 
    useEffect(() => {
@@ -40,20 +42,22 @@ export default function OyonConsentUpdate() {
             if (cancelled) return;
             if (!config?.enabled) return;              // tenant runs no Oyon
             const onboarding = parseOnboardingSettings(prefs);
-            if (needsConsentUpgrade({
+            const mode = consentPromptMode({
                granted: onboarding.oyon_consent,
                acceptedVersion: onboarding.oyon_consent_version,
                requiredVersion: config.consent_version,
-            })) {
-               setState({ requiredVersion: config.consent_version });
-            }
+               // Everyone but admins meets the welcome page (FirstRunGate) until
+               // first_run_done reaches its version, and is asked there.
+               awaitingFirstRun: role !== 'admin' && !(Number(onboarding.first_run_done) >= FIRST_RUN_VERSION),
+            });
+            if (mode) setState({ requiredVersion: config.consent_version, mode });
          } catch {
             // Oyon gated off, offline, or preferences unavailable — never block
             // the app on a consent probe.
          }
       })();
       return () => { cancelled = true; };
-   }, []);
+   }, [role]);
 
    const answer = async (granted) => {
       if (busy || !state) return;
@@ -92,21 +96,26 @@ export default function OyonConsentUpdate() {
    // records acceptableVersion(requiredVersion), so asking for v3 without
    // naming the microphone would repeat the v2 mistake one version later.
    const asksForVoice = consentRank(state.requiredVersion) >= consentRank(OYON_CONSENT_VOICE);
+   // A first-time answer grants the camera too (every contract covers it), so
+   // that card names it; the signal items appear only when the contract has them.
+   const first = state.mode === 'first';
+   const asksForSignals = consentRank(state.requiredVersion) >= 1;
 
    return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
          <div className="w-full max-w-lg rounded-lg border border-neutral-700 bg-neutral-900 p-5 space-y-4">
             <div className="flex items-center gap-2">
                <ScanFace className="w-5 h-5 text-blue-400" />
-               <h2 className="text-base font-semibold text-neutral-100">{t('reconsent_title')}</h2>
+               <h2 className="text-base font-semibold text-neutral-100">{t(first ? 'consent_ask_title' : 'reconsent_title')}</h2>
             </div>
 
-            <p className="text-sm text-neutral-300">{t('reconsent_body')}</p>
+            <p className="text-sm text-neutral-300">{t(first ? 'consent_ask_body' : 'reconsent_body')}</p>
 
             <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-1">
-               <li>{t('reconsent_item_typing')}</li>
-               <li>{t('reconsent_item_interaction')}</li>
-               <li>{t('reconsent_item_discourse')}</li>
+               {first && <li>{t('consent_item_camera')}</li>}
+               {asksForSignals && <li>{t('reconsent_item_typing')}</li>}
+               {asksForSignals && <li>{t('reconsent_item_interaction')}</li>}
+               {asksForSignals && <li>{t('reconsent_item_discourse')}</li>}
                {asksForVoice && <li>{t('reconsent_item_voice')}</li>}
                {asksForVoice && <li>{t('reconsent_item_ai_assist')}</li>}
             </ul>
@@ -115,7 +124,9 @@ export default function OyonConsentUpdate() {
                {/* Voice keeps a per-frame series of measurements, not only a
                    summary, so the typing-era note ("only summaries are stored")
                    would be untrue once voice is in scope. */}
-               {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note', { version: state.requiredVersion || '' })}
+               {t(first
+                  ? (asksForVoice ? 'consent_ask_note_voice' : 'consent_ask_note')
+                  : (asksForVoice ? 'reconsent_note_voice' : 'reconsent_note'), { version: state.requiredVersion || '' })}
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-1">
@@ -125,7 +136,7 @@ export default function OyonConsentUpdate() {
                   onClick={() => answer(false)}
                   className="px-3 py-1.5 rounded text-sm text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
                >
-                  {t('reconsent_decline')}
+                  {t(first ? 'consent_ask_decline' : 'reconsent_decline')}
                </button>
                <button
                   type="button"
@@ -134,7 +145,7 @@ export default function OyonConsentUpdate() {
                   className="px-3 py-1.5 rounded text-sm bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 flex items-center gap-2"
                >
                   {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {t('reconsent_accept')}
+                  {t(first ? 'consent_ask_accept' : 'reconsent_accept')}
                </button>
             </div>
          </div>

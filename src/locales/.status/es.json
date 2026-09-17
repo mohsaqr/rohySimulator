@@ -30569,6 +30569,76 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oyon.consent_ask_accept": {
+    "src": "5ac763ea23ae",
+    "tgt": "d05b63d23ab8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_ask_body": {
+    "src": "8ed2ac28947a",
+    "tgt": "0d71e00615f1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_ask_decline": {
+    "src": "3b7d67493a51",
+    "tgt": "4c9231d9b7f7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_ask_note": {
+    "src": "bae31efeea73",
+    "tgt": "a91091be3c8f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_ask_note_voice": {
+    "src": "8f71606776e4",
+    "tgt": "dfd26ddc85aa",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_ask_title": {
+    "src": "0181e1d13f4d",
+    "tgt": "0a06e9220a3d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.consent_item_camera": {
+    "src": "19e28e4253c9",
+    "tgt": "186d2ecf0064",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oyon.dashboard": {
     "src": "d0e9020c6ec4",
     "tgt": "49885c0e74e4",
