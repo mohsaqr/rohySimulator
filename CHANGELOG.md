@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.76] — 2026-09-17
+
+### Added
+
+- **Terms of use, server side** (migration 0060). The agreement lives in platform settings: a title, a body, a version, and whether acceptance is required. It is **off by default**, and the default text is the draft modelled on chatoyon+'s, kept in `server/shared/terms.js`.
+  - `GET /api/terms` serves it publicly, so it can be read before signing in.
+  - `GET /api/terms/status` tells a signed-in person whether they must accept the current version.
+  - `POST /api/terms/accept` records an acceptance once per person per version. It snapshots the exact text, time, IP address and browser, and writes an audit entry. It refuses (409) a version other than the current one, so nobody is recorded as accepting text they did not see.
+  - Admins read and edit it at `/api/platform-settings/terms`, which validates and audits edits and reports how many active accounts have accepted.
+
 ## [3.0.0-beta.75] — 2026-09-17
 
 ### Removed

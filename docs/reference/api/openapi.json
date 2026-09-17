@@ -8438,6 +8438,74 @@
         ]
       }
     },
+    "/api/platform-settings/terms": {
+      "get": {
+        "summary": "Get /platform-settings/terms",
+        "tags": [
+          "terms"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/terms-routes.js:157",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAdmin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Replace /platform-settings/terms",
+        "tags": [
+          "terms"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/terms-routes.js:172",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAdmin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/platform-settings/user-fields": {
       "get": {
         "summary": "Get /platform-settings/user-fields",
@@ -11612,6 +11680,101 @@
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/terms": {
+      "get": {
+        "summary": "Get /terms",
+        "tags": [
+          "terms"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/terms-routes.js:90",
+        "x-rohy-auth": [
+          "public"
+        ],
+        "security": []
+      }
+    },
+    "/api/terms/accept": {
+      "post": {
+        "summary": "Create /terms/accept",
+        "tags": [
+          "terms"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/terms-routes.js:117",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/terms/status": {
+      "get": {
+        "summary": "Get /terms/status",
+        "tags": [
+          "terms"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/terms-routes.js:99",
+        "x-rohy-auth": [
+          "authenticateToken"
         ],
         "security": [
           {
