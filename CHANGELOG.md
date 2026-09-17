@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.75] — 2026-09-17
+
+### Removed
+
+- **The first-time Oyon consent card from beta.73 is withdrawn** (never deployed). Rohy shows no consent pop-ups: Oyon measurement is opt-in, turned on by the learner, and consent is carried by a terms-of-use agreement and by researchers' own agreements. The decision and the plan are in `docs/design/oyon-licence-agreement.md`. A draft agreement, modelled on chatoyon+'s, is in `docs/design/rohy-terms-of-use-draft.md`.
+
 ## [3.0.0-beta.74] — 2026-09-17
 
 ### Fixed

@@ -64,38 +64,12 @@ describe('OyonConsentUpdate', () => {
         expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
     });
 
-    // Anyone who has not finished the welcome page is asked there, not here.
-    it('stays out of the way of a student still due the welcome page', async () => {
+    // Someone who never answered belongs to the first-run card, not here.
+    it('stays out of the way of a learner who has never answered', async () => {
         mockApi({ onboarding: {} });
-        render(<OyonConsentUpdate role="student" />);
+        render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
         expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
-        expect(screen.queryByText('consent_ask_title')).not.toBeInTheDocument();
-    });
-
-    // Regression lock: admins and educators never see the student welcome page,
-    // so a never-answered account was asked nowhere and capture never ran on it.
-    it('asks an admin who has never answered, naming the camera and every signal, and records the version shown', async () => {
-        mockApi({ consentVersion: 'oyon-consent-v3', onboarding: {} });
-        render(<OyonConsentUpdate role="admin" />);
-        await waitFor(() => expect(screen.getByText('consent_ask_title')).toBeInTheDocument());
-        expect(screen.queryByText('reconsent_body')).not.toBeInTheDocument();
-        for (const item of ['consent_item_camera', 'reconsent_item_typing', 'reconsent_item_voice']) {
-            expect(screen.getByText(item)).toBeInTheDocument();
-        }
-        // No "keeps your existing choice" note: there is no existing choice.
-        expect(screen.getByText('consent_ask_note_voice')).toBeInTheDocument();
-        expect(screen.queryByText('reconsent_note_voice')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByText('consent_ask_accept'));
-        await waitFor(() => expect(screen.queryByText('consent_ask_title')).not.toBeInTheDocument());
-        const put = apiFetch.mock.calls.find(([url, opts]) => url === '/users/preferences' && opts?.method === 'PUT');
-        expect(put[1].json.onboarding_settings).toEqual({ oyon_consent: true, oyon_consent_version: 'oyon-consent-v3' });
-    });
-
-    it('asks a student who finished the welcome page without answering', async () => {
-        mockApi({ onboarding: { first_run_done: 99 } });
-        render(<OyonConsentUpdate role="student" />);
-        await waitFor(() => expect(screen.getByText('consent_ask_title')).toBeInTheDocument());
     });
 
     it('says nothing when the tenant runs no Oyon', async () => {
