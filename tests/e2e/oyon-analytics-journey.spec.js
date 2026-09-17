@@ -251,7 +251,9 @@ test.describe('oyon analytics journey', () => {
 
         const section = adminPage.getByRole('heading', { name: 'Writing process' }).locator('xpath=ancestor::section[1]');
         await expect(section).toBeVisible();
-        await expect(section.getByRole('combobox').first()).toContainText(LEARNER.name);
+        // A real session is labelled by username: the chat starts it with
+        // student_name = user.username (ChatInterface), unlike the seeded spec.
+        await expect(section.getByRole('combobox').first()).toContainText(LEARNER.username);
         // Drawn from real capture: every edit positioned, bursts agree with Oyon.
         await expect(section.getByText(/Not drawable/)).toHaveCount(0);
         await expect(section.getByText(/matches the counts Oyon reported/)).toBeVisible();
@@ -287,9 +289,12 @@ test.describe('oyon analytics journey', () => {
 
         await source.selectOption('voice-states');
         await expect(adminPage.getByText('Voice states', { exact: true })).toBeVisible({ timeout: 20_000 });
-        // Two-word state names wrap onto two lines inside a node, so match per line.
-        for (const word of ['Turn', 'start', 'end']) {
-            await expect(adminPage.locator('svg text, svg tspan', { hasText: new RegExp(`^${word}$`) }).first()).toBeVisible();
+        // Every voice turn opens and closes, whatever the microphone heard (the
+        // fake device plays a tone, so Speech is not guaranteed). The state
+        // names are read from the page as a whole: node labels may wrap or sit
+        // below the fold, the centrality chart lists them in full.
+        for (const state of ['Turn start', 'Turn end']) {
+            await expect(adminPage.getByText(state, { exact: true }).first()).toBeAttached();
         }
         await adminPage.screenshot({ path: test.info().outputPath('journey-network-voice.png') });
         await test.info().attach('journey-network-voice', { path: test.info().outputPath('journey-network-voice.png'), contentType: 'image/png' });

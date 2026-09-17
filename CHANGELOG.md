@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.72] — 2026-09-17
+
+### Changed
+
+- `oyon-analytics-journey.spec.js` now matches what real capture records. A session started from the chat is labelled with the learner's username (the chat sets `student_name` from it), and the fake microphone's tone guarantees Turn start and Turn end states but not Speech. With PRV-5 (beta.70) and PRV-6 (beta.71) fixed, all four journey tests pass.
+
 ## [3.0.0-beta.71] — 2026-09-17
 
 ### Fixed
