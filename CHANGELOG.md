@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.79] — 2026-09-17
+
+### Changed
+
+- Regenerated the API and configuration reference for the terms-of-use routes (line numbers, and `ROHY_DISABLE_AUTH_RATE_LIMIT` now also read by `terms-routes.js`).
+
 ## [3.0.0-beta.78] — 2026-09-17
 
 ### Added
