@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.69] — 2026-09-17
+
+### Added
+
+- **`tests/e2e/oyon-analytics-journey.spec.js`: the whole typing and voice analytics journey on real capture.** A brand-new learner completes the welcome page, accepts the consent prompt, types two messages (a typo fixed with backspace, a pause mid-message) and speaks one voice turn on the fake microphone. An admin then opens Learning Analytics filtered to that learner, and the test checks that Text and Voice count exactly what the server stored during capture, that the writing process is drawn with bursts that agree with Oyon, and that the Typing and Voice networks are built from that learner's own states. It runs in the `chromium-voice` project.
+- Prova catalogue: feature `ANALYTICS.SIGNALS`. Case `.01` is the journey (`kind: both`); case `.02` covers the seeded cohort-figures spec.
+
 ## [3.0.0-beta.68] — 2026-09-16
 
 ### Changed

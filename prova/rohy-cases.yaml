@@ -1279,6 +1279,44 @@
         No student, session or result from the other educator's course is reachable anywhere,
         including through a filter, a search or an export.
 
+- feature: ANALYTICS.SIGNALS
+  title: Typing and voice analytics
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: ANALYTICS.SIGNALS.01
+      title: What a learner types and says reaches the educator's Text, Voice and Network views
+      kind: both
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. On a tenant with Oyon typing and voice on, sign in as a brand-new learner and complete the
+           welcome page.
+        2. Accept the consent prompt that names typing and voice.
+        3. In the patient room, type two messages — fix a typo with backspace in one, pause mid-way in
+           the other — then switch to voice and speak one turn.
+        4. As an admin, open Learning Analytics, filter to that learner, and look at Text, Voice, and
+           Network with Source set to Typing and then Voice.
+      expected: |-
+        Nothing needs a reload. Text counts exactly the messages sent and draws their writing process
+        (edits, pauses, bursts), Voice counts exactly the turns spoken, and the Typing and Voice
+        networks are built from that learner's own states — Insert and Delete for typing, Turn start
+        and Turn end for voice.
+      covers: ["rohy:chromium-voice::oyon-analytics-journey.spec.js › *"]
+    - id: ANALYTICS.SIGNALS.02
+      title: Cohort typing and voice figures give every learner one vote and leave unmeasurable turns out
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Store typing episodes and voice turns for two learners, one with many messages, including a
+           voice turn Oyon marks as not measurable.
+        2. Open Learning Analytics ▸ Text and ▸ Voice for that case.
+      expected: |-
+        Cohort figures are the median of each learner's median, not a pool of every message; the
+        unmeasurable turn is counted and explained but moves no figure.
+      covers: ["rohy:chromium::oyon-signal-analytics.spec.js › *"]
+
 - feature: ADMIN.LLM
   title: Model settings
   products: [rohy]
