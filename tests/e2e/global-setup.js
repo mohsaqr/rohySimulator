@@ -63,13 +63,24 @@ export default async function globalSetup(config) {
                     data: { completed: true },
                 });
                 if (!setupRes.ok()) throw new Error(`platform setup complete → ${setupRes.status()}: ${await setupRes.text()}`);
+                // Both seeded accounts also ANSWER the Oyon consent question
+                // (no). An account that has never answered is asked by a modal
+                // card on its next page (OyonConsentUpdate, beta.73), which
+                // would cover every screen these specs assert on. "No" keeps
+                // their previous behaviour — capture off — and the Oyon specs
+                // record their own consent where they need it.
                 const prefRes = await ctx.put('/api/users/preferences', {
                     headers: { Authorization: `Bearer ${student.token}` },
                     // Same shape StudentFirstRun writes: first_run_done is a
                     // VERSION number compared with >=, not a boolean.
-                    data: { onboarding_settings: { first_run_done: 1 } },
+                    data: { onboarding_settings: { first_run_done: 1, oyon_consent: false } },
                 });
                 if (!prefRes.ok()) throw new Error(`student first-run complete → ${prefRes.status()}: ${await prefRes.text()}`);
+                const adminPrefRes = await ctx.put('/api/users/preferences', {
+                    headers: { Authorization: `Bearer ${admin.token}` },
+                    data: { onboarding_settings: { oyon_consent: false } },
+                });
+                if (!adminPrefRes.ok()) throw new Error(`admin oyon answer → ${adminPrefRes.status()}: ${await adminPrefRes.text()}`);
             } finally { await ctx.dispose(); }
 
             console.log(`[globalSetup] minted tokens + completed first-run gates at ${TOKEN_FILE}`);
