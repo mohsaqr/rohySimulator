@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.85] — 2026-09-17
+
+### Added
+
+- The on-call phone. A round call icon at the right edge of the case screen — present in every room, clear of the monitor's numbers — opens a handset with three screens: contacts (the case's specialists, with the patient strip and who can be reached), a messaging thread per specialist, and a call. Opening it from a room a specialist owns lands straight in their thread and pages them: the pathology room reaches the pathologist, PACS and the legacy radiology room the radiologist, the ECG room the cardiologist; anywhere else it opens on the contact list, and the back arrow always reaches the whole team.
+- A call reuses the platform's own voice: push-to-talk speech recognition as in the patient chat, the reply read aloud in the agent's configured voice, live captions, mute, and typing for a browser without speech recognition. Call turns are stored with the call's id and appear in the thread afterwards, tagged.
+- Specialists no longer appear as chat tabs in the patient room; the phone is where they live.
+
+### Known gap
+
+- The `oncall` namespace is English-only in the other locales — the machine pass needs a live server with a working `/api/proxy/llm`. `tests/server/locales-integrity.test.js` declares the allowance (52 keys) so the gap is bounded and visible; delete the entry when the translations land.
+
 ## [3.0.0-beta.84] — 2026-09-17
 
 ### Added

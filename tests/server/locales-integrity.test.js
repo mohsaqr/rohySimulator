@@ -47,10 +47,15 @@ const TRANSLATED = ['it', 'fi', 'sv', 'de', 'es', 'fr', 'kk'];
  * takes a deliberate edit that shows up in review.
  */
 const AWAITING_TRANSLATION = {
-    // Empty, and that is the point: every namespace is fully translated in
-    // every locale held to parity. The oyon allowance opened at 383 on
-    // 2026-09-06 and closed the same day. Add an entry only for a namespace
-    // genuinely mid-translation, and delete it the moment it lands.
+    // Add an entry only for a namespace genuinely mid-translation, and delete
+    // it the moment it lands. The oyon allowance opened at 383 on 2026-09-06
+    // and closed the same day.
+    //
+    // oncall opened at 52 on 2026-09-17 with the on-call specialist phone.
+    // The machine pass needs a live server with a working /api/proxy/llm and
+    // could not be run in that session; every string is English-only until it
+    // is, and the phone falls back to English in the other locales.
+    'oncall.json': 52,
 };
 const GENERATED = ['en-XA'];
 

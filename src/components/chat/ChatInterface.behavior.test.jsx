@@ -92,6 +92,9 @@ const swappedCase = {
 const agents = [
     {
         id: 11,
+        // GET /sessions/:id/agents names every agent by case_agent_id; without
+        // it AgentService.sendAgentMessage refuses to call the proxy.
+        case_agent_id: 11,
         agent_type: 'nurse',
         name: 'Nancy',
         role_title: 'Floor Nurse',

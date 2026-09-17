@@ -1,0 +1,58 @@
+/* The round call icon that opens the on-call phone. Fixed to the right edge of
+   the case screen, present in every room. Scoped to .oncall-call-icon. */
+
+.oncall-call-icon {
+    position: fixed;
+    right: 12px;
+    top: 120px;
+    z-index: 46;              /* over the rooms, under the phone (55) and modals */
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    filter: drop-shadow(0 8px 14px rgba(3, 20, 45, .55));
+    transition: transform .16s ease, filter .16s ease;
+}
+.oncall-call-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28);
+}
+.oncall-call-icon:hover { transform: translateY(-2px) scale(1.04); }
+.oncall-call-icon:active { transform: translateY(0) scale(.98); }
+.oncall-call-icon:focus-visible {
+    outline: 2px solid #5DB9A0;
+    outline-offset: 3px;
+}
+/* open: the icon reads as engaged, tipped like a lifted receiver */
+.oncall-call-icon.is-open { transform: rotate(-8deg) scale(1.02); }
+
+.oncall-call-icon .tally {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: #1F8A5B;
+    color: #ecfdf5;
+    font: 600 11px/20px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .55), 0 0 0 2px rgba(8, 20, 30, .85);
+}
+
+@media (max-width: 640px) {
+    .oncall-call-icon { width: 46px; height: 46px; top: 76px; right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .oncall-call-icon,
+    .oncall-call-icon:hover,
+    .oncall-call-icon:active,
+    .oncall-call-icon.is-open { transition: none; transform: none; }
+}
