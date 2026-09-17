@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.71] — 2026-09-17
+
+### Fixed
+
+- **Every message is captured, not only the first on a page** (Prova PRV-6). Sending a message finalizes Oyon's typing episode and removes the adapter's listeners, but the chat only attached the adapter on mount or a tab switch — so nothing started the next episode, and a whole session yielded typing analytics for one message. The chat now starts a new episode once a sent message has cleared the composer. It waits for the box to be empty because the adapter takes the box's length as its baseline; attaching earlier would read the next keystroke as deleting the whole previous message. Regression lock in `ChatInterface.behavior.test.jsx`.
+
 ## [3.0.0-beta.70] — 2026-09-17
 
 ### Fixed

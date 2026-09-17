@@ -1204,6 +1204,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         };
     }, [signalCapture, composerEl, activeTab]);
 
+    // Start the NEXT episode once a sent message has cleared the composer.
+    // `typing.submit()` finalizes the episode and removes the adapter's
+    // listeners, and the effect above only attaches on mount or a tab change —
+    // so every message after the first on a page went uncaptured (Prova PRV-6).
+    // Waiting for the box to be empty matters: the adapter takes the element's
+    // current length as its baseline, so attaching while the sent text is still
+    // there would read the next keystroke as deleting the whole message.
+    useEffect(() => {
+        const typing = signalCapture?.typing;
+        if (!typing || !composerEl || input !== '' || typing.active) return;
+        typing.attach(composerEl, { targetKind: 'chat_composer', targetId: activeTab });
+    }, [input, signalCapture, composerEl, activeTab]);
+
     // End the Oyon voice turn when listening stops — by the learner tapping
     // again, the recogniser's onEnd, an STT error, or any other stop site. They
     // all funnel through setListening, so one transition catches every exit
