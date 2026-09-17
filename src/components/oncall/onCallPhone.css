@@ -1,0 +1,219 @@
+/* The on-call phone. Ported from the "Bleep Consult" prototype the product
+   owner signed off on — a handset, not a panel: bezel, status bar, contacts
+   with the patient strip, a messaging thread, and a full-bleed call screen.
+   Everything is scoped under .oncall-phone so none of it leaks into Rohy. */
+
+.oncall-phone {
+    --ground: #E6E9E2;
+    --ink: #17201C;
+    --muted: #5B6862;
+    --line: #CDD5CB;
+    --phone: #FAFBF7;
+    --phone-edge: #151A18;
+    --bar: #F1F3EE;
+    --bubble-in: #E9EDE6;
+    --bubble-out: #1E5B4F;
+    --bubble-out-ink: #F3F8F5;
+    --accent: #1E5B4F;
+    --accent-soft: #D3E4DC;
+    --accept: #1F8A5B;
+    --end: #C23B2E;
+    --warn-bg: #F6EBC8;
+    --warn-ink: #5A4712;
+    --path: #8B3A74;
+    --cardio: #B5322A;
+    --radio: #34587A;
+    --call-ground: #101513;
+    --call-ink: #EEF3F0;
+    --call-muted: #9AA8A1;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "Instrument Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+    /* The outer shell: a graphite casing with side buttons. The screen is
+       .glass inside it (bezel, rounded display, camera island). */
+    position: fixed;
+    right: 20px;
+    bottom: 80px;
+    z-index: 55;
+    width: 404px;
+    max-width: calc(100vw - 24px);
+    height: min(740px, calc(100vh - 150px));
+    min-height: 520px;
+    padding: 9px;
+    border-radius: 60px;
+    background: linear-gradient(150deg, #4a504d 0%, #202523 38%, #151917 62%, #3a403d 100%);
+    box-shadow:
+        0 40px 70px -24px rgba(0, 0, 0, .75),
+        0 0 0 1px rgba(255, 255, 255, .10),
+        inset 0 1px 1px rgba(255, 255, 255, .22),
+        inset 0 -1px 2px rgba(0, 0, 0, .6);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: left;
+}
+/* side buttons: volume on the left, power on the right */
+.oncall-phone::before, .oncall-phone::after {
+    content: ""; position: absolute; width: 4px; border-radius: 3px;
+    background: linear-gradient(90deg, #121514, #3c423f);
+}
+.oncall-phone::before { left: -4px; top: 150px; height: 88px; box-shadow: 0 -52px 0 -0px #2a2f2d; }
+.oncall-phone::after { right: -4px; top: 190px; height: 70px; background: linear-gradient(90deg, #3c423f, #121514); }
+.oncall-phone .glass {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--phone);
+    border: 7px solid var(--phone-edge);
+    border-radius: 51px;
+}
+.oncall-phone .island {
+    position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+    width: 92px; height: 25px; border-radius: 14px; background: #000; z-index: 2;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.oncall-phone .island::after {
+    content: ""; position: absolute; right: 10px; top: 8px; width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #2b3a55, #07090c 70%);
+}
+@media (prefers-color-scheme: dark) {
+    .oncall-phone {
+        --ink: #E4EBE7; --muted: #93A19A; --line: #28312D;
+        --phone: #0D1210; --phone-edge: #000000;
+        --bar: #131916; --bubble-in: #1B2320; --bubble-out: #2E7C6A; --bubble-out-ink: #F3F8F5;
+        --accent: #5DB9A0; --accent-soft: #1B3530; --accept: #2FA36F; --end: #D9544A;
+        --warn-bg: #3A3216; --warn-ink: #EAD9A0;
+        --path: #C97DB3; --cardio: #E2675D; --radio: #7EA6CA;
+    }
+}
+@media (max-width: 480px) {
+    .oncall-phone { right: 12px; left: 12px; width: auto; padding: 6px; border-radius: 44px; }
+    .oncall-phone .glass { border-width: 5px; border-radius: 38px; }
+}
+.oncall-phone *, .oncall-phone *::before, .oncall-phone *::after { box-sizing: border-box; }
+.oncall-phone button, .oncall-phone input, .oncall-phone textarea { font: inherit; color: inherit; }
+.oncall-phone button { cursor: pointer; }
+.oncall-phone button:disabled { cursor: default; }
+.oncall-phone :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oncall-phone:focus { outline: none; }
+
+.oncall-phone .status {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px 8px 26px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    flex-shrink: 0;
+}
+.oncall-phone .status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accept); margin-right: 6px; vertical-align: 1px; }
+.oncall-phone .status .right { display: flex; align-items: center; gap: 10px; }
+.oncall-phone .status-close { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+.oncall-phone .status-close:hover { background: var(--accent-soft); color: var(--ink); }
+.oncall-phone .status-close svg { width: 15px; height: 15px; }
+.oncall-phone .screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* contacts */
+.oncall-phone .contacts-head { padding: 8px 22px 14px; }
+.oncall-phone .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.oncall-phone .contacts-head h1 { font-size: 30px; line-height: 1.1; margin: 4px 0 14px; letter-spacing: -.01em; font-weight: 700; }
+.oncall-phone .patient { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; display: grid; gap: 2px; }
+.oncall-phone .patient strong { font-size: 15px; }
+.oncall-phone .patient span { font-size: 13px; color: var(--muted); }
+.oncall-phone .contact-list { list-style: none; margin: 0; padding: 4px 12px 16px; overflow-y: auto; }
+.oncall-phone .contact { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 10px; }
+.oncall-phone .contact + .contact { border-top: 1px solid var(--line); }
+.oncall-phone .contact-open { all: unset; cursor: pointer; display: grid; gap: 1px; min-width: 0; }
+.oncall-phone .contact-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.oncall-phone .contact-name { font-weight: 600; font-size: 15.5px; }
+.oncall-phone .contact-role { font-size: 13px; color: var(--muted); }
+.oncall-phone .contact-last { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.oncall-phone .contact-actions { display: flex; gap: 8px; }
+.oncall-phone .empty { padding: 20px 22px; color: var(--muted); font-size: 14px; }
+
+.oncall-phone .avatar {
+    --c: var(--accent);
+    width: 46px; height: 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--c) 16%, transparent);
+    color: var(--c);
+    font-weight: 700; font-size: 15px; letter-spacing: .02em;
+    position: relative; flex-shrink: 0;
+}
+.oncall-phone .avatar.online::after {
+    content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px;
+    border-radius: 50%; background: var(--accept); border: 2px solid var(--phone);
+}
+.oncall-phone .avatar.away::after {
+    content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px;
+    border-radius: 50%; background: #C9A227; border: 2px solid var(--phone);
+}
+.oncall-phone .avatar.big { width: 104px; height: 104px; font-size: 34px; }
+.oncall-phone .avatar.big::after { display: none; }
+.oncall-phone .spec-pathologist { --c: var(--path); }
+.oncall-phone .spec-cardiologist { --c: var(--cardio); }
+.oncall-phone .spec-radiologist { --c: var(--radio); }
+.oncall-phone .spec-tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--c, var(--muted)); }
+
+.oncall-phone .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+.oncall-phone .icon-btn svg { width: 19px; height: 19px; }
+.oncall-phone .icon-btn.plain { background: transparent; color: var(--ink); }
+.oncall-phone .icon-btn:disabled { opacity: .45; }
+
+/* chat */
+.oncall-phone .chat-bar { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; padding: 6px 12px 10px; border-bottom: 1px solid var(--line); background: var(--bar); }
+.oncall-phone .chat-bar .avatar { width: 38px; height: 38px; font-size: 13px; }
+.oncall-phone .chat-bar .avatar::after { width: 9px; height: 9px; }
+.oncall-phone .chat-who { min-width: 0; display: grid; }
+.oncall-phone .chat-who strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oncall-phone .chat-who span { font-size: 12px; color: var(--muted); }
+.oncall-phone .thread { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 6px; }
+.oncall-phone .day { align-self: center; font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 4px 0 8px; }
+.oncall-phone .msg { max-width: 82%; padding: 9px 13px; border-radius: 18px; font-size: 14.5px; line-height: 1.42; white-space: pre-wrap; overflow-wrap: anywhere; }
+.oncall-phone .msg.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 6px; }
+.oncall-phone .msg.out { align-self: flex-end; background: var(--bubble-out); color: var(--bubble-out-ink); border-bottom-right-radius: 6px; }
+.oncall-phone .msg .via { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; opacity: .7; margin-bottom: 2px; }
+.oncall-phone .msg.typing { color: var(--muted); font-style: italic; }
+.oncall-phone .sys { align-self: center; font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; margin: 6px 0; text-align: center; }
+.oncall-phone .sys.err { color: var(--end); border-color: color-mix(in srgb, var(--end) 40%, transparent); }
+.oncall-phone .sys button { border: 0; background: transparent; color: var(--accent); font-weight: 600; margin-left: 6px; padding: 0; }
+.oncall-phone .composer { display: flex; gap: 8px; align-items: flex-end; padding: 8px 12px 14px; border-top: 1px solid var(--line); background: var(--bar); flex-shrink: 0; }
+.oncall-phone .composer textarea { flex: 1; resize: none; min-height: 40px; max-height: 110px; border: 1px solid var(--line); border-radius: 20px; padding: 9px 14px; background: var(--phone); line-height: 1.35; font-size: 14.5px; }
+.oncall-phone .composer textarea:disabled { opacity: .6; }
+.oncall-phone .send { background: var(--bubble-out); color: var(--bubble-out-ink); }
+
+/* call */
+.oncall-phone .call {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center;
+    background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--c) 38%, var(--call-ground)) 0%, var(--call-ground) 70%);
+    color: var(--call-ink); padding: 28px 20px 22px; gap: 10px; text-align: center;
+}
+.oncall-phone .call .avatar { background: color-mix(in srgb, var(--c) 30%, #000); color: #fff; }
+.oncall-phone .call.ringing .avatar { animation: oncall-pulse 1.4s ease-out infinite; }
+.oncall-phone .call.speaking .avatar { box-shadow: 0 0 0 8px rgba(255, 255, 255, .12); }
+@keyframes oncall-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.35); } 100% { box-shadow: 0 0 0 26px rgba(255,255,255,0); } }
+.oncall-phone .call h2 { margin: 8px 0 0; font-size: 24px; font-weight: 600; }
+.oncall-phone .call .call-role { color: var(--call-muted); font-size: 13.5px; }
+.oncall-phone .call .call-state { font-family: var(--mono); font-size: 13px; color: var(--call-muted); font-variant-numeric: tabular-nums; }
+.oncall-phone .captions { flex: 1; min-height: 0; width: 100%; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 8px 4px; }
+.oncall-phone .cap { text-align: left; font-size: 15px; line-height: 1.45; margin: 0; }
+.oncall-phone .cap b { display: block; font-family: var(--mono); font-weight: 500; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--call-muted); }
+.oncall-phone .cap.you { color: var(--call-muted); }
+.oncall-phone .call-type { display: flex; gap: 8px; width: 100%; }
+.oncall-phone .call-type input { flex: 1; min-width: 0; border-radius: 99px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07); color: var(--call-ink); padding: 10px 16px; font-size: 14.5px; }
+.oncall-phone .call-type input::placeholder { color: var(--call-muted); }
+.oncall-phone .call-controls { display: flex; gap: 22px; align-items: flex-start; justify-content: center; margin-top: 6px; }
+.oncall-phone .round { width: 62px; height: 62px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(255,255,255,.12); color: #fff; }
+.oncall-phone .round svg { width: 25px; height: 25px; }
+.oncall-phone .round.on { background: #fff; color: var(--call-ground); }
+.oncall-phone .round.end { background: var(--end); }
+.oncall-phone .round.live { background: #fff; color: var(--end); animation: oncall-pulse 1.4s ease-out infinite; }
+.oncall-phone .round:disabled { opacity: .4; }
+.oncall-phone .round-label { font-size: 11px; color: var(--call-muted); margin-top: 4px; }
+.oncall-phone .ctl { display: grid; justify-items: center; }
+.oncall-phone .call-note { font-size: 12px; color: var(--call-muted); min-height: 1em; }
+.oncall-phone .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .oncall-phone .call.ringing .avatar, .oncall-phone .round.live { animation: none; }
+}

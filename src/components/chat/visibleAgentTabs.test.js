@@ -34,3 +34,17 @@ describe('visibleAgentTabs (Bug 10)', () => {
         expect(visibleAgentTabs(undefined)).toEqual([]);
     });
 });
+
+// Specialists live in the on-call phone (src/components/oncall), so they must
+// not also get a team-agent tab.
+describe('visibleAgentTabs — on-call specialists', () => {
+    it('drops every specialist type and keeps the rest of the team', () => {
+        const agents = [
+            { agent_type: 'nurse', name: 'Sarah', enabled: true },
+            { agent_type: 'pathologist', name: 'Dr. P', enabled: true },
+            { agent_type: 'cardiologist', name: 'Dr. C', enabled: true },
+            { agent_type: 'radiologist', name: 'Dr. R', enabled: true },
+        ];
+        expect(visibleAgentTabs(agents).map(a => a.agent_type)).toEqual(['nurse']);
+    });
+});

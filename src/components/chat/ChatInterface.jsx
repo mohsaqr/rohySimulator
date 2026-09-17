@@ -41,6 +41,7 @@ import { getAffectSnapshot } from '../../utils/latestAffect';
 import { buildAffectSignal } from '../../utils/affectSignal';
 import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
 import SubtitleBand from '../voice/SubtitleBand';
+import { isSpecialistType } from '../../../server/shared/specialties.js';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
 // only when a user actually toggles voice mode on for the first time.
@@ -49,9 +50,11 @@ import SubtitleBand from '../voice/SubtitleBand';
 // dedicated first tab driven by the case + attachedPatient merge, so an
 // agent_type==='patient' template (the seeded "Default Patient") must NOT
 // render a second tab mapped to the same person (Bug 10, 16.5.2026).
+// On-call specialists (pathologist, cardiologist, radiologist) are reached
+// through the on-call phone (src/components/oncall), not a chat tab.
 export function visibleAgentTabs(agents) {
     if (!Array.isArray(agents)) return [];
-    return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient');
+    return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient' && !isSpecialistType(a.agent_type));
 }
 
 // Per-case memory of which chat tab was open (see the effects in the

@@ -22,6 +22,9 @@ import { useNotifications } from './notifications/useNotifications';
 import { setExternalApi } from './notifications/externalApi';
 import { ToastSurface, BannerSurface, AudioSurface, BackendSurface, ConsoleSurface } from './notifications/surfaces';
 import DiagnosticBar from './components/debug/DiagnosticBar';
+import OnCallButton from './components/oncall/OnCallButton';
+import OnCallPhone from './components/oncall/OnCallPhone';
+import { useOnCall } from './components/oncall/useOnCall';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
@@ -222,6 +225,10 @@ function MainApp() {
    // panels that should be snapshot-bound mount as siblings under App. Falls
    // back to live activeCase if the fetch hasn't completed.
    const [caseSnapshot, setCaseSnapshot] = useState(null);
+   // On-call phone: the case's specialists and whether the handset is open.
+   // Closed and empty once the case has ended.
+   const onCall = useOnCall(sessionId && activeCase && !caseEnded ? sessionId : null);
+   const onCallButtonRef = useRef(null);
    useEffect(() => {
       if (!sessionId) { setCaseSnapshot(null); return; }
       let cancelled = false;
@@ -1015,6 +1022,27 @@ function MainApp() {
           one place the signal capture actually runs — could never answer it,
           and the consent that gates typing and voice stayed stale forever. */}
       {oyonConsentUpdate}
+      {/* On-call phone: text or call the case's specialists (pathology,
+          cardiology, radiology) from any room, plugin rooms included. Its
+          button sits in the room navigator (phoneButton below). */}
+      <OnCallButton
+         ref={onCallButtonRef}
+         sessionId={onCall.available ? sessionId : null}
+         specialists={onCall.team.specialists}
+         open={onCall.open}
+         onClick={onCall.toggle}
+      />
+      {onCall.open && (
+         <OnCallPhone
+            sessionId={sessionId}
+            activeCase={caseSnapshot ?? activeCase}
+            patient={patientInfo}
+            room={currentRoom}
+            team={onCall.team}
+            onClose={onCall.close}
+            returnFocusRef={onCallButtonRef}
+         />
+      )}
       <PatientRecordProvider
          sessionId={sessionId}
          caseId={activeCase?.id}
