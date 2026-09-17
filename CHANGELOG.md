@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.82] — 2026-09-17
+
+### Fixed
+
+- Learner reads of a case carried plugin answer keys that `learnerOmit` could not reach. `omitPath` walked dotted object paths only and returned early on an array, so the PACS document — `{version, worklist[]}` — kept every study's `rubric` and the full text of reports the author had marked *not released* in the payload sent to a student's browser; the room hid them client-side, devtools did not. Strip rules now accept an array step (`worklist[].rubric`), and a new `learnerOmitWhen` rule removes named fields when a condition on the same object holds (`report` fields when `released: false`, matching `readEntry`, where an absent flag means released). Both rules are declared in the manifest, parsed once by `parseDocumentPath`, and applied for every role below reviewer.
+
 ## [3.0.0-beta.81] — 2026-09-17
 
 ### Fixed

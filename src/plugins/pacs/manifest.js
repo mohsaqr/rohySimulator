@@ -152,14 +152,31 @@ export const manifest = {
         minRole: 'educator',
     },
 
-    // The document contract (§11a). `rubric` is the answer key — the expected
-    // findings, the key images, the dwell thresholds. The package's own
+    // The document contract (§11a). The PACS document is `{ version, worklist }`
+    // and the answer key — the expected findings, the key images, the dwell
+    // thresholds — is `worklist[].rubric`, one per study. The package's own
     // `learnerDocument()` projection omits it in the room, but a projection in
     // the browser only decides what is SHOWN; declaring it here makes the
-    // server strip the path from every read a role below reviewer makes, so it
-    // never reaches the learner's devtools in the first place.
+    // server strip it from every read a role below reviewer makes, so it never
+    // reaches the learner's devtools in the first place.
+    //
+    // Regression lock: this used to say only ['rubric'], a top-level path the
+    // PACS document does not have — the server stripped nothing and every
+    // rubric shipped. 'rubric' is kept because it is harmless: readDocument()
+    // ignores any top-level key but version/worklist, so a document-level
+    // rubric (an import, a hand-edited case) is never material the room needs.
+    //
+    // `learnerOmitWhen` is the same rule `learnerDocument()` applies to reports:
+    // `released: false` means "written, but withheld so the learner must read
+    // the images". The flag is authored and never flipped at run time, so the
+    // learner's room never shows that text — the server does not send it
+    // either. Absent `released` means released (readEntry), so it is `=== false`
+    // here, not `!== true`.
     document: {
-        learnerOmit: ['rubric'],
+        learnerOmit: ['rubric', 'worklist[].rubric'],
+        learnerOmitWhen: [
+            { path: 'worklist[].report', when: { released: false }, omit: ['findings', 'impression', 'reportedBy'] },
+        ],
     },
 };
 

@@ -48,6 +48,32 @@ import {
 
 export { CLINICAL_STATES, SEVERITIES, CATEGORIES };
 
+// ---- Document paths (RPS-1 §11a.2a) ------------------------------------------
+//
+// A learner-projection path names a place inside a plugin's case document:
+// dot-separated property names, where a segment may end in `[]` meaning "every
+// element of this array" — `rubric`, `manifest.answers`, `worklist[].rubric`.
+// The grammar lives HERE, beside the validator, and pluginDocument.js walks the
+// parsed steps, so what `plugins:gen` accepts and what the server strips can
+// never be two different languages.
+const PATH_SEGMENT = /^([A-Za-z0-9_$]+)(\[\])?$/;
+
+/**
+ * Parse a document path into steps, or `null` when it is malformed
+ * (`''`, `'[]'`, `'a[]b'`, `'a..b'`, `'.a'`, `'a[][]'`).
+ *
+ * @param {*} path
+ * @returns {Array<{key: string, each: boolean}>|null}
+ */
+export function parseDocumentPath(path) {
+    if (typeof path !== 'string' || path.length === 0) return null;
+    const steps = path.split('.').map((segment) => {
+        const match = PATH_SEGMENT.exec(segment);
+        return match ? { key: match[1], each: match[2] === '[]' } : null;
+    });
+    return steps.every(Boolean) ? steps : null;
+}
+
 // 'orders' is the session's INVESTIGATION ORDERS, narrowed. A plugin room that
 // shows the result of something the learner ordered in a core room (PACS shows
 // the images for a study ordered in Radiology) otherwise has to reach for
@@ -443,20 +469,44 @@ export function validateManifest(manifest) {
         if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
             throw new Error(`Plugin '${manifest.id}' declares 'document' that is not an object`);
         }
-        const unknown = Object.keys(doc).find((key) => key !== 'maxBytes' && key !== 'learnerOmit');
+        const DOCUMENT_FIELDS = ['maxBytes', 'learnerOmit', 'learnerOmitWhen'];
+        const unknown = Object.keys(doc).find((key) => !DOCUMENT_FIELDS.includes(key));
         if (unknown) {
-            throw new Error(`Plugin '${manifest.id}' document declares unknown field '${unknown}' — only maxBytes and learnerOmit are defined`);
+            throw new Error(`Plugin '${manifest.id}' document declares unknown field '${unknown}' — only ${DOCUMENT_FIELDS.join(', ')} are defined`);
         }
         if (doc.maxBytes !== undefined && !(Number.isInteger(doc.maxBytes) && doc.maxBytes > 0)) {
             throw new Error(`Plugin '${manifest.id}' document.maxBytes must be a positive integer number of bytes`);
         }
-        // Dotted paths the host strips for roles below reviewer (§11a.4). A
-        // typo here fails OPEN — the answer key ships — so the shape is strict.
+        // Paths the host strips for roles below reviewer (§11a.4). A typo here
+        // fails OPEN — the answer key ships — so the shape is strict. The last
+        // segment names the property removed, so it cannot be `[]`.
         if (doc.learnerOmit !== undefined) {
             const ok = Array.isArray(doc.learnerOmit) && doc.learnerOmit.length > 0
-                && doc.learnerOmit.every((p) => typeof p === 'string' && /^[A-Za-z0-9_$]+(\.[A-Za-z0-9_$]+)*$/.test(p));
+                && doc.learnerOmit.every((p) => {
+                    const steps = parseDocumentPath(p);
+                    return steps !== null && !steps[steps.length - 1].each;
+                });
             if (!ok) {
-                throw new Error(`Plugin '${manifest.id}' document.learnerOmit must be a non-empty array of dotted paths like 'rubric' or 'manifest.answers'`);
+                throw new Error(`Plugin '${manifest.id}' document.learnerOmit must be a non-empty array of paths like 'rubric', 'manifest.answers' or 'worklist[].rubric'`);
+            }
+        }
+        // Conditional withholding: at every object `path` reaches, remove the
+        // `omit` properties when the object's own properties strictly equal
+        // every pair in `when`. PACS uses it for a report the author wrote but
+        // did not release. Scalars only in `when`, because the comparison is
+        // `===` and an object there could never match.
+        if (doc.learnerOmitWhen !== undefined) {
+            const isKey = (k) => typeof k === 'string' && /^[A-Za-z0-9_$]+$/.test(k);
+            const isScalar = (v) => v === null || ['string', 'boolean'].includes(typeof v) || Number.isFinite(v);
+            const ruleOk = (rule) => rule && typeof rule === 'object' && !Array.isArray(rule)
+                && Object.keys(rule).every((k) => ['path', 'when', 'omit'].includes(k))
+                && parseDocumentPath(rule.path) !== null
+                && rule.when && typeof rule.when === 'object' && !Array.isArray(rule.when)
+                && Object.keys(rule.when).length > 0
+                && Object.entries(rule.when).every(([k, v]) => isKey(k) && isScalar(v))
+                && Array.isArray(rule.omit) && rule.omit.length > 0 && rule.omit.every(isKey);
+            if (!(Array.isArray(doc.learnerOmitWhen) && doc.learnerOmitWhen.length > 0 && doc.learnerOmitWhen.every(ruleOk))) {
+                throw new Error(`Plugin '${manifest.id}' document.learnerOmitWhen must be a non-empty array of { path, when, omit } rules, e.g. { path: 'worklist[].report', when: { released: false }, omit: ['findings'] }`);
             }
         }
     }

@@ -20,7 +20,7 @@
  * second authoring plugin needs no change in this file.
  */
 
-import { roleAllows } from './pluginRegistry.js';
+import { parseDocumentPath, roleAllows } from './pluginRegistry.js';
 
 /**
  * The default cap on one plugin document, serialised.
@@ -167,38 +167,82 @@ export function validatePluginDocuments(config, manifests) {
 // kept out of `case_snapshot` to avoid (sessions-routes.js).
 //
 // The server cannot import the package, so the plugin names what to strip in
-// its manifest: `document.learnerOmit = ['rubric']` — dotted paths into the
-// document, removed for every role below reviewer. Frozen data, like
-// `maxBytes` and `remote.paths`.
+// its manifest: `document.learnerOmit = ['rubric', 'worklist[].rubric']` —
+// paths into the document, where a `[]` segment means every element of that
+// array — removed for every role below reviewer. `document.learnerOmitWhen`
+// removes properties only from objects matching a condition (PACS: a report
+// the author wrote but did not release). Frozen data, like `maxBytes` and
+// `remote.paths`; the path grammar is `parseDocumentPath` in pluginRegistry.js.
 
 /** The role from which the whole document (answer key included) may be read. */
 export const DOCUMENT_FULL_READ_ROLE = 'reviewer';
 
-/** Dotted paths this plugin asks the host to strip for learners. */
+/** Paths this plugin asks the host to strip for learners. */
 export function learnerOmitPaths(manifest) {
     const declared = manifest?.document?.learnerOmit;
     return Array.isArray(declared) ? declared.filter((p) => typeof p === 'string' && p.length > 0) : [];
 }
 
-function omitPath(document, dotted) {
-    const parts = dotted.split('.');
-    const clone = { ...document };
-    let cursor = clone;
-    for (let i = 0; i < parts.length - 1; i++) {
-        const next = cursor[parts[i]];
-        if (!next || typeof next !== 'object' || Array.isArray(next)) return clone; // nothing to strip
-        cursor[parts[i]] = { ...next };
-        cursor = cursor[parts[i]];
+/** Conditional strip rules this plugin declares (`{ path, when, omit }`). */
+export function learnerOmitWhenRules(manifest) {
+    const declared = manifest?.document?.learnerOmitWhen;
+    return Array.isArray(declared) ? declared.filter((r) => r && typeof r === 'object') : [];
+}
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Apply `edit` to every plain object `steps` reach inside `node`, cloning only
+ * along the way and returning `node` itself (same reference) when nothing
+ * changed. Never mutates. A missing key, a non-array under `[]`, or a
+ * non-object element ends that branch untouched — there is nothing to strip.
+ */
+function updateAt(node, steps, edit) {
+    if (!isPlainObject(node)) return node;
+    if (steps.length === 0) return edit(node);
+    const [{ key, each }, ...rest] = steps;
+    if (!Object.hasOwn(node, key)) return node;
+    const child = node[key];
+    let next;
+    if (each) {
+        if (!Array.isArray(child)) return node;
+        const mapped = child.map((element) => updateAt(element, rest, edit));
+        next = mapped.some((element, i) => element !== child[i]) ? mapped : child;
+    } else {
+        next = updateAt(child, rest, edit);
     }
-    delete cursor[parts[parts.length - 1]];
+    return next === child ? node : { ...node, [key]: next };
+}
+
+function withoutKeys(object, keys) {
+    if (!keys.some((key) => Object.hasOwn(object, key))) return object;
+    const clone = { ...object };
+    keys.forEach((key) => { delete clone[key]; });
     return clone;
+}
+
+/** Remove one learnerOmit path. An unparseable path strips nothing (the manifest validator rejects it first). */
+export function omitDocumentPath(document, path) {
+    const steps = parseDocumentPath(path);
+    if (!steps || steps[steps.length - 1].each) return document;
+    const last = steps[steps.length - 1].key;
+    return updateAt(document, steps.slice(0, -1), (parent) => withoutKeys(parent, [last]));
+}
+
+/** Apply one learnerOmitWhen rule: strip `omit` from each object at `path` whose own props `===` every `when` pair. */
+export function omitDocumentWhen(document, { path, when, omit } = {}) {
+    const steps = parseDocumentPath(path);
+    if (!steps || !isPlainObject(when) || !Array.isArray(omit)) return document;
+    const pairs = Object.entries(when);
+    const matches = (object) => pairs.every(([key, value]) => Object.hasOwn(object, key) && object[key] === value);
+    return updateAt(document, steps, (object) => (matches(object) ? withoutKeys(object, omit) : object));
 }
 
 /**
  * The case config a given role may receive: every plugin document with its
- * `learnerOmit` paths removed for roles below reviewer. Returns the input
- * untouched (same reference) when there is nothing to strip, so callers can
- * apply it unconditionally.
+ * `learnerOmit` paths and matching `learnerOmitWhen` properties removed for
+ * roles below reviewer. Returns the input untouched (same reference) when
+ * there is nothing to strip, so callers can apply it unconditionally.
  *
  * @param {object|null|undefined} config
  * @param {Array<object>} manifests   the frozen manifest snapshot
@@ -212,10 +256,10 @@ export function projectPluginDocumentsForRole(config, manifests, role) {
     for (const manifest of manifests ?? []) {
         const id = manifest?.id;
         const document = id ? config[id] : null;
-        if (!document || typeof document !== 'object' || Array.isArray(document)) continue;
-        const paths = learnerOmitPaths(manifest);
-        if (paths.length === 0) continue;
-        const projected = paths.reduce((doc, dotted) => omitPath(doc, dotted), document);
+        if (!isPlainObject(document)) continue;
+        const stripped = learnerOmitPaths(manifest).reduce((doc, path) => omitDocumentPath(doc, path), document);
+        const projected = learnerOmitWhenRules(manifest).reduce((doc, rule) => omitDocumentWhen(doc, rule), stripped);
+        if (projected === document) continue;
         if (out === config) out = { ...config };
         out[id] = projected;
     }

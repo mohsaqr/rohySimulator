@@ -668,8 +668,23 @@ assessed with it. The server cannot import the package, so the plugin names
 what to strip as frozen manifest data:
 
 ```js
-document: { learnerOmit: ['rubric'] }   // dotted paths into the document
+document: {
+    learnerOmit: ['rubric', 'worklist[].rubric'],   // paths; `[]` = every element
+    learnerOmitWhen: [                              // conditional: strip `omit`
+        { path: 'worklist[].report', when: { released: false },   // where every
+          omit: ['findings', 'impression', 'reportedBy'] },        // `when` pair `===`
+    ],
+}
 ```
+
+A path is dot-separated property names; a segment ending in `[]` walks every
+element of that array (`a[].b[].c` nests). The last `learnerOmit` segment names
+the property removed, so it cannot be `[]`. Missing keys, non-arrays under `[]`
+and non-object elements strip nothing. `'[]'`, `'a[]b'`, `'a..b'` and `'a[][]'`
+fail `plugins:gen`. `learnerOmitWhen` suits a flag the author sets and nothing
+flips at run time (PACS's unreleased report): if a room ever released text
+during a session from the document, the server would have to mediate that
+release instead.
 
 The host removes those paths from `config[<id>]` on every read a role below
 **reviewer** makes, before the response leaves the server (rohy: v2.9.78,
