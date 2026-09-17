@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.84] — 2026-09-17
+
+### Added
+
+- The specialist brief, built on the server (`server/services/specialistBrief.js`). An on-call specialist's prompt is the authored persona plus a brief the server composes from the session's case document: a safe clinical frame, and the authored findings for that domain — pathology and ECG rubric findings, PACS report findings, the legacy radiology block — once the disclosure gate opens. The diagnosis never enters the brief. `after_effort` opens at the configured number of learner turns, counted in the database; `on_request` opens with a "share only when asked" instruction; `never` stays shut. `requireRoomActivity` and `requireInterpretation` are carried and logged as not yet enforced.
+- A reply guard for specialists: a non-streaming reply has any sentence naming the case's expected or accepted diagnosis removed before it reaches the learner, and a reply that is nothing but the answer becomes a question back. Streaming replies are not guarded and say so in the log.
+- `POST /sessions/:id/agents/:type/conversation` accepts `channel` (chat or call) and `call_id`, rejecting anything else with 400 `invalid_channel` / `invalid_call_id`, and resolves `case_agent_id` server-side. GET returns both. The GET also orders by timestamp then id, so turns stored in the same second keep their order.
+
+### Fixed
+
+- A specialist was handed the answer through the back door. The browser's "situation" text is `buildDiscussionCaseContext(activeCase, 'full')` — the whole case, expected diagnosis and every report's interpretation included — and the proxy appended it to the specialist's prompt (37 KB per turn in a real conversation). For a specialist that text is now dropped, and logged; the brief's own summary frames the case.
+
 ## [3.0.0-beta.83] — 2026-09-17
 
 ### Added

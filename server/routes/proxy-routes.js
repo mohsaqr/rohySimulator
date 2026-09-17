@@ -47,6 +47,18 @@ import {
 } from '../usage-budget.js';
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
+import { buildAgentPersonaPrompt, loadSessionCaseAgent } from '../services/agentPersona.js';
+import { isSpecialistType, normalizeDisclosure, specialtyFor } from '../shared/specialties.js';
+import {
+    buildSpecialistBrief,
+    caseSummary,
+    countStudentTurns,
+    disclosureState,
+    extractAnswerTerms,
+    extractFindings,
+    guardSpecialistReply,
+    loadSpecialistCaseData,
+} from '../services/specialistBrief.js';
 
 const radiologyLog = logger('radiology');
 const routesLlmLog = logger('routes-llm-tts');
@@ -149,8 +161,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // Helper to log rate limit events (fire and forget with error handling)
         const logRateLimit = (msg) => {
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, status, error_message, request_timestamp) VALUES (?, ?, ?, ?, ${SQL_NOW})`,
-                [userId, session_id, 'rate_limited', msg],
+            // Rate limits are checked before the agent is resolved (and the
+            // body's agent ids are not trusted unresolved), so agent_type and
+            // case_agent_id stay NULL on these rows.
+            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, status, error_message, request_timestamp) VALUES (?, ?, ?, NULL, NULL, ?, ?, ${SQL_NOW})`,
+                [userId, session_id, tenantId(req), 'rate_limited', msg],
                 (err) => { if (err) routesLlmLog.warn('llm rate-limit log failed', { error: err.message }); }
             );
         };
@@ -273,15 +288,72 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 had_api_key: !!agent_llm_config.api_key
             });
         }
-        if (agent_llm_config?.agent_template_id) {
-            // Try to fetch agent template LLM config from DB
-            const agentTemplate = await new Promise((resolve, reject) => {
+        // An agent config that names no agent is a client defect, not a
+        // patient request: AgentService posting `{ case_agent_id: undefined }`
+        // arrives as `{}`, and falling through would answer as a bare model
+        // with no persona. No legitimate caller sends one — llmService and the
+        // patient/discussant paths omit the field entirely when they have no
+        // template id — so refuse rather than guess.
+        if (agent_llm_config !== undefined && agent_llm_config !== null) {
+            const namesAgent = typeof agent_llm_config === 'object'
+                && !Array.isArray(agent_llm_config)
+                && (agent_llm_config.case_agent_id != null || !!agent_llm_config.agent_template_id);
+            if (!namesAgent) {
+                (req.log || routesLlmLog).warn('agent_llm_config names no agent', { user_id: userId, session_id: session_id ?? null });
+                return res.status(400).json({
+                    error: 'agent_llm_config must name an agent (case_agent_id or agent_template_id)',
+                    code: 'agent_not_named'
+                });
+            }
+        }
+        // A team agent is named by its CASE agent id: the server then owns the
+        // persona prompt as well as the routing (services/agentPersona.js), and
+        // the client's `system_prompt` is demoted to the situation block. The
+        // bare template id remains for the two client-built types (patient,
+        // discussant), which name a template with no case agent behind it.
+        let caseAgent = null;
+        let agentTemplateId = null;
+        let agentTemplate = null;
+        if (agent_llm_config?.case_agent_id != null) {
+            if (!session_id) {
+                return res.status(400).json({ error: 'case_agent_id requires session_id' });
+            }
+            caseAgent = await loadSessionCaseAgent({
+                sessionId: session_id,
+                caseAgentId: agent_llm_config.case_agent_id,
+                tenant: tenantId(req),
+            });
+            // 404, not a silent fall-through to the patient path: a missing
+            // agent would otherwise answer with no persona at all.
+            if (!caseAgent) {
+                return res.status(404).json({ error: 'Agent not found for this session' });
+            }
+            agentTemplateId = caseAgent.agentTemplateId;
+            agentTemplate = {
+                agent_type: caseAgent.agentType,
+                llm_provider: caseAgent.llm.provider,
+                llm_model: caseAgent.llm.model,
+                llm_api_key: caseAgent.llm.apiKey,
+                llm_endpoint: caseAgent.llm.endpoint,
+                llm_temperature: caseAgent.llm.temperature,
+                llm_max_tokens: caseAgent.llm.maxTokens,
+            };
+        } else if (agent_llm_config?.agent_template_id) {
+            agentTemplateId = agent_llm_config.agent_template_id;
+            agentTemplate = await new Promise((resolve, reject) => {
                 dbAdapter.get('SELECT agent_type, llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
-                    [agent_llm_config.agent_template_id, tenantId(req)], (err, row) => {
+                    [agentTemplateId, tenantId(req)], (err, row) => {
                     if (err) reject(err);
                     else resolve(row);
                 });
             });
+        }
+        // Every llm_request_log row after this point carries the tenant and
+        // the agent the request spoke as (NULLs for a non-agent request).
+        // Both agent values come from the server's own lookup above, never
+        // from the request body.
+        const logAttribution = () => [tenantId(req), agentType, caseAgent?.caseAgentId ?? null];
+        if (agentTemplateId) {
             // Set even when the template overrides no LLM routing — the type
             // governs what the agent may be told, which is unrelated to which
             // model answers. Read from the DB, never from the request body.
@@ -297,8 +369,18 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 if (agentTemplate.llm_max_tokens !== null && Number.isFinite(agentTemplate.llm_max_tokens)) {
                     agentMaxTokens = agentTemplate.llm_max_tokens;
                 }
-                (req.log || routesLlmLog).info('using agent-template llm config', { agent_template_id: agent_llm_config.agent_template_id, provider: agentProvider, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
+                (req.log || routesLlmLog).info('using agent-template llm config', { agent_template_id: agentTemplateId, provider: agentProvider, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
             }
+            // Attribution: which agent this request spoke as. Every agent
+            // request logs it, whether or not the template overrides routing.
+            (req.log || routesLlmLog).info('llm request agent', {
+                session_id: session_id ?? null,
+                tenant_id: tenantId(req),
+                agent_type: agentType,
+                agent_template_id: agentTemplateId,
+                case_agent_id: caseAgent?.caseAgentId ?? null,
+                persona: caseAgent ? 'server' : 'client',
+            });
         }
 
         // Priority: agent > session > platform
@@ -509,7 +591,69 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 });
             }
         }
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
+        // On-call specialists (pathologist, cardiologist, radiologist) get a
+        // server-built CASE BRIEF from the session's case document
+        // (services/specialistBrief.js): the findings when the disclosure gate
+        // is open, never the diagnosis. `specialistAnswerTerms` feeds the
+        // reply guard further down. Prompt order for a specialist:
+        //   role anchor -> authored prompt -> CASE BRIEF -> client situation
+        // The brief follows the authored prompt so the educator's persona
+        // leads, and precedes the client text so a situation cannot displace it.
+        let specialistAnswerTerms = null;
+        let personaAgent = caseAgent;
+        // The client situation for a specialist is DROPPED, not appended. The
+        // browser builds it from the whole case (buildDiscussionCaseContext,
+        // 'full'), which carries the diagnosis and every report's
+        // interpretation — appending it handed the specialist the answer the
+        // brief exists to withhold. The brief's summary is the case frame.
+        let situation = system_prompt;
+        if (caseAgent && isSpecialistType(caseAgent.agentType)) {
+            if (typeof system_prompt === 'string' && system_prompt.trim()) {
+                (req.log || routesLlmLog).info('specialist client situation dropped', {
+                    session_id, agent_type: caseAgent.agentType, chars: system_prompt.length,
+                });
+            }
+            situation = '';
+            const specialty = specialtyFor(caseAgent.agentType);
+            const disclosure = normalizeDisclosure(caseAgent.config?.disclosure);
+            if (disclosure.errors.length > 0) {
+                // Stored overrides are validated on write; a template config is
+                // not. Invalid fields keep the registry default.
+                (req.log || routesLlmLog).warn('specialist disclosure config invalid; defaults applied', {
+                    case_agent_id: caseAgent.caseAgentId, errors: disclosure.errors
+                });
+            }
+            const [caseData, studentTurns] = await Promise.all([
+                loadSpecialistCaseData({ sessionId: session_id, tenant: tenantId(req) }),
+                countStudentTurns({ sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType }),
+            ]);
+            const config = caseData?.config || {};
+            const findings = extractFindings(specialty.domain, config);
+            const state = disclosureState({ disclosure: disclosure.value, studentTurns });
+            const brief = buildSpecialistBrief({
+                specialty,
+                summary: caseSummary(config, caseData?.caseRow),
+                findings,
+                disclosureState: state,
+            });
+            specialistAnswerTerms = extractAnswerTerms(specialty.domain, config);
+            personaAgent = { ...caseAgent, prompt: [caseAgent.prompt, brief].filter(Boolean).join('\n\n') };
+            (req.log || routesLlmLog).info('specialist brief routed', {
+                session_id,
+                agent_type: caseAgent.agentType,
+                findings_count: findings.length,
+                findings_allowed: state.findingsAllowed,
+                disclosure_reason: state.reason,
+                student_turns: studentTurns,
+                not_enforced: state.notEnforced,
+                answer_terms: specialistAnswerTerms.length,
+            });
+        }
+        // A server-resolved case agent speaks from its authored prompt; what
+        // the client sent is only the situation it reported (none, for a
+        // specialist — see above).
+        const casePrompt = personaAgent ? buildAgentPersonaPrompt(personaAgent, situation) : system_prompt;
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };
@@ -582,6 +726,16 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             || req.body?.stream === true
             || (req.headers.accept || '').includes('text/event-stream');
         if (wantStream) {
+            // The specialist reply guard needs the whole reply to split into
+            // sentences; deltas are already on the wire before a sentence
+            // ends. Streamed specialist replies are therefore NOT guarded —
+            // logged so the gap is visible. The brief still never carries a
+            // diagnosis.
+            if (specialistAnswerTerms) {
+                (req.log || routesLlmLog).warn('specialist reply guard skipped', {
+                    session_id, agent_type: agentType, reason: 'streaming'
+                });
+            }
             const streamPayload = { ...requestPayload, stream: true };
             // F-005: bound upstream. Connect timeout caps how long we'll
             // wait for the upstream's first response; the max-duration
@@ -616,8 +770,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 clearTimeout(overallTimer);
                 const errText = await upstream.text();
                 (req.log || routesLlmLog).error('llm stream upstream error', { status: upstream.status, error: errText.slice(0, 200) });
-                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                    [userId, session_id, model, 'error', errText.substring(0, 500), Date.now() - startTime]);
+                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                    [userId, session_id, ...logAttribution(), model, 'error', errText.substring(0, 500), Date.now() - startTime]);
                 return res.status(upstream.status).json({ error: extractUpstreamError(errText) });
             }
 
@@ -732,9 +886,9 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             // Stream interrupts (upstream error mid-stream OR client disconnect)
             // get logged as 'error' with error_message disambiguating the cause.
             const finalStatus = streamInterrupted ? 'error' : 'success';
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms, request_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [userId, session_id, model, promptTokens, completionTokens, totalTokens, estCost, finalStatus, streamErrMessage, responseTimeStream]);
+            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms, request_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, estCost, finalStatus, streamErrMessage, responseTimeStream]);
 
             if (!res.writableEnded) {
                 sse({ done: true, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens } });
@@ -779,8 +933,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (!response.ok) {
                 const errText = await response.text();
                 (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
-                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                    [userId, session_id, model, 'error', errText.substring(0, 500), responseTime]);
+                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                    [userId, session_id, ...logAttribution(), model, 'error', errText.substring(0, 500), responseTime]);
                 return res.status(response.status).json({ error: extractUpstreamError(errText) });
             }
 
@@ -851,13 +1005,32 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         `, [userId, today, promptTokens, completionTokens, totalTokens, estimatedCost, model]);
 
         // 14. Log the request
-        dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms, request_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-            [userId, session_id, model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
+        dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms, request_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+            [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
 
         (req.log || routesLlmLog).info('llm usage recorded', { user_id: userId, total_tokens: totalTokens, estimated_cost: Number(estimatedCost.toFixed(4)), response_time_ms: responseTime });
 
-        // 15. Return response
+        // 15. Guard a specialist's reply: drop any sentence naming the answer
+        // (services/specialistBrief.js guardSpecialistReply). Only message
+        // content changes — usage was accounted above from the upstream
+        // numbers, and the response shape is untouched.
+        if (specialistAnswerTerms && specialistAnswerTerms.length > 0 && Array.isArray(data?.choices)) {
+            let removedSentences = 0;
+            data.choices.forEach((choice) => {
+                if (typeof choice?.message?.content !== 'string') return;
+                const guarded = guardSpecialistReply(choice.message.content, specialistAnswerTerms);
+                removedSentences += guarded.removed;
+                choice.message.content = guarded.text;
+            });
+            if (removedSentences > 0) {
+                (req.log || routesLlmLog).warn('specialist reply guarded', {
+                    session_id, agent_type: agentType, removed_sentences: removedSentences
+                });
+            }
+        }
+
+        // 16. Return response
         res.json(data);
     } catch (err) {
         if (err instanceof BudgetExceededError) {
