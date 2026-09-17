@@ -3,7 +3,7 @@ import { Camera, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTri
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { VALENCE_GRAPH_PREF_KEY, CONSENT_PREF_KEY } from '../oyon/OyonCaptureWidget';
-import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
 import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
 
 // Analytics is an in-app surface: ConfigPanel's "Oyon — Learning Analytics"
@@ -95,7 +95,9 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                oyon_consent_version: next ? version : null,
             },
          },
-      }).catch(() => { /* local flag still applies on this device */ });
+      }).catch(() => { /* local flag still applies on this device */ })
+         // After the save settles, so a reader re-fetching preferences sees it.
+         .finally(announceOyonConsentChanged);
    };
 
    const toggleValenceGraph = (next) => {

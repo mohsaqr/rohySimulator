@@ -10,6 +10,22 @@
 // Rule everywhere: an ACCEPTED version is what the learner was actually shown.
 // Never what the tenant currently advertises.
 
+/**
+ * Fired on `window` after a consent choice has been SAVED (the preferences PUT
+ * settled), by every surface that records one. Anything that read consent at
+ * mount re-reads it on this event. Without it a learner who accepted the
+ * consent prompt got no typing or voice capture until a reload — which, since
+ * every new learner meets that prompt, was every new learner's first session
+ * (Prova PRV-5).
+ */
+export const OYON_CONSENT_CHANGED_EVENT = 'rohy:oyon-consent-changed';
+
+/** Tell mounted readers that the recorded consent changed. */
+export function announceOyonConsentChanged() {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(OYON_CONSENT_CHANGED_EVENT));
+}
+
 /** Where this browser mirrors the accepted contract, beside CONSENT_PREF_KEY. */
 export const OYON_CONSENT_VERSION_LS_KEY = 'oyon.consentVersion';
 

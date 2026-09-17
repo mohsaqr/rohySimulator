@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.70] — 2026-09-17
+
+### Fixed
+
+- **Typing and voice capture start as soon as a learner accepts the consent prompt, without a reload** (Prova PRV-5). The signal gate read the learner's consent once, when the page loaded, and nothing told it when the choice changed. Every new learner completes the welcome page (camera-only consent) and then accepts the prompt that names typing and voice, so no new learner's first session produced typing or voice data. Every surface that records a consent choice — the prompt, Settings → Oyon, the welcome page — now announces the change once it is saved (`OYON_CONSENT_CHANGED_EVENT`), and the gate reads consent again. Found by the new analytics journey test; regression lock in `useOyonSignalGate.test.jsx`.
+
 ## [3.0.0-beta.69] — 2026-09-17
 
 ### Added
