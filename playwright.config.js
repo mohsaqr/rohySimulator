@@ -115,8 +115,8 @@ export default defineConfig({
         {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
-            // The voice spec needs a microphone, which only its own project has.
-            testIgnore: /oyon-voice\.spec\.js/,
+            // The voice specs need a microphone, which only their own project has.
+            testIgnore: /oyon-(voice|analytics-journey)\.spec\.js/,
         },
         {
             // Oyon voice capture, end to end. Plain headless Chromium refuses
@@ -126,7 +126,7 @@ export default defineConfig({
             // microphone. Prova records it as its own run (check keys
             // `rohy:chromium-voice::…`), on the same `chrome` platform.
             name: 'chromium-voice',
-            testMatch: /oyon-voice\.spec\.js/,
+            testMatch: /oyon-(voice|analytics-journey)\.spec\.js/,
             use: {
                 ...devices['Desktop Chrome'],
                 permissions: ['microphone'],
