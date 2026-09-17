@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.73] — 2026-09-17
+
+### Fixed
+
+- **An account that has never answered the Oyon consent question is now asked.** Found on production: an admin switched Oyon Voice on, talked to the patient, and nothing was captured. Capture needs the person's own consent, and the only place a never-answered person was asked is the welcome page. Admins never see it (they get the platform setup wizard), and the consent card asked only people who had already said yes. The card now also asks anyone who has never answered and has no welcome page coming, with first-time wording in all eight languages. That wording names the camera, since agreeing covers it, and drops the "keeps your existing choice" note. Declining is still an answer and is not re-asked; anyone who has not finished the welcome page is still asked there. Once they agree, capture starts on the same page (beta.70).
+- `tests/e2e/oyon-consent-first-ask.spec.js` proves it on a fresh admin with Voice on: the card appears and names the microphone, agreeing records the tenant's contract, a typed message is captured without a reload, and a reload does not bring the card back. Prova catalogue: `OYON.CONSENT.02`.
+
 ## [3.0.0-beta.72] — 2026-09-17
 
 ### Changed

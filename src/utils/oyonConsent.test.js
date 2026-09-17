@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    consentRank, consentSatisfies, needsConsentUpgrade, acceptableVersion, OYON_CONSENT_CAMERA_ONLY,
+    consentRank, consentSatisfies, needsConsentUpgrade, consentPromptMode, acceptableVersion, OYON_CONSENT_CAMERA_ONLY,
 } from './oyonConsent.js';
 
 describe('oyonConsent version logic', () => {
@@ -28,6 +28,24 @@ describe('oyonConsent version logic', () => {
     // An out-of-date bundle must re-prompt rather than assume it is current.
     it('treats an unrecognised requirement as unsatisfied', () => {
         expect(consentSatisfies('oyon-consent-v2', 'oyon-consent-v9')).toBe(false);
+    });
+
+    describe('consentPromptMode', () => {
+        const v3 = 'oyon-consent-v3';
+        it('asks again someone who agreed to an older contract', () => {
+            expect(consentPromptMode({ granted: true, acceptedVersion: 'oyon-consent-v1', requiredVersion: v3 })).toBe('upgrade');
+        });
+        it('asks nobody who is on the current contract or declined', () => {
+            expect(consentPromptMode({ granted: true, acceptedVersion: v3, requiredVersion: v3 })).toBeNull();
+            expect(consentPromptMode({ granted: false, acceptedVersion: null, requiredVersion: v3 })).toBeNull();
+        });
+        // Regression lock: an admin or educator who never answered was never
+        // asked anywhere, so capture never ran on their account.
+        it('asks someone who has never answered, unless a welcome page is about to', () => {
+            expect(consentPromptMode({ granted: undefined, requiredVersion: v3 })).toBe('first');
+            expect(consentPromptMode({ granted: null, requiredVersion: v3 })).toBe('first');
+            expect(consentPromptMode({ granted: undefined, requiredVersion: v3, awaitingFirstRun: true })).toBeNull();
+        });
     });
 
     describe('needsConsentUpgrade', () => {
