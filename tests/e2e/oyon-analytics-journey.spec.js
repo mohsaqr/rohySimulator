@@ -114,12 +114,20 @@ function watchIngest(page) {
             if (sent.includes('"modality":"typing"')) stored.typingWindows += body.signals_inserted ?? 0;
             if (sent.includes('"modality":"voice"')) stored.voiceWindows += body.signals_inserted ?? 0;
         } else {
+            // One batch can hold typing AND voice events: the transport batches by
+            // time (50 events or 2 s), not by modality, so a message sent just
+            // before a voice turn shares a batch with it (seen in CI). Count per
+            // event. Every sent event must be accounted for — stored now, or
+            // already stored by a retry — and none refused by the consent gate.
             const events = JSON.parse(sent).events || [];
-            const voiceShare = events.filter((e) => e.modality === 'voice').length;
-            // A batch is single-modality in practice; attribute by what was sent.
-            if (voiceShare === events.length) stored.voiceEvents += body.inserted ?? 0;
-            else if (voiceShare === 0) stored.typingEvents += body.inserted ?? 0;
-            else stored.errors.push(`mixed-modality event batch: ${voiceShare}/${events.length} voice`);
+            if ((body.consent_blocked ?? 0) !== 0 || (body.inserted ?? 0) + (body.skipped ?? 0) !== events.length) {
+                stored.errors.push(`event batch not fully stored: ${JSON.stringify(body)} for ${events.length} events`);
+                return;
+            }
+            for (const e of events) {
+                if (e.modality === 'voice') stored.voiceEvents += 1;
+                else if (e.modality === 'typing') stored.typingEvents += 1;
+            }
         }
     });
     return stored;
