@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.78] — 2026-09-17
+
+### Added
+
+- `tests/e2e/terms-of-use.spec.js` checks, in the browser:
+  - the agreement is readable from the login screen;
+  - with acceptance required, a learner cannot reach Rohy without accepting, and declining signs out;
+  - reading to the end and agreeing opens Rohy, and the step does not return;
+  - the admin editor shows the adoption count.
+- Prova catalogue: `TERMS.ACCEPT.01`.
+
 ## [3.0.0-beta.77] — 2026-09-17
 
 ### Added
