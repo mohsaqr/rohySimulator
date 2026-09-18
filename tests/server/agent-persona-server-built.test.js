@@ -106,6 +106,72 @@ describe('buildAgentPersonaPrompt', () => {
         const out = buildAgentPersonaPrompt({ agentType: 'relative', prompt: '' });
         expect(out).toMatch(/You are: relative\./);
     });
+
+    // Regression lock: config.dos / config.donts reached the prompt only on
+    // the CLIENT assembly path (ChatInterface, useDiscussionEngine), so when
+    // persona assembly moved to the server in v3.0.0-beta.83 every
+    // server-built agent — nurse, consultant, relative, every on-call
+    // specialist — silently stopped reading them. The persona editor went on
+    // offering the controls for all of them.
+    it('emits the authored dos and donts for a server-built agent', () => {
+        const out = buildAgentPersonaPrompt({
+            agentType: 'nurse',
+            roleTitle: 'Bedside nurse',
+            prompt: 'AUTHORED',
+            config: { dos: ['Speak up if an order seems unsafe'], donts: ['Do the diagnostic work'] },
+        });
+        expect(out).toContain('You should:\n- Speak up if an order seems unsafe');
+        expect(out).toContain('You must not:\n- Do the diagnostic work');
+        expect(out.indexOf('You should:')).toBeGreaterThan(out.indexOf('AUTHORED'));
+    });
+
+    it('omits the block entirely when neither list is authored', () => {
+        for (const config of [undefined, null, {}, { dos: [], donts: [] }, { dos: 42 }]) {
+            const out = buildAgentPersonaPrompt({ agentType: 'nurse', prompt: 'AUTHORED', config });
+            expect(out).not.toContain('You should:');
+            expect(out).not.toContain('You must not:');
+        }
+    });
+
+    // Not a malformed value: the persona editor saves these lists as one
+    // bullet per LINE, so buildPersonaBlocks splits a string on newlines.
+    // A config holding a string is an editor save, not a defect.
+    it('splits a newline-separated string into bullets', () => {
+        const out = buildAgentPersonaPrompt({
+            agentType: 'nurse',
+            prompt: 'AUTHORED',
+            config: { dos: 'First bullet\n\n  Second bullet  \n' },
+        });
+        expect(out).toContain('You should:\n- First bullet\n- Second bullet');
+    });
+
+    // The brief is the last word on what may be disclosed: an educator must
+    // not be able to author a "do" that argues with the disclosure gate and
+    // have the model read it afterwards. Order is
+    //   anchor -> persona -> dos/donts -> brief -> situation.
+    it('places a specialist brief after the persona and its dos/donts', () => {
+        const out = buildAgentPersonaPrompt(
+            {
+                agentType: 'pathologist',
+                roleTitle: 'Pathologist',
+                prompt: 'AUTHORED',
+                config: { dos: ['DO-BULLET'], donts: ['DONT-BULLET'] },
+            },
+            SITUATION,
+            '## CASE BRIEF (server)\nBRIEF-BODY',
+        );
+        const order = ['## ROLE', 'AUTHORED', 'DO-BULLET', 'DONT-BULLET', 'BRIEF-BODY', '--- CURRENT SITUATION ---']
+            .map((needle) => out.indexOf(needle));
+        expect(order.every((i) => i >= 0)).toBe(true);
+        expect(order).toEqual([...order].sort((a, b) => a - b));
+    });
+
+    it('omits the brief block when there is none', () => {
+        for (const brief of ['', '   ', undefined, null, 42]) {
+            const out = buildAgentPersonaPrompt({ agentType: 'nurse', prompt: 'AUTHORED' }, '', brief);
+            expect(out.trimEnd().endsWith('AUTHORED')).toBe(true);
+        }
+    });
 });
 
 describe('learnerMayHoldPrompt', () => {
