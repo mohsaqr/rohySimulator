@@ -2219,6 +2219,96 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.agent_disclosure_after_effort": {
+    "src": "c86ba63ef357",
+    "tgt": "84373d50c7e6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_findings": {
+    "src": "0d93a98289f8",
+    "tgt": "5e51c0652135",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_findings_help": {
+    "src": "5a889f311160",
+    "tgt": "589917abeca7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_min_turns": {
+    "src": "f14b78545c1b",
+    "tgt": "77ef66a88b06",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_min_turns_help": {
+    "src": "4430641d02fe",
+    "tgt": "85cde5404d02",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_never": {
+    "src": "b380e22c6b2b",
+    "tgt": "1275a661b906",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_on_request": {
+    "src": "d43f71e19313",
+    "tgt": "403e79167f58",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_room_activity": {
+    "src": "cd3c5940402e",
+    "tgt": "20bd0e2d7599",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_disclosure_room_activity_help": {
+    "src": "a3221e326209",
+    "tgt": "eabce35d5a9f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.agent_discussant_help": {
     "src": "13e3d6a57535",
     "tgt": "541f99e11983",
@@ -2322,6 +2412,26 @@
   "authoring_config.agent_show_encounter_record_help": {
     "src": "62975241560a",
     "tgt": "3b9b6ac742a9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_specialist_help": {
+    "src": "8f63f27a1c3d",
+    "tgt": "c392a2badb43",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_specialist_overrides": {
+    "src": "05e3d4123748",
+    "tgt": "efea46722d30",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -14292,6 +14402,26 @@
   "authoring_persona.type_discussant_label": {
     "src": "86f5d69ec08d",
     "tgt": "fabbe268c572",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_laboratorian_desc": {
+    "src": "e52ee2b1bbb7",
+    "tgt": "3b387cc4a83b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_persona.type_laboratorian_label": {
+    "src": "56527d9ab227",
+    "tgt": "69e7bcdff260",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -28738,6 +28868,526 @@
     "reviewed_at": null,
     "reviewer": null,
     "risk": "clinical"
+  },
+  "oncall.back_to_contacts": {
+    "src": "4d64152841e8",
+    "tgt": "b03fc68a15a1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_calling": {
+    "src": "326db06c51f7",
+    "tgt": "1ae8ac4e06dc",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_contact": {
+    "src": "d898dde3c7b0",
+    "tgt": "df98c410c084",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_done": {
+    "src": "11a6767d5674",
+    "tgt": "25d52d7e8665",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_done_label": {
+    "src": "f97d4dc62649",
+    "tgt": "32e15edf35b3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_end": {
+    "src": "f4db1e48476f",
+    "tgt": "60935a92d7da",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_end_label": {
+    "src": "2fe13d93a1f4",
+    "tgt": "95742a4c5ac3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_listening": {
+    "src": "bbb4106e8144",
+    "tgt": "fa6448e504cf",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_mute_label": {
+    "src": "79a5f7afaddf",
+    "tgt": "be79bf7319e9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_paging_eta": {
+    "src": "676c72ddd3f0",
+    "tgt": "907ea42f2f39",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_send_typed": {
+    "src": "d08ee9070487",
+    "tgt": "f0b987c7176a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_speaking": {
+    "src": "dd0e28d345e1",
+    "tgt": "90d0774e2179",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_stt_unsupported": {
+    "src": "47906b1c4612",
+    "tgt": "ca8938ed8354",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_talk": {
+    "src": "449f5a775762",
+    "tgt": "8399b3f4f927",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_talk_label": {
+    "src": "a5e3cc5d34c6",
+    "tgt": "6ecfc209c20c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_thinking": {
+    "src": "98a06dc7c627",
+    "tgt": "8d09b0547a7d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_type": {
+    "src": "baaddf70fb5d",
+    "tgt": "ddefbf5094a5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_type_instead": {
+    "src": "7ca309bb02d4",
+    "tgt": "6a67012bbf37",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_type_label": {
+    "src": "883d8201191f",
+    "tgt": "d3cb9194fdf2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_type_placeholder": {
+    "src": "1e57100eb073",
+    "tgt": "4ee9390fa071",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_unmute_label": {
+    "src": "763601b9edd8",
+    "tgt": "62489648360e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_voice": {
+    "src": "87bf2bc08589",
+    "tgt": "d7bb53dca2ae",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_you": {
+    "src": "08b041935798",
+    "tgt": "752dd02be4df",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.chat_empty": {
+    "src": "348f224b146b",
+    "tgt": "b405f59561f4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.chat_loading": {
+    "src": "3a496d425b0f",
+    "tgt": "1036b89047b2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.close_phone": {
+    "src": "80c673d926b5",
+    "tgt": "19d56b8adafd",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.composer_label": {
+    "src": "315ea83d0a2c",
+    "tgt": "84219ee615cf",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.composer_placeholder": {
+    "src": "2f77668a9dfb",
+    "tgt": "53367bc65275",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.composer_waiting": {
+    "src": "26277393a26b",
+    "tgt": "253fc46cac5d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.contacts_empty": {
+    "src": "228b5231bbfe",
+    "tgt": "ede25752719a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.contacts_eyebrow": {
+    "src": "5463f72fc4bb",
+    "tgt": "a88b0d6dfef3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.contacts_heading": {
+    "src": "39297fc28d7d",
+    "tgt": "594f15517ddc",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.contacts_loading": {
+    "src": "9485587c4eb7",
+    "tgt": "732cd3bdf719",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.message_contact": {
+    "src": "315ea83d0a2c",
+    "tgt": "d8548783f315",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.open_phone": {
+    "src": "9f1fe86fa80d",
+    "tgt": "6270f5198780",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.page_contact": {
+    "src": "0a30a815d67d",
+    "tgt": "7220f5fab1e9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.page_failed": {
+    "src": "09c78092ed67",
+    "tgt": "bddf3162ef9c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.page_needed": {
+    "src": "9f02bda52278",
+    "tgt": "ee97c839a0e8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.phone_title": {
+    "src": "2980ea8c3c4a",
+    "tgt": "f552d8cd6885",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.send": {
+    "src": "f6f4688ff23d",
+    "tgt": "079bef4e232f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.specialty_cardiologist": {
+    "src": "079dfcc04585",
+    "tgt": "6fac717c6011",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.specialty_laboratorian": {
+    "src": "5e37d1bb9d04",
+    "tgt": "7b6b969c8bc4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.specialty_pathologist": {
+    "src": "6e5cf6c39a78",
+    "tgt": "0df944490423",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.specialty_radiologist": {
+    "src": "ad51cb961843",
+    "tgt": "7da3d98d1b1c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_available": {
+    "src": "e674447337e8",
+    "tgt": "3aa55273aef4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_bar": {
+    "src": "5463f72fc4bb",
+    "tgt": "a88b0d6dfef3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_on_call": {
+    "src": "5463f72fc4bb",
+    "tgt": "16de78569367",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_paging": {
+    "src": "6e82007eb5d2",
+    "tgt": "cb8ee90eb406",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_paging_eta": {
+    "src": "676c72ddd3f0",
+    "tgt": "907ea42f2f39",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_unavailable": {
+    "src": "67a926f7008e",
+    "tgt": "5db96a2a9332",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.typing": {
+    "src": "16ecccdb08e3",
+    "tgt": "27b761c69747",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.via_call": {
+    "src": "d6e645b7d2b2",
+    "tgt": "aa287db6dfd8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
   },
   "orders.all_groups": {
     "src": "2f1bc6bcd80c",

@@ -49,13 +49,14 @@ const TRANSLATED = ['it', 'fi', 'sv', 'de', 'es', 'fr', 'kk'];
 const AWAITING_TRANSLATION = {
     // Add an entry only for a namespace genuinely mid-translation, and delete
     // it the moment it lands. The oyon allowance opened at 383 on 2026-09-06
-    // and closed the same day.
+    // and closed the same day. The oncall allowance opened at 52 on
+    // 2026-09-17 with the on-call specialist phone and closed on 2026-09-18.
     //
-    // oncall opened at 52 on 2026-09-17 with the on-call specialist phone.
-    // The machine pass needs a live server with a working /api/proxy/llm and
-    // could not be run in that session; every string is English-only until it
-    // is, and the phone falls back to English in the other locales.
-    'oncall.json': 52,
+    // EMPTY IS THE RESTING STATE. An entry here is a shipped feature that
+    // renders in English for everyone who does not read English, and nothing
+    // else catches it: `npm run i18n:check` is i18next-parser asserting that
+    // every t() call has an ENGLISH entry, so a namespace that is `{}` in all
+    // seven target locales passes it.
 };
 const GENERATED = ['en-XA'];
 

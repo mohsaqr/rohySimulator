@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.89] — 2026-09-18
+
+### Fixed
+
+- **The on-call phone was English-only in every other language.** `src/locales/en/oncall.json` held the whole handset — contacts, thread, call screen, paging status — and the namespace was `{}` in de, es, it, fi, sv, fr and kk. All seven are now translated, and the `AWAITING_TRANSLATION` allowance in `tests/server/locales-integrity.test.js` is deleted rather than raised. `npm run i18n:check` never saw this: it is i18next-parser asserting that every `t()` call has an ENGLISH entry, so an empty namespace passes it.
+- Spanish `can_be_paged` read "Puede ser pagado" — *can be paid*. "Paged" was read as "paid". Now "Se puede localizar", matching the phone's own Spanish vocabulary for paging.
+- French used `appeler` for both paging a doctor and placing a call, which the phone now puts side by side ("Biper" next to "Appeler {name}"). Paging is `biper` product-wide, so the educator editor and the learner's handset name the same action the same way.
+- `oncall.nav_label` is removed. No `t()` call referenced it — a leftover from when the phone button was going to live in the bottom room navigator. `keepRemoved: true` in the parser config means no gate would ever have flagged it.
+
+### Note
+
+These seven passes are machine translations, stamped `machine` in `src/locales/.status/`, and have not had native-clinician review. Each language's least-certain strings are the specialty titles, where every language has a real professional title longer than the contact row allows.
+
 ## [3.0.0-beta.88] — 2026-09-18
 
 ### Fixed

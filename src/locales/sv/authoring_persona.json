@@ -182,6 +182,8 @@
   "type_consultant_label": "Konsult",
   "type_discussant_desc": "Handledare för falldebriefing (diskussion efter fallet)",
   "type_discussant_label": "Diskussionsledare",
+  "type_laboratorian_desc": "Jourhavande specialist som diskuterar fallets labbsvar",
+  "type_laboratorian_label": "Laboratoriespecialist",
   "type_nurse_desc": "Vårdpersonal vid sängkanten",
   "type_nurse_label": "Sjuksköterska",
   "type_other_desc": "Anpassad agenttyp",
