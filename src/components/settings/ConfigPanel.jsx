@@ -97,6 +97,7 @@ import { MARITAL_STATUSES, PATIENT_GENDERS, PERSONA_TYPES } from '../../services
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
 import { useBodyImage } from '../../hooks/useBodyImage';
 import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
+import { isSpecialistType, normalizeDisclosure } from '../../../server/shared/specialties.js';
 
 // Wizard step order — the single source of truth for step numbers. CaseWizard's
 // WIZARD_STEPS table (titles + icons) is built from this list, and any call
@@ -3049,6 +3050,29 @@ function PagesEditor({ pages, onChange }) {
     );
 }
 
+// The disclosure settings to SHOW for an on-call specialist: the stored value
+// with anything the editor has touched this session laid over it.
+//
+// `editingAgent.config` is the MERGED {...template_config, ...config_override}
+// the API returns, so an untouched agent shows its case's real setting and,
+// failing that, the registry default — normalizeDisclosure fills the gaps and
+// drops any field the registry no longer accepts (a config written before
+// `requireInterpretation` was removed still renders).
+//
+// The `_cfg_disclosure_*` keys are the editor's own scratch fields, never sent
+// as-is: the save handler reads them back through this same function.
+function disclosureOf(agent) {
+    const stored = normalizeDisclosure(agent?.config?.disclosure).value;
+    // A half-typed number box ("" while the user clears it, or "3x") must not
+    // become NaN in the payload the server validates as an integer.
+    const typedTurns = Number.parseInt(agent?._cfg_disclosure_min_turns, 10);
+    return {
+        findings: agent?._cfg_disclosure_findings ?? stored.findings,
+        minStudentTurns: Number.isInteger(typedTurns) && typedTurns >= 0 ? typedTurns : stored.minStudentTurns,
+        requireRoomActivity: agent?._cfg_disclosure_room ?? stored.requireRoomActivity,
+    };
+}
+
 function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenPersonaEditor }) {
     const { t } = useTranslation('authoring_config');
     const [templates, setTemplates] = useState([]);
@@ -3303,6 +3327,79 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                     </div>
                 )}
 
+                {isSpecialistType(editingAgent.agent_type) && (
+                    <div className="space-y-4 p-4 rounded-lg bg-sky-950/30 border border-sky-900/50">
+                        {/* The disclosure gate. Like the discussant block above,
+                            these read `editingAgent.config` — the MERGED
+                            {...template_config, ...config_override} the API
+                            returns — not a top-level field, which does not
+                            exist for disclosure.
+
+                            Until this panel the gate was reachable only by
+                            hand-writing config_override through the API, so
+                            every case ran on the registry default. The server
+                            validates what is sent here (normalizeDisclosure)
+                            and refuses the whole PUT on a bad field, so the
+                            controls below only ever emit valid values. */}
+                        <h5 className="text-sm font-bold text-sky-300">{t('agent_specialist_overrides')}</h5>
+                        <p className="text-xs text-neutral-500">{t('agent_specialist_help')}</p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1" htmlFor="agent-disclosure-findings">
+                                    {t('agent_disclosure_findings')}
+                                </label>
+                                <select
+                                    id="agent-disclosure-findings"
+                                    value={disclosureOf(editingAgent).findings}
+                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_disclosure_findings: e.target.value }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                                >
+                                    <option value="after_effort">{t('agent_disclosure_after_effort')}</option>
+                                    <option value="on_request">{t('agent_disclosure_on_request')}</option>
+                                    <option value="never">{t('agent_disclosure_never')}</option>
+                                </select>
+                                <p className="text-xs text-neutral-500 mt-1">{t('agent_disclosure_findings_help')}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-neutral-400 mb-1" htmlFor="agent-disclosure-turns">
+                                    {t('agent_disclosure_min_turns')}
+                                </label>
+                                {/* Only the after_effort mode reads it, so the
+                                    input is disabled rather than hidden: the
+                                    stored value survives a trip through
+                                    on_request and back. */}
+                                <input
+                                    id="agent-disclosure-turns"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    disabled={disclosureOf(editingAgent).findings !== 'after_effort'}
+                                    value={disclosureOf(editingAgent).minStudentTurns}
+                                    onChange={(e) => setEditingAgent(prev => ({
+                                        ...prev,
+                                        _cfg_disclosure_min_turns: e.target.value,
+                                    }))}
+                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm disabled:opacity-40"
+                                />
+                                <p className="text-xs text-neutral-500 mt-1">{t('agent_disclosure_min_turns_help')}</p>
+                            </div>
+                        </div>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                disabled={disclosureOf(editingAgent).findings !== 'after_effort'}
+                                checked={disclosureOf(editingAgent).requireRoomActivity}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_disclosure_room: e.target.checked }))}
+                                className="mt-0.5 w-4 h-4 accent-sky-500 disabled:opacity-40"
+                            />
+                            <span>
+                                <span className="block text-sm text-neutral-300">{t('agent_disclosure_room_activity')}</span>
+                                <span className="block text-xs text-neutral-500">{t('agent_disclosure_room_activity_help')}</span>
+                            </span>
+                        </label>
+                    </div>
+                )}
+
                 <div className="flex justify-end gap-2 pt-4 border-t border-neutral-800">
                     <button
                         onClick={() => {
@@ -3341,6 +3438,29 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                     // leave a previously stored `true` standing.
                                     show_encounter_record: (editingAgent._cfg_show_encounter_record
                                         ?? base.show_encounter_record ?? false) === true,
+                                };
+                            }
+                            if (isSpecialistType(editingAgent.agent_type)) {
+                                // Same full-replace rule as the discussant
+                                // block: start from the merged config so keys
+                                // this panel does not edit survive the save.
+                                const base = (editingAgent.config && typeof editingAgent.config === 'object')
+                                    ? editingAgent.config
+                                    : {};
+                                const shown = disclosureOf(editingAgent);
+                                updates.config_override = {
+                                    ...base,
+                                    // Only the three fields the registry still
+                                    // accepts. A stored `requireInterpretation`
+                                    // from before it was removed would make the
+                                    // server refuse the whole PUT, so the
+                                    // disclosure block is rebuilt rather than
+                                    // spread from `base`.
+                                    disclosure: {
+                                        findings: shown.findings,
+                                        minStudentTurns: shown.minStudentTurns,
+                                        requireRoomActivity: shown.requireRoomActivity,
+                                    },
                                 };
                             }
                             handleUpdateAgent(updates);

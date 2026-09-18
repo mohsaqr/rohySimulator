@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.87] — 2026-09-18
+
+### Added
+
+- **A settings screen for the disclosure gate**, in the case editor's agent overrides: when the specialist will discuss findings (after the student has tried / whenever they ask / never), how many messages first, and whether a visit to the specialty's own room is required. The gate has existed since beta.84 with no UI at all — `grep -rn "disclosure" src/` returned nothing — so every case in the product ran on the shipped default and an educator had no way to change it.
+- The two effort controls are disabled rather than hidden outside `after_effort`, so a trip through "whenever they ask" and back does not lose the stored numbers.
+
+### Fixed
+
+- The save rebuilds the disclosure block instead of spreading the stored one forward. A case authored before `requireInterpretation` was removed still carries it, and spreading it into the PUT would make the server refuse the whole save as `invalid_disclosure` — locking an educator out of a case they never mis-authored. Keys the panel does not edit (`voice`, `dos`, `donts`) still survive the round-trip, as the discussant block learned to do in v2.9.101.
+
 ## [3.0.0-beta.86] — 2026-09-18
 
 ### Changed
