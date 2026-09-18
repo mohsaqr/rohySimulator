@@ -182,6 +182,8 @@
   "type_consultant_label": "Consultant",
   "type_discussant_desc": "Case debrief tutor (post-case discussion)",
   "type_discussant_label": "Discussant",
+  "type_laboratorian_desc": "On-call specialist who discusses the case's laboratory results",
+  "type_laboratorian_label": "Laboratory specialist",
   "type_nurse_desc": "Bedside nursing staff",
   "type_nurse_label": "Nurse",
   "type_other_desc": "Custom agent type",

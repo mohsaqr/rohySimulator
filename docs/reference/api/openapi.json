@@ -6665,7 +6665,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1052",
+        "x-rohy-source": "server/routes/proxy-routes.js:1058",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6699,7 +6699,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1865",
+        "x-rohy-source": "server/routes/proxy-routes.js:1871",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6732,7 +6732,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1881",
+        "x-rohy-source": "server/routes/proxy-routes.js:1887",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6767,7 +6767,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1757",
+        "x-rohy-source": "server/routes/proxy-routes.js:1763",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6801,7 +6801,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1795",
+        "x-rohy-source": "server/routes/proxy-routes.js:1801",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6836,7 +6836,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1821",
+        "x-rohy-source": "server/routes/proxy-routes.js:1827",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -11976,7 +11976,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1291",
+        "x-rohy-source": "server/routes/proxy-routes.js:1297",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -12010,7 +12010,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1298",
+        "x-rohy-source": "server/routes/proxy-routes.js:1304",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -12045,7 +12045,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1063",
+        "x-rohy-source": "server/routes/proxy-routes.js:1069",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -12079,7 +12079,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1160",
+        "x-rohy-source": "server/routes/proxy-routes.js:1166",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -12114,7 +12114,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1129",
+        "x-rohy-source": "server/routes/proxy-routes.js:1135",
         "x-rohy-auth": [
           "authenticateToken"
         ],

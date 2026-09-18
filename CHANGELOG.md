@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.86] — 2026-09-18
+
+### Changed
+
+- **An on-call specialist is a room expert, not a consultant on the case.** It has read one room's material — the slides, the tracing, the images, the analyser run — and it knows nothing else: not the patient, not their symptoms, not their history, not why they presented. It explains findings and teaches how to look; it never names a diagnosis. The seeded personas say so themselves, and none of them calls itself a consultant any more.
+- The brief no longer carries a patient summary. It led with patient name, age, sex and **chief complaint**, which is a symptom — the withholding layer was handing over the very thing it exists to withhold. `caseSummary()` is gone; a brief is now the scope line ("you have not seen the patient…"), the findings for that domain, and the no-diagnosis rule.
+- `requireRoomActivity` is **enforced**. Under `after_effort` the learner must have been in the specialty's own room, read from `learning_events.room`, as well as having sent the configured number of messages. The probe only runs when a case asks for it.
+- `requireInterpretation` is **removed** from the disclosure config. Whether a free-text turn contains the learner's own interpretation is not something the server can check, and a setting that never fires is worse than no setting. A stored value is now refused on write with a named error instead of being silently ignored.
+
+### Added
+
+- **A laboratory specialist** (`laboratorian`), the fourth specialty: the person who ran and validated the case's tests. Reached from the lab room, briefed from `investigations.labs[]` — each resulted test against its reference interval, with the abnormal flag — and from nothing else; the authoring shortcuts (`preset`, `normal_samples`) stay private. It teaches how to read a result and raises pre-analytical explanations as questions.
+- The specialty registry gained `rooms` (core room keys) alongside `pluginIds`, so a specialty whose room is not a plugin — the lab — is expressible, and `roomKeysOf()` / `specialtyTypeForRoom()` answer both "whose room is this" and the room-activity gate from one list. The phone's own room mapping was a second copy and now delegates to it.
+
+### Fixed
+
+- A seeded avatar filename that does not ship (`rb_business_female_04.glb`) would have 404'd silently on the contact row and the 3D head. A test now stats every seeded specialist's avatar.
+
 ## [3.0.0-beta.85] — 2026-09-17
 
 ### Added

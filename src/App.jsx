@@ -1023,8 +1023,15 @@ function MainApp() {
           and the consent that gates typing and voice stayed stale forever. */}
       {oyonConsentUpdate}
       {/* On-call phone: text or call the case's specialists (pathology,
-          cardiology, radiology) from any room, plugin rooms included. Its
-          button sits in the room navigator (phoneButton below). */}
+          cardiology, radiology, laboratory) from any room, plugin rooms
+          included. It sits HERE, above PatientRecordProvider and below every
+          surface that early-returns (settings, analytics, lessons), which is
+          exactly the set of screens that are "inside a case".
+
+          The round button floats at the right edge of the case screen rather
+          than living in the bottom RoomNavigator: the nav is per-room and the
+          handset has to outlive a room change, and the earlier floating
+          position covered the monitor's EtCO2 reading. */}
       <OnCallButton
          ref={onCallButtonRef}
          sessionId={onCall.available ? sessionId : null}

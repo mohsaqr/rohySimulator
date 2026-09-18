@@ -5,7 +5,7 @@
 // Which agent types are specialists is NOT decided here: the registry in
 // server/shared/specialties.js is the single source of truth.
 
-import { isSpecialistType, SPECIALTIES } from '../../../server/shared/specialties.js';
+import { isSpecialistType, specialtyTypeForRoom } from '../../../server/shared/specialties.js';
 import { AgentService } from '../../services/AgentService';
 
 /** The case's enabled on-call specialists, in the server's order. */
@@ -44,6 +44,7 @@ export const SPECIALTY_LABEL_KEYS = Object.freeze({
     pathologist: 'specialty_pathologist',
     cardiologist: 'specialty_cardiologist',
     radiologist: 'specialty_radiologist',
+    laboratorian: 'specialty_laboratorian',
 });
 
 /**
@@ -103,20 +104,17 @@ export function statusKeyFor(state, hasRemaining = false) {
 /**
  * The specialist who owns a room, so the phone opens on the right person:
  * the pathology room reaches the pathologist, PACS and the legacy radiology
- * room the radiologist, the ECG room the cardiologist. A room nobody owns
- * (patient chat, exam, lab, debrief) opens the contact list.
+ * room the radiologist, the ECG room the cardiologist, the lab room the
+ * laboratory specialist. A room nobody owns (patient chat, exam, debrief)
+ * opens the contact list.
  *
- * Plugin room keys ARE plugin ids (RoomNavigator builds them from the
- * manifests), which is what the registry lists in `pluginIds`.
+ * A thin re-export of the registry's own mapping: the same list answers
+ * `requireRoomActivity` on the server, and two copies of "which room belongs
+ * to whom" would drift the moment a specialty gained a room.
  *
- * @param {string|null} room  currentRoom
+ * @param {string|null} room  currentRoom (a core room key or a plugin id)
  * @returns {string|null}     agent_type, or null
  */
 export function specialistTypeForRoom(room) {
-    if (!room) return null;
-    for (const specialty of Object.values(SPECIALTIES)) {
-        if (specialty.pluginIds.includes(room)) return specialty.agentType;
-        if (specialty.legacyRadiology && room === 'radiology') return specialty.agentType;
-    }
-    return null;
+    return specialtyTypeForRoom(room);
 }

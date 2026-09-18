@@ -8,7 +8,10 @@ import {
     newCallId,
     reachabilityOf,
     specialistsOf,
+    specialistTypeForRoom,
+    SPECIALTY_LABEL_KEYS,
 } from './onCallModel';
+import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
 
 const team = [
     { agent_type: 'patient', name: 'Default Patient', enabled: true },
@@ -16,11 +19,13 @@ const team = [
     { agent_type: 'pathologist', name: 'Dr. Ana Path', enabled: true, availability_type: 'on-call', status: 'absent' },
     { agent_type: 'cardiologist', name: 'Dr. Ben Heart', enabled: true, availability_type: 'on-call', status: 'present' },
     { agent_type: 'radiologist', name: 'Dr. Cy Ray', enabled: true, availability_type: 'absent', status: 'absent' },
+    { agent_type: 'laboratorian', name: 'Dr. Dana Lab', enabled: true, availability_type: 'on-call', status: 'present' },
 ];
 
 describe('specialistsOf', () => {
     it('keeps registry specialists only, never the nurse or the patient', () => {
-        expect(specialistsOf(team).map(a => a.agent_type)).toEqual(['pathologist', 'cardiologist', 'radiologist']);
+        expect(specialistsOf(team).map(a => a.agent_type))
+            .toEqual(['pathologist', 'cardiologist', 'radiologist', 'laboratorian']);
     });
     it('drops disabled specialists and is null-safe', () => {
         expect(specialistsOf([{ agent_type: 'pathologist', enabled: false }])).toEqual([]);
@@ -36,7 +41,9 @@ describe('reachabilityOf / countReachable', () => {
         expect(reachabilityOf({ ...team[2], status: 'paged', arrives_at: '2099-01-01T00:00:00Z' })).toBe('paging');
     });
     it('counts specialists that can be reached, ignoring the unavailable one', () => {
-        expect(countReachable(team)).toBe(2);
+        // pathologist (on call) + cardiologist (present) + laboratorian
+        // (present); the radiologist is absent.
+        expect(countReachable(team)).toBe(3);
         expect(countReachable([])).toBe(0);
     });
 });
@@ -80,5 +87,32 @@ describe('formatCallDuration / isFailedReply', () => {
         expect(isFailedReply('Error: Could not communicate with X.')).toBe(true);
         expect(isFailedReply('Rate limit exceeded: slow down')).toBe(true);
         expect(isFailedReply('The margins are clear.')).toBe(false);
+    });
+});
+
+describe('specialistTypeForRoom', () => {
+    it('opens the phone on the specialist who owns the room it was rung from', () => {
+        expect(specialistTypeForRoom('pathology')).toBe('pathologist');
+        expect(specialistTypeForRoom('ecg')).toBe('cardiologist');
+        expect(specialistTypeForRoom('pacs')).toBe('radiologist');
+        // The pre-plugin radiology room and the core lab room.
+        expect(specialistTypeForRoom('radiology')).toBe('radiologist');
+        expect(specialistTypeForRoom('lab')).toBe('laboratorian');
+    });
+
+    it('opens the contact list from a room nobody owns', () => {
+        ['chat', 'examination', 'consultant', 'room3d', '', null, undefined]
+            .forEach((room) => expect(specialistTypeForRoom(room), String(room)).toBeNull());
+    });
+});
+
+describe('SPECIALTY_LABEL_KEYS', () => {
+    // A specialty added to the registry without its phone label would render
+    // the contact row with no tag and no error.
+    it('carries a label key for every specialty in the registry', () => {
+        SPECIALIST_TYPES.forEach((type) => {
+            expect(SPECIALTY_LABEL_KEYS[type], type).toBe(`specialty_${type}`);
+        });
+        expect(Object.keys(SPECIALTY_LABEL_KEYS).sort()).toEqual([...SPECIALIST_TYPES].sort());
     });
 });
