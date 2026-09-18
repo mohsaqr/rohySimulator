@@ -182,6 +182,8 @@
   "type_consultant_label": "Facharzt",
   "type_discussant_desc": "Tutor für die Fallnachbesprechung (Diskussion nach dem Fall)",
   "type_discussant_label": "Diskussionsleiter",
+  "type_laboratorian_desc": "Konsiliararzt im Bereitschaftsdienst, der die Laborwerte des Falls bespricht",
+  "type_laboratorian_label": "Laborarzt",
   "type_nurse_desc": "Pflegepersonal am Krankenbett",
   "type_nurse_label": "Pflegekraft",
   "type_other_desc": "Benutzerdefinierter Agententyp",

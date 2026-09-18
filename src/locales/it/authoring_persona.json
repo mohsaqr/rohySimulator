@@ -182,6 +182,8 @@
   "type_consultant_label": "Consulente",
   "type_discussant_desc": "Tutor per il debriefing del caso (discussione post-caso)",
   "type_discussant_label": "Discussore",
+  "type_laboratorian_desc": "Specialista reperibile che discute i risultati di laboratorio del caso",
+  "type_laboratorian_label": "Medico di laboratorio",
   "type_nurse_desc": "Personale infermieristico al letto del paziente",
   "type_nurse_label": "Infermiere",
   "type_other_desc": "Tipo di agente personalizzato",

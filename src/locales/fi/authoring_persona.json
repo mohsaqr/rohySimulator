@@ -182,6 +182,8 @@
   "type_consultant_label": "Konsultti",
   "type_discussant_desc": "Tapauksen purkuohjaaja (tapauksen jälkeinen keskustelu)",
   "type_discussant_label": "Keskustelija",
+  "type_laboratorian_desc": "Päivystävä erikoislääkäri, joka käy läpi tapauksen laboratoriotulokset",
+  "type_laboratorian_label": "Laboratoriolääkäri",
   "type_nurse_desc": "Vuodeosaston hoitohenkilökunta",
   "type_nurse_label": "Hoitaja",
   "type_other_desc": "Mukautettu agenttityyppi",

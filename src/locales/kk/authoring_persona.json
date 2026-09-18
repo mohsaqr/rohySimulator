@@ -182,6 +182,8 @@
   "type_consultant_label": "Консультант",
   "type_discussant_desc": "Кейс дебрифингінің тьюторы (кейстен кейінгі талқылау)",
   "type_discussant_label": "Талқылау жүргізушісі",
+  "type_laboratorian_desc": "Жағдайдың зертханалық нәтижелерін талқылайтын кезекші маман",
+  "type_laboratorian_label": "Зертхана маманы",
   "type_nurse_desc": "Палата мейірбике қызметкерлері",
   "type_nurse_label": "Мейірбике",
   "type_other_desc": "Жеке агент түрі",
