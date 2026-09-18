@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.88] — 2026-09-18
+
+### Fixed
+
+- **Existing installs kept the old specialist personas.** `seedDefaultAgents` is `INSERT ... WHERE NOT EXISTS` — it adds a seeded row but never updates one already present. So on upgrade the new laboratory specialist arrived while the pathologist, cardiologist and radiologist went on introducing themselves as "the on-call consultant …", with no limit on discussing symptoms, on every install created since beta.83. Their `role_title` is spoken aloud by the ROLE anchor on every single turn. Migration `0062` rewrites the three, matching the FULL old prompt and old role_title so a persona an educator edited in place is left alone and a database that never saw beta.83 matches nothing. The server-composed brief was always correct — it is built per request — so only the stored persona was stale.
+
 ## [3.0.0-beta.87] — 2026-09-18
 
 ### Added
