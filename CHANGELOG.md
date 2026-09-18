@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.90] — 2026-09-18
+
+### Fixed
+
+- **Authored dos and don'ts reached no server-built agent.** `buildPersonaBlocks()` lived on the client assembly path, so when persona assembly moved to the server in beta.83 the nurse, consultant, relative and every on-call specialist silently stopped reading `config.dos` / `config.donts` — while the persona editor went on offering the controls for all of them. The seeded nurse has been carrying "Speak up if an order seems unsafe" unread ever since. The helper moves to `server/shared/personaBlocks.js` (the Docker image ships `server/`, not `src/`; the client re-exports it, as `roleAnchor` already did) and `buildAgentPersonaPrompt()` now emits it.
+- A specialist's CASE BRIEF is passed to `buildAgentPersonaPrompt()` as its own argument rather than glued onto the authored prompt beforehand, so the order is anchor → persona → dos/donts → brief → situation. The brief stays the last word on what may be disclosed: an educator cannot author a "do" that argues with the disclosure gate and have the model read it afterwards.
+
+### Note
+
+This changes what existing agents say. Every seeded nurse, consultant and relative already stores three do's and three don'ts that have never been read; they take effect on the next turn. All of them reinforce what those personas already say, and the on-call specialists were authored this session with the same fields in mind.
+
 ## [3.0.0-beta.89] — 2026-09-18
 
 ### Fixed

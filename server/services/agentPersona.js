@@ -24,6 +24,7 @@
 import dbAdapter from '../dbAdapter.js';
 import { logger } from '../logger.js';
 import { roleAnchor } from '../shared/roleAnchor.js';
+import { buildPersonaBlocks } from '../shared/personaBlocks.js';
 
 const personaLog = logger('agent-persona');
 
@@ -59,25 +60,50 @@ export function learnerMayHoldPrompt(agentType) {
 }
 
 /**
- * The system prompt for a team agent: role anchor, the authored prompt, then
- * the situation the client reported.
+ * The system prompt for a team agent.
  *
- * `situation` is client text. It is placed under its own header AFTER the
- * authored prompt, so it adds context but cannot displace the persona.
+ * Order, and why:
+ *
+ *   ## ROLE            the anchor: who you are, and never anyone else
+ *   <authored prompt>  the educator's persona
+ *   You should: …      config.dos / config.donts, the behavioural reminder
+ *   <brief>            a specialist's server-built CASE BRIEF
+ *   --- CURRENT SITUATION ---
+ *   <situation>        client text
+ *
+ * The dos/donts follow the persona they qualify, and PRECEDE the brief so the
+ * brief stays the last word on what may be disclosed — an educator cannot
+ * write a "do" that argues with the disclosure gate and have it read last.
+ *
+ * `situation` is client text. It sits under its own header at the end, so it
+ * adds context but cannot displace the persona. A specialist is passed none
+ * (proxy-routes drops it: the browser builds it from the whole case).
  *
  * @param {object} agent
  * @param {string} agent.agentType
  * @param {string} [agent.roleTitle]
  * @param {string} [agent.name]
- * @param {string} [agent.prompt]      authored prompt (override or template)
- * @param {string} [situation]         client-reported current situation
+ * @param {string} [agent.prompt]   authored prompt (override or template)
+ * @param {object} [agent.config]   merged template config + case override;
+ *                                  read for `dos` / `donts` only
+ * @param {string} [situation]      client-reported current situation
+ * @param {string} [brief]          server-built block appended after the
+ *                                  persona (the specialist CASE BRIEF)
  * @returns {string}
  */
-export function buildAgentPersonaPrompt({ agentType, roleTitle, name, prompt }, situation = '') {
+export function buildAgentPersonaPrompt({ agentType, roleTitle, name, prompt, config }, situation = '', brief = '') {
     const parts = [
         roleAnchor({ role: roleTitle || agentType || 'team member', name }),
         typeof prompt === 'string' ? prompt : '',
     ];
+    // Already self-delimiting: buildPersonaBlocks returns '\n\n…\n' or ''.
+    const blocks = buildPersonaBlocks(config);
+    if (blocks) parts.push(blocks);
+    const briefText = typeof brief === 'string' ? brief.trim() : '';
+    if (briefText) {
+        parts.push('');
+        parts.push(briefText);
+    }
     const context = typeof situation === 'string' ? situation.trim() : '';
     if (context) {
         parts.push('');

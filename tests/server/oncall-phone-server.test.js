@@ -21,6 +21,8 @@ const SNAPSHOT_FINDING = 'Snapshot-only finding: tubule formation is scant';
 const DIAGNOSIS = 'Invasive ductal carcinoma';
 const ACCEPTED = 'IDC';
 const PATHOLOGIST_PROMPT = 'AUTHORED-PATHOLOGIST: you are collegial and precise.';
+const DO_BULLET = 'AUTHORED-DO: ask what they looked at first';
+const DONT_BULLET = 'AUTHORED-DONT: lecture when a question would teach more';
 
 const caseConfig = (findingText) => ({
     patient_name: 'Ada Example',
@@ -161,14 +163,15 @@ beforeAll(async () => {
             `INSERT INTO cases (name, description, system_prompt, config, tenant_id)
              VALUES ('Invasive ductal carcinoma case', 'desc', 'case-prompt', ?, 1)`,
             [JSON.stringify(caseConfig(FINDING))])).lastID;
-        const addTemplate = async (type, name, roleTitle, prompt) => (await pRun(db,
+        const addTemplate = async (type, name, roleTitle, prompt, config = '{}') => (await pRun(db,
             `INSERT INTO agent_templates (agent_type, name, role_title, system_prompt, config, tenant_id)
-             VALUES (?, ?, ?, ?, '{}', 1)`, [type, name, roleTitle, prompt])).lastID;
+             VALUES (?, ?, ?, ?, ?, 1)`, [type, name, roleTitle, prompt, config])).lastID;
         const attach = async (templateId) => (await pRun(db,
             `INSERT INTO case_agents (case_id, agent_template_id, enabled, availability_type, tenant_id)
              VALUES (?, ?, 1, 'on-call', 1)`, [caseId, templateId])).lastID;
-        pathologistAgentId = await attach(await addTemplate('pathologist', 'Dr Path', 'Consultant pathologist', PATHOLOGIST_PROMPT));
-        nurseAgentId = await attach(await addTemplate('nurse', 'Nurse', 'Bedside nurse', 'NURSE-PROMPT'));
+        const bullets = JSON.stringify({ dos: [DO_BULLET], donts: [DONT_BULLET] });
+        pathologistAgentId = await attach(await addTemplate('pathologist', 'Dr Path', 'Consultant pathologist', PATHOLOGIST_PROMPT, bullets));
+        nurseAgentId = await attach(await addTemplate('nurse', 'Nurse', 'Bedside nurse', 'NURSE-PROMPT', bullets));
 
         const addSession = async (snapshot = null, onCase = caseId) => (await pRun(db,
             `INSERT INTO sessions (case_id, user_id, student_name, status, tenant_id, case_snapshot)
@@ -188,6 +191,40 @@ beforeAll(async () => {
 afterAll(async () => {
     if (server) await server.close();
     if (llm) await llm.close();
+});
+
+// Regression lock: `config.dos` / `config.donts` reached the prompt only via
+// the CLIENT assembly path (buildPersonaBlocks in ChatInterface and
+// useDiscussionEngine). When persona assembly moved server-side in beta.83,
+// every server-built agent stopped reading them — silently, while the persona
+// editor kept offering the controls. These two fail against that proxy.
+describe('authored dos and donts reach a server-built agent', () => {
+    it('carries them for a nurse, after the authored prompt', async () => {
+        llm.reply.content = 'Understood.';
+        const res = await postAs(studentToken, '/api/proxy/llm', {
+            session_id: liveSessionId,
+            messages: [{ role: 'user', content: 'Any concerns?' }],
+            system_prompt: 'SITUATION: bedside',
+            agent_llm_config: { case_agent_id: nurseAgentId },
+        });
+        expect(res.status).toBe(200);
+        const system = lastSystemPrompt();
+        expect(system).toContain(`You should:\n- ${DO_BULLET}`);
+        expect(system).toContain(`You must not:\n- ${DONT_BULLET}`);
+        expect(system.indexOf(DO_BULLET)).toBeGreaterThan(system.indexOf('NURSE-PROMPT'));
+    });
+
+    it('carries them for a specialist, before the case brief', async () => {
+        await storeStudentTurn(liveSessionId, 'What am I looking at?');
+        llm.reply.content = 'What do you see?';
+        await callPathologist(liveSessionId, 'What am I looking at?');
+        const system = lastSystemPrompt();
+        const order = [PATHOLOGIST_PROMPT, DO_BULLET, DONT_BULLET, BRIEF_HEADER].map((n) => system.indexOf(n));
+        expect(order.every((i) => i >= 0)).toBe(true);
+        // The brief stays the last word on what may be disclosed, so an
+        // educator's "do" cannot be read after it.
+        expect(order).toEqual([...order].sort((a, b) => a - b));
+    });
 });
 
 describe('POST /proxy/llm as an on-call pathologist', () => {

@@ -591,16 +591,16 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 });
             }
         }
-        // On-call specialists (pathologist, cardiologist, radiologist) get a
-        // server-built CASE BRIEF from the session's case document
-        // (services/specialistBrief.js): the findings when the disclosure gate
-        // is open, never the diagnosis. `specialistAnswerTerms` feeds the
-        // reply guard further down. Prompt order for a specialist:
-        //   role anchor -> authored prompt -> CASE BRIEF -> client situation
-        // The brief follows the authored prompt so the educator's persona
-        // leads, and precedes the client text so a situation cannot displace it.
+        // On-call specialists get a server-built CASE BRIEF from the session's
+        // case document (services/specialistBrief.js): the findings when the
+        // disclosure gate is open, never the diagnosis. `specialistAnswerTerms`
+        // feeds the reply guard further down. The brief is passed to
+        // buildAgentPersonaPrompt as its own argument, which places it after
+        // the persona and its dos/donts and before any client text -- so the
+        // educator's persona leads and the brief is the last word on what may
+        // be disclosed.
         let specialistAnswerTerms = null;
-        let personaAgent = caseAgent;
+        let specialistBrief = '';
         // The client situation for a specialist is DROPPED, not appended. Two
         // reasons, either of which alone is enough. The browser builds it from
         // the whole case (buildDiscussionCaseContext, 'full'), which carries
@@ -641,9 +641,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const config = caseData?.config || {};
             const findings = extractFindings(specialty.domain, config);
             const state = disclosureState({ disclosure: disclosure.value, studentTurns, roomActive });
-            const brief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
+            specialistBrief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
             specialistAnswerTerms = extractAnswerTerms(specialty.domain, config);
-            personaAgent = { ...caseAgent, prompt: [caseAgent.prompt, brief].filter(Boolean).join('\n\n') };
             (req.log || routesLlmLog).info('specialist brief routed', {
                 session_id,
                 agent_type: caseAgent.agentType,
@@ -658,7 +657,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // A server-resolved case agent speaks from its authored prompt; what
         // the client sent is only the situation it reported (none, for a
         // specialist — see above).
-        const casePrompt = personaAgent ? buildAgentPersonaPrompt(personaAgent, situation) : system_prompt;
+        const casePrompt = caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, specialistBrief) : system_prompt;
         let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type
