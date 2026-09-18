@@ -122,6 +122,22 @@ const callPathologist = (sessionId, content) => postAs(studentToken, '/api/proxy
     agent_llm_config: { case_agent_id: pathologistAgentId },
 });
 
+// The default disclosure gate also requires the learner to have been in the
+// specialty's own room (`requireRoomActivity`). Any learning_events row
+// carrying that room satisfies it — the gate asks whether they went and
+// looked, not what they did there.
+const visitRoom = async (sessionId, room) => {
+    const db = await openDb(dbPath);
+    try {
+        await pRun(db,
+            `INSERT INTO learning_events (session_id, tenant_id, verb, object_type, object_id, room)
+             VALUES (?, 1, 'NAVIGATED', 'room', ?, ?)`,
+            [sessionId, room, room]);
+    } finally {
+        await closeDb(db);
+    }
+};
+
 const lastSystemPrompt = () => (llm.bodies.at(-1).messages || [])
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
@@ -185,9 +201,16 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
         expect(system).toContain(BRIEF_HEADER);
         expect(system).toContain(BRIEF_WITHHELD);
         expect(system).toContain(BRIEF_NO_DIAGNOSIS);
-        expect(system).toContain('Chief complaint: Left breast lump');
         expect(system).not.toContain(FINDING);
         expect(system).not.toContain(DIAGNOSIS);
+        // Regression lock: a specialist read one room's material and never met
+        // the patient. The brief led with a patient summary until 2026-09-18 —
+        // name, age, sex and CHIEF COMPLAINT, which is a symptom. None of it
+        // may reach the prompt.
+        expect(system).not.toContain('Left breast lump');
+        expect(system).not.toContain('Ada Example');
+        expect(system).not.toContain('Female');
+        expect(system).toContain('You have not seen the patient');
         // Order: authored prompt -> brief. The client's situation is dropped
         // for a specialist (see the regression lock below), so there is no
         // CURRENT SITUATION block at all.
@@ -195,14 +218,22 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
         expect(system).not.toContain('--- CURRENT SITUATION ---');
     });
 
-    it('shares the findings once the learner has made three turns (default after_effort)', async () => {
+    it('holds the findings back while the learner has never opened the pathology room', async () => {
+        // Turn quota met (this is the 3rd), room quota not: the default
+        // disclosure sets requireRoomActivity, and no learning_events row for
+        // this session carries `pathology` yet.
         await storeStudentTurn(liveSessionId, 'I saw cells in the stroma.');
-        // Two turns stored: still one short of the default minimum of 3.
-        await callPathologist(liveSessionId, 'I saw cells in the stroma.');
-        expect(lastSystemPrompt()).not.toContain(FINDING);
-
         await storeStudentTurn(liveSessionId, 'They look like nests to me.');
         await callPathologist(liveSessionId, 'They look like nests to me.');
+        const system = lastSystemPrompt();
+        expect(system).toContain(BRIEF_WITHHELD);
+        expect(system).not.toContain(FINDING);
+    });
+
+    it('shares the findings once the learner has made three turns AND been in the room', async () => {
+        await visitRoom(liveSessionId, 'pathology');
+        await storeStudentTurn(liveSessionId, 'Nests, infiltrating.');
+        await callPathologist(liveSessionId, 'Nests, infiltrating.');
         const system = lastSystemPrompt();
         expect(system).toContain(FINDING);
         expect(system).not.toContain(BRIEF_WITHHELD);
@@ -210,6 +241,7 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
     });
 
     it('briefs from the session snapshot, not the live case, when a snapshot exists', async () => {
+        await visitRoom(snapshotSessionId, 'pathology');
         await storeStudentTurn(snapshotSessionId, 'a');
         await storeStudentTurn(snapshotSessionId, 'b');
         await storeStudentTurn(snapshotSessionId, 'c');
@@ -224,7 +256,8 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
     // diagnosis and every report's interpretation included. Appending it to a
     // specialist's prompt handed over the answer the brief exists to withhold
     // (found by watching a real conversation: 37 KB of case text per turn).
-    // The server drops it; only the brief's own summary frames the case.
+    // The server drops it, and replaces it with nothing: the brief is
+    // findings alone.
     it('ignores the client situation for a specialist, however much case text it carries', async () => {
         await storeStudentTurn(liveSessionId, 'Anything else?');
         llm.reply.content = 'What do you see?';

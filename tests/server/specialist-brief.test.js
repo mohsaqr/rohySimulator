@@ -13,14 +13,14 @@ import {
     BRIEF_NO_FINDINGS,
     BRIEF_WITHHELD,
     GUARD_FALLBACK_REPLY,
+    BRIEF_NO_PATIENT,
     buildSpecialistBrief,
-    caseSummary,
     disclosureState,
     extractAnswerTerms,
     extractFindings,
     guardSpecialistReply,
 } from '../../server/services/specialistBrief.js';
-import { normalizeDisclosure } from '../../server/shared/specialties.js';
+import { SPECIALTIES, normalizeDisclosure } from '../../server/shared/specialties.js';
 
 const SECRET = {
     pathDx: 'SECRET-PATH-DX invasive ductal carcinoma',
@@ -31,6 +31,7 @@ const SECRET = {
     impression: 'SECRET-IMPRESSION right lower lobe pneumonia',
     interpretation: 'SECRET-INTERPRETATION lobar consolidation',
     caseDx: 'SECRET-CASE-DX',
+    labPreset: 'SECRET-LAB-PRESET high',
 };
 
 const fullConfig = () => ({
@@ -81,6 +82,16 @@ const fullConfig = () => ({
         { studyName: 'Empty' },
         42,
     ],
+    investigations: {
+        labs: [
+            { test_name: 'Troponin I', test_group: 'Cardiac Markers', min_value: 0, max_value: 0.04, current_value: 0.09, unit: 'ng/mL', is_abnormal: true, preset: SECRET.labPreset, normal_samples: [0.01] },
+            { test_name: 'Sodium', min_value: 135, max_value: 145, current_value: 139, unit: 'mmol/L', is_abnormal: false },
+            { test_name: 'Not resulted', current_value: null, unit: 'x' },
+            { test_name: '', current_value: 5 },
+            'not an object',
+            null,
+        ],
+    },
 });
 
 const secretsIn = (value) => Object.values(SECRET).filter((secret) => JSON.stringify(value).toLowerCase().includes(secret.toLowerCase()));
@@ -145,21 +156,56 @@ describe('extractAnswerTerms', () => {
     });
 });
 
-describe('caseSummary', () => {
-    it('allow-lists patient, age, sex and chief complaint only', () => {
-        expect(caseSummary(fullConfig(), {})).toBe('Patient: Ada Example\nAge: 58\nSex: Female\nChief complaint: Breast lump');
+// Regression lock (2026-09-18): there is no caseSummary any more. The brief
+// led with patient name, age, sex and CHIEF COMPLAINT — a symptom — for a
+// specialist who never met the patient. The block below pins the replacement:
+// the brief says outright that it knows none of that.
+describe('the specialist knows no patient', () => {
+    it('exports a scope line that denies symptoms, history and presentation', () => {
+        expect(BRIEF_NO_PATIENT).toMatch(/not their symptoms/i);
+        expect(BRIEF_NO_PATIENT).toMatch(/not their history/i);
     });
 
-    it('falls back to the case row columns and never uses the case name', () => {
-        const summary = caseSummary({}, { patient_name: 'Row Name', patient_age: 40, patient_gender: 'Male', chief_complaint: 'Cough', name: 'SECRET-CASE-DX STEMI' });
-        expect(summary).toBe('Patient: Row Name\nAge: 40\nSex: Male\nChief complaint: Cough');
+    it('invariant: no patient text from the config can reach a brief', () => {
+        for (const type of Object.keys(SPECIALTIES)) {
+            const specialty = SPECIALTIES[type];
+            const brief = buildSpecialistBrief({
+                specialty,
+                findings: extractFindings(specialty.domain, fullConfig()),
+                disclosureState: { findingsAllowed: true, reason: 'on_request' },
+            });
+            expect(brief, type).not.toContain('Ada Example');
+            expect(brief, type).not.toContain('Breast lump');
+            expect(brief, type).not.toContain('SECRET-HPI');
+            expect(brief, type).not.toContain('58');
+            expect(brief, type).not.toContain('Female');
+        }
+    });
+});
+
+describe('extractFindings — laboratory', () => {
+    it('renders each resulted test against its reference interval', () => {
+        expect(extractFindings('laboratory', fullConfig())).toEqual([
+            { text: 'Troponin I = 0.09 ng/mL (reference 0-0.04 ng/mL, abnormal)', source: 'Cardiac Markers' },
+            { text: 'Sodium = 139 mmol/L (reference 135-145 mmol/L)', source: 'Laboratory' },
+        ]);
     });
 
-    it('invariant: no answer-key or unlisted text', () => {
-        const summary = caseSummary(fullConfig(), { name: SECRET.caseDx });
-        expect(secretsIn(summary)).toEqual([]);
-        expect(summary).not.toContain('SECRET-HPI');
-        expect(caseSummary(null, null)).toBe('');
+    it('skips an unresulted test rather than reporting a blank value', () => {
+        const texts = extractFindings('laboratory', fullConfig()).map((f) => f.text);
+        expect(texts.some((t) => t.startsWith('Not resulted'))).toBe(false);
+    });
+
+    it('reads no authoring shortcuts: preset and normal_samples stay private', () => {
+        const findings = extractFindings('laboratory', fullConfig());
+        expect(secretsIn(findings)).toEqual([]);
+        expect(JSON.stringify(findings)).not.toContain('0.01');
+    });
+
+    it('survives a missing or malformed investigations block', () => {
+        expect(extractFindings('laboratory', {})).toEqual([]);
+        expect(extractFindings('laboratory', { investigations: 'nope' })).toEqual([]);
+        expect(extractFindings('laboratory', { investigations: { labs: 'nope' } })).toEqual([]);
     });
 });
 
@@ -176,17 +222,36 @@ describe('disclosureState', () => {
     });
 
     it("'after_effort' opens exactly at minStudentTurns", () => {
-        const d = disclosure({ findings: 'after_effort', minStudentTurns: 3 });
+        const d = disclosure({ findings: 'after_effort', minStudentTurns: 3, requireRoomActivity: false });
         expect(disclosureState({ disclosure: d, studentTurns: 2 }).findingsAllowed).toBe(false);
         expect(disclosureState({ disclosure: d, studentTurns: 3 }).findingsAllowed).toBe(true);
         expect(disclosureState({ disclosure: d, studentTurns: 4 }).findingsAllowed).toBe(true);
     });
 
-    it('reports the room-activity and interpretation conditions as not enforced', () => {
-        const state = disclosureState({ disclosure: disclosure({}), studentTurns: 0 });
-        expect(state.notEnforced).toEqual(['requireRoomActivity', 'requireInterpretation']);
-        const off = disclosure({ requireRoomActivity: false, requireInterpretation: false });
-        expect(disclosureState({ disclosure: off, studentTurns: 0 }).notEnforced).toEqual([]);
+    it('enforces requireRoomActivity as a second after_effort condition', () => {
+        const d = disclosure({ findings: 'after_effort', minStudentTurns: 1, requireRoomActivity: true });
+        expect(disclosureState({ disclosure: d, studentTurns: 5, roomActive: false }))
+            .toMatchObject({ findingsAllowed: false, reason: 'after_effort_room_not_visited' });
+        expect(disclosureState({ disclosure: d, studentTurns: 5, roomActive: true }))
+            .toMatchObject({ findingsAllowed: true, reason: 'after_effort_met' });
+    });
+
+    it('names the turn shortfall first when BOTH conditions fail', () => {
+        const d = disclosure({ findings: 'after_effort', minStudentTurns: 3, requireRoomActivity: true });
+        expect(disclosureState({ disclosure: d, studentTurns: 0, roomActive: false }).reason)
+            .toBe('after_effort_turns_below_min');
+    });
+
+    // Fail SHUT: a caller that forgets to pass roomActive must not be handed
+    // an open gate by a falsy default that happens to read as "fine".
+    it('defaults roomActive to closed when the caller omits it', () => {
+        const d = disclosure({ findings: 'after_effort', minStudentTurns: 0, requireRoomActivity: true });
+        expect(disclosureState({ disclosure: d, studentTurns: 9 }).findingsAllowed).toBe(false);
+    });
+
+    it('ignores room activity when the mode is not after_effort', () => {
+        const d = disclosure({ findings: 'on_request', requireRoomActivity: true });
+        expect(disclosureState({ disclosure: d, studentTurns: 0, roomActive: false }).findingsAllowed).toBe(true);
     });
 
     it('is closed for an unknown mode or missing disclosure', () => {
@@ -197,38 +262,53 @@ describe('disclosureState', () => {
 
 describe('buildSpecialistBrief', () => {
     const findings = extractFindings('pathology', fullConfig());
+    const path = SPECIALTIES.pathologist;
 
-    it('lists the findings when allowed', () => {
-        const brief = buildSpecialistBrief({ summary: 'Patient: A', findings, disclosureState: { findingsAllowed: true, reason: 'after_effort_met' } });
+    it('leads with the scope line and lists the findings when allowed', () => {
+        const brief = buildSpecialistBrief({ specialty: path, findings, disclosureState: { findingsAllowed: true, reason: 'after_effort_met' } });
         expect(brief.startsWith(BRIEF_HEADER)).toBe(true);
-        expect(brief).toContain('Patient: A');
+        expect(brief).toContain('the pathology material for this case');
+        expect(brief).toContain(BRIEF_NO_PATIENT);
         expect(brief).toContain(BRIEF_FINDINGS_LEAD);
         expect(brief).toContain('- Nests of atypical cells infiltrate the stroma (Activity act-1)');
         expect(brief).not.toContain(BRIEF_WITHHELD);
         expect(brief.trim().endsWith(BRIEF_NO_DIAGNOSIS)).toBe(true);
     });
 
-    it('withholds the findings when not allowed', () => {
-        const brief = buildSpecialistBrief({ summary: '', findings, disclosureState: { findingsAllowed: false, reason: 'never' } });
+    it('names each domain\'s own material', () => {
+        const material = (type) => buildSpecialistBrief({
+            specialty: SPECIALTIES[type], findings: [], disclosureState: { findingsAllowed: true },
+        });
+        expect(material('cardiologist')).toContain('the ECG tracing(s) for this case');
+        expect(material('radiologist')).toContain('the imaging for this case');
+        expect(material('laboratorian')).toContain('the laboratory results for this case');
+        // An unknown or missing specialty still gets a brief, read generically.
+        expect(buildSpecialistBrief({ findings: [], disclosureState: {} })).toContain('the material for this case');
+    });
+
+    it('withholds the findings when not allowed, but keeps the scope line', () => {
+        const brief = buildSpecialistBrief({ specialty: path, findings, disclosureState: { findingsAllowed: false, reason: 'never' } });
+        expect(brief).toContain(BRIEF_NO_PATIENT);
         expect(brief).toContain(BRIEF_WITHHELD);
         expect(brief).not.toContain('Nests of atypical cells');
         expect(brief).toContain(BRIEF_NO_DIAGNOSIS);
     });
 
     it('says no findings were provided when none were authored', () => {
-        const brief = buildSpecialistBrief({ summary: '', findings: [], disclosureState: { findingsAllowed: true } });
+        const brief = buildSpecialistBrief({ specialty: path, findings: [], disclosureState: { findingsAllowed: true } });
         expect(brief).toContain(BRIEF_NO_FINDINGS);
         expect(brief).not.toContain(BRIEF_FINDINGS_LEAD);
     });
 
     it('invariant: a brief built from any domain carries no answer-key text', () => {
-        for (const domain of ['pathology', 'ecg', 'radiology']) {
+        for (const type of Object.keys(SPECIALTIES)) {
+            const specialty = SPECIALTIES[type];
             const brief = buildSpecialistBrief({
-                summary: caseSummary(fullConfig(), {}),
-                findings: extractFindings(domain, fullConfig()),
+                specialty,
+                findings: extractFindings(specialty.domain, fullConfig()),
                 disclosureState: { findingsAllowed: true, reason: 'on_request' },
             });
-            expect(secretsIn(brief), domain).toEqual([]);
+            expect(secretsIn(brief), type).toEqual([]);
         }
     });
 });

@@ -15,6 +15,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
 import bcrypt from 'bcrypt';
+import fs from 'node:fs';
+import path from 'node:path';
 import sqlite3 from 'sqlite3';
 import { createTestDb } from '../utils/seedDb.js';
 import { startTestServer } from '../utils/startTestServer.js';
@@ -89,7 +91,7 @@ describe('migration 0061', () => {
 
 describe('default specialist templates', () => {
     const specialistRows = () => testDb.all(
-        `SELECT agent_type, name, config, system_prompt, context_filter FROM agent_templates
+        `SELECT agent_type, name, role_title, avatar_url, config, system_prompt, context_filter FROM agent_templates
           WHERE is_default = 1 AND deleted_at IS NULL
             AND agent_type IN (${SPECIALIST_TYPES.map(() => '?').join(', ')})
           ORDER BY agent_type`,
@@ -111,8 +113,35 @@ describe('default specialist templates', () => {
 
     it('ships a conduct-only prompt that confines the specialist to its brief', async () => {
         for (const row of await specialistRows()) {
-            expect(row.system_prompt).toMatch(/only discuss findings given to you in the case brief/i);
-            expect(row.system_prompt).toMatch(/never state the diagnosis/i);
+            expect(row.system_prompt, row.agent_type).toMatch(/only discuss findings given to you in the case brief/i);
+            expect(row.system_prompt, row.agent_type).toMatch(/never state the diagnosis/i);
+        }
+    });
+
+    // The specialist is a room expert, not a consultant on the case: it read
+    // one room's material and never met the patient. The prompt has to say so
+    // itself — the server brief repeats it, but an educator duplicating a
+    // template to author their own keeps only the prompt.
+    it('tells every specialist it has not seen the patient and knows no symptoms', async () => {
+        for (const row of await specialistRows()) {
+            expect(row.system_prompt, row.agent_type).toMatch(/you have not seen the patient/i);
+            expect(row.system_prompt, row.agent_type).toMatch(/do not know their symptoms/i);
+            // 'consultant' is the word for the wrong mental model, and it
+            // shipped in all three original prompts ("on-call consultant
+            // pathologist"). A specialist must not describe itself as one.
+            expect(row.system_prompt, row.agent_type).not.toMatch(/consultant/i);
+            expect(row.role_title, row.agent_type).not.toMatch(/consultant/i);
+        }
+    });
+
+    // Every seeded avatar must be a file that actually ships, or the contact
+    // row and the 3D head both 404 silently. (A first draft of the laboratory
+    // template named rb_business_female_04.glb, which does not exist.)
+    it('points every specialist at an avatar that exists in public/avatars', async () => {
+        const heads = path.join(process.cwd(), 'public', 'avatars', 'heads');
+        for (const row of await specialistRows()) {
+            expect(row.avatar_url, row.agent_type).toMatch(/\.glb$/);
+            expect(fs.existsSync(path.join(heads, row.avatar_url)), `${row.agent_type} -> ${row.avatar_url}`).toBe(true);
         }
     });
 

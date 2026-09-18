@@ -1,11 +1,20 @@
 // On-call specialists: the specialty registry.
 //
 // The single source of truth for which agent types are on-call specialists,
-// which case material each one may read, and how willing each one is by
-// default to discuss findings with the learner. Lives under server/shared/
-// for the same reason as languages.js and llmCatalogue.js: the Docker runtime
-// stage copies server/ but not src/, and the client (case editor, agent
-// editor) needs the same list. No node-only imports here.
+// which case material each one may read, which rooms each one owns, and how
+// willing each one is by default to discuss findings with the learner. Lives
+// under server/shared/ for the same reason as languages.js and
+// llmCatalogue.js: the Docker runtime stage copies server/ but not src/, and
+// the client (case editor, agent editor, the on-call phone) needs the same
+// list. No node-only imports here.
+//
+// WHAT A SPECIALIST IS. Not a consultant. Each one is the person who READ ONE
+// ROOM'S MATERIAL — the ECG, the slides, the images, the analyser run — and
+// knows nothing else about the patient. They explain what the material shows
+// and teach how to look at it. They never name a diagnosis, and they never
+// discuss the patient's symptoms, history or story, because they were never
+// told any of it: services/specialistBrief.js builds their brief out of
+// findings alone.
 //
 // Each specialty is its own agent_type. Everything runtime-side
 // (agent_session_state UNIQUE(session_id, agent_type), agent_conversations,
@@ -13,17 +22,21 @@
 // case falls out of that keying; POST /cases/:caseId/agents enforces it.
 //
 // CONTRACT — adding a specialty is exactly two changes:
-//   1. one entry in SPECIALTIES below (agentType, domain, pluginIds, …), and
+//   1. one entry in SPECIALTIES below (agentType, domain, pluginIds, rooms,
+//      defaultDisclosure), and
 //   2. one seeded default template for that agent_type in server/db.js
 //      DEFAULT_AGENTS (its config.disclosure comes from defaultDisclosure
 //      here, never a copy).
-// Plus the editor label keys `type_<agentType>_label` / `_desc` in
-// src/locales/en/authoring_persona.json. Nothing else may hardcode the list:
+// Plus a findings extractor for its `domain` in services/specialistBrief.js,
+// the editor label keys `type_<agentType>_label` / `_desc` in
+// src/locales/en/authoring_persona.json, and the phone's `specialty_<type>`
+// key in src/locales/en/oncall.json. Nothing else may hardcode the list:
 // import SPECIALIST_TYPES / isSpecialistType instead.
 
 // When the specialist will discuss the findings in its brief:
-//   after_effort — only once the learner has shown effort (turns, room
-//                  activity, their own interpretation; see thresholds below)
+//   after_effort — only once the learner has shown effort (turns in this
+//                  conversation, and optionally activity in the specialty's
+//                  own room; see requireRoomActivity below)
 //   on_request   — whenever the learner asks
 //   never        — teaches how to look, never confirms findings
 export const DISCLOSURE_MODES = Object.freeze(['after_effort', 'on_request', 'never']);
@@ -32,39 +45,58 @@ const DEFAULT_DISCLOSURE = Object.freeze({
     findings: 'after_effort',
     minStudentTurns: 3,
     requireRoomActivity: true,
-    requireInterpretation: true,
 });
 
 // Field -> kind. Drives normalizeDisclosure; a field not listed here is
 // rejected, so a typo in a case config surfaces instead of being ignored.
+//
+// `requireInterpretation` was a fourth field until it was removed: deciding
+// whether a free-text turn contains the learner's own interpretation is not
+// something the server can check, and a stored setting that never fires is
+// worse than no setting. Stored overrides that still carry it are refused by
+// normalizeDisclosure with `unknown disclosure field`, which is the visible
+// failure the silent version never gave.
 const DISCLOSURE_FIELDS = Object.freeze({
     findings: 'mode',
     minStudentTurns: 'count',
     requireRoomActivity: 'boolean',
-    requireInterpretation: 'boolean',
 });
 
 export const SPECIALTIES = Object.freeze({
     pathologist: Object.freeze({
         agentType: 'pathologist',
         domain: 'pathology',
+        // Plugin rooms this specialty owns (a plugin room's key IS its
+        // plugin id — RoomNavigator builds them from the manifests).
         pluginIds: Object.freeze(['pathology']),
-        legacyRadiology: false,
+        // Core (non-plugin) room keys this specialty owns; see App.jsx
+        // ROOM_KEYS.
+        rooms: Object.freeze([]),
         defaultDisclosure: DEFAULT_DISCLOSURE,
     }),
     cardiologist: Object.freeze({
         agentType: 'cardiologist',
         domain: 'ecg',
         pluginIds: Object.freeze(['ecg']),
-        legacyRadiology: false,
+        rooms: Object.freeze([]),
         defaultDisclosure: DEFAULT_DISCLOSURE,
     }),
     radiologist: Object.freeze({
         agentType: 'radiologist',
         domain: 'radiology',
         pluginIds: Object.freeze(['pacs']),
-        // Also reads the pre-plugin case config.radiology block.
-        legacyRadiology: true,
+        // The pre-plugin radiology room, whose case material is the
+        // top-level config.radiology block.
+        rooms: Object.freeze(['radiology']),
+        defaultDisclosure: DEFAULT_DISCLOSURE,
+    }),
+    laboratorian: Object.freeze({
+        agentType: 'laboratorian',
+        domain: 'laboratory',
+        // The lab has no plugin: it is the core `lab` room
+        // (InvestigationsScreen), and its material is config.investigations.
+        pluginIds: Object.freeze([]),
+        rooms: Object.freeze(['lab']),
         defaultDisclosure: DEFAULT_DISCLOSURE,
     }),
 });
@@ -77,6 +109,37 @@ export function isSpecialistType(agentType) {
 
 export function specialtyFor(agentType) {
     return isSpecialistType(agentType) ? SPECIALTIES[agentType] : null;
+}
+
+/**
+ * Every room key a specialty owns — plugin rooms and core rooms together.
+ *
+ * Used both to open the phone on the right person (the learner rang from that
+ * room) and to answer `requireRoomActivity` (did the learner do anything in
+ * the room whose material this specialist read).
+ *
+ * @param {object|string} specialtyOrType  a SPECIALTIES entry or an agentType
+ * @returns {string[]} room keys; [] for anything that is not a specialty
+ */
+export function roomKeysOf(specialtyOrType) {
+    const specialty = typeof specialtyOrType === 'string'
+        ? specialtyFor(specialtyOrType)
+        : specialtyOrType;
+    if (!specialty) return [];
+    return [...(specialty.pluginIds || []), ...(specialty.rooms || [])];
+}
+
+/**
+ * The specialty that owns a room, so the phone opens on the right person and
+ * the room-activity gate knows where to look.
+ *
+ * @param {string|null} room  a room key (core room or plugin id)
+ * @returns {string|null} agentType, or null when nobody owns the room
+ */
+export function specialtyTypeForRoom(room) {
+    if (!room) return null;
+    const found = Object.values(SPECIALTIES).find((s) => roomKeysOf(s).includes(room));
+    return found ? found.agentType : null;
 }
 
 // Merge a partial per-case disclosure config over the default and validate it.

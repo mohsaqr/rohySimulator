@@ -11,13 +11,16 @@ import {
     isSpecialistType,
     specialtyFor,
     normalizeDisclosure,
+    roomKeysOf,
+    specialtyTypeForRoom,
 } from '../../server/shared/specialties.js';
 
-const DOMAINS = ['pathology', 'ecg', 'radiology'];
+const DOMAINS = ['pathology', 'ecg', 'radiology', 'laboratory'];
 
 describe('SPECIALTIES registry', () => {
-    it('lists exactly the three shipped specialties, keyed by agent_type', () => {
-        expect(Object.keys(SPECIALTIES).sort()).toEqual(['cardiologist', 'pathologist', 'radiologist']);
+    it('lists exactly the shipped specialties, keyed by agent_type', () => {
+        expect(Object.keys(SPECIALTIES).sort())
+            .toEqual(['cardiologist', 'laboratorian', 'pathologist', 'radiologist']);
         expect([...SPECIALIST_TYPES].sort()).toEqual(Object.keys(SPECIALTIES).sort());
     });
 
@@ -26,18 +29,48 @@ describe('SPECIALTIES registry', () => {
             expect(entry.agentType, key).toBe(key);
             expect(DOMAINS, key).toContain(entry.domain);
             expect(Array.isArray(entry.pluginIds), key).toBe(true);
-            expect(entry.pluginIds.length, key).toBeGreaterThan(0);
-            expect(typeof entry.legacyRadiology, key).toBe('boolean');
+            expect(Array.isArray(entry.rooms), key).toBe(true);
             expect(normalizeDisclosure(entry.defaultDisclosure).errors, key).toEqual([]);
         }
     });
 
-    it('maps each specialty to the plugins whose case material it may read', () => {
-        expect(SPECIALTIES.pathologist.pluginIds).toEqual(['pathology']);
-        expect(SPECIALTIES.cardiologist.pluginIds).toEqual(['ecg']);
-        expect(SPECIALTIES.radiologist.pluginIds).toEqual(['pacs']);
-        expect(SPECIALTIES.radiologist.legacyRadiology).toBe(true);
-        expect(SPECIALTIES.pathologist.legacyRadiology).toBe(false);
+    // Every specialty must own at least one room: `requireRoomActivity` asks
+    // "was the learner in this specialist's room", and a specialty with no
+    // room could never answer yes, so the gate would be permanently shut.
+    it('gives every specialty at least one room to own', () => {
+        for (const key of SPECIALIST_TYPES) {
+            expect(roomKeysOf(key).length, key).toBeGreaterThan(0);
+        }
+    });
+
+    it('maps each specialty to the rooms whose case material it may read', () => {
+        expect(roomKeysOf('pathologist')).toEqual(['pathology']);
+        expect(roomKeysOf('cardiologist')).toEqual(['ecg']);
+        // The PACS plugin room and the pre-plugin core radiology room.
+        expect(roomKeysOf('radiologist')).toEqual(['pacs', 'radiology']);
+        // The lab is a core room with no plugin behind it.
+        expect(SPECIALTIES.laboratorian.pluginIds).toEqual([]);
+        expect(roomKeysOf('laboratorian')).toEqual(['lab']);
+    });
+
+    it('never lets two specialties claim the same room', () => {
+        const all = SPECIALIST_TYPES.flatMap((t) => roomKeysOf(t));
+        expect(all.length).toBe(new Set(all).size);
+    });
+
+    it('answers which specialty owns a room, and null for one nobody owns', () => {
+        expect(specialtyTypeForRoom('pathology')).toBe('pathologist');
+        expect(specialtyTypeForRoom('ecg')).toBe('cardiologist');
+        expect(specialtyTypeForRoom('pacs')).toBe('radiologist');
+        expect(specialtyTypeForRoom('radiology')).toBe('radiologist');
+        expect(specialtyTypeForRoom('lab')).toBe('laboratorian');
+        ['chat', 'examination', 'consultant', '', null, undefined]
+            .forEach((room) => expect(specialtyTypeForRoom(room), String(room)).toBeNull());
+    });
+
+    it('returns no rooms for anything that is not a specialty', () => {
+        expect(roomKeysOf('nurse')).toEqual([]);
+        expect(roomKeysOf(null)).toEqual([]);
     });
 
     it('ships the after-effort default disclosure', () => {
@@ -45,7 +78,11 @@ describe('SPECIALTIES registry', () => {
             findings: 'after_effort',
             minStudentTurns: 3,
             requireRoomActivity: true,
-            requireInterpretation: true,
+        });
+        // Every specialty shares one frozen default object, so a change to the
+        // registry default cannot reach three of four specialties.
+        SPECIALIST_TYPES.forEach((t) => {
+            expect(SPECIALTIES[t].defaultDisclosure, t).toBe(SPECIALTIES.pathologist.defaultDisclosure);
         });
     });
 

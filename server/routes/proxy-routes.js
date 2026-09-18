@@ -48,15 +48,15 @@ import {
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionCaseAgent } from '../services/agentPersona.js';
-import { isSpecialistType, normalizeDisclosure, specialtyFor } from '../shared/specialties.js';
+import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
 import {
     buildSpecialistBrief,
-    caseSummary,
     countStudentTurns,
     disclosureState,
     extractAnswerTerms,
     extractFindings,
     guardSpecialistReply,
+    hasRoomActivity,
     loadSpecialistCaseData,
 } from '../services/specialistBrief.js';
 
@@ -601,11 +601,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // leads, and precedes the client text so a situation cannot displace it.
         let specialistAnswerTerms = null;
         let personaAgent = caseAgent;
-        // The client situation for a specialist is DROPPED, not appended. The
-        // browser builds it from the whole case (buildDiscussionCaseContext,
-        // 'full'), which carries the diagnosis and every report's
-        // interpretation — appending it handed the specialist the answer the
-        // brief exists to withhold. The brief's summary is the case frame.
+        // The client situation for a specialist is DROPPED, not appended. Two
+        // reasons, either of which alone is enough. The browser builds it from
+        // the whole case (buildDiscussionCaseContext, 'full'), which carries
+        // the diagnosis and every report's interpretation — appending it
+        // handed the specialist the answer the brief exists to withhold. And
+        // it carries the patient: demographics, history, vitals. A specialist
+        // read one room's material and never met the patient, so there is no
+        // case frame to replace it with; the brief is findings alone.
         let situation = system_prompt;
         if (caseAgent && isSpecialistType(caseAgent.agentType)) {
             if (typeof system_prompt === 'string' && system_prompt.trim()) {
@@ -623,19 +626,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                     case_agent_id: caseAgent.caseAgentId, errors: disclosure.errors
                 });
             }
-            const [caseData, studentTurns] = await Promise.all([
+            // `requireRoomActivity` is only read by the after_effort gate, so
+            // the learning_events probe is skipped unless the config asks for
+            // it — one query saved on every on_request/never turn.
+            const needsRoomProbe = disclosure.value.findings === 'after_effort'
+                && disclosure.value.requireRoomActivity === true;
+            const [caseData, studentTurns, roomActive] = await Promise.all([
                 loadSpecialistCaseData({ sessionId: session_id, tenant: tenantId(req) }),
                 countStudentTurns({ sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType }),
+                needsRoomProbe
+                    ? hasRoomActivity({ sessionId: session_id, tenant: tenantId(req), roomKeys: roomKeysOf(specialty) })
+                    : Promise.resolve(false),
             ]);
             const config = caseData?.config || {};
             const findings = extractFindings(specialty.domain, config);
-            const state = disclosureState({ disclosure: disclosure.value, studentTurns });
-            const brief = buildSpecialistBrief({
-                specialty,
-                summary: caseSummary(config, caseData?.caseRow),
-                findings,
-                disclosureState: state,
-            });
+            const state = disclosureState({ disclosure: disclosure.value, studentTurns, roomActive });
+            const brief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
             specialistAnswerTerms = extractAnswerTerms(specialty.domain, config);
             personaAgent = { ...caseAgent, prompt: [caseAgent.prompt, brief].filter(Boolean).join('\n\n') };
             (req.log || routesLlmLog).info('specialist brief routed', {
@@ -645,7 +651,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 findings_allowed: state.findingsAllowed,
                 disclosure_reason: state.reason,
                 student_turns: studentTurns,
-                not_enforced: state.notEnforced,
+                room_active: needsRoomProbe ? roomActive : null,
                 answer_terms: specialistAnswerTerms.length,
             });
         }
