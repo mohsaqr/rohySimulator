@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.101] — 2026-09-19
+
+### Fixed
+
+- **Seven cases were being cleared from the release gate by automation that does not cover them.**
+  `kind: manual` plus a `covers:` line does NOT keep the human requirement — Prova accepts the
+  linked automated pass and the case leaves the missing list. `kind: both` is the kind that needs a
+  counting manual pass *and* a counting automated one, and it is the correct encoding for "a machine
+  covers part of this, a person still judges the rest".
+
+  `NAV.ROOMS.01`, `CASE.IMAGING.02`, `DEBRIEF.DISCUSS.04`, `I18N.CASE.01`, `CASE.EXAM.03`,
+  `SESSION.START.02` and `AUTH.PASSWORD.01` move to `kind: both`. Each has a clause nothing asserts:
+  the examination log does not survive a reload (PRV-8), the admin form states no password rule
+  (PRV-9), there is no figure toggle inside a case, and whether room labels stay English or anything
+  hides behind the room bar is not judged by a machine.
+
+  The gate's core-case shortfall goes 25 → 32 as a result. That is the honest number: those seven
+  were never really covered.
+
 ## [3.0.0-beta.100] — 2026-09-19
 
 ### Added
