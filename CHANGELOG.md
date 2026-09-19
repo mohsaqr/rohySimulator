@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.93] — 2026-09-19
+
+### Added
+
+- **`tests/e2e/agent-knowledge.spec.js`** — 17 Playwright tests covering the knowledge axis from the browser to the prompt. The assertions read **the literal system prompt the server sent upstream**: the spec starts its own recording HTTP server and points the platform at it, so what is checked is the real wire payload rather than an intermediate the test built. For `none` it posts a situation carrying the diagnosis, the history and the vitals and asserts that not one string of it reaches the model; for `handover` it asserts the prompt carries the vitals the SERVER read from `session_vitals` and NOT the ones the browser sent.
+
 ## [3.0.0-beta.92] — 2026-09-19
 
 ### Added
