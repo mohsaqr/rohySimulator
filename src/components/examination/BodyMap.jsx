@@ -167,6 +167,7 @@ export default function BodyMap({
                                 <g key={region.id}>
                                     {/* Clickable polygon region */}
                                     <polygon
+                                        data-testid={`bodymap-region-${region.id}`}
                                         points={pointsToString(region.points)}
                                         fill={getFillColor(region.id)}
                                         stroke={getStrokeColor(region.id)}

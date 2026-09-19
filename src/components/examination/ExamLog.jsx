@@ -17,7 +17,7 @@ export default function ExamLog({
     const { t } = useTranslation('examination');
     if (examLog.length === 0) {
         return (
-            <div className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-4">
+            <div data-testid="exam-log" data-entry-count="0" className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-4">
                 <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-medium text-slate-400">{t('exam_log')}</h4>
                 </div>
@@ -34,7 +34,7 @@ export default function ExamLog({
     const abnormalCount = examLog.filter(e => e.abnormal).length;
 
     return (
-        <div className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-4">
+        <div data-testid="exam-log" data-entry-count={examLog.length} className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-medium text-slate-400">{t('exam_log')}</h4>
@@ -64,6 +64,7 @@ export default function ExamLog({
                     return (
                         <div
                             key={`${entry.regionId}-${entry.examType}-${index}`}
+                            data-testid="exam-log-row"
                             onClick={() => onSelectExam && onSelectExam(entry)}
                             className={`
                                 flex items-center gap-2 p-2 rounded text-sm cursor-pointer

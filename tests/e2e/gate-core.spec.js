@@ -2,10 +2,10 @@
 //
 // Prova's release gate lists 40 core cases with no counting pass. Eleven are
 // `kind: both` — already automated, waiting on their HUMAN half — so no test
-// can help them. Of the 29 that are `manual` with no automation at all, these
-// six are decidable by a machine WITHOUT judgement: each one's whole expected
-// outcome is a server contract, not something a person has to look at and form
-// an opinion about.
+// can help them. Of the 29 that are `manual` with no automation at all, the
+// ones here are decidable by a machine WITHOUT judgement: each one's whole
+// expected outcome is a server contract, not something a person has to look at
+// and form an opinion about.
 //
 // They are driven through the API rather than the UI, following the convention
 // `case-lifecycle.spec.js` states outright — "the Start affordance varies by
@@ -23,6 +23,10 @@
 import { test, expect, findCase, waitForSeed } from './fixtures/index.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
+// The client's copy of the password policy, imported as the form imports it.
+// Asserting against a re-implementation here would test this file against
+// itself; the point is to test the file the register form actually uses.
+import { passwordMeetsRules } from '../../src/utils/passwordRules.js';
 
 const RUN_TAG = `e2e-gate-${Date.now()}`;
 
@@ -206,5 +210,182 @@ test.describe('a case carries its own language', () => {
         // this request is English throughout; the codes are unaffected by it.
         const languages = new Set(coded.map((c) => c.case_code.slice(0, 2)));
         expect(languages.size, `more than one case language is seeded (saw ${[...languages].join(', ')})`).toBeGreaterThan(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Second tranche. Same rule as above: only what a machine can decide without
+// judgement. Both of these are cases whose `expected` is a server contract
+// wearing a UI description — "the log still holds one row" and "the form never
+// accepts something the save then rejects" are both statements about data.
+
+test.describe('an examination recorded twice is one examination', () => {
+    // CASE.EXAM.02 — "Repeating the same examination does not duplicate the log"
+    //
+    // The natural key is (session, body_region, exam_type): re-running an exam
+    // is the SAME observation, not a second one. Before this was keyed, a retry
+    // — a flaky network, a double click, a remount — inserted a fresh row and
+    // bumped `exam_findings_count`, so one examination was recorded as two —
+    // in the findings the debrief reads back, and in the stored counter.
+    test('a repeated region-and-technique yields one row and one increment', async ({ baseURL }) => {
+        const ctx = await api(baseURL);
+        // Its own session: the counter assertion is exact, so nothing else may
+        // be writing findings to it.
+        const s = await ctx.post('/api/sessions', { data: { case_id: caseId, student_name: `${RUN_TAG}-exam` } });
+        const sid = (await s.json()).id;
+
+        const exam = { body_region: 'chest', exam_type: 'auscultation', finding: 'Crackles at both bases', is_abnormal: true };
+        const first = await ctx.post(`/api/sessions/${sid}/exam-findings`, { data: exam });
+        expect(first.ok(), await first.text()).toBeTruthy();
+        const one = await first.json();
+        expect(one.already_recorded, 'the first time is a real record').toBe(false);
+
+        const second = await ctx.post(`/api/sessions/${sid}/exam-findings`, { data: exam });
+        expect(second.ok(), await second.text()).toBeTruthy();
+        const two = await second.json();
+        // Reported honestly rather than silently swallowed, and pointing at
+        // the row that already exists — this is what lets the room show the
+        // same finding again instead of a second entry.
+        expect(two.already_recorded, 'the second time is recognised as the same observation').toBe(true);
+        expect(String(two.id), 'it points at the row already there').toBe(String(one.id));
+
+        // A DIFFERENT technique on the same region is a different observation
+        // and must still be recorded — otherwise "no duplicates" would be
+        // indistinguishable from "only the first exam counts".
+        const other = await ctx.post(`/api/sessions/${sid}/exam-findings`, {
+            data: { body_region: 'chest', exam_type: 'palpation', finding: 'No tenderness', is_abnormal: false },
+        });
+        expect(other.ok(), await other.text()).toBeTruthy();
+        expect((await other.json()).already_recorded, 'a different technique is a new observation').toBe(false);
+
+        const rows = (await (await ctx.get(`/api/sessions/${sid}/exam-findings`)).json()).findings || [];
+        const auscultations = rows.filter((r) => r.body_region === 'chest' && r.exam_type === 'auscultation');
+        expect(auscultations.length, 'one row for the repeated pair, not two').toBe(1);
+        expect(rows.length, 'two observations in total').toBe(2);
+
+        // `sessions.exam_findings_count` is a stored counter rather than a
+        // COUNT(*), which is exactly why it can drift from the rows. Nothing
+        // renders it today — the case summary reads `/exam-findings` directly
+        // — so this is not a claim about what the debrief shows; it is a lock
+        // on the counter staying true to the table while it exists, because a
+        // silently wrong number is worse than an absent one.
+        const session = (await (await ctx.get(`/api/sessions/${sid}`)).json()).session;
+        expect(Number(session.exam_findings_count), 'the counter matches the rows it counts').toBe(2);
+    });
+});
+
+test.describe('the password the form accepts is the password the server accepts', () => {
+    // AUTH.PASSWORD.01 — "A password the form accepts is a password the server accepts"
+    //
+    // src/utils/passwordRules.js is a DUPLICATE of the server's
+    // validatePassword(), kept by hand because the client cannot import
+    // server/routes/_helpers.js. A duplicate rule is only a mirror while
+    // someone checks that it still reflects. This is that check: the mirror's
+    // verdict is compared against the real endpoint's, password by password,
+    // so an edit to one copy and not the other fails here rather than in front
+    // of a user who typed something the form blessed and the save refused.
+    //
+    // The corpus carries the case's own three examples plus every boundary the
+    // rules name — a rule that is only tested in the middle of its range is
+    // not tested at its edges, and the edges are where the two copies drifted
+    // last time (the 128-character cap existed on the server and nowhere else).
+    const CORPUS = [
+        ['short1A', 'seven characters — the case\'s first example'],
+        ['alllowercase1', 'no upper case — the case\'s second example'],
+        ['Passw0rd', 'exactly eight, all three classes — the case\'s third'],
+        ['Passwor1', 'the shortest acceptable password'],
+        ['NoDigitsHere', 'no digit'],
+        ['ALLUPPERCASE1', 'no lower case'],
+        [`Aa1${'x'.repeat(125)}`, 'exactly 128 — the cap itself'],
+        [`Aa1${'x'.repeat(126)}`, 'one past the cap'],
+        ['', 'empty'],
+    ];
+
+    // Users this spec creates, torn down in afterAll whatever the test did.
+    const CREATED_USERS = [];
+
+    test.afterAll(async () => {
+        if (!_ctx || CREATED_USERS.length === 0) return;
+        const stranded = [];
+        for (const user of CREATED_USERS) {
+            if (!user.id) { stranded.push(user.username); continue; }
+            const gone = await _ctx.delete(`/api/users/${user.id}`);
+            if (!gone.ok()) stranded.push(`${user.username} (HTTP ${gone.status()})`);
+        }
+        CREATED_USERS.length = 0;
+        // Reported rather than swallowed — a user left behind collides with
+        // the next run — but only as a failure of its own, never in place of
+        // whatever the test itself found.
+        expect(stranded, `cleanup left users behind: ${stranded.join(', ')}`).toEqual([]);
+    });
+
+    test('the client mirror predicts the server, password by password', async ({ baseURL }) => {
+        const ctx = await api(baseURL);
+        const stamp = Date.now();
+        const created = [];
+
+        // Every user created here is registered with the spec-level cleanup
+        // (afterAll) rather than deleted at the end of this block. The corpus
+        // deliberately contains passwords the server is expected to refuse; if
+        // it accepts one, the mismatch assertion below throws, and a cleanup
+        // that lived at the end of the test would never run — leaving the
+        // account behind in a database the whole suite shares, precisely on
+        // the run where something is already wrong.
+        //
+        // The cleanup is NOT a `finally` here for a related reason: a throwing
+        // `finally` replaces the error that got you there, so a cleanup
+        // hiccup would hide the verdict mismatch this test exists to report.
+        {
+            for (const [i, [password, why]] of CORPUS.entries()) {
+                const username = `pw${stamp}x${i}`;
+                const res = await ctx.post('/api/users/create', {
+                    data: { username, email: `${username}@example.test`, password, role: 'student' },
+                });
+                const body = await res.text();
+                const serverAccepted = res.status() === 200 || res.status() === 201;
+
+                // Registered for cleanup BEFORE the verdict is judged: if the
+                // server accepted something the mirror refuses, that user
+                // exists and the next line is what stops the test.
+                if (serverAccepted) {
+                    const user = { id: JSON.parse(body).id ?? JSON.parse(body).user?.id, username, password };
+                    created.push(user);
+                    CREATED_USERS.push(user);
+                }
+
+                // Neither copy is the authority over the other — they must
+                // simply agree. A mismatch names the password and which side
+                // said what.
+                expect(
+                    serverAccepted,
+                    `${why}: the form's mirror says ${passwordMeetsRules(password) ? 'accept' : 'refuse'}, `
+                    + `the server answered ${res.status()} ${body.slice(0, 160)}`,
+                ).toBe(passwordMeetsRules(password));
+
+                if (!serverAccepted) {
+                    // Refused for the PASSWORD, not for a duplicate username or
+                    // a bad role — otherwise a 400 for any other reason would
+                    // make this test agree with the mirror by accident.
+                    expect(res.status(), `${why}: refused with a client error`).toBe(400);
+                    expect(body.toLowerCase(), `${why}: refused for the password`).toContain('password');
+                }
+            }
+
+            expect(created.length, 'some of the corpus is meant to be accepted').toBeGreaterThan(0);
+
+            // And an accepted password is a WORKING password: the case's third
+            // step is "the new user can log in with it". A create that stores
+            // an unusable credential would satisfy every assertion above.
+            const anon = await pwRequest.newContext({ baseURL });
+            try {
+                for (const user of created) {
+                    const login = await anon.post('/api/auth/login', { data: { username: user.username, password: user.password } });
+                    expect(login.ok(), `${user.username} can log in with the password that was accepted`).toBeTruthy();
+                    expect((await login.json()).token, 'the login returns a usable token').toBeTruthy();
+                }
+            } finally {
+                await anon.dispose();
+            }
+        }
     });
 });

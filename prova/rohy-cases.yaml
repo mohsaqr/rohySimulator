@@ -114,6 +114,8 @@
         The learner lands back in the Examination room (not the patient room), the session clock
         continues from where it was rather than restarting at 0:00, and the earlier conversation and
         the examination log are still there.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › coming back to a case › a reload comes back to the same room, with the clock carrying on"
 
 - feature: NAV.ROOMS
   title: The room navigator
@@ -247,7 +249,7 @@
       covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 5. exam findings*"]
     - id: CASE.EXAM.02
       title: Repeating the same examination does not duplicate the log
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -256,6 +258,10 @@
       expected: |-
         The technique is marked as already done, the same finding is shown again, and the log still
         holds one row for that region-and-technique pair rather than two.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › an examination recorded twice is one examination › a repeated region-and-technique yields one row and one increment"
+        - "rohy:chromium::gate-exam.spec.js › repeating an examination › the same technique twice is marked done, shown again, and logged once"
+
     - id: CASE.EXAM.03
       title: The body map offers both aspects and both figures
       kind: manual
@@ -268,6 +274,8 @@
       expected: |-
         Each toggle redraws the body map with regions that are clickable in the new view, and the
         shortcuts open their grouped examinations. No control leaves the pane blank.
+      covers:
+        - "rohy:chromium::gate-exam.spec.js › the body map › each aspect and each shortcut redraws a map that can still be worked"
 
 - feature: CASE.LABS
   title: Ordering laboratory tests
@@ -887,7 +895,7 @@
       covers: ["rohy:chromium::multi-tab.spec.js › multi-tab session handling › *"]
     - id: AUTH.SESSION.03
       title: Closing the browser does not lose the case
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -896,6 +904,8 @@
       expected: |-
         The user is still logged in and the case is still running, with the conversation and the
         elapsed session time intact.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › coming back to a case › closing the browser and coming back keeps the learner in their case"
 
 - feature: AUTH.PASSWORD
   title: Password rules
@@ -915,6 +925,8 @@
       expected: |-
         The form states the rule and refuses the first two before submitting; the third is accepted
         and the new user can log in with it. The form never accepts something the save then rejects.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › the password the form accepts is the password the server accepts › the client mirror predicts the server, password by password"
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Language

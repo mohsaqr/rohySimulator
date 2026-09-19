@@ -131,10 +131,13 @@ export default function FindingDisplay({
             </div>
 
             {/* Finding text */}
-            <div className={`
-                text-sm leading-relaxed p-3 rounded bg-slate-900/50
-                ${isAbnormal ? 'text-red-200' : 'text-slate-200'}
-            `}>
+            <div
+                data-testid="exam-finding"
+                className={`
+                    text-sm leading-relaxed p-3 rounded bg-slate-900/50
+                    ${isAbnormal ? 'text-red-200' : 'text-slate-200'}
+                `}
+            >
                 {finding || t('no_finding')}
             </div>
         </div>
