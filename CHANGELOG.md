@@ -9,6 +9,34 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.91] — 2026-09-19
+
+### Added
+
+- **One knowledge axis for every persona.** `config.knowledge` — `{ scope, answerKey, record }` — decides what the server puts in an agent's prompt before the conversation starts, per agent per case. `scope` runs `none` → `handover` → `summary` → `history` → `chart`. This builds `docs/design/agent-behaviour-model.md` §4, specified 2026-08-07 and unbuilt since: an agent set to `none` knows only what the learner tells it, so the handoff a learner performs is no longer theatre.
+- **A consultant you have to brief.** Setting a consultant to `none` gives it a server-built block that denies every category of knowledge by name and forbids back-filling "what a case like this usually looks like". The learner must present the case.
+- **A nurse who has just taken over.** `handover` builds a shift handover server-side: who the patient is, why they presented, and the LAST RECORDED OBSERVATIONS read from `session_vitals` — live values the server read itself, not the browser's.
+- For `none` and `handover` the route **drops the client situation** and assembles the block itself, reusing the specialist pattern. An agent that is supposed to know nothing cannot have that enforced by the learner's own browser.
+
+### Fixed
+
+- **The top rung of `context_filter` bundled the answer key.** `full` was the only value that carried the configured results, and it also emitted `### Authoring Expectations` — the expected diagnosis, treatment plan and learning objectives. There was no "knows the chart but not the answer" rung, so the seeded consultant (`context_filter: 'full'`) was handed the diagnosis it was meant to coach the learner towards, and its own prompt said so: *"You have access to the patient's full record."* The answer key is now an explicit `answerKey` flag, off for every shipped persona.
+- **A stored differential reached the family member.** `formatLegacyClinicalRecords` emitted `### Differential Diagnosis` and `### Management Plan` unconditionally on the discussion path while the patient path filtered them out by a regex on section titles. The seeded relative sits at the history scope, so any case authored with a stored differential handed it to a relative. Both are now answer-key material, gated in one place for both callers.
+- **The discussant shipped a database column name to the model.** Its seeded prompt contained the literal string `when context_filter='full'`. Migration 0063 corrects it and the consultant's full-record claim, matching the whole old prompt so an educator's edits survive.
+- **The prompt argued with itself.** The case-context block ended "ask the learner about what they did rather than assuming" while the encounter record appended a few lines later said "Rely on it instead of asking the learner to recall what they did". Both shipped in the same prompt; the contradicting half is gone.
+- An agent told to know nothing could still be handed the learner's full action log: the `RECORD_AGENT_TYPES` allowlist says who MAY see the encounter record, and nothing said who DOES. `knowledge.record` now narrows it per agent per case, and the editor turns it off when the scope is set to `none`.
+- **The family member read the monitor.** `=== CURRENT VITALS ===` in `buildDebriefingContext` had no agent-type gate of any kind, so the learner's live haemodynamics went to whoever was talking — including the relative, whose scope withholds even the configured vitals. Now gated on the chart scope, like everything else.
+- An unrecorded vital sign was rendered into a handover as `EtCO2 0 mmHg` — `Number(null)` is 0, and 0 is finite. A genuine recorded zero still reports; a NULL column no longer invents a value incompatible with life.
+
+### Removed
+
+- `context_filter_override`, read in `discussionService` and `patientTemplate` for a column that exists in no migration. Its unit test passed by hand-feeding a fake row, so it proved the mapping and never the plumbing.
+- The `memory_access` verb filter in `AgentService`, whose only branch called `getFilteredNarrative` — a method defined nowhere in the repo. The column reached no runtime object either.
+
+### Note
+
+`config.knowledge` is backfilled onto seeded personas by a key-absent `json_patch` loop in `seedDefaultAgents`, which runs on every boot and never clobbers a stored value — so an upgraded install picks up the shipped defaults without a migration. An agent carrying neither `config.knowledge` nor a backfill keeps its exact previous behaviour: `normalizeKnowledge` maps the legacy `context_filter` column, and `full` still implies the answer key.
+
 ## [3.0.0-beta.90] — 2026-09-18
 
 ### Fixed

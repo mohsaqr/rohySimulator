@@ -84,10 +84,10 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:470` |
+| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:478` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:138` |
 | `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1719`<br>`server/routes/admin-routes.js:1744`<br>`server/routes/admin-routes.js:1745`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1746`<br>`server/routes/admin-routes.js:1747`<br>`server/routes/proxy-routes.js:476`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1746`<br>`server/routes/admin-routes.js:1747`<br>`server/routes/proxy-routes.js:484`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |
@@ -113,8 +113,8 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:659` |
-| `ROHY_NO_AUTO_SEED` | No | — | Skips automatic seeders on boot. | `server/db.js:45` |
+| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:700` |
+| `ROHY_NO_AUTO_SEED` | No | — | Skips automatic seeders on boot. | `server/db.js:46` |
 
 ## Uncategorized
 

@@ -680,6 +680,68 @@ describe('AgentService.buildDebriefingContext', () => {
         expect(out).toContain('Expected diagnosis: Pulmonary edema');
     });
 
+    // Regression lock: a SEEDED nurse does not get the answer key.
+    //
+    // The test above is the legacy path — an agent carrying no
+    // `config.knowledge`, which still maps `context_filter: 'full'` to the
+    // chart WITH the key so nothing silently narrows on upgrade. Once the
+    // seeder has written `config.knowledge`, the same nurse gets the chart and
+    // NOT the expected diagnosis. That split is the whole point of the change,
+    // and it is decided on the client for every scope the browser still
+    // assembles, so it needs locking here and not only in the proxy tests.
+    it('withholds the answer key once config.knowledge is stored', () => {
+        const activeCase = {
+            name: 'Configured Case',
+            config: {
+                patient_name: 'Alex Patient',
+                structuredHistory: { chiefComplaint: 'Shortness of breath', hpi: 'Worse when lying flat' },
+                initialVitals: { hr: 118, bpSys: 100, bpDia: 64, spo2: 90 },
+                diagnosis: 'Pulmonary edema',
+                treatment_plan: 'Diuresis',
+            },
+        };
+        const seeded = {
+            agent_type: 'nurse',
+            context_filter: 'full',
+            config: { knowledge: { scope: 'chart', answerKey: false, record: true } },
+        };
+        const out = AgentService.buildDebriefingContext(seeded, null, [], null, activeCase);
+        expect(out).toContain('History of Present Illness: Worse when lying flat');
+        expect(out).toContain('HR: 118 bpm');
+        expect(out).not.toContain('Expected diagnosis');
+        expect(out).not.toContain('Expected treatment plan');
+    });
+
+    // Regression lock: the family member does not read the monitor.
+    //
+    // `=== CURRENT VITALS ===` had no agent-type gate of any kind, so the live
+    // haemodynamics went to whoever was talking — including the relative,
+    // whose scope withholds even the CONFIGURED vitals. Scoping the case
+    // context alone did not close this; it is a separate block.
+    it('gives the live monitor only to an agent that has the chart', () => {
+        const vitals = { hr: 118, spo2: 91, bpSys: 90, bpDia: 60 };
+        const withScope = (agent_type, scope) => AgentService.buildDebriefingContext(
+            { agent_type, config: { knowledge: { scope } } }, null, [], vitals,
+        );
+        expect(withScope('nurse', 'chart')).toContain('HR: 118bpm');
+        expect(withScope('relative', 'history')).not.toContain('CURRENT VITALS');
+        expect(withScope('discussant', 'summary')).not.toContain('CURRENT VITALS');
+        expect(withScope('consultant', 'none')).not.toContain('CURRENT VITALS');
+    });
+
+    it('sends nothing at all for a scope the server assembles itself', () => {
+        // `none` and `handover` are built server-side from rows the server
+        // read; the route drops whatever this returns. Narrowing here saves a
+        // payload — it is not the security boundary.
+        const activeCase = { name: 'C', config: { diagnosis: 'Pulmonary edema', structuredHistory: { hpi: 'x' } } };
+        for (const scope of ['none', 'handover']) {
+            const agent = { agent_type: 'consultant', context_filter: 'full', config: { knowledge: { scope } } };
+            const out = AgentService.buildDebriefingContext(agent, null, [], null, activeCase);
+            expect(out, scope).not.toContain('CASE CONTEXT');
+            expect(out, scope).not.toContain('Pulmonary edema');
+        }
+    });
+
     it('honours context_filter="history" by dropping non-matching agent_type entries', () => {
         const agent = { agent_type: 'nurse', context_filter: 'history' };
         const teamLog = [

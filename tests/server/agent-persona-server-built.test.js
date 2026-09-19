@@ -203,6 +203,15 @@ let disabledAgentId;
 let otherCaseAgentId;
 let otherStudentToken;
 let deletedTemplateAgentId;
+let scopedCaseId;
+let scopedSessionId;
+let unbriefedConsultantId;
+let handoverNurseId;
+let chartNurseId;
+let leakyConsultantId;
+const SCOPED_DIAGNOSIS = 'Anterior STEMI';
+const SCOPED_HPI = 'two hours of crushing retrosternal pain';
+const RECORD_ITEM = 'Troponin I';
 const DELETED_TEMPLATE_PROMPT = 'DELETED-RELATIVE: this template was soft-deleted.';
 
 async function login(username) {
@@ -274,6 +283,47 @@ beforeAll(async () => {
         sessionId = (await pRun(db,
             `INSERT INTO sessions (case_id, user_id, student_name, status, tenant_id)
              VALUES (?, ?, 'Persona Student', 'active', 1)`, [caseId, student.lastID])).lastID;
+
+        // --- knowledge-scope fixtures -------------------------------------
+        // A case with a real patient and a real chief complaint, so the
+        // handover brief has something to hand over and the `none` brief has
+        // something it must NOT leak.
+        scopedCaseId = (await pRun(db,
+            `INSERT INTO cases (name, description, system_prompt, config, patient_name, patient_age,
+                                patient_gender, chief_complaint, tenant_id)
+             VALUES ('Scoped Case', 'desc', 'case-prompt', ?, 'Ada Example', 54, 'Female',
+                     'central chest pain', 1)`,
+            [JSON.stringify({ diagnosis: SCOPED_DIAGNOSIS, structuredHistory: { chiefComplaint: 'central chest pain', hpi: SCOPED_HPI } })])).lastID;
+
+        const addScoped = async (type, name, knowledge) => {
+            const tpl = (await pRun(db,
+                `INSERT INTO agent_templates (agent_type, name, role_title, system_prompt, context_filter, config, tenant_id)
+                 VALUES (?, ?, ?, ?, 'full', ?, 1)`,
+                [type, name, name, `${name.toUpperCase()}-PROMPT`, JSON.stringify({ knowledge })])).lastID;
+            return (await pRun(db,
+                `INSERT INTO case_agents (case_id, agent_template_id, enabled, availability_type, tenant_id)
+                 VALUES (?, ?, 1, 'on-call', 1)`, [scopedCaseId, tpl])).lastID;
+        };
+        unbriefedConsultantId = await addScoped('consultant', 'Unbriefed', { scope: 'none', record: false });
+        handoverNurseId = await addScoped('nurse', 'Handover', { scope: 'handover', record: true });
+        chartNurseId = await addScoped('nurse', 'Chart', { scope: 'chart', record: true });
+        // A consultant told to know nothing but left holding the record: the
+        // combination an educator can create by changing only the scope.
+        leakyConsultantId = await addScoped('consultant', 'Leaky', { scope: 'none', record: true });
+
+        scopedSessionId = (await pRun(db,
+            `INSERT INTO sessions (case_id, user_id, student_name, status, tenant_id)
+             VALUES (?, ?, 'Persona Student', 'active', 1)`, [scopedCaseId, student.lastID])).lastID;
+        // Live observations, as the monitor persists them.
+        await pRun(db,
+            `INSERT INTO session_vitals (session_id, elapsed_ms, hr, spo2, bp_sys, bp_dia, etco2, source, tenant_id)
+             VALUES (?, 60000, 118, 91, 90, 60, NULL, 'monitor', 1)`, [scopedSessionId]);
+        // Something the learner did, for the encounter-record gate.
+        await pRun(db,
+            `INSERT INTO patient_record_events
+                (session_id, record_id, event_id, verb, time_elapsed, category, item, content, tenant_id)
+             VALUES (?, 'rec-scoped', 'evt-scoped-1', 'ORDERED', 4, 'lab', ?, ?, 1)`,
+            [scopedSessionId, RECORD_ITEM, RECORD_ITEM]);
     } finally {
         await closeDb(db);
     }
@@ -472,5 +522,126 @@ describe('POST /proxy/llm with case_agent_id', () => {
         const system = systemTextOf(llm.bodies.at(-1));
         expect(system).toContain('CLIENT-BUILT PATIENT PERSONA');
         expect(system).not.toContain('## ROLE');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The knowledge axis, end to end through the real proxy.
+//
+// The client situation below carries the WHOLE case — diagnosis, history, the
+// lot — exactly as AgentService assembles it. Whether any of it reaches the
+// model is decided server-side, which is the point: an agent that is supposed
+// to know only what the learner tells it cannot have that enforced by the
+// learner's own browser.
+// ---------------------------------------------------------------------------
+
+describe('POST /proxy/llm — config.knowledge scopes', () => {
+    const systemTextOf = (body) => (body.messages || [])
+        .filter((m) => m.role === 'system')
+        .map((m) => m.content)
+        .join('\n');
+
+    const LEAKY_SITUATION = [
+        '=== CASE CONTEXT ===',
+        '### Summary',
+        'Patient: Ada Example',
+        '### Structured History',
+        `History of Present Illness: ${SCOPED_HPI}`,
+        '### Authoring Expectations',
+        `- Expected diagnosis: ${SCOPED_DIAGNOSIS}`,
+        '=== END CONTEXT ===',
+        '=== CURRENT VITALS ===',
+        'HR: 90bpm',
+    ].join('\n');
+
+    const speakTo = async (caseAgentId) => {
+        const before = llm.bodies.length;
+        const res = await proxyAs(studentToken, {
+            session_id: scopedSessionId,
+            messages: [{ role: 'user', content: 'Can you come and see this patient?' }],
+            system_prompt: LEAKY_SITUATION,
+            agent_llm_config: { case_agent_id: caseAgentId },
+        });
+        expect(res.status).toBe(200);
+        expect(llm.bodies.length).toBe(before + 1);
+        return systemTextOf(llm.bodies.at(-1));
+    };
+
+    it('scope "none": drops the client situation and says the agent knows nothing', async () => {
+        const system = await speakTo(unbriefedConsultantId);
+        // The persona still leads — an educator's prompt is not discarded.
+        expect(system).toContain('## ROLE');
+        expect(system).toContain('UNBRIEFED-PROMPT');
+        // ... and the block that makes the ignorance non-negotiable follows it.
+        expect(system).toContain('## WHAT YOU KNOW (server)');
+        expect(system).toMatch(/nobody has briefed you on them/i);
+        // Not one word of the case the browser sent.
+        expect(system).not.toContain('--- CURRENT SITUATION ---');
+        expect(system).not.toContain('=== CASE CONTEXT ===');
+        expect(system).not.toContain(SCOPED_DIAGNOSIS);
+        expect(system).not.toContain(SCOPED_HPI);
+        expect(system).not.toContain('Ada Example');
+        expect(system).not.toContain('HR: 90bpm');
+    });
+
+    // Regression lock: an agent that knows nothing must not be handed the
+    // learner's action log. The allowlist in encounterRecord.js says a
+    // consultant MAY see the record; knowledge.record says whether it DOES.
+    // Without the second gate, "knows nothing about the patient" arrived with
+    // a complete list of everything ordered and given — a lie the learner has
+    // no way to detect.
+    it('scope "none" with record off: no encounter record either', async () => {
+        const system = await speakTo(unbriefedConsultantId);
+        expect(system).not.toContain('WHAT THE LEARNER ACTUALLY DID');
+        expect(system).not.toContain(RECORD_ITEM);
+    });
+
+    it('record stays independent of scope, so the combination is the educator\'s', async () => {
+        // The same `none` scope with `record: true`. Deliberately allowed —
+        // the two are separate questions — and deliberately tested, because
+        // it is the combination the UI has to steer people away from.
+        const system = await speakTo(leakyConsultantId);
+        expect(system).toContain('## WHAT YOU KNOW (server)');
+        expect(system).toContain(RECORD_ITEM);
+    });
+
+    it('scope "handover": identity, reason and the LIVE vitals the server read', async () => {
+        const system = await speakTo(handoverNurseId);
+        expect(system).toContain('## HANDOVER (server)');
+        expect(system).toContain('Patient: Ada Example, 54 years old, Female.');
+        expect(system).toContain('Reason for admission: central chest pain.');
+        // From session_vitals, not from the client's "HR: 90bpm".
+        expect(system).toContain('HR 118/min');
+        expect(system).toContain('SpO2 91%');
+        expect(system).not.toContain('HR: 90bpm');
+        // An unrecorded EtCO2 is absent, not reported as zero.
+        expect(system).not.toMatch(/EtCO2 0/);
+        // Handed a patient, not a workup.
+        expect(system).not.toContain(SCOPED_HPI);
+        expect(system).not.toContain(SCOPED_DIAGNOSIS);
+        expect(system).not.toContain('--- CURRENT SITUATION ---');
+    });
+
+    it('scope "handover": what was done this session still arrives, as the record', async () => {
+        const system = await speakTo(handoverNurseId);
+        expect(system).toContain(RECORD_ITEM);
+    });
+
+    it('scope "chart": the client situation is used, as it always was', async () => {
+        const system = await speakTo(chartNurseId);
+        expect(system).toContain('--- CURRENT SITUATION ---');
+        expect(system).toContain('=== CASE CONTEXT ===');
+        expect(system).toContain(SCOPED_HPI);
+        expect(system).toContain('HR: 90bpm');
+        // No server-built block: nothing to replace the situation with.
+        expect(system).not.toContain('## HANDOVER (server)');
+        expect(system).not.toContain('## WHAT YOU KNOW (server)');
+    });
+
+    it('keeps the brief in the persona slot, so the five-way order holds', async () => {
+        const system = await speakTo(handoverNurseId);
+        const order = ['## ROLE', 'HANDOVER-PROMPT', '## HANDOVER (server)'].map((n) => system.indexOf(n));
+        expect(order.every((i) => i >= 0)).toBe(true);
+        expect(order).toEqual([...order].sort((a, b) => a - b));
     });
 });

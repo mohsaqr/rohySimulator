@@ -346,6 +346,73 @@ describe('POST /cases/:caseId/agents with a specialist', () => {
         const stored = await withDb((db) => pAll(db, 'SELECT config_override FROM case_agents WHERE id = ?', [id]));
         expect(JSON.parse(stored[0].config_override)).toEqual({ disclosure: { findings: 'on_request' } });
     });
+
+    // --- config_override.knowledge -------------------------------------
+    // The knowledge axis validates on write on the same terms as disclosure:
+    // an invalid block is refused with its own code and NOTHING is stored,
+    // rather than being kept and quietly ignored at read time.
+
+    it('refuses an unknown scope with 400 invalid_knowledge and stores nothing', async () => {
+        const caseId = await newCase('Bad knowledge case');
+        const res = await sendAs(educatorToken, 'POST', `/api/cases/${caseId}/agents`, {
+            agent_template_id: templateIdByType.cardiologist,
+            config_override: { knowledge: { scope: 'everything' } },
+        });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('invalid_knowledge');
+        expect(await caseAgentTypes(caseId)).toEqual([]);
+    });
+
+    it('refuses an unknown knowledge field rather than carrying it', async () => {
+        const caseId = await newCase('Unknown knowledge field case');
+        const res = await sendAs(educatorToken, 'POST', `/api/cases/${caseId}/agents`, {
+            agent_template_id: templateIdByType.cardiologist,
+            config_override: { knowledge: { scope: 'none', revealDiagnosis: true } },
+        });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.code).toBe('invalid_knowledge');
+        expect(body.error).toMatch(/unknown knowledge field: revealDiagnosis/);
+        expect(await caseAgentTypes(caseId)).toEqual([]);
+    });
+
+    it('refuses a non-boolean answerKey', async () => {
+        const caseId = await newCase('Bad answerKey case');
+        const res = await sendAs(educatorToken, 'POST', `/api/cases/${caseId}/agents`, {
+            agent_template_id: templateIdByType.cardiologist,
+            config_override: { knowledge: { answerKey: 'yes' } },
+        });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('invalid_knowledge');
+    });
+
+    it('accepts a valid partial knowledge block and stores it as sent', async () => {
+        const caseId = await newCase('Good knowledge case');
+        const res = await sendAs(educatorToken, 'POST', `/api/cases/${caseId}/agents`, {
+            agent_template_id: templateIdByType.cardiologist,
+            config_override: { knowledge: { scope: 'handover' } },
+        });
+        expect(res.status).toBe(201);
+        const { id } = await res.json();
+        const stored = await withDb((db) => pAll(db, 'SELECT config_override FROM case_agents WHERE id = ?', [id]));
+        // Partial, unmerged — so a later change to the shipped default reaches
+        // a case the educator only half-configured.
+        expect(JSON.parse(stored[0].config_override)).toEqual({ knowledge: { scope: 'handover' } });
+    });
+
+    // Unlike disclosure, a knowledge block is NOT restricted by agent type.
+    // Every persona is given some slice of the case, the specialists included
+    // — theirs is `none`, which is exactly what disclosure then gates findings
+    // on top of. There is no type for which the question is meaningless.
+    it('accepts a knowledge block on a non-specialist', async () => {
+        const caseId = await newCase('Knowledge on a nurse case');
+        const res = await sendAs(educatorToken, 'POST', `/api/cases/${caseId}/agents`, {
+            agent_template_id: templateIdByType.nurse,
+            config_override: { knowledge: { scope: 'handover' } },
+        });
+        expect(res.status).toBe(201);
+        expect(await caseAgentTypes(caseId)).toEqual(['nurse']);
+    });
 });
 
 describe('PUT /cases/:caseId/agents/:agentId disclosure', () => {
