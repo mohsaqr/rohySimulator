@@ -47,8 +47,16 @@ import {
 } from '../usage-budget.js';
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
-import { buildAgentPersonaPrompt, loadSessionCaseAgent } from '../services/agentPersona.js';
+import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
+import { normalizeKnowledge, serverBuildsSituation } from '../shared/agentKnowledge.js';
+import {
+    buildHandoverBrief,
+    buildUnbriefedBlock,
+    formatVitals,
+    latestVitals,
+    loadHandoverCaseData,
+} from '../services/situationBrief.js';
 import {
     buildSpecialistBrief,
     countStudentTurns,
@@ -559,13 +567,57 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 });
             }
         }
+        // WHAT THIS AGENT KNOWS. Resolved once, before anything reads it, from
+        // config.knowledge over the type default over the legacy
+        // context_filter column (shared/agentKnowledge.js). It decides three
+        // things below: whether the encounter record may be compiled in,
+        // whether the client's situation is used or dropped, and which
+        // server-built block replaces it.
+        //
+        // The template-id branch (the discussant) has no caseAgent, so its
+        // config is fetched by type — otherwise an educator's per-case setting
+        // would govern the case context the browser builds and be ignored by
+        // the record gate here, and the tutor's knowledge would depend on
+        // which side of the wire you asked.
+        let agentKnowledge = null;
+        if (agentType) {
+            let knowledgeSource = null;
+            if (caseAgent) {
+                knowledgeSource = { config: caseAgent.config, contextFilter: caseAgent.contextFilter };
+            } else if (session_id && agentMaySeeRecord(agentType)) {
+                knowledgeSource = await loadSessionAgentKnowledge({
+                    sessionId: session_id, agentType, tenant: tenantId(req),
+                });
+            }
+            const resolved = normalizeKnowledge({
+                knowledge: knowledgeSource?.config?.knowledge,
+                agentType,
+                contextFilter: knowledgeSource?.contextFilter,
+            });
+            if (resolved.errors.length > 0) {
+                // Stored overrides are validated on write; a template config is
+                // not. Invalid fields keep the default rather than costing the
+                // learner a reply.
+                (req.log || routesLlmLog).warn('agent knowledge config invalid; defaults applied', {
+                    session_id: session_id ?? null, agent_type: agentType, errors: resolved.errors,
+                });
+            }
+            agentKnowledge = resolved.value;
+        }
+
         // The encounter record — what this learner has actually done. Read
         // from patient_record_events (which the client syncs as it goes) so
         // the debriefing tutor is not relying on the learner's own browser to
         // report their omissions. Allowlisted agent types only: a patient who
         // knows their own troponin is not a patient.
+        //
+        // `knowledge.record` narrows the allowlist further, per agent per
+        // case. It has to: an agent set to know nothing about the patient, and
+        // then handed the full list of everything ordered and given, is not
+        // an agent that knows nothing. The allowlist says who MAY; the setting
+        // says who DOES.
         let encounterRecordNote = '';
-        if (session_id && agentMaySeeRecord(agentType)) {
+        if (session_id && agentMaySeeRecord(agentType) && agentKnowledge?.record === true) {
             const recordRows = await new Promise((resolve) => {
                 dbAdapter.all(
                     `SELECT verb, time_elapsed, category, region, item, content, finding, value, unit, abnormal
@@ -600,7 +652,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // educator's persona leads and the brief is the last word on what may
         // be disclosed.
         let specialistAnswerTerms = null;
-        let specialistBrief = '';
+        // The server-built block that goes in buildAgentPersonaPrompt's `brief`
+        // slot: a specialist's CASE BRIEF, or the unbriefed / handover block
+        // for a scoped team agent. One slot, because they are mutually
+        // exclusive and all three are the last word on what the agent knows.
+        let serverBrief = '';
         // The client situation for a specialist is DROPPED, not appended. Two
         // reasons, either of which alone is enough. The browser builds it from
         // the whole case (buildDiscussionCaseContext, 'full'), which carries
@@ -641,7 +697,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const config = caseData?.config || {};
             const findings = extractFindings(specialty.domain, config);
             const state = disclosureState({ disclosure: disclosure.value, studentTurns, roomActive });
-            specialistBrief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
+            serverBrief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
             specialistAnswerTerms = extractAnswerTerms(specialty.domain, config);
             (req.log || routesLlmLog).info('specialist brief routed', {
                 session_id,
@@ -653,11 +709,47 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 room_active: needsRoomProbe ? roomActive : null,
                 answer_terms: specialistAnswerTerms.length,
             });
+        } else if (caseAgent && serverBuildsSituation(agentKnowledge?.scope)) {
+            // `none` and `handover`: the same move the specialist branch makes
+            // above, for the same reason. The browser assembles its situation
+            // from the whole case, so appending it would hand a colleague who
+            // is supposed to know nothing the entire chart — and a learner who
+            // tampered with their own client could do exactly that on purpose.
+            // Drop it, and build the block here from rows the server read.
+            if (typeof system_prompt === 'string' && system_prompt.trim()) {
+                (req.log || routesLlmLog).info('client situation dropped for scoped agent', {
+                    session_id,
+                    agent_type: caseAgent.agentType,
+                    knowledge_scope: agentKnowledge.scope,
+                    chars: system_prompt.length,
+                });
+            }
+            situation = '';
+            if (agentKnowledge.scope === 'handover') {
+                const [caseData, vitalsRow] = await Promise.all([
+                    loadHandoverCaseData({ sessionId: session_id, tenant: tenantId(req) }),
+                    latestVitals({ sessionId: session_id, tenant: tenantId(req) }),
+                ]);
+                serverBrief = buildHandoverBrief({
+                    patient: caseData?.patient,
+                    reason: caseData?.reason,
+                    vitals: formatVitals(vitalsRow),
+                });
+            } else {
+                serverBrief = buildUnbriefedBlock();
+            }
+            (req.log || routesLlmLog).info('scoped situation brief routed', {
+                session_id,
+                agent_type: caseAgent.agentType,
+                knowledge_scope: agentKnowledge.scope,
+                record_allowed: agentKnowledge.record,
+                brief_chars: serverBrief.length,
+            });
         }
         // A server-resolved case agent speaks from its authored prompt; what
         // the client sent is only the situation it reported (none, for a
         // specialist — see above).
-        const casePrompt = caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, specialistBrief) : system_prompt;
+        const casePrompt = caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt;
         let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type

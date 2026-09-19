@@ -9,6 +9,7 @@ import { importLoincMapping } from '../scripts/import-loinc-mapping.js';
 import { seedPediatricRanges } from '../scripts/seed-pediatric-ranges.js';
 import { pricingSeedRows } from './shared/llmCatalogue.js';
 import { SPECIALTIES } from './shared/specialties.js';
+import { KNOWLEDGE_TYPES, defaultKnowledgeFor } from './shared/agentKnowledge.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -101,6 +102,9 @@ You have access to the patient's current vitals, recent events, and can see what
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
                 voice: { gender: 'female', case_voice: 'af_sky' },
+                // What this persona is given about the case. From the registry,
+                // never a copy — shared/agentKnowledge.js is the source of truth.
+                knowledge: defaultKnowledgeFor('nurse'),
                 dos: [
                     'Be clear and professional with nursing terminology',
                     'Speak up if an order seems unsafe',
@@ -140,7 +144,7 @@ When consulted:
 - Suggest further workup if needed
 - Be willing to discuss your reasoning
 
-You have access to the patient's full record. Base your assessment on the actual clinical data available.`,
+What you know about this patient is whatever appears below and whatever the learner tells you. If you were given no case details, say so and ask them to present the case to you — who the patient is, what brought them in, what they have found. Do not assume a history you were not given.`,
             context_filter: 'full',
             communication_style: 'educational',
             is_default: 1,
@@ -156,6 +160,9 @@ You have access to the patient's full record. Base your assessment on the actual
                 // docs/design/agent-behaviour-model.md, not a default.
                 response_time: { min: 0, max: 0 },
                 voice: { gender: 'male', case_voice: 'am_liam' },
+                // What this persona is given about the case. From the registry,
+                // never a copy — shared/agentKnowledge.js is the source of truth.
+                knowledge: defaultKnowledgeFor('consultant'),
                 dos: [
                     'Ask clarifying questions about the presentation',
                     'Explain reasoning and differential diagnoses',
@@ -205,6 +212,9 @@ Respond based on the patient information available. If specific family relations
                 can_be_paged: false,
                 response_time: { min: 0, max: 0 },
                 voice: { gender: 'female', case_voice: 'af_nicole' },
+                // What this persona is given about the case. From the registry,
+                // never a copy — shared/agentKnowledge.js is the source of truth.
+                knowledge: defaultKnowledgeFor('relative'),
                 dos: [
                     'Use lay terms — you\'re not medically trained',
                     'Express genuine worry and ask for explanation',
@@ -239,7 +249,7 @@ Communication style:
 - Keep responses concise; this is a dialogue, not a lecture
 
 Critical behaviors:
-- You have full access to the case (patient summary, vitals trajectory, orders, results) when context_filter='full'
+- How much of the case you are given is the educator's choice, and it may be only a brief summary. Ask the learner to present what happened rather than assuming you already have it
 - Anchor your questions in what actually happened in this case — reference specific decisions and timestamps when useful
 - If the learner asks you to "just tell me", briefly answer, then redirect to a question that deepens their understanding
 - Wrap up when the learner signals they're done — offer one or two key takeaways, not ten
@@ -254,6 +264,9 @@ You are a tutor, not a judge. The goal is learning, not assessment.`,
                 response_time: { min: 0, max: 0 },
                 unlock_trigger: 'after_case_ended',
                 voice: { gender: 'male', case_voice: 'bm_lewis' },
+                // What this persona is given about the case. From the registry,
+                // never a copy — shared/agentKnowledge.js is the source of truth.
+                knowledge: defaultKnowledgeFor('discussant'),
                 dos: [
                     'Ask before you tell — favour open-ended questions',
                     'Anchor questions in the specific decisions the learner made',
@@ -350,6 +363,7 @@ Limits:
                 response_time: { min: 0, max: 0 },
                 specialty: SPECIALTIES.pathologist.agentType,
                 disclosure: SPECIALTIES.pathologist.defaultDisclosure,
+                knowledge: defaultKnowledgeFor('pathologist'),
                 voice: { gender: 'female', case_voice: 'bf_emma' },
                 dos: [
                     'Ask what the learner has looked at before offering anything',
@@ -391,6 +405,7 @@ Limits:
                 response_time: { min: 0, max: 0 },
                 specialty: SPECIALTIES.cardiologist.agentType,
                 disclosure: SPECIALTIES.cardiologist.defaultDisclosure,
+                knowledge: defaultKnowledgeFor('cardiologist'),
                 voice: { gender: 'male', case_voice: 'am_adam' },
                 dos: [
                     'Ask how the learner read the tracing before offering anything',
@@ -432,6 +447,7 @@ Limits:
                 response_time: { min: 0, max: 0 },
                 specialty: SPECIALTIES.radiologist.agentType,
                 disclosure: SPECIALTIES.radiologist.defaultDisclosure,
+                knowledge: defaultKnowledgeFor('radiologist'),
                 voice: { gender: 'male', case_voice: 'bm_george' },
                 dos: [
                     'Ask which images the learner reviewed before offering anything',
@@ -474,6 +490,7 @@ Limits:
                 response_time: { min: 0, max: 0 },
                 specialty: SPECIALTIES.laboratorian.agentType,
                 disclosure: SPECIALTIES.laboratorian.defaultDisclosure,
+                knowledge: defaultKnowledgeFor('laboratorian'),
                 voice: { gender: 'female', case_voice: 'bf_isabella' },
                 dos: [
                     'Ask which tests the learner ordered and how they read them',
@@ -537,6 +554,30 @@ async function seedDefaultAgents() {
     }
 
     dbLog.info('default agent personas seeded');
+
+    // Backfill config.knowledge — what each default persona is given about
+    // the case (shared/agentKnowledge.js).
+    //
+    // WHY A BACKFILL AND NOT A MIGRATION. seedDefaultAgents is
+    // INSERT ... WHERE NOT EXISTS: it creates a persona that is missing and
+    // never touches one that exists. An install that has been running since
+    // before the knowledge axis has rows with no such key, and would fall
+    // back to the legacy context_filter column forever — which for the
+    // consultant and the nurse means `full`, which means the answer key. The
+    // same class of bug as migration 0062, caught the same way.
+    //
+    // Keyed on agent_type alone (not name) so a default persona an educator
+    // renamed still gets it, and key-absent only so a setting they chose is
+    // never clobbered. Types with no seeded row match nothing.
+    for (const agentType of KNOWLEDGE_TYPES) {
+        await runDb(
+            `UPDATE agent_templates
+             SET config = json_patch(COALESCE(config, '{}'), ?)
+             WHERE agent_type = ? AND is_default = 1
+               AND json_extract(COALESCE(config, '{}'), '$.knowledge') IS NULL`,
+            [JSON.stringify({ knowledge: defaultKnowledgeFor(agentType) }), agentType]
+        );
+    }
 
     // Backfill avatar_url for default rows seeded before each row had a
     // shipped avatar. Idempotent — only updates rows currently NULL or empty.

@@ -37,7 +37,11 @@ export function normalizePatientAgent(raw, caseId = null) {
         roleTitle: raw.role_title || 'Simulated Patient',
         avatarUrl: raw.avatar_url || null,
         systemPrompt: raw.system_prompt_override || raw.system_prompt || '',
-        contextFilter: raw.context_filter_override || raw.context_filter || 'history',
+        // No `contextFilter` here. It was read from `context_filter_override`,
+        // a column that exists in no migration, and nothing ever consumed the
+        // result: the patient's prompt is built by buildPatientCaseDesignContext,
+        // which scopes itself. A field that is always undefined and never read
+        // is a claim the code cannot keep.
         config,
         // Stamp the case this template was resolved for. The agents loader
         // is gated on `sessionId && activeCase`, so during a case switch

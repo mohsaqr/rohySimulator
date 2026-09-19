@@ -339,27 +339,59 @@ describe('normalizeAgent (via fetchDiscussantForCase) — discussant-voice contr
         expect(result.name).toBe('Discussant');
         expect(result.roleTitle).toBe('Case Debrief Tutor');
         expect(result.systemPrompt).toMatch(/senior clinician-educator/);
-        expect(result.contextFilter).toBe('full');
+        // The tutor's shipped knowledge: a brief summary, and NOT the answer
+        // key. An educator who wants it holding the expected diagnosis turns
+        // that on per case.
+        expect(result.knowledge).toEqual({ scope: 'summary', answerKey: false, record: true });
         expect(result.unlockTrigger).toBe('after_case_ended');
         expect(result.avatarUrl).toBeNull();
     });
 
-    it('prefers name_override / system_prompt_override / context_filter_override when present', async () => {
+    it('prefers name_override / system_prompt_override when present', async () => {
         setCase(10, {
             id: 10,
             name: 'Base',
             name_override: 'Custom',
             system_prompt: 'base prompt',
             system_prompt_override: 'overridden prompt',
-            context_filter: 'full',
-            context_filter_override: 'minimal',
             agent_template_id: 555,
         });
         const result = await fetchDiscussantForCase(10);
         expect(result.name).toBe('Custom');
         expect(result.systemPrompt).toBe('overridden prompt');
-        expect(result.contextFilter).toBe('minimal');
         expect(result.templateId).toBe(555);
+    });
+
+    // Regression lock: `context_filter_override` does not exist.
+    //
+    // This assertion used to read `expect(result.contextFilter).toBe('minimal')`
+    // against a hand-built row carrying `context_filter_override` — a column
+    // that appears in no migration. `case_agents` has never had it. The test
+    // passed because the fixture supplied the field the production query could
+    // never return, so it proved the mapping and not the plumbing, and the
+    // per-case knowledge control it appeared to verify did nothing for as long
+    // as it was green.
+    it('ignores a context_filter_override field: no such column exists', async () => {
+        setCase(11, {
+            id: 11,
+            context_filter: 'full',
+            context_filter_override: 'minimal',
+            config: JSON.stringify({}),
+        });
+        const result = await fetchDiscussantForCase(11);
+        // The legacy column still maps; the phantom override is not consulted.
+        expect(result.knowledge.scope).toBe('chart');
+        expect(result).not.toHaveProperty('contextFilter');
+    });
+
+    it('a stored config.knowledge outranks the legacy context_filter column', async () => {
+        setCase(12, {
+            id: 12,
+            context_filter: 'full',
+            config: JSON.stringify({ knowledge: { scope: 'none', answerKey: false, record: false } }),
+        });
+        const result = await fetchDiscussantForCase(12);
+        expect(result.knowledge).toEqual({ scope: 'none', answerKey: false, record: false });
     });
 });
 
@@ -405,7 +437,11 @@ describe('normalizeAgent — showEncounterRecord opt-in', () => {
     });
 });
 
-describe('buildCaseContext — filter-aware prompt context', () => {
+describe('buildCaseContext — knowledge-scoped prompt context', () => {
+    // The widest setting there is: the whole chart AND the answer key. It is
+    // no longer what any persona ships with — `answerKey` has to be asked for.
+    const CHART_WITH_KEY = { scope: 'chart', answerKey: true };
+
     const fullCase = {
         name: 'Acute MI',
         config: {
@@ -428,18 +464,18 @@ describe('buildCaseContext — filter-aware prompt context', () => {
     it('returns empty string when activeCase is null', () => {
         // CONTRACT: missing case -> no context block at all (caller's
         // system prompt stays clean).
-        expect(buildCaseContext(null, 'full')).toBe('');
-        expect(buildCaseContext(undefined, 'full')).toBe('');
+        expect(buildCaseContext(null, CHART_WITH_KEY)).toBe('');
+        expect(buildCaseContext(undefined, CHART_WITH_KEY)).toBe('');
     });
 
-    it('returns empty string when contextFilter === "minimal" (Socratic mode)', () => {
-        // CONTRACT: minimal mode is the Socratic / spoiler-free mode; the
+    it('returns empty string at scope "none" (the learner presents the case)', () => {
+        // CONTRACT: `none` is the Socratic / spoiler-free mode; the
         // discussant gets nothing, must ask the learner instead.
-        expect(buildCaseContext(fullCase, 'minimal')).toBe('');
+        expect(buildCaseContext(fullCase, { scope: 'none' })).toBe('');
     });
 
-    it('full filter includes diagnosis, treatment plan, and learning objectives', () => {
-        const out = buildCaseContext(fullCase, 'full');
+    it('chart scope WITH answerKey includes diagnosis, treatment plan, and learning objectives', () => {
+        const out = buildCaseContext(fullCase, CHART_WITH_KEY);
         expect(out).toContain('Expected diagnosis: STEMI');
         expect(out).toContain('Expected treatment plan: ASA, heparin, cath lab');
         expect(out).toContain('Learning objectives: recognize STEMI; order labs');
@@ -450,7 +486,7 @@ describe('buildCaseContext — filter-aware prompt context', () => {
     it('history filter includes HPI/PMH but strips diagnosis and vitals', () => {
         // CONTRACT: 'history' is for cases where the discussant should
         // reason from the story, not the diagnosis or vitals.
-        const out = buildCaseContext(fullCase, 'history');
+        const out = buildCaseContext(fullCase, { scope: 'history' });
         expect(out).toContain('History of Present Illness: sudden onset 1h ago');
         expect(out).toContain('Past Medical History: HTN, T2DM');
         expect(out).not.toContain('Expected diagnosis');
@@ -459,7 +495,7 @@ describe('buildCaseContext — filter-aware prompt context', () => {
     });
 
     it('vitals filter includes initial vitals but strips HPI and diagnosis', () => {
-        const out = buildCaseContext(fullCase, 'vitals');
+        const out = buildCaseContext(fullCase, { scope: 'summary' });
         expect(out).toContain('Initial Vitals');
         expect(out).toContain('HR: 110 bpm');
         expect(out).toContain('BP: 90/60');
@@ -472,21 +508,47 @@ describe('buildCaseContext — filter-aware prompt context', () => {
         // CONTRACT: any non-minimal filter at minimum identifies the case
         // and the chief complaint — the discussant needs SOMETHING to
         // anchor the conversation.
-        const out = buildCaseContext(fullCase, 'history');
+        const out = buildCaseContext(fullCase, { scope: 'history' });
         expect(out).toContain('Case: Acute MI');
         expect(out).toContain('Patient: Jane Doe');
         expect(out).toContain('Age: 58');
         expect(out).toContain('Chief Complaint: chest pain');
     });
 
-    it('emits the spoiler-guard footer reminding the discussant to ask the learner', () => {
-        // CONTRACT: the trailing note is what stops the discussant from
-        // hallucinating that the learner did orders/exams. It MUST appear
+    it('emits the fence and a note that the configured case is not what happened', () => {
+        // CONTRACT: the trailing note is what stops the discussant treating
+        // the AUTHORED case as a record of the session. It MUST appear
         // whenever any context is emitted.
-        const out = buildCaseContext(fullCase, 'full');
+        //
+        // It used to end "ask the learner about what they did rather than
+        // assuming", which contradicted the encounter-record block the server
+        // appends a few lines later ("Rely on it instead of asking the learner
+        // to recall what they did"). Both sentences shipped in one prompt.
+        const out = buildCaseContext(fullCase, CHART_WITH_KEY);
         expect(out).toContain('=== CASE CONTEXT ===');
         expect(out).toContain('=== END CONTEXT ===');
-        expect(out).toContain("ask the learner");
+        expect(out).toContain('this is how the case was authored');
+        expect(out).not.toContain('ask the learner about what they did');
+    });
+
+    // Regression lock: the answer key is opt-in, at every scope.
+    //
+    // Until config.knowledge existed, `full` was the only value that carried
+    // the configured results and it emitted the expected diagnosis with them.
+    // There was no way to give an agent the chart without the answer, which is
+    // why the seeded consultant held the diagnosis it was coaching towards.
+    it('chart scope WITHOUT answerKey gives the results and withholds the answer', () => {
+        const out = buildCaseContext(fullCase, { scope: 'chart', answerKey: false });
+        expect(out).toContain('Past Medical History: HTN, T2DM');
+        expect(out).toContain('Initial Vitals');
+        expect(out).not.toContain('Expected diagnosis');
+        expect(out).not.toContain('Expected treatment plan');
+        expect(out).not.toContain('Learning objectives');
+    });
+
+    it('defaults to withholding the answer key when the flag is absent', () => {
+        expect(buildCaseContext(fullCase, { scope: 'chart' })).not.toContain('Expected diagnosis');
+        expect(buildCaseContext(fullCase, {})).not.toContain('Expected diagnosis');
     });
 
     it('returns empty string for an empty case (no name, no config) at full filter', () => {
@@ -495,7 +557,7 @@ describe('buildCaseContext — filter-aware prompt context', () => {
         // array still gets a default "Case: Unnamed" line — so this also
         // doubles as a regression check on that summary line.
         const minimalCase = { config: {} };
-        const out = buildCaseContext(minimalCase, 'full');
+        const out = buildCaseContext(minimalCase, CHART_WITH_KEY);
         // The summary line is always pushed, so parts.length is never 0
         // when filter !== 'minimal'. The output WILL have a context block,
         // but only the "Case: Unnamed" line.
@@ -512,7 +574,7 @@ describe('buildCaseContext — filter-aware prompt context', () => {
             name: 'Old Case',
             config: { learning_objectives: 'memorize the algorithm' },
         };
-        const out = buildCaseContext(legacy, 'full');
+        const out = buildCaseContext(legacy, CHART_WITH_KEY);
         expect(out).toContain('Learning objectives: memorize the algorithm');
     });
 });

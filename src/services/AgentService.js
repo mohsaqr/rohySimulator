@@ -15,6 +15,7 @@
 
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from './apiClient.js';
 import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
+import { normalizeKnowledge, scopeAtLeast } from '../../server/shared/agentKnowledge.js';
 
 async function tryReturning(fallback, fn, label) {
   try {
@@ -243,25 +244,35 @@ export const AgentService = {
   // ==================== DEBRIEFING & LLM INTEGRATION ====================
 
   /**
-   * Build debriefing context for an agent
-   * Combines patient record, team communications, and agent-specific filtering
-   * Respects agent's memory_access configuration to filter patient record data
+   * Build the situation an agent is told about, as this browser sees it.
+   *
+   * Scoped by the agent's `config.knowledge` (server/shared/agentKnowledge.js),
+   * falling back to the legacy `context_filter` column for an agent nobody has
+   * migrated.
+   *
+   * NOTE ON TRUST. For `none` and `handover` the server DROPS whatever this
+   * returns and builds the block itself (services/situationBrief.js), because
+   * an agent that is supposed to know only what the learner tells it must not
+   * have its ignorance enforced by the learner's own browser. The narrowing
+   * here saves a payload; it is not the security boundary.
+   *
+   * `memory_access` used to be read here to filter the record by verb. It
+   * never worked: no route projection returned the column, and the branch that
+   * consumed it called `getFilteredNarrative`, a method defined nowhere in the
+   * repo. Both are gone. What the learner actually did is now rendered
+   * server-side from rows the server read itself (services/encounterRecord.js)
+   * and gated by `knowledge.record`.
    */
   buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase = null) {
     const lines = [];
 
-    let memoryAccess = agent.memory_access;
-    if (typeof memoryAccess === 'string') {
-      try { memoryAccess = JSON.parse(memoryAccess); } catch { memoryAccess = null; }
-    }
-    if (!memoryAccess) {
-      memoryAccess = {
-        OBTAINED: true, EXAMINED: true, ELICITED: true, NOTED: true,
-        ORDERED: true, ADMINISTERED: true, CHANGED: true, EXPRESSED: true
-      };
-    }
+    const knowledge = normalizeKnowledge({
+      knowledge: agent?.config?.knowledge,
+      agentType: agent?.agent_type,
+      contextFilter: agent?.context_filter,
+    }).value;
 
-    const caseContext = buildDiscussionCaseContext(activeCase, agent.context_filter || 'full');
+    const caseContext = buildDiscussionCaseContext(activeCase, knowledge.scope, { answerKey: knowledge.answerKey });
     if (caseContext) {
       lines.push(caseContext.trim());
     }
@@ -269,13 +280,7 @@ export const AgentService = {
     if (patientRecord) {
       lines.push('=== PATIENT BRIEFING ===');
 
-      if (patientRecord.getFilteredNarrative && typeof patientRecord.getFilteredNarrative === 'function') {
-        const allowedVerbs = Object.entries(memoryAccess)
-          .filter(([, allowed]) => allowed)
-          .map(([verb]) => verb);
-        const narrative = patientRecord.getFilteredNarrative('context', allowedVerbs);
-        if (narrative) lines.push(narrative);
-      } else if (patientRecord.toNarrative && typeof patientRecord.toNarrative === 'function') {
+      if (patientRecord.toNarrative && typeof patientRecord.toNarrative === 'function') {
         const narrative = patientRecord.toNarrative('context');
         if (narrative) lines.push(narrative);
       } else {
@@ -289,7 +294,14 @@ export const AgentService = {
       }
     }
 
-    if (currentVitals) {
+    // The live monitor. Gated on the chart scope like everything else: an
+    // agent that is not given the configured vitals has no business reading
+    // the current ones off the screen either. This block had NO agent-type
+    // gate at all, so the family member was handed the learner's live
+    // haemodynamics — the one leak the case-context scoping alone did not
+    // close. A `handover` agent still gets observations, server-built from
+    // session_vitals, in its own brief.
+    if (currentVitals && scopeAtLeast(knowledge.scope, 'chart')) {
       lines.push('');
       lines.push('=== CURRENT VITALS ===');
       const vitalLabels = { hr: 'HR', spo2: 'SpO2', rr: 'RR', bpSys: 'BP Sys', bpDia: 'BP Dia', temp: 'Temp', etco2: 'ETCO2' };
@@ -302,9 +314,13 @@ export const AgentService = {
     }
 
     if (teamLog && teamLog.length > 0) {
-      const relevantLogs = agent.context_filter === 'history'
-        ? teamLog.filter(l => l.agent_type === 'relative' || l.agent_type === agent.agent_type)
-        : teamLog;
+      // An agent that was not given the chart is not given the whole team's
+      // traffic either. Previously keyed on `context_filter === 'history'`;
+      // now any scope below `chart` narrows it, which additionally catches
+      // `summary` (the old `vitals`).
+      const relevantLogs = scopeAtLeast(knowledge.scope, 'chart')
+        ? teamLog
+        : teamLog.filter(l => l.agent_type === 'relative' || l.agent_type === agent.agent_type);
 
       if (relevantLogs.length > 0) {
         lines.push('');

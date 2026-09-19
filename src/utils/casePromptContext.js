@@ -1,5 +1,6 @@
 import { formatRadiologyAsMarkdown } from '../data/aiPromptContext.js';
 import { formatHistoryAsMarkdown } from '../data/historyGroups.js';
+import { LEGACY_SCOPE_BY_CONTEXT_FILTER, KNOWLEDGE_SCOPES, scopeAtLeast } from '../../server/shared/agentKnowledge.js';
 
 function clean(value) {
     if (value == null) return '';
@@ -325,7 +326,12 @@ function formatClinicalRecords(config = {}, { respectAiAccess = true } = {}) {
     return sections;
 }
 
-function formatLegacyClinicalRecords(config = {}) {
+// `answerKey` gates the two sections that ARE the answer: a stored
+// differential and a stored management plan. The patient path always filtered
+// them out with an ad-hoc regex on the titles; the discussion path did not,
+// which is how a family member came to be handed the differential. One rule,
+// one place, opt-in.
+function formatLegacyClinicalRecords(config = {}, { answerKey = false } = {}) {
     const legacy = config.clinical_records;
     if (!legacy || typeof legacy !== 'object') return [];
     const sections = [];
@@ -342,10 +348,10 @@ function formatLegacyClinicalRecords(config = {}) {
             .join('\n');
         if (exam) sections.push(['Legacy Physical Examination', exam]);
     }
-    if (Array.isArray(legacy.differential_diagnosis) && legacy.differential_diagnosis.length) {
+    if (answerKey && Array.isArray(legacy.differential_diagnosis) && legacy.differential_diagnosis.length) {
         sections.push(['Differential Diagnosis', legacy.differential_diagnosis.map(x => `- ${x}`).join('\n')]);
     }
-    if (Array.isArray(legacy.management_plan) && legacy.management_plan.length) {
+    if (answerKey && Array.isArray(legacy.management_plan) && legacy.management_plan.length) {
         sections.push(['Management Plan', legacy.management_plan.map(x => `- ${x}`).join('\n')]);
     }
     return sections;
@@ -384,9 +390,10 @@ export function buildPatientCaseDesignContext(activeCase) {
     const physical = formatPhysicalExamConfigForPrompt(cfg);
     if (physical) sections.push(['Configured Physical Exam Findings', physical]);
 
-    const legacySections = formatLegacyClinicalRecords(cfg)
-        .filter(([title]) => !/Differential|Management/.test(title));
-    sections.push(...legacySections);
+    // answerKey stays off: a patient does not know their own differential.
+    // (This used to be a regex filter on the section titles here; the rule now
+    // lives in formatLegacyClinicalRecords so both callers obey it.)
+    sections.push(...formatLegacyClinicalRecords(cfg));
 
     const body = sections
         .filter(([, content]) => clean(content))
@@ -398,36 +405,78 @@ export function buildPatientCaseDesignContext(activeCase) {
         : '';
 }
 
-export function buildDiscussionCaseContext(activeCase, contextFilter = 'full') {
-    if (!activeCase || contextFilter === 'minimal') return '';
+/**
+ * The case context block given to an agent whose situation the browser builds.
+ *
+ * `scope` is a KNOWLEDGE_SCOPES value (server/shared/agentKnowledge.js). The
+ * four legacy `context_filter` values are still accepted and mapped, so an
+ * agent nobody has migrated keeps the sections it had:
+ *
+ *   minimal -> none      vitals -> summary      history -> history      full -> chart
+ *
+ * `answerKey` is what `full` used to imply and no longer does. It adds the
+ * "### Authoring Expectations" block — the expected diagnosis, the expected
+ * treatment plan and the learning objectives — and it gates the stored
+ * differential and management plan inside the legacy records. It is OFF by
+ * default: until this argument existed, the only way to give an agent the
+ * configured results was to give it the answer at the same time, which is why
+ * the seeded consultant was coaching a learner towards a diagnosis it had
+ * been handed on a plate.
+ *
+ * @param {object|null} activeCase
+ * @param {string} [scope]  a scope, or a legacy context_filter value
+ * @param {object} [options]
+ * @param {boolean} [options.answerKey=false]
+ * @returns {string} '' for `none`/`handover` and for a case with no content
+ */
+export function buildDiscussionCaseContext(activeCase, scope = 'chart', { answerKey = false } = {}) {
+    if (!activeCase) return '';
+    // A legacy value maps; a scope passes through; anything else reads as the
+    // narrowest thing rather than the widest.
+    const resolved = KNOWLEDGE_SCOPES.includes(scope)
+        ? scope
+        : (LEGACY_SCOPE_BY_CONTEXT_FILTER[scope] || 'none');
+    // `handover` is assembled SERVER-side (services/situationBrief.js) from
+    // rows the server read itself, so there is nothing for the browser to
+    // contribute here.
+    if (resolved === 'none' || resolved === 'handover') return '';
+
     const cfg = activeCase.config || {};
+    const deep = scopeAtLeast(resolved, 'history');
+    const chart = resolved === 'chart';
+    // Reproduces the old ladder exactly: `history` carried no vitals, while
+    // `vitals` and `full` both did.
+    const withVitals = resolved === 'summary' || chart;
+
     const sections = [['Summary', caseSummary(activeCase)]];
 
     const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, { demographics: cfg.demographics });
-    if (structured && ['history', 'full'].includes(contextFilter)) {
+    if (structured && deep) {
         sections.push(['Structured History', structured]);
     } else if (cfg.structuredHistory?.chiefComplaint) {
         sections.push(['Chief Complaint', cfg.structuredHistory.chiefComplaint]);
     }
 
-    if (['history', 'full'].includes(contextFilter)) {
+    if (deep) {
         sections.push(...formatClinicalRecords(cfg, { respectAiAccess: false }));
-        sections.push(...formatLegacyClinicalRecords(cfg));
+        sections.push(...formatLegacyClinicalRecords(cfg, { answerKey }));
     }
 
-    if (['vitals', 'full'].includes(contextFilter)) {
+    if (withVitals) {
         const vitals = formatCaseVitalsForPrompt(cfg);
         if (vitals) sections.push(['Initial Vitals', vitals]);
     }
 
-    if (contextFilter === 'full') {
+    if (chart) {
         const physical = formatPhysicalExamConfigForPrompt(cfg);
         if (physical) sections.push(['Configured Physical Exam Findings', physical]);
         const radiology = formatCaseRadiologyForPrompt(cfg);
         if (radiology) sections.push(['Configured Radiology Results', radiology]);
         const labs = formatConfiguredLabsForPrompt(cfg);
         if (labs) sections.push(['Configured Investigation Results', labs]);
+    }
 
+    if (chart && answerKey) {
         const expectations = [
             clean(cfg.diagnosis || cfg.expected_diagnosis) && `- Expected diagnosis: ${clean(cfg.diagnosis || cfg.expected_diagnosis)}`,
             clean(cfg.treatment_plan) && `- Expected treatment plan: ${clean(cfg.treatment_plan)}`,
@@ -443,8 +492,14 @@ export function buildDiscussionCaseContext(activeCase, contextFilter = 'full') {
         .map(([title, content]) => `### ${title}\n${content}`)
         .join('\n\n');
 
+    // The closing note used to end "ask the learner about what they did rather
+    // than assuming", which now contradicts the encounter record block the
+    // server appends a few lines later ("Rely on it instead of asking the
+    // learner to recall what they did"). Both sentences shipped in the same
+    // prompt. What remains is the half that is still true: the configured case
+    // is what was AUTHORED, not what happened.
     return body
         ? `\n\n=== CASE CONTEXT ===\n${body}\n=== END CONTEXT ===\n`
-            + `\nNote: the learner's actual orders, exam findings, lab results, and treatments performed in this session may differ from configured case expectations; ask the learner about what they did rather than assuming.\n`
+            + `\nNote: this is how the case was authored. What the learner actually ordered, examined, found and treated in this session may differ from it.\n`
         : '';
 }

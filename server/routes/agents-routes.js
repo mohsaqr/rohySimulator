@@ -26,6 +26,7 @@ import {
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
 import { isSpecialistType, normalizeDisclosure } from '../shared/specialties.js';
+import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
@@ -58,6 +59,17 @@ function disclosureErrors(configOverride) {
     return normalizeDisclosure(configOverride.disclosure).errors;
 }
 
+// A case agent's `config_override.knowledge` must pass the registry's
+// validator before it is stored, on the same terms as disclosure. Returns the
+// error list; empty when the body carries no knowledge block. `agentType` is
+// passed so the type's own default is the base the partial merges over.
+function knowledgeErrors(configOverride, agentType) {
+    if (!configOverride || typeof configOverride !== 'object' || !Object.hasOwn(configOverride, 'knowledge')) {
+        return [];
+    }
+    return normalizeKnowledge({ knowledge: configOverride.knowledge, agentType }).errors;
+}
+
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
     const proto = Object.getPrototypeOf(value);
@@ -88,12 +100,21 @@ function configOverrideProblem(configOverride, agentType) {
     if (errors.length > 0) {
         return { error: `Invalid disclosure: ${errors.join('; ')}`, code: 'invalid_disclosure' };
     }
+    const knowledgeProblems = knowledgeErrors(configOverride, agentType);
+    if (knowledgeProblems.length > 0) {
+        return { error: `Invalid knowledge: ${knowledgeProblems.join('; ')}`, code: 'invalid_knowledge' };
+    }
     if (agentType !== null && Object.hasOwn(configOverride, 'disclosure') && !isSpecialistType(agentType)) {
         return {
             error: `A disclosure block applies only to an on-call specialist, not a ${agentType}`,
             code: 'disclosure_not_applicable'
         };
     }
+    // A knowledge block is deliberately NOT restricted by type. Every persona
+    // is given some slice of the case, including the specialists — theirs is
+    // `none`, which is what `disclosure` then gates findings on top of. There
+    // is no type for which the question "what does this one know" is
+    // meaningless, so there is nothing to refuse.
     return null;
 }
 

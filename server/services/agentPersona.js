@@ -137,6 +137,7 @@ export async function loadSessionCaseAgent({ sessionId, caseAgentId, tenant }) {
                 ca.system_prompt_override, ca.config_override,
                 at.agent_type, at.name AS template_name, at.role_title,
                 at.system_prompt AS template_system_prompt, at.config AS template_config,
+                at.context_filter AS template_context_filter,
                 at.llm_provider, at.llm_model, at.llm_api_key, at.llm_endpoint,
                 at.llm_temperature, at.llm_max_tokens
            FROM case_agents ca
@@ -155,6 +156,9 @@ export async function loadSessionCaseAgent({ sessionId, caseAgentId, tenant }) {
         agentType: row.agent_type,
         name: row.name_override || row.template_name,
         roleTitle: row.role_title,
+        // The legacy knowledge ladder. Read only as the fallback inside
+        // normalizeKnowledge, for an agent that carries no config.knowledge.
+        contextFilter: row.template_context_filter,
         prompt: row.system_prompt_override || row.template_system_prompt || '',
         config: {
             ...parseConfigColumn(row.template_config, 'agent_templates.config', row.case_agent_id),
@@ -168,5 +172,50 @@ export async function loadSessionCaseAgent({ sessionId, caseAgentId, tenant }) {
             temperature: row.llm_temperature,
             maxTokens: row.llm_max_tokens,
         },
+    };
+}
+
+/**
+ * The knowledge inputs for an agent named by TEMPLATE id rather than case
+ * agent id — in practice the discussant, the one server-gated type whose
+ * prompt the browser still assembles.
+ *
+ * `loadSessionCaseAgent` cannot serve this: the client never sends a
+ * case_agent_id for a client-built type. Without it the server would gate the
+ * encounter record on the template's config alone and ignore an educator's
+ * per-case setting, so the tutor's knowledge would differ depending on which
+ * side of the wire you asked.
+ *
+ * Returns the merged config (template under case override, shallow, exactly
+ * as loadSessionCaseAgent does) and the legacy context_filter column, or null
+ * when this session's case has no enabled agent of that type.
+ *
+ * @param {object} args
+ * @param {number|string} args.sessionId
+ * @param {string} args.agentType
+ * @param {number} args.tenant
+ * @returns {Promise<{config: object, contextFilter: string|null}|null>}
+ */
+export async function loadSessionAgentKnowledge({ sessionId, agentType, tenant }) {
+    const row = await dbAdapter.get(
+        `SELECT ca.id AS case_agent_id, ca.config_override,
+                at.config AS template_config, at.context_filter
+           FROM case_agents ca
+           JOIN agent_templates at
+             ON at.id = ca.agent_template_id AND at.tenant_id = ca.tenant_id
+            AND at.deleted_at IS NULL
+           JOIN sessions s
+             ON s.case_id = ca.case_id AND s.tenant_id = ca.tenant_id
+          WHERE s.id = ? AND at.agent_type = ? AND ca.tenant_id = ? AND ca.enabled = 1
+          LIMIT 1`,
+        [sessionId, agentType, tenant]
+    );
+    if (!row) return null;
+    return {
+        config: {
+            ...parseConfigColumn(row.template_config, 'agent_templates.config', row.case_agent_id),
+            ...parseConfigColumn(row.config_override, 'case_agents.config_override', row.case_agent_id),
+        },
+        contextFilter: row.context_filter ?? null,
     };
 }

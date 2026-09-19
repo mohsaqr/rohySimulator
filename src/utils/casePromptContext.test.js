@@ -130,7 +130,9 @@ describe('case prompt context surfaces', () => {
     });
 
     it('full debrief context includes all authored clinical expectations and configured results', () => {
-        const out = buildDiscussionCaseContext(richCase, 'full');
+        // The legacy 'full' name still maps to the chart scope; the answer key
+        // it used to imply is now an explicit argument.
+        const out = buildDiscussionCaseContext(richCase, 'full', { answerKey: true });
         expect(out).toContain('Structured History');
         expect(out).toContain('History of Present Illness: Started after stairs');
         expect(out).toContain('Initial Vitals');
@@ -138,6 +140,51 @@ describe('case prompt context surfaces', () => {
         expect(out).toContain('Troponin I = 2.1 ng/mL');
         expect(out).toContain('Expected diagnosis: STEMI');
         expect(out).toContain('Learning objectives: recognize STEMI; activate cath lab');
+    });
+
+    // Regression lock: the top rung no longer bundles the answer key.
+    //
+    // `full` was the ONLY context_filter value that carried the configured
+    // results, and it emitted the expected diagnosis, treatment plan and
+    // learning objectives alongside them. An educator who wanted an agent to
+    // know the chart had no way to withhold the answer, which is how the
+    // seeded consultant came to be coaching a learner towards a diagnosis it
+    // had already been handed.
+    it('the chart scope gives results and withholds the answer key by default', () => {
+        const out = buildDiscussionCaseContext(richCase, 'chart');
+        expect(out).toContain('Configured Radiology Results');
+        expect(out).toContain('Troponin I = 2.1 ng/mL');
+        expect(out).not.toContain('Expected diagnosis');
+        expect(out).not.toContain('Expected treatment plan');
+        expect(out).not.toContain('Learning objectives');
+    });
+
+    // Regression lock: a stored differential must not reach a narrow agent.
+    //
+    // formatLegacyClinicalRecords emitted "### Differential Diagnosis" and
+    // "### Management Plan" unconditionally on this path, while the patient
+    // path filtered them out by a regex on the section titles. The seeded
+    // relative sits at the history scope, so a case authored with a stored
+    // differential handed it to the family member.
+    it('a stored differential and management plan are answer-key material', () => {
+        const withLegacy = {
+            name: 'Legacy', config: {
+                clinical_records: {
+                    present_illness: 'crushing chest pain',
+                    differential_diagnosis: ['STEMI', 'aortic dissection'],
+                    management_plan: ['aspirin', 'cath lab'],
+                },
+            },
+        };
+        const relative = buildDiscussionCaseContext(withLegacy, 'history');
+        expect(relative).toContain('crushing chest pain');
+        expect(relative).not.toContain('Differential Diagnosis');
+        expect(relative).not.toContain('aortic dissection');
+        expect(relative).not.toContain('Management Plan');
+
+        const tutor = buildDiscussionCaseContext(withLegacy, 'chart', { answerKey: true });
+        expect(tutor).toContain('Differential Diagnosis');
+        expect(tutor).toContain('Management Plan');
     });
 
     it('history and vitals filters only expose their intended slices', () => {

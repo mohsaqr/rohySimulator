@@ -1,6 +1,7 @@
 import { apiFetch } from './apiClient.js';
 import { AgentService } from './AgentService';
 import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
+import { normalizeKnowledge } from '../../server/shared/agentKnowledge.js';
 
 // The discussant resolution order:
 //   1) Per-case attached discussant in case_agents (overrides apply)
@@ -67,7 +68,16 @@ function normalizeAgent(raw, caseId = null) {
         roleTitle: raw.role_title || 'Case Debrief Tutor',
         avatarUrl: raw.avatar_url || null,
         systemPrompt: (raw.system_prompt_override || raw.system_prompt || '').trim() || DEFAULT_DISCUSSANT_SYSTEM_PROMPT,
-        contextFilter: raw.context_filter_override || raw.context_filter || 'full',
+        // How much of the case the tutor is given. `context_filter_override`
+        // was read here for a column that exists in no migration — always
+        // undefined, and its unit test passed by hand-feeding a fake row. The
+        // real per-case control is config.knowledge, which normalizeKnowledge
+        // resolves over the type default and the legacy context_filter column.
+        knowledge: normalizeKnowledge({
+            knowledge: config.knowledge,
+            agentType: raw.agent_type || 'discussant',
+            contextFilter: raw.context_filter,
+        }).value,
         unlockTrigger: config.unlock_trigger || 'after_case_ended',
         // Per-case educator opt-in: show the learner their own encounter
         // record during debrief. Default OFF — during the case the same view
@@ -88,8 +98,20 @@ function parseConfig(value) {
     try { return JSON.parse(value); } catch { return null; }
 }
 
-// Build case-context block prepended to the discussant's system prompt.
-// Honors context_filter to keep Socratic / minimal modes spoiler-free.
-export function buildCaseContext(activeCase, contextFilter) {
-    return buildDiscussionCaseContext(activeCase, contextFilter);
+/**
+ * The case-context block prepended to the discussant's system prompt.
+ *
+ * Scoped by the tutor's resolved knowledge. The default is `summary` with the
+ * answer key OFF: the tutor opens on the case in outline and the learner
+ * presents what happened, which is the debrief exercise rather than a
+ * shortcoming. An educator who wants the tutor holding the expected diagnosis
+ * ticks it on in the case editor.
+ *
+ * @param {object|null} activeCase
+ * @param {{scope: string, answerKey: boolean}} knowledge
+ * @returns {string}
+ */
+export function buildCaseContext(activeCase, knowledge) {
+    const k = knowledge && typeof knowledge === 'object' ? knowledge : {};
+    return buildDiscussionCaseContext(activeCase, k.scope, { answerKey: k.answerKey === true });
 }

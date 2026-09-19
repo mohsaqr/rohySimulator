@@ -1,8 +1,9 @@
 # Supporting-agent behaviour model
 
-**Status:** design proposal. Sections 1–3 describe what rohy does today;
-sections 4 onward are unbuilt and specified here so they can be argued
-with before they are written.
+**Status:** part built. Sections 1–3 describe what rohy does today.
+**§4 shipped in v3.0.0-beta.91** and is marked up accordingly. Sections 5
+onward remain unbuilt and are specified here so they can be argued with
+before they are written.
 
 A rohy case has one main virtual agent — the patient — and may have any
 number of *supporting* agents: a bedside nurse, an on-call consultant, a
@@ -24,7 +25,7 @@ presets is what makes the space feel small.
 | Axis | The question it answers | Today |
 |---|---|---|
 | **Availability** | *When* can the learner reach them? | ✅ built |
-| **Knowledge** | *What* do they know? | ⚠️ static tier only |
+| **Knowledge** | *What* do they know? | ✅ built (§4) |
 | **Stance** | What do they *do* with what they know? | ❌ absent |
 | **Initiative** | Do they speak *unprompted*? | ❌ absent |
 
@@ -61,15 +62,21 @@ author opts into. See §7 for the history — the previous default made
 "instant" literally unreachable, and it is worth reading before anyone
 proposes reintroducing a floor.
 
-### Knowledge — half built
+### Knowledge — built, see §4
 
-`agent_templates.context_filter` picks how much of the case file the
-agent is given: `full` · `history` · `vitals` · `minimal`. A second
-control, `memory_access`, gates the patient-record narrative by verb
-(`OBTAINED`, `EXAMINED`, `ELICITED`, `ORDERED`, …).
+Superseded by `config.knowledge`. What this section used to describe:
+`agent_templates.context_filter` (`full` · `history` · `vitals` ·
+`minimal`) plus `memory_access`, a verb filter on the patient-record
+narrative.
 
-Both are chosen by the **author**, and both read from the **case
-record**. That distinction is the whole of §4.
+Both were chosen by the **author** and both read from the **case
+record** — the distinction that motivated §4. Two footnotes worth
+keeping, because both were discovered only when §4 was built:
+`context_filter`'s per-case override was stored and never read, and
+`memory_access` reached no runtime object at all (its one consumer
+called a method defined nowhere). Neither control did what this section
+claimed. `context_filter` survives as a legacy fallback that
+`normalizeKnowledge` maps; `memory_access` is gone.
 
 ### Stance and initiative — absent
 
@@ -91,42 +98,59 @@ Worth stating plainly so nobody budgets engineering for it.
 
 ---
 
-## 4. The missing primitive: `briefed` knowledge
+## 4. The missing primitive: `briefed` knowledge — BUILT (beta.91)
 
-Everything interesting about a *delayed, unaware* agent depends on one
-thing that does not exist.
+Everything interesting about a *delayed, unaware* agent depended on one
+thing that did not exist. It does now; the problem is recorded here
+because it is the reason the axis has the shape it has.
 
-Today an agent's situational knowledge comes from
-`buildDebriefingContext()`, which assembles the case record filtered by
-the author's `context_filter` tier. So a nurse configured as "arrives at
-minute 5, knows nothing" still arrives knowing whatever the author let
-her know. The handoff the learner performs is theatre: they can say
-"she's crashing, help" and receive a fully briefed, competent colleague.
-Nothing reads what they said. Nothing can be wrong because of what they
+An agent's situational knowledge came from `buildDebriefingContext()`,
+which assembled the case record filtered by the author's
+`context_filter` tier. So a nurse configured as "arrives at minute 5,
+knows nothing" still arrived knowing whatever the author let her know.
+The handoff the learner performed was theatre: they could say "she's
+crashing, help" and receive a fully briefed, competent colleague.
+Nothing read what they said. Nothing could be wrong because of what they
 left out.
 
-### Proposal
+### What shipped
 
-Add a **knowledge source** alongside the existing tier:
+One ordered axis rather than a source beside a tier — the two collapsed
+once it was clear `context_filter` was the same question asked twice.
+`config.knowledge` in `server/shared/agentKnowledge.js`:
 
 ```
-knowledge_source:  'case'      -- today's behaviour: read the record
-                 | 'briefed'   -- read ONLY the learner's handoff
-                 | 'hybrid'    -- role-plausible baseline + handoff
+scope:  'none'      -- the proposal's `briefed`: knows ONLY what the
+                       learner says in this conversation
+      | 'handover'  -- the proposal's `hybrid`: a shift handover —
+                       identity, reason for presentation, live vitals
+      | 'summary'   -- the case in outline, with the initial vitals
+      | 'history'   -- the patient's story and the clinical records
+      | 'chart'     -- everything the chart holds
+answerKey: boolean  -- the expected diagnosis, plan and objectives
+record:    boolean  -- the server-rendered encounter record
 ```
 
-- **`case`** — unchanged. The default. Existing agents keep working.
-- **`briefed`** — the agent's context block is assembled from the
-  learner's own turns in this conversation, plus a role-plausible
-  baseline of what anyone in that role would know on walking in (the
-  patient exists, they are in a bed, their name and age). Nothing else.
-  Vitals, history, orders, results: absent unless the learner said them.
-- **`hybrid`** — for the doctor called to a ward: knows the ward and
-  that a patient deteriorated, not the specifics.
+Three deviations from the proposal above, each for a reason:
 
-`context_filter` keeps its current meaning and applies *after* the
-source: it bounds what a `case`-sourced agent may see, and is inert for
-a `briefed` one.
+- **A config key, not an `agent_templates` column.** The proposal
+  predates the specialist `disclosure` gate, which proved the pattern.
+  A config key gets the per-case override for free; a column would have
+  been template-global, so an educator could not vary it per case —
+  which is most of the point.
+- **`answerKey` is separate.** Not in the proposal, and the defect that
+  made this urgent: `context_filter: 'full'` was the only rung carrying
+  the configured results and it emitted the expected diagnosis with
+  them. There was no way to give an agent the chart without the answer.
+- **`record` is separate.** An agent at `none` was still handed the
+  learner's full action log by the `RECORD_AGENT_TYPES` allowlist. "You
+  know nothing about this patient" plus a complete list of everything
+  ordered is a lie the learner cannot detect.
+
+`context_filter` is not read as a tier any more. It survives only as the
+fallback `normalizeKnowledge` maps when an agent carries no
+`config.knowledge`, so an install nobody has backfilled keeps exactly
+the behaviour it had — `full` included, answer key and all.
 
 ### Why this is the load-bearing item
 
@@ -138,24 +162,34 @@ moment, from the learner's own omission. It is also the natural input to
 a handoff-quality measure in the debrief, which is the assessment payload
 the "unaware agent" scenario is really after.
 
-### Shape
+### How it was actually done
 
-- Migration: `agent_templates.knowledge_source TEXT DEFAULT 'case'`
-  (nullable, additive; NULL reads as `'case'`).
-- `buildDebriefingContext()` branches on the source before it touches
-  the record.
-- A new prompt block making the ignorance explicit and non-negotiable,
-  because a model handed a thin context will cheerfully invent a rich
-  one. It must sit next to `roleAnchor()` and be as blunt: *you know
-  only what appears below; if you were not told something, you do not
-  know it; ask rather than assume.*
-- The handoff transcript needs marking as such, so the assembler can
-  tell "what the learner told this agent" from the whole conversation.
+- **No migration for the config.** `seedDefaultAgents` already runs a
+  key-absent `json_patch` backfill on every boot, which is idempotent
+  and never clobbers an educator's value. Migration 0063 carries only
+  the two prompt-PROSE corrections, which cannot be patched that way.
+- **The server assembles `none` and `handover`, not the client.** The
+  route drops whatever situation the browser sent, exactly as the
+  specialist path does. This was not in the proposal and is the most
+  important part: an agent that knows only what the learner tells it
+  must not have its ignorance enforced by the learner's own browser.
+- **The ignorance block** is `BRIEF_UNBRIEFED` in
+  `services/situationBrief.js`, in the same prompt slot as a
+  specialist's CASE BRIEF — after the persona and its dos/donts, so an
+  educator cannot author a "do" that argues with it and have the model
+  read it last.
+- **The handoff transcript needed no marking.** `agentConversations` is
+  already keyed per agent type, so the conversation IS the handoff.
+  The work was subtraction, not plumbing.
+- **Live vitals come from `session_vitals`**, which the monitor persists
+  on a deadband crossing — so a handover carries real current
+  observations without trusting the browser's text.
 
-**Estimated effort:** medium. The migration and branch are small; the
-prompt engineering to stop a model back-filling plausible clinical
-detail is the real work, and it needs evaluation against a small model
-(voice mode uses one) before it can be trusted.
+**Effort, as predicted:** the branch was small and the prompt
+engineering was the real work. The back-filling estimate holds: the
+wording that stops a model inventing a presentation is repetitive and
+closes each escape route by name. **Still outstanding: evaluation
+against the small model voice mode uses.**
 
 ---
 
@@ -257,16 +291,18 @@ own merits regardless of which agent scenarios ship.
 
 | Scenario | Availability | Knowledge | Stance | Initiative | Blocked on |
 |---|---|---|---|---|---|
-| 1A · unaware nurse called in | `on-call`, delay N | **`briefed`** | supportive | — | §4 |
-| 1B · unaware doctor, nurse learner | `on-call`, delay N | **`briefed`** | supportive | — | §4 + §7 |
-| 2 · helpful bedside nurse | `present`, instant | `case`/`full` | supportive | — | **nothing — authorable today** |
-| 3 · anxious family member | `present`, instant | `case`/`history` | **obstructive** | **proactive** | §5 + §6 |
-| — · wrong-headed colleague | any | `case` | **misleading** | — | §5 |
+| 1A · unaware nurse called in | `on-call`, delay N | **`none`** | supportive | — | **nothing — authorable** |
+| 1B · unaware doctor, nurse learner | `on-call`, delay N | **`none`** | supportive | — | §7 |
+| 2 · helpful bedside nurse | `present`, instant | `chart` | supportive | — | **nothing — authorable** |
+| 2b · nurse who just took shift | `present`, instant | **`handover`** | supportive | — | **nothing — authorable** |
+| 3 · anxious family member | `present`, instant | `history` | **obstructive** | **proactive** | §5 + §6 |
+| — · wrong-headed colleague | any | any | **misleading** | — | §5 |
 
-Suggested order: **§4 first** — it unblocks both 1A and 1B, it is the
-one with real pedagogical content, and it is medium rather than large.
-§5 is cheap once §4 lands. §7 is a project. §6 is a project with a UX
-risk that should be prototyped before it is scheduled.
+§4 shipped in v3.0.0-beta.91 and unblocked 1A outright; 1B still waits
+on §7. **§5 (stance) is the cheap next step** now that knowledge is
+separable from behaviour, which was its precondition. §7 is a project.
+§6 is a project with a UX risk that should be prototyped before it is
+scheduled.
 
 ---
 

@@ -151,7 +151,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const caseContext = buildCaseContext(activeCase, discussant.contextFilter);
+        const caseContext = buildCaseContext(activeCase, discussant.knowledge);
         // Persona blocks (dos / donts) read from the discussant template's
         // config — same shape used by every other agent type so the LLM call
         // path stays uniform.
