@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.97] — 2026-09-19
+
+### Changed
+
+- **CI reads the Prova reporter with a read-only deploy key** instead of a personal access token. `mohsaqr/prova` is private and a job's `GITHUB_TOKEN` is scoped to the repository it runs in, whoever owns the others — so something had to be granted. A deploy key is the least privilege that works: read on exactly one repository, where a PAT carries the whole account. The key is exported for the whole clone because `--filter=blob:none` makes a partial clone and `sparse-checkout` then fetches from the promisor remote; scoping ssh to the clone alone left that second fetch unauthenticated and it failed *after* the clone appeared to succeed.
+
 ## [3.0.0-beta.96] — 2026-09-19
 
 ### Fixed

@@ -183,7 +183,7 @@ jobs:
       # Skips cleanly when PROVA_GIT_TOKEN is absent, so forks still run.
       - name: Clone prova sibling (Playwright reporter)
         env:
-          PROVA_GIT_TOKEN: ${{ secrets.PROVA_GIT_TOKEN }}
+          PROVA_DEPLOY_KEY: ${{ secrets.PROVA_DEPLOY_KEY }}
         run: bash scripts/clone-prova.sh ../prova
       - name: Install dependencies
         run: npm ci
