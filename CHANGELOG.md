@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.94] — 2026-09-19
+
+### Changed
+
+- **The knowledge axis joins the Prova test battery.** `prova/rohy-cases.yaml` gains four cases under `PERSONA.AGENTS`: three `automated` ones mapping the 17 new end-to-end checks by describe block, and one `manual` case — *"An unbriefed colleague admits what it was not told instead of inventing it"* — with no `covers:`, because the suite can prove the prompt SAYS the agent knows nothing while only a person can judge whether the model honours it rather than back-filling. Coverage moves from 125 to 142 of 161 checks mapped, with no pattern matching nothing.
+
 ## [3.0.0-beta.93] — 2026-09-19
 
 ### Added

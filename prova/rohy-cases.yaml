@@ -1250,6 +1250,77 @@
       expected: |-
         The new manner is audible in the answers from the first reply, without needing a restart of
         the application.
+    - id: PERSONA.AGENTS.02
+      title: What an agent knows is set per agent, per case, and comes back as it was left
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an admin, open a case, go to the Agents step and choose Case overrides on a nurse.
+        2. Change what the agent knows, save, leave the panel and come back to it.
+      expected: |-
+        The block appears for a nurse, a consultant and a family member, and NOT for an on-call
+        specialist (whose disclosure gate is its own control) or the patient (whose prompt is built
+        by a different path). It shows the value stored for this case rather than the shipped
+        default, and the value survives a save and a cold reopen — read back from the server, not
+        redrawn from the panel's own state. Choosing "knows nothing" clears the encounter-record
+        toggle, because an agent told nothing about the patient must not also hold the list of
+        everything that was ordered. Keys the panel does not edit survive the save.
+      covers:
+        - "rohy:chromium::agent-knowledge.spec.js › the knowledge block in the case editor › *"
+    - id: PERSONA.AGENTS.03
+      title: The chosen scope decides what reaches the model, and the browser cannot widen it
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Set an agent's knowledge to each scope in turn and speak to it in a session.
+        2. Read the system prompt the server sent upstream, not the one the browser posted.
+      expected: |-
+        At the whole-chart scope the client's situation is used as before. At "knows nothing" the
+        client's situation is DROPPED entirely — no case context, no history, no diagnosis, no
+        vitals — and replaced by a server-built block saying the agent was told nothing. At the
+        handover scope the prompt carries the patient's identity, the reason for presentation and
+        the last observations the SERVER read from session_vitals, not the values the browser sent.
+        The role anchor and the authored persona still lead every prompt, and an on-call specialist
+        is still briefed on findings and never on the patient.
+      covers:
+        - "rohy:chromium::agent-knowledge.spec.js › the compiled prompt, as the model receives it › *"
+    - id: PERSONA.AGENTS.04
+      title: A knowledge setting the server cannot honour is refused, not stored
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Send a case-agent update carrying an unknown scope, and another carrying an unknown field.
+        2. Clear the override from an agent that has no stored knowledge of its own.
+      expected: |-
+        Both bad updates are refused with `invalid_knowledge` and NOTHING is stored — a setting that
+        is kept but never honoured is worse than one that is rejected. An agent with no stored
+        knowledge keeps the behaviour its legacy `context_filter` column gave it, so an install that
+        has not been migrated is never silently narrowed by a release.
+      covers:
+        - "rohy:chromium::agent-knowledge.spec.js › the server refuses what it cannot honour › *"
+    - id: PERSONA.AGENTS.05
+      title: An unbriefed colleague admits what it was not told instead of inventing it
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. Set the on-call consultant on a case to know NOTHING, and start a session as a learner.
+        2. Page the consultant and tell it only "sixty-five year old with chest pain" — no age
+           confirmation, no history, no observations, no results.
+        3. Ask it what it thinks, then ask it directly about something you never mentioned (the
+           patient's allergies, or what the troponin showed).
+      expected: |-
+        It asks for what it was not given rather than proceeding, and when asked about the allergy
+        or the troponin it says plainly that it has not been told, rather than producing a plausible
+        value. It must not describe symptoms, a history or a result that you did not say out loud,
+        and it must not repeat a detail back as though it already had it.
+
+        This is the half no automated check can make. The suite proves the prompt SAYS the agent
+        knows nothing; only a person can judge whether the model honours that. Run it against the
+        smaller model used in voice mode as well as the default — back-filling is likeliest there.
 
 - feature: ANALYTICS.COHORT
   title: Cohort analytics
