@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.98] — 2026-09-19
+
+### Added
+
+- **`tests/e2e/gate-core.spec.js`** — five core-tier cases the Prova gate was blocked on, automated at the contract layer. They are driven through the API rather than the UI, following the convention `case-lifecycle.spec.js` states outright: the learner-facing chrome for these has no stable hook, while the contract underneath it does, and the contract is what each case's `expected` describes. `CASE.TREAT.03` and `DEBRIEF.REVIEW.01` move to `kind: automated`, removing them from the gate's manual burden; the other three keep `kind: manual` with `covers:` because the automation covers only part of what the case asks a person to judge.
+
+### Found
+
+- **`turnaround_override` is ignored for default-catalogue labs** (Prova PRV-7). Ordering the same `default_*` lab with `turnaround_override: 0` and with `5` yields an identical `available_at`, and the catalogue advertises a `turnaround_minutes` it never imposes. So "Order instantly" cannot be distinguished from an ordinary order, and an author's delayed-result setting is silently dropped. `CASE.LABS.03` is deliberately left un-automated for this reason — with everything already instant, any assertion would pass without testing the case.
+
 ## [3.0.0-beta.97] — 2026-09-19
 
 ### Changed

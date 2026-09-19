@@ -336,6 +336,8 @@
       expected: |-
         The PACS room appears in the bar once an imaging study has been ordered, and the report's
         PACS link opens that room on the study.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › orders honour what the learner asked for › an imaging order is what makes a study exist for the PACS room"
 
 - feature: CASE.TREAT
   title: Giving a treatment
@@ -368,7 +370,7 @@
         terms. It is not refused without explanation, and it is not accepted with no comment at all.
     - id: CASE.TREAT.03
       title: A treatment can be stopped
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -378,6 +380,8 @@
       expected: |-
         The order is shown as discontinued and its contribution to the vital signs stops growing and
         then fades, rather than continuing as though it were still running.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › orders honour what the learner asked for › a treatment can be discontinued, and the order says so afterwards"
 
 - feature: MONITOR.VITALS
   title: The patient monitor
@@ -584,7 +588,7 @@
   cases:
     - id: DEBRIEF.REVIEW.01
       title: The case summary reflects what this learner actually did
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -594,6 +598,9 @@
       expected: |-
         The summary lists that one lab, that one examination and that one treatment — no invented
         entries, and nothing the learner did left out.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › the debrief tells the truth about the session › the record holds exactly what was done, with nothing invented"
+
     - id: DEBRIEF.REVIEW.02
       title: The answer key is not shown until the case is over
       kind: both
@@ -657,6 +664,8 @@
       expected: |-
         A plain message explains that no discussant is configured and where an admin would add one.
         The room does not sit on an empty loading state or crash.
+      covers:
+        - "rohy:chromium::gate-core.spec.js › the debrief tells the truth about the session › a case with no discussant resolves to none rather than hanging"
 
 - feature: DEBRIEF.RECORD
   title: The encounter record
@@ -963,6 +972,8 @@
 # ───────────────────────────────────────────────────────────────────────────────
 # Voice — needs engines and hardware, so these are environment-dependent
 # ───────────────────────────────────────────────────────────────────────────────
+      covers:
+        - "rohy:chromium::gate-core.spec.js › a case carries its own language › each case advertises its own language, whatever the interface is set to"
 
 - feature: VOICE.OUT
   title: The patient speaking
