@@ -62,6 +62,8 @@ export default function ExamTypeSelector({
                         <button
                             key={examType.id}
                             onClick={() => onExamTypeSelect(examType.id)}
+                            data-testid={`exam-technique-${examType.id}`}
+                            data-performed={isPerformed ? 'true' : 'false'}
                             className={`
                                 p-3 rounded-lg border transition-all flex flex-col items-center gap-2
                                 ${isSelected

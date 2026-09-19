@@ -9,6 +9,64 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.100] — 2026-09-19
+
+### Added
+
+- **The examination room, and the two persistence cases, automated.** `tests/e2e/gate-exam.spec.js` drives the body map, its aspect and shortcut controls and the examination log; `gate-rooms.spec.js` gains the reload and browser-restart cases. `CASE.EXAM.02` and `AUTH.SESSION.03` move to `kind: automated`; `CASE.EXAM.03`, `SESSION.START.02` and `AUTH.PASSWORD.01` keep `kind: manual` with `covers:`, each for a clause the automation does not settle (see **Found**).
+- **`tests/e2e/gate-core.spec.js`** gains the two cases whose `expected` is a server contract wearing a UI description: that a repeated region-and-technique is one row and one increment, and that the client's password mirror predicts the real endpoint password by password, across every boundary the rules name, with each accepted password proved by a real login.
+- Seven `data-testid` hooks in the examination room — `exam-aspect-<view>`, `exam-figure`, `exam-shortcut-<region>`, `bodymap-region-<id>`, `exam-technique-<id>` with `data-performed`, `exam-finding`, `exam-log` with `data-entry-count`, and `exam-log-row`. Every alternative selector there is a translated label, and `bodymap-region-*` is an SVG `<polygon>` with no text at all.
+- **`tests/e2e/fixtures/liveCase.js`** — entering a running case, the room button, the clock read that waits for `PatientMonitor` to recompute, and `ageSession`/`expectClockMatchesSession`, extracted from `gate-rooms.spec.js` now that two specs need them. Two copies would drift the moment the restore contract changed, and that contract is what both specs depend on.
+
+### Hardened after adversarial review
+
+A second pass (Codex) attacked the automation for coverage it claimed but did not assert. Nine
+findings, all acted on:
+
+- **The restart case was testing the wrong credential.** It injected a bearer token into
+  `localStorage`, but `AuthService.login()` defaults to `rememberToken = false` — a returning learner
+  is authenticated by the `rohy_auth` cookie alone, and `apiClient` prefers a bearer token when one is
+  present. The only test that asks whether a learner survives a browser restart was therefore exercising
+  the legacy lane and would have stayed green through a regression that stopped honouring the cookie.
+  It now carries no token at all.
+- **Every clock claim is now measured against the session's own `start_time`**, not against an earlier
+  reading of the same clock: `after >= before` is satisfied by a clock that restarted at zero and
+  ticked past a small `before`, and by one that is frozen. `ageSession()` runs before the action under
+  test, because what separates a surviving clock from one that restarts on every mount is how much of
+  the session had already elapsed when the monitor last mounted. Mutating `PatientMonitor` to ignore
+  the server anchor now fails all five tests that make a claim about time; before this it failed three,
+  and the two that passed were the reason the helper was added.
+- **`CASE.EXAM.02` now asserts what is rendered**, not only state attributes: `logCount()` checks the
+  drawn `exam-log-row` count against `data-entry-count`, and the "already done" cue is read off the
+  button rather than inferred from `data-performed`.
+- **The server read no longer races the write.** `usePhysicalExam` posts findings fire-and-forget, so
+  the assertion polls and then holds, rather than reading once after an unrelated UI assertion.
+- **Password cleanup moved to `afterAll`** and registers each created user *before* the verdict is
+  judged — a password the server unexpectedly accepts used to leave an account behind in the shared
+  database on exactly the run where something was already wrong. It is not a `finally`, because a
+  throwing `finally` would replace the failure that got you there.
+- **The body-map case proves a redraw**, comparing region ids across the aspect toggle and clicking a
+  posterior region, rather than counting polygons that a view stuck on anterior would also satisfy.
+- Four comments asserted things that are not true and were corrected — `storageState` does not carry
+  `addInitScript` registrations, `loginAs` prefers the globalSetup cache over a real login, nothing
+  reads `sessions.exam_findings_count`, and the PRV-9 note below contradicted itself.
+
+### Fixed in the tests themselves
+
+- **A real flake, found and fixed rather than retried.** The restart case inserted its conversation
+  through the API *after* the app had already opened the case. ChatInterface restores from its
+  `rohy_chat_history` localStorage copy first and only falls back to `GET /interactions/:session` when
+  that copy is absent — so whether the inserted turns survived depended on whether the case's own
+  opening exchange had reached localStorage first. It passed alone and failed in a combined run. The
+  conversation is now recorded before the browser opens the case, which is both deterministic and the
+  truthful shape: a learner who comes back has a history the app itself put there.
+
+### Found
+
+- **PRV-8 (major)** — the examination log empties when the learner leaves the room or reloads, though the server still holds the findings. Measured: 1 entry after the examination, 0 after a room round trip, 0 after a reload, 1 row on the server throughout. `ManikinPanel` holds `examLog` in `useState([])` and nothing rehydrates it from `GET /sessions/:id/exam-findings`. The "already done" marks and the abnormal-region shading go with it. This is the clause that keeps `SESSION.START.02` manual.
+- **PRV-9 (minor)** — the admin's create-user form applies no password rule: it neither states it nor refuses before submitting. `UserFormModal.jsx` imports neither half of `src/utils/passwordRules.js`, so a failing password is posted and the only feedback is the server's 400 in a toast. It is minor rather than major because the two rules cannot silently DISAGREE on that screen — with no client check there is only one judge — but the admin still gets a round trip and a raw server string where the form should have stated the rule up front. This is the clause that keeps `AUTH.PASSWORD.01` manual.
+- `CASE.EXAM.03`'s second step, switching the figure between the male and female silhouette, **cannot be performed inside a case**: `ManikinPanel` renders a locked indicator once the patient has a sex, and switching the figure away from the patient in front of you would be the bug rather than the feature. The spec asserts the lock instead. The case text still describes the pre-case behaviour and wants amending.
+
 ## [3.0.0-beta.99] — 2026-09-19
 
 ### Added

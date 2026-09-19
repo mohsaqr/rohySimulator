@@ -248,6 +248,8 @@ export default function ManikinPanel({
                         <div className="flex gap-2 mb-3">
                             <button
                                 onClick={() => setView('anterior')}
+                                data-testid="exam-aspect-anterior"
+                                aria-pressed={view === 'anterior'}
                                 className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                                     view === 'anterior'
                                         ? 'bg-cyan-600 text-white'
@@ -258,6 +260,8 @@ export default function ManikinPanel({
                             </button>
                             <button
                                 onClick={() => setView('posterior')}
+                                data-testid="exam-aspect-posterior"
+                                aria-pressed={view === 'posterior'}
                                 className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                                     view === 'posterior'
                                         ? 'bg-cyan-600 text-white'
@@ -272,9 +276,14 @@ export default function ManikinPanel({
                         <div className="flex gap-2 mb-4">
                             {patientGender ? (
                                 // Show locked gender indicator when case is loaded
-                                <div className={`flex-1 py-1.5 px-2 rounded text-xs font-medium flex items-center justify-center gap-1 ${
-                                    gender === 'male' ? 'bg-blue-600 text-white' : 'bg-pink-600 text-white'
-                                }`}>
+                                <div
+                                    data-testid="exam-figure"
+                                    data-figure={gender}
+                                    data-locked="true"
+                                    className={`flex-1 py-1.5 px-2 rounded text-xs font-medium flex items-center justify-center gap-1 ${
+                                        gender === 'male' ? 'bg-blue-600 text-white' : 'bg-pink-600 text-white'
+                                    }`}
+                                >
                                     {gender === 'male' ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
                                     {gender === 'male' ? t('male_patient') : t('female_patient')}
                                 </div>
@@ -283,6 +292,8 @@ export default function ManikinPanel({
                                 <>
                                     <button
                                         onClick={() => setGender('male')}
+                                        data-testid="exam-figure-male"
+                                        aria-pressed={gender === 'male'}
                                         className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                                             gender === 'male'
                                                 ? 'bg-blue-600 text-white'
@@ -294,6 +305,8 @@ export default function ManikinPanel({
                                     </button>
                                     <button
                                         onClick={() => setGender('female')}
+                                        data-testid="exam-figure-female"
+                                        aria-pressed={gender === 'female'}
                                         className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                                             gender === 'female'
                                                 ? 'bg-pink-600 text-white'
@@ -323,6 +336,8 @@ export default function ManikinPanel({
                         <div className="mt-4 flex gap-2">
                             <button
                                 onClick={() => handleRegionClick('general')}
+                                data-testid="exam-shortcut-general"
+                                aria-pressed={selectedRegion === 'general'}
                                 className={`flex-1 py-2 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                                     selectedRegion === 'general'
                                         ? 'bg-cyan-600 text-white'
@@ -334,6 +349,8 @@ export default function ManikinPanel({
                             </button>
                             <button
                                 onClick={() => handleRegionClick('neurological')}
+                                data-testid="exam-shortcut-neurological"
+                                aria-pressed={selectedRegion === 'neurological'}
                                 className={`flex-1 py-2 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                                     selectedRegion === 'neurological'
                                         ? 'bg-cyan-600 text-white'
