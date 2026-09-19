@@ -34,14 +34,29 @@ if [[ -z "${PROVA_GIT_TOKEN:-}" ]]; then
     exit 0
 fi
 
+# A BAD token must degrade exactly like a missing one: warn, skip, carry on.
+# Reporting to Prova is not what the e2e job is for, and failing the whole
+# suite over it turns main red for a credential problem while telling you
+# nothing about the software. The warning below is the signal; the job's
+# result stays about the tests.
+#
+# `git credential` prompting is disabled so a rejected token fails fast with
+# "could not read Username" instead of hanging on a terminal that is not there.
 basic_auth="$(printf 'x-access-token:%s' "$PROVA_GIT_TOKEN" | base64 | tr -d '\r\n')"
-git -c "http.extraHeader=Authorization: Basic $basic_auth" \
-    clone --depth 1 --filter=blob:none --sparse "$repo" "$destination"
+if ! GIT_TERMINAL_PROMPT=0 git -c "http.extraHeader=Authorization: Basic $basic_auth" \
+        clone --depth 1 --filter=blob:none --sparse "$repo" "$destination" 2>&1; then
+    unset basic_auth
+    echo "clone-prova: clone FAILED (check PROVA_GIT_TOKEN has read access to mohsaqr/prova)" >&2
+    echo "clone-prova: continuing without the reporter — this run will not report to Prova." >&2
+    rm -rf "$destination"
+    exit 0
+fi
 unset basic_auth
 git -C "$destination" sparse-checkout set reporters
 
 if [[ ! -f "$destination/reporters/playwright.mjs" ]]; then
-    echo "clone-prova: reporters/playwright.mjs missing after clone" >&2
-    exit 1
+    echo "clone-prova: reporters/playwright.mjs missing after clone — not reporting." >&2
+    rm -rf "$destination"
+    exit 0
 fi
 echo "clone-prova: reporter available at $destination/reporters/playwright.mjs"

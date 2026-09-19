@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.96] — 2026-09-19
+
+### Fixed
+
+- **A bad `PROVA_GIT_TOKEN` turned CI red instead of skipping.** The clone helper added in beta.95 ran under `set -e`, so a rejected credential failed the whole Playwright job — main went red over a token, while saying nothing about the software. A failed clone now degrades exactly like a missing token: it warns loudly on stderr and carries on without the reporter, which is the contract the job already had for forks and secret-less PRs. `GIT_TERMINAL_PROMPT=0` makes a rejected token fail fast rather than block on a terminal that is not there.
+
 ## [3.0.0-beta.95] — 2026-09-19
 
 ### Fixed
