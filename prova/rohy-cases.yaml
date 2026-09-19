@@ -103,7 +103,7 @@
       covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 1. load case*"]
     - id: SESSION.START.02
       title: A reloaded page comes back to the same moment, not the beginning
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -124,7 +124,7 @@
   cases:
     - id: NAV.ROOMS.01
       title: Every room in the bar opens and the case stays live
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -264,7 +264,7 @@
 
     - id: CASE.EXAM.03
       title: The body map offers both aspects and both figures
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -339,7 +339,7 @@
         impression, laid out as a report rather than as raw data.
     - id: CASE.IMAGING.02
       title: Ordering imaging opens the PACS room
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -676,7 +676,7 @@
         the transcript keeps what they said and the debrief can be retried.
     - id: DEBRIEF.DISCUSS.04
       title: A case with no discussant says so plainly
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -914,7 +914,7 @@
   cases:
     - id: AUTH.PASSWORD.01
       title: A password the form accepts is a password the server accepts
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -982,7 +982,7 @@
   cases:
     - id: I18N.CASE.01
       title: The case's language is independent of the interface language
-      kind: manual
+      kind: both
       platforms: [any]
       severity_if_failed: major
       steps: |-
