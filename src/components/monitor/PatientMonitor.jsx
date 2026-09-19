@@ -1430,7 +1430,15 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                {/* Session Timer */}
                {monitorSettings.showTimer && (
                   <div className="text-center mr-2 px-3 py-1 bg-neutral-800 rounded-lg">
-                     <div className="text-lg font-mono font-bold text-green-400">{formatElapsedTime(elapsedTime)}</div>
+                     {/* Test hook. The rendered value is formatted for humans
+                         (m:ss) and the label is translated, so a spec reading
+                         either is parsing presentation. `data-elapsed-seconds`
+                         is the number the clock is actually derived from. */}
+                     <div
+                         data-testid="session-clock"
+                         data-elapsed-seconds={elapsedTime}
+                         className="text-lg font-mono font-bold text-green-400"
+                     >{formatElapsedTime(elapsedTime)}</div>
                      <div className="text-[10px] text-neutral-500 uppercase tracking-wide">{t('session_time')}</div>
                   </div>
                )}
