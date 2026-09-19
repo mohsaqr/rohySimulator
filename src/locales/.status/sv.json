@@ -2349,6 +2349,136 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.agent_knowledge_answer_key": {
+    "src": "65937a31b654",
+    "tgt": "83d4d78b0e19",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_answer_key_help": {
+    "src": "5e713e818f85",
+    "tgt": "cd694b963005",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_help": {
+    "src": "400366a7781b",
+    "tgt": "adadb1fe5308",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_overrides": {
+    "src": "78c338d8f588",
+    "tgt": "97d226972363",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_record": {
+    "src": "4c28070f5669",
+    "tgt": "90b9b76237eb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_record_help": {
+    "src": "a70ea406a571",
+    "tgt": "d6345b9ed527",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope": {
+    "src": "949711f21744",
+    "tgt": "dfc55d684969",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_chart": {
+    "src": "ea7e7a77ff7c",
+    "tgt": "40a0dfa3119c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_handover": {
+    "src": "c178efbf4e1c",
+    "tgt": "19e7cf9e7976",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_help": {
+    "src": "7d99b763b4b6",
+    "tgt": "08d9754356b5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_history": {
+    "src": "ac24cbab347a",
+    "tgt": "8a289e84430d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_none": {
+    "src": "af5fb8959686",
+    "tgt": "ae994f7261e3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.agent_knowledge_scope_summary": {
+    "src": "97e50dce717f",
+    "tgt": "1d7c4d0f15fc",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.agent_name_override": {
     "src": "7bb50de836a0",
     "tgt": "58265f87f296",

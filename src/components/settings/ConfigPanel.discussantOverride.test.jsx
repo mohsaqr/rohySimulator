@@ -128,7 +128,11 @@ describe('ConfigPanel — discussant case overrides survive a save', () => {
     it('still writes an edited control through, without dropping the rest', async () => {
         await openDiscussantOverrides();
 
-        const checkbox = screen.getByRole('checkbox', { checked: true });
+        // Queried by label, not by role: the panel grew a second block ("What
+        // this agent knows about the case") whose checkboxes also match
+        // role=checkbox, and a bare getByRole now finds several.
+        const checkbox = screen.getByLabelText(/Show the encounter record/i);
+        expect(checkbox.checked).toBe(true);
         fireEvent.click(checkbox); // turn the encounter record OFF
         fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
 
