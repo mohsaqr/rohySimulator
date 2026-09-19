@@ -133,6 +133,9 @@
         Every button opens its room, the active one is visibly marked, nothing is hidden behind the
         bar or off the bottom of the screen, and back in the patient room the conversation and the
         session clock have carried on rather than restarting.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › the room bar › every room in the bar opens, and the case is still live afterwards"
+
     - id: NAV.ROOMS.02
       title: Ready results are advertised on the Laboratory and Radiology buttons
       kind: manual
@@ -147,7 +150,7 @@
         disappears once it has been opened. No badge ever appears on a room that has no results.
     - id: NAV.ROOMS.03
       title: Visiting the Consultant mid-case does not end the case
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -156,6 +159,8 @@
       expected: |-
         The case is still live: the monitor is tracing, the session clock is still counting, the
         "End & Debrief" button is still offered, and no "case ended" state has appeared.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › the room bar › visiting the Consultant mid-case does not end the case"
 
 - feature: CASE.INTERVIEW
   title: Interviewing the virtual patient
@@ -402,7 +407,7 @@
       covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 3. vitals tick*"]
     - id: MONITOR.VITALS.02
       title: The session clock is the real elapsed time
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -411,6 +416,9 @@
       expected: |-
         The session clock reads about two minutes further on — it tracks elapsed time rather than
         restarting when the room is re-entered.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › the session clock › the clock is real elapsed time, not a counter that starts at zero"
+
     - id: MONITOR.VITALS.03
       title: A rhythm change is visible in the trace, not only in the numbers
       kind: manual
@@ -525,7 +533,7 @@
       covers: ["rohy:chromium::scenario-engine.spec.js › scenario engine › *"]
     - id: SCENARIO.TIME.02
       title: Time passes even while the learner is in another room
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -534,6 +542,8 @@
       expected: |-
         The patient is where the trajectory should have carried them in those two minutes — the
         scenario does not pause or restart because nobody was watching.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › the session clock › time passes even while the learner is in another room"
 
 - feature: TEAM.CONSULT
   title: The care team
@@ -573,13 +583,15 @@
       covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 6. end session*"]
     - id: SESSION.END.02
       title: Ending is deliberate
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
         1. Press **End & Debrief** and then dismiss the confirmation without confirming.
       expected: |-
         Nothing ends: the case is still running, and no debrief has been opened.
+      covers:
+        - "rohy:chromium::gate-rooms.spec.js › ending the case › ending is deliberate: dismissing the confirmation ends nothing"
 
 - feature: DEBRIEF.REVIEW
   title: The debrief summary

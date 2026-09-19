@@ -188,6 +188,11 @@ export default function RoomNavigator({
     const counts = useReadyCounts(sessionId);
     return (
         <nav
+            // Test hooks. The accessible name of a room button is TRANSLATED,
+            // and gains a count when results are ready ("Laboratory, 2 ready"),
+            // so a spec that targets rooms by name is both locale-bound and
+            // state-bound. The key is neither.
+            data-testid="room-navigator"
             className="flex items-stretch gap-1 px-3 py-2 bg-slate-950/95 backdrop-blur border-t border-slate-800 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
             aria-label={t('room_navigation')}
         >
@@ -231,6 +236,7 @@ function RoomButton({ room, active, badge, onClick }) {
     return (
         <button
             type="button"
+            data-testid={`room-button-${room.key}`}
             onClick={onClick}
             aria-pressed={active}
             aria-label={showBadge ? t('room_ready_results', { label, count: badge }) : label}

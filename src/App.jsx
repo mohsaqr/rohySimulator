@@ -1203,6 +1203,12 @@ function MainApp() {
                {sessionId && !caseEnded && (
                   <div className="absolute top-4 right-4 z-10">
                      <button
+                        // Test hook: the visible label is hidden below `lg`
+                        // (max-lg:sr-only), so at tablet width this button has
+                        // no text at all and a spec matching on it finds
+                        // nothing on exactly the viewports most likely to
+                        // regress.
+                        data-testid="end-session"
                         onClick={() => setShowEndConfirm(true)}
                         className="px-3 py-2 bg-red-900/70 hover:bg-red-800/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-red-50 border border-red-700/60 transition-colors"
                         title={t('end_debrief_title')}
@@ -1366,12 +1372,14 @@ function EndSessionConfirm({ onCancel, onConfirm }) {
             </div>
             <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
                <button
+                  data-testid="end-session-cancel"
                   onClick={onCancel}
                   className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
                >
                   {t('cancel')}
                </button>
                <button
+                  data-testid="end-session-confirm"
                   onClick={onConfirm}
                   className="px-4 py-2 text-sm rounded text-white font-semibold bg-red-700 hover:bg-red-600 flex items-center gap-2"
                >

@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.99] — 2026-09-19
+
+### Added
+
+- **Test hooks for the learner's chrome, and five more gate-blocked cases automated.** `tests/e2e/gate-rooms.spec.js` drives the room bar, the session clock and the end-of-case confirmation in a real browser. Four cases move to `kind: automated` (NAV.ROOMS.03, MONITOR.VITALS.02, SCENARIO.TIME.02, SESSION.END.02); NAV.ROOMS.01 keeps `kind: manual` because its expected includes "nothing is hidden behind the bar or off the bottom of the screen", which the automation does not judge.
+- Three `data-testid` hooks, each replacing a selector that would pass or fail for the wrong reason: `room-navigator`/`room-button-<key>` (room names are translated, and a room's accessible name gains "2 ready" when results land), `session-clock` with `data-elapsed-seconds` (the rendered value is formatted m:ss), and `end-session` with its confirm/cancel buttons (the label is `max-lg:sr-only`, so at tablet width the button has no text at all).
+
+### Note
+
+The spec enters a live case by seeding `rohy_active_session`, the same contract App.jsx restores from, rather than guessing at a Start affordance — the approach `case-lifecycle.spec.js` adopted for the same reason. Reads of the clock wait for it to recompute: `PatientMonitor` holds elapsed time in `useState(0)` and recomputes from a wall-clock anchor on the next tick, so a read taken straight after any room change catches the reset rather than the elapsed time.
+
 ## [3.0.0-beta.98] — 2026-09-19
 
 ### Added
