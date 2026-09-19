@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.95] — 2026-09-19
+
+### Fixed
+
+- **CI ran the e2e suite and recorded nothing in Prova, silently.** The `e2e` job is named "Run Playwright and report to Prova" and passes `PROVA_URL`/`PROVA_TOKEN`, but `playwright.config.js` adds the reporter only `if (fs.existsSync('../prova/reporters/playwright.mjs'))` — and the job cloned the `dynajs` and `3D` siblings, never `prova`. The secrets reached a reporter that was never loaded, and a reporter that does not load cannot warn, so the failure was invisible: a green job, a clean log, and no build in Prova. `scripts/clone-prova.sh` now fetches the reporter (blobless sparse clone, one-shot auth header rather than a credential in the remote URL) and skips cleanly without `PROVA_GIT_TOKEN` so forks and secret-less PRs still run.
+
 ## [3.0.0-beta.94] — 2026-09-19
 
 ### Changed

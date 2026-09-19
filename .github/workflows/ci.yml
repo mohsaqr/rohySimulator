@@ -175,6 +175,16 @@ jobs:
         env:
           ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
         run: bash scripts/clone-room3d.sh ../3D
+      # playwright.config.js adds the Prova reporter only when
+      # ../prova/reporters/playwright.mjs exists. Without this step the
+      # PROVA_* secrets below reach a reporter that was never loaded, and the
+      # job runs the whole suite while recording nothing — silently, because a
+      # reporter that does not load cannot warn. Measured 2026-09-19.
+      # Skips cleanly when PROVA_GIT_TOKEN is absent, so forks still run.
+      - name: Clone prova sibling (Playwright reporter)
+        env:
+          PROVA_GIT_TOKEN: ${{ secrets.PROVA_GIT_TOKEN }}
+        run: bash scripts/clone-prova.sh ../prova
       - name: Install dependencies
         run: npm ci
       - name: Install Playwright browsers
