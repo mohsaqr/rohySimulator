@@ -98,6 +98,7 @@ import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
 import { useBodyImage } from '../../hooks/useBodyImage';
 import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 import { isSpecialistType, normalizeDisclosure } from '../../../server/shared/specialties.js';
+import { KNOWLEDGE_TYPES, normalizeKnowledge } from '../../../server/shared/agentKnowledge.js';
 
 // Wizard step order — the single source of truth for step numbers. CaseWizard's
 // WIZARD_STEPS table (titles + icons) is built from this list, and any call
@@ -3073,6 +3074,37 @@ function disclosureOf(agent) {
     };
 }
 
+// What this agent is given about the case, as the editor should show it.
+//
+// Same three-level read as disclosureOf: the stored value (resolved through
+// the registry, which also maps the legacy `context_filter` column for an
+// agent nobody has migrated), with the panel's `_cfg_knowledge_*` scratch
+// fields laid over it. The scratch keys are never sent as-is — the save
+// handler reads them back through this same function.
+function knowledgeOf(agent) {
+    const stored = normalizeKnowledge({
+        knowledge: agent?.config?.knowledge,
+        agentType: agent?.agent_type,
+        contextFilter: agent?.context_filter,
+    }).value;
+    return {
+        scope: agent?._cfg_knowledge_scope ?? stored.scope,
+        answerKey: agent?._cfg_knowledge_answer_key ?? stored.answerKey,
+        record: agent?._cfg_knowledge_record ?? stored.record,
+    };
+}
+
+// Does the knowledge block apply to this agent type?
+//
+// Not the patient, whose prompt is built by a path that never consults it, and
+// not an on-call specialist: a specialist is `none` by definition — the server
+// drops the client situation and builds a findings-only brief — and its own
+// disclosure block above is the control that means something. Rendering a
+// scope dropdown that changes nothing would be a setting that lies.
+function knowledgeApplies(agentType) {
+    return KNOWLEDGE_TYPES.includes(agentType) && !isSpecialistType(agentType);
+}
+
 function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenPersonaEditor }) {
     const { t } = useTranslation('authoring_config');
     const [templates, setTemplates] = useState([]);
@@ -3285,20 +3317,14 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                             saving silently reverted a per-case override to the
                             default. The API sends no top-level field for either. */}
                         <h5 className="text-sm font-bold text-indigo-300">{t('agent_discussant_overrides')}</h5>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-neutral-400 mb-1">{t('agent_context_filter')}</label>
-                                <select
-                                    value={editingAgent._cfg_context_filter ?? editingAgent.config?.context_filter ?? editingAgent.context_filter ?? 'full'}
-                                    onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_context_filter: e.target.value }))}
-                                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
-                                >
-                                    <option value="full">{t('agent_ctx_full')}</option>
-                                    <option value="history">{t('agent_ctx_history')}</option>
-                                    <option value="vitals">{t('agent_ctx_vitals')}</option>
-                                    <option value="minimal">{t('agent_ctx_minimal')}</option>
-                                </select>
-                            </div>
+                        <div className="grid grid-cols-1 gap-4">
+                            {/* The per-case `context_filter` select used to sit
+                                here. It was stored and never read: the only
+                                consumer in the repo was this select's own
+                                `value=`, so an educator could set it, reopen
+                                the editor, see it remembered, and have it
+                                change nothing. The knowledge block below is the
+                                control that works. */}
                             <div>
                                 <label className="block text-sm text-neutral-400 mb-1">{t('agent_unlock_trigger')}</label>
                                 <select
@@ -3400,6 +3426,79 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                     </div>
                 )}
 
+                {knowledgeApplies(editingAgent.agent_type) && (
+                    <div className="space-y-4 p-4 rounded-lg bg-emerald-950/30 border border-emerald-900/50">
+                        {/* What this agent is given about the case.
+
+                            Reads `editingAgent.config` — the MERGED
+                            {...template_config, ...config_override} the API
+                            returns — through the registry, which also maps the
+                            legacy `context_filter` column so an agent nobody
+                            has migrated renders the behaviour it actually has.
+
+                            The server validates what is sent (normalizeKnowledge)
+                            and refuses the whole PUT on a bad field, so the
+                            controls below only ever emit valid values. */}
+                        <h5 className="text-sm font-bold text-emerald-300">{t('agent_knowledge_overrides')}</h5>
+                        <p className="text-xs text-neutral-500">{t('agent_knowledge_help')}</p>
+                        <div>
+                            <label className="block text-sm text-neutral-400 mb-1">{t('agent_knowledge_scope')}</label>
+                            <select
+                                value={knowledgeOf(editingAgent).scope}
+                                onChange={(e) => setEditingAgent(prev => ({
+                                    ...prev,
+                                    _cfg_knowledge_scope: e.target.value,
+                                    // Choosing "knows nothing" and leaving the
+                                    // encounter record on produces an agent
+                                    // that has been told nothing about the
+                                    // patient and handed the full list of what
+                                    // was ordered and given — a contradiction
+                                    // the learner cannot see. The two stay
+                                    // independent in the data; the editor just
+                                    // stops you walking into it by accident.
+                                    ...(e.target.value === 'none' ? { _cfg_knowledge_record: false } : {}),
+                                }))}
+                                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm"
+                            >
+                                <option value="none">{t('agent_knowledge_scope_none')}</option>
+                                <option value="handover">{t('agent_knowledge_scope_handover')}</option>
+                                <option value="summary">{t('agent_knowledge_scope_summary')}</option>
+                                <option value="history">{t('agent_knowledge_scope_history')}</option>
+                                <option value="chart">{t('agent_knowledge_scope_chart')}</option>
+                            </select>
+                            <p className="text-xs text-neutral-500 mt-1">{t('agent_knowledge_scope_help')}</p>
+                        </div>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                // Only the chart scope carries the configured
+                                // results the expectations belong with; below
+                                // it there is nothing for the answer to sit on.
+                                disabled={knowledgeOf(editingAgent).scope !== 'chart'}
+                                checked={knowledgeOf(editingAgent).answerKey}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_knowledge_answer_key: e.target.checked }))}
+                                className="mt-0.5 w-4 h-4 accent-emerald-500"
+                            />
+                            <span>
+                                <span className="block text-sm text-neutral-300">{t('agent_knowledge_answer_key')}</span>
+                                <span className="block text-xs text-neutral-500">{t('agent_knowledge_answer_key_help')}</span>
+                            </span>
+                        </label>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={knowledgeOf(editingAgent).record}
+                                onChange={(e) => setEditingAgent(prev => ({ ...prev, _cfg_knowledge_record: e.target.checked }))}
+                                className="mt-0.5 w-4 h-4 accent-emerald-500"
+                            />
+                            <span>
+                                <span className="block text-sm text-neutral-300">{t('agent_knowledge_record')}</span>
+                                <span className="block text-xs text-neutral-500">{t('agent_knowledge_record_help')}</span>
+                            </span>
+                        </label>
+                    </div>
+                )}
+
                 <div className="flex justify-end gap-2 pt-4 border-t border-neutral-800">
                     <button
                         onClick={() => {
@@ -3412,25 +3511,32 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 response_time_min: editingAgent.response_time_min,
                                 response_time_max: editingAgent.response_time_max,
                             };
+                            // config_override is a FULL REPLACE server-side, so
+                            // the save must start from the config that is there —
+                            // `editingAgent.config`, the merged
+                            // {...template_config, ...config_override} the
+                            // controls above render. Rebuilding the blob from
+                            // those controls alone dropped every key this panel
+                            // does not edit: v2.9.98's show_encounter_record
+                            // vanished on the next save of ANY field (2026-08-30
+                            // UI review, #12). The API never sends the raw
+                            // override, so the merged object is the most faithful
+                            // base available.
+                            //
+                            // The three blocks below ACCUMULATE into one object.
+                            // They each used to assign `updates.config_override`
+                            // outright, which was safe only while no agent could
+                            // match two of them. The knowledge block spans nearly
+                            // every type, so a discussant now matches two, and the
+                            // second assignment would have silently dropped the
+                            // first.
+                            const base = (editingAgent.config && typeof editingAgent.config === 'object')
+                                ? editingAgent.config
+                                : {};
+                            let override = null;
                             if (editingAgent.agent_type === 'discussant') {
-                                // config_override is a FULL REPLACE server-side,
-                                // so the save must start from the config that is
-                                // there — `editingAgent.config`, the merged
-                                // {...template_config, ...config_override} the
-                                // three controls above render. Rebuilding the blob
-                                // from those controls alone dropped every key this
-                                // panel does not edit: v2.9.98's
-                                // show_encounter_record vanished on the next save
-                                // of ANY field (2026-08-30 UI review, #12). The
-                                // API never sends the raw override, so the merged
-                                // object is the most faithful base available.
-                                const base = (editingAgent.config && typeof editingAgent.config === 'object')
-                                    ? editingAgent.config
-                                    : {};
-                                updates.config_override = {
-                                    ...base,
-                                    context_filter: editingAgent._cfg_context_filter
-                                        ?? base.context_filter ?? editingAgent.context_filter ?? 'full',
+                                override = {
+                                    ...(override ?? base),
                                     unlock_trigger: editingAgent._cfg_unlock_trigger
                                         ?? base.unlock_trigger ?? editingAgent.unlock_trigger ?? 'after_case_ended',
                                     // Written explicitly, true or false: with a
@@ -3441,15 +3547,9 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                 };
                             }
                             if (isSpecialistType(editingAgent.agent_type)) {
-                                // Same full-replace rule as the discussant
-                                // block: start from the merged config so keys
-                                // this panel does not edit survive the save.
-                                const base = (editingAgent.config && typeof editingAgent.config === 'object')
-                                    ? editingAgent.config
-                                    : {};
                                 const shown = disclosureOf(editingAgent);
-                                updates.config_override = {
-                                    ...base,
+                                override = {
+                                    ...(override ?? base),
                                     // Only the three fields the registry still
                                     // accepts. A stored `requireInterpretation`
                                     // from before it was removed would make the
@@ -3463,6 +3563,23 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                     },
                                 };
                             }
+                            if (knowledgeApplies(editingAgent.agent_type)) {
+                                const known = knowledgeOf(editingAgent);
+                                override = {
+                                    ...(override ?? base),
+                                    // Rebuilt, not spread, for the same reason as
+                                    // disclosure: a field the registry no longer
+                                    // accepts would make the server refuse the
+                                    // whole PUT. Booleans written explicitly so an
+                                    // OFF survives the spread of `base`.
+                                    knowledge: {
+                                        scope: known.scope,
+                                        answerKey: known.answerKey === true,
+                                        record: known.record === true,
+                                    },
+                                };
+                            }
+                            if (override) updates.config_override = override;
                             handleUpdateAgent(updates);
                         }}
                         className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm font-bold"

@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.92] — 2026-09-19
+
+### Added
+
+- **A settings screen for what an agent knows.** The case-agent editor gains a block for `config.knowledge`: the scope, whether the expected diagnosis comes with it, and whether the agent is told what the learner has done. Choosing "knows nothing" clears the encounter-record toggle, because an agent told nothing about the patient and then handed the full list of everything ordered is a contradiction the learner cannot see. Thirteen new strings, translated into all nine locales.
+
+### Fixed
+
+- The save handler now **accumulates** into one `config_override` instead of assigning it per agent type. That was safe only while no agent could match two blocks; the knowledge block spans nearly every type, so a discussant now matches two and the second assignment would have silently dropped the first — taking `unlock_trigger` and `show_encounter_record` with it on every save.
+
+### Removed
+
+- The per-case `context_filter` select in the case editor. It was stored and never read — the only consumer in the repo was that select's own `value=`, so an educator could set it, reopen the editor, see it remembered, and have it change nothing.
+
 ## [3.0.0-beta.91] — 2026-09-19
 
 ### Added
