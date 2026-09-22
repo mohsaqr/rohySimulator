@@ -871,6 +871,15 @@ function MainApp() {
          }}
          uiLanguage={uiLanguage}
          onSetLanguage={setUiLanguage}
+         trailing={
+            <OnCallButton
+               ref={onCallButtonRef}
+               sessionId={onCall.available ? sessionId : null}
+               specialists={onCall.team.specialists}
+               open={onCall.open}
+               onClick={onCall.toggle}
+            />
+         }
       />
    ) : null;
 
@@ -1024,21 +1033,15 @@ function MainApp() {
       {oyonConsentUpdate}
       {/* On-call phone: text or call the case's specialists (pathology,
           cardiology, radiology, laboratory) from any room, plugin rooms
-          included. It sits HERE, above PatientRecordProvider and below every
-          surface that early-returns (settings, analytics, lessons), which is
-          exactly the set of screens that are "inside a case".
+          included. The handset sits HERE, above PatientRecordProvider and
+          below every surface that early-returns (settings, analytics,
+          lessons), which is exactly the set of screens that are "inside a
+          case", so it outlives a room change.
 
-          The round button floats at the right edge of the case screen rather
-          than living in the bottom RoomNavigator: the nav is per-room and the
-          handset has to outlive a room change, and the earlier floating
-          position covered the monitor's EtCO2 reading. */}
-      <OnCallButton
-         ref={onCallButtonRef}
-         sessionId={onCall.available ? sessionId : null}
-         specialists={onCall.team.specialists}
-         open={onCall.open}
-         onClick={onCall.toggle}
-      />
+          Its button is NOT here: it rides in topBarControls (the `trailing`
+          slot), the one header every room renders. Two floating positions
+          before that covered the monitor — first the EtCO2 reading, then the
+          HR number at the right edge. */}
       {onCall.open && (
          <OnCallPhone
             sessionId={sessionId}
@@ -1188,40 +1191,46 @@ function MainApp() {
             <div className="h-[30%] lg:h-[45%] border-b border-neutral-800 relative">
                <PatientVisual caseData={activeCase} />
 
-               {/* Settings menu + language switcher — far-left top corner.
-                   Now the shared TopBarControls, identical to the one rendered
-                   in every other screen's header, so the gear and language
-                   switch are consistent app-wide. */}
-               <div className="absolute top-4 left-4 z-10">
-                  {topBarControls}
-               </div>
-
-               {/* End & Debrief — the explicit way for the learner to close
-                   the case. Tab-close + case-switch still call the same
-                   endpoint as fallbacks, but this is the canonical path:
-                   one click, one confirmation, lands you in the debrief. */}
-               {sessionId && !caseEnded && (
-                  <div className="absolute top-4 right-4 z-10">
-                     <button
-                        // Test hook: the visible label is hidden below `lg`
-                        // (max-lg:sr-only), so at tablet width this button has
-                        // no text at all and a spec matching on it finds
-                        // nothing on exactly the viewports most likely to
-                        // regress.
-                        data-testid="end-session"
-                        onClick={() => setShowEndConfirm(true)}
-                        className="px-3 py-2 bg-red-900/70 hover:bg-red-800/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-red-50 border border-red-700/60 transition-colors"
-                        title={t('end_debrief_title')}
-                     >
-                        <StopCircle className="w-4 h-4" />
-                        {/* Label hidden below `lg`: this button, the top-left
-                            controls and the centred Oyon pill all share one
-                            narrow band, and the three collided on a tablet.
-                            `title` + aria-label keep it identifiable. */}
-                        <span className="max-lg:sr-only">{t('end_debrief')}</span>
-                     </button>
+               {/* The top band over the portrait: the shared TopBarControls
+                   (menu, logout, the on-call phone) on the left, End & Debrief
+                   on the right. ONE flex row that wraps, not two absolutely
+                   positioned corners: the corners collided whenever the
+                   column was narrower than both groups together, and at
+                   1024px End & Debrief sat right on top of the phone.
+                   pointer-events pass through the empty middle to the
+                   portrait. */}
+               <div className="absolute top-4 inset-x-4 z-10 flex flex-wrap items-start justify-between gap-2 pointer-events-none">
+                  <div className="pointer-events-auto">
+                     {topBarControls}
                   </div>
-               )}
+
+                  {/* End & Debrief — the explicit way for the learner to close
+                      the case. Tab-close + case-switch still call the same
+                      endpoint as fallbacks, but this is the canonical path:
+                      one click, one confirmation, lands you in the debrief. */}
+                  {sessionId && !caseEnded && (
+                     <div className="pointer-events-auto ml-auto">
+                        <button
+                           // Test hook: the visible label is hidden below `lg`
+                           // (max-lg:sr-only), so at tablet width this button has
+                           // no text at all and a spec matching on it finds
+                           // nothing on exactly the viewports most likely to
+                           // regress.
+                           data-testid="end-session"
+                           onClick={() => setShowEndConfirm(true)}
+                           className="px-3 py-2 bg-red-900/70 hover:bg-red-800/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-red-50 border border-red-700/60 transition-colors"
+                           title={t('end_debrief_title')}
+                        >
+                           <StopCircle className="w-4 h-4" />
+                           {/* Label hidden below `lg`: this button, the top-left
+                               controls and the centred Oyon pill all share one
+                               narrow band, and the three collided on a tablet.
+                               `title` + aria-label keep it identifiable. */}
+                           <span className="max-lg:sr-only">{t('end_debrief')}</span>
+                        </button>
+                     </div>
+                  )}
+               </div>
             </div>
 
             {/* Bottom Left: Chat Interface — a gaze attention target

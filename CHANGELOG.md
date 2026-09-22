@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.103] — 2026-09-22
+
+### Fixed
+
+- **The on-call phone covered the monitor.** Its button floated at a fixed spot on the right
+  edge and sat on the HR number, cut off by the screen edge. It now lives in the shared top bar
+  (`TopBarControls`, new `trailing` slot) after the menu and Logout: the one header every room
+  renders, so it is in the same place in the patient room, the lab, radiology, plugin rooms and
+  the debrief, and never over a room's content. Sized to the bar's controls (38px, 34px on a
+  phone).
+- In the patient room the top controls and **End & Debrief** were two absolutely positioned
+  corners that collided when the column was narrow; at 1024px End & Debrief covered the phone.
+  They are one wrapping row now.
+
 ## [3.0.0-beta.102] — 2026-09-22
 
 ### Changed
