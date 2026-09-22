@@ -22,6 +22,7 @@ import { DEFAULT_LANGUAGE, LANGUAGES, isKnownLanguage } from '../shared/language
 import { SCENARIO_CATEGORY_IDS, resolveScenarioCategory } from '../shared/scenarioCategories.js';
 import { validatePluginDocuments, projectPluginDocumentsForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
+import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import {
     auditSuccess,
     canManageOwnedResource,
@@ -482,17 +483,26 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
             name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenantId(req)
         });
 
+        // The lab and radiology stand on every case (the on-call phone).
+        // Settled BEFORE the response so an editor that reloads the case's
+        // agents right after saving already sees them. A failure is logged
+        // and does not fail the save: the case exists, and the boot sweep
+        // (attachStandingSpecialists) attaches whatever this missed.
+        const attached = attachStandingSpecialists({ caseId }).catch((attachErr) => {
+            (req.log || routesCasesLog).warn('standing specialist attach failed', { caseId, error: attachErr.message });
+        });
+
         // Stamp the visible case code (needs the autoincrement id, hence a
         // follow-up UPDATE). Server-generated only — anything the client sent
         // is ignored. On failure the boot sweep (ensureCaseCodes) repairs it.
         const caseCode = caseCodeFor(safeConfig, caseId);
-        stampCaseCode(caseCode, caseId, tenantId(req), (codeErr) => {
+        attached.then(() => stampCaseCode(caseCode, caseId, tenantId(req), (codeErr) => {
             if (codeErr) {
                 (req.log || routesCasesLog).warn('case code stamp failed', { caseId, error: codeErr.message });
                 return res.json({ id: caseId, ...req.body, config: safeConfig, ...withWarnings(warnings) });
             }
             res.json({ id: caseId, ...req.body, config: safeConfig, case_code: caseCode, ...withWarnings(warnings) });
-        });
+        }));
     });
 });
 

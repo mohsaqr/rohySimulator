@@ -8,9 +8,13 @@ const radiologistAway = { agent_type: 'radiologist', name: 'Dr. Cy Ray', enabled
 const nurse = { agent_type: 'nurse', name: 'Sarah', enabled: true, availability_type: 'present' };
 
 describe('OnCallButton', () => {
-    it('renders nothing when the case has no specialists', () => {
-        const { container } = render(<OnCallButton sessionId={5} specialists={[nurse]} onClick={() => {}} />);
-        expect(container).toBeEmptyDOMElement();
+    // Regression lock: the phone vanished from every case with no specialist
+    // attached — which, before the lab and radiology stood on every case, was
+    // every case an educator had not set up by hand.
+    it('renders in a session even when the case has no specialists, with no badge', () => {
+        render(<OnCallButton sessionId={5} specialists={[nurse]} onClick={() => {}} />);
+        expect(screen.getByRole('button', { name: /on-call phone/i })).toBeInTheDocument();
+        expect(screen.queryByTestId('oncall-badge')).not.toBeInTheDocument();
     });
 
     it('renders nothing without a session', () => {

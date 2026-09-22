@@ -2729,6 +2729,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.badge_standing_specialist": {
+    "src": "15c90e1ad6c6",
+    "tgt": "c6494290733a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.bodymap_close_editor": {
     "src": "bd0b7be215ce",
     "tgt": "c5f90e864817",
