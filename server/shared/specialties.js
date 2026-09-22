@@ -22,8 +22,8 @@
 // case falls out of that keying; POST /cases/:caseId/agents enforces it.
 //
 // CONTRACT — adding a specialty is exactly two changes:
-//   1. one entry in SPECIALTIES below (agentType, domain, pluginIds, rooms,
-//      defaultDisclosure), and
+//   1. one entry in SPECIALTIES below (agentType, standing, domain,
+//      pluginIds, rooms, defaultDisclosure), and
 //   2. one seeded default template for that agent_type in server/db.js
 //      DEFAULT_AGENTS (its config.disclosure comes from defaultDisclosure
 //      here, never a copy).
@@ -65,6 +65,7 @@ const DISCLOSURE_FIELDS = Object.freeze({
 export const SPECIALTIES = Object.freeze({
     pathologist: Object.freeze({
         agentType: 'pathologist',
+        standing: false,
         domain: 'pathology',
         // Plugin rooms this specialty owns (a plugin room's key IS its
         // plugin id — RoomNavigator builds them from the manifests).
@@ -76,6 +77,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     cardiologist: Object.freeze({
         agentType: 'cardiologist',
+        standing: false,
         domain: 'ecg',
         pluginIds: Object.freeze(['ecg']),
         rooms: Object.freeze([]),
@@ -83,6 +85,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     radiologist: Object.freeze({
         agentType: 'radiologist',
+        standing: true,
         domain: 'radiology',
         pluginIds: Object.freeze(['pacs']),
         // The pre-plugin radiology room, whose case material is the
@@ -92,6 +95,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     laboratorian: Object.freeze({
         agentType: 'laboratorian',
+        standing: true,
         domain: 'laboratory',
         // The lab has no plugin: it is the core `lab` room
         // (InvestigationsScreen), and its material is config.investigations.
@@ -102,6 +106,27 @@ export const SPECIALTIES = Object.freeze({
 });
 
 export const SPECIALIST_TYPES = Object.freeze(Object.keys(SPECIALTIES));
+
+// STANDING specialists are on every case: whatever the case holds, a learner
+// can always ring the lab and radiology from the phone. Every case has a lab
+// room and a radiology room, so there is always something to ask them about;
+// when the case configured no material, the brief says so and they answer
+// that honestly (specialistBrief BRIEF_NO_FINDINGS). The others are attached
+// by an educator, because they only make sense on a case with slides or an
+// ECG to discuss.
+//
+// services/standingSpecialists.js attaches them — when a case is created, and
+// in a boot sweep for every existing case. Because the sweep re-attaches a
+// missing one, a standing specialist cannot be REMOVED from a case (DELETE
+// answers 409 standing_specialist); an educator who does not want it
+// disables it instead, which the sweep leaves alone.
+export const STANDING_SPECIALIST_TYPES = Object.freeze(
+    SPECIALIST_TYPES.filter((type) => SPECIALTIES[type].standing === true),
+);
+
+export function isStandingSpecialistType(agentType) {
+    return STANDING_SPECIALIST_TYPES.includes(agentType);
+}
 
 export function isSpecialistType(agentType) {
     return typeof agentType === 'string' && Object.hasOwn(SPECIALTIES, agentType);

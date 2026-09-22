@@ -25,7 +25,7 @@ import {
 } from './_helpers.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
-import { isSpecialistType, normalizeDisclosure } from '../shared/specialties.js';
+import { isSpecialistType, isStandingSpecialistType, normalizeDisclosure } from '../shared/specialties.js';
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 
 const radiologyLog = logger('radiology');
@@ -1181,6 +1181,20 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, requireEducat
         });
         if (!existing) {
             return res.status(404).json({ error: 'Case agent not found' });
+        }
+
+        // The lab and radiology stand on every case, and the boot sweep would
+        // re-attach one removed here — a delete that quietly undoes itself.
+        // Refuse it and point at the switch that does stick.
+        const template = await dbAdapter.get(
+            'SELECT agent_type FROM agent_templates WHERE id = ? AND tenant_id = ?',
+            [existing.agent_template_id, tenantId(req)]
+        );
+        if (isStandingSpecialistType(template?.agent_type)) {
+            return res.status(409).json({
+                error: `The ${template.agent_type} is on every case and cannot be removed; disable it instead`,
+                code: 'standing_specialist'
+            });
         }
 
         await new Promise((resolve, reject) => {

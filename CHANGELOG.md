@@ -9,6 +9,37 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.102] — 2026-09-22
+
+### Changed
+
+- **The on-call phone is on every case, and every case can ring the lab and radiology.** The phone
+  rendered nothing on a case with no specialist attached, and nothing attached one: specialists were
+  added by hand in the case editor, and "Add Default Agents" skips them on purpose. So on an
+  upgraded install — prod included — the phone was on no case at all.
+
+  - The laboratorian and the radiologist are now **standing** specialists
+    (`standing: true` in `server/shared/specialties.js`). `services/standingSpecialists.js`
+    attaches them when a case is created (`POST /cases`, settled before the response) and, at boot,
+    to every existing case. The sweep is idempotent and never touches a case that already holds one
+    — enabled or disabled, from the shipped template or an educator's own. A tenant with no
+    specialist template gets nothing rather than another tenant's persona. The pathologist and the
+    cardiologist stay opt-in: they only make sense on a case with slides or an ECG.
+  - A case without lab or radiology material is fine: the specialist's brief says no findings were
+    provided, and they answer that honestly.
+  - `DELETE /cases/:caseId/agents/:agentId` answers **409 `standing_specialist`** for a standing
+    specialist, because the boot sweep would put it back. **Disable** is the off switch, and the
+    sweep leaves a disabled one alone. The case editor hides "Remove" for them and badges them
+    "On every case".
+  - The phone button now renders in every case session, specialists or not. A case whose educator
+    disabled both opens on the "nobody on call" contact list instead of the phone vanishing.
+
+### Fixed
+
+- The attach retries briefly on `SQLITE_BUSY`, like `stampCaseCode` does. The audit chain writes on
+  its own connection just before it, and without the retry every case created after the first
+  lost its specialists.
+
 ## [3.0.0-beta.101] — 2026-09-19
 
 ### Fixed

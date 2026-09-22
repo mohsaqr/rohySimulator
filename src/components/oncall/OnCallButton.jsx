@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { countReachable, specialistsOf } from './onCallModel';
+import { countReachable } from './onCallModel';
 import './onCallHandset.css';
 
 // The way in: a round call icon at the right edge of the case screen, in every
@@ -11,10 +11,14 @@ import './onCallHandset.css';
 // It sits at the edge rather than over the monitor: the floating button this
 // replaces covered the EtCO2 reading.
 //
-// Renders nothing without a session or when the case has no specialists.
+// Renders in every case session, and nothing outside one. It no longer hides
+// when the case has no specialists: the phone is part of every case (the lab
+// and radiology stand on every case, see shared/specialties.js), and a case
+// whose educator disabled them all still opens the handset on its "nobody on
+// call" contact list rather than making the phone vanish.
 const OnCallButton = forwardRef(function OnCallButton({ sessionId, specialists, open = false, onClick }, ref) {
     const { t } = useTranslation('oncall');
-    if (!sessionId || specialistsOf(specialists).length === 0) return null;
+    if (!sessionId) return null;
     const count = countReachable(specialists);
     const label = t('open_phone', { count });
     return (

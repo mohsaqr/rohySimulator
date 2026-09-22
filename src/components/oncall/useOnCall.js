@@ -11,7 +11,8 @@ export function useOnCall(sessionId) {
     const [openFor, setOpenFor] = useState(null);
     // Open state belongs to one session: a new case starts with the phone shut.
     const open = Boolean(sessionId) && openFor === sessionId;
-    const available = Boolean(sessionId) && team.specialists.length > 0;
+    // Every case session has the phone, specialists or not (OnCallButton).
+    const available = Boolean(sessionId);
     return {
         team,
         available,
