@@ -197,11 +197,29 @@ jobs:
       # No --reporter flag: passing one on the command line REPLACES the
       # reporter array from playwright.config.js, which silently drops the
       # Prova reporter and posts nothing.
+      # The catalogue is the checklist the results are read against. On main, when
+      # prova/rohy-cases.yaml changed, it is imported first (idempotent; a second
+      # import of the same file changes nothing) under its catalogue name, with
+      # the catalogue token (catalog:write) — the runner token cannot rewrite it.
+      - name: Import the catalogue into Prova (main, when the YAML changed)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_CATALOG_TOKEN: ${{ secrets.PROVA_CATALOG_TOKEN }}
+        run: |
+          if [ -z "$PROVA_CATALOG_TOKEN" ]; then echo "no PROVA_CATALOG_TOKEN; catalogue not imported"; exit 0; fi
+          if git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- prova/rohy-cases.yaml 2>/dev/null; then echo "prova/rohy-cases.yaml unchanged; nothing to import"; exit 0; fi
+          curl -fsS -X POST "$PROVA_URL/api/v1/catalog/import?name=Rohy%20battery&icon=robot" \
+            -H "Authorization: Bearer $PROVA_CATALOG_TOKEN" -H 'Content-Type: application/yaml' \
+            --data-binary @prova/rohy-cases.yaml
+      # PROVA_CATALOG scopes each CI run to the "Rohy battery" catalogue, so the
+      # catalogue shows CI as its last run and "Re-test the failures" works from it.
       - name: Run Playwright and report to Prova
         env:
           PROVA_URL: ${{ secrets.PROVA_URL }}
           PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
           PROVA_LABEL: ci
+          PROVA_CATALOG: Rohy battery
         run: npx playwright test
       - name: Upload Playwright report
         if: always()
