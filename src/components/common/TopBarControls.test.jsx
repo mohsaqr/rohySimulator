@@ -153,3 +153,19 @@ describe('TopBarControls — keyboard dismissal', () => {
         expect(screen.queryByRole('menu')).toBeNull();
     });
 });
+
+describe('TopBarControls — trailing slot', () => {
+    // Regression lock: the on-call phone floated over the room's content — it
+    // covered the monitor's EtCO2, then its HR number. It now rides in this
+    // row, the one header every room renders, after the menu and logout.
+    it('renders the trailing element in the bar, after logout', () => {
+        setup({ trailing: <button type="button">phone</button> });
+        const buttons = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') || b.textContent);
+        expect(buttons.indexOf('phone')).toBeGreaterThan(buttons.indexOf('logout'));
+    });
+
+    it('renders nothing extra without one', () => {
+        setup();
+        expect(screen.queryByRole('button', { name: 'phone' })).not.toBeInTheDocument();
+    });
+});

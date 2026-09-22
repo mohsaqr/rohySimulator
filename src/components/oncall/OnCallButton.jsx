@@ -3,13 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { countReachable } from './onCallModel';
 import './onCallHandset.css';
 
-// The way in: a round call icon at the right edge of the case screen, in every
-// room, which opens the phone (OnCallPhone). Teal-to-blue disc with a white
-// handset glyph, the same raised, ringed treatment as Rohy's own buttons, and
-// a tally of how many specialists can be reached.
-//
-// It sits at the edge rather than over the monitor: the floating button this
-// replaces covered the EtCO2 reading.
+// The way in: a round call icon in the shared top bar (App passes it to
+// TopBarControls as `trailing`), so it sits in the same place in every room
+// and never over a room's content — two floating positions before this one
+// covered the monitor's EtCO2 and then its HR number. Teal-to-blue disc with a
+// white handset glyph and a tally of how many specialists can be reached.
 //
 // Renders in every case session, and nothing outside one. It no longer hides
 // when the case has no specialists: the phone is part of every case (the lab

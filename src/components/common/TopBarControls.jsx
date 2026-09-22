@@ -52,6 +52,10 @@ export default function TopBarControls({
    onLogout,
    uiLanguage,
    onSetLanguage,
+   // Rendered after the menu and logout, in the same row. The case screens
+   // put the on-call phone here, so it sits in the one header every room
+   // shares instead of floating over the room's content.
+   trailing = null,
 }) {
    const { t } = useTranslation('app');
    const [showMenu, setShowMenu] = useState(false);
@@ -287,6 +291,7 @@ export default function TopBarControls({
                </>
             )}
          </div>
+         {trailing}
       </div>
    );
 }
