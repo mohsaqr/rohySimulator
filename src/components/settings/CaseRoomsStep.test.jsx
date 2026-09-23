@@ -23,13 +23,25 @@ afterEach(() => {
 });
 
 describe('CaseRoomsStep', () => {
-    it('lists every room on by default, with the patient room locked on', () => {
+    it('lists every room on by default but the bedside, with the patient room locked on', () => {
         render(<Harness initialConfig={{}} />);
         expect(screen.queryByTestId('room-toggle-chat')).toBeNull();
         expect(screen.getByText('Always on')).toBeInTheDocument();
         for (const key of ['examination', 'lab', 'radiology', 'consultant']) {
             expect(screen.getByTestId(`room-toggle-${key}`)).toHaveAttribute('aria-checked', 'true');
         }
+        // The bedside examines too, so it is off unless switched on.
+        expect(screen.getByTestId('room-toggle-room3d')).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByText(/it examines the patient too/)).toBeInTheDocument();
+    });
+
+    it('switches the bedside on through rooms.enabled, and off again to no setting', () => {
+        render(<Harness initialConfig={{}} />);
+        fireEvent.click(screen.getByTestId('room-toggle-room3d'));
+        expect(latest.config.rooms).toEqual({ enabled: ['room3d'] });
+        expect(screen.getByTestId('room-toggle-room3d')).toHaveAttribute('aria-checked', 'true');
+        fireEvent.click(screen.getByTestId('room-toggle-room3d'));
+        expect(latest.config).not.toHaveProperty('rooms');
     });
 
     it('switches a room off into config.rooms.disabled, and back on to no setting at all', () => {

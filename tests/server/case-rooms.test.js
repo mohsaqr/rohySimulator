@@ -2,8 +2,9 @@
 // hidden AND locked (server/shared/caseRooms.js).
 //
 // - the registry: only the patient room is fixed; a missing setting means
-//   every room is on; unknown keys are dropped with a warning, a bad shape and
-//   the patient room are refused;
+//   every room is on but the default-off ones (the bedside), which a case
+//   switches on through `rooms.enabled`; unknown keys are dropped with a
+//   warning, a bad shape and the patient room are refused;
 // - the learner projection drops a switched-off plugin room's document, so its
 //   room cannot light in any client;
 // - a learner's lab/radiology/exam actions in a switched-off room answer 403
@@ -21,12 +22,14 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import {
+    DEFAULT_OFF_ROOMS,
     FIXED_ROOMS,
     SWITCHABLE_ROOM_KEYS,
     disabledRooms,
     isRoomEnabled,
     normaliseCaseRooms,
     specialistAnswers,
+    withRoom,
 } from '../../server/shared/caseRooms.js';
 import { CORE_ROOM_KEYS } from '../../server/shared/pluginRegistry.js';
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
@@ -48,20 +51,38 @@ describe('the rooms registry', () => {
         for (const m of PLUGIN_MANIFESTS) expect(m.room?.key ?? m.id, m.id).toBe(m.id);
     });
 
-    it('turns nothing off when a case stores no setting, or one it cannot read', () => {
+    it('turns only the default-off rooms off when a case stores no setting, or one it cannot read', () => {
+        // The bedside duplicates the examination room, so it is off by default.
+        expect(DEFAULT_OFF_ROOMS).toEqual(['room3d']);
         for (const config of [{}, null, undefined, 'not json', '[]', { rooms: null },
             { rooms: 'lab' }, { rooms: { disabled: 'lab' } }, { rooms: { disabled: [7] } }]) {
-            expect(disabledRooms(config), JSON.stringify(config)).toEqual([]);
+            expect(disabledRooms(config), JSON.stringify(config)).toEqual(['room3d']);
             for (const key of [...FIXED_ROOMS, ...SWITCHABLE_ROOM_KEYS]) {
-                expect(isRoomEnabled(config, key)).toBe(true);
+                expect(isRoomEnabled(config, key)).toBe(key !== 'room3d');
             }
         }
     });
 
+    it('switches a default-off room on only through rooms.enabled', () => {
+        expect(isRoomEnabled({ rooms: { enabled: ['room3d'] } }, 'room3d')).toBe(true);
+        // `enabled` means nothing for a room that is on anyway, and cannot
+        // override `disabled`.
+        expect(disabledRooms({ rooms: { enabled: ['room3d', 'lab'], disabled: ['lab'] } })).toEqual(['lab']);
+        expect(disabledRooms({ rooms: { enabled: ['room3d'], disabled: ['room3d'] } })).toEqual(['room3d']);
+    });
+
+    it('writes a switch into the right list, and nothing at the defaults', () => {
+        expect(withRoom(undefined, 'lab', false)).toEqual({ disabled: ['lab'] });
+        expect(withRoom({ disabled: ['lab'] }, 'lab', true)).toBeUndefined();
+        expect(withRoom(undefined, 'room3d', true)).toEqual({ enabled: ['room3d'] });
+        expect(withRoom({ enabled: ['room3d'], disabled: ['lab'] }, 'room3d', false)).toEqual({ disabled: ['lab'] });
+        expect(withRoom({ disabled: ['radiology'] }, 'lab', false)).toEqual({ disabled: ['lab', 'radiology'] });
+    });
+
     it('reads the list from an object or a stored JSON string, ignoring the patient room and unknown keys', () => {
         const config = { rooms: { disabled: ['lab', 'chat', 'bogus', 'lab', 'examination'] } };
-        expect(disabledRooms(config)).toEqual(['examination', 'lab']);
-        expect(disabledRooms(JSON.stringify(config))).toEqual(['examination', 'lab']);
+        expect(disabledRooms(config)).toEqual(['examination', 'lab', 'room3d']);
+        expect(disabledRooms(JSON.stringify(config))).toEqual(['examination', 'lab', 'room3d']);
         expect(isRoomEnabled(config, 'chat')).toBe(true);
         expect(isRoomEnabled(config, 'lab')).toBe(false);
         expect(isRoomEnabled(config, 'radiology')).toBe(true);
@@ -69,7 +90,10 @@ describe('the rooms registry', () => {
 
     it('validates for storage: refuses a bad shape and the patient room, drops unknowns with a warning', () => {
         expect(normaliseCaseRooms({})).toEqual({ rooms: undefined, problem: null, warnings: [] });
-        for (const rooms of ['lab', ['lab'], { disabled: 'lab' }, { disabled: [1] }, { disabled: [], hidden: [] }]) {
+        // Back at the defaults: nothing to store.
+        expect(normaliseCaseRooms({ rooms: { disabled: [], enabled: [] } }).rooms).toBeUndefined();
+        for (const rooms of ['lab', ['lab'], { disabled: 'lab' }, { disabled: [1] }, { enabled: 'room3d' },
+            { disabled: [], hidden: [] }]) {
             expect(normaliseCaseRooms({ rooms }).problem, JSON.stringify(rooms)).toBeTruthy();
         }
         expect(normaliseCaseRooms({ rooms: { disabled: ['chat'] } }).problem).toMatch(/chat/);
@@ -77,6 +101,10 @@ describe('the rooms registry', () => {
         expect(result.problem).toBeNull();
         expect(result.rooms).toEqual({ disabled: ['lab', 'radiology'] });
         expect(result.warnings).toEqual([expect.objectContaining({ field: 'config.rooms.disabled', received: 'gone-plugin' })]);
+        // `enabled` takes only default-off rooms.
+        const enabled = normaliseCaseRooms({ rooms: { enabled: ['lab', 'room3d'] } });
+        expect(enabled.rooms).toEqual({ enabled: ['room3d'] });
+        expect(enabled.warnings).toEqual([expect.objectContaining({ field: 'config.rooms.enabled', received: 'lab' })]);
     });
 
     it('lets a specialist answer while any of its rooms is on', () => {
@@ -196,7 +224,7 @@ describe('the server', () => {
             ids.offCase = await addCase('Pathology and history only',
                 { pathology: PATHOLOGY_DOC, rooms: { disabled: ALL_OFF.filter((k) => k !== 'pathology') } });
             ids.onCase = await addCase('Every room', { pathology: PATHOLOGY_DOC });
-            ids.bedsideCase = await addCase('Bedside exam only', { rooms: { disabled: ['examination'] } });
+            ids.bedsideCase = await addCase('Bedside exam only', { rooms: { disabled: ['examination'], enabled: ['room3d'] } });
 
             const addTemplate = async (type) => (await pRun(db,
                 `INSERT INTO agent_templates (agent_type, name, role_title, system_prompt, config, tenant_id)
@@ -247,10 +275,10 @@ describe('the server', () => {
         });
 
         it('stores a valid one sorted, dropping an unknown room with a warning', async () => {
-            const res = await save({ rooms: { disabled: ['gone-plugin', 'examination'] } });
+            const res = await save({ rooms: { disabled: ['gone-plugin', 'examination'], enabled: ['room3d'] } });
             expect(res.status).toBe(200);
             const body = await res.json();
-            expect(body.config.rooms).toEqual({ disabled: ['examination'] });
+            expect(body.config.rooms).toEqual({ disabled: ['examination'], enabled: ['room3d'] });
             expect(body.warnings).toEqual([expect.objectContaining({ received: 'gone-plugin' })]);
         });
     });
@@ -266,7 +294,7 @@ describe('the server', () => {
             await refused(await as(student, 'POST', `/api/sessions/${ids.offSession}/order-radiology`, { radiology_ids: ['cxr'] }), 'room_disabled');
         });
 
-        it('cannot examine with both the examination room and the bedside off, and can with the bedside on', async () => {
+        it('cannot examine with both the examination room and the bedside off, and can with the bedside switched on', async () => {
             const finding = { body_region: 'chest', exam_type: 'auscultation', finding: 'clear' };
             await refused(await as(student, 'POST', `/api/sessions/${ids.offSession}/exam-findings`, finding), 'room_disabled');
             const bedside = await as(student, 'POST', `/api/sessions/${ids.bedsideSession}/exam-findings`, finding);

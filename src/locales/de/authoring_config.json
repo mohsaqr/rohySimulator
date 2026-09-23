@@ -522,6 +522,7 @@
   "registration_toast_saved": "Registrierungsregel gespeichert",
   "registration_unsaved": "Nicht gespeicherte Änderungen",
   "rooms_always_on": "Immer an",
+  "rooms_default_off_note": "Aus, solange Sie ihn nicht einschalten: Hier wird ebenfalls untersucht, wie im Raum „Untersuchung“.",
   "rooms_fixed_note": "Hier wird der Fall gespielt. Er kann nicht ausgeschaltet werden.",
   "rooms_material_kept": "Das für diesen Raum konfigurierte Material bleibt erhalten und ist für Lernende verborgen.",
   "rooms_needs_material": "Erscheint nur, wenn der Fall Material dafür enthält.",

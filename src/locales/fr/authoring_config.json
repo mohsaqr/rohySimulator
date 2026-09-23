@@ -522,6 +522,7 @@
   "registration_toast_saved": "Politique d'inscription enregistrée",
   "registration_unsaved": "Modifications non enregistrées",
   "rooms_always_on": "Toujours active",
+  "rooms_default_off_note": "Désactivée sauf si vous l’activez : on y examine aussi le patient, comme dans la salle Examen.",
   "rooms_fixed_note": "Là où le cas se joue. Elle ne peut pas être désactivée.",
   "rooms_material_kept": "Le matériel configuré pour cette salle est conservé, masqué aux apprenants.",
   "rooms_needs_material": "N’apparaît que si le cas contient du matériel pour elle.",

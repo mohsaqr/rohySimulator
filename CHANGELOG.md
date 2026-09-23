@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.113] — 2026-09-23
+
+### Changed
+
+- **Bedside is off by default.** The immersive 3D room examines the patient too, duplicating the
+  Examination room, so for now a case gets it only when an educator switches it on in the Rooms
+  step. `server/shared/caseRooms.js` gains `DEFAULT_OFF_ROOMS` (`room3d`) and a second list,
+  `config.rooms.enabled`, which only takes default-off rooms (anything else is dropped with a
+  warning); `withRoom()` is the one writer that picks the right list and stores nothing at the
+  defaults. Existing cases lose the Bedside tab until it is switched on; a running session keeps
+  the rooms it started with. Examination findings are still refused only when both rooms are off.
+- The Rooms step says why Bedside is off; the case wizard doc describes the default.
+- e2e: the on-call phone's every-room test plays its own case with Bedside switched on
+  (`createAssignedCase` in `tests/e2e/fixtures/liveCase.js`, which also publishes the case — a new
+  case is hidden from students, so the learner's `GET /cases/:id` answered 404).
+
 ## [3.0.0-beta.112] — 2026-09-23
 
 ### Fixed

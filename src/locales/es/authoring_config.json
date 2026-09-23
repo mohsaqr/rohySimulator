@@ -522,6 +522,7 @@
   "registration_toast_saved": "Política de registro guardada",
   "registration_unsaved": "Cambios sin guardar",
   "rooms_always_on": "Siempre activa",
+  "rooms_default_off_note": "Desactivada salvo que la active: también permite explorar al paciente, como la sala Examen.",
   "rooms_fixed_note": "Donde se juega el caso. No se puede desactivar.",
   "rooms_material_kept": "El material configurado para esta sala se conserva, oculto a los estudiantes.",
   "rooms_needs_material": "Solo aparece cuando el caso tiene material para ella.",

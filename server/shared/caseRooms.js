@@ -6,12 +6,14 @@
 // to navigate into it) and LOCKED (the server refuses its actions for a
 // learner), so a learner's client is never what enforces it.
 //
-// Stored on the case as `config.rooms = { disabled: [roomKey, ...] }`. The list
-// is of rooms turned OFF, deliberately: every case written before this setting
-// existed, every seeded case, and every room a newly installed plugin adds are
-// ON with nothing stored at all. The setting travels in the session's
-// case_snapshot like the rest of the config, so a running session keeps the
-// rooms it started with.
+// Stored on the case as `config.rooms = { disabled: [...], enabled: [...] }`.
+// Most rooms are ON unless listed in `disabled`, deliberately: every case
+// written before this setting existed, every seeded case, and every room a
+// newly installed plugin adds are on with nothing stored at all. A few rooms
+// are OFF unless listed in `enabled` (DEFAULT_OFF_ROOMS): today the bedside,
+// which duplicates the examination room. The setting travels in the
+// session's case_snapshot like the rest of the config, so a running session
+// keeps the rooms it started with.
 //
 // The patient room (`chat`, the history) is always on: it is where a case is
 // played, and where the learner lands when a room goes away.
@@ -25,6 +27,11 @@ import { roomKeysOf } from './specialties.js';
 
 /** Rooms that cannot be switched off. */
 export const FIXED_ROOMS = Object.freeze(['chat']);
+
+/** Rooms that are off unless a case switches them on (`rooms.enabled`). The
+ *  bedside examines the patient too, so for now a case gets one examination
+ *  room — the examination room — unless the educator asks for the bedside. */
+export const DEFAULT_OFF_ROOMS = Object.freeze(['room3d']);
 
 /** Every room an educator may switch off: the core rooms but the patient
  *  room, and every installed plugin room (a plugin room's key is its id). */
@@ -47,20 +54,48 @@ function readConfig(config) {
     }
 }
 
+const listOf = (rooms, field) => (isPlainObject(rooms) && Array.isArray(rooms[field]) ? rooms[field] : []);
+
 /**
- * The rooms switched off on a case. Total: a missing, malformed or unreadable
- * setting switches nothing off, and a key that is not switchable (the patient
- * room, a plugin since uninstalled) is ignored.
+ * The rooms switched off on a case: those listed in `rooms.disabled`, plus
+ * every default-off room not listed in `rooms.enabled`. Total: a missing,
+ * malformed or unreadable setting leaves only the default-off rooms off, and a
+ * key that is not switchable (the patient room, a plugin since uninstalled) is
+ * ignored.
  *
  * @param {object|string|null} config  the case config, parsed or as stored
  * @returns {string[]} switchable room keys, sorted
  */
 export function disabledRooms(config) {
-    const parsed = readConfig(config);
-    const listed = parsed && isPlainObject(parsed.rooms) && Array.isArray(parsed.rooms.disabled)
-        ? parsed.rooms.disabled
-        : [];
-    return [...new Set(listed.filter((key) => SWITCHABLE_ROOM_KEYS.includes(key)))].sort();
+    const rooms = readConfig(config)?.rooms;
+    const enabled = listOf(rooms, 'enabled');
+    const off = [
+        ...listOf(rooms, 'disabled'),
+        ...DEFAULT_OFF_ROOMS.filter((key) => !enabled.includes(key)),
+    ];
+    return [...new Set(off.filter((key) => SWITCHABLE_ROOM_KEYS.includes(key)))].sort();
+}
+
+/**
+ * The `rooms` value that switches one room on or off, from the current one.
+ * Shared by every writer (the case editor) so the two lists stay consistent:
+ * a default-off room is switched through `enabled`, any other through
+ * `disabled`. Returns undefined when nothing differs from the defaults, so a
+ * case back at its defaults stores no setting at all.
+ *
+ * @param {object|undefined} rooms  the current `config.rooms`
+ * @param {string} roomKey
+ * @param {boolean} on
+ * @returns {{disabled?: string[], enabled?: string[]}|undefined}
+ */
+export function withRoom(rooms, roomKey, on) {
+    const field = DEFAULT_OFF_ROOMS.includes(roomKey) ? 'enabled' : 'disabled';
+    const add = field === 'enabled' ? on : !on;
+    const current = listOf(rooms, field).filter((key) => key !== roomKey);
+    const next = { disabled: listOf(rooms, 'disabled'), enabled: listOf(rooms, 'enabled') };
+    next[field] = add ? [...current, roomKey].sort() : current;
+    const out = Object.fromEntries(Object.entries(next).filter(([, list]) => list.length > 0));
+    return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -101,34 +136,42 @@ export function specialistAnswers(agentType, config) {
  * while a plugin was installed must stay re-savable after it is removed.
  *
  * @param {object} config  the case config about to be stored (not mutated)
- * @returns {{ rooms: {disabled: string[]}|undefined, problem: string|null,
+ * @returns {{ rooms: {disabled?: string[], enabled?: string[]}|undefined, problem: string|null,
  *            warnings: Array<{field: string, received: string, hint: string}> }}
- *          `rooms` is the value to store (undefined when the config has none)
+ *          `rooms` is the value to store; undefined means store none (the
+ *          defaults)
  */
 export function normaliseCaseRooms(config) {
     const raw = isPlainObject(config) ? config.rooms : undefined;
     if (raw === undefined || raw === null) return { rooms: undefined, problem: null, warnings: [] };
-    if (!isPlainObject(raw) || !Array.isArray(raw.disabled)
-        || !raw.disabled.every((key) => typeof key === 'string')) {
-        return { rooms: undefined, problem: 'rooms must be { disabled: [room key, ...] }', warnings: [] };
-    }
-    const unknownFields = Object.keys(raw).filter((field) => field !== 'disabled');
+    const shape = 'rooms must be { disabled?: [room key, ...], enabled?: [room key, ...] }';
+    if (!isPlainObject(raw)) return { rooms: undefined, problem: shape, warnings: [] };
+    const unknownFields = Object.keys(raw).filter((field) => field !== 'disabled' && field !== 'enabled');
     if (unknownFields.length > 0) {
         return { rooms: undefined, problem: `unknown rooms field: ${unknownFields.join(', ')}`, warnings: [] };
     }
-    const fixed = raw.disabled.filter((key) => FIXED_ROOMS.includes(key));
+    const lists = { disabled: raw.disabled ?? [], enabled: raw.enabled ?? [] };
+    if (!Object.values(lists).every((list) => Array.isArray(list) && list.every((key) => typeof key === 'string'))) {
+        return { rooms: undefined, problem: shape, warnings: [] };
+    }
+    const fixed = lists.disabled.filter((key) => FIXED_ROOMS.includes(key));
     if (fixed.length > 0) {
         return { rooms: undefined, problem: `the ${fixed[0]} room cannot be switched off`, warnings: [] };
     }
-    const warnings = [...new Set(raw.disabled.filter((key) => !SWITCHABLE_ROOM_KEYS.includes(key)))]
-        .map((key) => ({
-            field: 'config.rooms.disabled',
+    // `enabled` only means something for a default-off room; anything else in
+    // it is on already, and is dropped with the same warning as an unknown key.
+    const accepts = { disabled: SWITCHABLE_ROOM_KEYS, enabled: DEFAULT_OFF_ROOMS };
+    const warnings = [];
+    const rooms = {};
+    for (const [field, list] of Object.entries(lists)) {
+        const allowed = accepts[field];
+        [...new Set(list.filter((key) => !allowed.includes(key)))].forEach((key) => warnings.push({
+            field: `config.rooms.${field}`,
             received: key,
-            hint: `Not an installed room; dropped. Expected one of: ${SWITCHABLE_ROOM_KEYS.join(', ')}.`,
+            hint: `Not a room this list takes; dropped. Expected one of: ${allowed.join(', ')}.`,
         }));
-    return {
-        rooms: { disabled: [...new Set(raw.disabled.filter((key) => SWITCHABLE_ROOM_KEYS.includes(key)))].sort() },
-        problem: null,
-        warnings,
-    };
+        const kept = [...new Set(list.filter((key) => allowed.includes(key)))].sort();
+        if (kept.length > 0) rooms[field] = kept;
+    }
+    return { rooms: Object.keys(rooms).length > 0 ? rooms : undefined, problem: null, warnings };
 }

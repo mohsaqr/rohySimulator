@@ -522,6 +522,7 @@
   "registration_toast_saved": "Criterio di registrazione salvato",
   "registration_unsaved": "Modifiche non salvate",
   "rooms_always_on": "Sempre attiva",
+  "rooms_default_off_note": "Disattivata finché non la attivi: anche qui si visita il paziente, come nella stanza Visita.",
   "rooms_fixed_note": "Dove si svolge il caso. Non può essere disattivata.",
   "rooms_material_kept": "Il materiale configurato per questa stanza viene conservato, nascosto agli studenti.",
   "rooms_needs_material": "Compare solo quando il caso ha materiale per essa.",

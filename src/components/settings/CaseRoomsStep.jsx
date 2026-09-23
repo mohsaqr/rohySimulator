@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { DoorOpen, Lock, Info } from 'lucide-react';
 import { ROOM_DEFS } from '../common/RoomNavigator';
-import { FIXED_ROOMS, disabledRooms, specialistAnswers } from '../../../server/shared/caseRooms.js';
+import { DEFAULT_OFF_ROOMS, FIXED_ROOMS, disabledRooms, specialistAnswers, withRoom } from '../../../server/shared/caseRooms.js';
 import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
 import { SPECIALTY_LABEL_KEYS } from '../oncall/onCallModel';
 
@@ -40,12 +40,13 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
 
     const toggle = (key) => {
         setCaseData((prev) => {
-            const current = disabledRooms(prev.config);
-            const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key].sort();
-            // No setting at all means every room is on, so an empty list is
-            // removed rather than stored.
-            const { rooms: _previous, ...rest } = prev.config ?? {};
-            return { ...prev, config: next.length > 0 ? { ...rest, rooms: { disabled: next } } : rest };
+            const turnOn = disabledRooms(prev.config).includes(key);
+            // withRoom picks the list (a default-off room is switched on through
+            // `enabled`) and returns undefined at the defaults, so a case back
+            // at its defaults stores no setting at all.
+            const { rooms: previous, ...rest } = prev.config ?? {};
+            const rooms = withRoom(previous, key, turnOn);
+            return { ...prev, config: rooms ? { ...rest, rooms } : rest };
         });
     };
 
@@ -67,6 +68,7 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                     let note = null;
                     if (fixed) note = t('rooms_fixed_note');
                     else if (!on && hasMaterial(config, room.key)) note = t('rooms_material_kept');
+                    else if (!on && DEFAULT_OFF_ROOMS.includes(room.key)) note = t('rooms_default_off_note');
                     else if (on && room.isPlugin && room.key !== 'room3d' && !hasMaterial(config, room.key)) {
                         note = t('rooms_needs_material');
                     }

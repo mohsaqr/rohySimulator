@@ -20,15 +20,23 @@
 // GETTING INTO A LIVE CASE is `fixtures/liveCase.js`.
 
 import { test, expect, waitForSeed } from './fixtures/index.js';
-import { enterLiveCase, disposeLearnerApi, pickCase, room } from './fixtures/liveCase.js';
+import { createAssignedCase, enterLiveCase, disposeLearnerApi, pickCase, room } from './fixtures/liveCase.js';
 
 const RUN_TAG = `e2e-oncall-${Date.now()}`;
 
 let theCase;
+// The bedside is off by default (it duplicates the examination room), and it
+// is the overlay that once hid the phone — so the every-room test plays a case
+// that switches it on.
+let bedsideCase;
 
 test.beforeAll(async ({ baseURL }) => {
     await waitForSeed(baseURL);
     theCase = await pickCase(baseURL);
+    bedsideCase = await createAssignedCase(baseURL, {
+        name: `${RUN_TAG} bedside on`,
+        config: { patient_name: 'Phone Example', demographics: { age: 50, gender: 'Male' }, rooms: { enabled: ['room3d'] } },
+    });
 });
 
 test.afterAll(disposeLearnerApi);
@@ -50,12 +58,14 @@ test.describe('the on-call phone', () => {
         // Six rooms, one of them a WebGL scene, after entering a case: past
         // the 30 s default on a busy runner.
         test.setTimeout(120_000);
-        await enterLiveCase(page, baseURL, `${RUN_TAG}-rooms`, theCase);
-        const keys = await page.locator('[data-testid^="room-button-"]')
+        await enterLiveCase(page, baseURL, `${RUN_TAG}-rooms`, bedsideCase);
+        // Not vacuous: the bar must hold the core rooms and the bedside
+        // overlay — that is the one that hid the phone. Polled: the case's
+        // rooms are known once the session snapshot lands.
+        const readKeys = () => page.locator('[data-testid^="room-button-"]')
             .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
-        // Not vacuous: the bar must hold the core rooms, and the overlay room
-        // when its plugin is installed — that is the one that hid the phone.
-        expect(keys).toEqual(expect.arrayContaining(['chat', 'examination', 'lab', 'radiology', 'consultant']));
+        await expect.poll(readKeys).toEqual(expect.arrayContaining(['chat', 'room3d', 'examination', 'lab', 'radiology', 'consultant']));
+        const keys = await readKeys();
 
         for (const key of keys) {
             await pressAtCentre(page, room(page, key), `the ${key} room button`);

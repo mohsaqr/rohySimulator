@@ -191,6 +191,7 @@ function normaliseCaseForStorage(req, res, body) {
         return null;
     }
     if (roomsCheck.rooms) safeConfig.rooms = roomsCheck.rooms;
+    else delete safeConfig.rooms;
 
     logVocabularyWarnings(req, 'case', warnings);
     // After the vocabulary log: these are dropped, not "kept verbatim".

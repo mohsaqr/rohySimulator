@@ -163,14 +163,15 @@ describe('case prompt context surfaces', () => {
     // open to the learner, so its configured results must not reach an agent
     // as part of the case the learner worked.
     it('leaves out the results of rooms the case switched off', () => {
-        const withRooms = (disabled) => ({ ...richCase, config: { ...richCase.config, rooms: { disabled } } });
-        const noInvestigations = buildDiscussionCaseContext(withRooms(['lab', 'radiology']), 'chart');
+        const withRooms = (rooms) => ({ ...richCase, config: { ...richCase.config, rooms } });
+        const noInvestigations = buildDiscussionCaseContext(withRooms({ disabled: ['lab', 'radiology'] }), 'chart');
         expect(noInvestigations).not.toContain('Configured Radiology Results');
         expect(noInvestigations).not.toContain('Troponin I = 2.1 ng/mL');
-        // The bedside still examines, so exam findings stay until both are off.
-        expect(buildDiscussionCaseContext(withRooms(['examination']), 'chart'))
+        // The bedside (off by default) examines too, so exam findings stay
+        // while either room is on.
+        expect(buildDiscussionCaseContext(withRooms({ disabled: ['examination'], enabled: ['room3d'] }), 'chart'))
             .toContain('Configured Physical Exam Findings');
-        expect(buildDiscussionCaseContext(withRooms(['examination', 'room3d']), 'chart'))
+        expect(buildDiscussionCaseContext(withRooms({ disabled: ['examination'] }), 'chart'))
             .not.toContain('Configured Physical Exam Findings');
     });
 

@@ -48,8 +48,10 @@ imaging, exam and treatments.
 
 ## Choosing the rooms
 
-Every room is on by default. In the **Rooms** step you can switch off any
-room except **Patient**, where the case is played. A case built around the
+Every room is on by default except **Bedside**, the immersive 3D room. Bedside
+examines the patient too, which duplicates the **Examination** room, so for now
+a case gets it only when you switch it on. In the **Rooms** step you can switch
+any room on or off except **Patient**, where the case is played. A case built around the
 history and a set of slides, for example, can keep Patient and Pathology and
 switch off everything else.
 
