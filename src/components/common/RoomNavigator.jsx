@@ -183,6 +183,10 @@ export default function RoomNavigator({
     // passes the resolved list so a case carrying no pathology material shows
     // no Pathology tab, rather than a tab onto an empty state.
     enabledPlugins = null,
+    // Every room this case offers, core rooms included — a case can switch
+    // rooms off (config.rooms, server/shared/caseRooms.js). When given, it
+    // alone decides; `null` falls back to the plugin-only rule above.
+    enabledRooms = null,
 }) {
     const { t } = useTranslation('common');
     const counts = useReadyCounts(sessionId);
@@ -197,7 +201,9 @@ export default function RoomNavigator({
             aria-label={t('room_navigation')}
         >
             {ROOM_DEFS
-                .filter((room) => !room.isPlugin || enabledPlugins === null || enabledPlugins.includes(room.key))
+                .filter((room) => (Array.isArray(enabledRooms)
+                    ? enabledRooms.includes(room.key)
+                    : !room.isPlugin || enabledPlugins === null || enabledPlugins.includes(room.key)))
                 .map((room) => (
                 <RoomButton
                     key={room.key}

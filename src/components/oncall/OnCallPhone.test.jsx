@@ -16,6 +16,7 @@ import { setupServer } from 'msw/node';
 import OnCallButton from './OnCallButton';
 import OnCallPhone from './OnCallPhone';
 import { useOnCall } from './useOnCall';
+import { NO_ANSWER_RING_MS } from './onCallModel';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
@@ -180,6 +181,53 @@ describe('OnCallPhone — the room decides who answers', () => {
         mount('lab');
         const dialog = await openPhone();
         expect(await within(dialog).findByText('Who do you need?')).toBeInTheDocument();
+    });
+});
+
+// Regression lock: a case can switch a specialist's rooms off (config.rooms).
+// The phone still lists them — the learner may try — but nobody picks up, and
+// nothing is paged or sent (the server refuses both with 409 no_answer).
+describe('OnCallPhone — a specialist who does not answer', () => {
+    const silentPathologist = () => server.use(
+        http.get('*/api/sessions/:sid/agents', () => HttpResponse.json({
+            agents: agentsFixture().map((a) => (a.agent_type === 'pathologist' ? { ...a, answers: false } : { ...a, answers: true })),
+        })),
+    );
+
+    it('is listed as "No answer", and a message screen says so with nothing to send', async () => {
+        silentPathologist();
+        mount();
+        const dialog = await openPhone();
+        const contact = await within(dialog).findByTestId('oncall-contact-pathologist');
+        expect(contact).toHaveTextContent('No answer');
+        expect(within(dialog).getByTestId('oncall-contact-radiologist')).toHaveTextContent('Available');
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Message Dr. Ana Moreno' }));
+        expect(await within(dialog).findByTestId('oncall-no-answer')).toHaveTextContent('Dr. Ana Moreno is not answering on this case.');
+        expect(within(dialog).getByLabelText('Message Dr. Ana Moreno')).toBeDisabled();
+        expect(pageCalls).toEqual([]);
+    });
+
+    it('rings, then ends in "No answer" — never paged, nothing posted', async () => {
+        silentPathologist();
+        mount();
+        const dialog = await openPhone();
+        await within(dialog).findByTestId('oncall-contact-pathologist');
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Call Dr. Ana Moreno' }));
+
+        const state = await within(dialog).findByTestId('oncall-call-state');
+        expect(state).toHaveTextContent('Calling…');
+        await waitFor(() => expect(state).toHaveTextContent('No answer'), { timeout: NO_ANSWER_RING_MS + 3000 });
+        expect(pageCalls).toEqual([]);
+        expect(requests.filter((r) => r.path.endsWith('/proxy/llm'))).toEqual([]);
+        expect(conversationPosts('pathologist')).toEqual([]);
+    }, NO_ANSWER_RING_MS + 10_000);
+
+    it('does not count toward the reachable tally on the phone button', async () => {
+        silentPathologist();
+        mount();
+        // Radiologist only: the pathologist is on the phone but will not answer.
+        expect(await screen.findByRole('button', { name: 'On-call phone, 1 specialist reachable' })).toBeInTheDocument();
     });
 });
 

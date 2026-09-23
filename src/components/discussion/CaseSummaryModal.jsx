@@ -93,7 +93,7 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
     const chiefComplaint = history.chiefComplaint || activeCase?.chief_complaint || null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
+        <div data-testid="case-summary-modal" className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
             <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700">
                 <header className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-900/50 rounded-t-2xl">
                     <div>

@@ -71,6 +71,9 @@ export default function OnCallChat({ agent, reachability, pagingNow, statusLine,
                 {(pagingNow || reachability === 'paging') && (
                     <p className="sys">{t('composer_waiting', { name: agent.name })}</p>
                 )}
+                {reachability === 'no_answer' && (
+                    <p className="sys" data-testid="oncall-no-answer">{t('chat_no_answer', { name: agent.name })}</p>
+                )}
                 {!pagingNow && reachability === 'on_call' && (
                     <p className="sys">
                         {t('page_needed', { name: agent.name })}

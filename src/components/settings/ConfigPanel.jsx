@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CasePluginsStep } from './CasePluginsStep.jsx';
+import { CaseRoomsStep } from './CaseRoomsStep.jsx';
 import { PluginAuthorSurface } from './PluginAuthorSurface.jsx';
 import { registry } from '../../plugins/registry.js';
 import { useToast } from '../../contexts/ToastContext';
@@ -113,6 +114,9 @@ import { KNOWLEDGE_TYPES, normalizeKnowledge } from '../../../server/shared/agen
 const WIZARD_STEP_KEYS = [
     'demographics', 'avatar', 'story', 'scenario', 'vitals', 'labs',
     'radiology', 'exam', 'records', 'treatments', 'agents', 'plugins',
+    // Appended, never inserted: a key placed earlier would renumber every
+    // step after it and break existing deep links (see above).
+    'rooms',
 ];
 const wizardStepNumber = (key) => WIZARD_STEP_KEYS.indexOf(key) + 1;
 
@@ -3948,6 +3952,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         treatments:   { title: t('wstep_treatments'),   icon: '💊' },
         agents:       { title: t('wstep_agents'),       icon: '🤖' },
         plugins:      { title: t('wstep_plugins'),      icon: '🧩' },
+        rooms:        { title: t('wstep_rooms'),        icon: '🚪' },
     };
     const WIZARD_STEPS = WIZARD_STEP_KEYS.map((key, i) => ({ num: i + 1, key, ...WIZARD_STEP_META[key] }));
 
@@ -5438,6 +5443,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 )}
 
                 {/* STEP 12: PLUGINS — a card per plugin that ships an editor */}
+                {step === wizardStepNumber('rooms') && (
+                    <CaseRoomsStep caseData={caseData} setCaseData={setCaseData} />
+                )}
+
                 {step === wizardStepNumber('plugins') && (
                     <CasePluginsStep
                         caseData={caseData}

@@ -159,6 +159,21 @@ describe('case prompt context surfaces', () => {
         expect(out).not.toContain('Learning objectives');
     });
 
+    // Regression lock: a room the case switched off (config.rooms) was never
+    // open to the learner, so its configured results must not reach an agent
+    // as part of the case the learner worked.
+    it('leaves out the results of rooms the case switched off', () => {
+        const withRooms = (disabled) => ({ ...richCase, config: { ...richCase.config, rooms: { disabled } } });
+        const noInvestigations = buildDiscussionCaseContext(withRooms(['lab', 'radiology']), 'chart');
+        expect(noInvestigations).not.toContain('Configured Radiology Results');
+        expect(noInvestigations).not.toContain('Troponin I = 2.1 ng/mL');
+        // The bedside still examines, so exam findings stay until both are off.
+        expect(buildDiscussionCaseContext(withRooms(['examination']), 'chart'))
+            .toContain('Configured Physical Exam Findings');
+        expect(buildDiscussionCaseContext(withRooms(['examination', 'room3d']), 'chart'))
+            .not.toContain('Configured Physical Exam Findings');
+    });
+
     // Regression lock: a stored differential must not reach a narrow agent.
     //
     // formatLegacyClinicalRecords emitted "### Differential Diagnosis" and

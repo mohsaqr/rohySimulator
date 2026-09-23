@@ -172,7 +172,7 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
                             const unavailable = r === 'unavailable';
                             return (
                                 <li key={a.agent_type} data-testid={`oncall-contact-${a.agent_type}`} className={`contact spec-${a.agent_type}`}>
-                                    <OnCallAvatar agent={a} presence={r === 'available' ? 'online' : unavailable ? null : 'away'} />
+                                    <OnCallAvatar agent={a} presence={r === 'available' ? 'online' : unavailable || r === 'no_answer' ? null : 'away'} />
                                     <button
                                         type="button"
                                         className="contact-open"

@@ -53,9 +53,14 @@ export const SPECIALTY_LABEL_KEYS = Object.freeze({
  *   'on_call'    — must be paged first (the phone pages on first contact)
  *   'paging'     — paged, on the way (arrives_at in the future)
  *   'unavailable'— disabled, departed, not yet on shift
+ *   'no_answer'  — on the phone, but the case switched every room this
+ *                  specialist owns off (config.rooms): the call rings and
+ *                  nobody picks up. The server sets `answers: false` and
+ *                  refuses paging and conversations with 409 no_answer.
  */
 export function reachabilityOf(agent, elapsedMinutes = 0) {
     if (!agent) return 'unavailable';
+    if (agent.answers === false) return 'no_answer';
     const display = AgentService.getAgentDisplayStatus(agent, elapsedMinutes);
     if (display.canChat) return 'available';
     if (display.canPage) return 'on_call';
@@ -65,8 +70,12 @@ export function reachabilityOf(agent, elapsedMinutes = 0) {
 
 /** Specialists the learner can contact (now, by paging, or once they arrive). */
 export function countReachable(agents, elapsedMinutes = 0) {
-    return specialistsOf(agents).filter(a => reachabilityOf(a, elapsedMinutes) !== 'unavailable').length;
+    return specialistsOf(agents)
+        .filter(a => !['unavailable', 'no_answer'].includes(reachabilityOf(a, elapsedMinutes))).length;
 }
+
+/** How long a call to a specialist who will not answer rings before "No answer". */
+export const NO_ANSWER_RING_MS = 6000;
 
 /** A call id the conversation route accepts: [A-Za-z0-9_-], at most 64 chars. */
 export function newCallId() {
@@ -92,12 +101,14 @@ export function isFailedReply(text) {
 
 /**
  * The oncall-namespace key for a one-line reachability label: "Available",
- * "On call", "Paging…" / "Paging… 0:42", "Not available".
+ * "On call", "Paging…" / "Paging… 0:42", "No answer",
+ * "Not available".
  */
 export function statusKeyFor(state, hasRemaining = false) {
     if (state === 'available') return 'status_available';
     if (state === 'on_call') return 'status_on_call';
     if (state === 'paging') return hasRemaining ? 'status_paging_eta' : 'status_paging';
+    if (state === 'no_answer') return 'status_no_answer';
     return 'status_unavailable';
 }
 
