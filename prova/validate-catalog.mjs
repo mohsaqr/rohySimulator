@@ -36,7 +36,12 @@ try {
   tx(t.db, () => insertProduct(t.db, principal, validateProfile(rohyProfile)));
 
   const text = fs.readFileSync(file, 'utf8');
-  const doc = parseCatalogYaml(text);
+  // Prova 0.1.2 (named catalogues) returns { header, features } where it
+  // used to return the bare feature list; accept both so the check runs
+  // against whichever Prova checkout sits beside this repo.
+  const parsed = parseCatalogYaml(text);
+  const doc = Array.isArray(parsed) ? parsed : parsed.features;
+  const header = Array.isArray(parsed) ? null : parsed.header;
   const plan = planImport(t.db, doc);
 
   const features = plan.length;
@@ -71,7 +76,7 @@ try {
   if (dupes.length) { console.error(`  DUPLICATE case ids: ${[...new Set(dupes)].join(', ')}`); failed = true; }
 
   if (apply) {
-    const counts = tx(t.db, () => applyImport(t.db, principal, plan));
+    const counts = tx(t.db, () => applyImport(t.db, principal, plan, header));
     console.log(`APPLY OK ${JSON.stringify(counts)}`);
     const exported = exportCatalog(t.db, ['rohy']);
     const a = JSON.stringify(parseYaml(exported));

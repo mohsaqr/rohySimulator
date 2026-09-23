@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.106] — 2026-09-23
+
+### Added
+
+- **The on-call phone joins the test battery.** It had no case in `prova/rohy-cases.yaml`, so the
+  release gate knew nothing about it. New feature `ONCALL.PHONE` (core):
+  - `.01` (automated): the phone opens and closes from every room in the bar, the bedside included.
+  - `.02` (automated): a case nobody set up can reach the lab and radiology.
+  - `.03` (manual): the button covers nothing, at desktop and tablet width.
+
+  The automated half is `tests/e2e/oncall-phone.spec.js`. Each room is checked by CLICKING the
+  button, because a Playwright click fails when anything is drawn over it. Putting the beta.103
+  bedside bug back makes it fail with `… z-30 … intercepts pointer events`. All 79 coverage
+  patterns match a real test.
+
+### Fixed
+
+- `prova/validate-catalog.mjs` failed on every catalogue (`doc.map is not a function`) against
+  Prova 0.1.2, whose `parseCatalogYaml` now returns `{ header, features }`. It accepts both
+  shapes.
+
 ## [3.0.0-beta.105] — 2026-09-23
 
 ### Fixed

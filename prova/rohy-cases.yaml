@@ -1785,3 +1785,49 @@
       covers:
         - "rohy:chromium::case-lifecycle.spec.js › case lifecycle › 8. clinical note*"
 
+
+- feature: ONCALL.PHONE
+  title: The on-call phone
+  products: [rohy]
+  tier: core
+  cases:
+    - id: ONCALL.PHONE.01
+      title: The phone opens from every room, the bedside included
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case.
+        2. Visit every room in the room bar in turn, the immersive bedside included.
+        3. In each, press the round phone button, then press it again.
+      expected: |-
+        Every room shows exactly one phone button. Pressing it opens the handset and pressing it
+        again closes it, in every room — nothing is drawn over it, the bedside's full-screen scene
+        included.
+      covers:
+        - "rohy:chromium::oncall-phone.spec.js › the on-call phone › opens from every room in the bar, the bedside overlay included"
+    - id: ONCALL.PHONE.02
+      title: Every case can reach the lab and radiology
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case no educator attached a specialist to.
+        2. Open the phone from the patient room.
+      expected: |-
+        The contact list offers the laboratory and radiology specialists. They stand on every case;
+        no case setup is needed for a learner to ring them.
+      covers:
+        - "rohy:chromium::oncall-phone.spec.js › the on-call phone › reaches the lab and radiology on a case nobody set up"
+    - id: ONCALL.PHONE.03
+      title: The phone button covers nothing
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. As a learner, start a case on a desktop-width window, then on a tablet-width one.
+        2. Look at the phone button in the patient room, the bedside, the examination room, the lab,
+           radiology and the debrief.
+      expected: |-
+        The button sits in each room's own top bar — beside Logout, or beside the Ready pill over the
+        bedside — and covers no vital sign, trace, room control or End & Debrief, at either width.
