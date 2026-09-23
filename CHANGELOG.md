@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.118] — 2026-09-23
+
+### Fixed
+
+- **The fuzz job failed on its first CI run on four pathology routes** (`/api/plugins/pathology/imports`,
+  `/jobs/:id/cancel`, `/assets/:id`, `/assets/:id/calibration`). They answer 503
+  `plugin_import_no_library` by design when the deployment has no slide library, CI has none, and
+  the fuzzer reports any 5xx. `scripts/fuzz-api.sh` now gives its server an empty library
+  directory (`ROHY_PLUGIN_LIBRARY_DIRS`), so the routes are exercised for real: educator 13,505 of
+  13,505 and student 13,560 of 13,560 pass locally with it.
+- **`POST /settings/log` answered before its `learning_events` dual-write landed**, so a reader that
+  trusted the 200 could find no row yet — `learning-events-room-column.test.js` did, once, on a slow
+  CI runner. The response now follows the write; a failure to mirror the event is logged and still
+  answers 200, as before.
+
 ## [3.0.0-beta.117] — 2026-09-23
 
 ### Added

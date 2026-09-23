@@ -343,6 +343,10 @@ router.post('/settings/log', authenticateToken, (req, res) => {
         // Dual-write into learning_events, through the one write path, so the
         // unified Activity view sees settings changes alongside session events.
         // Settings changes never happen inside a room — `room` stays NULL.
+        // Answered AFTER the event lands (a failure to log it is not a failure
+        // of the change, so it still answers 200): the response used to go
+        // out first, and a reader that trusted it — the room-column test on a
+        // slow CI runner (2026-09-23) — found no row yet.
         recordServerEvent(req, {
             session_id: session_id || null,
             verb: 'CHANGED_SETTING',
@@ -352,9 +356,11 @@ router.post('/settings/log', authenticateToken, (req, res) => {
             component: 'CONFIG_PANEL',
             result: new_value != null ? `${old_value ?? ''} → ${new_value}` : null,
             context: { setting_type, setting_name, old_value, new_value },
-        }, { tenantId: tenantId(req) }).catch(() => {});
-
-        res.json({ id: this.lastID, message: 'Setting change logged' });
+        }, { tenantId: tenantId(req) }).catch((eventErr) => {
+            (req.log || feedLog).warn('settings change not mirrored to learning_events', { error: eventErr.message });
+        }).then(() => {
+            res.json({ id: this.lastID, message: 'Setting change logged' });
+        });
     });
 });
 
