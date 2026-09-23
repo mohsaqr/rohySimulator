@@ -25,6 +25,7 @@ import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { normaliseCaseRooms } from '../shared/caseRooms.js';
 import {
+    missingField,
     auditSuccess,
     canManageOwnedResource,
     canReadAcrossUsers,
@@ -417,6 +418,8 @@ router.put('/cases/:id/default', authenticateToken, requireEducator, (req, res) 
 
 // POST /api/cases - Admin only
 router.post('/cases', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['name']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { name, description, system_prompt, config } = req.body;
     const ipAddress = req.ip || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -516,6 +519,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
 
 // PUT /api/cases/:id - Admin only
 router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['name']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { name, description, system_prompt } = req.body;
     const caseId = req.params.id;
     const ipAddress = req.ip || req.connection?.remoteAddress;
@@ -531,6 +536,12 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
     dbAdapter.get(`SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`, [caseId, tenantId(req)], (err, oldCase) => {
         if (err) {
             return res.status(500).json({ error: err.message });
+        }
+        // An unknown, deleted or other-tenant case: the UPDATE below would
+        // match nothing and answer 200, and the version snapshot after it
+        // would fail its foreign key (found by the API fuzzer).
+        if (!oldCase) {
+            return res.status(404).json({ error: 'Case not found' });
         }
 
         // Case language is IMMUTABLE: whatever the client sends, the stored

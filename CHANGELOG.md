@@ -9,6 +9,53 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.115] — 2026-09-23
+
+### Added
+
+- **API fuzzing** (`scripts/fuzz-api.sh`, CI job `fuzz`). Boots an isolated server, mints an
+  educator and a student token, and runs schemathesis (pinned 4.28.0) over the generated OpenAPI
+  document once per role, 30 examples per operation. Fails on any response ≥ 500, any response
+  slower than 5 s, or a server that dies mid-run. Destructive and session-ending routes are
+  excluded, each with its reason in the script. Only the `not_a_server_error` check and the
+  response-time budget run: the reference has no response schemas and lists only the shared
+  statuses, so with `--checks all` the conformance checks fail by construction (measured: 150
+  unsupported-method, 140 undocumented-status and 57 rejected-valid-request findings as an
+  educator, none of them server errors). `FUZZ_CHECKS=all` still measures them.
+- `scripts/fuzz-api-spec.mjs` builds the fuzzer's document: the reference plus an optional
+  JSON-object body on every POST/PUT/PATCH, for the fuzzer only, because the reference cannot say
+  what a route's body is.
+
+### Fixed
+
+- **A bodiless POST was a 500 on ~40 routes.** Express 5 leaves `req.body` undefined when no parser
+  ran, and handlers destructure it. `server/server.js` now defaults it to `{}`, so the handler's own
+  400 answers.
+- **Six routes stored a missing required field as NULL and answered 500** (SQLITE_CONSTRAINT):
+  `POST /cases`, `/master/body-regions`, `/master/scenario-templates`, `/master/lab-tests`,
+  `/master/medications` and `/settings/log`. They now answer 400 naming the field (`missingField`
+  in `server/routes/_helpers.js`; "missing" means exactly what NOT NULL refuses, so an empty string
+  is still accepted).
+- **`PUT /cases/:id` on an unknown case answered 200** (an UPDATE of nothing, then a version
+  snapshot that failed its foreign key). It is a 404; and without a `name` it is a 400, not a 500.
+- **Duplicating an agent template twice answered 500** (UNIQUE `agent_type, name`, which spans
+  every tenant and soft-deleted rows). An unnamed copy takes the first free "(Copy N)"; a
+  requested name that is taken is a 409.
+- **`/proxy/llm` answered an unreachable provider with 500.** It is an upstream failure: 502
+  `LLM provider unreachable`.
+- **The OpenAPI reference** declares every path parameter (OpenAPI requires it; the fuzzer skipped
+  undeclared ones), writes Express's `*splat` as `{splat}`, gives `/` as the server (the paths
+  already start with `/api`, so `/api` sent clients to `/api/api/…`), and names the auth cookie
+  `rohy_auth`, not `token`.
+- Regression tests: `tests/server/fuzz-regressions.test.js`, `tests/server/fuzz-api-spec.test.js`.
+
+### Known, not fixed
+
+- `POST /agents/templates/:id/test-llm` reads the platform LLM settings from a table named
+  `config` that no migration creates, so it answers 500 for every template without its own
+  provider override. Excluded from the fuzz run with a comment naming the bug; the fix belongs with
+  the LLM resolution in `/proxy/llm`.
+
 ## [3.0.0-beta.114] — 2026-09-23
 
 ### Added

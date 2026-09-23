@@ -246,13 +246,25 @@ function buildOpenApi(byArea) {
       (a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method),
     );
     for (const ep of eps) {
-      // OpenAPI path templating: Express ':id' -> '{id}'.
-      const oaPath = ep.path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+      // OpenAPI path templating: Express ':id' -> '{id}', and an Express 5
+      // named wildcard '*splat' -> '{splat}' (it matches the rest of the path).
+      const oaPath = ep.path
+        .replace(/:([A-Za-z0-9_]+)/g, '{$1}')
+        .replace(/\*([A-Za-z0-9_]+)/g, '{$1}');
       if (!paths[oaPath]) paths[oaPath] = {};
+
+      // OpenAPI requires every templated path parameter to be declared, and
+      // tools that read this file (the API fuzzer, scripts/fuzz-api.sh) refuse
+      // or skip an operation whose `{id}` is undeclared. Express hands every
+      // path parameter to a handler as a string, so that is all we can say.
+      const parameters = [...oaPath.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map(([, name]) => ({
+        name, in: 'path', required: true, schema: { type: 'string' },
+      }));
 
       const op = {
         summary: summarize(ep.method, ep.path),
         tags: [area],
+        ...(parameters.length ? { parameters } : {}),
         responses: {
           200: { description: 'Success' },
           400: { description: 'Validation error (envelope via server/redaction.js)' },
@@ -295,7 +307,9 @@ function buildOpenApi(byArea) {
         'Auto-generated from server/routes/*.js by scripts/docs-gen/gen-api.mjs. ' +
         'Do not hand-edit. Regenerate with `npm run docs:gen:api`.',
     },
-    servers: [{ url: '/api' }],
+    // Every path below already carries the /api prefix (API_BASE), so the
+    // server is the origin root; '/api' here made clients request /api/api/….
+    servers: [{ url: '/' }],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -307,7 +321,8 @@ function buildOpenApi(byArea) {
         cookieAuth: {
           type: 'apiKey',
           in: 'cookie',
-          name: 'token',
+          // server/middleware/auth.js AUTH_COOKIE_NAME.
+          name: 'rohy_auth',
           description:
             'HttpOnly JWT cookie. State-changing cookie-authenticated ' +
             'requests also require the X-CSRF-Token header.',

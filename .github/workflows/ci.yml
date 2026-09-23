@@ -260,6 +260,60 @@ jobs:
           path: test-results.e2e.junit.xml
           if-no-files-found: warn
 
+  # API fuzzing (scripts/fuzz-api.sh): schemathesis over the generated OpenAPI
+  # document, once as an educator and once as a student, against an isolated
+  # server the script boots (temporary port and database, like the audit job's
+  # server but its own). Fails on any response >= 500, any response slower
+  # than 5 s, or a server that dies mid-run. The script lists every excluded
+  # route with its reason, and says why only the no-server-error and
+  # response-time checks run (the reference carries no response schemas).
+  # Pinned: the version the exclusions and flags were measured against.
+  fuzz:
+    name: API fuzzing (schemathesis)
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # See the Build job for why the sibling clones exist.
+      - name: Clone dynajs sibling
+        run: |
+          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+      - name: Clone 3D patient room sibling
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: bash scripts/clone-room3d.sh ../3D
+      - name: Install dependencies
+        run: npm ci
+      - name: Install schemathesis
+        run: pip install 'schemathesis==4.28.0'
+      # TMPDIR under the runner's temp so a failed run's kept directory (server
+      # log, fuzz document) can be uploaded below.
+      - name: Fuzz the API as an educator and as a student
+        env:
+          TMPDIR: ${{ runner.temp }}
+          FUZZ_REPORT_DIR: ${{ runner.temp }}/fuzz-reports
+        run: bash scripts/fuzz-api.sh
+      - name: Upload fuzz reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-reports-${{ matrix.node-version }}
+          path: |
+            ${{ runner.temp }}/fuzz-reports/
+            ${{ runner.temp }}/rohy-fuzz-*/server.log
+          if-no-files-found: warn
+
   audit:
     name: HTTP audit scripts
     runs-on: ubuntu-latest

@@ -338,6 +338,28 @@ export async function dbScalar(sql, params = []) {
 }
 
 /**
+ * The first required body field that is missing, or null when all are there.
+ *
+ * For the columns a route inserts into a NOT NULL column with no default:
+ * without the check the INSERT fails with SQLITE_CONSTRAINT and the route
+ * answers 500 for what is the client's mistake (found by the API fuzzer,
+ * scripts/fuzz-api.sh). "Missing" is exactly what NOT NULL refuses — undefined
+ * or null; an empty string was stored before and still is. A body that is not
+ * a plain object (a JSON array) is missing every field.
+ *
+ * @param {*} body req.body
+ * @param {string[]} fields
+ * @returns {string|null}
+ */
+export function missingField(body, fields) {
+    const obj = body !== null && typeof body === 'object' && !Array.isArray(body) ? body : {};
+    return fields.find((field) => {
+        const value = obj[field];
+        return value === undefined || value === null;
+    }) ?? null;
+}
+
+/**
  * Validate password strength
  * @param {string} password - Password to validate
  * @returns {Object} - { valid: boolean, errors: string[] }

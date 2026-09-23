@@ -38,6 +38,7 @@ import {
     providerEnabledKeys,
 } from '../services/ttsProviders.js';
 import {
+    missingField,
     auditSuccess,
     dbAll,
     redactAuditSetting,
@@ -218,6 +219,8 @@ router.get('/master/body-regions', (req, res) => {
 
 // POST /api/master/body-regions - Create body region (Admin)
 router.post('/master/body-regions', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['region_id', 'name']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { region_id, name, anatomical_view, description, parent_region_id, display_order } = req.body;
 
     dbAdapter.run(
@@ -340,6 +343,8 @@ router.get('/master/scenario-templates/:id', (req, res) => {
 
 // POST /api/master/scenario-templates - Create scenario template (Admin)
 router.post('/master/scenario-templates', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['template_id', 'name', 'duration_minutes']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline } = req.body;
 
     dbAdapter.run(
@@ -436,6 +441,8 @@ router.get('/master/lab-tests/groups', (req, res) => {
 
 // POST /api/master/lab-tests - Create lab test (Admin)
 router.post('/master/lab-tests', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['test_name', 'test_group', 'unit']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes } = req.body;
 
     dbAdapter.run(
@@ -536,6 +543,8 @@ router.get('/master/medications', (req, res) => {
 
 // POST /api/master/medications - Create medication (Admin)
 router.post('/master/medications', authenticateToken, requireEducator, (req, res) => {
+    const missing = missingField(req.body, ['generic_name']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert } = req.body;
 
     dbAdapter.run(

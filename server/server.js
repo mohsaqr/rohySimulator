@@ -88,6 +88,16 @@ app.use(requestLoggerMiddleware());
 // unaffected by this cap.
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
+// Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request
+// with no body, or with a Content-Type none of them accepts. Handlers
+// destructure it (`const { x } = req.body`), so a bodiless POST was a 500
+// TypeError instead of the handler's own 400: ~40 routes, found by the API
+// fuzzer (scripts/fuzz-api.sh). Default it once, here, rather than guarding
+// every handler. Multipart routes are unaffected — multer sets its own body.
+app.use((req, _res, next) => {
+    if (req.body === undefined) req.body = {};
+    next();
+});
 
 // Routes
 app.use('/api', apiRoutes);
