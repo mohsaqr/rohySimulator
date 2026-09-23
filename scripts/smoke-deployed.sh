@@ -4,6 +4,7 @@
 # actually serving.
 #
 #   scripts/smoke-deployed.sh https://rohy.lacarm.com
+#   scripts/smoke-deployed.sh https://rohy.lacarm.com --reporter=list   # extra args go to Playwright
 #
 # This is the battery's upgrade hook. `bin/rohy-update apply` already runs
 # post_verify (scripts/post-verify-rohy.sh -> tech-test.sh) and rolls back when
@@ -36,6 +37,9 @@ if [[ -z "$TARGET" ]]; then
     exit 2
 fi
 TARGET="${TARGET%/}"
+# Anything after the URL is passed to Playwright as-is (e.g. --reporter=list,
+# which REPLACES the config's reporters and so keeps a run from posting).
+[[ $# -gt 0 ]] && shift
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2
@@ -80,7 +84,7 @@ else
     echo "==> smoke against $TARGET (PROVA_URL/PROVA_TOKEN unset — not reporting)"
 fi
 
-npx playwright test --config=playwright.smoke.config.js
+npx playwright test --config=playwright.smoke.config.js "$@"
 STATUS=$?
 
 if [[ $STATUS -eq 0 ]]; then
