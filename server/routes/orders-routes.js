@@ -604,7 +604,7 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
             if (readErr) return res.status(500).json({ error: readErr.message });
 
     dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN');
+        dbAdapter.run('BEGIN IMMEDIATE');
         // Delete dependent orders for this case's lab investigations first
         // (FK has no ON DELETE CASCADE — application layer handles it).
         const orphanSql = `
@@ -777,7 +777,7 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
         if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
 
     dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN');
+        dbAdapter.run('BEGIN IMMEDIATE');
         // Regular `function` (not arrow) so SQLite binds `this.changes` for
         // the orphan-row count.
         dbAdapter.run(

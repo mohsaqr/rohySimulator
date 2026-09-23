@@ -566,7 +566,7 @@ export async function buildUserPurgePlan(userId, tenant_id) {
 }
 
 export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, passwordHash, authoredCaseIds }) {
-    await dbRun('BEGIN');
+    await dbRun('BEGIN IMMEDIATE');
     try {
         await dbRun(`UPDATE cases SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL, last_modified_by = NULL
                      WHERE tenant_id = ? AND (created_by = ? OR last_modified_by = ?)`, [tenant_id, userId, userId]);

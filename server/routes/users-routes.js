@@ -878,7 +878,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
         }
 
         dbAdapter.serialize(() => {
-            dbAdapter.run('BEGIN');
+            dbAdapter.run('BEGIN IMMEDIATE');
             const cleanupSteps = [
                 ['DELETE FROM active_sessions WHERE user_id = ?', [userId]],
                 ['DELETE FROM user_preferences WHERE user_id = ?', [userId]],

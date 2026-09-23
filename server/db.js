@@ -25,12 +25,27 @@ export const dbReady = new Promise((resolve, reject) => {
     resolveDbReady = resolve;
     rejectDbReady = reject;
 });
+// How long one attempt of a statement on the shared handle waits for another
+// connection's write lock (the audit chain has its own, audit-chain.js) before
+// failing with SQLITE_BUSY. 1000 ms is node-sqlite3's own default, set here
+// explicitly so a driver upgrade cannot change it silently. dbAdapter.run
+// retries a failed write (BUSY_RETRY_DELAYS_MS), so a write waits up to about
+// 6 × this in all before it gives up — raising it would multiply that worst
+// case without covering anything the retry does not (measured: a lock held
+// 1.5 s is already ridden out at 1000).
+//
+// A timeout is NOT what fixes the common SQLITE_BUSY on this handle: that one
+// is a stale WAL read snapshot, which sqlite refuses at once whatever the
+// timeout. See dbAdapter.js.
+export const DB_BUSY_TIMEOUT_MS = 1000;
+
 const db = new sqlite.Database(dbPath, (err) => {
     if (err) {
         dbLog.error('database open failed', { db_path: dbPath, error: err.message });
         rejectDbReady(err);
     } else {
-        dbLog.info('sqlite database connected', { db_path: dbPath });
+        db.configure('busyTimeout', DB_BUSY_TIMEOUT_MS);
+        dbLog.info('sqlite database connected', { db_path: dbPath, busy_timeout_ms: DB_BUSY_TIMEOUT_MS });
         // Audit finding #8: startup runs migrations always, but seeding is
         // gated. Production deploys can set ROHY_NO_AUTO_SEED=1 and run
         // `node scripts/seed.js` from a one-off job — keeps the

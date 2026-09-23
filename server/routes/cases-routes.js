@@ -118,24 +118,15 @@ function derivePatientColumns(config) {
     };
 }
 
-// Stamp the visible case code after an INSERT. The audit chain writes on its
-// own DEDICATED sqlite connection (audit-chain.js) and logAudit fires right
-// before this UPDATE; with no busy_timeout on the shared handle an
-// overlapping audit write surfaces as SQLITE_BUSY. Retry briefly with
-// backoff — the boot sweep (ensureCaseCodes) is the last-resort repair.
-function stampCaseCode(caseCode, caseId, tenant, cb, attempt = 0) {
+// Stamp the visible case code after an INSERT. logAudit fires right before
+// this UPDATE and the audit chain writes on its own connection; the SQLITE_BUSY
+// that can cause is retried inside dbAdapter.run (see BUSY_RETRY_DELAYS_MS).
+// The boot sweep (ensureCaseCodes) is the last-resort repair.
+function stampCaseCode(caseCode, caseId, tenant, cb) {
     dbAdapter.run(
         `UPDATE cases SET case_code = ? WHERE id = ? AND tenant_id = ?`,
         [caseCode, caseId, tenant],
-        (err) => {
-            if (err && /SQLITE_BUSY/.test(err.message) && attempt < 4) {
-                return setTimeout(
-                    () => stampCaseCode(caseCode, caseId, tenant, cb, attempt + 1),
-                    25 * (attempt + 1)
-                );
-            }
-            cb(err);
-        }
+        (err) => cb(err)
     );
 }
 
