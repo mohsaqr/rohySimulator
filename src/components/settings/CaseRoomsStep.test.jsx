@@ -56,4 +56,18 @@ describe('CaseRoomsStep', () => {
         expect(screen.getByTestId('rooms-silent-specialists')).not.toHaveTextContent('Radiology');
         expect(screen.getByText(/End & Debrief ends the case and shows the case summary/)).toBeInTheDocument();
     });
+
+    // Regression lock: the admin light theme (.rohy-admin-light in index.css)
+    // repaints every bg-neutral-* / bg-white to the white card surface, so an
+    // OFF switch drawn with those classes was white on white — invisible.
+    it('colours the switch without classes the admin light theme repaints', () => {
+        render(<Harness initialConfig={{ rooms: { disabled: ['lab'] } }} />);
+        for (const key of ['lab', 'radiology']) {
+            const toggle = screen.getByTestId(`room-toggle-${key}`);
+            for (const el of [toggle, ...toggle.querySelectorAll('*')]) {
+                expect(el.className).not.toMatch(/\bbg-(neutral|white|gray|slate)/);
+                expect(el.style.background).not.toBe('');
+            }
+        }
+    });
 });
