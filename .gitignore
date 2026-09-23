@@ -107,6 +107,9 @@ test-results-*/
 test-results.e2e.junit.xml
 test-results.e2e-*.junit.xml
 test-results.smoke.junit.xml
+# schemathesis (scripts/fuzz-api.sh): its example database and default report dir
+.schemathesis/
+schemathesis-report/
 tests/e2e/.auth/
 
 # Local-only working notes (kept on disk, not tracked).

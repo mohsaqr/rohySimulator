@@ -1152,6 +1152,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             return res.status(429).json(budgetExceededResponse(err));
         }
         (req.log || routesLlmLog).error('llm proxy failed', { error: err.message });
+        // The provider could not be reached at all (DNS, refused, reset):
+        // undici's fetch rejects with a TypeError "fetch failed". That is an
+        // upstream failure, not this server's — 502, as sendSynthesisError
+        // answers for TTS. Found by the API fuzzer (scripts/fuzz-api.sh),
+        // which runs with no provider configured.
+        if (err instanceof TypeError && err.message === 'fetch failed') {
+            return res.status(502).json({ error: 'LLM provider unreachable', details: err.cause?.code || err.message });
+        }
         res.status(500).json({ error: "LLM Request Failed", details: err.message });
     }
 });

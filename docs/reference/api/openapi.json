@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "/api"
+      "url": "/"
     }
   ],
   "components": {
@@ -21,7 +21,7 @@
       "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "token",
+        "name": "rohy_auth",
         "description": "HttpOnly JWT cookie. State-changing cookie-authenticated requests also require the X-CSRF-Token header."
       }
     }
@@ -134,6 +134,16 @@
         "summary": "Get /addons/oyon/analytics/session/:sessionId",
         "tags": [
           "oyon"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -574,6 +584,16 @@
         "tags": [
           "users"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -693,7 +713,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:163",
+        "x-rohy-source": "server/routes/admin-routes.js:164",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -728,7 +748,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:142",
+        "x-rohy-source": "server/routes/admin-routes.js:143",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -761,7 +781,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:116",
+        "x-rohy-source": "server/routes/admin-routes.js:117",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -796,7 +816,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:992",
+        "x-rohy-source": "server/routes/admin-routes.js:1001",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -831,7 +851,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:953",
+        "x-rohy-source": "server/routes/admin-routes.js:962",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -866,7 +886,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:857",
+        "x-rohy-source": "server/routes/admin-routes.js:866",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -901,7 +921,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:912",
+        "x-rohy-source": "server/routes/admin-routes.js:921",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -936,7 +956,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:883",
+        "x-rohy-source": "server/routes/admin-routes.js:892",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1024,6 +1044,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1057,6 +1087,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1088,6 +1128,16 @@
         "summary": "Replace /agents/templates/:id",
         "tags": [
           "agents"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -1124,6 +1174,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1159,6 +1219,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1193,6 +1263,16 @@
         "summary": "Create /agents/templates/:id/test-llm",
         "tags": [
           "agents"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -1243,7 +1323,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2790",
+        "x-rohy-source": "server/routes/analytics-routes.js:2793",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1275,7 +1355,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2831",
+        "x-rohy-source": "server/routes/analytics-routes.js:2834",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1296,6 +1376,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1310,7 +1400,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2806",
+        "x-rohy-source": "server/routes/analytics-routes.js:2809",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1344,7 +1434,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2721",
+        "x-rohy-source": "server/routes/analytics-routes.js:2724",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1364,6 +1454,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1378,7 +1478,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2745",
+        "x-rohy-source": "server/routes/analytics-routes.js:2748",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1412,7 +1512,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1406",
+        "x-rohy-source": "server/routes/analytics-routes.js:1409",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1446,7 +1546,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3007",
+        "x-rohy-source": "server/routes/analytics-routes.js:3010",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1481,7 +1581,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2915",
+        "x-rohy-source": "server/routes/analytics-routes.js:2918",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1515,7 +1615,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3066",
+        "x-rohy-source": "server/routes/analytics-routes.js:3069",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1550,7 +1650,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3017",
+        "x-rohy-source": "server/routes/analytics-routes.js:3020",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1585,7 +1685,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:359",
+        "x-rohy-source": "server/routes/analytics-routes.js:362",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1620,7 +1720,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:904",
+        "x-rohy-source": "server/routes/analytics-routes.js:907",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1655,7 +1755,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:208",
+        "x-rohy-source": "server/routes/analytics-routes.js:209",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1675,6 +1775,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1689,7 +1799,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:247",
+        "x-rohy-source": "server/routes/analytics-routes.js:248",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1709,6 +1819,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1723,7 +1843,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:948",
+        "x-rohy-source": "server/routes/analytics-routes.js:951",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -1758,7 +1878,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:378",
+        "x-rohy-source": "server/routes/analytics-routes.js:381",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1793,7 +1913,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3046",
+        "x-rohy-source": "server/routes/analytics-routes.js:3049",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1828,7 +1948,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3037",
+        "x-rohy-source": "server/routes/analytics-routes.js:3040",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1863,7 +1983,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3028",
+        "x-rohy-source": "server/routes/analytics-routes.js:3031",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1898,7 +2018,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2976",
+        "x-rohy-source": "server/routes/analytics-routes.js:2979",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1933,7 +2053,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3057",
+        "x-rohy-source": "server/routes/analytics-routes.js:3060",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1954,6 +2074,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -1968,7 +2098,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:282",
+        "x-rohy-source": "server/routes/analytics-routes.js:283",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1987,6 +2117,16 @@
         "summary": "Get /auth/invite/:token",
         "tags": [
           "registration"
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -2232,6 +2372,16 @@
         "tags": [
           "uploads"
         ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2341,7 +2491,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:234",
+        "x-rohy-source": "server/routes/cases-routes.js:235",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -2373,7 +2523,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:419",
+        "x-rohy-source": "server/routes/cases-routes.js:420",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2394,6 +2544,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2408,7 +2568,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:912",
+        "x-rohy-source": "server/routes/agents-routes.js:927",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -2426,6 +2586,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2440,7 +2610,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:994",
+        "x-rohy-source": "server/routes/agents-routes.js:1009",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2461,6 +2631,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2475,7 +2655,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1282",
+        "x-rohy-source": "server/routes/agents-routes.js:1297",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2496,6 +2676,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2510,7 +2708,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1224",
+        "x-rohy-source": "server/routes/agents-routes.js:1239",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2529,6 +2727,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2543,7 +2759,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1136",
+        "x-rohy-source": "server/routes/agents-routes.js:1151",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2563,6 +2779,16 @@
         "summary": "Replace /cases/:caseId/course",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -2599,6 +2825,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2631,6 +2867,16 @@
         "summary": "Replace /cases/:caseId/labs",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -2667,6 +2913,24 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "labId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2699,6 +2963,24 @@
         "summary": "Replace /cases/:caseId/labs/:labId",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "labId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -2735,6 +3017,24 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2749,7 +3049,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1318",
+        "x-rohy-source": "server/routes/cases-routes.js:1329",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -2769,6 +3069,16 @@
         "summary": "Replace /cases/:caseId/treatments",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -2805,6 +3115,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2819,7 +3139,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1288",
+        "x-rohy-source": "server/routes/cases-routes.js:1299",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -2840,6 +3160,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2854,7 +3184,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:617",
+        "x-rohy-source": "server/routes/cases-routes.js:628",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2873,6 +3203,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2887,7 +3227,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:310",
+        "x-rohy-source": "server/routes/cases-routes.js:311",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -2905,6 +3245,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2919,7 +3269,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:518",
+        "x-rohy-source": "server/routes/cases-routes.js:521",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2940,6 +3290,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2954,7 +3314,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:342",
+        "x-rohy-source": "server/routes/cases-routes.js:343",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -2975,6 +3335,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -2989,7 +3359,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:368",
+        "x-rohy-source": "server/routes/cases-routes.js:369",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -3009,6 +3379,16 @@
         "summary": "Get /cases/:id/investigations",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3210,6 +3590,16 @@
         "tags": [
           "catalogue"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -3241,6 +3631,16 @@
         "summary": "Replace /catalogue/lab-tests/:id",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3275,6 +3675,16 @@
         "summary": "Create /catalogue/lab-tests/:id/promote",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3411,6 +3821,16 @@
         "tags": [
           "catalogue"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -3442,6 +3862,16 @@
         "summary": "Replace /catalogue/medications/:id",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3476,6 +3906,16 @@
         "summary": "Create /catalogue/medications/:id/promote",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3512,6 +3952,16 @@
         "tags": [
           "catalogue"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -3543,6 +3993,16 @@
         "summary": "Replace /catalogue/:id",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3578,6 +4038,16 @@
         "tags": [
           "catalogue"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -3609,6 +4079,16 @@
         "summary": "Create /catalogue/:id/items",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3643,6 +4123,24 @@
         "summary": "Delete /catalogue/:id/items/:itemId",
         "tags": [
           "catalogue"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -3692,7 +4190,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1850",
+        "x-rohy-source": "server/routes/analytics-routes.js:1853",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -3727,7 +4225,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1320",
+        "x-rohy-source": "server/routes/analytics-routes.js:1323",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -3761,7 +4259,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:720",
+        "x-rohy-source": "server/routes/analytics-routes.js:723",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -3796,7 +4294,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:674",
+        "x-rohy-source": "server/routes/analytics-routes.js:677",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -3989,6 +4487,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4022,6 +4530,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4054,6 +4572,16 @@
         "summary": "Update /cohorts/:id",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4090,6 +4618,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4124,6 +4662,16 @@
         "summary": "Get /cohorts/:id/analytics/filter-options",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4160,6 +4708,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4194,6 +4752,16 @@
         "summary": "Get /cohorts/:id/analytics/pulse",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4230,6 +4798,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4264,6 +4842,16 @@
         "summary": "Get /cohorts/:id/analytics/summary",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4300,6 +4888,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4334,6 +4932,16 @@
         "summary": "Get /cohorts/:id/analytics/tna-sequences",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4370,6 +4978,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4404,6 +5022,16 @@
         "summary": "Create /cohorts/:id/cases",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4440,6 +5068,24 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4472,6 +5118,24 @@
         "summary": "Update /cohorts/:id/cases/:caseId",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4508,6 +5172,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4542,6 +5216,16 @@
         "summary": "Get /cohorts/:id/feed",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4578,6 +5262,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4613,6 +5307,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4645,6 +5349,16 @@
         "summary": "Create /cohorts/:id/join-code",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4681,6 +5395,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4715,6 +5439,16 @@
         "summary": "Create /cohorts/:id/members/bulk",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4751,6 +5485,24 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4783,6 +5535,24 @@
         "summary": "Update /cohorts/:id/members/:userId",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4819,6 +5589,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4853,6 +5633,24 @@
         "summary": "Get /cohorts/:id/student/:userId",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4889,6 +5687,16 @@
         "tags": [
           "cohorts"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -4923,6 +5731,24 @@
         "summary": "Delete /cohorts/:id/teachers/:userId",
         "tags": [
           "cohorts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -4994,6 +5820,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5028,6 +5864,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5061,6 +5907,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5092,6 +5948,16 @@
         "summary": "Replace /courses/lectures/:id",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -5128,6 +5994,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5161,6 +6037,16 @@
         "summary": "Create /courses/lectures/:id/duplicate",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -5197,6 +6083,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "lectureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5228,6 +6124,16 @@
         "summary": "Create /courses/lectures/:lectureId/sections",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "lectureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -5264,6 +6170,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "lectureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5299,6 +6215,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5330,6 +6256,16 @@
         "summary": "Create /courses/modules/:moduleId/lectures",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -5366,6 +6302,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5401,6 +6347,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5435,6 +6391,16 @@
         "tags": [
           "lessons"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5467,6 +6433,16 @@
         "summary": "Replace /courses/sections/:id",
         "tags": [
           "lessons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -5517,7 +6493,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3139",
+        "x-rohy-source": "server/routes/analytics-routes.js:3142",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -5550,7 +6526,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3120",
+        "x-rohy-source": "server/routes/analytics-routes.js:3123",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -5570,6 +6546,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5584,7 +6570,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:411",
+        "x-rohy-source": "server/routes/analytics-routes.js:414",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -5618,7 +6604,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1722",
+        "x-rohy-source": "server/routes/analytics-routes.js:1725",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -5652,7 +6638,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3167",
+        "x-rohy-source": "server/routes/analytics-routes.js:3170",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -5673,6 +6659,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5687,7 +6683,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2207",
+        "x-rohy-source": "server/routes/analytics-routes.js:2210",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -5846,7 +6842,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:162",
+        "x-rohy-source": "server/routes/analytics-routes.js:163",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -5866,6 +6862,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -5880,7 +6886,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:184",
+        "x-rohy-source": "server/routes/analytics-routes.js:185",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -5968,6 +6974,16 @@
         "summary": "Get /labs/group/:groupName",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "groupName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -6325,7 +7341,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:545",
+        "x-rohy-source": "server/routes/analytics-routes.js:548",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6359,7 +7375,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:999",
+        "x-rohy-source": "server/routes/analytics-routes.js:1002",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6393,7 +7409,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:836",
+        "x-rohy-source": "server/routes/analytics-routes.js:839",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6427,7 +7443,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:605",
+        "x-rohy-source": "server/routes/analytics-routes.js:608",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6447,6 +7463,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -6461,7 +7487,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1606",
+        "x-rohy-source": "server/routes/analytics-routes.js:1609",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6495,7 +7521,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1297",
+        "x-rohy-source": "server/routes/analytics-routes.js:1300",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6529,7 +7555,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:971",
+        "x-rohy-source": "server/routes/analytics-routes.js:974",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6549,6 +7575,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -6563,7 +7599,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:756",
+        "x-rohy-source": "server/routes/analytics-routes.js:759",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6583,6 +7619,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -6597,7 +7643,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:784",
+        "x-rohy-source": "server/routes/analytics-routes.js:787",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6631,7 +7677,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:898",
+        "x-rohy-source": "server/routes/analytics-routes.js:901",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6665,7 +7711,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1167",
+        "x-rohy-source": "server/routes/proxy-routes.js:1175",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6699,7 +7745,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1980",
+        "x-rohy-source": "server/routes/proxy-routes.js:1988",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6732,7 +7778,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1996",
+        "x-rohy-source": "server/routes/proxy-routes.js:2004",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6767,7 +7813,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1872",
+        "x-rohy-source": "server/routes/proxy-routes.js:1880",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6801,7 +7847,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1910",
+        "x-rohy-source": "server/routes/proxy-routes.js:1918",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6836,7 +7882,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1936",
+        "x-rohy-source": "server/routes/proxy-routes.js:1944",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -6871,7 +7917,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:251",
+        "x-rohy-source": "server/routes/admin-routes.js:254",
         "x-rohy-auth": [
           "public"
         ],
@@ -6898,7 +7944,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:201",
+        "x-rohy-source": "server/routes/admin-routes.js:202",
         "x-rohy-auth": [
           "public"
         ],
@@ -6923,7 +7969,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:220",
+        "x-rohy-source": "server/routes/admin-routes.js:221",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -6958,7 +8004,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:802",
+        "x-rohy-source": "server/routes/admin-routes.js:811",
         "x-rohy-auth": [
           "public"
         ],
@@ -6985,7 +8031,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:237",
+        "x-rohy-source": "server/routes/admin-routes.js:240",
         "x-rohy-auth": [
           "public"
         ],
@@ -7012,7 +8058,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:762",
+        "x-rohy-source": "server/routes/admin-routes.js:771",
         "x-rohy-auth": [
           "public"
         ],
@@ -7039,7 +8085,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:462",
+        "x-rohy-source": "server/routes/admin-routes.js:469",
         "x-rohy-auth": [
           "public"
         ],
@@ -7066,7 +8112,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:397",
+        "x-rohy-source": "server/routes/admin-routes.js:402",
         "x-rohy-auth": [
           "public"
         ],
@@ -7091,7 +8137,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:438",
+        "x-rohy-source": "server/routes/admin-routes.js:443",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7126,7 +8172,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:426",
+        "x-rohy-source": "server/routes/admin-routes.js:431",
         "x-rohy-auth": [
           "public"
         ],
@@ -7153,7 +8199,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:509",
+        "x-rohy-source": "server/routes/admin-routes.js:516",
         "x-rohy-auth": [
           "public"
         ],
@@ -7178,7 +8224,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:538",
+        "x-rohy-source": "server/routes/admin-routes.js:545",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7213,7 +8259,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:690",
+        "x-rohy-source": "server/routes/admin-routes.js:699",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7248,7 +8294,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:560",
+        "x-rohy-source": "server/routes/admin-routes.js:569",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7269,6 +8315,16 @@
         "tags": [
           "admin"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -7283,7 +8339,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:617",
+        "x-rohy-source": "server/routes/admin-routes.js:626",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7318,7 +8374,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:280",
+        "x-rohy-source": "server/routes/admin-routes.js:283",
         "x-rohy-auth": [
           "public"
         ],
@@ -7343,7 +8399,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:342",
+        "x-rohy-source": "server/routes/admin-routes.js:345",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7364,6 +8420,16 @@
         "tags": [
           "admin"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -7378,7 +8444,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:322",
+        "x-rohy-source": "server/routes/admin-routes.js:325",
         "x-rohy-auth": [
           "public"
         ],
@@ -7405,7 +8471,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:833",
+        "x-rohy-source": "server/routes/admin-routes.js:842",
         "x-rohy-auth": [
           "public"
         ],
@@ -7432,7 +8498,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:788",
+        "x-rohy-source": "server/routes/admin-routes.js:797",
         "x-rohy-auth": [
           "public"
         ],
@@ -7511,6 +8577,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -7579,6 +8655,16 @@
         "tags": [
           "patient-record"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -7610,6 +8696,16 @@
         "summary": "Get /patient-record/:sessionId",
         "tags": [
           "patient-record"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -7645,6 +8741,16 @@
         "tags": [
           "patient-record"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -7678,6 +8784,16 @@
         "summary": "Get /patient-record/:sessionId/summary",
         "tags": [
           "patient-record"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -7727,7 +8843,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1087",
+        "x-rohy-source": "server/routes/admin-routes.js:1096",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7762,7 +8878,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1926",
+        "x-rohy-source": "server/routes/admin-routes.js:1935",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7794,7 +8910,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1937",
+        "x-rohy-source": "server/routes/admin-routes.js:1946",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7829,7 +8945,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:2002",
+        "x-rohy-source": "server/routes/admin-routes.js:2011",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7861,7 +8977,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:2022",
+        "x-rohy-source": "server/routes/admin-routes.js:2031",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7896,7 +9012,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1660",
+        "x-rohy-source": "server/routes/admin-routes.js:1669",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7928,7 +9044,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1675",
+        "x-rohy-source": "server/routes/admin-routes.js:1684",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7963,7 +9079,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1152",
+        "x-rohy-source": "server/routes/admin-routes.js:1161",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7996,7 +9112,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1161",
+        "x-rohy-source": "server/routes/admin-routes.js:1170",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8031,7 +9147,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1229",
+        "x-rohy-source": "server/routes/admin-routes.js:1238",
         "x-rohy-auth": [
           "public"
         ],
@@ -8056,7 +9172,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1240",
+        "x-rohy-source": "server/routes/admin-routes.js:1249",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8091,7 +9207,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1376",
+        "x-rohy-source": "server/routes/admin-routes.js:1385",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8123,7 +9239,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1415",
+        "x-rohy-source": "server/routes/admin-routes.js:1424",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8158,7 +9274,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1515",
+        "x-rohy-source": "server/routes/admin-routes.js:1524",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8193,7 +9309,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1435",
+        "x-rohy-source": "server/routes/admin-routes.js:1444",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8228,7 +9344,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1623",
+        "x-rohy-source": "server/routes/admin-routes.js:1632",
         "x-rohy-auth": [
           "public"
         ],
@@ -8253,7 +9369,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1637",
+        "x-rohy-source": "server/routes/admin-routes.js:1646",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8288,7 +9404,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1576",
+        "x-rohy-source": "server/routes/admin-routes.js:1585",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8320,7 +9436,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1593",
+        "x-rohy-source": "server/routes/admin-routes.js:1602",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8355,7 +9471,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1177",
+        "x-rohy-source": "server/routes/admin-routes.js:1186",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8388,7 +9504,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1190",
+        "x-rohy-source": "server/routes/admin-routes.js:1199",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8423,7 +9539,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1336",
+        "x-rohy-source": "server/routes/admin-routes.js:1345",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8526,7 +9642,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1026",
+        "x-rohy-source": "server/routes/admin-routes.js:1035",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8558,7 +9674,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1048",
+        "x-rohy-source": "server/routes/admin-routes.js:1057",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8593,7 +9709,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1722",
+        "x-rohy-source": "server/routes/admin-routes.js:1731",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8625,7 +9741,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1768",
+        "x-rohy-source": "server/routes/admin-routes.js:1777",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -8681,6 +9797,16 @@
         "tags": [
           "plugins"
         ],
+        "parameters": [
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -8715,6 +9841,16 @@
         "summary": "Replace /plugins/pathology/assets/:assetId/calibration",
         "tags": [
           "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -8786,6 +9922,16 @@
         "tags": [
           "plugins"
         ],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -8821,6 +9967,16 @@
         "tags": [
           "plugins"
         ],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -8850,46 +10006,21 @@
         ]
       }
     },
-    "/api/plugins/{pluginId}/*splat": {
-      "get": {
-        "summary": "Get /plugins/:pluginId/*splat",
-        "tags": [
-          "plugins"
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error (envelope via server/redaction.js)"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Insufficient role"
-          }
-        },
-        "x-rohy-source": "server/routes/plugins-routes.js:696",
-        "x-rohy-auth": [
-          "authenticateToken",
-          "requireStudent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ]
-      }
-    },
     "/api/plugins/{pluginId}/catalog": {
       "get": {
         "summary": "Get /plugins/:pluginId/catalog",
         "tags": [
           "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -8925,6 +10056,16 @@
         "tags": [
           "plugins"
         ],
+        "parameters": [
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -8957,6 +10098,16 @@
         "tags": [
           "plugins"
         ],
+        "parameters": [
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -8974,6 +10125,59 @@
         "x-rohy-source": "server/routes/plugins-routes.js:638",
         "x-rohy-auth": [
           "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/plugins/{pluginId}/{splat}": {
+      "get": {
+        "summary": "Get /plugins/:pluginId/*splat",
+        "tags": [
+          "plugins"
+        ],
+        "parameters": [
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "splat",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugins-routes.js:696",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireStudent"
         ],
         "security": [
           {
@@ -9039,7 +10243,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3253",
+        "x-rohy-source": "server/routes/analytics-routes.js:3256",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9071,7 +10275,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3234",
+        "x-rohy-source": "server/routes/analytics-routes.js:3237",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9220,6 +10424,16 @@
         "tags": [
           "registration"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9254,6 +10468,16 @@
         "summary": "Get /registration-invites/:id/uses",
         "tags": [
           "registration"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9325,6 +10549,16 @@
         "tags": [
           "registration"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9359,6 +10593,16 @@
         "summary": "Create /registration-requests/:id/reject",
         "tags": [
           "registration"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9409,7 +10653,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:658",
+        "x-rohy-source": "server/routes/cases-routes.js:669",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9441,7 +10685,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:913",
+        "x-rohy-source": "server/routes/cases-routes.js:924",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9475,7 +10719,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1053",
+        "x-rohy-source": "server/routes/cases-routes.js:1064",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -9496,6 +10740,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9510,7 +10764,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1021",
+        "x-rohy-source": "server/routes/cases-routes.js:1032",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9528,6 +10782,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9542,7 +10806,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:694",
+        "x-rohy-source": "server/routes/cases-routes.js:705",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9560,6 +10824,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9574,7 +10848,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:961",
+        "x-rohy-source": "server/routes/cases-routes.js:972",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9628,6 +10902,16 @@
         "tags": [
           "sessions"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9661,6 +10945,16 @@
         "summary": "Replace /sessions/:id/end",
         "tags": [
           "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9696,6 +10990,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9710,7 +11014,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:510",
+        "x-rohy-source": "server/routes/analytics-routes.js:513",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9729,6 +11033,16 @@
         "summary": "Create /sessions/:id/order",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9764,6 +11078,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9798,6 +11122,16 @@
         "tags": [
           "sessions"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9829,6 +11163,16 @@
         "summary": "Create /sessions/:id/vitals",
         "tags": [
           "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9864,6 +11208,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9897,6 +11251,24 @@
         "summary": "Create /sessions/:sessionId/administer/:orderId",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -9932,6 +11304,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9946,7 +11328,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1371",
+        "x-rohy-source": "server/routes/agents-routes.js:1386",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -9966,6 +11348,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9980,7 +11380,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1614",
+        "x-rohy-source": "server/routes/agents-routes.js:1629",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10000,6 +11400,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10014,7 +11432,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1787",
+        "x-rohy-source": "server/routes/agents-routes.js:1802",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10032,6 +11450,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10046,7 +11482,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1701",
+        "x-rohy-source": "server/routes/agents-routes.js:1716",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10064,6 +11500,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10078,7 +11532,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1734",
+        "x-rohy-source": "server/routes/agents-routes.js:1749",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10098,6 +11552,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10112,7 +11584,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1641",
+        "x-rohy-source": "server/routes/agents-routes.js:1656",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10132,6 +11604,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10146,7 +11636,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1522",
+        "x-rohy-source": "server/routes/agents-routes.js:1537",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10166,6 +11656,24 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10180,7 +11688,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1666",
+        "x-rohy-source": "server/routes/agents-routes.js:1681",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10199,6 +11707,16 @@
         "summary": "Get /sessions/:sessionId/available-labs",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10234,6 +11752,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10267,6 +11795,16 @@
         "summary": "Get /sessions/:sessionId/available-treatments",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10302,6 +11840,24 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10336,6 +11892,16 @@
         "tags": [
           "notes"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10367,6 +11933,16 @@
         "summary": "Replace /sessions/:sessionId/discussion-notes",
         "tags": [
           "notes"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10402,6 +11978,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10416,7 +12002,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1265",
+        "x-rohy-source": "server/routes/cases-routes.js:1276",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10434,6 +12020,16 @@
         "tags": [
           "cases"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10448,7 +12044,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/cases-routes.js:1199",
+        "x-rohy-source": "server/routes/cases-routes.js:1210",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10467,6 +12063,16 @@
         "summary": "Get /sessions/:sessionId/lab-results",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10501,6 +12107,24 @@
         "summary": "Replace /sessions/:sessionId/labs/:labId",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "labId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10537,6 +12161,16 @@
         "tags": [
           "admin"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10551,7 +12185,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:94",
+        "x-rohy-source": "server/routes/admin-routes.js:95",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10569,6 +12203,16 @@
         "tags": [
           "admin"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10583,7 +12227,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:72",
+        "x-rohy-source": "server/routes/admin-routes.js:73",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10602,6 +12246,16 @@
         "summary": "Create /sessions/:sessionId/order-labs",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10637,6 +12291,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10670,6 +12334,16 @@
         "summary": "Create /sessions/:sessionId/order-treatment",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10705,6 +12379,16 @@
         "tags": [
           "orders"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10739,6 +12423,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10753,7 +12447,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1813",
+        "x-rohy-source": "server/routes/agents-routes.js:1828",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10771,6 +12465,16 @@
         "tags": [
           "agents"
         ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -10785,7 +12489,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/agents-routes.js:1839",
+        "x-rohy-source": "server/routes/agents-routes.js:1854",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10804,6 +12508,16 @@
         "summary": "Get /sessions/:sessionId/treatment-debrief",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10838,6 +12552,16 @@
         "summary": "Get /sessions/:sessionId/treatment-orders",
         "tags": [
           "orders"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -10887,7 +12611,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:325",
+        "x-rohy-source": "server/routes/analytics-routes.js:326",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10921,7 +12645,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/admin-routes.js:1260",
+        "x-rohy-source": "server/routes/admin-routes.js:1269",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -11009,6 +12733,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11040,6 +12774,16 @@
         "summary": "Create /surveys/module/:moduleId",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11076,6 +12820,24 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "moduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "surveyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11111,6 +12873,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11144,6 +12916,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11175,6 +12957,16 @@
         "summary": "Replace /surveys/:id",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11211,6 +13003,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11246,6 +13048,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11279,6 +13091,16 @@
         "summary": "Create /surveys/:id/publish",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11315,6 +13137,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11349,6 +13181,16 @@
         "summary": "Create /surveys/:id/questions/reorder",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11385,6 +13227,24 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "questionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11417,6 +13277,24 @@
         "summary": "Replace /surveys/:id/questions/:questionId",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "questionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11453,6 +13331,16 @@
         "tags": [
           "surveys"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11487,6 +13375,16 @@
         "summary": "Create /surveys/:id/submit",
         "tags": [
           "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11571,7 +13469,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2296",
+        "x-rohy-source": "server/routes/analytics-routes.js:2299",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -11592,6 +13490,16 @@
         "tags": [
           "analytics"
         ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11606,7 +13514,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2674",
+        "x-rohy-source": "server/routes/analytics-routes.js:2677",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -11641,7 +13549,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2648",
+        "x-rohy-source": "server/routes/analytics-routes.js:2651",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -11859,6 +13767,16 @@
         "tags": [
           "treatments-library"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -11891,6 +13809,16 @@
         "summary": "Replace /treatment-effects/:id",
         "tags": [
           "treatments-library"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11926,6 +13854,16 @@
         "summary": "Replace /treatment-effects/:id/restore",
         "tags": [
           "treatments-library"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -11976,7 +13914,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1406",
+        "x-rohy-source": "server/routes/proxy-routes.js:1414",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -12010,7 +13948,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1413",
+        "x-rohy-source": "server/routes/proxy-routes.js:1421",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -12045,7 +13983,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1178",
+        "x-rohy-source": "server/routes/proxy-routes.js:1186",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -12079,7 +14017,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1275",
+        "x-rohy-source": "server/routes/proxy-routes.js:1283",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -12114,7 +14052,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/proxy-routes.js:1244",
+        "x-rohy-source": "server/routes/proxy-routes.js:1252",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -12649,6 +14587,16 @@
         "tags": [
           "users"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -12682,6 +14630,16 @@
         "tags": [
           "users"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -12714,6 +14672,16 @@
         "summary": "Replace /users/:id",
         "tags": [
           "users"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -12750,6 +14718,16 @@
         "tags": [
           "users"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -12784,6 +14762,16 @@
         "summary": "Create /users/:id/purge",
         "tags": [
           "users"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -12820,6 +14808,16 @@
         "tags": [
           "users"
         ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -12854,6 +14852,16 @@
         "summary": "Create /users/:id/tenant",
         "tags": [
           "tenants"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {

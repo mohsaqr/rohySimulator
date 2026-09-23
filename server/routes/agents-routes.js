@@ -850,7 +850,22 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
             return res.status(404).json({ error: 'Agent template not found' });
         }
 
-        const duplicateName = newName || `${original.name} (Copy)`;
+        // (agent_type, name) is UNIQUE across every row — all tenants, soft-
+        // deleted rows included (idx_agent_templates_type_name) — so a second
+        // click on Duplicate used to hit the constraint and answer 500 (found
+        // by the API fuzzer). An asked-for name that is taken is the caller's
+        // conflict: 409. An unnamed copy takes the first free "(Copy N)".
+        const takenNames = new Set((await new Promise((resolve, reject) => {
+            dbAdapter.all('SELECT name FROM agent_templates WHERE agent_type = ?', [original.agent_type],
+                (err, rows) => (err ? reject(err) : resolve(rows || [])));
+        })).map((row) => row.name));
+        if (typeof newName === 'string' && newName && takenNames.has(newName)) {
+            return res.status(409).json({ error: `A ${original.agent_type} template named "${newName}" already exists` });
+        }
+        const copyName = (n) => (n === 1 ? `${original.name} (Copy)` : `${original.name} (Copy ${n})`);
+        let copyNumber = 1;
+        while (takenNames.has(copyName(copyNumber))) copyNumber += 1;
+        const duplicateName = (typeof newName === 'string' && newName) || copyName(copyNumber);
 
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(

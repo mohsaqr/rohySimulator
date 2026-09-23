@@ -38,6 +38,7 @@ import { reconcileSession, RECORD_VERB_EXPECTATIONS } from '../lib/sessionReconc
 import { logger } from '../logger.js';
 import { SQL_NOW, toIsoZ, timeMs } from '../shared/time.js';
 import {
+    missingField,
     auditSuccess,
     canReadAcrossUsers,
     dbRun,
@@ -323,6 +324,8 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
 
 // POST /api/settings/log - Log settings changes
 router.post('/settings/log', authenticateToken, (req, res) => {
+    const missing = missingField(req.body, ['setting_type']);
+    if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { session_id, case_id, setting_type, setting_name, old_value, new_value, settings_json } = req.body;
 
     const sql = `INSERT INTO settings_logs (
