@@ -29,6 +29,10 @@ jobs:
         run: npm ci
       - name: ESLint
         run: npm run lint
+      # Every quarantined test names its Prova defect and is no older than 30
+      # days (tests/utils/describeQuarantine.js, playwright.config.js).
+      - name: Quarantine rules
+        run: node scripts/check-quarantine.mjs
 
   build:
     name: Build
@@ -94,7 +98,12 @@ jobs:
         run: bash scripts/clone-room3d.sh ../3D
       - name: Install dependencies
         run: npm ci
+      # ROHY_QUARANTINE=1: a failure inside a describeQuarantine block is
+      # logged and reported as skipped instead of failing the job. Local runs
+      # leave it unset and see the failure.
       - name: Run tests with coverage and JUnit
+        env:
+          ROHY_QUARANTINE: '1'
         run: npm run test:ci
       - name: Upload JUnit results
         if: always()
@@ -238,6 +247,19 @@ jobs:
           ROHY_PW_PROJECTS: monkey
           MONKEY_MINUTES: '2'
         run: npx playwright test --project=monkey
+      # The tests tagged @quarantine, outside the gate: recorded in Prova under
+      # their own label, never failing the job. --pass-with-no-tests because
+      # there usually are none.
+      - name: Quarantined tests (not gating)
+        if: always()
+        continue-on-error: true
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
+          PROVA_LABEL: quarantine
+          PROVA_CATALOG: Rohy battery
+          ROHY_PW_PROJECTS: quarantine
+        run: npx playwright test --project=quarantine --pass-with-no-tests
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

@@ -73,7 +73,15 @@ describe('PUT /api/users/preferences — merge, not replace', () => {
         method: 'PUT',
         body: JSON.stringify(body),
     });
-    const getPrefs = async () => (await studentFetch('/api/users/preferences')).json();
+    // The status is asserted, with the body as the message: the one CI failure
+    // of this file (2026-09-23) read `language` off an ERROR body — the GET
+    // had failed, and "expected undefined to be 'it'" hid how.
+    const getPrefs = async () => {
+        const res = await studentFetch('/api/users/preferences');
+        const body = await res.json();
+        expect(res.status, JSON.stringify(body)).toBe(200);
+        return body;
+    };
 
     beforeAll(async () => {
         server = await startTestServer({ seed: false });
@@ -133,7 +141,15 @@ describe('GET/PUT /api/users/preferences — no stored language stays null', () 
         method: 'PUT',
         body: JSON.stringify(body),
     });
-    const getPrefs = async () => (await virginFetch('/api/users/preferences')).json();
+    // The status is asserted, with the body as the message: the one CI failure
+    // of this file (2026-09-23) read `language` off an ERROR body — the GET
+    // had failed, and "expected undefined to be 'it'" hid how.
+    const getPrefs = async () => {
+        const res = await virginFetch('/api/users/preferences');
+        const body = await res.json();
+        expect(res.status, JSON.stringify(body)).toBe(200);
+        return body;
+    };
 
     beforeAll(async () => {
         server = await startTestServer({ seed: false });

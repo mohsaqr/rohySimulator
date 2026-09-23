@@ -60,9 +60,52 @@ async function bootDb() {
     await runDbMigrations();
     if (process.env.ROHY_NO_AUTO_SEED === '1') {
         dbLog.info('auto seed skipped', { reason: 'ROHY_NO_AUTO_SEED=1' });
+    } else {
+        await seedDbDefaults();
+    }
+    // Last, and before dbReady resolves: nothing else has a connection yet
+    // (the audit chain's waits for dbReady) and the server is not listening.
+    await enableWal();
+}
+
+// WAL, switched on HERE, at boot, while this is the only connection. After the
+// migrations and seeds, so the pre-migration backup (a plain file copy, below)
+// and the migrations themselves run exactly as they always have.
+//
+// dbAdapter.js is written for WAL ("the database runs in WAL mode"), but until
+// 2026-09-23 the only statement that set it was the audit chain's dedicated
+// connection (audit-chain.js), opened lazily on the FIRST audited write.
+// Measured: a fresh test server's database reads `journal_mode = delete` after
+// boot and after a login, and turns `wal` only once something is audited — so
+// a new database served its first requests in rollback-journal mode, where a
+// reader on this handle waits (1 s, DB_BUSY_TIMEOUT_MS) and then fails
+// SQLITE_BUSY while the audit connection commits or switches the journal.
+// That is the shape of the one CI failure of
+// tests/server/users-preferences-merge.test.js (2026-09-23): the GET right
+// after the first audited PUT answered an error body with no `language`, in
+// ~1 s. In WAL a reader does not wait on another connection's writer. Not
+// reproduced locally (48 fresh servers, 4 in parallel), so this removes the
+// precondition rather than a reproduced failure; tests/server/db-wal-at-boot
+// pins the precondition. The mode is persistent: a database that has seen one
+// audited write was already WAL, and this changes nothing for it.
+async function enableWal() {
+    let row;
+    try {
+        row = await new Promise((resolve, reject) => {
+            db.get('PRAGMA journal_mode=WAL', (err, result) => (err ? reject(err) : resolve(result)));
+        });
+    } catch (err) {
+        // Never fatal: before this existed the server booted in whatever mode
+        // the file was in, and it still can.
+        dbLog.warn('sqlite WAL switch failed', { db_path: dbPath, error: err.message });
         return;
     }
-    await seedDbDefaults();
+    const mode = String(row?.journal_mode ?? '').toLowerCase();
+    if (mode !== 'wal') {
+        // A filesystem without shared-memory support (some network mounts)
+        // refuses WAL. The database still works, in the mode it reports.
+        dbLog.warn('sqlite WAL mode unavailable', { db_path: dbPath, journal_mode: mode || null });
+    }
 }
 
 function runDb(sql, params = []) {
