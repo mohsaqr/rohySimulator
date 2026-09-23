@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.120] — 2026-09-23
+
+### Fixed
+
+- **The fuzz job still failed on CI after beta.118, on the same four pathology paths.** The
+  requests were `GET`s on POST/PUT/DELETE-only routes: schemathesis's coverage phase probes every
+  declared route with the methods it does not declare, and under `/api/plugins/:id/` an unmatched
+  method falls through to the content proxy's catch-all, which answers its designed 503 on a
+  deployment with no content. A plugin's own routes are now fuzzed only with
+  `ROHY_FUZZ_PLUGIN_ROUTES=1`, on a box that has run `npm run setup:content`; CI leaves them out.
+  Locally, gated: educator 13,202 of 13,202, student 13,306 of 13,306. The lasting fix is a 405
+  from the plugin router for a known path with an unsupported method (not done).
+
 ## [3.0.0-beta.119] — 2026-09-23
 
 ### Fixed
