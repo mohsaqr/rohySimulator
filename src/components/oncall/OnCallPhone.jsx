@@ -50,10 +50,13 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
     const thread = useSpecialistThread({ sessionId, agent, activeCase, caseLanguage });
 
     // Focus moves into the handset on open and back to the button on close.
+    // The button is read at CLOSE time, not captured at open: it lives in
+    // each room's own header, so a room change while the handset is open
+    // replaces it, and the node captured at open is detached by then.
     useEffect(() => {
         phoneRef.current?.focus();
-        const returnTo = returnFocusRef?.current;
-        return () => returnTo?.focus?.();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately the ref's value at cleanup
+        return () => returnFocusRef?.current?.focus?.();
     }, [returnFocusRef]);
 
     const reach = async (target) => {
@@ -130,6 +133,7 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
             role="dialog"
             aria-modal="false"
             aria-labelledby="oncall-phone-title"
+            data-testid="oncall-phone"
             tabIndex={-1}
             onKeyDown={onKeyDown}
             className="oncall-phone"

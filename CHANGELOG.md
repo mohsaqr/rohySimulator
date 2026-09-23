@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.105] — 2026-09-23
+
+### Fixed
+
+- **The phone could not be reached in the bedside room (beta.103).** Moving the button into the
+  shared top bar put it under the immersive bedside: that room is a full-bleed overlay (z-30) over
+  an `inert` chat layout, so the button was hidden and unclickable. Over an overlay room the button
+  now sits beside the Oyon "Ready" pill, in the host's own chrome row below the room's top bar,
+  which is already kept clear of the package's controls (ISSUE-0023). It is shown only in the case
+  view: the pill also renders on settings, lessons and analytics, where the handset is not mounted.
+- **Focus fell to the page after changing room with the phone open.** The button lives in each
+  room's own header, so a room change replaces it; the handset returned focus to the node it
+  captured when it opened, which was detached by then. It now reads the button at close time.
+- The button and the handset carry `data-testid` hooks (`oncall-phone-button`, `oncall-phone`) for
+  the e2e suite. Their accessible names are translated and include a live count.
+
 ## [3.0.0-beta.104] — 2026-09-22
 
 ### Fixed
