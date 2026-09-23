@@ -9,15 +9,15 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/llm/models` | `authenticateToken` | `server/routes/proxy-routes.js:1149` |
-| `GET` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1962` |
-| `PUT` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1978` |
-| `GET` | `/api/llm/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1854` |
-| `GET` | `/api/llm/usage/all` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1892` |
-| `GET` | `/api/llm/usage/platform` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1918` |
-| `POST` | `/api/proxy/llm` | `authenticateToken` | `server/routes/proxy-routes.js:122` |
-| `POST` | `/api/tts` | `authenticateToken` | `server/routes/proxy-routes.js:1388` |
-| `POST` | `/api/tts/preview` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1395` |
-| `GET` | `/api/tts/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1160` |
-| `GET` | `/api/tts/voice-usage` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1257` |
-| `GET` | `/api/tts/voices` | `authenticateToken` | `server/routes/proxy-routes.js:1226` |
+| `GET` | `/api/llm/models` | `authenticateToken` | `server/routes/proxy-routes.js:1167` |
+| `GET` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1980` |
+| `PUT` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1996` |
+| `GET` | `/api/llm/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1872` |
+| `GET` | `/api/llm/usage/all` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1910` |
+| `GET` | `/api/llm/usage/platform` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1936` |
+| `POST` | `/api/proxy/llm` | `authenticateToken` | `server/routes/proxy-routes.js:124` |
+| `POST` | `/api/tts` | `authenticateToken` | `server/routes/proxy-routes.js:1406` |
+| `POST` | `/api/tts/preview` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1413` |
+| `GET` | `/api/tts/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1178` |
+| `GET` | `/api/tts/voice-usage` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1275` |
+| `GET` | `/api/tts/voices` | `authenticateToken` | `server/routes/proxy-routes.js:1244` |

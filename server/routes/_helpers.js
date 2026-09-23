@@ -15,6 +15,7 @@ import {
 } from '../redaction.js';
 import { logger } from '../logger.js';
 import { appendAuditEntry } from '../audit-chain.js';
+import { isRoomEnabled } from '../shared/caseRooms.js';
 
 const auditLog = logger('audit');
 const routesCasesLog = logger('routes-cases-sessions');
@@ -782,6 +783,57 @@ export function resolveSessionCaseConfig(row) {
         }
     }
     return {};
+}
+
+/**
+ * The case config a session runs on (snapshot first), or null when the
+ * session is not in this tenant.
+ *
+ * @param {number|string} sessionId
+ * @param {number} tenant
+ * @returns {Promise<object|null>}
+ */
+export async function loadSessionCaseConfig(sessionId, tenant) {
+    const row = await dbAdapter.get(
+        `SELECT s.case_snapshot, c.config
+           FROM sessions s
+           LEFT JOIN cases c ON c.id = s.case_id AND c.tenant_id = s.tenant_id
+          WHERE s.id = ? AND s.tenant_id = ?`,
+        [sessionId, tenant]
+    );
+    return row ? resolveSessionCaseConfig(row) : null;
+}
+
+/**
+ * Refuse a learner's action in a room the session's case has switched off
+ * (config.rooms, shared/caseRooms.js). Hiding the room is the client's half;
+ * this is the half a learner's own client cannot skip.
+ *
+ * Passes when ANY of `roomKeys` is on (an exam finding can be taken from the
+ * examination room or the bedside). Reviewers and above pass: they preview
+ * cases, and the client hides the room from them anyway. A session that does
+ * not resolve passes too — the caller's own ownership check answers that.
+ *
+ * @param {object} req
+ * @param {object} res
+ * @param {number|string} sessionId
+ * @param {string[]} roomKeys
+ * @returns {Promise<boolean>} true when the action may go ahead; false once a
+ *          403 {code:'room_disabled'} (or a 500) has been sent
+ */
+export async function requireSessionRoom(req, res, sessionId, roomKeys) {
+    if (hasRoleAtLeast(req.user, ROLE_RANKS.reviewer)) return true;
+    let config;
+    try {
+        config = await loadSessionCaseConfig(sessionId, tenantId(req));
+    } catch (err) {
+        (req.log || routesCasesLog).error('session room check failed', { error: err.message });
+        res.status(500).json({ error: err.message });
+        return false;
+    }
+    if (config === null || roomKeys.some((key) => isRoomEnabled(config, key))) return true;
+    res.status(403).json({ error: 'This room is switched off for this case', code: 'room_disabled' });
+    return false;
 }
 
 // Same shape for scenario JSON.

@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.110] — 2026-09-23
+
+### Added
+
+- **Per-case rooms, on the server.** A case can switch rooms off:
+  `config.rooms = { disabled: [room key, ...] }` (`server/shared/caseRooms.js`). The list is of
+  rooms turned OFF, so every existing and seeded case, and every newly installed plugin room, is on
+  with nothing stored. The patient room (`chat`) cannot be switched off. The setting travels in the
+  session snapshot, so a running session keeps the rooms it started with.
+  - **Saved safely.** `POST`/`PUT /cases` refuse a shape they cannot read, or switching off the
+    patient room (400 `invalid_rooms`), and drop an uninstalled room key with a warning.
+  - **Locked for learners.** Lab and imaging catalogues and orders, examination findings (refused
+    only when both the examination room and the bedside are off) and the discussant (`/proxy/llm`)
+    answer 403 `room_disabled` in a switched-off room. Reviewers and above pass, to preview.
+  - **Plugin material withheld.** The learner projection drops a switched-off plugin room's whole
+    document, so the room cannot light in any client.
+  - **The phone rings out.** A specialist whose rooms are all off stays on the phone, but
+    `GET /sessions/:id/agents` marks it `answers: false`, and paging, the conversation log and
+    `/proxy/llm` answer 409 `no_answer`.
+
 ## [3.0.0-beta.109] — 2026-09-23
 
 ### Fixed

@@ -25,6 +25,7 @@ import {
     auditSuccess,
     logAudit,
     resolveSessionCaseConfig,
+    requireSessionRoom,
     resolveSessionTrinity,
     tenantId,
     verifySessionOwnership
@@ -87,6 +88,16 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     }
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    // Each ordered investigation belongs to the lab or radiology room; an
+    // order touching a room the case switched off is refused whole.
+    const orderedTypes = investigation_ids.length === 0 ? [] : await dbAdapter.all(
+        `SELECT DISTINCT investigation_type FROM case_investigations
+          WHERE tenant_id = ? AND id IN (${investigation_ids.map(() => '?').join(',')})`,
+        [tenantId(req), ...investigation_ids]
+    );
+    for (const { investigation_type: room } of orderedTypes) {
+        if ((room === 'lab' || room === 'radiology') && !await requireSessionRoom(req, res, sessionId, [room])) return;
+    }
 
     // COALESCE is load-bearing: turnaround_minutes may be NULL (= "follow the
     // case default"), and `'+' || NULL || ' minutes'` makes datetime() return
@@ -826,6 +837,7 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
 router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    if (!await requireSessionRoom(req, res, sessionId, ['lab'])) return;
 
     // Get session + case_snapshot (preferred) + live config (fallback for
     // sessions written before the snapshot column existed). Tenant-scoped so
@@ -985,13 +997,15 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req,
 });
 
 // POST /api/sessions/:sessionId/order-labs - Order multiple lab tests
-router.post('/sessions/:sessionId/order-labs', authenticateToken, (req, res) => {
+router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { lab_ids, turnaround_override } = req.body; // Array of lab investigation IDs + optional turnaround override
 
     if (!Array.isArray(lab_ids) || lab_ids.length === 0) {
         return res.status(400).json({ error: 'lab_ids array is required' });
     }
+    // A case that switched the lab room off takes no lab orders.
+    if (!await requireSessionRoom(req, res, sessionId, ['lab'])) return;
 
     (req.log || routesOrdersLog).info('lab order request received', { session_id: sessionId, lab_ids, turnaround_override });
 
@@ -1456,6 +1470,7 @@ function radiologyCatalogueOpen(caseConfig) {
 router.get('/sessions/:sessionId/available-radiology', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    if (!await requireSessionRoom(req, res, sessionId, ['radiology'])) return;
 
     // Get case config (snapshot-preferred) to include custom studies.
     dbAdapter.get(
@@ -1550,7 +1565,7 @@ router.get('/sessions/:sessionId/radiology-orders', authenticateToken, async (re
 });
 
 // POST /api/sessions/:sessionId/order-radiology - Order radiology studies
-router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res) => {
+router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { radiology_ids, instant, turnaround_override } = req.body;
     // `instant: true` is a shorthand for "skip the wait" used by the
@@ -1566,6 +1581,8 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, (req, res
     if (!Array.isArray(radiology_ids) || radiology_ids.length === 0) {
         return res.status(400).json({ error: 'radiology_ids array is required' });
     }
+    // A case that switched the radiology room off takes no imaging orders.
+    if (!await requireSessionRoom(req, res, sessionId, ['radiology'])) return;
 
     // Verify session exists and get case config (snapshot-preferred)
     dbAdapter.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ? AND s.tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
