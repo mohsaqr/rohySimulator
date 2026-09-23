@@ -10,7 +10,11 @@ set -eo pipefail
 
 API="${ROHY_API:-http://localhost:3000}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+if [ -z "${ROHY_AUDIT_PASS:-}" ]; then
+    echo "ROHY_AUDIT_PASS must be set to the audit admin's password (no default credential is provided)." >&2
+    exit 1
+fi
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-redaction-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
