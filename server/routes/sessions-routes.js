@@ -193,9 +193,10 @@ router.post('/sessions', authenticateToken, async (req, res) => {
         });
     }
 
-    // The lab and radiology must be on the phone for this session. POST /cases
-    // and the boot sweep attach them; this is the runtime repair for a case
-    // whose create-time attach failed, so no learner waits for a reboot.
+    // The lab and radiology must be on the phone for this session, and the
+    // pathologist or cardiologist when the case has slides or an ECG. Saving
+    // a case and the boot sweep attach them; this is the runtime repair for a
+    // save whose attach failed, so no learner waits for a reboot.
     // Idempotent (a no-op on every case that has them), non-fatal: a session
     // without them still runs.
     if (case_id != null) {

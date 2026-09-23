@@ -474,7 +474,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
             name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenantId(req)
         });
 
-        // The lab and radiology stand on every case (the on-call phone).
+        // The lab and radiology stand on every case, the pathologist and the
+        // cardiologist on one with slides or an ECG (the on-call phone).
         // Settled BEFORE the response so an editor that reloads the case's
         // agents right after saving already sees them. A failure is logged
         // and does not fail the save: the case exists, and the boot sweep
@@ -582,8 +583,16 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                 name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenantId(req)
             });
 
-            // Echo the config actually stored (immutable case_language pinned).
-            res.json({ id: caseId, ...req.body, config: safeConfig, ...withWarnings(warnings) });
+            // A save that added slides or an ECG puts the pathologist or the
+            // cardiologist on the phone. Settled before the response, as on
+            // create, so the editor's agent list already shows it; a failure
+            // is logged, not fatal — session start and the boot sweep repeat it.
+            attachStandingSpecialists({ caseId }).catch((attachErr) => {
+                (req.log || routesCasesLog).warn('standing specialist attach failed', { caseId, error: attachErr.message });
+            }).then(() => {
+                // Echo the config actually stored (immutable case_language pinned).
+                res.json({ id: caseId, ...req.body, config: safeConfig, ...withWarnings(warnings) });
+            });
         });
     });
 });

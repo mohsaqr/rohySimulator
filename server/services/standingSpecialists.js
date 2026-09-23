@@ -1,4 +1,5 @@
-// Standing specialists: the lab and radiology are on every case.
+// Standing specialists: the lab and radiology are on every case, and the
+// pathologist and the cardiologist on every case that has slides or an ECG.
 //
 // The on-call phone lists the specialists attached to a case (case_agents),
 // and every runtime path — paging, the brief, the conversation log, the LLM
@@ -6,12 +7,18 @@
 // has to be a real row on every case, not a contact the client invents.
 //
 // Which specialties stand is the registry's call (shared/specialties.js
-// STANDING_SPECIALIST_TYPES); this module only attaches them. It runs:
-//   - when a case is created (POST /cases) and when a session starts
-//     (POST /sessions), for that one case — the second is the runtime repair
-//     for a create whose attach failed, so a learner never waits for a reboot;
+// STANDING_SPECIALIST_TYPES, MATERIAL_SPECIALIST_TYPES, hasSpecialtyMaterial);
+// this module only attaches them. It runs:
+//   - when a case is created or saved (POST/PUT /cases) and when a session
+//     starts (POST /sessions), for that one case — the session start is the
+//     runtime repair for a save whose attach failed, so a learner never waits
+//     for a reboot;
 //   - at boot, for every case — existing installs, seeded cases, and any
 //     insert path that skipped the calls above. Same shape as ensureCaseCodes.
+//
+// Only ever ADDS. A case whose slides were later removed keeps its
+// pathologist; with no material left it is removable again (see
+// standsOnCase), so the educator decides.
 //
 // Idempotent and non-clobbering: a case that already holds a LIVE specialist
 // of that type — enabled or DISABLED, from the default template or an
@@ -26,7 +33,11 @@
 
 import dbAdapter from '../dbAdapter.js';
 import { logger } from '../logger.js';
-import { STANDING_SPECIALIST_TYPES } from '../shared/specialties.js';
+import {
+    MATERIAL_SPECIALIST_TYPES,
+    STANDING_SPECIALIST_TYPES,
+    hasSpecialtyMaterial,
+} from '../shared/specialties.js';
 
 const standingLog = logger('standing-specialists');
 
@@ -57,11 +68,32 @@ const ATTACH_SQL = `
             WHERE ca.case_id = c.id AND ca.tenant_id = c.tenant_id
               AND t2.agent_type = ? AND t2.deleted_at IS NULL)`;
 
+// Which cases hold material for a with_material specialty is decided in JS,
+// by the same hasSpecialtyMaterial() the case editor and the DELETE guard
+// use — one definition, rather than a SQL json_* copy that could drift from
+// it. The attach itself is still ATTACH_SQL scoped to that one case, so it
+// keeps every guard above (live case, tenant template, no live slot).
+async function casesWithMaterial(type, caseId) {
+    const rows = await dbAdapter.all(
+        `SELECT id, config FROM cases
+          WHERE deleted_at IS NULL AND (? IS NULL OR id = ?)`,
+        [caseId, caseId],
+    );
+    return rows.filter((row) => hasSpecialtyMaterial(type, row.config)).map((row) => row.id);
+}
+
 async function attach(caseId) {
     const attached = {};
     for (const type of STANDING_SPECIALIST_TYPES) {
         const result = await dbAdapter.run(ATTACH_SQL, [type, caseId, caseId, type, type]);
         attached[type] = result.changes;
+    }
+    for (const type of MATERIAL_SPECIALIST_TYPES) {
+        attached[type] = 0;
+        for (const id of await casesWithMaterial(type, caseId)) {
+            const result = await dbAdapter.run(ATTACH_SQL, [type, id, id, type, type]);
+            attached[type] += result.changes;
+        }
     }
     const total = Object.values(attached).reduce((sum, n) => sum + n, 0);
     if (total > 0) {

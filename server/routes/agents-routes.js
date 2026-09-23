@@ -25,7 +25,7 @@ import {
 } from './_helpers.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
-import { isSpecialistType, isStandingSpecialistType, normalizeDisclosure } from '../shared/specialties.js';
+import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/specialties.js';
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 
 const radiologyLog = logger('radiology');
@@ -934,6 +934,11 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             );
         });
 
+        // Whether each one stands on this case is the server's call (it also
+        // decides the DELETE), so the editor shows the badge and hides Remove
+        // from the same answer rather than re-deriving it from an unsaved form.
+        const config = await caseConfig(caseId, tenantId(req));
+
         // Merge template data with overrides
         const parsed = agents.map(a => ({
             id: a.id,
@@ -941,6 +946,7 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             agent_template_id: a.agent_template_id,
             agent_type: a.agent_type,
             enabled: a.enabled === 1,
+            standing: standsOnCase(a.agent_type, config),
             // Use override if set, else template value
             name: a.name_override || a.template_name,
             role_title: a.template_role_title,
@@ -972,6 +978,15 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// The stored config of one case, for standsOnCase(); null when there is none.
+async function caseConfig(caseId, tenant) {
+    const row = await dbAdapter.get(
+        'SELECT config FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+        [caseId, tenant]
+    );
+    return row?.config ?? null;
+}
 
 // POST /api/cases/:caseId/agents - Add agent to case
 router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (req, res) => {
@@ -1029,14 +1044,16 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
             return res.status(400).json(addTypeProblem);
         }
 
-        // A standing specialty (the lab, radiology) is on every case already,
-        // attached from the shipped default. Adding an educator's OWN persona
-        // of that specialty therefore SWAPS it into the existing slot —
+        // A specialty that stands on this case (the lab and radiology always;
+        // the pathologist or cardiologist when the case has slides or an ECG)
+        // is attached already, from the shipped default. Adding an educator's
+        // OWN persona of that specialty therefore SWAPS it into the existing slot —
         // enabled state and per-case overrides kept — rather than answering
         // specialty_already_attached with no way round it (the standing one
         // cannot be deleted). Re-adding the template already in the slot
         // still falls through to the 409 below.
-        if (isStandingSpecialistType(template.agent_type)) {
+        if (isSpecialistType(template.agent_type)
+            && standsOnCase(template.agent_type, await caseConfig(caseId, tenantId(req)))) {
             const slot = await dbAdapter.get(
                 `SELECT ca.id, ca.agent_template_id FROM case_agents ca
                    JOIN agent_templates t ON t.id = ca.agent_template_id
@@ -1216,8 +1233,10 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, requireEducat
             return res.status(404).json({ error: 'Case agent not found' });
         }
 
-        // The lab and radiology stand on every case, and the boot sweep would
-        // re-attach one removed here — a delete that quietly undoes itself.
+        // A specialist that stands on this case (the lab and radiology always;
+        // the pathologist or cardiologist while the case has slides or an
+        // ECG) would be re-attached by the sweep — a delete that quietly
+        // undoes itself.
         // Refuse it and point at the switch that does stick. Only a LIVE one:
         // a row whose template was soft-deleted is already invisible at
         // runtime and must stay removable, or nothing can clear it.
@@ -1225,9 +1244,9 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, requireEducat
             'SELECT agent_type FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
             [existing.agent_template_id, tenantId(req)]
         );
-        if (isStandingSpecialistType(template?.agent_type)) {
+        if (template && standsOnCase(template.agent_type, await caseConfig(caseId, tenantId(req)))) {
             return res.status(409).json({
-                error: `The ${template.agent_type} is on every case and cannot be removed; disable it instead`,
+                error: `The ${template.agent_type} stands on this case and cannot be removed; disable it instead`,
                 code: 'standing_specialist'
             });
         }

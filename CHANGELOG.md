@@ -9,6 +9,30 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.109] — 2026-09-23
+
+### Fixed
+
+- **A case with a Pathology room had no pathologist on the phone.** The STEMI case showed Pathology,
+  and the phone listed only the laboratory and radiology: those two were the only specialists the
+  server attached, whatever the case held. A specialist now stands on a case in one of two ways
+  (`standing` in `server/shared/specialties.js`):
+  - `always` — the laboratorian and the radiologist, on every case, as before;
+  - `with_material` — the pathologist on a case whose config holds a pathology document, the
+    cardiologist on one that holds an ECG record.
+  The material rule (`hasSpecialtyMaterial`) is "a non-empty document is stored at the room's
+  plugin id". That is a superset of both rooms' own gates, which the server cannot run (they live in
+  `src/`, which the Docker image does not carry), so wherever the room shows, its specialist is on
+  call. A client test pins that relation against the pathology gate's own fixtures.
+- The attach now also runs when a case is **saved** (`PUT /cases/:id`), so adding slides puts the
+  pathologist on the phone at once; case create, session start and the boot sweep attach as before.
+  It only ever adds: removing the slides later leaves the pathologist, who is then removable.
+- A specialist that stands on a case cannot be removed from it (409 `standing_specialist`; disable
+  it instead), and an educator's own persona of that specialty swaps into its slot. Both now follow
+  the per-case rule. `GET /cases/:id/agents` returns `standing` per agent, and the case editor's
+  badge and Remove button read it rather than re-deriving it. The badge reads "Always on call" (was
+  "On every case"), in all eight languages.
+
 ## [3.0.0-beta.108] — 2026-09-23
 
 ### Fixed

@@ -17,6 +17,7 @@ import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import descriptor from '../../src/plugins/pathology/index.jsx';
 import { CaseAuthor } from '../../src/components/pathology/CaseAuthor.jsx';
+import { hasSpecialtyMaterial } from '../../server/shared/specialties.js';
 import {
     addStudioBlock, addStudioGrossImage, addStudioSlide, createStudioDocument,
     updateStudioEntity,
@@ -117,6 +118,24 @@ describe('R20 — available() judges the document, not the key', () => {
         for (const data of ['nonsense', 7, [], { manifest: { slides: 'no' } }]) {
             expect(() => descriptor.available({ data })).not.toThrow();
             expect(descriptor.available({ data })).toBe(false);
+        }
+    });
+});
+
+// The server puts the pathologist on the phone of a case whose config holds
+// material (server/shared/specialties.js hasSpecialtyMaterial). It cannot run
+// this gate — src/ is not in the Docker image — so its rule is a superset:
+// wherever the Pathology room shows, the pathologist must be attached.
+// Regression lock: the STEMI case showed Pathology with no pathologist on call.
+describe('the pathologist stands wherever the Pathology room shows', () => {
+    it('finds material in every document available() accepts', () => {
+        const documents = [null, undefined, {}, blank(), withSlide(), withPhotographOnly(),
+            'nonsense', 7, [], { manifest: { slides: 'no' } },
+            { id: 'c1', slides: [{ id: 's1', label: 'A1', stain: 'H&E', dzi: '/a.dzi' }] }];
+        const shown = documents.filter((data) => descriptor.available({ data }));
+        expect(shown.length).toBe(2); // not vacuous: the slide and the photograph
+        for (const data of shown) {
+            expect(hasSpecialtyMaterial('pathologist', { pathology: data })).toBe(true);
         }
     });
 });

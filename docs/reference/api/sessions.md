@@ -10,7 +10,7 @@ model.
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
 | `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:48` |
-| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:280` |
-| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:314` |
-| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:394` |
-| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:366` |
+| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:281` |
+| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:315` |
+| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:395` |
+| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:367` |

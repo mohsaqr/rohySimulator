@@ -2730,8 +2730,8 @@
     "risk": "low"
   },
   "authoring_config.badge_standing_specialist": {
-    "src": "15c90e1ad6c6",
-    "tgt": "4f1037080c67",
+    "src": "4b72b6478c81",
+    "tgt": "73deddddf0b3",
     "state": "machine",
     "origin": "machine",
     "locked": false,

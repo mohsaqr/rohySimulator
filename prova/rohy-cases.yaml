@@ -1831,3 +1831,19 @@
       expected: |-
         The button sits in each room's own top bar — beside Logout, or beside the Ready pill over the
         bedside — and covers no vital sign, trace, room control or End & Debrief, at either width.
+    - id: ONCALL.PHONE.04
+      title: A case with slides or an ECG has its specialist on call
+      kind: manual
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an educator, open a case that has no Pathology room, add pathology slides (or a gross
+           photograph) to it and save.
+        2. In the case's agents list, look for the pathologist; try to remove it.
+        3. As a learner, start that case and open the phone from the Pathology room.
+        4. Repeat with an ECG record on another case, looking for the cardiologist.
+      expected: |-
+        After the save the pathologist is listed, marked "Always on call", with no Remove button
+        (disable is still offered). The learner's phone lists the pathologist beside the laboratory
+        and radiology. The ECG case lists the cardiologist the same way. A case without slides or an
+        ECG lists neither.
