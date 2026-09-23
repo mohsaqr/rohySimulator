@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.119] — 2026-09-23
+
+### Fixed
+
+- **The CI monkey walk reported the plugin content proxy's designed 503.** With no content
+  installed (CI never runs `npm run setup:content`), opening PACS asks `/api/plugins/pacs/catalog`,
+  which answers 503 `plugin_remote_not_configured` — an honest, pinned answer
+  (`plugin-rooms.spec.js`), not a crash. The walker's "no ≥ 500" invariant and its console
+  allowlist now make that one exception (`serverErrorAllowed` in `tests/monkey/walker-lib.js`);
+  every other 5xx is still a finding. Seed 1790186927161, step 296, replayed clean locally.
+
 ## [3.0.0-beta.118] — 2026-09-23
 
 ### Fixed

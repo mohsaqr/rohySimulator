@@ -234,7 +234,33 @@ export const CONSOLE_ERROR_ALLOWLIST = Object.freeze([
         pattern: /status of 404 .*\[[^\]]*\/uploads\/bodymap\/(man|woman)-(front|back)\.(png|svg)\?v=\d+\]$/,
         why: 'body-map silhouette upload-first fallback',
     },
+    {
+        // The plugin content proxy (/api/plugins/:id/*) answers 503
+        // plugin_remote_not_configured when the deployment has no content for
+        // that plugin — CI never runs `npm run setup:content`, so PACS has
+        // none there. By design and pinned by plugin-rooms.spec.js; the room
+        // shows its own empty state. See serverErrorAllowed for the response.
+        pattern: /status of 503 .*\[[^\]]*\/api\/plugins\/[a-z][a-z0-9_]*\/[^\]]*\]$/,
+        why: 'plugin content proxy with no content installed',
+    },
 ]);
+
+/**
+ * Is this ≥ 500 response one the walk must not report? Only the plugin
+ * content proxy's 503 for a plugin with no content on this deployment
+ * (plugin_remote_not_configured): a designed, honest answer, not a crash.
+ * Everything else ≥ 500 is a finding.
+ *
+ * @param {number} status
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function serverErrorAllowed(status, url) {
+    if (status !== 503) return false;
+    let path;
+    try { path = new URL(String(url)).pathname; } catch { return false; }
+    return /^\/api\/plugins\/[a-z][a-z0-9_]*\/.+/.test(path);
+}
 
 /**
  * Is this console.error text allowlisted?
