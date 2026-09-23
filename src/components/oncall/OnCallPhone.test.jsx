@@ -8,6 +8,7 @@
 //     channel 'call' with a call id; End call returns to the chat thread
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
+import { useRef } from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -284,5 +285,40 @@ describe('OnCallPhone — call', () => {
         fireEvent.click(within(dialog).getByRole('button', { name: 'Stop talking and send' }));
         await waitFor(() => expect(conversationPosts('radiologist')).toHaveLength(2));
         expect(conversationPosts('radiologist')[0].body).toMatchObject({ role: 'user', content: 'Is there a hilar node?', channel: 'call' });
+    });
+});
+
+// The call button lives in each room's own header, so changing room while the
+// handset is open replaces it. The handset must hand focus back to the button
+// that is on screen when it closes, not the one it captured on opening.
+function FocusHarness({ which, open }) {
+    const ref = useRef(null);
+    return (
+        <>
+            {which === 'a'
+                ? <button key="a" ref={ref} type="button">room A phone</button>
+                : <button key="b" ref={ref} type="button">room B phone</button>}
+            {open && (
+                <OnCallPhone
+                    sessionId={SESSION}
+                    activeCase={caseFixture}
+                    team={{ specialists: [], loaded: true, now: Date.now(), page: vi.fn() }}
+                    onClose={() => {}}
+                    returnFocusRef={ref}
+                />
+            )}
+        </>
+    );
+}
+
+describe('OnCallPhone focus', () => {
+    // Regression lock: focus fell to <body> after a room change, because the
+    // handset returned it to the node captured at open — detached by then.
+    it('returns focus to the button on screen at close, after a room change replaced it', async () => {
+        const view = renderWithProviders(<FocusHarness which="a" open />);
+        await screen.findByRole('dialog', { name: /on-call phone/i });
+        view.rerender(<FocusHarness which="b" open />);
+        view.rerender(<FocusHarness which="b" open={false} />);
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'room B phone' }));
     });
 });

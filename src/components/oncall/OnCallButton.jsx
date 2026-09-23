@@ -23,6 +23,9 @@ const OnCallButton = forwardRef(function OnCallButton({ sessionId, specialists, 
         <button
             ref={ref}
             type="button"
+            // Test hook: the accessible name is translated and carries a
+            // live count, so a spec matching on it breaks in any other locale.
+            data-testid="oncall-phone-button"
             onClick={onClick}
             aria-label={label}
             aria-expanded={open}

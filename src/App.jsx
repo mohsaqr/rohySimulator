@@ -831,13 +831,37 @@ function MainApp() {
    // unless this learner previously accepted an older contract.
    const oyonConsentUpdate = user ? <OyonConsentUpdate /> : null;
 
-   const oyonPill = user ? (
-      // Rendered whenever a user is signed in, session or not: without a
-      // session the pill still captures locally; persistence starts once
-      // consent + a session exist.
+   // The on-call phone's button, built once and mounted in exactly one place
+   // (the handset returns focus to it through onCallButtonRef):
+   //   - normally in the shared top bar (topBarControls `trailing`), the one
+   //     header every room renders;
+   //   - over an OVERLAY room (the immersive bedside), beside the Oyon pill.
+   //     That room is a full-bleed package surface at z-30 over an `inert`
+   //     chat layout, so a phone left in the top bar is both hidden and
+   //     unclickable. The pill's overlay spot is the host chrome row already
+   //     cleared of the package's own controls (ISSUE-0023).
+   //     Only in the CASE view: the pill is also rendered on every
+   //     early-return surface (settings, lessons, analytics, the persona
+   //     editor), where currentRoom — and so overlayPlugin — is unchanged
+   //     but the handset is not mounted.
+   const onCallButton = (
+      <OnCallButton
+         ref={onCallButtonRef}
+         sessionId={onCall.available ? sessionId : null}
+         specialists={onCall.team.specialists}
+         open={onCall.open}
+         onClick={onCall.toggle}
+      />
+   );
+
+   // Rendered whenever a user is signed in, session or not: without a
+   // session the pill still captures locally; persistence starts once
+   // consent + a session exist. `companion` rides beside it in the same fixed
+   // row — the case view passes the phone there over an overlay room.
+   const renderOyonPill = (companion = null) => (user ? (
       <div
          ref={oyonPillRef}
-         className={`fixed z-[80] ${oyonPlacement.centred ? '-translate-x-1/2' : ''}`}
+         className={`fixed z-[80] ${oyonPlacement.centred ? '-translate-x-1/2' : ''} ${companion ? 'flex items-center gap-2' : ''}`}
          style={oyonPlacement.style}
       >
          <OyonCaptureWidget
@@ -846,8 +870,10 @@ function MainApp() {
             room={oyonRoom}
             onOpenAnalytics={canSeeOyonAnalytics ? handleOpenOyonAnalytics : undefined}
          />
+         {companion}
       </div>
-   ) : null;
+   ) : null);
+   const oyonPill = renderOyonPill();
 
    // Persistent settings/account menu + language switcher. Built once here
    // and rendered in every screen's header (via the same `roomNav`-style
@@ -871,15 +897,7 @@ function MainApp() {
          }}
          uiLanguage={uiLanguage}
          onSetLanguage={setUiLanguage}
-         trailing={
-            <OnCallButton
-               ref={onCallButtonRef}
-               sessionId={onCall.available ? sessionId : null}
-               specialists={onCall.team.specialists}
-               open={onCall.open}
-               onClick={onCall.toggle}
-            />
-         }
+         trailing={overlayPlugin ? null : onCallButton}
       />
    ) : null;
 
@@ -1025,7 +1043,7 @@ function MainApp() {
 
    return (
       <>
-      {oyonPill}
+      {renderOyonPill(overlayPlugin ? onCallButton : null)}
       {/* ISSUE-0019: the re-consent prompt was rendered in every settings and
           analytics branch but not here, so a learner sitting in a case — the
           one place the signal capture actually runs — could never answer it,
@@ -1039,7 +1057,8 @@ function MainApp() {
           case", so it outlives a room change.
 
           Its button is NOT here: it rides in topBarControls (the `trailing`
-          slot), the one header every room renders. Two floating positions
+          slot), the one header every room renders — or beside the Oyon pill
+          over an overlay room (see `onCallButton`). Two floating positions
           before that covered the monitor — first the EtCO2 reading, then the
           HR number at the right edge. */}
       {onCall.open && (
