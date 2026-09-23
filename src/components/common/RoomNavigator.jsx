@@ -218,6 +218,7 @@ export default function RoomNavigator({
             {onOpenCourse && (
                 <button
                     type="button"
+                    data-testid="room-course"
                     onClick={onOpenCourse}
                     aria-label={t('room_course', { defaultValue: 'Course' })}
                     className="shrink-0 self-stretch px-3 rounded-lg flex items-center gap-2 bg-black text-white/85 ring-1 ring-white/10 hover:bg-neutral-900 hover:text-white transition-colors"

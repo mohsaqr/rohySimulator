@@ -1,7 +1,7 @@
 // A Playwright reporter that writes the check keys this suite WOULD report to
 // Prova, without contacting Prova at all.
 //
-//   npx playwright test --list --reporter=./prova/dump-check-keys.mjs
+//   ROHY_PW_PROJECTS=all npx playwright test --list --reporter=./prova/dump-check-keys.mjs
 //
 // writes prova/check-keys.txt, which prova/check-coverage-links.mjs then matches
 // against the `covers:` patterns in rohy-cases.yaml. That pairing is what proves

@@ -1,7 +1,7 @@
 // Prove that every `covers:` pattern in rohy-cases.yaml points at a Playwright
 // test that actually exists.
 //
-//   npx playwright test --list --reporter=./prova/dump-check-keys.mjs
+//   ROHY_PW_PROJECTS=all npx playwright test --list --reporter=./prova/dump-check-keys.mjs
 //   node prova/check-coverage-links.mjs
 //
 // Why this is a separate check: Prova validates a coverage pattern's SYNTAX when
@@ -25,7 +25,7 @@ const catalogueFile = path.join(here, 'rohy-cases.yaml');
 
 if (!fs.existsSync(keysFile)) {
     console.error(`${path.relative(process.cwd(), keysFile)} is missing — generate it first:\n`
-        + '  npx playwright test --list --reporter=./prova/dump-check-keys.mjs');
+        + '  ROHY_PW_PROJECTS=all npx playwright test --list --reporter=./prova/dump-check-keys.mjs');
     process.exit(2);
 }
 

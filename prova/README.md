@@ -43,9 +43,14 @@ whether any check key matches it. A renamed test or a typo therefore imports
 cleanly and covers nothing, while the case goes on looking automated. Check it:
 
 ```bash
-npx playwright test --list --reporter=./prova/dump-check-keys.mjs   # writes prova/check-keys.txt
-node prova/check-coverage-links.mjs                                 # exits 1 on an orphan
+ROHY_PW_PROJECTS=all npx playwright test --list --reporter=./prova/dump-check-keys.mjs   # writes prova/check-keys.txt
+node prova/check-coverage-links.mjs                                                      # exits 1 on an orphan
 ```
+
+`ROHY_PW_PROJECTS=all` matters: the monkey walker (`tests/monkey/`) is an opt-in Playwright project
+that a bare `npx playwright test` never defines (see `playwright.config.js`), so without it the
+listing leaves out the check keys the MONKEY.WALK cases cover and they show up as orphans. Its keys
+read `rohy:monkey::../monkey/walker.spec.js › …` — the file is named relative to the e2e testDir.
 
 The first command contacts nothing — it only enumerates the check keys this
 suite *would* report. The second matches them against the catalogue using

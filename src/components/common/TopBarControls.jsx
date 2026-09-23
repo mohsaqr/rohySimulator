@@ -118,6 +118,12 @@ export default function TopBarControls({
          document.body,
       );
 
+   // Test hooks (`data-testid`): every item that LEAVES the case's rooms — for
+   // a full-page surface or by signing out — carries one, because its
+   // accessible name is translated and the seeded monkey walker
+   // (tests/monkey/) must recognise it in any UI language. The language
+   // items deliberately carry none: switching language mid-case is part of
+   // what the walker exercises.
    return (
       <div className="flex items-center gap-2">
          <div className="relative">
@@ -144,6 +150,7 @@ export default function TopBarControls({
                <button
                   type="button"
                   onClick={() => onLogout()}
+                  data-testid="logout"
                   aria-label={t('logout')}
                   title={t('logout')}
                   className="rohy-topbar-menu-trigger text-sm ml-2"
@@ -159,6 +166,7 @@ export default function TopBarControls({
                      <button
                         type="button"
                         onClick={() => { onOpenCases?.(); closeAll(); }}
+                        data-testid="menu-cases"
                         role="menuitem"
                         className="rohy-topbar-menu-item"
                      >
@@ -169,6 +177,7 @@ export default function TopBarControls({
                   <button
                      type="button"
                      onClick={() => { onOpenProfile?.(); closeAll(); }}
+                     data-testid="menu-profile"
                      role="menuitem"
                      className="rohy-topbar-menu-item"
                   >
@@ -178,6 +187,7 @@ export default function TopBarControls({
                   <button
                      type="button"
                      onClick={() => { onOpenSettings?.(); closeAll(); }}
+                     data-testid="menu-settings"
                      role="menuitem"
                      className="rohy-topbar-menu-item"
                   >
@@ -187,6 +197,7 @@ export default function TopBarControls({
                   <button
                      type="button"
                      onClick={() => { onOpenHelp?.(); closeAll(); }}
+                     data-testid="menu-help"
                      role="menuitem"
                      className="rohy-topbar-menu-item"
                   >
@@ -197,6 +208,7 @@ export default function TopBarControls({
                      <button
                         type="button"
                         onClick={() => { onOpenLessons?.(); closeAll(); }}
+                        data-testid="menu-lessons"
                         role="menuitem"
                         className="rohy-topbar-menu-item"
                      >
@@ -229,6 +241,7 @@ export default function TopBarControls({
                            <button
                               type="button"
                               onClick={() => { onOpenEmotionAnalytics?.(); closeAll(); }}
+                              data-testid="menu-emotion-analytics"
                               role="menuitem"
                               className="rohy-topbar-menu-item"
                            >
@@ -244,6 +257,7 @@ export default function TopBarControls({
                            <button
                               type="button"
                               onClick={() => { onOpenOyonDashboard?.(); closeAll(); }}
+                              data-testid="menu-oyon-dashboard"
                               role="menuitem"
                               className="rohy-topbar-menu-item"
                            >
@@ -255,6 +269,7 @@ export default function TopBarControls({
                            <button
                               type="button"
                               onClick={() => { onOpenCaseAnalytics?.(); closeAll(); }}
+                              data-testid="menu-case-analytics"
                               role="menuitem"
                               className="rohy-topbar-menu-item"
                            >
@@ -268,6 +283,7 @@ export default function TopBarControls({
                            <button
                               type="button"
                               onClick={() => { onOpenSetup(); closeAll(); }}
+                              data-testid="menu-setup"
                               role="menuitem"
                               className="rohy-topbar-menu-item"
                            >
@@ -282,6 +298,7 @@ export default function TopBarControls({
                   <button
                      type="button"
                      onClick={() => { onLogout?.(); closeAll(); }}
+                     data-testid="logout"
                      role="menuitem"
                      className="rohy-topbar-menu-item rohy-topbar-menu-item-danger"
                   >

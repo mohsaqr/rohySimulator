@@ -85,6 +85,46 @@ const provaReporter = fs.existsSync(PROVA_REPORTER)
     ? [[PROVA_REPORTER, { product: 'rohy' }]]
     : [];
 
+// Opt-in projects. Playwright runs EVERY defined project unless `--project`
+// narrows it, and has no notion of a project that is off by default — so the
+// projects that must never ride along with a bare `npx playwright test` (the
+// CI gate run) are only defined when asked for:
+//
+//   ROHY_PW_PROJECTS=monkey      the seeded monkey walker (tests/monkey/)
+//   ROHY_PW_PROJECTS=all         every opt-in project — use it for
+//                                `--list` when dumping check keys for Prova
+//
+// An env var, not an argv sniff: Playwright's workers load this config too,
+// with their own argv, and a project missing from a worker's config fails the
+// run. Env is inherited by the workers.
+const OPT_IN = new Set((process.env.ROHY_PW_PROJECTS || '').split(',').map((s) => s.trim()).filter(Boolean));
+const optedIn = (name) => OPT_IN.has(name) || OPT_IN.has('all');
+const REPORT_SUFFIX = OPT_IN.size > 0 ? `-${[...OPT_IN].sort().join('-')}` : '';
+
+const monkeyProject = {
+    // A random walk inside a live case (tests/monkey/walker.spec.js). Its own
+    // testDir, so the e2e projects never collect it; MONKEY_MINUTES sets how
+    // long each case is walked, MONKEY_SEED replays a failed walk.
+    name: 'monkey',
+    testDir: './tests/monkey',
+    testMatch: /\.spec\.js$/,
+    // Never retried: a walk that fails and then passes is a finding, and a
+    // retry would record it as a pass (the retry replays the seed, not the
+    // timing that broke it).
+    retries: 0,
+    use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        // Real Chrome lets a page write the clipboard from a click on a secure
+        // origin; headless Chromium refuses unless granted, and the vendored
+        // Radoyon report's "Copy as text" (navigator.clipboard.writeText with
+        // no catch) then throws an unhandled rejection the walker reports.
+        // Granted so the walk matches a real browser. The missing catch is an
+        // upstream Radoyon defect, recorded in LEARNINGS.md 2026-09-23.
+        permissions: ['clipboard-write'],
+    },
+};
+
 export default defineConfig({
     testDir: './tests/e2e',
     globalSetup: './tests/e2e/global-setup.js',
@@ -97,10 +137,15 @@ export default defineConfig({
     retries: process.env.CI ? 1 : 0,
     timeout: 30_000,
     expect: { timeout: 5_000 },
+    // Per run kind, like the reports below: Playwright empties outputDir at
+    // the start of a run, and the gate run's traces must survive the monkey's.
+    outputDir: `test-results${REPORT_SUFFIX}`,
     reporter: [
         ['list'],
-        ['html', { open: 'never', outputFolder: 'playwright-report' }],
-        ['junit', { outputFile: 'test-results.e2e.junit.xml' }],
+        // An opt-in run (the monkey, the quarantine) writes its own report,
+        // so CI running it after the gate run does not overwrite the gate's.
+        ['html', { open: 'never', outputFolder: `playwright-report${REPORT_SUFFIX}` }],
+        ['junit', { outputFile: `test-results.e2e${REPORT_SUFFIX}.junit.xml` }],
         ...provaReporter,
     ],
     use: {
@@ -135,6 +180,7 @@ export default defineConfig({
                 },
             },
         },
+        ...(optedIn('monkey') ? [monkeyProject] : []),
     ],
     webServer: {
         // Spawn the real Express boot path. Same binary the audit scripts

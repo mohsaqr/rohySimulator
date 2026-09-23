@@ -101,8 +101,11 @@ coverage/
 
 # Playwright e2e outputs
 playwright-report/
+playwright-report-*/
 test-results/
+test-results-*/
 test-results.e2e.junit.xml
+test-results.e2e-*.junit.xml
 test-results.smoke.junit.xml
 tests/e2e/.auth/
 
