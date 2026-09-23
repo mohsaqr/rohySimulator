@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 
 const adapterLog = logger('dbAdapter');
 
-// Routes use fire-and-forget `dbAdapter.run('BEGIN')` / `.run('COMMIT')`
+// Routes use fire-and-forget `dbAdapter.run('BEGIN IMMEDIATE')` / `.run('COMMIT')`
 // with no callback. Without a callback, sqlite3-driver errors vanish.
 // If COMMIT silently fails (BUSY, constraint check, etc.), the
 // connection stays in a pending transaction and the next BEGIN throws
@@ -82,9 +82,51 @@ export function all(sql, params = [], callback) {
     return promise;
 }
 
+// SQLITE_BUSY on the shared handle, and why a timeout does not cover it.
+//
+// The database runs in WAL mode, and the audit chain writes on its OWN
+// connection (audit-chain.js). This handle runs statements in parallel, so one
+// of them is often still reading — holding a read snapshot — when another
+// statement on the same handle wants to write. If the audit connection
+// committed in between, that snapshot is stale and sqlite refuses the write
+// with SQLITE_BUSY AT ONCE: the busy timeout is not consulted, because
+// waiting could never make a stale snapshot current. It clears as soon as the
+// in-flight read finishes. Measured: 0 ms to fail with busy_timeout=5000, and
+// the same write succeeds once the read is done.
+//
+// So a write that fails SQLITE_BUSY is retried here, briefly, with backoff —
+// once, for every caller, instead of in each call site that happened to hit
+// it (stampCaseCode, claimInviteUse and standingSpecialists each carried a
+// copy). Retrying is safe: a statement that failed SQLITE_BUSY did not run.
+// Transaction control (BEGIN/COMMIT/…) is never retried; write transactions
+// open with BEGIN IMMEDIATE, which holds the write lock, so statements inside
+// them do not hit this.
+export const BUSY_RETRY_DELAYS_MS = Object.freeze([25, 50, 75, 100, 125]);
+
+const isBusy = (err) => err?.code === 'SQLITE_BUSY' || /SQLITE_BUSY/.test(err?.message ?? '');
+
+async function retryingBusy(sql, exec) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await exec();
+        } catch (err) {
+            if (!isBusy(err) || attempt >= BUSY_RETRY_DELAYS_MS.length) {
+                if (isBusy(err)) {
+                    adapterLog.warn('write still SQLITE_BUSY after retries', {
+                        sql: sql.trim().slice(0, 80), attempts: attempt + 1,
+                    });
+                }
+                throw err;
+            }
+            // Sequential by design: each retry waits for the previous one.
+            await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_DELAYS_MS[attempt]));
+        }
+    }
+}
+
 export function run(sql, params = [], callback) {
     const args = splitParamsAndCallback(params, callback);
-    const promise = timeDbAdapterQuery('adapter.run', sql, () => new Promise((resolve, reject) => {
+    const exec = () => timeDbAdapterQuery('adapter.run', sql, () => new Promise((resolve, reject) => {
         db.run(sql, normalizeParams(args.params), function onRun(err) {
             err ? reject(err) : resolve({
                 lastID: this.lastID,
@@ -93,6 +135,7 @@ export function run(sql, params = [], callback) {
             });
         });
     }));
+    const promise = isTclStatement(sql) ? exec() : retryingBusy(sql, exec);
     if (args.callback) {
         promise.then((result) => args.callback.call(result.statement, null), (err) => args.callback(err));
     } else if (isTclStatement(sql)) {
@@ -120,9 +163,14 @@ export function serialize(work) {
     });
 }
 
+// BEGIN IMMEDIATE, not a deferred BEGIN: the database runs in WAL mode (set
+// by the audit chain's connection), and a deferred transaction that reads and
+// then writes fails with SQLITE_BUSY WITHOUT waiting when another connection
+// committed in between — sqlite skips the busy timeout there to avoid a
+// deadlock. Taking the write lock up front makes the wait apply.
 export async function transaction(work) {
     return serialize(async () => {
-        await run('BEGIN');
+        await run('BEGIN IMMEDIATE');
         try {
             const result = await work();
             await run('COMMIT');

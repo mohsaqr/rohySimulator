@@ -9,6 +9,31 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.108] — 2026-09-23
+
+### Fixed
+
+- **SQLITE_BUSY on the shared database handle.** CI logs showed it failing the phone's
+  `GET /sessions/:id/agents` (and it did so before the on-call work too), and it had cost case-code
+  stamps, invite claims and standing-specialist attaches. Diagnosed and measured, not assumed:
+  - **The handle was not at zero wait.** node-sqlite3 opens every handle with a 1000 ms busy
+    timeout, so the long-standing comments saying "no busy_timeout" were wrong. `db.js` now sets it
+    explicitly (`DB_BUSY_TIMEOUT_MS = 1000`) so a driver upgrade cannot change it silently.
+  - **The common failure is a stale WAL read snapshot, which a timeout cannot fix.** The shared
+    handle runs statements in parallel, and the audit chain commits on its own connection. When a
+    statement on the shared handle is still reading while the audit connection commits, the next
+    write on the shared handle is refused in **0 ms**, whatever the timeout (measured with
+    `busy_timeout=5000`). It clears as soon as the read finishes. `dbAdapter.run` now retries a
+    write that fails `SQLITE_BUSY`, with bounded backoff (`BUSY_RETRY_DELAYS_MS`, 375 ms in all),
+    for every caller. That replaces the three copies in `stampCaseCode`, `claimInviteUse` and
+    `standingSpecialists`. Retrying is safe because a statement that failed `SQLITE_BUSY` did not
+    run. Transaction control is never retried.
+  - **Write transactions open with `BEGIN IMMEDIATE`** (`dbAdapter.transaction()` and the seven
+    route-level `BEGIN`s). A deferred transaction that reads and then writes is refused at once when
+    the audit connection commits in between; taking the write lock up front makes it wait instead.
+  - **The timeout is not raised.** The retry already rides out a lock held past one timeout, and
+    raising the timeout would multiply the worst-case stall (6 attempts × timeout) for nothing.
+
 ## [3.0.0-beta.107] — 2026-09-23
 
 ### Fixed

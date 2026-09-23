@@ -572,7 +572,7 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
     let skipped = 0;
 
     dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN TRANSACTION');
+        dbAdapter.run('BEGIN IMMEDIATE TRANSACTION');
 
         for (const med of medications) {
             const name = med.name || med.medicine_name || med.generic_name;
@@ -622,7 +622,7 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
         if (!oldMedication) return res.status(404).json({ error: 'Medication not found' });
 
     dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN');
+        dbAdapter.run('BEGIN IMMEDIATE');
         dbAdapter.run('DELETE FROM medication_doses WHERE medication_id = ?', [id], function(doseErr) {
             if (doseErr) {
                 dbAdapter.run('ROLLBACK');
@@ -693,7 +693,7 @@ router.delete('/master/medications/all', authenticateToken, requireEducator, (re
         const oldCount = row?.count || 0;
 
     dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN');
+        dbAdapter.run('BEGIN IMMEDIATE');
         dbAdapter.run('DELETE FROM medication_doses', [], function(doseErr) {
             if (doseErr) {
                 dbAdapter.run('ROLLBACK');

@@ -16,7 +16,6 @@ const inviteLog = logger('registration-invites');
 // already trusts you; an invite mints an ACCOUNT.)
 export const INVITE_TOKEN_LENGTH = 12;
 const INVITE_MAX_RETRIES = 6;
-const CLAIM_MAX_RETRIES = 4;
 
 /** What the person holding the invite is told. Never speculates about why. */
 export const INVITE_ERRORS = {
@@ -69,31 +68,21 @@ export async function findInviteByToken(rawToken) {
  *
  * @returns {Promise<boolean>} true when THIS caller got the use.
  */
-export async function claimInviteUse(inviteId, attempt = 0) {
-    try {
-        const result = await dbAdapter.run(
-            `UPDATE registration_invites
-                SET uses = uses + 1
-              WHERE id = ?
-                AND revoked_at IS NULL
-                AND (max_uses IS NULL OR uses < max_uses)
-                AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`,
-            [inviteId]
-        );
-        return (result?.changes ?? 0) === 1;
-    } catch (err) {
-        // SQLITE_BUSY is expected here, not exceptional: the audit chain writes on
-        // its OWN dedicated sqlite connection (audit-chain.js), so a registration
-        // in flight can collide with the audit write of the one before it. The
-        // same retry-with-backoff exists in stampCaseCode() for exactly this
-        // reason. Without it, two people redeeming an invite at the same moment
-        // can turn a clean "already used" into a 500.
-        if (/SQLITE_BUSY/i.test(err.message) && attempt < CLAIM_MAX_RETRIES) {
-            await new Promise((r) => setTimeout(r, 25 * (attempt + 1)));
-            return claimInviteUse(inviteId, attempt + 1);
-        }
-        throw err;
-    }
+export async function claimInviteUse(inviteId) {
+    // Two people redeeming at once can collide with the audit write of the
+    // registration before them (the audit chain has its own connection); the
+    // SQLITE_BUSY that raises is retried inside dbAdapter.run, so it resolves
+    // to a clean "already used" rather than a 500.
+    const result = await dbAdapter.run(
+        `UPDATE registration_invites
+            SET uses = uses + 1
+          WHERE id = ?
+            AND revoked_at IS NULL
+            AND (max_uses IS NULL OR uses < max_uses)
+            AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`,
+        [inviteId]
+    );
+    return (result?.changes ?? 0) === 1;
 }
 
 /** Hand a claimed use back when the registration it was claimed for failed. */

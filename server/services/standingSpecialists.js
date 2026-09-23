@@ -57,27 +57,10 @@ const ATTACH_SQL = `
             WHERE ca.case_id = c.id AND ca.tenant_id = c.tenant_id
               AND t2.agent_type = ? AND t2.deleted_at IS NULL)`;
 
-// POST /cases runs this right after logAudit, and the audit chain writes on
-// its OWN sqlite connection (audit-chain.js) while the shared handle has no
-// busy_timeout — so an overlapping audit write surfaces here as SQLITE_BUSY.
-// Same bounded retry as cases-routes stampCaseCode; past it the error is
-// thrown to the caller, and the boot sweep is the last-resort repair.
-const BUSY_RETRIES = 5;
-
-async function runRetryingBusy(sql, params, attempt = 0) {
-    try {
-        return await dbAdapter.run(sql, params);
-    } catch (err) {
-        if (!/SQLITE_BUSY/.test(err.message) || attempt >= BUSY_RETRIES) throw err;
-        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
-        return runRetryingBusy(sql, params, attempt + 1);
-    }
-}
-
 async function attach(caseId) {
     const attached = {};
     for (const type of STANDING_SPECIALIST_TYPES) {
-        const result = await runRetryingBusy(ATTACH_SQL, [type, caseId, caseId, type, type]);
+        const result = await dbAdapter.run(ATTACH_SQL, [type, caseId, caseId, type, type]);
         attached[type] = result.changes;
     }
     const total = Object.values(attached).reduce((sum, n) => sum + n, 0);
@@ -98,8 +81,8 @@ async function attach(caseId) {
  * @throws {TypeError} when caseId is not a positive integer — never widened to
  *         a sweep: node-sqlite3 binds NaN as NULL, and NULL here means "every
  *         case"
- * @throws the sqlite error when a write fails for any reason other than a
- *         lock that clears within the retry budget
+ * @throws the sqlite error when a write fails (SQLITE_BUSY is retried inside
+ *         dbAdapter.run first)
  */
 export async function attachStandingSpecialists({ caseId } = {}) {
     const id = Number(caseId);
