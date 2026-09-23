@@ -9,6 +9,46 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.117] — 2026-09-23
+
+### Added
+
+- **Flake quarantine.** Playwright: a test whose title carries `@quarantine` is skipped by the
+  default projects (`grepInvert`) and runs only in the opt-in `quarantine` project
+  (`ROHY_PW_PROJECTS=quarantine`, `npm run test:quarantine`), which CI runs after the gate with
+  `continue-on-error` and `PROVA_LABEL=quarantine`. Vitest: `describeQuarantine(name, fn)` in
+  `tests/utils/describeQuarantine.js` is a plain `describe` locally; with `ROHY_QUARANTINE=1` (now
+  set in the CI `test` job) a failure — or a failed setup hook — is logged as a warning and the
+  test is reported skipped. The block uses the `it`/hooks it is handed. Tested for real in
+  `tests/server/quarantine.test.js`, which runs a fixture in a child vitest both ways.
+- `scripts/check-quarantine.mjs` (lint job, `npm run check:quarantine`): every quarantined test
+  must sit under `// QUARANTINED: YYYY-MM-DD` and, on the line directly above it,
+  `// PROVA-DEFECT: <url>`; a quarantine older than 30 days, or dated in the future, fails.
+
+### Fixed
+
+- **A fresh database served its first requests in rollback-journal mode.** `dbAdapter.js` is
+  written for WAL, but only the audit chain's connection set it, lazily, on the first audited
+  write; measured on a fresh test server, `journal_mode` read `delete` after boot and after a
+  login. `server/db.js` now switches to WAL at the end of boot, while it is the only connection
+  (after the migrations and the pre-migration backup, which are unchanged; non-fatal if the
+  filesystem refuses). Existing databases were already WAL. Regression test:
+  `tests/server/db-wal-at-boot.test.js`.
+
+### Not quarantined: `users-preferences-merge.test.js` › "persists a language-only PUT"
+
+It failed once on CI (run 35867130955, attempt 1) and could not be reproduced locally: 15 runs of
+the file, and 48 fresh servers (4 in parallel) doing the same first PUT and GET, all passed. So it
+is not quarantined. What the CI log does show: `expected undefined to be 'it'` — the GET returned
+a body with no `language` key, i.e. an error response rather than a stale row — and the test took
+1052 ms, the shape of a read that waited out the shared handle's 1000 ms busy timeout. In
+rollback-journal mode a reader can fail that way while the other connection commits or switches
+the journal; in WAL it cannot. The WAL fix above removes that precondition; the test now asserts
+the GET's status with the body as the message, so a recurrence names its cause. A separate, harder
+contention was measured and is NOT fixed: 8 users doing concurrent PUT+GET on
+`/users/preferences` get some PUTs answered 500 SQLITE_BUSY after ~10-15 s, in either journal
+mode.
+
 ## [3.0.0-beta.116] — 2026-09-23
 
 ### Added

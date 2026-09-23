@@ -91,6 +91,7 @@ const provaReporter = fs.existsSync(PROVA_REPORTER)
 // CI gate run) are only defined when asked for:
 //
 //   ROHY_PW_PROJECTS=monkey      the seeded monkey walker (tests/monkey/)
+//   ROHY_PW_PROJECTS=quarantine  the tests tagged @quarantine (below)
 //   ROHY_PW_PROJECTS=all         every opt-in project — use it for
 //                                `--list` when dumping check keys for Prova
 //
@@ -123,6 +124,22 @@ const monkeyProject = {
         // upstream Radoyon defect, recorded in LEARNINGS.md 2026-09-23.
         permissions: ['clipboard-write'],
     },
+};
+
+// Flake quarantine. A test whose title carries `@quarantine` is taken out of
+// the gate: the default projects skip it (grepInvert), and it runs only in the
+// opt-in `quarantine` project, which CI runs with continue-on-error and
+// PROVA_LABEL=quarantine, so its results are still recorded. The rules — a
+// PROVA-DEFECT link and a QUARANTINED date no older than 30 days on the two
+// lines above — are enforced by scripts/check-quarantine.mjs in the lint job.
+const QUARANTINE = /@quarantine/;
+
+const quarantineProject = {
+    name: 'quarantine',
+    grep: QUARANTINE,
+    // Desktop Chrome, no microphone: a quarantined voice spec would need the
+    // chromium-voice project's fake-device flags added here.
+    use: { ...devices['Desktop Chrome'] },
 };
 
 export default defineConfig({
@@ -162,6 +179,7 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
             // The voice specs need a microphone, which only their own project has.
             testIgnore: /oyon-(voice|analytics-journey)\.spec\.js/,
+            grepInvert: QUARANTINE,
         },
         {
             // Oyon voice capture, end to end. Plain headless Chromium refuses
@@ -172,6 +190,7 @@ export default defineConfig({
             // `rohy:chromium-voice::…`), on the same `chrome` platform.
             name: 'chromium-voice',
             testMatch: /oyon-(voice|analytics-journey)\.spec\.js/,
+            grepInvert: QUARANTINE,
             use: {
                 ...devices['Desktop Chrome'],
                 permissions: ['microphone'],
@@ -181,6 +200,7 @@ export default defineConfig({
             },
         },
         ...(optedIn('monkey') ? [monkeyProject] : []),
+        ...(optedIn('quarantine') ? [quarantineProject] : []),
     ],
     webServer: {
         // Spawn the real Express boot path. Same binary the audit scripts
