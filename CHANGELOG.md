@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.RC01] — 2026-09-24
+
+Release candidate 1 of Rohy 3.0 (package version `3.0.0-rc.1`, commit after `789a846`). It is
+the 3.0.0-beta.109–120 line as deployed to rohy.lacarm.com on 2026-09-23, unchanged:
+
+- **Per-case rooms.** An educator switches rooms off in the case wizard's Rooms step; a switched-off
+  room is hidden and locked on the server, its material kept. Bedside is off by default. Without a
+  debrief room, End & Debrief ends on the case summary.
+- **The on-call phone on every case.** The lab and radiology stand on every case; the pathologist
+  and cardiologist on any case with slides or an ECG. A specialist whose rooms are off is listed
+  but does not answer.
+- **SQLite hardening.** Bounded retry on SQLITE_BUSY, `BEGIN IMMEDIATE` for writers, WAL from boot.
+- **API robustness.** ~50 fuzz-found 500s now answer 400/404/409/502 as they should.
+- **Test infrastructure.** A seeded monkey walker, API fuzzing, a 10-minute production check and a
+  flake quarantine, all in CI (see the beta.114–120 sections below).
+
 ## [3.0.0-beta.120] — 2026-09-23
 
 ### Fixed
