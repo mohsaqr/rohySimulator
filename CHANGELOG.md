@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.107] — 2026-09-23
+
+### Fixed
+
+- **`oncall-phone.spec.js` failed on CI's first run while the app was fine.** On the GPU-less runner,
+  the bedside's WebGL scene renders in software and starves the main thread, so Playwright's
+  `locator.click()` never finished its scroll-into-view step. The failure screenshot shows the phone
+  on screen and uncovered. The spec now presses each control with a real mouse event at its centre
+  (`page.mouse.click`, through hit-testing), and gives the box measurement 30 s. It still catches a
+  covered button: with the beta.103 bedside bug put back, it fails on "the handset opens from
+  room3d".
+
 ## [3.0.0-beta.106] — 2026-09-23
 
 ### Added
