@@ -522,6 +522,7 @@
   "registration_toast_saved": "Rekisteröitymiskäytäntö tallennettu",
   "registration_unsaved": "Tallentamattomia muutoksia",
   "rooms_always_on": "Aina päällä",
+  "rooms_default_off_note": "Pois päältä, ellet kytke sitä päälle: siellä potilasta tutkitaan myös, kuten Tutkimus-huoneessa.",
   "rooms_fixed_note": "Tapaus pelataan täällä. Tätä ei voi kytkeä pois.",
   "rooms_material_kept": "Tälle huoneelle määritetty materiaali säilyy, piilotettuna oppijoilta.",
   "rooms_needs_material": "Näkyy vain, kun tapauksessa on sille materiaalia.",

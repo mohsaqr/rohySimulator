@@ -2,16 +2,15 @@
 // the phone rings out for a specialist whose rooms are off, and End & Debrief
 // without a debrief room ends on the case summary.
 //
-// The case is built for this spec (a student can only start the default case
-// or one assigned through a course, so it is assigned through a fresh course):
-// every switchable core room is off, and the bedside with them. No plugin room
+// The case is built for this spec (createAssignedCase): every switchable core
+// room is off, and the bedside is off by default. No plugin room
 // has material, so the room bar must hold the patient room alone.
 //
 // Presses go through `page.mouse` at the element's centre, like
 // oncall-phone.spec.js, for the same reason (software WebGL on CI).
 
-import { test, expect, waitForSeed, apiAsAdmin } from './fixtures/index.js';
-import { enterLiveCase, disposeLearnerApi } from './fixtures/liveCase.js';
+import { test, expect, waitForSeed } from './fixtures/index.js';
+import { createAssignedCase, enterLiveCase, disposeLearnerApi } from './fixtures/liveCase.js';
 
 const RUN_TAG = `e2e-rooms-${Date.now()}`;
 const OFF = ['examination', 'lab', 'radiology', 'consultant', 'room3d'];
@@ -20,32 +19,15 @@ let theCase;
 
 test.beforeAll(async ({ baseURL }) => {
     await waitForSeed(baseURL);
-    const admin = await apiAsAdmin(baseURL);
-    try {
-        const created = await admin.post('/api/cases', { data: {
-            name: `${RUN_TAG} history only`,
-            description: 'A case with the history room and nothing else',
-            system_prompt: 'You are a patient with a cough.',
-            config: {
-                patient_name: 'Rooms Example',
-                demographics: { age: 40, gender: 'Female' },
-                rooms: { disabled: OFF },
-            },
-        } });
-        expect(created.ok(), await created.text()).toBeTruthy();
-        theCase = await created.json();
-        expect(theCase.config.rooms.disabled).toEqual([...OFF].sort());
-
-        const cohort = await admin.post('/api/cohorts', { data: { name: `${RUN_TAG} course` } });
-        expect(cohort.ok(), await cohort.text()).toBeTruthy();
-        const cohortId = (await cohort.json()).cohort.id;
-        const member = await admin.post(`/api/cohorts/${cohortId}/members`, { data: { identifier: 'student' } });
-        expect(member.ok(), await member.text()).toBeTruthy();
-        const assigned = await admin.post(`/api/cohorts/${cohortId}/cases`, { data: { case_ids: [theCase.id] } });
-        expect(assigned.ok(), await assigned.text()).toBeTruthy();
-    } finally {
-        await admin.dispose();
-    }
+    theCase = await createAssignedCase(baseURL, {
+        name: `${RUN_TAG} history only`,
+        config: {
+            patient_name: 'Rooms Example',
+            demographics: { age: 40, gender: 'Female' },
+            rooms: { disabled: OFF },
+        },
+    });
+    expect(theCase.config.rooms.disabled).toEqual([...OFF].sort());
 });
 
 test.afterAll(disposeLearnerApi);
@@ -59,8 +41,7 @@ async function pressAtCentre(page, locator, what) {
 test.describe('per-case rooms', () => {
     test('the room bar holds only the rooms the case keeps', async ({ page, baseURL }) => {
         await enterLiveCase(page, baseURL, `${RUN_TAG}-bar`, theCase);
-        // Polled: enterLiveCase seeds the case as the learner's GET /cases/:id
-        // returns it, and the rooms are known once the session snapshot lands.
+        // Polled: the room bar settles once the case's rooms are loaded.
         await expect.poll(() => page.locator('[data-testid^="room-button-"]')
             .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', ''))))
             .toEqual(['chat']);

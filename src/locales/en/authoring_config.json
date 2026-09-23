@@ -522,6 +522,7 @@
   "registration_toast_saved": "Registration policy saved",
   "registration_unsaved": "Unsaved changes",
   "rooms_always_on": "Always on",
+  "rooms_default_off_note": "Off unless you switch it on: it examines the patient too, like the Examination room.",
   "rooms_fixed_note": "Where the case is played. It cannot be switched off.",
   "rooms_material_kept": "Material configured for this room is kept, hidden from learners.",
   "rooms_needs_material": "Shows only when the case has material for it.",

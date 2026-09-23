@@ -1797,7 +1797,7 @@
       platforms: [any]
       severity_if_failed: major
       steps: |-
-        1. As a learner, start a case.
+        1. As a learner, start a case whose Rooms step has Bedside switched on (it is off by default).
         2. Visit every room in the room bar in turn, the immersive bedside included.
         3. In each, press the round phone button, then press it again.
       expected: |-
@@ -1858,12 +1858,13 @@
       platforms: [any]
       severity_if_failed: major
       steps: |-
-        1. As an educator, open a case and, in the Rooms step, switch off Examination, Laboratory,
-           Radiology, Consultant and Bedside. Save.
-        2. As a learner, start that case.
+        1. As an educator, open a new case's Rooms step: Bedside is off, every other room on.
+        2. Switch off Examination, Laboratory, Radiology and Consultant. Save.
+        3. As a learner, start that case.
       expected: |-
         The room bar shows the Patient room only (plus a plugin room the case has material for).
-        No switched-off room can be reached, including after a reload.
+        No switched-off room can be reached, including after a reload. A case that never touched
+        the Rooms step shows every room but Bedside.
       covers:
         - "rohy:chromium::case-rooms.spec.js › per-case rooms › the room bar holds only the rooms the case keeps"
     - id: CASE.ROOMS.02

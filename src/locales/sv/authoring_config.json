@@ -522,6 +522,7 @@
   "registration_toast_saved": "Registreringspolicy sparad",
   "registration_unsaved": "Osparade ändringar",
   "rooms_always_on": "Alltid på",
+  "rooms_default_off_note": "Av tills du slår på det: här undersöks patienten också, som i rummet Undersökning.",
   "rooms_fixed_note": "Där fallet spelas. Det kan inte stängas av.",
   "rooms_material_kept": "Materialet som är konfigurerat för det här rummet sparas, dolt för de studerande.",
   "rooms_needs_material": "Visas bara när fallet har material för det.",

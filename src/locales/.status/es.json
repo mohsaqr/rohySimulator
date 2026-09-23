@@ -7109,6 +7109,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.rooms_default_off_note": {
+    "src": "78d27cd636a2",
+    "tgt": "66dda713628e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.rooms_fixed_note": {
     "src": "028426eea0e7",
     "tgt": "c8f499d69ba0",

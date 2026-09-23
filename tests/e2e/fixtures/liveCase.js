@@ -12,7 +12,7 @@
 
 import { expect, request as pwRequest } from '@playwright/test';
 import { loginAs } from './auth.js';
-import { findCase } from './seed.js';
+import { apiAsAdmin, findCase } from './seed.js';
 // The app's own parser, not a re-implementation: SQLite hands back
 // 'YYYY-MM-DD HH:MM:SS' with no zone marker and JS would read that as local
 // time. Parsing it a second way here would test this file against itself.
@@ -45,6 +45,43 @@ export async function disposeLearnerApi() {
     if (_ctx) await _ctx.dispose();
     _ctx = null;
     _token = undefined;
+}
+
+/**
+ * A case built for one spec, which the seeded student may start. A student can
+ * only launch the default case or one assigned through a course, so this
+ * creates the case and a fresh course holding it and the student. Use it when
+ * a spec needs a case configured its own way (rooms, material) without
+ * touching the default case every other spec plays.
+ *
+ * @param {string} baseURL
+ * @param {{ name: string, config: object }} spec
+ * @returns {Promise<object>} the created case row, as POST /cases returns it
+ */
+export async function createAssignedCase(baseURL, { name, config }) {
+    const admin = await apiAsAdmin(baseURL);
+    try {
+        const created = await admin.post('/api/cases', { data: {
+            name, description: 'e2e case', system_prompt: 'You are a patient.', config,
+        } });
+        expect(created.ok(), await created.text()).toBeTruthy();
+        const theCase = await created.json();
+        // A new case is hidden from students until published; the learner's
+        // GET /cases/:id (which enterLiveCase seeds the app with) answers 404
+        // for a hidden one.
+        const published = await admin.put(`/api/cases/${theCase.id}/availability`, { data: { is_available: true } });
+        expect(published.ok(), await published.text()).toBeTruthy();
+        const cohort = await admin.post('/api/cohorts', { data: { name: `${name} course` } });
+        expect(cohort.ok(), await cohort.text()).toBeTruthy();
+        const cohortId = (await cohort.json()).cohort.id;
+        const member = await admin.post(`/api/cohorts/${cohortId}/members`, { data: { identifier: 'student' } });
+        expect(member.ok(), await member.text()).toBeTruthy();
+        const assigned = await admin.post(`/api/cohorts/${cohortId}/cases`, { data: { case_ids: [theCase.id] } });
+        expect(assigned.ok(), await assigned.text()).toBeTruthy();
+        return theCase;
+    } finally {
+        await admin.dispose();
+    }
 }
 
 /** The default seeded case, or any seeded case if none is marked default. */
