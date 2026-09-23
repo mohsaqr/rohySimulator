@@ -22,7 +22,8 @@
 // case falls out of that keying; POST /cases/:caseId/agents enforces it.
 //
 // CONTRACT — adding a specialty is exactly two changes:
-//   1. one entry in SPECIALTIES below (agentType, standing, domain,
+//   1. one entry in SPECIALTIES below (agentType, standing — one of
+//      STANDING_MODES — domain,
 //      pluginIds, rooms, defaultDisclosure), and
 //   2. one seeded default template for that agent_type in server/db.js
 //      DEFAULT_AGENTS (its config.disclosure comes from defaultDisclosure
@@ -65,7 +66,7 @@ const DISCLOSURE_FIELDS = Object.freeze({
 export const SPECIALTIES = Object.freeze({
     pathologist: Object.freeze({
         agentType: 'pathologist',
-        standing: false,
+        standing: 'with_material',
         domain: 'pathology',
         // Plugin rooms this specialty owns (a plugin room's key IS its
         // plugin id — RoomNavigator builds them from the manifests).
@@ -77,7 +78,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     cardiologist: Object.freeze({
         agentType: 'cardiologist',
-        standing: false,
+        standing: 'with_material',
         domain: 'ecg',
         pluginIds: Object.freeze(['ecg']),
         rooms: Object.freeze([]),
@@ -85,7 +86,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     radiologist: Object.freeze({
         agentType: 'radiologist',
-        standing: true,
+        standing: 'always',
         domain: 'radiology',
         pluginIds: Object.freeze(['pacs']),
         // The pre-plugin radiology room, whose case material is the
@@ -95,7 +96,7 @@ export const SPECIALTIES = Object.freeze({
     }),
     laboratorian: Object.freeze({
         agentType: 'laboratorian',
-        standing: true,
+        standing: 'always',
         domain: 'laboratory',
         // The lab has no plugin: it is the core `lab` room
         // (InvestigationsScreen), and its material is config.investigations.
@@ -107,25 +108,89 @@ export const SPECIALTIES = Object.freeze({
 
 export const SPECIALIST_TYPES = Object.freeze(Object.keys(SPECIALTIES));
 
-// STANDING specialists are on every case: whatever the case holds, a learner
-// can always ring the lab and radiology from the phone. Every case has a lab
-// room and a radiology room, so there is always something to ask them about;
-// when the case configured no material, the brief says so and they answer
-// that honestly (specialistBrief BRIEF_NO_FINDINGS). The others are attached
-// by an educator, because they only make sense on a case with slides or an
-// ECG to discuss.
+// STANDING specialists are attached by the server, not by an educator:
+//   always        — on every case. Every case has a lab room and a radiology
+//                   room, so there is always something to ask them about;
+//                   when the case configured no material, the brief says so
+//                   and they answer that honestly (specialistBrief
+//                   BRIEF_NO_FINDINGS).
+//   with_material — on every case that holds material for one of the
+//                   specialty's plugin rooms: slides for the pathologist, an
+//                   ECG for the cardiologist. A case that shows the
+//                   Pathology room must have a pathologist on the phone.
 //
-// services/standingSpecialists.js attaches them — when a case is created, and
-// in a boot sweep for every existing case. Because the sweep re-attaches a
-// missing one, a standing specialist cannot be REMOVED from a case (DELETE
-// answers 409 standing_specialist); an educator who does not want it
-// disables it instead, which the sweep leaves alone.
+// services/standingSpecialists.js attaches them — when a case is created or
+// saved, when a session starts, and in a boot sweep for every existing case.
+// Because the sweep re-attaches a missing one, a specialist that stands on a
+// case cannot be REMOVED from it (DELETE answers 409 standing_specialist); an
+// educator who does not want it disables it instead, which the sweep leaves
+// alone.
+export const STANDING_MODES = Object.freeze(['always', 'with_material']);
+
+// The ones on every case, whatever it holds.
 export const STANDING_SPECIALIST_TYPES = Object.freeze(
-    SPECIALIST_TYPES.filter((type) => SPECIALTIES[type].standing === true),
+    SPECIALIST_TYPES.filter((type) => SPECIALTIES[type].standing === 'always'),
+);
+
+// The ones on a case that holds material for their room.
+export const MATERIAL_SPECIALIST_TYPES = Object.freeze(
+    SPECIALIST_TYPES.filter((type) => SPECIALTIES[type].standing === 'with_material'),
 );
 
 export function isStandingSpecialistType(agentType) {
     return STANDING_SPECIALIST_TYPES.includes(agentType);
+}
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function readConfig(config) {
+    if (typeof config !== 'string') return isPlainObject(config) ? config : null;
+    try {
+        const parsed = JSON.parse(config);
+        return isPlainObject(parsed) ? parsed : null;
+    } catch {
+        // An unreadable config holds no material; the case editor reports
+        // the config itself. Total, so one bad row cannot stop the sweep.
+        return null;
+    }
+}
+
+/**
+ * Does this case config hold material for one of the specialty's plugin rooms?
+ *
+ * A plugin room's case document lives at `config[pluginId]`. The rule is
+ * "a non-empty document is stored there", which is deliberately a SUPERSET of
+ * each room's own gate: pathology's and the ECG's `available()` both refuse a
+ * missing, non-object or empty document before judging anything else. So
+ * wherever the room shows, the specialist is attached; the reverse can differ
+ * (a saved but unservable document), and then the specialist answers that
+ * no findings were provided. The server cannot run the rooms' own gates —
+ * they live in src/, which the Docker image does not carry.
+ *
+ * @param {string} agentType
+ * @param {object|string|null} config  the case config, parsed or as stored
+ * @returns {boolean} false for a non-specialist or a specialty with no
+ *          plugin room
+ */
+export function hasSpecialtyMaterial(agentType, config) {
+    const specialty = isSpecialistType(agentType) ? SPECIALTIES[agentType] : null;
+    const parsed = readConfig(config);
+    if (!specialty || !parsed) return false;
+    return specialty.pluginIds.some((pluginId) => isPlainObject(parsed[pluginId])
+        && Object.keys(parsed[pluginId]).length > 0);
+}
+
+/**
+ * Does this specialist stand on the case with this config — attached by the
+ * server, and not removable?
+ *
+ * @param {string} agentType
+ * @param {object|string|null} config  the case config, parsed or as stored
+ * @returns {boolean}
+ */
+export function standsOnCase(agentType, config) {
+    if (isStandingSpecialistType(agentType)) return true;
+    return MATERIAL_SPECIALIST_TYPES.includes(agentType) && hasSpecialtyMaterial(agentType, config);
 }
 
 export function isSpecialistType(agentType) {

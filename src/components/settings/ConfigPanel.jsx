@@ -97,7 +97,7 @@ import { MARITAL_STATUSES, PATIENT_GENDERS, PERSONA_TYPES } from '../../services
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
 import { useBodyImage } from '../../hooks/useBodyImage';
 import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
-import { isSpecialistType, isStandingSpecialistType, normalizeDisclosure } from '../../../server/shared/specialties.js';
+import { isSpecialistType, normalizeDisclosure } from '../../../server/shared/specialties.js';
 import { KNOWLEDGE_TYPES, normalizeKnowledge } from '../../../server/shared/agentKnowledge.js';
 
 // Wizard step order — the single source of truth for step numbers. CaseWizard's
@@ -3645,7 +3645,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                             {agent.has_name_override && (
                                                 <span className="px-1 py-0.5 bg-blue-900/50 text-blue-400 rounded text-xs">{t('badge_override')}</span>
                                             )}
-                                            {isStandingSpecialistType(agent.agent_type) && (
+                                            {agent.standing && (
                                                 <span className="px-1 py-0.5 bg-teal-900/50 text-teal-300 rounded text-xs">{t('badge_standing_specialist')}</span>
                                             )}
                                         </div>
@@ -3684,10 +3684,12 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                                             {t('btn_edit_persona')}
                                         </button>
                                     )}
-                                    {/* The lab and radiology stand on every case: the server
-                                        refuses to remove them (the boot sweep would put them
-                                        back). Disable is their off switch. */}
-                                    {!isStandingSpecialistType(agent.agent_type) && (
+                                    {/* A specialist that stands on this case (the lab and
+                                        radiology always; the pathologist or cardiologist while
+                                        the case has slides or an ECG) is refused removal by the
+                                        server, since the sweep would put it back. Disable is its
+                                        off switch. `standing` comes from the server. */}
+                                    {!agent.standing && (
                                         <button
                                             onClick={() => handleRemoveAgent(agent.id)}
                                             className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs"

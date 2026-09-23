@@ -1,6 +1,8 @@
-// Standing specialists: the lab and radiology are on every case.
+// Standing specialists: the lab and radiology are on every case, the
+// pathologist and the cardiologist on every case with slides or an ECG.
 //
-// - the registry marks exactly the laboratorian and the radiologist standing;
+// - the registry marks the laboratorian and the radiologist `always`, the
+//   pathologist and the cardiologist `with_material`;
 // - attachStandingSpecialists() attaches the ones a case is missing, is
 //   idempotent, and never touches a specialist already there (disabled, or an
 //   educator's own template), a deleted case, or a tenant with no template;
@@ -12,6 +14,8 @@
 // Regression lock: the on-call phone rendered nothing on a case with no
 // specialist attached, and nothing attached one — so on an upgraded install
 // the phone was on no case at all.
+// Regression lock: the STEMI case showed a Pathology room with no pathologist
+// on the phone — only the lab and radiology stood, whatever the case held.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import bcrypt from 'bcrypt';
@@ -20,11 +24,20 @@ import { createTestDb } from '../utils/seedDb.js';
 import { startTestServer } from '../utils/startTestServer.js';
 import {
     SPECIALIST_TYPES,
+    MATERIAL_SPECIALIST_TYPES,
+    SPECIALTIES,
+    STANDING_MODES,
     STANDING_SPECIALIST_TYPES,
+    hasSpecialtyMaterial,
     isStandingSpecialistType,
+    standsOnCase,
 } from '../../server/shared/specialties.js';
 
 const STANDING = ['laboratorian', 'radiologist'];
+// A case document as a plugin room stores it; any non-empty object counts.
+const PATHOLOGY_DOC = { schemaVersion: 1, specimens: [{ id: 'specimen-1' }] };
+const ECG_DOC = { manifest: { schema_version: 1, recordings: [{ id: 'r1' }] } };
+const attachedCounts = (counts) => ({ radiologist: 0, laboratorian: 0, pathologist: 0, cardiologist: 0, ...counts });
 
 describe('the specialty registry', () => {
     it('marks exactly the laboratorian and the radiologist standing', () => {
@@ -38,6 +51,41 @@ describe('the specialty registry', () => {
         expect(isStandingSpecialistType('pathologist')).toBe(false);
         expect(isStandingSpecialistType('nurse')).toBe(false);
         expect(isStandingSpecialistType(undefined)).toBe(false);
+    });
+
+    it('gives every specialty a standing mode, and the pathologist and cardiologist with_material', () => {
+        for (const type of SPECIALIST_TYPES) {
+            expect(STANDING_MODES, type).toContain(SPECIALTIES[type].standing);
+        }
+        expect([...MATERIAL_SPECIALIST_TYPES].sort()).toEqual(['cardiologist', 'pathologist']);
+    });
+
+    it('finds material only in a non-empty document at one of the specialty\'s plugin rooms', () => {
+        expect(hasSpecialtyMaterial('pathologist', { pathology: PATHOLOGY_DOC })).toBe(true);
+        expect(hasSpecialtyMaterial('pathologist', JSON.stringify({ pathology: PATHOLOGY_DOC }))).toBe(true);
+        expect(hasSpecialtyMaterial('cardiologist', { ecg: ECG_DOC })).toBe(true);
+        // The other room's material is not this specialty's.
+        expect(hasSpecialtyMaterial('pathologist', { ecg: ECG_DOC })).toBe(false);
+        expect(hasSpecialtyMaterial('cardiologist', { pathology: PATHOLOGY_DOC })).toBe(false);
+        // A key saved and never filled is no material — the room shows no tab.
+        for (const empty of [{}, { pathology: {} }, { pathology: [] }, { pathology: 'x' },
+            { pathology: null }, null, undefined, '', 'not json', '[1]', 42]) {
+            expect(hasSpecialtyMaterial('pathologist', empty), JSON.stringify(empty)).toBe(false);
+        }
+        // A specialty with no plugin room, or no specialty, never has any.
+        expect(hasSpecialtyMaterial('laboratorian', { lab: { a: 1 } })).toBe(false);
+        expect(hasSpecialtyMaterial('nurse', { pathology: PATHOLOGY_DOC })).toBe(false);
+    });
+
+    it('stands the lab and radiology on any case, the pathologist only with slides', () => {
+        for (const config of [{}, null, 'not json', { pathology: PATHOLOGY_DOC }]) {
+            expect(standsOnCase('laboratorian', config)).toBe(true);
+            expect(standsOnCase('radiologist', config)).toBe(true);
+        }
+        expect(standsOnCase('pathologist', {})).toBe(false);
+        expect(standsOnCase('pathologist', { pathology: PATHOLOGY_DOC })).toBe(true);
+        expect(standsOnCase('cardiologist', { ecg: ECG_DOC })).toBe(true);
+        expect(standsOnCase('nurse', { pathology: PATHOLOGY_DOC })).toBe(false);
     });
 });
 
@@ -64,9 +112,10 @@ describe('attachStandingSpecialists()', () => {
         await testDb?.cleanup();
     });
 
-    const newCase = async (name, { tenant = 1, deleted = false } = {}) => (await testDb.run(
+    const newCase = async (name, { tenant = 1, deleted = false, config = {} } = {}) => (await testDb.run(
         `INSERT INTO cases (name, description, system_prompt, config, tenant_id, deleted_at)
-         VALUES (?, 'd', 'p', '{}', ?, ${deleted ? 'CURRENT_TIMESTAMP' : 'NULL'})`, [name, tenant],
+         VALUES (?, 'd', 'p', ?, ?, ${deleted ? 'CURRENT_TIMESTAMP' : 'NULL'})`,
+        [name, JSON.stringify(config), tenant],
     )).lastID;
 
     const agentsOf = (caseId) => testDb.all(
@@ -81,7 +130,7 @@ describe('attachStandingSpecialists()', () => {
     )).id;
 
     it('has a tenant-1 default template for each standing specialty (not vacuous)', async () => {
-        for (const type of STANDING) {
+        for (const type of SPECIALIST_TYPES) {
             expect(Number.isInteger(await defaultTemplateId(type)), type).toBe(true);
         }
     });
@@ -89,7 +138,7 @@ describe('attachStandingSpecialists()', () => {
     it('attaches the lab and radiology, enabled and present, and nothing else', async () => {
         const caseId = await newCase('Bare case');
         const { attached } = await attachStandingSpecialists({ caseId });
-        expect(attached).toEqual({ radiologist: 1, laboratorian: 1 });
+        expect(attached).toEqual(attachedCounts({ radiologist: 1, laboratorian: 1 }));
         expect(await agentsOf(caseId)).toEqual([
             { agent_type: 'laboratorian', is_default: 1, enabled: 1, availability_type: 'present' },
             { agent_type: 'radiologist', is_default: 1, enabled: 1, availability_type: 'present' },
@@ -100,7 +149,7 @@ describe('attachStandingSpecialists()', () => {
         const caseId = await newCase('Twice case');
         await attachStandingSpecialists({ caseId });
         const { attached } = await attachStandingSpecialists({ caseId });
-        expect(attached).toEqual({ radiologist: 0, laboratorian: 0 });
+        expect(attached).toEqual(attachedCounts({}));
         expect((await agentsOf(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
     });
 
@@ -176,7 +225,7 @@ describe('attachStandingSpecialists()', () => {
             [caseId, dead],
         );
         const { attached } = await attachStandingSpecialists({ caseId });
-        expect(attached).toEqual({ radiologist: 1, laboratorian: 1 });
+        expect(attached).toEqual(attachedCounts({ radiologist: 1, laboratorian: 1 }));
         const live = await testDb.all(
             `SELECT t.agent_type FROM case_agents ca JOIN agent_templates t ON t.id = ca.agent_template_id
               WHERE ca.case_id = ? AND t.deleted_at IS NULL ORDER BY t.agent_type`, [caseId],
@@ -184,11 +233,64 @@ describe('attachStandingSpecialists()', () => {
         expect(live.map((r) => r.agent_type)).toEqual(STANDING);
     });
 
+    it('attaches the pathologist to a case with slides, the cardiologist to one with an ECG', async () => {
+        const slides = await newCase('Slides case', { config: { pathology: PATHOLOGY_DOC } });
+        const ecg = await newCase('ECG case', { config: { ecg: ECG_DOC } });
+        const both = await newCase('Both case', { config: { pathology: PATHOLOGY_DOC, ecg: ECG_DOC } });
+        const bare = await newCase('Empty documents case', { config: { pathology: {}, ecg: {} } });
+
+        expect((await attachStandingSpecialists({ caseId: slides })).attached)
+            .toEqual(attachedCounts({ radiologist: 1, laboratorian: 1, pathologist: 1 }));
+        await attachStandingSpecialists({ caseId: ecg });
+        await attachStandingSpecialists({ caseId: both });
+        await attachStandingSpecialists({ caseId: bare });
+
+        const types = async (id) => (await agentsOf(id)).map((a) => a.agent_type);
+        expect(await types(slides)).toEqual(['laboratorian', 'pathologist', 'radiologist']);
+        expect(await types(ecg)).toEqual(['cardiologist', 'laboratorian', 'radiologist']);
+        expect(await types(both)).toEqual(['cardiologist', 'laboratorian', 'pathologist', 'radiologist']);
+        expect(await types(bare)).toEqual(STANDING);
+        // Enabled and present, from the shipped default, like the others.
+        expect((await agentsOf(slides)).find((a) => a.agent_type === 'pathologist'))
+            .toEqual({ agent_type: 'pathologist', is_default: 1, enabled: 1, availability_type: 'present' });
+    });
+
+    it('is idempotent for the pathologist, and leaves a disabled one alone', async () => {
+        const caseId = await newCase('Disabled pathologist case', { config: { pathology: PATHOLOGY_DOC } });
+        await testDb.run(
+            `INSERT INTO case_agents (case_id, tenant_id, agent_template_id, enabled) VALUES (?, 1, ?, 0)`,
+            [caseId, await defaultTemplateId('pathologist')],
+        );
+        await attachStandingSpecialists({ caseId });
+        const { attached } = await attachStandingSpecialists({ caseId });
+        expect(attached).toEqual(attachedCounts({}));
+        const paths = (await agentsOf(caseId)).filter((a) => a.agent_type === 'pathologist');
+        expect(paths.map((a) => a.enabled)).toEqual([0]);
+    });
+
+    it('sweeps the pathologist onto every live case with slides, and onto no other', async () => {
+        const slides = await newCase('Sweep slides case', { config: { pathology: PATHOLOGY_DOC } });
+        const plain = await newCase('Sweep plain case');
+        const unreadable = (await testDb.run(
+            `INSERT INTO cases (name, description, system_prompt, config, tenant_id)
+             VALUES ('Unreadable config case', 'd', 'p', 'not json', 1)`,
+        )).lastID;
+        const gone = await newCase('Sweep deleted slides case', { deleted: true, config: { pathology: PATHOLOGY_DOC } });
+
+        await attachStandingSpecialistsToAllCases();
+        const has = async (id) => (await agentsOf(id)).some((a) => a.agent_type === 'pathologist');
+        expect(await has(slides)).toBe(true);
+        expect(await has(plain)).toBe(false);
+        expect(await has(unreadable)).toBe(false);
+        expect((await agentsOf(unreadable)).map((a) => a.agent_type)).toEqual(STANDING);
+        expect(await agentsOf(gone)).toEqual([]);
+    });
+
     it("gives a tenant with no specialist template nothing, never another tenant's persona", async () => {
         await testDb.run(`INSERT OR IGNORE INTO tenants (id, slug, name) VALUES (2, 'other', 'Other')`);
         const caseId = await newCase('Other tenant case', { tenant: 2 });
         const { attached } = await attachStandingSpecialists({ caseId });
-        expect(attached).toEqual({ radiologist: 0, laboratorian: 0 });
+        expect(attached).toEqual(attachedCounts({}));
         expect(await agentsOf(caseId)).toEqual([]);
     });
 });
@@ -361,6 +463,76 @@ describe('the server', () => {
         const res = await send('POST', '/api/sessions', { case_id: caseId, student_name: 'S' });
         expect(res.status).toBe(200);
         expect((await caseAgents(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
+    });
+
+    const saveCase = (caseId, config) => send('PUT', `/api/cases/${caseId}`, {
+        name: `Case ${caseId}`, description: 'd', system_prompt: 'p', config,
+    });
+
+    it('attaches the pathologist when a save adds slides, before answering', async () => {
+        const caseId = await newCaseOverHttp('Slides added later case');
+        expect((await caseAgents(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
+
+        const res = await saveCase(caseId, { pathology: PATHOLOGY_DOC });
+        expect(res.status).toBe(200);
+        expect((await caseAgents(caseId)).map((a) => a.agent_type))
+            .toEqual(['laboratorian', 'pathologist', 'radiologist']);
+
+        // The editor reads `standing` from the server, which decides DELETE.
+        const listed = await (await send('GET', `/api/cases/${caseId}/agents`)).json();
+        expect(Object.fromEntries(listed.agents.map((a) => [a.agent_type, a.standing])))
+            .toEqual({ laboratorian: true, pathologist: true, radiologist: true });
+    });
+
+    it('attaches the pathologist to a case created with slides', async () => {
+        const res = await send('POST', '/api/cases', {
+            name: 'Created with slides', description: 'd', system_prompt: 'p', config: { pathology: PATHOLOGY_DOC },
+        });
+        expect(res.status).toBe(200);
+        const { id } = await res.json();
+        expect((await caseAgents(id)).map((a) => a.agent_type))
+            .toEqual(['laboratorian', 'pathologist', 'radiologist']);
+    });
+
+    it('refuses to remove the pathologist while the case has slides, and allows it after', async () => {
+        const caseId = await newCaseOverHttp('Pathologist stands case');
+        await saveCase(caseId, { pathology: PATHOLOGY_DOC });
+        const [path] = (await caseAgents(caseId)).filter((a) => a.agent_type === 'pathologist');
+
+        const refused = await send('DELETE', `/api/cases/${caseId}/agents/${path.id}`);
+        expect(refused.status).toBe(409);
+        expect((await refused.json()).code).toBe('standing_specialist');
+
+        // Slides gone: the sweep would no longer put it back, so it goes.
+        await saveCase(caseId, {});
+        const listed = await (await send('GET', `/api/cases/${caseId}/agents`)).json();
+        expect(listed.agents.find((a) => a.agent_type === 'pathologist').standing).toBe(false);
+        const removed = await send('DELETE', `/api/cases/${caseId}/agents/${path.id}`);
+        expect(removed.status).toBe(200);
+        expect((await caseAgents(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
+    });
+
+    it("swaps an educator's own pathologist into the slot on a case with slides", async () => {
+        const caseId = await newCaseOverHttp('Own pathologist case');
+        await saveCase(caseId, { pathology: PATHOLOGY_DOC });
+        const own = await withDb(async (db) => (await pRun(db,
+            `INSERT INTO agent_templates (agent_type, name, system_prompt, is_default, tenant_id)
+             VALUES ('pathologist', 'Dr Own Path', 'p', 0, 1)`)).lastID);
+        const [before] = (await caseAgents(caseId)).filter((a) => a.agent_type === 'pathologist');
+
+        const res = await send('POST', `/api/cases/${caseId}/agents`, { agent_template_id: own });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ id: before.id, swapped: true });
+    });
+
+    it('puts the pathologist on the phone when a session starts on a case with slides', async () => {
+        const caseId = await withDb(async (db) => (await pRun(db,
+            `INSERT INTO cases (name, description, system_prompt, config, tenant_id)
+             VALUES ('Slides, never attached', 'd', 'p', ?, 1)`, [JSON.stringify({ pathology: PATHOLOGY_DOC })])).lastID);
+        const res = await send('POST', '/api/sessions', { case_id: caseId, student_name: 'S' });
+        expect(res.status).toBe(200);
+        expect((await caseAgents(caseId)).map((a) => a.agent_type))
+            .toEqual(['laboratorian', 'pathologist', 'radiologist']);
     });
 
     it('still removes a specialist that is not standing', async () => {
