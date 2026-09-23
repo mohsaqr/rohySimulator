@@ -12,7 +12,8 @@
 //
 //   - no uncaught exception (`pageerror`) and no unhandled promise rejection;
 //   - no console.error outside CONSOLE_ERROR_ALLOWLIST (walker-lib.js);
-//   - no HTTP response >= 500 from this server;
+//   - no HTTP response >= 500 from this server (but the content proxy's
+//     designed 503 for a plugin with no content, serverErrorAllowed);
 //   - the room bar holds exactly the rooms the case offers (expectedRooms);
 //   - the page is not blank: the room bar is visible, or a dialog is open.
 //
@@ -36,7 +37,7 @@ import {
 } from '../../src/components/pathology/caseStudioModel.js';
 import {
     consoleErrorAllowed, expectedRooms, isDenied, localisedDenyWords, mulberry32, pickIndex, pickOne,
-    pickWeighted, randomText, roomBarProblem,
+    pickWeighted, randomText, roomBarProblem, serverErrorAllowed,
 } from './walker-lib.js';
 
 const MINUTES = Number(process.env.MONKEY_MINUTES || 2);
@@ -171,7 +172,7 @@ function watchPage(page, baseURL) {
     });
     // The context, not the page: a worker's requests do not reach page.on.
     page.context().on('response', (res) => {
-        if (res.status() >= 500 && res.url().startsWith(baseURL)) {
+        if (res.status() >= 500 && res.url().startsWith(baseURL) && !serverErrorAllowed(res.status(), res.url())) {
             problems.push(`HTTP ${res.status()} ${res.request().method()} ${res.url()}`);
         }
     });

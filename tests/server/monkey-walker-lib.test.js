@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, it, expect, afterEach } from 'vitest';
 import {
     CONSOLE_ERROR_ALLOWLIST, consoleErrorAllowed, DENY_TEST_IDS, expectedRooms, isDenied, localisedDenyWords,
-    mulberry32, pickWeighted, randomText, roomBarProblem,
+    mulberry32, pickWeighted, randomText, roomBarProblem, serverErrorAllowed,
 } from '../monkey/walker-lib.js';
 
 describe('the seeded PRNG', () => {
@@ -141,5 +141,20 @@ describe('the console allowlist', () => {
             'Failed to load resource: the server responded with a status of 403 (Forbidden) [http://127.0.0.1:4811/api/patient-record/12]',
         )).toBe(false);
         expect(consoleErrorAllowed('TypeError: cannot read properties of undefined')).toBe(false);
+        // The plugin content proxy with no content installed (CI): a designed
+        // 503, pinned by plugin-rooms.spec.js. Found by the first nightly-shaped
+        // CI walk (seed 1790186927161, step 296, pressing PACS).
+        const missing = 'Failed to load resource: the server responded with a status of 503 (Service Unavailable)';
+        expect(consoleErrorAllowed(`${missing} [http://127.0.0.1:4811/api/plugins/pacs/catalog]`)).toBe(true);
+        expect(consoleErrorAllowed(`${missing} [http://127.0.0.1:4811/api/sessions/12/agents]`)).toBe(false);
+    });
+
+    it('lets only the content proxy answer 503, and only 503', () => {
+        expect(serverErrorAllowed(503, 'http://127.0.0.1:4811/api/plugins/pacs/catalog')).toBe(true);
+        expect(serverErrorAllowed(503, 'http://127.0.0.1:4811/api/plugins/pathology/assets/1')).toBe(true);
+        expect(serverErrorAllowed(500, 'http://127.0.0.1:4811/api/plugins/pacs/catalog')).toBe(false);
+        expect(serverErrorAllowed(503, 'http://127.0.0.1:4811/api/plugins/pacs')).toBe(false);
+        expect(serverErrorAllowed(503, 'http://127.0.0.1:4811/api/sessions/12/agents')).toBe(false);
+        expect(serverErrorAllowed(503, 'not a url')).toBe(false);
     });
 });
