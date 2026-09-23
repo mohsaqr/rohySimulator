@@ -1,0 +1,145 @@
+# The scheduled production check.
+#
+# Every ten minutes (GitHub runs schedules best-effort; expect some drift):
+#
+#   1. Version. /api/health on production against package.json at the
+#      `current` tag (scripts/check-prod-version.mjs). A mismatch is expected
+#      while a deploy is in flight, so it fails only once the tag is older than
+#      15 minutes.
+#   2. Smoke. The 6-test read-only battery (tests/smoke/) against production,
+#      through scripts/smoke-deployed.sh exactly as post-verify runs it. With
+#      the PROVA_URL/PROVA_TOKEN secrets it posts to Prova under
+#      PROVA_LABEL=prod; without them it runs with --reporter=list and posts
+#      nothing.
+#
+# Both always run, so a failure report says whether the version, the smoke or
+# both failed.
+#
+# ALERTING. The alert channel is not decided yet, so for now the sink is ONE
+# GitHub issue titled "prod check failing": created on the first failure,
+# commented on by every later failure while it is open, and commented on and
+# closed by the first passing run after it. Replace the two issue steps when a
+# channel is chosen.
+#
+# Read-only against production: health, the smoke battery (unauthenticated,
+# never writes), and a git fetch of the tag into FETCH_HEAD.
+
+name: Production check
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: prod-check
+  cancel-in-progress: false
+
+env:
+  PROD_URL: https://rohy.lacarm.com
+  ISSUE_TITLE: prod check failing
+
+jobs:
+  check:
+    name: Production version and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Production serves the current tag
+        id: version
+        continue-on-error: true
+        run: node scripts/check-prod-version.mjs --url "$PROD_URL" --tag current
+
+      # Only Playwright is needed for the smoke, so this installs just that —
+      # at the version the lockfile pins — instead of `npm ci`, which would pull
+      # the whole application (and its sibling checkouts) every ten minutes.
+      # node_modules is a symlink so the smoke config's `@playwright/test`
+      # import resolves from the repo root as it does locally.
+      - name: Install Playwright only
+        id: pwversion
+        run: |
+          PW_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          echo "version=$PW_VERSION" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "@playwright/test@$PW_VERSION"
+          ln -s "$RUNNER_TEMP/pw/node_modules" "$GITHUB_WORKSPACE/node_modules"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ steps.pwversion.outputs.version }}
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The Prova reporter lives in the private prova repo; see ci.yml's e2e
+      # job. Skips cleanly without the deploy key.
+      - name: Clone prova sibling (Playwright reporter)
+        env:
+          PROVA_DEPLOY_KEY: ${{ secrets.PROVA_DEPLOY_KEY }}
+        run: bash scripts/clone-prova.sh ../prova
+
+      - name: Smoke battery against production
+        id: smoke
+        continue-on-error: true
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
+          PROVA_LABEL: prod
+          # Production has a real certificate; refuse anything else.
+          ROHY_INSECURE: '0'
+        run: |
+          if [ -n "$PROVA_URL" ] && [ -n "$PROVA_TOKEN" ]; then
+            bash scripts/smoke-deployed.sh "$PROD_URL"
+          else
+            bash scripts/smoke-deployed.sh "$PROD_URL" --reporter=list
+          fi
+
+      - name: Verdict
+        env:
+          VERSION_OUTCOME: ${{ steps.version.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          echo "version check: $VERSION_OUTCOME · smoke: $SMOKE_OUTCOME"
+          [ "$VERSION_OUTCOME" = success ] && [ "$SMOKE_OUTCOME" = success ]
+
+      # The alert sink until a channel is chosen (see the header).
+      - name: Open or update the "prod check failing" issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_OUTCOME: ${{ steps.version.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          BODY="Production check failed at $(date -u +%Y-%m-%dT%H:%M:%SZ): version check **$VERSION_OUTCOME**, smoke **$SMOKE_OUTCOME**. Run: $RUN_URL"
+          NUMBER=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "$BODY"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$BODY
+
+          This issue is the alert sink for .github/workflows/prod-check.yml until an alert channel is chosen. Later failures comment here; the first passing run closes it."
+          fi
+      - name: Close the issue on recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          NUMBER=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+          if [ -n "$NUMBER" ]; then
+            gh issue close "$NUMBER" --comment "Recovered: version check and smoke passed. Run: $RUN_URL"
+          fi

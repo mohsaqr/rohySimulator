@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.116] — 2026-09-23
+
+### Added
+
+- **A scheduled production check** (`.github/workflows/prod-check.yml`, every 10 minutes and on
+  demand). It compares production's `/api/health` version with `package.json` at the `current` tag
+  and fails when they differ once the tag is more than 15 minutes old (the tag's commit time stands
+  in for when it moved; inside that window a deploy is presumably in flight). Then it runs the
+  6-test read-only smoke battery against production through `scripts/smoke-deployed.sh`, posting
+  to Prova under `PROVA_LABEL=prod` when the secrets are set and with `--reporter=list` otherwise.
+  It installs only Playwright, not the application.
+- **Alerting, for now, is one GitHub issue** titled "prod check failing": created on the first
+  failure, commented on by later ones, closed by the first passing run. The alert channel is not
+  decided; the workflow says where to replace it.
+- `npm run check:prod` runs the version comparison locally (`scripts/check-prod-version.mjs`; the
+  tag is fetched into `FETCH_HEAD`, never into the local tag). Unit tests in
+  `tests/server/check-prod-version.test.js`: same version ok, different inside 15 minutes grace,
+  different after that a failure.
+- `scripts/smoke-deployed.sh` passes any arguments after the URL to Playwright.
+
 ## [3.0.0-beta.115] — 2026-09-23
 
 ### Added
