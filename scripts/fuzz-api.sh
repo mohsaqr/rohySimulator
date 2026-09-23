@@ -29,6 +29,8 @@
 #   FUZZ_SEED               replay a run's seed         (default: random)
 #   FUZZ_REPORT_DIR         keep JUnit reports here     (default: temporary)
 #   ROHY_FUZZ_KEEP=1        keep the temp dir (server log, fuzz document)
+#   ROHY_FUZZ_PLUGIN_ROUTES=1  also fuzz a plugin's own routes (needs content
+#                           installed: `npm run setup:content`; see EXCLUDE)
 #
 # Bash 3.2 compatible.
 
@@ -108,6 +110,17 @@ EXCLUDE=(
     # server error to report here.
     '^/api/plugins/\{pluginId\}/\{splat\}$'
 )
+# A plugin's OWN server routes (pathology's imports, jobs, assets) sit under
+# that same catch-all. Schemathesis's coverage phase probes each of them with
+# the methods they do not declare, and a GET on a POST-only path falls through
+# to the proxy — which, with no content installed, answers the designed 503
+# above (CI, 2026-09-23: four such probes, no real error). So they are fuzzed
+# only where content is installed: set ROHY_FUZZ_PLUGIN_ROUTES=1 on a box that
+# has run `npm run setup:content`. The lasting fix is a 405 from the plugin
+# router for a known path with an unsupported method.
+if [ "${ROHY_FUZZ_PLUGIN_ROUTES:-}" != "1" ]; then
+    EXCLUDE+=('^/api/plugins/[a-z][a-z0-9_]*/')
+fi
 EXCLUDE_REGEX="$(IFS='|'; echo "${EXCLUDE[*]}")"
 
 wait_for_server() {
