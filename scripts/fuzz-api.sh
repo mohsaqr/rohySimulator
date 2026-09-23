@@ -138,6 +138,12 @@ if curl -s -o /dev/null "$API/api/health"; then
     exit 2
 fi
 
+# A slide library for the pathology plugin's own routes (imports, jobs,
+# assets). Without one they answer 503 plugin_import_no_library BY DESIGN —
+# which the fuzzer would report as a server error, and did, on the first CI
+# run (no library there; a dev box had one). An empty directory is enough:
+# the routes then answer 400/404 like any other.
+mkdir -p "$OUT/pathology-library"
 echo "[fuzz] booting an isolated server on :$PORT"
 (
     cd "$ROOT"
@@ -150,6 +156,7 @@ echo "[fuzz] booting an isolated server on :$PORT"
     ROHY_DISABLE_AUTH_RATE_LIMIT=1 \
     ROHY_DISABLE_GENERAL_RATE_LIMIT=1 \
     OYON_ENABLED=1 \
+    ROHY_PLUGIN_LIBRARY_DIRS="pathology=$OUT/pathology-library" \
     exec node server/server.js > "$LOG_FILE" 2>&1
 ) &
 # `exec`, so $! is the node process itself: killing a subshell would orphan
