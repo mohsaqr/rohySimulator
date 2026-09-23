@@ -18,7 +18,7 @@ import { recoverInterruptedJobs, drain as drainPluginJobs, pump as pumpPluginJob
 import dbAdapter from './dbAdapter.js';
 import { runSeeders, needsSeeding } from './seeders/index.js';
 import { ensureCaseCodes } from './seeders/cases.js';
-import { attachStandingSpecialists } from './services/standingSpecialists.js';
+import { attachStandingSpecialistsToAllCases } from './services/standingSpecialists.js';
 import seedStemiCourse from './seedStemiCourse.js';
 import { seedLanguageCases } from './seedLanguageCases.js';
 import { seedLlmDefaults } from './seeders/llmSettings.js';
@@ -327,7 +327,7 @@ async function initializeAndStart() {
     // that skipped it. Idempotent, never touches a specialist already there
     // (disabled included). Non-fatal on failure.
     try {
-        await attachStandingSpecialists();
+        await attachStandingSpecialistsToAllCases();
     } catch (err) {
         bootLog.error('standing specialist sweep failed', { error: err.message, fatal: false });
     }

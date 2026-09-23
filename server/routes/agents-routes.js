@@ -1029,11 +1029,43 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
             return res.status(400).json(addTypeProblem);
         }
 
+        // A standing specialty (the lab, radiology) is on every case already,
+        // attached from the shipped default. Adding an educator's OWN persona
+        // of that specialty therefore SWAPS it into the existing slot —
+        // enabled state and per-case overrides kept — rather than answering
+        // specialty_already_attached with no way round it (the standing one
+        // cannot be deleted). Re-adding the template already in the slot
+        // still falls through to the 409 below.
+        if (isStandingSpecialistType(template.agent_type)) {
+            const slot = await dbAdapter.get(
+                `SELECT ca.id, ca.agent_template_id FROM case_agents ca
+                   JOIN agent_templates t ON t.id = ca.agent_template_id
+                  WHERE ca.case_id = ? AND ca.tenant_id = ? AND t.agent_type = ? AND t.deleted_at IS NULL
+                  ORDER BY ca.id LIMIT 1`,
+                [caseId, tenantId(req), template.agent_type]
+            );
+            if (slot && Number(slot.agent_template_id) !== Number(agent_template_id)) {
+                await dbAdapter.run(
+                    'UPDATE case_agents SET agent_template_id = ? WHERE id = ? AND tenant_id = ?',
+                    [agent_template_id, slot.id, tenantId(req)]
+                );
+                auditSuccess(req, {
+                    action: 'swap_case_agent_template',
+                    resourceType: 'case_agent',
+                    resourceId: String(slot.id),
+                    oldValue: { caseId, agent_template_id: slot.agent_template_id },
+                    newValue: { caseId, agent_template_id }
+                });
+                return res.status(200).json({ id: slot.id, swapped: true, message: 'Agent persona swapped on case' });
+            }
+        }
+
         // One specialist per specialty per case: runtime state and
         // conversations are keyed by agent_type, so a second pathologist would
         // share the first one's state. The guard is inside the INSERT so two
         // concurrent requests cannot both pass it. A disabled case agent still
-        // counts — re-enable it rather than attaching a second.
+        // counts — re-enable it rather than attaching a second. A row whose
+        // template was soft-deleted does not: runtime already hides it.
         const specialist = isSpecialistType(template.agent_type);
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
@@ -1046,6 +1078,7 @@ router.post('/cases/:caseId/agents', authenticateToken, requireEducator, async (
                    SELECT 1 FROM case_agents ca
                    JOIN agent_templates t ON t.id = ca.agent_template_id
                    WHERE ca.case_id = ? AND ca.tenant_id = ? AND t.agent_type = ?
+                     AND t.deleted_at IS NULL
                  )`,
                 [
                     caseId, tenantId(req), agent_template_id, enabled ? 1 : 0, name_override, system_prompt_override,
@@ -1185,9 +1218,11 @@ router.delete('/cases/:caseId/agents/:agentId', authenticateToken, requireEducat
 
         // The lab and radiology stand on every case, and the boot sweep would
         // re-attach one removed here — a delete that quietly undoes itself.
-        // Refuse it and point at the switch that does stick.
+        // Refuse it and point at the switch that does stick. Only a LIVE one:
+        // a row whose template was soft-deleted is already invisible at
+        // runtime and must stay removable, or nothing can clear it.
         const template = await dbAdapter.get(
-            'SELECT agent_type FROM agent_templates WHERE id = ? AND tenant_id = ?',
+            'SELECT agent_type FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
             [existing.agent_template_id, tenantId(req)]
         );
         if (isStandingSpecialistType(template?.agent_type)) {

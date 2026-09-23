@@ -15,6 +15,7 @@ import {
 import { logger } from '../logger.js';
 import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
+import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import {
     canReadAcrossUsers,
@@ -190,6 +191,19 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             tenant_id: tenantId(req),
             message: 'Reused recent active session'
         });
+    }
+
+    // The lab and radiology must be on the phone for this session. POST /cases
+    // and the boot sweep attach them; this is the runtime repair for a case
+    // whose create-time attach failed, so no learner waits for a reboot.
+    // Idempotent (a no-op on every case that has them), non-fatal: a session
+    // without them still runs.
+    if (case_id != null) {
+        try {
+            await attachStandingSpecialists({ caseId: case_id });
+        } catch (err) {
+            (req.log || routesCasesLog).warn('standing specialist attach failed at session start', { case_id, error: err.message });
+        }
     }
 
     // start_time / updated_at are NAMED rather than left to the column

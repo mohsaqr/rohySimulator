@@ -48,6 +48,7 @@ describe('the specialty registry', () => {
 describe('attachStandingSpecialists()', () => {
     let testDb;
     let attachStandingSpecialists;
+    let attachStandingSpecialistsToAllCases;
 
     beforeAll(async () => {
         testDb = await createTestDb({ seed: true, label: 'standing' });
@@ -55,7 +56,8 @@ describe('attachStandingSpecialists()', () => {
         process.env.JWT_SECRET = process.env.JWT_SECRET || 'standing-specialist-tests';
         const dbModule = await import('../../server/db.js');
         await dbModule.dbReady;
-        ({ attachStandingSpecialists } = await import('../../server/services/standingSpecialists.js'));
+        ({ attachStandingSpecialists, attachStandingSpecialistsToAllCases } =
+            await import('../../server/services/standingSpecialists.js'));
     }, 60_000);
 
     afterAll(async () => {
@@ -138,9 +140,48 @@ describe('attachStandingSpecialists()', () => {
         await attachStandingSpecialists({ caseId: a });
         expect(await agentsOf(b)).toEqual([]);
 
-        await attachStandingSpecialists();
+        await attachStandingSpecialistsToAllCases();
         expect((await agentsOf(b)).map((x) => x.agent_type)).toEqual(STANDING);
         expect(await agentsOf(gone)).toEqual([]);
+    });
+
+    // Regression lock: node-sqlite3 binds NaN as NULL, and NULL is the
+    // sweep's "every case" — so Number('abc') once widened a one-case attach
+    // into a sweep of the whole install.
+    it('refuses a caseId that is not a positive integer, and attaches nothing anywhere', async () => {
+        const bystander = await newCase('Bystander case');
+        for (const bad of [undefined, null, 'abc', Number.NaN, 0, -3, 1.5]) {
+            await expect(attachStandingSpecialists({ caseId: bad }), String(bad)).rejects.toBeInstanceOf(TypeError);
+        }
+        expect(await agentsOf(bystander)).toEqual([]);
+    });
+
+    it('accepts a numeric string, as a request body carries it', async () => {
+        const caseId = await newCase('String id case');
+        await attachStandingSpecialists({ caseId: String(caseId) });
+        expect((await agentsOf(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
+    });
+
+    // Regression lock: a row on a soft-deleted template is invisible at
+    // runtime but still counted here, so the phone had no lab and every
+    // repair path refused.
+    it('repairs a case whose laboratorian row points at a soft-deleted template', async () => {
+        const dead = (await testDb.run(
+            `INSERT INTO agent_templates (agent_type, name, system_prompt, is_default, tenant_id, deleted_at)
+             VALUES ('laboratorian', 'Purged lab lead', 'p', 0, 1, CURRENT_TIMESTAMP)`,
+        )).lastID;
+        const caseId = await newCase('Dead template case');
+        await testDb.run(
+            `INSERT INTO case_agents (case_id, tenant_id, agent_template_id, enabled) VALUES (?, 1, ?, 1)`,
+            [caseId, dead],
+        );
+        const { attached } = await attachStandingSpecialists({ caseId });
+        expect(attached).toEqual({ radiologist: 1, laboratorian: 1 });
+        const live = await testDb.all(
+            `SELECT t.agent_type FROM case_agents ca JOIN agent_templates t ON t.id = ca.agent_template_id
+              WHERE ca.case_id = ? AND t.deleted_at IS NULL ORDER BY t.agent_type`, [caseId],
+        );
+        expect(live.map((r) => r.agent_type)).toEqual(STANDING);
     });
 
     it("gives a tenant with no specialist template nothing, never another tenant's persona", async () => {
@@ -273,6 +314,53 @@ describe('the server', () => {
         expect(res.status).toBe(200);
         const [row] = await withDb((db) => pAll(db, 'SELECT enabled FROM case_agents WHERE id = ?', [rad.id]));
         expect(row.enabled).toBe(0);
+    });
+
+    const newCaseOverHttp = async (name) => (await (await send('POST', '/api/cases', {
+        name, description: 'd', system_prompt: 'p', config: {},
+    })).json()).id;
+
+    it('lets an educator swap their own laboratorian persona into the slot, keeping one', async () => {
+        const caseId = await newCaseOverHttp('Own persona case');
+        const own = await withDb(async (db) => (await pRun(db,
+            `INSERT INTO agent_templates (agent_type, name, system_prompt, is_default, tenant_id)
+             VALUES ('laboratorian', 'Dr Own Lab', 'p', 0, 1)`)).lastID);
+        const [before] = (await caseAgents(caseId)).filter((a) => a.agent_type === 'laboratorian');
+
+        const res = await send('POST', `/api/cases/${caseId}/agents`, { agent_template_id: own });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ id: before.id, swapped: true });
+        const labs = await withDb((db) => pAll(db,
+            `SELECT ca.id, ca.agent_template_id FROM case_agents ca JOIN agent_templates t ON t.id = ca.agent_template_id
+              WHERE ca.case_id = ? AND t.agent_type = 'laboratorian'`, [caseId]));
+        expect(labs).toEqual([{ id: before.id, agent_template_id: own }]);
+
+        // Adding the persona already in the slot is still a conflict.
+        const again = await send('POST', `/api/cases/${caseId}/agents`, { agent_template_id: own });
+        expect(again.status).toBe(409);
+        expect((await again.json()).code).toBe('specialty_already_attached');
+    });
+
+    it('still removes a standing row whose template was soft-deleted', async () => {
+        const caseId = await newCaseOverHttp('Dead row removal case');
+        const [rad] = (await caseAgents(caseId)).filter((a) => a.agent_type === 'radiologist');
+        const dead = await withDb(async (db) => (await pRun(db,
+            `INSERT INTO agent_templates (agent_type, name, system_prompt, is_default, tenant_id, deleted_at)
+             VALUES ('radiologist', 'Purged rad', 'p', 0, 1, CURRENT_TIMESTAMP)`)).lastID);
+        await withDb((db) => pRun(db, 'UPDATE case_agents SET agent_template_id = ? WHERE id = ?', [dead, rad.id]));
+
+        const res = await send('DELETE', `/api/cases/${caseId}/agents/${rad.id}`);
+        expect(res.status).toBe(200);
+    });
+
+    it('attaches them when a session starts on a case that lacks them', async () => {
+        const caseId = await withDb(async (db) => (await pRun(db,
+            `INSERT INTO cases (name, description, system_prompt, config, tenant_id)
+             VALUES ('Missed attach case', 'd', 'p', '{}', 1)`)).lastID);
+        expect(await caseAgents(caseId)).toEqual([]);
+        const res = await send('POST', '/api/sessions', { case_id: caseId, student_name: 'S' });
+        expect(res.status).toBe(200);
+        expect((await caseAgents(caseId)).map((a) => a.agent_type)).toEqual(STANDING);
     });
 
     it('still removes a specialist that is not standing', async () => {
