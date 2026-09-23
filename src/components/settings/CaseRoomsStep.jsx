@@ -5,6 +5,9 @@ import { FIXED_ROOMS, disabledRooms, specialistAnswers } from '../../../server/s
 import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
 import { SPECIALTY_LABEL_KEYS } from '../oncall/onCallModel';
 
+const SWITCH_ON = 'var(--rohy-accent, #0d9488)';
+const SWITCH_OFF = 'var(--rohy-border-strong, #737373)';
+
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // Whether the case carries material a switched-off room would have shown. Only
@@ -92,9 +95,17 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                                     aria-label={t('rooms_toggle_label', { room: label })}
                                     data-testid={`room-toggle-${room.key}`}
                                     onClick={() => toggle(room.key)}
-                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${on ? 'bg-teal-600' : 'bg-neutral-600'}`}
+                                    className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors"
+                                    // Colours inline, not as utility classes: the admin light
+                                    // theme (index.css, .rohy-admin-light) repaints every
+                                    // bg-neutral-* / bg-white to the card surface, which drew
+                                    // the OFF switch white on a white card — invisible.
+                                    style={{ background: on ? SWITCH_ON : SWITCH_OFF }}
                                 >
-                                    <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    <span
+                                        className={`inline-block h-4 w-4 rounded-full transition-transform ${on ? 'translate-x-6' : 'translate-x-1'}`}
+                                        style={{ background: '#ffffff', boxShadow: '0 1px 2px rgb(15 23 42 / 0.3)' }}
+                                    />
                                 </button>
                             )}
                         </li>

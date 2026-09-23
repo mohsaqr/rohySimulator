@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.112] — 2026-09-23
+
+### Fixed
+
+- **The Rooms step's OFF switch was invisible.** The admin light theme (`.rohy-admin-light` in
+  `index.css`) repaints every `bg-neutral-*` and `bg-white` to the white card surface, so a
+  switched-off room's switch was drawn white on white and an educator could not see how to switch
+  it back on. The switch now takes its colours inline from the theme's own tokens. A test fails if
+  it is drawn with a class the theme repaints again.
+
 ## [3.0.0-beta.111] — 2026-09-23
 
 ### Added
