@@ -1,6 +1,7 @@
 import { formatRadiologyAsMarkdown } from '../data/aiPromptContext.js';
 import { formatHistoryAsMarkdown } from '../data/historyGroups.js';
 import { LEGACY_SCOPE_BY_CONTEXT_FILTER, KNOWLEDGE_SCOPES, scopeAtLeast } from '../../server/shared/agentKnowledge.js';
+import { isRoomEnabled } from '../../server/shared/caseRooms.js';
 
 function clean(value) {
     if (value == null) return '';
@@ -468,11 +469,16 @@ export function buildDiscussionCaseContext(activeCase, scope = 'chart', { answer
     }
 
     if (chart) {
-        const physical = formatPhysicalExamConfigForPrompt(cfg);
+        // A room the case switched off (config.rooms) was never open to the
+        // learner, so its results are not part of the case they worked:
+        // examination findings go with both the examination room and the
+        // bedside, which examines too.
+        const room = (key) => isRoomEnabled(cfg, key);
+        const physical = (room('examination') || room('room3d')) ? formatPhysicalExamConfigForPrompt(cfg) : '';
         if (physical) sections.push(['Configured Physical Exam Findings', physical]);
-        const radiology = formatCaseRadiologyForPrompt(cfg);
+        const radiology = room('radiology') ? formatCaseRadiologyForPrompt(cfg) : '';
         if (radiology) sections.push(['Configured Radiology Results', radiology]);
-        const labs = formatConfiguredLabsForPrompt(cfg);
+        const labs = room('lab') ? formatConfiguredLabsForPrompt(cfg) : '';
         if (labs) sections.push(['Configured Investigation Results', labs]);
     }
 

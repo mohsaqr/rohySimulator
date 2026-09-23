@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     countReachable,
     formatCallDuration,
+    statusKeyFor,
     initialsOf,
     isFailedReply,
     isImageAvatar,
@@ -45,6 +46,15 @@ describe('reachabilityOf / countReachable', () => {
         // (present); the radiologist is absent.
         expect(countReachable(team)).toBe(3);
         expect(countReachable([])).toBe(0);
+    });
+    // Regression lock: a specialist whose rooms the case switched off is on
+    // the phone but never answers (server `answers: false`).
+    it('reads answers:false as no_answer, whatever the availability, and does not count it', () => {
+        const silent = { ...team[3], answers: false };
+        expect(reachabilityOf(silent)).toBe('no_answer');
+        expect(reachabilityOf({ ...team[3], answers: true })).toBe('available');
+        expect(statusKeyFor('no_answer')).toBe('status_no_answer');
+        expect(countReachable([team[2], silent])).toBe(1);
     });
 });
 

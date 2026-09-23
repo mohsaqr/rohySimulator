@@ -369,8 +369,10 @@ describe('ConfigPanel', () => {
         window.localStorage.setItem('rohy_editing_case', JSON.stringify({
             id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
         }));
-        mount({ initialTab: 'cases', initialWizardStep: 12 });
+        // 13 = Rooms, appended after Plugins (WIZARD_STEP_KEYS).
+        mount({ initialTab: 'cases', initialWizardStep: 13 });
         await waitForAdmin();
+        expect(await screen.findByTestId('case-rooms-step')).toBeInTheDocument();
         expect(await screen.findByRole('button', { name: /Save & Finish/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /^Next$/i })).not.toBeInTheDocument();
     });
@@ -382,7 +384,7 @@ describe('ConfigPanel', () => {
         window.localStorage.setItem('rohy_editing_case', JSON.stringify({
             id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
         }));
-        mount({ initialTab: 'cases', initialWizardStep: 11 });
+        mount({ initialTab: 'cases', initialWizardStep: 12 });
         await waitForAdmin();
         expect(await screen.findByRole('button', { name: /^Next$/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Save & Finish/i })).not.toBeInTheDocument();

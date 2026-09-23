@@ -10,7 +10,7 @@ import { parseConfig } from '../../utils/parseConfig';
 import { sanitizeResponseText } from '../../utils/plainText';
 import OnCallAvatar from './OnCallAvatar';
 import { EndIcon, KeyboardIcon, MicIcon, SendIcon, SpeakerIcon } from './phoneIcons';
-import { formatCallDuration, isFailedReply } from './onCallModel';
+import { NO_ANSWER_RING_MS, formatCallDuration, isFailedReply } from './onCallModel';
 import { formatRemaining } from '../../utils/agentWait';
 
 // A voice call with one specialist. Push-to-talk like the patient chat: tap
@@ -40,6 +40,14 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
     const substitutionToastedRef = useRef(false);
 
     const connected = reachability === 'available' && !pagingNow;
+    // A specialist whose rooms the case switched off never picks up: the call
+    // rings for a moment, then says so. Nothing is paged or sent.
+    const [unanswered, setUnanswered] = useState(false);
+    useEffect(() => {
+        if (reachability !== 'no_answer') return undefined;
+        const id = setTimeout(() => setUnanswered(true), NO_ANSWER_RING_MS);
+        return () => clearTimeout(id);
+    }, [reachability]);
 
     // VoiceContext holds the platform voice settings once the chat room has
     // loaded them. From a plugin room it may not have, so fetch our own copy.
@@ -191,7 +199,9 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
     };
 
     let stateLine;
-    if (!connected) {
+    if (reachability === 'no_answer') {
+        stateLine = unanswered ? t('call_no_answer', { name: agent.name }) : t('call_calling');
+    } else if (!connected) {
         const remaining = agent.arrives_at ? formatRemaining(agent.arrives_at, now) : '';
         stateLine = remaining ? t('call_paging_eta', { remaining }) : t('call_calling');
     } else if (listening) stateLine = t('call_listening');
@@ -203,7 +213,7 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
     // This call's transcript, in order: the turns tagged with its call id.
     const turns = thread.messages.filter(m => m.channel === 'call' && m.call_id === callId);
     const lastReplyIndex = turns.map(m => m.role).lastIndexOf('assistant');
-    const callClass = ['call', `spec-${agent.agent_type}`, !connected ? 'ringing' : '', speaking ? 'speaking' : '']
+    const callClass = ['call', `spec-${agent.agent_type}`, !connected && !unanswered ? 'ringing' : '', speaking ? 'speaking' : '']
         .filter(Boolean).join(' ');
 
     return (

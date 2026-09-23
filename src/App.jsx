@@ -29,12 +29,15 @@ import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
 import { ApiError, apiFetch, apiPut } from './services/apiClient';
 import { pickLandingCase } from './services/landingCase';
-import { X, StopCircle, AlertTriangle } from 'lucide-react';
+import { X, StopCircle, AlertTriangle, ClipboardList } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import OyonDashboardRoom from './components/oyon/OyonDashboardRoom';
 import OyonConsentUpdate from './components/oyon/OyonConsentUpdate';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
+import CaseSummaryModal from './components/discussion/CaseSummaryModal';
+import { disabledRooms } from '../server/shared/caseRooms.js';
+import { CORE_ROOM_KEYS } from '../server/shared/pluginRegistry.js';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
 import InvestigationsScreen from './components/investigations/InvestigationsScreen';
 import { registry as pluginRegistry, PluginRoom, useHostOrders } from './plugins/index.js';
@@ -142,6 +145,9 @@ function MainApp() {
    const sessionStartedAtRef = useRef(null);
    useEffect(() => { sessionStartedAtRef.current = sessionId ? Date.now() : null; }, [sessionId]);
    const [showEndConfirm, setShowEndConfirm] = useState(false);
+   // The case summary, opened by End & Debrief when the case has switched the
+   // debrief room off (there is no debrief room to land in).
+   const [showEndSummary, setShowEndSummary] = useState(false);
    const [showHelpCenter, setShowHelpCenter] = useState(false);
    const showExamination = currentRoom === 'examination';
    const showInvestigations = currentRoom === 'lab' || currentRoom === 'radiology';
@@ -313,6 +319,10 @@ function MainApp() {
    // in sync. The snapshot wins over the live case for the same reason every
    // other room prefers it: a running session must not shift under the learner.
    const pluginCaseConfig = caseSnapshot?.config ?? activeCase?.config ?? null;
+   // Rooms the case switched off (config.rooms, server/shared/caseRooms.js):
+   // no tab, no way in. The server refuses their actions for a learner too,
+   // so this is the half that hides, not the half that locks.
+   const roomsOff = useMemo(() => disabledRooms(pluginCaseConfig), [pluginCaseConfig]);
    const pluginSession = useMemo(() => ({
       id: sessionId,
       caseId: activeCase?.id ?? null,
@@ -366,8 +376,16 @@ function MainApp() {
             // by reaching for a field the host happened to set.
             orders: (m.capabilities ?? []).includes('orders') ? pluginOrders : null,
          }))
-         .map((p) => p.manifest.id),
-      [pluginCaseConfig, pluginSession, pluginOrders],
+         .map((p) => p.manifest.id)
+         .filter((id) => !roomsOff.includes(id)),
+      [pluginCaseConfig, pluginSession, pluginOrders, roomsOff],
+   );
+
+   // Every room this case offers, core and plugin: what the navigator shows and
+   // the only rooms navigateToRoom will enter. The patient room is always in it.
+   const enabledRooms = useMemo(
+      () => CORE_ROOM_KEYS.filter((key) => !roomsOff.includes(key)).concat(enabledPlugins),
+      [roomsOff, enabledPlugins],
    );
 
    // Any room key owned by a plugin resolves to the generic PluginRoom mount —
@@ -386,21 +404,22 @@ function MainApp() {
    // second view of that same patient, not a second patient.
    const overlayPlugin = activePlugin?.manifest?.room?.presentation === 'overlay' ? activePlugin : null;
 
-   // A room can become unavailable underneath the learner (case switch, or a
-   // restored `rohy_view` blob naming a plugin room this case does not offer).
-   // Leaving currentRoom pointing at a room nothing renders would strand the
-   // user on the patient screen with no tab highlighted.
+   // A room can become unavailable underneath the learner (case switch, a
+   // restored `rohy_view` blob naming a room this case does not offer, or a
+   // room the case switched off). Leaving currentRoom pointing at a room
+   // nothing renders would strand the user with no tab highlighted — and for a
+   // switched-off core room, would render it anyway.
    useEffect(() => {
-      if (pluginRegistry.get(currentRoom) && !enabledPlugins.includes(currentRoom)) {
+      if (!enabledRooms.includes(currentRoom)) {
          setCurrentRoom('chat');
       }
-   }, [currentRoom, enabledPlugins]);
+   }, [currentRoom, enabledRooms]);
 
    // Core rooms plus whatever plugins are installed (RPS-1). This list used to
    // name 'pathology' literally; a plugin now contributes its room key through
    // its manifest, so installing the next one touches no file in src/ outside
    // its own directory.
-   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant']
+   const ROOM_KEYS = CORE_ROOM_KEYS
       .concat(pluginRegistry.manifests().map((m) => m.room.key));
    const captureView = useCallback(() => {
       let view = 'home';
@@ -608,6 +627,8 @@ function MainApp() {
    // hooks in one place.
    const navigateToRoom = (target) => {
       if (target === currentRoom) return;
+      // A room the case does not offer is never entered, whoever asks.
+      if (!enabledRooms.includes(target)) return;
       // Stamp the room BEFORE React re-renders. React runs child mount
       // effects before the parent's, so an effect-based stamp let the new
       // room's components log their first events while EventLogger.room
@@ -671,7 +692,9 @@ function MainApp() {
       setShowEndConfirm(false);
       setCaseEnded(true);
       setCaseEndedAt(Date.now());
-      navigateToRoom('consultant');
+      // A case with the debrief room switched off ends on the case summary.
+      if (enabledRooms.includes('consultant')) navigateToRoom('consultant');
+      else setShowEndSummary(true);
    };
 
    const handleLoadCase = (caseData) => {
@@ -694,6 +717,7 @@ function MainApp() {
       setActiveCase(caseData);
       setSessionId(null); // Will be set by ChatInterface when session starts
       setCaseEnded(false);
+      setShowEndSummary(false);
       setCaseEndedAt(null);
       setShowFullPageSettings(false);
       // Log case loaded event
@@ -1098,6 +1122,7 @@ function MainApp() {
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
                      enabledPlugins={enabledPlugins}
+                     enabledRooms={enabledRooms}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
@@ -1117,6 +1142,7 @@ function MainApp() {
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
                      enabledPlugins={enabledPlugins}
+                     enabledRooms={enabledRooms}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
@@ -1151,6 +1177,7 @@ function MainApp() {
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                      enabledPlugins={enabledPlugins}
+                     enabledRooms={enabledRooms}
                   />
                }
             />
@@ -1166,6 +1193,7 @@ function MainApp() {
                      currentRoom={currentRoom}
                      onSelectRoom={navigateToRoom}
                      enabledPlugins={enabledPlugins}
+                     enabledRooms={enabledRooms}
                      onOpenCourse={openCourseForCase}
                      sessionId={sessionId}
                   />
@@ -1246,6 +1274,23 @@ function MainApp() {
                                narrow band, and the three collided on a tablet.
                                `title` + aria-label keep it identifiable. */}
                            <span className="max-lg:sr-only">{t('end_debrief')}</span>
+                        </button>
+                     </div>
+                  )}
+
+                  {/* With the debrief room switched off, the ended case keeps
+                      its summary one click away — End & Debrief opened it, and
+                      closing it must not lose it. */}
+                  {sessionId && caseEnded && !enabledRooms.includes('consultant') && (
+                     <div className="pointer-events-auto ml-auto">
+                        <button
+                           data-testid="open-case-summary"
+                           onClick={() => setShowEndSummary(true)}
+                           className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700/80 backdrop-blur-md rounded-full flex items-center gap-2 text-sm text-slate-100 border border-slate-600/60 transition-colors"
+                           title={t('case_summary')}
+                        >
+                           <ClipboardList className="w-4 h-4" />
+                           <span className="max-lg:sr-only">{t('case_summary')}</span>
                         </button>
                      </div>
                   )}
@@ -1336,6 +1381,7 @@ function MainApp() {
                   currentRoom={currentRoom}
                   onSelectRoom={navigateToRoom}
                   enabledPlugins={enabledPlugins}
+                  enabledRooms={enabledRooms}
                   onOpenCourse={openCourseForCase}
                   sessionId={sessionId}
                />
@@ -1369,6 +1415,13 @@ function MainApp() {
          </div>
          )}
 
+         {showEndSummary && sessionId && (
+            <CaseSummaryModal
+               activeCase={activeCase}
+               sessionId={sessionId}
+               onClose={() => setShowEndSummary(false)}
+            />
+         )}
          {showEndConfirm && (
             <EndSessionConfirm
                onCancel={() => setShowEndConfirm(false)}

@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.111] — 2026-09-23
+
+### Added
+
+- **Per-case rooms, in the app.** Educators switch rooms off in a new **Rooms** step of the case
+  wizard, appended after Plugins so existing step numbers and deep links stay put. Patient is shown
+  locked on. The step says when a switched-off room's material is kept, names the specialists who
+  will not answer, and says what End & Debrief does without a debrief room.
+- **Hidden rooms.** The room bar shows only the rooms the case keeps (`enabledRooms` in `App.jsx`,
+  core rooms included for the first time). `navigateToRoom` will not enter a switched-off room, and
+  a restored or stale room falls back to Patient.
+- **No debrief room.** With Consultant off, End & Debrief ends the case and opens the case summary
+  over the patient room; a **Case summary** button reopens it.
+- **The phone rings out.** A specialist the server marks `answers: false` is listed as "No answer".
+  A call rings for six seconds and ends in "No answer", and a message screen says they are not
+  answering. Nothing is paged or sent, and they do not count toward the phone's reachable tally.
+- **Agent context follows the rooms.** An agent given the chart no longer receives lab, radiology
+  or examination results from rooms the case switched off.
+- New strings in all eight languages; the case wizard doc describes the Rooms step (and now lists
+  the Plugins step it was missing).
+
 ## [3.0.0-beta.110] — 2026-09-23
 
 ### Added

@@ -7,9 +7,9 @@ Open **Settings → Cases**, then create a new case or edit an existing one to
 enter the wizard. You can jump between steps freely using the step strip; the
 draft auto-saves and shows a last-saved time.
 
-## The 11 steps
+## The steps
 
-The wizard has eleven steps. They are, in order:
+The wizard has up to thirteen steps. They are, in order:
 
 1. **Demographics**: patient name, age, gender, weight, height/BMI and the
    identity fields the simulated patient uses.
@@ -35,12 +35,44 @@ The wizard has eleven steps. They are, in order:
 11. **Agents**: the personas attached to the case, such as the patient, the
     discussant and a consultant. Edit a persona from here to open the
     [Agent persona editor](/educator/agents).
+12. **Plugins**: material for plugin rooms such as Pathology, the ECG and
+    PACS. The step appears only when an installed plugin has an editor.
+13. **Rooms**: which rooms learners get on this case. See
+    [Choosing the rooms](#choosing-the-rooms).
 
 ::: tip
 You do not have to fill every step before saving. Author the demographics,
 story and scenario first, run the case yourself, then return to refine labs,
 imaging, exam and treatments.
 :::
+
+## Choosing the rooms
+
+Every room is on by default. In the **Rooms** step you can switch off any
+room except **Patient**, where the case is played. A case built around the
+history and a set of slides, for example, can keep Patient and Pathology and
+switch off everything else.
+
+A room you switch off is hidden and locked for learners:
+
+- It has no tab in the room bar and cannot be entered.
+- The server refuses its actions. Lab and imaging orders, examination
+  findings and the debrief conversation all answer with an error.
+- Anything configured for it is kept. Switching the room back on restores it
+  unchanged.
+
+It also changes two things elsewhere:
+
+- **The on-call phone.** The phone is on every case. A specialist whose rooms
+  are all off is still listed, but does not answer: the call rings and ends
+  with "No answer". The radiologist answers while either Radiology or PACS is
+  on.
+- **End & Debrief.** With the **Consultant** room off, End & Debrief ends the
+  case and opens the case summary. A **Case summary** button then reopens it.
+
+A plugin room such as Pathology also needs material to appear: switching it
+on does not show an empty room. A session that is already running keeps the
+rooms it started with.
 
 ## Quick start with persona defaults
 

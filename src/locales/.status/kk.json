@@ -19,6 +19,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "app.case_summary": {
+    "src": "8c0199f1bc6e",
+    "tgt": "66bb7322fb89",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "app.close": {
     "src": "7d9eb7acb13e",
     "tgt": "baea27f78286",
@@ -7089,6 +7099,86 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.rooms_always_on": {
+    "src": "044ba8a9ae43",
+    "tgt": "ebf6f91bf5d7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_fixed_note": {
+    "src": "028426eea0e7",
+    "tgt": "0fe7ec048836",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_material_kept": {
+    "src": "455966bdbe46",
+    "tgt": "50a73e7c5bc9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_needs_material": {
+    "src": "4affc76adca0",
+    "tgt": "adb266b2db1d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_no_answer_note": {
+    "src": "1bc93cde9a68",
+    "tgt": "21f2909fa205",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_no_debrief_note": {
+    "src": "51991f9a6f63",
+    "tgt": "d19ffb851051",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_step_help": {
+    "src": "6f1beba78acc",
+    "tgt": "8b0c8cbf713a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_toggle_label": {
+    "src": "af8cb5a37c53",
+    "tgt": "19490dc631a8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.scen_add_alternative": {
     "src": "ef0bb7f8bf6f",
     "tgt": "87c57196aa44",
@@ -9392,6 +9482,16 @@
   "authoring_config.wstep_records": {
     "src": "47a84e92d5b2",
     "tgt": "b27b49d07c26",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.wstep_rooms": {
+    "src": "bd32f6cedb5f",
+    "tgt": "f0ede3e66d58",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -29099,6 +29199,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oncall.call_no_answer": {
+    "src": "7e49c68db30e",
+    "tgt": "15576abc4896",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oncall.call_paging_eta": {
     "src": "676c72ddd3f0",
     "tgt": "8cffb5c7582b",
@@ -29252,6 +29362,16 @@
   "oncall.chat_loading": {
     "src": "3a496d425b0f",
     "tgt": "bbb0dbf18fad",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.chat_no_answer": {
+    "src": "f76addcab119",
+    "tgt": "94a46d9155cf",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -29462,6 +29582,16 @@
   "oncall.status_bar": {
     "src": "5463f72fc4bb",
     "tgt": "96cebbb41771",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.status_no_answer": {
+    "src": "7e49c68db30e",
+    "tgt": "15576abc4896",
     "state": "machine",
     "origin": "machine",
     "locked": false,

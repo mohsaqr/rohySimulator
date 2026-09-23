@@ -1847,3 +1847,62 @@
         (disable is still offered). The learner's phone lists the pathologist beside the laboratory
         and radiology. The ECG case lists the cardiologist the same way. A case without slides or an
         ECG lists neither.
+- feature: CASE.ROOMS
+  title: Per-case rooms
+  products: [rohy]
+  tier: core
+  cases:
+    - id: CASE.ROOMS.01
+      title: A case shows only the rooms it keeps
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As an educator, open a case and, in the Rooms step, switch off Examination, Laboratory,
+           Radiology, Consultant and Bedside. Save.
+        2. As a learner, start that case.
+      expected: |-
+        The room bar shows the Patient room only (plus a plugin room the case has material for).
+        No switched-off room can be reached, including after a reload.
+      covers:
+        - "rohy:chromium::case-rooms.spec.js › per-case rooms › the room bar holds only the rooms the case keeps"
+    - id: CASE.ROOMS.02
+      title: A specialist whose rooms are off does not answer
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case with the Laboratory room switched off.
+        2. Open the phone and call the laboratory.
+      expected: |-
+        The laboratory is listed with the status "No answer". The call shows "Calling…" for a few
+        seconds and then "No answer"; no conversation starts.
+      covers:
+        - "rohy:chromium::case-rooms.spec.js › per-case rooms › a specialist whose rooms are off is on the phone, and the call rings out"
+    - id: CASE.ROOMS.03
+      title: Without a debrief room, End & Debrief ends on the case summary
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case with the Consultant room switched off.
+        2. Press End & Debrief and confirm.
+      expected: |-
+        The case ends and the case summary opens over the patient room. There is no Consultant tab,
+        and a "Case summary" button reopens the summary after it is closed.
+      covers:
+        - "rohy:chromium::case-rooms.spec.js › per-case rooms › End & Debrief without a debrief room ends on the case summary"
+    - id: CASE.ROOMS.04
+      title: The Rooms step keeps material and explains the effects
+      kind: manual
+      platforms: [any]
+      severity_if_failed: minor
+      steps: |-
+        1. As an educator, open a case with laboratory results configured, go to the Rooms step and
+           switch the Laboratory room off. Save, reopen the case and return to the Rooms step.
+        2. Switch Consultant off too, then switch both back on and save.
+      expected: |-
+        Patient is shown as always on and has no switch. With Laboratory off, the step says its
+        material is kept and names the laboratory among the specialists who will not answer; with
+        Consultant off, it says End & Debrief ends on the case summary. The switches survive the
+        save. Switching both back on restores the lab results unchanged.

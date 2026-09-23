@@ -18,6 +18,7 @@ function renderNav(overrides = {}) {
         <RoomNavigator
             currentRoom={overrides.currentRoom ?? 'chat'}
             onSelectRoom={onSelectRoom}
+            enabledRooms={overrides.enabledRooms ?? null}
         />
     );
     return { onSelectRoom };
@@ -92,5 +93,16 @@ describe('RoomNavigator', () => {
         await waitFor(() => {
             expect(screen.getByRole('button', { name: /Radiologia/ })).toBeTruthy();
         });
+    });
+
+    // Regression lock: core rooms could not be hidden — a case with the lab
+    // switched off (config.rooms) still showed a Laboratory tab.
+    it('shows only the rooms the case offers when given enabledRooms, core rooms included', () => {
+        renderNav({ enabledRooms: ['chat', 'pathology'] });
+        const keys = [...document.querySelectorAll('[data-testid^="room-button-"]')]
+            .map((el) => el.dataset.testid.replace('room-button-', ''));
+        expect(keys).toEqual(['chat', 'pathology']);
+        expect(screen.queryByRole('button', { name: /Laboratory/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Consultant/ })).toBeNull();
     });
 });
