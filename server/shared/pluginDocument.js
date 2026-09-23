@@ -21,6 +21,7 @@
  */
 
 import { parseDocumentPath, roleAllows } from './pluginRegistry.js';
+import { disabledRooms } from './caseRooms.js';
 
 /**
  * The default cap on one plugin document, serialised.
@@ -241,8 +242,11 @@ export function omitDocumentWhen(document, { path, when, omit } = {}) {
 /**
  * The case config a given role may receive: every plugin document with its
  * `learnerOmit` paths and matching `learnerOmitWhen` properties removed for
- * roles below reviewer. Returns the input untouched (same reference) when
- * there is nothing to strip, so callers can apply it unconditionally.
+ * roles below reviewer — and the whole document of a plugin room the case has
+ * switched off (config.rooms, shared/caseRooms.js), so that room's
+ * `available()` fails in any client and its material never reaches a learner.
+ * Returns the input untouched (same reference) when there is nothing to
+ * strip, so callers can apply it unconditionally.
  *
  * @param {object|null|undefined} config
  * @param {Array<object>} manifests   the frozen manifest snapshot
@@ -253,8 +257,14 @@ export function projectPluginDocumentsForRole(config, manifests, role) {
     if (!config || typeof config !== 'object') return config;
     if (roleAllows(role, DOCUMENT_FULL_READ_ROLE)) return config;
     let out = config;
+    const off = disabledRooms(config);
     for (const manifest of manifests ?? []) {
         const id = manifest?.id;
+        if (id && off.includes(id) && Object.hasOwn(config, id)) {
+            if (out === config) out = { ...config };
+            delete out[id];
+            continue;
+        }
         const document = id ? config[id] : null;
         if (!isPlainObject(document)) continue;
         const stripped = learnerOmitPaths(manifest).reduce((doc, path) => omitDocumentPath(doc, path), document);

@@ -36,9 +36,11 @@ import {
 import { logger } from '../logger.js';
 import {
     auditSuccess,
+    loadSessionCaseConfig,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+import { isRoomEnabled, specialistAnswers } from '../shared/caseRooms.js';
 import {
     BudgetExceededError,
     budgetExceededResponse,
@@ -389,6 +391,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 case_agent_id: caseAgent?.caseAgentId ?? null,
                 persona: caseAgent ? 'server' : 'client',
             });
+        }
+
+        // Rooms the case switched off (config.rooms, shared/caseRooms.js): the
+        // debrief room off means there is no discussant to talk to, and a
+        // specialist whose rooms are all off does not pick up the phone. The
+        // learner's client hides both; this is the half it cannot skip.
+        // Reviewers and above preview cases and pass.
+        if (session_id != null && !hasRoleAtLeast(req.user, ROLE_RANKS.reviewer)
+            && (agentType === 'discussant' || isSpecialistType(agentType))) {
+            const roomsConfig = await loadSessionCaseConfig(session_id, tenantId(req));
+            if (roomsConfig && agentType === 'discussant' && !isRoomEnabled(roomsConfig, 'consultant')) {
+                return res.status(403).json({ error: 'This room is switched off for this case', code: 'room_disabled' });
+            }
+            if (roomsConfig && isSpecialistType(agentType) && !specialistAnswers(agentType, roomsConfig)) {
+                return res.status(409).json({ error: 'No answer', code: 'no_answer' });
+            }
         }
 
         // Priority: agent > session > platform

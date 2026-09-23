@@ -18,11 +18,13 @@ import {
 import { logger } from '../logger.js';
 import {
     auditSuccess,
+    loadSessionCaseConfig,
     logAudit,
     redactRow,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+import { specialistAnswers } from '../shared/caseRooms.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
 import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/specialties.js';
@@ -1353,6 +1355,19 @@ router.post('/cases/:caseId/agents/add-defaults', authenticateToken, requireEduc
 // -------------------- AGENT SESSION STATE (Runtime) --------------------
 
 // GET /api/sessions/:sessionId/agents - Get agent states for session
+// A specialist whose rooms the case switched off (config.rooms,
+// shared/caseRooms.js) is still on the phone, but nobody picks up: paging and
+// the conversation answer 409 no_answer for a learner. The client shows "No
+// answer" from the `answers` flag on the session's agent list; this is the half
+// a learner's client cannot skip. Reviewers and above preview cases and pass.
+async function refuseUnansweredSpecialist(req, res, sessionId, agentType) {
+    if (!isSpecialistType(agentType) || hasRoleAtLeast(req.user, ROLE_RANKS.reviewer)) return false;
+    const config = await loadSessionCaseConfig(sessionId, tenantId(req));
+    if (!config || specialistAnswers(agentType, config)) return false;
+    res.status(409).json({ error: 'No answer', code: 'no_answer' });
+    return true;
+}
+
 router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
@@ -1407,7 +1422,12 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             );
         });
 
+        // Rooms the case switched off leave their specialist on the phone but
+        // unanswered (see refuseUnansweredSpecialist).
+        const roomsConfig = await loadSessionCaseConfig(sessionId, tenantId(req));
+
         const parsed = agents.map(a => ({
+            answers: specialistAnswers(a.agent_type, roomsConfig),
             // The case agent id is how the client names this agent to
             // /proxy/llm; the template id is the routing fallback. Both were
             // missing, so `agent.agent_template_id || agent.id` was undefined
@@ -1503,6 +1523,7 @@ router.post('/sessions/:sessionId/agents/:agentType/page', authenticateToken, as
     try {
         const { sessionId, agentType } = req.params;
         if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+        if (await refuseUnansweredSpecialist(req, res, sessionId, agentType)) return;
 
         // Pull the case-agent's configured response window. Absent row
         // (agent not provisioned on this case) reads as 0/0 = instant,
@@ -1725,6 +1746,7 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
             return res.status(400).json({ error: 'call_id must be 1-64 characters of letters, digits, _ or -', code: 'invalid_call_id' });
         }
         if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+        if (await refuseUnansweredSpecialist(req, res, sessionId, agentType)) return;
 
         // Attribution: the case agent of this type on the session's case,
         // resolved here rather than taken from the body. Same liveness rules

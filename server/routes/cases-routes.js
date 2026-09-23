@@ -23,6 +23,7 @@ import { SCENARIO_CATEGORY_IDS, resolveScenarioCategory } from '../shared/scenar
 import { validatePluginDocuments, projectPluginDocumentsForRole } from '../shared/pluginDocument.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
+import { normaliseCaseRooms } from '../shared/caseRooms.js';
 import {
     auditSuccess,
     canManageOwnedResource,
@@ -35,6 +36,7 @@ import {
     mergeScenarioSource,
     parseAuditJson,
     redactRow,
+    requireSessionRoom,
     resolveSessionTrinity,
     tenantId,
     verifySessionOwnership
@@ -179,7 +181,20 @@ function normaliseCaseForStorage(req, res, body) {
         return null;
     }
 
+    // Which rooms the case offers (shared/caseRooms.js). A shape the server
+    // cannot read would be stored as "every room on" — refuse it instead. A
+    // room that is no longer installed is dropped with a warning, so a case
+    // saved under an old plugin set stays re-savable.
+    const roomsCheck = normaliseCaseRooms(safeConfig);
+    if (roomsCheck.problem) {
+        res.status(400).json({ error: roomsCheck.problem, code: 'invalid_rooms' });
+        return null;
+    }
+    if (roomsCheck.rooms) safeConfig.rooms = roomsCheck.rooms;
+
     logVocabularyWarnings(req, 'case', warnings);
+    // After the vocabulary log: these are dropped, not "kept verbatim".
+    warnings.push(...roomsCheck.warnings);
 
     // Denormalised columns. The case editor writes the patient name to
     // `config.patient_name` and the chief complaint to
@@ -1189,6 +1204,9 @@ router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req,
     }
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    // Findings are taken in the examination room or at the bedside (room3d
+    // shares the exam hook); refused only when the case has switched off both.
+    if (!await requireSessionRoom(req, res, sessionId, ['examination', 'room3d'])) return;
 
     // `case_id` used to be read from the request body, so a learner examining case
     // 7 could file the finding against case 99 and skew that case's analytics. The
