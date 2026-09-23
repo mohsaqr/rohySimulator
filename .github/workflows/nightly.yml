@@ -1,0 +1,96 @@
+# The nightly monkey walk.
+#
+# tests/monkey/walker.spec.js enters a live case and presses things at random
+# — rooms, buttons, text fields, Escape, the phone, scrolls, resizes — checking
+# after every press that the page threw nothing, logged no console.error, got
+# no 5xx, is not blank and shows exactly the rooms the case offers. CI walks
+# each case for two minutes on every push; this walks each for fifteen, every
+# night, with a fresh seed.
+#
+# A failure names its seed in the log and attaches it (with the last 20
+# actions, a screenshot, the trace and the video) to the report uploaded
+# below. Replay it locally:
+#
+#   npm run build:e2e
+#   MONKEY_SEED=<seed> MONKEY_MINUTES=15 npm run test:monkey -- --reporter=list
+#
+# Results post to Prova as their own label (`nightly`), so a nightly finding
+# never lands in the CI run a release gate reads.
+
+name: Nightly monkey walk
+
+on:
+  schedule:
+    # 02:00 UTC — clear of install-from-scratch.yml at 04:00.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Minutes to walk each case'
+        required: false
+        default: '15'
+      seed:
+        description: 'MONKEY_SEED to replay (empty = a fresh one)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  monkey:
+    name: Monkey walk
+    runs-on: ubuntu-latest
+    # Two cases x 15 minutes, plus install, build and setup.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        # The Prova reporter reads the commit and whether the tree is dirty;
+        # see ci.yml's e2e job.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      # The same sibling clones as ci.yml's e2e job; see its Build job for why.
+      - name: Clone dynajs sibling
+        run: |
+          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+      - name: Clone 3D patient room sibling
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: bash scripts/clone-room3d.sh ../3D
+      - name: Clone prova sibling (Playwright reporter)
+        env:
+          PROVA_DEPLOY_KEY: ${{ secrets.PROVA_DEPLOY_KEY }}
+        run: bash scripts/clone-prova.sh ../prova
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npm run test:e2e:install
+      # build:e2e, never build: see the header of playwright.config.js.
+      - name: Build the SPA for the e2e base path
+        run: npm run build:e2e
+      - name: Walk both cases
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
+          PROVA_LABEL: nightly
+          PROVA_CATALOG: Rohy battery
+          ROHY_PW_PROJECTS: monkey
+          MONKEY_MINUTES: ${{ github.event.inputs.minutes || '15' }}
+          MONKEY_SEED: ${{ github.event.inputs.seed }}
+        run: npx playwright test --project=monkey
+      - name: Upload the monkey report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-monkey-nightly
+          path: playwright-report-monkey/
+          if-no-files-found: warn

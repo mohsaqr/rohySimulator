@@ -9,6 +9,45 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.114] — 2026-09-23
+
+### Added
+
+- **A seeded monkey walker** (`tests/monkey/walker.spec.js`, Playwright project `monkey`). It enters a
+  live case as a learner — by the `rohy_auth` cookie a real login sets, not the legacy bearer lane —
+  and for `MONKEY_MINUTES` (default 2) presses at random: rooms, any visible enabled button (the
+  language menu included), text fields, Escape, the phone, scrolls, and resizes between 1280×800 and
+  820×1180. After every press it fails on an uncaught exception or unhandled rejection, a
+  `console.error` outside a commented allowlist, a response ≥ 500, a blank page, or a room bar that
+  differs from the rooms the case offers. Randomness is mulberry32 seeded by `MONKEY_SEED` (printed
+  at the start); a failure attaches the seed, the last 20 actions, a screenshot, the trace and the
+  video. End & Debrief, sign-out, the settings-menu surfaces and anything that deletes, removes,
+  purges, resets or exits are denied by test id and by the translated words in every UI language
+  (derived from `src/locales`). Two cases: default rooms, and Bedside on with a pathology
+  photograph.
+- `npm run test:monkey`; a 2-minute-per-case walk in the CI `e2e` job after the gate run;
+  `.github/workflows/nightly.yml` walks 15 minutes per case at 02:00 UTC (`PROVA_LABEL=nightly`).
+- Opt-in Playwright projects: `ROHY_PW_PROJECTS=monkey` (or `all`) defines the project, so a bare
+  `npx playwright test` — the gate run — never includes it. Opt-in runs write
+  `playwright-report-<name>/`, `test-results-<name>/` and their own JUnit file. The Prova key dump
+  is now `ROHY_PW_PROJECTS=all npx playwright test --list --reporter=./prova/dump-check-keys.mjs`.
+- Prova feature `MONKEY.WALK` (two automated cases).
+- Test ids for everything that leaves the case's rooms: `logout` (both sign-out buttons),
+  `menu-cases`, `menu-profile`, `menu-settings`, `menu-help`, `menu-lessons`,
+  `menu-emotion-analytics`, `menu-oyon-dashboard`, `menu-case-analytics`, `menu-setup`, and
+  `room-course` on the room bar's Course button.
+
+### Fixed
+
+- **The PACS room re-opened its study on every render.** The adapter handed the room a new
+  `{ log }` object on each render; Radoyon memoises its logger on that object and keys its
+  OPENED/CLOSED study effect on the logger, so every host render logged CLOSED_STUDY + OPENED_STUDY
+  and those events re-rendered the host — a loop. Found by the walker (`MONKEY_SEED=3`: a learner
+  orders a T-spine X-ray, opens PACS): about 95 learning-event batches a second until the per-user
+  limiter answered 429, and a page too busy to close. The adapter now passes one wrapper per host
+  logger (`eventLoggerFor` in `src/plugins/pacs/index.jsx`). Regression test in
+  `tests/client/plugins/pacs-room.test.jsx`.
+
 ## [3.0.0-beta.113] — 2026-09-23
 
 ### Changed

@@ -221,6 +221,23 @@ jobs:
           PROVA_LABEL: ci
           PROVA_CATALOG: Rohy battery
         run: npx playwright test
+      # The seeded monkey walker (tests/monkey/walker.spec.js): two minutes of
+      # random presses in each of two live cases, failing on any uncaught
+      # error, console.error, 5xx, blank page or wrong room bar. A smoke walk —
+      # the long one is nightly.yml. It is an opt-in project
+      # (ROHY_PW_PROJECTS), so the gate run above never includes it, and it
+      # writes playwright-report-monkey/ so the gate's report survives. On a
+      # failure the seed is in the log and in the report: replay it locally
+      # with MONKEY_SEED=<seed> npm run test:monkey.
+      - name: Monkey walk (2 minutes per case)
+        env:
+          PROVA_URL: ${{ secrets.PROVA_URL }}
+          PROVA_TOKEN: ${{ secrets.PROVA_TOKEN }}
+          PROVA_LABEL: ci
+          PROVA_CATALOG: Rohy battery
+          ROHY_PW_PROJECTS: monkey
+          MONKEY_MINUTES: '2'
+        run: npx playwright test --project=monkey
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -228,6 +245,13 @@ jobs:
           name: playwright-report-${{ matrix.node-version }}
           path: playwright-report/
           if-no-files-found: warn
+      - name: Upload monkey report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-monkey-${{ matrix.node-version }}
+          path: playwright-report-monkey/
+          if-no-files-found: ignore
       - name: Upload e2e JUnit results
         if: always()
         uses: actions/upload-artifact@v4

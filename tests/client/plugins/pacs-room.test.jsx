@@ -285,6 +285,34 @@ describe('PACS room — the end-to-end thin slice', () => {
         expect(opened[2].objectId).toBeTruthy();
     });
 
+    // Regression lock: re-rendering the room re-opened the study. The adapter
+    // built a fresh `{ log }` wrapper on every props() call, Radoyon memoises
+    // its logger on that wrapper's identity and keys the OPENED/CLOSED effect
+    // on the logger — so every host render logged CLOSED_STUDY + OPENED_STUDY,
+    // and those events re-rendered the host: a loop. Found by the seeded
+    // monkey walker (tests/monkey/, MONKEY_SEED=3): ~95 learning-event batches
+    // a second, until the per-user limiter answered 429.
+    it('re-rendering with fresh props opens the study once, not once per render', async () => {
+        const local = { log: vi.fn() };
+        const localCtx = {
+            ...ctx,
+            log: createPluginLogger({ manifest: pacsManifest, eventLogger: local, sessionId: null }),
+        };
+        const Room = descriptor.component;
+        const { rerender } = render(<Room {...descriptor.props(localCtx, persist)} />);
+        await waitFor(() => {
+            expect(local.log.mock.calls.map(([verb]) => verb)).toContain('OPENED_STUDY');
+        }, { timeout: 5000 });
+        // What PluginRoom does on every host render: call props() again with
+        // the same (memoised) context.
+        Array.from({ length: 5 }).forEach(() => rerender(<Room {...descriptor.props(localCtx, persist)} />));
+        const verbs = local.log.mock.calls.map(([verb]) => verb);
+        expect(verbs.filter((v) => v === 'OPENED_STUDY')).toHaveLength(1);
+        expect(verbs.filter((v) => v === 'CLOSED_STUDY')).toHaveLength(0);
+        // And the prop itself is the same object each time.
+        expect(descriptor.props(localCtx, persist).eventLogger).toBe(descriptor.props(localCtx, persist).eventLogger);
+    });
+
     it('the fetched bytes really are DICOM, and order spatially', () => {
         // Guards the fixture itself: if these stopped being valid DICOM the
         // render test above could pass for the wrong reason.

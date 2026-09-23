@@ -1907,3 +1907,51 @@
         material is kept and names the laboratory among the specialists who will not answer; with
         Consultant off, it says End & Debrief ends on the case summary. The switches survive the
         save. Switching both back on restores the lab results unchanged.
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Robustness — the seeded monkey walker (tests/monkey/walker.spec.js)
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# The walker is its own Playwright project (`monkey`, opted into with
+# ROHY_PW_PROJECTS=monkey) with its own testDir, so its check keys carry the file
+# path relative to the e2e testDir: `../monkey/walker.spec.js`. CI walks each case
+# for 2 minutes on every push (label `ci`); nightly.yml walks each for 15 (label
+# `nightly`). A failure attaches its MONKEY_SEED, which replays the same choices.
+
+- feature: MONKEY.WALK
+  title: A random walk through a live case breaks nothing
+  products: [rohy]
+  tier: extended
+  cases:
+    - id: MONKEY.WALK.01
+      title: A random walk through a case with the default rooms breaks nothing
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case that stores no room setting.
+        2. For MONKEY_MINUTES, press at random: a room, any visible enabled button (the UI language
+           included), type into a visible text field, Escape, the phone, scroll, resize between
+           1280x800 and 820x1180. Never press End & Debrief, sign out, a control that leaves the
+           case for a full-page surface, or one that deletes, removes, purges, resets or exits.
+      expected: |-
+        After every press: no uncaught exception or unhandled rejection, no console error outside
+        the walker's commented allowlist, no response of 500 or above, the page is not blank (the
+        room bar or a dialog is visible), and the room bar shows exactly the Patient, Examination,
+        Laboratory, Radiology and Consultant rooms (PACS may join once imaging is ordered).
+      covers:
+        - "rohy:monkey::../monkey/walker.spec.js › monkey walk › a random walk through the plain case breaks nothing"
+    - id: MONKEY.WALK.02
+      title: A random walk through a case with the bedside and pathology material breaks nothing
+      kind: automated
+      platforms: [any]
+      severity_if_failed: major
+      steps: |-
+        1. As a learner, start a case with the Bedside switched on and a pathology specimen
+           photograph.
+        2. Walk it as in MONKEY.WALK.01.
+      expected: |-
+        The same invariants as MONKEY.WALK.01 after every press, and the room bar shows the five
+        core rooms, Bedside and Pathology (PACS may join once imaging is ordered).
+      covers:
+        - "rohy:monkey::../monkey/walker.spec.js › monkey walk › a random walk through the bedside-pathology case breaks nothing"
