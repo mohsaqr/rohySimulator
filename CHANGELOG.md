@@ -9,6 +9,30 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-beta.104] — 2026-09-22
+
+### Fixed
+
+Found reviewing beta.102–103.
+
+- **A lab or radiology row on a soft-deleted template could not be repaired.** Runtime hides such a
+  row, so the phone had no lab, while the boot sweep counted it, DELETE refused it
+  (`standing_specialist`) and a fresh add refused it (`specialty_already_attached`). All three now
+  ignore rows whose template is deleted: the sweep re-attaches, and the dead row can be removed.
+  (`executeUserPurge` soft-deletes a departing author's templates without touching `case_agents`.)
+- **An educator could not use their own lab or radiology persona on a new case.** The default is
+  attached at creation and cannot be removed, so adding one's own answered 409. For a standing
+  specialty, `POST /cases/:caseId/agents` now **swaps** the persona into the existing slot (enabled
+  state and per-case overrides kept), answers 200 `{ id, swapped: true }`, and audits
+  `swap_case_agent_template`. Re-adding the persona already there is still 409.
+- **A case whose create-time attach failed stayed without its lab and radiology until a reboot.**
+  `POST /sessions` now attaches whatever the case is missing before the session starts: idempotent,
+  non-fatal.
+- **A bad case id widened a one-case attach into a sweep of every case.** node-sqlite3 binds `NaN` as
+  `NULL`, which the query read as "all cases". `attachStandingSpecialists({ caseId })` now requires a
+  positive integer and throws `TypeError` otherwise; the boot sweep is its own
+  `attachStandingSpecialistsToAllCases()`.
+
 ## [3.0.0-beta.103] — 2026-09-22
 
 ### Fixed
