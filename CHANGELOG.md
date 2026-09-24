@@ -9,9 +9,9 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
-## [3.0.RC01] — 2026-09-24
+## [3.0.0-rc.1] — 2026-09-24
 
-Release candidate 1 of Rohy 3.0 (package version `3.0.0-rc.1`, commit after `789a846`). It is
+Release candidate 1 of Rohy 3.0, released as the tag `v3.0.RC01` (package version `3.0.0-rc.1`). It is
 the 3.0.0-beta.109–120 line as deployed to rohy.lacarm.com on 2026-09-23, unchanged:
 
 - **Per-case rooms.** An educator switches rooms off in the case wizard's Rooms step; a switched-off
