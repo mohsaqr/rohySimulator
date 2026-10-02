@@ -10633,6 +10633,76 @@
         ]
       }
     },
+    "/api/report": {
+      "post": {
+        "summary": "Create /report",
+        "tags": [
+          "report"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/report-routes.js:99",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reports/mine": {
+      "get": {
+        "summary": "Get /reports/mine",
+        "tags": [
+          "report"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/report-routes.js:117",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/scenarios": {
       "get": {
         "summary": "Get /scenarios",

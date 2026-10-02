@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Heads up:",
   "multi_tab_warning": "this session is open in another browser tab. Last-write-wins applies.",
   "my_profile": "My Profile",
+  "my_reports": "My reports",
+  "my_reports_new": "{count} new",
   "open_settings": "Open Settings",
+  "report_news": "A report has news",
+  "report_problem": "Report a problem…",
   "settings": "Settings",
   "settings_menu_aria": "Settings and profile menu"
 }

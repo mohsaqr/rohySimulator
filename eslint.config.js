@@ -32,6 +32,10 @@ export default defineConfig([
     // portability.test.js is rohy's and stays linted.
     'src/components/ecg/**/*.{js,jsx}',
     '!src/components/ecg/portability.test.js',
+    // Vendored from Prova (prova.lacarm.com/widget/report.js and /widget/relay.mjs): the "Report a
+    // problem" widget and its server relay. Lint is owned upstream; change them in the Prova repo.
+    'src/vendor/prova-report.js',
+    'server/lib/prova-relay.js',
     'coverage/**',
     'playwright-report/**',
     'test-results/**',

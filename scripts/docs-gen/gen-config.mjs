@@ -224,6 +224,11 @@ const PURPOSES = {
     ROHY_KOKORO_IDLE_UNLOAD_MIN: 'Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup.',
     ROHY_TEST_FAKE_GOOGLE_TTS: 'Test hook: stub Google TTS instead of calling the API.',
     ROHY_TEST_FAKE_OPENAI_TTS: 'Test hook: stub OpenAI TTS instead of calling the API.',
+    ROHY_PROVA_URL: 'Where "Report a problem" reports go: the Prova service rohy relays to (`/api/report`, `/api/reports/mine`). Production defaults to `https://prova.lacarm.com`; anywhere else reporting is off unless this is set; `off` turns it off. The browser never talks to Prova — this server adds the signed-in username and the installation key.',
+    ROHY_PROVA_INSTALLATION_KEY: 'An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova\u0027s unverified queue until someone trusts the installation.',
+    ROHY_REPORT_KEY_FILE: 'Where the self-registered installation key is kept (mode 0600). Default: `report-key.json` beside the database (ROHY_DB).',
+    ROHY_REPORT_LABEL: 'The installation\u0027s name in Prova ("beyza · via <label> · <host>"). Default `Rohy`.',
+    ROHY_REPORT_HOST: 'The host Prova shows beside the label, e.g. `rohy.lacarm.com`. Default: the request\u0027s Host header.',
 };
 
 function purposeFor(name) {
