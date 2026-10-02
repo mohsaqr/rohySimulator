@@ -169,3 +169,44 @@ describe('TopBarControls — trailing slot', () => {
         expect(screen.queryByRole('button', { name: 'phone' })).not.toBeInTheDocument();
     });
 });
+
+describe('TopBarControls — Report a problem', () => {
+    const rp = (over = {}) => ({ available: true, news: 0, onReport: vi.fn(), onMine: vi.fn(), ...over });
+
+    it('offers Report a problem… and My reports under Help & Support when reporting is set up', () => {
+        const reportProblem = rp();
+        setup({ reportProblem });
+        openMenu();
+        const items = within(screen.getByRole('menu')).getAllByRole('menuitem').map((b) => b.textContent);
+        expect(items.indexOf('report_problem')).toBe(items.indexOf('help_support') + 1);
+        expect(items.indexOf('my_reports')).toBe(items.indexOf('help_support') + 2);
+        fireEvent.click(screen.getByTestId('menu-report-problem'));
+        expect(reportProblem.onReport).toHaveBeenCalledOnce();
+        expect(screen.queryByRole('menu')).toBeNull();
+        openMenu();
+        fireEvent.click(screen.getByTestId('menu-my-reports'));
+        expect(reportProblem.onMine).toHaveBeenCalledOnce();
+    });
+
+    it('shows nothing of it when reporting is not set up', () => {
+        setup({ reportProblem: rp({ available: false, news: 2 }) });
+        expect(screen.queryByTestId('report-news-dot')).toBeNull();
+        openMenu();
+        expect(screen.queryByTestId('menu-report-problem')).toBeNull();
+        expect(screen.queryByTestId('menu-my-reports')).toBeNull();
+    });
+
+    it('a report with news: a dot on the trigger and "N new" on My reports; none without news', () => {
+        setup({ reportProblem: rp({ news: 1 }) });
+        expect(screen.getByTestId('report-news-dot')).toBeInTheDocument();
+        openMenu();
+        expect(screen.getByTestId('my-reports-new').textContent).toBe('my_reports_new');
+    });
+
+    it('no dot and no badge when nothing is new', () => {
+        setup({ reportProblem: rp({ news: 0 }) });
+        expect(screen.queryByTestId('report-news-dot')).toBeNull();
+        openMenu();
+        expect(screen.queryByTestId('my-reports-new')).toBeNull();
+    });
+});

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye, Bug, List } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
 // The single persistent top-bar menu: ONE trigger (gear + current-language
@@ -50,6 +50,9 @@ export default function TopBarControls({
    onOpenCaseAnalytics,
    onOpenSetup,
    onLogout,
+   // Report a problem (hooks/useReportProblem.js): { available, news, onReport, onMine }. The two rows sit
+   // under Help & Support; an amber dot on the trigger and "· N new" on My reports when a report has news.
+   reportProblem = null,
    uiLanguage,
    onSetLanguage,
    // Rendered after the menu and logout, in the same row. The case screens
@@ -134,8 +137,15 @@ export default function TopBarControls({
                aria-expanded={showMenu}
                aria-controls="app-main-menu"
                aria-label={t('settings_menu_aria')}
-               className={`rohy-topbar-menu-trigger text-sm ${showMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
+               className={`rohy-topbar-menu-trigger relative text-sm ${showMenu ? 'rohy-topbar-menu-trigger-open' : ''}`}
             >
+               {reportProblem?.available && reportProblem.news > 0 && (
+                  <span
+                     data-testid="report-news-dot"
+                     title={t('report_news')}
+                     className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-600 border-2 border-white"
+                  />
+               )}
                <Settings className="w-4 h-4 text-[var(--rohy-accent)]" />
                {/* Current language flag rides on the trigger so the language
                    switch is still glanceable now that the globe is gone. */}
@@ -204,6 +214,35 @@ export default function TopBarControls({
                      <HelpCircle className="w-4 h-4" />
                      {t('help_support')}
                   </button>
+                  {reportProblem?.available && (
+                     <>
+                        <button
+                           type="button"
+                           onClick={() => { closeAll(); reportProblem.onReport?.(); }}
+                           data-testid="menu-report-problem"
+                           role="menuitem"
+                           className="rohy-topbar-menu-item"
+                        >
+                           <Bug className="w-4 h-4" />
+                           {t('report_problem')}
+                        </button>
+                        <button
+                           type="button"
+                           onClick={() => { closeAll(); reportProblem.onMine?.(); }}
+                           data-testid="menu-my-reports"
+                           role="menuitem"
+                           className="rohy-topbar-menu-item"
+                        >
+                           <List className="w-4 h-4" />
+                           {t('my_reports')}
+                           {reportProblem.news > 0 && (
+                              <span data-testid="my-reports-new" className="ml-auto text-[11px] font-bold rounded-full px-2 bg-amber-100 text-amber-900">
+                                 {t('my_reports_new', { count: reportProblem.news })}
+                              </span>
+                           )}
+                        </button>
+                     </>
+                  )}
                   {onOpenLessons && (
                      <button
                         type="button"

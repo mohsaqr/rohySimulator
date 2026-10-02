@@ -12,6 +12,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { useCaseLanguageSync } from './hooks/useCaseLanguageSync';
 import TopBarControls from './components/common/TopBarControls';
+import { useReportProblem } from './hooks/useReportProblem';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
 // loading only when a user opens the lessons room.
@@ -130,6 +131,13 @@ function MainApp() {
    // Ending the session also sends the user here (caseEnded=true) but
    // leaving via the nav while the session is live just navigates back.
    const [currentRoom, setCurrentRoom] = useState('chat');
+   // Report a problem (user menu): "Sent with it" names where the person was — the room and the
+   // case id, never the case's content.
+   const reportPlaceRef = useRef('Case list');
+   useEffect(() => {
+      reportPlaceRef.current = activeCase ? `Case ${activeCase.id ?? ''} · ${currentRoom} room` : 'Case list';
+   }, [activeCase, currentRoom]);
+   const reportProblem = useReportProblem(user, () => reportPlaceRef.current);
    // caseEnded sticks once the user explicitly ends the session via the
    // End & Debrief button. While true, the patient room chrome treats the
    // case as closed (the End button hides itself) and DiscussionScreen
@@ -919,6 +927,7 @@ function MainApp() {
             EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
             logout();
          }}
+         reportProblem={{ available: reportProblem.available, news: reportProblem.news, onReport: reportProblem.open, onMine: reportProblem.openMine }}
          uiLanguage={uiLanguage}
          onSetLanguage={setUiLanguage}
          trailing={overlayPlugin ? null : onCallButton}

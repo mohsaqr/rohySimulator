@@ -22,6 +22,7 @@ import lessonsRoutes from './routes/lessons-routes.js';
 import surveysRoutes from './routes/surveys-routes.js';
 import healthRoutes from './routes/health-routes.js';
 import helpRoutes from './routes/help-routes.js';
+import reportRoutes from './routes/report-routes.js';
 import termsRoutes from './routes/terms-routes.js';
 import pluginsRoutes, { pluginContentProxy } from './routes/plugins-routes.js';
 import { mountPluginServerSlots } from './lib/pluginServerSlot.js';
@@ -130,6 +131,7 @@ router.use(cohortsRoutes);
 router.use(lessonsRoutes);
 router.use(surveysRoutes);
 router.use(helpRoutes);
+router.use(reportRoutes);
 router.use(termsRoutes);
 router.use(pluginsRoutes);
 

@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.2] — 2026-10-02
+
+- **Report a problem.** The gear menu's Help & Support has "Report a problem…" and "My reports". A
+  report (what happened, what you expected, steps, an optional screenshot, and the technical details
+  shown before sending — never case content) goes through Rohy's own server to the Prova test service,
+  so nobody needs a Prova login. My reports shows each report's status; a dot marks news. Settings:
+  `ROHY_PROVA_URL` (`off` disables), `ROHY_PROVA_INSTALLATION_KEY`, `ROHY_REPORT_KEY_FILE`,
+  `ROHY_REPORT_HOST`, `ROHY_REPORT_LABEL`.
+
 ## [3.0.0-rc.1] — 2026-09-24
 
 Release candidate 1 of Rohy 3.0, released as the tag `v3.0.RC01` (package version `3.0.0-rc.1`). It is

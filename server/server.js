@@ -86,6 +86,9 @@ app.use(requestLoggerMiddleware());
 // global limit and overriding per-route where genuinely needed. The
 // upload routes use multer (multipart), not express.json, so they are
 // unaffected by this cap.
+// Report a problem (routes/report-routes.js) carries one screenshot of at most 2 MB, base64 in JSON: that one
+// path gets a larger cap. It parses first, so the general parser below sees the body as already read.
+app.use('/api/report', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request
