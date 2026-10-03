@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Map, Volume2, VolumeX } from 'lucide-react';
 import { mountPatientRoom } from 'rohy-3d-patient-room';
 import EventLogger from '../../services/eventLogger';
-import { avatarUrl, casePatient, mapVitals, rhythmLabel } from './caseBinding.js';
+import { casePatient, mapVitals, rhythmLabel } from './caseBinding.js';
 import { startEcgMirror } from './ecgMirror.js';
 import { SUPINE_REGIONS_3D } from './examRegions3d.js';
 import { supineRegionsWithExams } from './examWheelData.js';
@@ -12,6 +12,7 @@ import ManikinOverlay from './ManikinOverlay.jsx';
 import FindingPanel from './FindingPanel.jsx';
 import usePatientVoice from './usePatientVoice.js';
 import usePatientTemplate from './usePatientTemplate.js';
+import usePatientAvatar from './usePatientAvatar.js';
 import useRoomConversation from './useRoomConversation.js';
 import SubtitleBand from '../../components/voice/SubtitleBand';
 import { useSubtitleReveal } from '../../components/voice/useSubtitleReveal';
@@ -106,6 +107,10 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer }) {
     // resolver the chat room uses — it carries the persona's voice, which is
     // the tier that decides whether this patient sounds male or female.
     const patientTemplate = usePatientTemplate({ activeCase, sessionId });
+    // Which body is on the bed. Resolved through Rohy's own avatar resolver,
+    // so the person in the first screen's portrait and the person lying here
+    // are the same patient.
+    const avatar = usePatientAvatar({ activeCase });
     // The same hook the 2D examination room performs through.
     const voice = usePatientVoice({
         activeCase,
@@ -179,13 +184,17 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer }) {
     const bodyRegions = useMemo(() => supineRegionsWithExams(), []);
 
     useEffect(() => {
+        // Wait for the resolver. Mounting before it answers would put the
+        // fallback body on the bed and then swap it, which costs a full
+        // remount and shows the learner the wrong patient first.
+        if (!avatar.url) return undefined;
         let room = null;
         room = mountPatientRoom(hostRef.current, {
             mode: 'bound',
             waveform: 'host',
             chrome: 'room',
             patient: casePatient(activeCase),
-            avatar_url: avatarUrl(activeCase),
+            avatar_url: avatar.url,
             body_regions: bodyRegions,
             nav_actions: NAV_ACTIONS,
             // Rohy presents findings itself (FindingPanel → FindingDisplay →
@@ -253,7 +262,7 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer }) {
             room.dispose();
             roomRef.current = null;
         };
-    }, [activeCase, sessionId, bodyRegions]);
+    }, [activeCase, sessionId, bodyRegions, avatar.url]);
 
     // The finding chart docks left, so hand that side over while it is up.
     useEffect(() => {

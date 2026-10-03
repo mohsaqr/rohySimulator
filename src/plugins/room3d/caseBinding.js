@@ -85,11 +85,8 @@ export function rhythmLabel(rhythm) {
     return labels[rhythm] ?? null;
 }
 
-/**
- * Resolve the case's avatar GLB URL from Rohy's own catalogue.
- */
-export function avatarUrl(activeCase) {
-    const avatar_id = activeCase?.config?.avatar_id;
-    const file = typeof avatar_id === 'string' && avatar_id ? avatar_id : 'avatarsdk.glb';
-    return `/avatars/heads/${file}`;
-}
+// (no avatarUrl here any more) — which body lies on the bed is resolved by
+// usePatientAvatar through Rohy's own four-tier resolver, the same one the
+// first screen's portrait uses. The one-line version that lived here
+// answered 'avatarsdk.glb' for every case that set no avatar_id, which is
+// every seeded case, so a female patient was a male body on the bed.
