@@ -483,6 +483,31 @@ export function logAuditAsync(params) {
     });
 }
 
+/**
+ * COMMIT the open transaction, then — and only then — run `onCommitted`
+ * (audit + response). A bare `dbAdapter.run('COMMIT')` followed by
+ * `res.json()` answers before the commit lands, so a reader on another
+ * connection can still see the old rows after a 2xx, and the audit chain
+ * records a success for a change that may never commit. A COMMIT that fails
+ * is rolled back and answered 500 with `code: 'COMMIT_FAILED'`.
+ *
+ * @param {import('express').Request} req   for the request-scoped logger
+ * @param {import('express').Response} res
+ * @param {() => void} onCommitted          audit + response; runs once, after COMMIT
+ */
+export function commitThen(req, res, onCommitted) {
+    dbAdapter.run('COMMIT', [], (err) => {
+        if (!err) return onCommitted();
+        (req.log ?? routesCasesLog).error('COMMIT failed; rolling back', { error: err.message });
+        dbAdapter.run('ROLLBACK', [], (rollbackErr) => {
+            // A failed COMMIT may already have ended the transaction; say so
+            // rather than letting the adapter log it as an unhandled failure.
+            if (rollbackErr) (req.log ?? routesCasesLog).warn('ROLLBACK after failed COMMIT', { error: rollbackErr.message });
+        });
+        res.status(500).json({ error: 'Could not save the change', code: 'COMMIT_FAILED' });
+    });
+}
+
 export function auditSuccess(req, params) {
     logAudit({
         userId: req.user?.id,

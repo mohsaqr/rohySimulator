@@ -4,8 +4,9 @@ import { logger } from './logger.js';
 
 const adapterLog = logger('dbAdapter');
 
-// Routes use fire-and-forget `dbAdapter.run('BEGIN IMMEDIATE')` / `.run('COMMIT')`
-// with no callback. Without a callback, sqlite3-driver errors vanish.
+// Routes use fire-and-forget `dbAdapter.run('BEGIN IMMEDIATE')` / `.run('ROLLBACK')`
+// with no callback; COMMIT goes through `commitThen()` in routes/_helpers.js so the
+// response waits for it. Without a callback, sqlite3-driver errors vanish.
 // If COMMIT silently fails (BUSY, constraint check, etc.), the
 // connection stays in a pending transaction and the next BEGIN throws
 // "cannot start a transaction within a transaction" — the cascade that

@@ -23,6 +23,7 @@ import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import { recordServerEvent } from '../lib/learningEventIngest.js';
 import {
     auditSuccess,
+    commitThen,
     logAudit,
     resolveSessionCaseConfig,
     requireSessionRoom,
@@ -642,16 +643,17 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                     }
                     const deleted = this.changes ?? 0;
                     if (labs.length === 0) {
-                        dbAdapter.run('COMMIT');
-                        auditSuccess(req, {
-                            action: 'bulk_replace_case_labs',
-                            resourceType: 'case',
-                            resourceId: caseId,
-                            oldValue: { labs: oldLabs || [] },
-                            newValue: { labs: [] },
-                            metadata: { inserted: 0, deleted }
+                        return commitThen(req, res, () => {
+                            auditSuccess(req, {
+                                action: 'bulk_replace_case_labs',
+                                resourceType: 'case',
+                                resourceId: caseId,
+                                oldValue: { labs: oldLabs || [] },
+                                newValue: { labs: [] },
+                                metadata: { inserted: 0, deleted }
+                            });
+                            res.json({ inserted: 0, deleted });
                         });
-                        return res.json({ inserted: 0, deleted });
                     }
                     const insertSql = `
                         INSERT INTO case_investigations (
@@ -686,16 +688,17 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res)
                             }
                             pending--;
                             if (pending === 0 && !failed) {
-                                dbAdapter.run('COMMIT');
-                                auditSuccess(req, {
-                                    action: 'bulk_replace_case_labs',
-                                    resourceType: 'case',
-                                    resourceId: caseId,
-                                    oldValue: { labs: oldLabs || [] },
-                                    newValue: { labs },
-                                    metadata: { inserted: labs.length }
+                                commitThen(req, res, () => {
+                                    auditSuccess(req, {
+                                        action: 'bulk_replace_case_labs',
+                                        resourceType: 'case',
+                                        resourceId: caseId,
+                                        oldValue: { labs: oldLabs || [] },
+                                        newValue: { labs },
+                                        metadata: { inserted: labs.length }
+                                    });
+                                    res.json({ inserted: labs.length, message: 'Labs replaced' });
                                 });
-                                res.json({ inserted: labs.length, message: 'Labs replaced' });
                             }
                         });
                     });
@@ -814,18 +817,19 @@ router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, 
                             dbAdapter.run('ROLLBACK');
                             return res.status(404).json({ error: 'Lab test not found' });
                         }
-                        dbAdapter.run('COMMIT');
-                        auditSuccess(req, {
-                            action: 'delete_case_lab',
-                            resourceType: 'case_lab',
-                            resourceId: labId,
-                            resourceName: oldLab.test_name,
-                            oldValue: oldLab,
-                            metadata: { case_id: caseId, orphan_orders_removed: orphans }
-                        });
-                        res.json({
-                            message: 'Lab test removed from case',
-                            orphan_orders_removed: orphans
+                        commitThen(req, res, () => {
+                            auditSuccess(req, {
+                                action: 'delete_case_lab',
+                                resourceType: 'case_lab',
+                                resourceId: labId,
+                                resourceName: oldLab.test_name,
+                                oldValue: oldLab,
+                                metadata: { case_id: caseId, orphan_orders_removed: orphans }
+                            });
+                            res.json({
+                                message: 'Lab test removed from case',
+                                orphan_orders_removed: orphans
+                            });
                         });
                     }
                 );
