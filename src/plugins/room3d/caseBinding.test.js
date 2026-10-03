@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { avatarUrl, casePatient, mapVitals, rhythmLabel } from './caseBinding.js';
+import { casePatient, mapVitals, rhythmLabel } from './caseBinding.js';
 
 const STEMI_CASE = {
     id: 7,
@@ -76,17 +76,6 @@ describe('mapVitals', () => {
 
     it('substitutes a normal temperature when the feed omits it', () => {
         expect(mapVitals({ ...FEED, temp: null }).temperature).toBe(37.0);
-    });
-});
-
-describe('avatarUrl', () => {
-    it('uses the case avatar_id from the Rohy catalogue', () => {
-        expect(avatarUrl(STEMI_CASE)).toBe('/avatars/heads/rb_female_adult_02.glb');
-    });
-
-    it('falls back to the default full-body avatar', () => {
-        expect(avatarUrl(null)).toBe('/avatars/heads/avatarsdk.glb');
-        expect(avatarUrl({ config: {} })).toBe('/avatars/heads/avatarsdk.glb');
     });
 });
 

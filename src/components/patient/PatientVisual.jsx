@@ -1,9 +1,16 @@
-import { lazy, Suspense, useMemo, useRef } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Loader2 } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
 import { PATIENT_AOI_ID, FACE_BOX } from '../oyon/screenAois';
 import { useAoiPublisher } from '../oyon/useAoiPublisher';
+import BedsideFeedFrame from './BedsideFeedFrame';
+import { ROOM3D_ENABLED, BEDSIDE_PORTRAIT, BEDSIDE_VIEW, BEDSIDE_HEAD_DIRECTION } from '../../plugins/config';
+import usePatientAvatar from '../../plugins/room3d/usePatientAvatar';
+
+// The bedside camera pulls in three.js, so it loads only when it is shown —
+// the same treatment the head avatar gets.
+const BedsideCamera = lazy(() => import('./BedsideCamera'));
 
 // Lazy-load the 3D head — pulls in three.js / r3f / drei (~250 KB gzip).
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar'));
@@ -45,6 +52,21 @@ export default function PatientVisual({ caseData, participant }) {
 
     const p = participant || activeParticipant || caseFallback;
 
+    // Only the patient is in a bed. Agents (nurse, consultant, relative) keep
+    // the head portrait — the patient participant is the one the chat marks
+    // with a `case:` id, or the case fallback itself when nothing is active.
+    const isPatient = p === caseFallback || String(p?.id ?? '').startsWith('case:');
+    // The body the 3D room puts on the bed, resolved by the same resolver the
+    // head portrait uses — so the circle and the room cannot disagree.
+    const bedsideAvatar = usePatientAvatar({ activeCase: caseData });
+    // A bedside view that cannot mount hands the portrait back to the head
+    // avatar rather than leaving an empty circle.
+    const [bedsideFailed, setBedsideFailed] = useState(false);
+    const onBedsideFailed = useCallback(() => setBedsideFailed(true), []);
+    // Opt-in: the default portrait is the pre-3D head, face-on. The bedside
+    // camera replaces it only when the plugin config asks for it.
+    const showBedside = ROOM3D_ENABLED && BEDSIDE_PORTRAIT && isPatient && !bedsideFailed && !!bedsideAvatar.url;
+
     // Always render the avatar when the manifest is loaded — every case now
     // resolves to a GLB (explicit, platform-default, or demographic auto-pick).
     // The `avatar_type === 'none'` global toggle still wins as a kill switch.
@@ -69,12 +91,21 @@ export default function PatientVisual({ caseData, participant }) {
                        must exist from the FIRST render (the effect above runs
                        once per showLiveHead flip), not only after the lazy 3D
                        head resolves. */
-                    <div ref={stageRef} className="aspect-square h-full max-h-full max-w-full">
+                    <div ref={stageRef} className="relative aspect-square h-full max-h-full max-w-full">
                         <Suspense fallback={
                             <div className="w-full h-full rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                                 <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
                             </div>
                         }>
+                            {showBedside ? (
+                                <BedsideCamera
+                                    avatarUrl={bedsideAvatar.url}
+                                    visemes={visemes}
+                                    view={BEDSIDE_VIEW}
+                                    headDirection={BEDSIDE_HEAD_DIRECTION}
+                                    onFailed={onBedsideFailed}
+                                />
+                            ) : (
                             <PatientAvatar
                                 patient={p}
                                 speaking={speaking}
@@ -85,7 +116,11 @@ export default function PatientVisual({ caseData, participant }) {
                                 cameraOverride={p.avatar_camera}
                                 platformAvatars={platformAvatars}
                             />
+                            )}
                         </Suspense>
+                        {/* Viewfinder chrome belongs to the camera on the bed,
+                            not to the head portrait, which stays as it was. */}
+                        {showBedside && <BedsideFeedFrame speaking={speaking} />}
                     </div>
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-neutral-700">
