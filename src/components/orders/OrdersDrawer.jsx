@@ -21,7 +21,7 @@ import { DEFAULT_TURNAROUND_MINUTES } from '../../constants/turnaround';
  * - Radiology Studies
  * - Medications/Drugs
  */
-export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData }) {
+export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData, openRequest = null }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('labs'); // labs, radiology, drugs, records
     const [drawerHeight, setDrawerHeight] = useState('50vh'); // 50vh or 80vh
@@ -63,6 +63,14 @@ export default function OrdersDrawer({ caseId, sessionId, onViewResult, caseData
         EventLogger.drawerOpened('OrdersDrawer');
         EventLogger.tabSwitched(tab, COMPONENTS.ORDERS_DRAWER);
     };
+
+    // External open requests (e.g. the 3D room's chart/IV/oxygen objects ask
+    // for a specific tab). A nonce field makes repeat requests re-fire.
+    // handleDrawerOpen is re-created each render, so only the request itself
+    // may be a dependency — re-firing on the handler would reopen the drawer.
+    useEffect(() => {
+        if (openRequest?.tab) handleDrawerOpen(openRequest.tab);
+    }, [openRequest]);
 
     const handleDrawerClose = () => {
         setIsOpen(false);

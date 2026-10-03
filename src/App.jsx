@@ -17,6 +17,8 @@ import TopBarControls from './components/common/TopBarControls';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
 // loading only when a user opens the lessons room.
 const LessonsRoomContainer = lazy(() => import('./components/lessons/LessonsRoomContainer'));
+// Lazy so three.js and the 3D room bundle load only when the room is opened.
+const Exam3DScreen = lazy(() => import('./components/room3d/Exam3DScreen'));
 import { VoiceProvider } from './contexts/VoiceContext';
 import { NotificationProvider } from './notifications/NotificationContext';
 import { useNotifications } from './notifications/useNotifications';
@@ -48,6 +50,8 @@ function MainApp() {
    const { t } = useTranslation('app');
    const [showFullPageSettings, setShowFullPageSettings] = useState(false);
    const [showLessonsRoom, setShowLessonsRoom] = useState(false);
+   // Drawer-open requests from the 3D room (chart → records, IV/O2 → treatments).
+   const [drawerRequest, setDrawerRequest] = useState(null);
    // The course tied to the active case, resolved when the Course card opens.
    // { cohortId, cohortName } — one case, one course (no picker).
    const [courseCohortId, setCourseCohortId] = useState({ cohortId: null, cohortName: null });
@@ -270,7 +274,7 @@ function MainApp() {
    // serialisable blob so we don't end up with N localStorage keys to
    // keep in sync.
    const VIEW_STORAGE_KEY = 'rohy_view';
-   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant'];
+   const ROOM_KEYS = ['chat', 'examination', 'lab', 'radiology', 'consultant', 'exam3d'];
    const captureView = useCallback(() => {
       let view = 'home';
       if (personaEditorTarget !== null) view = 'persona-editor';
@@ -904,8 +908,10 @@ function MainApp() {
             </div>
          )}
 
-         {/* Left Column (Visual + Chat) - 35% width on large screens */}
-         <div className="w-[35%] min-w-[350px] flex flex-col border-r border-neutral-800 bg-neutral-900">
+         {/* Left Column (Visual + Chat) - 35% width on large screens.
+             inert while the exam3d surface covers it: the column stays mounted
+             (the physiology bridge) but is unreachable by pointer/keyboard/AT. */}
+         <div className="w-[35%] min-w-[350px] flex flex-col border-r border-neutral-800 bg-neutral-900" inert={currentRoom === 'exam3d' || undefined}>
 
             {/* Top Left: Patient Visual */}
             <div className="h-[45%] border-b border-neutral-800 relative">
@@ -955,8 +961,9 @@ function MainApp() {
 
          </div>
 
-         {/* Right Column (Monitor) - Remaining width */}
-         <div className="flex-1 h-full min-w-[600px] bg-black relative">
+         {/* Right Column (Monitor) - Remaining width. inert under exam3d,
+             same rationale as the left column. */}
+         <div className="flex-1 h-full min-w-[600px] bg-black relative" inert={currentRoom === 'exam3d' || undefined}>
             <PatientMonitor
                caseParams={activeCase?.config}
                caseData={activeCase}
@@ -976,7 +983,19 @@ function MainApp() {
                sessionId={sessionId}
                onViewResult={handleViewResult}
                caseData={activeCase}
+               openRequest={drawerRequest}
             />
+         )}
+
+         {/* 3D examination room (exam3d). Rendered as a z-30 surface OVER the
+             chat layout, which the room-key fallthrough keeps mounted (hidden
+             and inert) underneath — that is the vitals bridge: PatientMonitor
+             keeps simulating so EventLogger.currentVitals stays live. The
+             fixed RoomNavigator (z-40) and OrdersDrawer (z-50) sit above. */}
+         {currentRoom === 'exam3d' && activeCase && sessionId && (
+            <Suspense fallback={<div className="fixed inset-0 z-30 grid place-items-center bg-black text-sm text-neutral-400">Loading 3D room…</div>}>
+               <Exam3DScreen activeCase={activeCase} sessionId={sessionId} onOpenDrawer={(tab) => setDrawerRequest({ tab, at: Date.now() })} />
+            </Suspense>
          )}
 
          {/* In-app Help & Support (Stage 4). The drawer is always mounted
