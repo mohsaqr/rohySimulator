@@ -38,6 +38,8 @@
   "room_course": "Course",
   "room_examination": "Examination",
   "room_examination_sub": "physical exam",
+  "room_exam3d": "3D Room",
+  "room_exam3d_sub": "immersive exam",
   "room_lab": "Laboratory",
   "room_lab_sub": "investigations",
   "room_navigation": "Room navigation",

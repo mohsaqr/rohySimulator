@@ -4,6 +4,12 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // rohy-3d-patient-room is a file:-linked package whose own node_modules
+    // carries a second copy of three; force resolution to the host's copy so
+    // exactly one three.js instance is bundled.
+    dedupe: ['three'],
+  },
   base: process.env.NODE_ENV === 'production' ? '/rohy/' : '/',
   // ES module workers are kept enabled in case future inference moves off-thread.
   worker: {

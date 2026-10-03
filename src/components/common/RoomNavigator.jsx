@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope, BookOpen } from 'lucide-react';
+import { FlaskConical, GraduationCap, MessageCircle, Scan, Stethoscope, BookOpen, Bed } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 
 // Bottom navigation bar shared across every in-session surface — main
@@ -71,6 +71,17 @@ const ROOM_DEFS = [
         activeRing: 'ring-cyan-500/30',
         activeBar: 'bg-cyan-400',
         badgeAccent: 'bg-emerald-500 text-emerald-50 ring-emerald-300/40',
+    },
+    {
+        key: 'exam3d',
+        labelKey: 'room_exam3d',
+        subKey: 'room_exam3d_sub',
+        icon: Bed,
+        iconText: 'text-teal-300',
+        activeText: 'text-teal-200',
+        activeBg: 'bg-teal-500/15',
+        activeRing: 'ring-teal-500/30',
+        activeBar: 'bg-teal-400',
     },
     {
         key: 'consultant',
