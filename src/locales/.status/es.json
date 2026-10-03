@@ -239,9 +239,49 @@
     "reviewer": null,
     "risk": "low"
   },
+  "app.my_reports": {
+    "src": "cc6e3f4580d5",
+    "tgt": "545c951ca80b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.my_reports_new": {
+    "src": "93578072b1e8",
+    "tgt": "a221806cdcc9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "app.open_settings": {
     "src": "3f940108cb1e",
     "tgt": "14c30dae9282",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.report_news": {
+    "src": "1e654c620c4d",
+    "tgt": "e751df7dc592",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.report_problem": {
+    "src": "574106585e48",
+    "tgt": "48d842f5c446",
     "state": "machine",
     "origin": "machine",
     "locked": false,

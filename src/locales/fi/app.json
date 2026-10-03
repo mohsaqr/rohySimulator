@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Huomio:",
   "multi_tab_warning": "tämä istunto on avoinna toisessa selainvälilehdessä. Viimeisin tallennus jää voimaan.",
   "my_profile": "Oma profiili",
+  "my_reports": "Omat ilmoitukset",
+  "my_reports_new": "{count, plural, one {# uusi} other {# uutta}}",
   "open_settings": "Avaa asetukset",
+  "report_news": "Ilmoituksessa on uutta",
+  "report_problem": "Ilmoita ongelmasta…",
   "settings": "Asetukset",
   "settings_menu_aria": "Asetus- ja profiilivalikko"
 }

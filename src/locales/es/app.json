@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Aviso:",
   "multi_tab_warning": "esta sesión está abierta en otra pestaña del navegador. Se aplica la última escritura.",
   "my_profile": "Mi Perfil",
+  "my_reports": "Mis informes",
+  "my_reports_new": "{count, plural, one {# nuevo} other {# nuevos}}",
   "open_settings": "Abrir Configuración",
+  "report_news": "Hay novedades en un informe",
+  "report_problem": "Informar de un problema…",
   "settings": "Configuración",
   "settings_menu_aria": "Menú de configuración y perfil"
 }

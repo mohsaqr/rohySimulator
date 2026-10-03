@@ -19,18 +19,24 @@ hardening (TLS, reverse proxy, env, security checklist) and
 | **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build`: Caddy auto-TLS, persistent volumes |
 | **Air-gapped** (no internet on target) | [§ Air-gap](#air-gapped-target) | One signed tarball, sha256-verified, platform-stamped |
 
-After any path → [§ Imaging content](#imaging-content) (advanced channel only),
+After any path → [§ Imaging content](#imaging-content),
 then [§ First boot](#first-boot) and [§ Smoke verify](#smoke-verify).
 
 ### Which channel
 
-| tag | what it is |
-|---|---|
-| `current` | the stable, **pre-plugin** build: no PACS, Pathology or ECG rooms |
-| `advanced` | those rooms included; needs imaging content installed (below) |
+There is one: the `current` tag. It includes the PACS, Pathology and ECG
+rooms. The `advanced` tag is kept on the same commit for installs that
+already follow it; it is no longer a different build.
 
-Take `current` if you do not teach imaging. There is nothing to install and
-nothing below applies to you.
+A plugin room shows only on a case that has material for it: Pathology
+needs a slide or gross photograph, ECG an ECG document. PACS opens on a case
+with imaging studies **or** once a learner orders imaging, and the default
+case orders four, so it appears on the first case. An educator can also
+switch any room off for a case in the case wizard's Rooms step.
+
+If you do not teach imaging, set `ROHY_STARTER_CONTENT=off` (see below).
+The PACS room then reports that no content is configured instead of showing
+starter studies.
 
 ---
 
@@ -189,8 +195,7 @@ heart rate, ECG, depth, probe) is left intact because it carries no identity
 and you need it to read the study.
 
 **This is a required step.** The default case orders four imaging
-studies, so a learner on the advanced channel reaches the PACS room on the
-first case they open. Without content that room is empty.
+studies, so a learner reaches the PACS room on the first case they open. Without content that room is empty.
 
 ### Installing from a file: no credentials at all
 
@@ -233,8 +238,8 @@ ROHY_PLUGIN_ORIGINS=pacs=https://slides.example.edu
 ROHY_PLUGIN_ORIGIN_TOKENS=pacs=…       # if that origin is closed
 ```
 
-A configured origin always wins over installed content. To run the advanced
-channel with **no** imaging at all, set `ROHY_STARTER_CONTENT=off`. The rooms
+A configured origin always wins over installed content. To run with **no**
+imaging at all, set `ROHY_STARTER_CONTENT=off`. The rooms
 then report honestly that no content is configured, which is the right state
 for a deployment that must show only its own material.
 

@@ -345,10 +345,12 @@ router.get('/labs/groups', authenticateToken, (req, res) => {
 
 // GET /api/labs/group/:groupName - Get tests by group
 router.get('/labs/group/:groupName', authenticateToken, (req, res) => {
+    // Express has already decoded req.params; decoding again threw URIError on
+    // any name containing '%' (tests/server/labs-group-param.test.js).
     const { groupName } = req.params;
-    
+
     try {
-        const tests = labDb.getTestsByGroup(decodeURIComponent(groupName));
+        const tests = labDb.getTestsByGroup(groupName);
         res.json({ tests });
     } catch (error) {
         res.status(500).json({ error: 'Error fetching tests by group', details: error.message });

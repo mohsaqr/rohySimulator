@@ -15,7 +15,7 @@ The public website is `website/index.html`. The documentation site sources live 
 | Container image | `ghcr.io/mohsaqr/rohy:v3.0.0-beta.9` and `ghcr.io/mohsaqr/rohy:latest`, an OCI index covering `linux/amd64` and `linux/arm64` |
 | Licence | Carm Research License v1.4 ([`LICENSE`](LICENSE)) |
 
-Releases carry a channel in their title: `v2.9.119` is titled "Stable fixes (pre-plugin channel)" and `v2.9.132` is titled "Advanced: PACS, Pathology & ECG workstations". [`docs/INSTALL.md`](docs/INSTALL.md) names the two channels `current` (without the PACS, Pathology and ECG rooms) and `advanced` (with those rooms, imaging content required).
+Older releases carried a channel in their title (`v2.9.119` "Stable fixes (pre-plugin channel)", `v2.9.132` "Advanced: PACS, Pathology & ECG workstations"). Since 3.0 there is one channel, the `current` tag, with those rooms included; a plugin room shows only on a case that has material for it. See [`docs/INSTALL.md`](docs/INSTALL.md#which-channel).
 
 ## Requirements
 

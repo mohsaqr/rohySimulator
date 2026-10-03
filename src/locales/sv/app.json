@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Obs:",
   "multi_tab_warning": "den här sessionen är öppen i en annan webbläsarflik. Senast sparade ändring gäller.",
   "my_profile": "Min profil",
+  "my_reports": "Mina rapporter",
+  "my_reports_new": "{count, plural, one {# ny} other {# nya}}",
   "open_settings": "Öppna inställningar",
+  "report_news": "En rapport har nyheter",
+  "report_problem": "Rapportera ett problem…",
   "settings": "Inställningar",
   "settings_menu_aria": "Meny för inställningar och profil"
 }
