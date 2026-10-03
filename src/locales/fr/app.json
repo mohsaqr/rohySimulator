@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Attention :",
   "multi_tab_warning": "cette session est ouverte dans un autre onglet du navigateur. La dernière écriture l'emporte.",
   "my_profile": "Mon profil",
+  "my_reports": "Mes signalements",
+  "my_reports_new": "{count, plural, one {# nouveau} other {# nouveaux}}",
   "open_settings": "Ouvrir les paramètres",
+  "report_news": "Un signalement a du nouveau",
+  "report_problem": "Signaler un problème…",
   "settings": "Paramètres",
   "settings_menu_aria": "Menu paramètres et profil"
 }

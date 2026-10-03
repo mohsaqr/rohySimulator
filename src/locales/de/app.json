@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Achtung:",
   "multi_tab_warning": "diese Sitzung ist in einem anderen Browser-Tab geöffnet. Es gilt die zuletzt gespeicherte Änderung.",
   "my_profile": "Mein Profil",
+  "my_reports": "Meine Meldungen",
+  "my_reports_new": "{count} neu",
   "open_settings": "Einstellungen öffnen",
+  "report_news": "Es gibt Neuigkeiten zu einer Meldung",
+  "report_problem": "Problem melden…",
   "settings": "Einstellungen",
   "settings_menu_aria": "Menü für Einstellungen und Profil"
 }

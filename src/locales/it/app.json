@@ -23,7 +23,11 @@
   "multi_tab_heads_up": "Attenzione:",
   "multi_tab_warning": "questa sessione è aperta in un'altra scheda del browser. Vale l'ultima modifica salvata.",
   "my_profile": "Il mio profilo",
+  "my_reports": "Le mie segnalazioni",
+  "my_reports_new": "{count, plural, one {# nuova} other {# nuove}}",
   "open_settings": "Apri impostazioni",
+  "report_news": "Una segnalazione ha novità",
+  "report_problem": "Segnala un problema…",
   "settings": "Impostazioni",
   "settings_menu_aria": "Menu impostazioni e profilo"
 }

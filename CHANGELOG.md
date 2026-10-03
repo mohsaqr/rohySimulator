@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.3] — 2026-10-03
+
+- **Report a problem, translated.** The four menu strings rc.2 added in English only ("Report a
+  problem…", "My reports", the new-count and the news notice) are now in every shipped language.
+- **Lab groups with a `%` in the name.** `GET /api/labs/group/:groupName` decoded the name twice and
+  answered 500 to any name containing `%`; it now decodes once (found by the API fuzzer).
+- **One release channel.** `docs/INSTALL.md` and the README described `current` as a build without the
+  PACS, Pathology and ECG rooms. It has included them since 3.0; `advanced` marks the same commit. A
+  plugin room shows only on a case with material for it.
+
 ## [3.0.0-rc.2] — 2026-10-02
 
 - **Report a problem.** The gear menu's Help & Support has "Report a problem…" and "My reports". A
