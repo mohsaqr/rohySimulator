@@ -40,6 +40,7 @@ import {
 import {
     missingField,
     auditSuccess,
+    commitThen,
     dbAll,
     redactAuditSetting,
     redactRows,
@@ -665,26 +666,27 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
                                 dbAdapter.run('ROLLBACK');
                                 return res.status(404).json({ error: 'Medication not found' });
                             }
-                            dbAdapter.run('COMMIT');
-                            auditSuccess(req, {
-                                action: 'delete_master_medication',
-                                resourceType: 'medication',
-                                resourceId: id,
-                                resourceName: oldMedication.generic_name,
-                                oldValue: oldMedication,
-                                metadata: {
+                            commitThen(req, res, () => {
+                                auditSuccess(req, {
+                                    action: 'delete_master_medication',
+                                    resourceType: 'medication',
+                                    resourceId: id,
+                                    resourceName: oldMedication.generic_name,
+                                    oldValue: oldMedication,
+                                    metadata: {
+                                        medication_doses_removed: medicationDosesRemoved,
+                                        treatment_effects_detached: treatmentEffectsDetached,
+                                        treatment_orders_detached: treatmentOrdersDetached,
+                                        case_treatments_detached: caseTreatmentsDetached
+                                    }
+                                });
+                                res.json({
+                                    message: 'Medication deleted',
                                     medication_doses_removed: medicationDosesRemoved,
                                     treatment_effects_detached: treatmentEffectsDetached,
                                     treatment_orders_detached: treatmentOrdersDetached,
                                     case_treatments_detached: caseTreatmentsDetached
-                                }
-                            });
-                            res.json({
-                                message: 'Medication deleted',
-                                medication_doses_removed: medicationDosesRemoved,
-                                treatment_effects_detached: treatmentEffectsDetached,
-                                treatment_orders_detached: treatmentOrdersDetached,
-                                case_treatments_detached: caseTreatmentsDetached
+                                });
                             });
                         });
                     });
@@ -733,28 +735,29 @@ router.delete('/master/medications/all', authenticateToken, requireEducator, (re
                                 return res.status(500).json({ error: err.message });
                             }
                             const deleted = this.changes ?? 0;
-                            dbAdapter.run('COMMIT');
-                            auditSuccess(req, {
-                                action: 'delete_all_master_medications',
-                                resourceType: 'medication_catalog',
-                                resourceId: 'medications',
-                                oldValue: { medication_count: oldCount },
-                                newValue: { medication_count: 0 },
-                                metadata: {
+                            commitThen(req, res, () => {
+                                auditSuccess(req, {
+                                    action: 'delete_all_master_medications',
+                                    resourceType: 'medication_catalog',
+                                    resourceId: 'medications',
+                                    oldValue: { medication_count: oldCount },
+                                    newValue: { medication_count: 0 },
+                                    metadata: {
+                                        deleted,
+                                        medication_doses_removed: medicationDosesRemoved,
+                                        treatment_effects_detached: treatmentEffectsDetached,
+                                        treatment_orders_detached: treatmentOrdersDetached,
+                                        case_treatments_detached: caseTreatmentsDetached
+                                    }
+                                });
+                                res.json({
+                                    message: 'All medications deleted',
                                     deleted,
                                     medication_doses_removed: medicationDosesRemoved,
                                     treatment_effects_detached: treatmentEffectsDetached,
                                     treatment_orders_detached: treatmentOrdersDetached,
                                     case_treatments_detached: caseTreatmentsDetached
-                                }
-                            });
-                            res.json({
-                                message: 'All medications deleted',
-                                deleted,
-                                medication_doses_removed: medicationDosesRemoved,
-                                treatment_effects_detached: treatmentEffectsDetached,
-                                treatment_orders_detached: treatmentOrdersDetached,
-                                case_treatments_detached: caseTreatmentsDetached
+                                });
                             });
                         });
                     });

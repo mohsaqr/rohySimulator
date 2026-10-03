@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.4] — 2026-10-03
+
+- **Writes answer after they commit.** Six admin and educator write routes (delete a user, delete one or
+  all catalogue medications, replace a case's labs, remove a case lab) sent their 200 before the
+  database COMMIT had landed. A read straight after could still see the old rows, and the audit chain
+  recorded a success for a change that might not have committed. They now go through `commitThen()`,
+  which answers only after COMMIT; a failed COMMIT rolls back and returns 500 `COMMIT_FAILED`.
+
 ## [3.0.0-rc.3] — 2026-10-03
 
 - **Report a problem, translated.** The four menu strings rc.2 added in English only ("Report a

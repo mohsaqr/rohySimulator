@@ -17,6 +17,7 @@ import { logger } from '../logger.js';
 import { verifyAuditChain } from '../audit-chain.js';
 import {
     auditSuccess,
+    commitThen,
     buildUserPurgePlan,
     dbGet,
     enrollUserInCohort,
@@ -921,15 +922,16 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
                             dbAdapter.run('ROLLBACK');
                             return res.status(404).json({ error: 'User not found' });
                         }
-                        dbAdapter.run('COMMIT');
-                        auditSuccess(req, {
-                            action: 'admin_delete_user',
-                            resourceType: 'user',
-                            resourceId: userId,
-                            resourceName: targetUser.username,
-                            oldValue: targetUser
+                        return commitThen(req, res, () => {
+                            auditSuccess(req, {
+                                action: 'admin_delete_user',
+                                resourceType: 'user',
+                                resourceId: userId,
+                                resourceName: targetUser.username,
+                                oldValue: targetUser
+                            });
+                            res.json({ message: 'User deleted successfully', id: userId });
                         });
-                        return res.json({ message: 'User deleted successfully', id: userId });
                     });
                     return;
                 }
