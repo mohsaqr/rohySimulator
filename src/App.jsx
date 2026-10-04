@@ -272,9 +272,9 @@ function MainApp() {
          const data = await apiFetch('/cases');
          const landingCase = pickLandingCase(data?.cases || [], uiLanguage);
          if (landingCase) {
-            console.log('Auto-loading landing case:', landingCase.name, `(ui=${uiLanguage})`);
+            console.log('Auto-loading landing case:', landingCase.name ?? landingCase.case_code, `(ui=${uiLanguage})`);
             setActiveCase(landingCase);
-            EventLogger.caseLoaded(landingCase.id, landingCase.name);
+            EventLogger.caseLoaded(landingCase.id, landingCase.name ?? landingCase.case_code);
          }
       } catch (err) {
          console.error('Failed to load landing case:', err);
@@ -532,7 +532,7 @@ function MainApp() {
                      if (data?.session?.end_time) {
                         console.log('[Session] restored a server-ended session; user will exit through End');
                      } else {
-                        EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name);
+                        EventLogger.sessionResumed(savedSessionId, savedCase?.id, savedCase?.name ?? savedCase?.case_code);
                      }
                   } catch (err) {
                      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
@@ -746,7 +746,7 @@ function MainApp() {
       setCaseEndedAt(null);
       setShowFullPageSettings(false);
       // Log case loaded event
-      EventLogger.caseLoaded(caseData?.id, caseData?.name);
+      EventLogger.caseLoaded(caseData?.id, caseData?.name ?? caseData?.case_code);
    };
 
    // Handle settings panel open/close with logging

@@ -11,6 +11,6 @@ model.
 |--------|------|------|--------|
 | `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:48` |
 | `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:281` |
-| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:315` |
-| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:395` |
-| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:367` |
+| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:318` |
+| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:398` |
+| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:370` |
