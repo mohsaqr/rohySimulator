@@ -53,11 +53,13 @@ export default function StudentFirstRun({ onDone }) {
     const [oyonConfig, setOyonConfig] = useState(null); // null = tenant has Oyon off / unavailable
 
     const [wantsVoice, setWantsVoice] = useState(false);
-    // Mirrors today's behaviour (consent defaults ON once the tenant opts
-    // in) — but now the student SEES and can flip it before first capture.
-    // Pre-migration users who had opted out in this browser keep their 'no'.
+    // Consent starts OFF and is only ever given by the student ticking the
+    // box (QA 2026-10-04, PRV-22). It used to default ON once the tenant opted
+    // in, so pressing Start recorded consent nobody gave — and the next screen
+    // told a brand-new user "You previously agreed". A pre-ticked box is not
+    // consent. Only an explicit 'yes' already given in this browser pre-fills.
     const [oyonConsent, setOyonConsent] = useState(() => {
-        try { return localStorage.getItem(OYON_CONSENT_LS_KEY) !== '0'; } catch { return true; }
+        try { return localStorage.getItem(OYON_CONSENT_LS_KEY) === '1'; } catch { return false; }
     });
     const [micStatus, setMicStatus] = useState(null); // null | 'ok' | 'blocked'
     const [casesFailed, setCasesFailed] = useState(false);
@@ -236,7 +238,7 @@ export default function StudentFirstRun({ onDone }) {
                             <span className="text-sm text-neutral-200">{t('oyon:card_toggle')}</span>
                         </label>
                         <p className="text-xs text-neutral-500 mt-2">
-                            {t('oyon:card_note', { version: oyonConfig.consent_version || '' })}
+                            {t('oyon:card_note')}
                         </p>
                     </section>
                 )}

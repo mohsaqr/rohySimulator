@@ -197,7 +197,13 @@ export default function RoomNavigator({
             // so a spec that targets rooms by name is both locale-bound and
             // state-bound. The key is neither.
             data-testid="room-navigator"
-            className="flex items-stretch gap-1 px-3 py-2 bg-slate-950/95 backdrop-blur border-t border-slate-800 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
+            // overflow-x-auto is the last resort, not the layout: the buttons
+            // below shrink first (min-w-0, tighter padding under md). With
+            // every plugin room enabled, a 768px portrait tablet still had
+            // more rooms than room, and the bar CLIPPED the Course button off
+            // its right edge, unreachable (QA 2026-10-04, PRV-36). A bar that
+            // scrolls keeps every room reachable.
+            className="flex items-stretch gap-1 px-3 py-2 overflow-x-auto bg-slate-950/95 backdrop-blur border-t border-slate-800 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
             aria-label={t('room_navigation')}
         >
             {ROOM_DEFS
@@ -223,8 +229,9 @@ export default function RoomNavigator({
                     aria-label={t('room_course', { defaultValue: 'Course' })}
                     className="shrink-0 self-stretch px-3 rounded-lg flex items-center gap-2 bg-black text-white/85 ring-1 ring-white/10 hover:bg-neutral-900 hover:text-white transition-colors"
                 >
-                    <BookOpen className="w-4 h-4" />
-                    <span className="text-xs font-semibold">{t('room_course', { defaultValue: 'Course' })}</span>
+                    <BookOpen className="w-4 h-4" aria-hidden="true" />
+                    {/* Icon-only under md; the aria-label names it. */}
+                    <span className="text-xs font-semibold max-md:sr-only">{t('room_course', { defaultValue: 'Course' })}</span>
                 </button>
             )}
         </nav>
@@ -247,7 +254,7 @@ function RoomButton({ room, active, badge, onClick }) {
             onClick={onClick}
             aria-pressed={active}
             aria-label={showBadge ? t('room_ready_results', { label, count: badge }) : label}
-            className={`relative flex-1 px-4 py-2.5 rounded-lg flex items-center justify-center gap-2.5 transition-colors group ${
+            className={`relative flex-1 min-w-0 max-md:min-w-[3rem] px-2 md:px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 md:gap-2.5 transition-colors group ${
                 active
                     ? `${room.activeBg} ring-1 ${room.activeRing}`
                     : 'hover:bg-slate-900/60'

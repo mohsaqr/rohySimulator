@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, User, UserCheck, Brain, Download, Users } from 'lucide-react';
 import BodyMap from './BodyMap';
@@ -10,6 +10,7 @@ import usePhysicalExam from '../../hooks/usePhysicalExam';
 import { regionLabel } from './examinationLabels';
 import { useToast } from '../../contexts/ToastContext';
 import { bodyMapGender } from '../../services/patientDemographics';
+import { apiFetch } from '../../services/apiClient';
 
 /**
  * Manikin Panel - Main Physical Examination Interface
@@ -62,6 +63,43 @@ export default function ManikinPanel({
     const [selectedExamType, setSelectedExamType] = useState(null);
     const [examLog, setExamLog] = useState([]);
     const [currentFinding, setCurrentFinding] = useState(null);
+
+    // Rehydrate the log from the session's persisted findings. Every exam is
+    // already written to /sessions/:id/exam-findings, but the log lived only
+    // in this component's state, so a reload (or a room switch, which
+    // unmounts this panel) showed "No exams yet" over a session full of them
+    // (QA PRV-8). Merged under anything performed since mount, and only for
+    // the session the rows belong to. "Clear log" stays a view action: the
+    // record keeps what was examined.
+    useEffect(() => {
+        if (!sessionId) return undefined;
+        let cancelled = false;
+        apiFetch(`/sessions/${sessionId}/exam-findings`)
+            .then((data) => {
+                if (cancelled) return;
+                const rows = Array.isArray(data?.findings) ? data.findings : [];
+                const restored = rows.map((r) => ({
+                    regionId: r.body_region,
+                    examType: r.exam_type,
+                    // A special test is persisted as "<Test name>: <finding>"
+                    // under exam_type 'special' (usePhysicalExam).
+                    specialTest: r.exam_type === 'special' && String(r.finding).includes(': ')
+                        ? String(r.finding).split(': ')[0]
+                        : null,
+                    finding: r.finding,
+                    abnormal: Boolean(r.is_abnormal),
+                    timestamp: r.timestamp,
+                }));
+                if (restored.length === 0) return;
+                setExamLog((prev) => {
+                    const key = (e) => `${e.regionId}|${e.examType}|${e.specialTest || ''}`;
+                    const seen = new Set(prev.map(key));
+                    return [...restored.filter((e) => !seen.has(key(e))), ...prev];
+                });
+            })
+            .catch((err) => console.warn('[ManikinPanel] exam log restore failed:', err.message));
+        return () => { cancelled = true; };
+    }, [sessionId]);
 
 
     // Compute examined regions and abnormal regions from log

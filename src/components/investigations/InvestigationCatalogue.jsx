@@ -76,6 +76,7 @@ export default function InvestigationCatalogue({
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
                         placeholder={placeholder}
+                        aria-label={placeholder}
                         className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none transition-colors"
                     />
                 </div>
@@ -90,6 +91,7 @@ export default function InvestigationCatalogue({
                 <div className="relative">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <select
+                        aria-label={t('group_filter_label')}
                         value={groupFilter}
                         onChange={(e) => onGroupFilterChange(e.target.value)}
                         className="w-full pl-9 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-cyan-500 focus:outline-none appearance-none cursor-pointer transition-colors"

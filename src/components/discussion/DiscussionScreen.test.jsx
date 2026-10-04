@@ -81,7 +81,7 @@ vi.mock('./NotesDrawer', () => ({
     },
 }));
 vi.mock('./TextComposerModal', () => ({
-    default: function TextComposerModalStub() { return <div data-testid="text-composer" />; },
+    default: function TextComposerModalStub({ prompt }) { return <div data-testid="text-composer" data-prompt={prompt ?? ''} />; },
 }));
 vi.mock('./CaseSummaryModal', () => ({
     default: function CaseSummaryModalStub() { return <div data-testid="case-summary" />; },
@@ -340,5 +340,51 @@ describe('DiscussionScreen — component contract', () => {
         await screen.findByTestId('voice-control');
         expect(screen.queryByRole('button', { name: /start debrief/i })).toBeNull();
         expect(hookState.startConversation).not.toHaveBeenCalled();
+    });
+});
+
+describe('DiscussionScreen — caption (PRV-30)', () => {
+    // Regression lock: a long discussant reply was a fixed z-40 overlay that covered the voice controls and room bar, showed raw markdown, and vanished with the audio so a text-mode learner could not read the question (QA 2026-10-04, PRV-30)
+    const QUESTION = '**Your working diagnosis?** Walk me through the ECG first.';
+    beforeEach(() => {
+        localStorage.setItem('rohy_discussion_history_sess-cap', JSON.stringify([{ role: 'assistant', content: QUESTION }]));
+        hookState.messages = [{ role: 'assistant', content: QUESTION }];
+        fetchDiscussantForCase.mockResolvedValue(makeDiscussant());
+    });
+    afterEach(() => localStorage.removeItem('rohy_discussion_history_sess-cap'));
+
+    it('keeps the last question readable after speech ends, without markdown, in flow', async () => {
+        const { container } = renderWithProviders(
+            <DiscussionScreen sessionId="sess-cap" activeCase={ACTIVE_CASE} onClose={() => {}} />
+        );
+        const caption = await screen.findByTestId('debrief-caption');
+        expect(caption.textContent).toContain('Your working diagnosis? Walk me through the ECG first.');
+        expect(caption.textContent).not.toContain('**');
+        // Not an overlay: nothing in the caption, nor the caption itself, is fixed-position.
+        expect(caption.closest('.fixed')).toBeNull();
+        expect(container.querySelector('button.fixed.z-40')).toBeNull();
+    });
+
+    it('hands the question, markdown-free, to the text composer', async () => {
+        renderWithProviders(
+            <DiscussionScreen sessionId="sess-cap" activeCase={ACTIVE_CASE} onClose={() => {}} />
+        );
+        await screen.findByText('Dr. Debrief'); // "Type instead" is disabled until the discussant loads
+        fireEvent.click(screen.getByRole('button', { name: /Type instead/i }));
+        const composer = await screen.findByTestId('text-composer');
+        expect(composer.getAttribute('data-prompt')).toBe('Your working diagnosis? Walk me through the ECG first.');
+    });
+});
+
+
+describe('DiscussionScreen — header', () => {
+    // Regression lock: the discussant's name and role ran together as "Name(Role)" in the text read aloud and copied — the gap was only a CSS margin (QA 2026-10-04, PRV-33)
+    it('separates the discussant name and role with a real space', async () => {
+        fetchDiscussantForCase.mockResolvedValue(makeDiscussant());
+        const { container } = renderWithProviders(
+            <DiscussionScreen sessionId="sess-hdr" activeCase={ACTIVE_CASE} onClose={() => {}} />
+        );
+        await screen.findByText('Dr. Debrief');
+        expect(container.querySelector('header').textContent).toContain('Dr. Debrief (Case Debrief Tutor)');
     });
 });

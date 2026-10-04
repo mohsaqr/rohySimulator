@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
 import { oyonClientLog } from '../oyon/clientLogger';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
@@ -307,6 +307,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // Last (voice|language) pair we already warned about — one toast per
     // combination, re-armed automatically when either side changes.
     const voiceLangWarnedRef = useRef(null);
+    const alarmVoiceWarnedRef = useRef(null);
     const { user } = useAuth();
     const { caseLanguage } = useLanguage();
     const { t } = useTranslation('chat');
@@ -337,9 +338,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const { obtained } = patientRecord;
     const [messages, setMessages] = useState([]);
     const [chatSettings, setChatSettings] = useState({
-        doctorName: 'Dr. Carmen',
+        doctorName: '',
         doctorAvatar: ''
     });
+    // The learner's own bubbles carry THEIR name unless an admin set a
+    // platform-wide one. The built-in default used to be "Dr. Carmen", so every
+    // learner was labelled as the same invented doctor (QA 2026-10-04, PRV-38).
+    const learnerLabel = chatSettings.doctorName || user?.name || user?.username || '';
 
     // Voice mode (Stack T) — voiceSettings is loaded from /api/platform-settings/voice.
     // Defaults are intentionally absent in the frontend; voice mode only activates
@@ -974,12 +979,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             richSystemPrompt += personaBlocks;
         }
 
+        // answerKey is the persona's explicit argument (config.knowledge),
+        // off unless an educator turned it on: a patient does not know their
+        // own diagnosis.
         richSystemPrompt += buildPatientCaseDesignContext({
             ...activeCase,
             name: sourceName,
             system_prompt: sourceSystemPrompt,
             config,
-        });
+        }, { answerKey: templateForThisCase?.config?.knowledge?.answerKey === true });
 
         if (config.constraints) {
             richSystemPrompt += `\n## CONSTRAINTS\n${config.constraints}\n`;
@@ -1363,7 +1371,11 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 try { settings = await voiceSettingsPromiseRef.current; }
                 catch { settings = null; /* loud path below, never a wrong voice */ }
             }
-            const r = resolveSpeakerVoice(activeCase?.config?.voice, patientTemplate?.config?.voice, settings);
+            // The session's server snapshot first: activeCase can be a copy
+            // restored from localStorage, taken before the voice was set, and
+            // resolving from it played the persona voice in place of the
+            // configured one (QA 2026-10-04, PRV-29).
+            const r = resolveSpeakerVoice((caseSnapshot?.config ?? activeCase?.config)?.voice, patientTemplate?.config?.voice, settings);
             if (!r.file) {
                 // No playable voice AND no language default — mute with
                 // truth. Two distinct stories (plan P2): a voice IS
@@ -1441,7 +1453,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         try {
             responseText = await LLMService.streamMessage(
                 sessionId,
-                [...messages, userMsg],
+                // A failed turn is the app talking, not the patient: sent on,
+                // "Error: LLM provider unreachable" reached the model as the
+                // patient's own previous reply (QA 2026-10-04, PRV-38).
+                [...messages.filter(m => !m.error), userMsg],
                 richSystemPrompt,
                 wantSpeech ? 'voice' : undefined,
                 {
@@ -1576,9 +1591,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const speakPatientAlarm = useCallback(({ text }) => {
         if (!voiceMode || activeTab !== 'patient') return false;
         if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return false;
-        const r = resolveSpeakerVoice(activeCase?.config?.voice, patientTemplate?.config?.voice);
+        const r = resolveSpeakerVoice((caseSnapshot?.config ?? activeCase?.config)?.voice, patientTemplate?.config?.voice);
         const spokenText = sanitizeResponseText(text);
-        if (!spokenText || !r.file) return false;
+        if (!spokenText) return false;
+        if (!r.file) {
+            // A configured voice that cannot play here fails LOUDLY on every
+            // path, this one included — it used to return silently (PRV-29).
+            // Once per voice: alarms repeat, the toast should not.
+            if (r.tier === 'invalid' && alarmVoiceWarnedRef.current !== r.requestedFile) {
+                alarmVoiceWarnedRef.current = r.requestedFile;
+                toast?.error?.(t('voice_wrong_provider', { voice: r.requestedFile, provider: r.provider || '?' }));
+            }
+            return false;
+        }
 
         notifySubstitutionOnce(toast, t, r);
         setMessages(prev => [...prev, { role: 'assistant', content: spokenText }]);
@@ -1603,7 +1628,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         });
         return true;
-    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, t, setSpeaking, setVisemes]);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, caseSnapshot?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, t, setSpeaking, setVisemes]);
 
     useEffect(() => {
         return subscribe((event) => {
@@ -1791,7 +1816,8 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         if (!agent) return;
 
         const userMsg = { role: 'user', content: input };
-        const currentConversation = agentConversations[agentType] || [];
+        // Failed turns are not the agent's words (PRV-38) — see runPatientTurn.
+        const currentConversation = (agentConversations[agentType] || []).filter(m => !m.error);
         EventLogger.agentMessageSent(agentType, agent.name || agentType, input, COMPONENTS.CHAT_INTERFACE);
 
         // Use functional update to properly add user message
@@ -1840,7 +1866,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             // Use functional update with fallback to empty array
             setAgentConversations(prev => ({
                 ...prev,
-                [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: t('agent_response_error') }]
+                [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: t('agent_response_error'), error: true }]
             }));
         }
 
@@ -2119,7 +2145,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     </div>
                 )}
 
-                {currentMessages.map((msg, i) => (
+                {currentMessages.map((msg, i) => msg.error && msg.role === 'assistant' && msg.content ? (
+                    // A failed reply is the APP speaking, so it is drawn as a
+                    // notice — no patient/agent avatar, no name. As a bubble
+                    // it read as the patient saying "Error: LLM provider
+                    // unreachable" (QA 2026-10-04, PRV-38).
+                    <div key={i} role="alert" data-testid="chat-error-notice" className="flex justify-center">
+                        <div className="max-w-[85%] flex items-start gap-2 px-3 py-2 rounded-lg text-xs leading-relaxed bg-red-950/40 text-red-200 border border-red-800/60">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                            <span>{msg.content}</span>
+                        </div>
+                    </div>
+                ) : (
                     <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {/* Assistant avatar and name */}
                         {msg.role === 'assistant' && (
@@ -2167,12 +2204,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                             <div className="flex flex-col items-center gap-1 shrink-0">
                                 <div className="w-9 h-9 rounded-full bg-blue-900/30 flex items-center justify-center border border-blue-700 overflow-hidden">
                                     {chatSettings.doctorAvatar ? (
-                                        <img src={chatSettings.doctorAvatar} alt={chatSettings.doctorName} className="w-full h-full object-cover" />
+                                        <img src={chatSettings.doctorAvatar} alt={learnerLabel} className="w-full h-full object-cover" />
                                     ) : (
                                         <Stethoscope className="w-5 h-5 text-blue-400" />
                                     )}
                                 </div>
-                                <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">{chatSettings.doctorName}</span>
+                                <span className="text-[10px] text-neutral-500 max-w-[60px] truncate">{learnerLabel}</span>
                             </div>
                         )}
                     </div>
@@ -2342,6 +2379,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         <input
                             type="text"
                             ref={setComposerEl}
+                            aria-label={t('composer_label')}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             disabled={caseEnded || loading || (activeTab !== 'patient' && !agentStatus?.canChat)}
@@ -2356,9 +2394,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         <button
                             type="submit"
                             disabled={caseEnded || loading || !input.trim() || (activeTab !== 'patient' && !agentStatus?.canChat)}
+                            aria-label={t('send_message')}
                             className="absolute right-2 top-2 p-1.5 bg-blue-600 rounded-md hover:bg-blue-500 transition-colors text-white disabled:bg-neutral-700 disabled:text-neutral-500"
                         >
-                            <Send className="w-4 h-4" />
+                            <Send className="w-4 h-4" aria-hidden="true" />
                         </button>
                     </form>
                 )}

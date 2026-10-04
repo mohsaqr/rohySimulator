@@ -105,3 +105,13 @@ describe('RadiologyReportView — side effects on mount', () => {
         expect(meta.has_image).toBe(true);
     });
 });
+
+describe('RadiologyReportView — no catalogue indications as the patient\'s', () => {
+    // Regression lock: the report printed the study's generic common indications ("Pneumonia; Heart failure; Lung mass") as this patient's clinical indication (QA 2026-10-04, PRV-37)
+    it('ignores a stored `indications` list', () => {
+        const stored = { ...baseResult, result_data: { ...baseResult.result_data, indications: ['Pneumonia', 'Heart failure', 'Lung mass'] } };
+        const { container } = render(<RadiologyReportView result={stored} patientInfo={{}} />);
+        expect(container.textContent).not.toContain('Pneumonia');
+        expect(container.textContent).not.toContain('Lung mass');
+    });
+});

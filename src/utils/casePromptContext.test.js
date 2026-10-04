@@ -129,6 +129,25 @@ describe('case prompt context surfaces', () => {
         expect(out).not.toContain('Expected diagnosis');
     });
 
+    // Regression lock: the patient and every answerKey-off agent were handed the diagnosis through the authoring title/description in the summary (QA 2026-10-04, PRV-32)
+    it('keeps the authoring title and description out unless answerKey is on', () => {
+        const withTitle = { ...richCase, name: 'Inferior STEMI - teaching case', description: 'ECG shows inferior ST elevation (RCA occlusion).' };
+        const patient = buildPatientCaseDesignContext(withTitle);
+        expect(patient).not.toContain('Inferior STEMI');
+        expect(patient).not.toContain('RCA occlusion');
+        expect(patient).toContain('Patient: Richard Thompson');
+
+        const patientWithKey = buildPatientCaseDesignContext(withTitle, { answerKey: true });
+        expect(patientWithKey).toContain('Case: Inferior STEMI - teaching case');
+        expect(patientWithKey).toContain('RCA occlusion');
+
+        const consultant = buildDiscussionCaseContext(withTitle, 'chart');
+        expect(consultant).not.toContain('Inferior STEMI');
+        expect(consultant).not.toContain('RCA occlusion');
+        const tutor = buildDiscussionCaseContext(withTitle, 'summary', { answerKey: true });
+        expect(tutor).toContain('Inferior STEMI');
+    });
+
     it('full debrief context includes all authored clinical expectations and configured results', () => {
         // The legacy 'full' name still maps to the chart scope; the answer key
         // it used to imply is now an explicit argument.

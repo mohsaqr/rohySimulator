@@ -115,7 +115,7 @@ export default function OyonConsentUpdate() {
                {/* Voice keeps a per-frame series of measurements, not only a
                    summary, so the typing-era note ("only summaries are stored")
                    would be untrue once voice is in scope. */}
-               {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note', { version: state.requiredVersion || '' })}
+               {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note')}
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-1">

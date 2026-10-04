@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Send } from 'lucide-react';
 
-export default function TextComposerModal({ onClose, onSend, busy }) {
+// `prompt` is the discussant's last line, shown above the box: the learner is
+// answering it, and the modal used to blur it out of sight (QA 2026-10-04,
+// PRV-30).
+export default function TextComposerModal({ onClose, onSend, busy, prompt = null }) {
     const { t } = useTranslation('discussion');
     const [text, setText] = useState('');
 
@@ -22,10 +25,10 @@ export default function TextComposerModal({ onClose, onSend, busy }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
-            <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl border border-slate-700">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-950/60">
+            <div role="dialog" aria-modal="true" aria-labelledby="text-composer-title" className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl border border-slate-700">
                 <header className="flex items-center justify-between px-5 py-3 border-b border-slate-700">
-                    <h2 className="text-sm font-semibold text-slate-100">{t('type_a_message')}</h2>
+                    <h2 id="text-composer-title" className="text-sm font-semibold text-slate-100">{t('type_a_message')}</h2>
                     <button
                         type="button"
                         onClick={onClose}
@@ -36,7 +39,16 @@ export default function TextComposerModal({ onClose, onSend, busy }) {
                     </button>
                 </header>
                 <div className="px-5 py-4">
+                    {prompt && (
+                        <figure className="mb-3">
+                            <figcaption className="text-xs font-medium text-slate-400 mb-1">{t('composer_replying_to')}</figcaption>
+                            <blockquote className="max-h-40 overflow-y-auto rounded-lg bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-200 whitespace-pre-wrap break-words">
+                                {prompt}
+                            </blockquote>
+                        </figure>
+                    )}
                     <textarea
+                        aria-label={t('type_a_message')}
                         autoFocus
                         value={text}
                         onChange={(e) => setText(e.target.value)}

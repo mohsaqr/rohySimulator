@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Activity, Award, FlaskConical, Pill, Stethoscope, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { parseConfig } from '../../utils/parseConfig.js';
+import { genderLabel } from '../../utils/genderLabel.js';
 import { resolveCaseHistory } from '../../utils/casePromptContext.js';
 import { regionLabel, techniqueLabel } from '../examination/examinationLabels';
 import EventLogger, { COMPONENTS, OBJECT_TYPES } from '../../services/eventLogger';
@@ -48,6 +49,12 @@ function resolveInitialVitals(activeCase, cfg) {
 // Uses the existing read-only session endpoints — no new backend work.
 export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
     const { t } = useTranslation('discussion');
+    // Escape closes, like every other modal (QA 2026-10-04, PRV-31).
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
     // Region and technique names are keyed in the `examination` namespace, not
     // this one — same second-hook pattern PhysicalExamEditor uses so the exam
     // room and the summary say the same words for the same body part.
@@ -94,12 +101,14 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
 
     return (
         <div data-testid="case-summary-modal" className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm">
-            <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700">
+            <div role="dialog" aria-modal="true" aria-labelledby="case-summary-title" className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700">
                 <header className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-900/50 rounded-t-2xl">
                     <div>
                         <div className="text-xs font-semibold uppercase tracking-wider text-indigo-400">{t('case_debrief_summary')}</div>
-                        <h2 className="text-lg font-semibold text-slate-100">
-                            {cfg.patient_name || activeCase?.name || t('patient_fallback')}
+                        {/* Never `activeCase.name`: that is the authoring title,
+                            often the diagnosis (PRV-21). */}
+                        <h2 id="case-summary-title" className="text-lg font-semibold text-slate-100">
+                            {cfg.patient_name || t('patient_fallback')}
                         </h2>
                     </div>
                     <button
@@ -114,9 +123,9 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
 
                 <div className="overflow-y-auto px-6 py-5 space-y-6 text-slate-100">
                     <Section title={t('section_demographics')}>
-                        <Row label={t('label_name')} value={cfg.patient_name || activeCase?.name} />
+                        <Row label={t('label_name')} value={cfg.patient_name} />
                         <Row label={t('label_age')} value={demographics.age ? t('age_years', { age: demographics.age }) : null} />
-                        <Row label={t('label_gender')} value={demographics.gender} />
+                        <Row label={t('label_gender')} value={genderLabel(t, demographics.gender) || null} />
                         <Row label={t('label_mrn')} value={demographics.mrn} />
                     </Section>
 
