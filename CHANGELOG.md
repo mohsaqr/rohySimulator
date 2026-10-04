@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.22] — 2026-10-04
+
+- **Test fix:** the learner case-title test exercised the Oyon route only where the developer's shell
+  had `OYON_ENABLED=1`; CI's unit job has none, so the route answered 503 and the run failed. The test
+  now starts its server with Oyon on and requires the route to answer.
+
 ## [3.0.0-rc.21] — 2026-10-04
 
 - **Oyon 3.3.3: the capture pill speaks the interface language and can be used by keyboard and screen
