@@ -122,5 +122,6 @@
   "unmute_alarms": "Activar alarmas",
   "unsilence_title": "Haga clic para activar — la alarma sonará nuevamente",
   "using_case_vitals": "Usando constantes vitales del caso",
-  "wide_qrs": "QRS ancho"
+  "wide_qrs": "QRS ancho",
+  "close_controls": "Cerrar los controles del simulador"
 }

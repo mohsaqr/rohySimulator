@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "қолжетімсіз",
   "voice_group_other": "Басқа",
   "voice_unplayable_note": "Бапталған {requested} дауысы {provider} провайдерінде ойнатылмайды — бұл түзетілмейінше ештеңе айтылмайды.",
-  "yes": "Иә"
+  "yes": "Иә",
+  "gender_male": "Ер",
+  "gender_female": "Әйел",
+  "gender_other": "Басқа"
 }

@@ -73,5 +73,13 @@
   "urgency_routine": "Rutina",
   "urgency_stat": "ESTADO",
   "urgency_stat_bolus": "ESTADO (Bolo)",
-  "warning_prefix": "Advertencia: {message}"
+  "warning_prefix": "Advertencia: {message}",
+  "search_placeholder_medication": "Buscar medicamentos…",
+  "search_placeholder_iv_fluid": "Buscar fluidos IV…",
+  "search_placeholder_oxygen": "Buscar oxigenoterapia…",
+  "search_placeholder_nursing": "Buscar cuidados de enfermería…",
+  "dose_unit_label": "Unidad de dosis",
+  "rate_unit_label": "Unidad de velocidad",
+  "search_treatments_label": "Buscar tratamientos",
+  "close_order_form": "Cerrar el formulario de pedido"
 }

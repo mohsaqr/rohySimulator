@@ -73,5 +73,13 @@
   "urgency_routine": "Routine",
   "urgency_stat": "STAT",
   "urgency_stat_bolus": "STAT (Bolus)",
-  "warning_prefix": "Warnung: {message}"
+  "warning_prefix": "Warnung: {message}",
+  "search_placeholder_medication": "Medikamente durchsuchen…",
+  "search_placeholder_iv_fluid": "Infusionen durchsuchen…",
+  "search_placeholder_oxygen": "Sauerstofftherapie durchsuchen…",
+  "search_placeholder_nursing": "Pflegemaßnahmen durchsuchen…",
+  "dose_unit_label": "Dosiseinheit",
+  "rate_unit_label": "Rateneinheit",
+  "search_treatments_label": "Behandlungen durchsuchen",
+  "close_order_form": "Bestellformular schließen"
 }

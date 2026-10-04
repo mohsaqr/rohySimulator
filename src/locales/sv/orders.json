@@ -31,7 +31,7 @@
   "order_status": "Beställningsstatus",
   "ordered_badge": "Beställd",
   "ordered_labs": "Beställde {count} labbprov",
-  "ordered_radiology": "Beställde {count} radiologiundersökning(ar)",
+  "ordered_radiology": "Beställde {count, plural, one {# radiologiundersökning} other {# radiologiundersökningar}}",
   "ordering": "Beställer...",
   "panel_title": "{label}: {tests} prover ({available} tillgängliga)",
   "ready": "Klar",

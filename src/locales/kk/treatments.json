@@ -73,5 +73,13 @@
   "urgency_routine": "Жоспарлы",
   "urgency_stat": "STAT",
   "urgency_stat_bolus": "STAT (болюс)",
-  "warning_prefix": "Ескерту: {message}"
+  "warning_prefix": "Ескерту: {message}",
+  "search_placeholder_medication": "Дәрілерді іздеу…",
+  "search_placeholder_iv_fluid": "Көктамыр ішілік ерітінділерді іздеу…",
+  "search_placeholder_oxygen": "Оттегі терапиясын іздеу…",
+  "search_placeholder_nursing": "Мейіргерлік күтімді іздеу…",
+  "dose_unit_label": "Доза бірлігі",
+  "rate_unit_label": "Жылдамдық бірлігі",
+  "search_treatments_label": "Емдерді іздеу",
+  "close_order_form": "Тағайындау формасын жабу"
 }

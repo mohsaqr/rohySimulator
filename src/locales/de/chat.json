@@ -92,5 +92,7 @@
   "wait_relative_0": "Die Angehörigen werden kontaktiert …",
   "wait_relative_1": "Angehörige auf dem Weg aus dem Wartebereich",
   "wait_relative_2": "Angehörige nähern sich dem Raum",
-  "waiting_for_response": "Warte auf Antwort …"
+  "waiting_for_response": "Warte auf Antwort …",
+  "composer_label": "Nachricht",
+  "send_message": "Nachricht senden"
 }

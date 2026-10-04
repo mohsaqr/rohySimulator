@@ -74,5 +74,6 @@
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
   "voice_not_supported": "La entrada por voz no es compatible en este navegador. Utiliza el botón de escribir a continuación.",
-  "your_actions": "Tus acciones"
+  "your_actions": "Tus acciones",
+  "composer_replying_to": "La pregunta del tutor"
 }

@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "inte tillgänglig",
   "voice_group_other": "Övrigt",
   "voice_unplayable_note": "Den konfigurerade rösten {requested} kan inte spelas upp på {provider} — inget kommer att läsas upp förrän detta är åtgärdat.",
-  "yes": "Ja"
+  "yes": "Ja",
+  "gender_male": "Man",
+  "gender_female": "Kvinna",
+  "gender_other": "Annat"
 }

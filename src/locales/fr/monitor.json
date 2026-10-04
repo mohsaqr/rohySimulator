@@ -122,5 +122,6 @@
   "unmute_alarms": "Rétablir les alarmes",
   "unsilence_title": "Cliquez pour réactiver — l'alarme se déclenchera à nouveau",
   "using_case_vitals": "Constantes du cas utilisées",
-  "wide_qrs": "QRS large"
+  "wide_qrs": "QRS large",
+  "close_controls": "Fermer les commandes du simulateur"
 }

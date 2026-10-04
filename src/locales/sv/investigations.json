@@ -19,8 +19,8 @@
   "dashboard_pending_highlight_lab": "{count} prov väntar",
   "dashboard_pending_highlight_radiology": "{count} undersökningar väntar",
   "dashboard_ready_body": "klara i arbetslistan. Klicka på ett svar i arbetslistan till höger för att öppna det — rapporterna staplas här allteftersom du läser dem.",
-  "dashboard_ready_highlight_lab": "{count} nya svar",
-  "dashboard_ready_highlight_radiology": "{count} nya undersökningar",
+  "dashboard_ready_highlight_lab": "{count, plural, one {# nytt svar} other {# nya svar}}",
+  "dashboard_ready_highlight_radiology": "{count, plural, one {# ny undersökning} other {# nya undersökningar}}",
   "edit_lab_values_desc": "Ändra labbvärden under simuleringen. Ändringarna slår igenom direkt om proverna redan är beställda.",
   "edit_lab_values_title": "Redigera labbvärden (instruktör)",
   "electronically_signed": "Elektroniskt signerad",
@@ -55,7 +55,7 @@
   "legend_high": "HÖGT - Över referensintervallet",
   "legend_low": "LÅGT - Under referensintervallet",
   "legend_normal": "Normalt - Inom referensintervallet",
-  "medical_center": "VipSim Medical Center",
+  "medical_center": "Rohy undervisningssjukhus",
   "modality_cardiac": "Hjärta",
   "modality_ct": "DT",
   "modality_dexa": "DEXA",
@@ -166,8 +166,8 @@
   "toast_order_failed": "Beställningen misslyckades: {message}",
   "toast_ordered_lab": "Beställde {count} prov",
   "toast_ordered_lab_instant": "Beställde {count} prov — direkt",
-  "toast_ordered_radiology": "Beställde {count} undersökning(ar)",
-  "toast_ordered_radiology_instant": "Beställde {count} undersökning(ar) — direkt",
+  "toast_ordered_radiology": "Beställde {count, plural, one {# undersökning} other {# undersökningar}}",
+  "toast_ordered_radiology_instant": "Beställde {count, plural, one {# undersökning} other {# undersökningar}} — direkt",
   "toast_update_failed": "Kunde inte uppdatera labbvärdet",
   "turnaround_short": "{minutes} min",
   "unknown_patient": "Okänd patient",
@@ -181,5 +181,6 @@
   "worklist": "Arbetslista",
   "worklist_empty_hint": "Välj i katalogen till vänster.",
   "worklist_empty_lab": "Inga prover beställda ännu.",
-  "worklist_empty_radiology": "Inga undersökningar beställda ännu."
+  "worklist_empty_radiology": "Inga undersökningar beställda ännu.",
+  "group_filter_label": "Filtrera efter grupp"
 }

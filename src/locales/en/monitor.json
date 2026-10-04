@@ -18,6 +18,7 @@
   "clear_saved_settings": "Clear Saved Settings",
   "clear_settings_confirm": "Clear saved settings? Monitor will use factory defaults on next load.",
   "clear_settings_title": "Clear Settings",
+  "close_controls": "Close simulator controls",
   "current": "Current",
   "custom_trend_description": "Linear trend to HR {hr}, SpO2 {spo2}%",
   "custom_trend_name": "Custom Trend ({duration}m)",

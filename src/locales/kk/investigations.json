@@ -55,7 +55,7 @@
   "legend_high": "ЖОҒАРЫ — референстік аралықтан жоғары",
   "legend_low": "ТӨМЕН — референстік аралықтан төмен",
   "legend_normal": "Қалыпты — референстік аралық шегінде",
-  "medical_center": "VipSim медициналық орталығы",
+  "medical_center": "Rohy оқу ауруханасы",
   "modality_cardiac": "Кардиологиялық",
   "modality_ct": "КТ",
   "modality_dexa": "DEXA",
@@ -181,5 +181,6 @@
   "worklist": "Жұмыс тізімі",
   "worklist_empty_hint": "Сол жақтағы каталогтан таңдаңыз.",
   "worklist_empty_lab": "Әзірге талдаулар тағайындалмаған.",
-  "worklist_empty_radiology": "Әзірге зерттеулер тағайындалмаған."
+  "worklist_empty_radiology": "Әзірге зерттеулер тағайындалмаған.",
+  "group_filter_label": "Топ бойынша сүзу"
 }
