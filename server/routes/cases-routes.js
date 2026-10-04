@@ -489,7 +489,9 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
         // Create initial version snapshot — of what was STORED (clamped,
         // canonicalised, gender written back), not the raw request body, so
         // a restore brings back exactly the row that existed.
-        createCaseVersion(caseId, req.user.id, 'created', 'Initial case creation', {
+        // Awaited with the specialists below: the response must not precede
+        // the version it created (the editor's History reads it next).
+        const versioned = createCaseVersion(caseId, req.user.id, 'created', 'Initial case creation', {
             name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenantId(req)
         });
 
@@ -499,9 +501,9 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
         // agents right after saving already sees them. A failure is logged
         // and does not fail the save: the case exists, and the boot sweep
         // (attachStandingSpecialists) attaches whatever this missed.
-        const attached = attachStandingSpecialists({ caseId }).catch((attachErr) => {
+        const attached = Promise.all([versioned, attachStandingSpecialists({ caseId }).catch((attachErr) => {
             (req.log || routesCasesLog).warn('standing specialist attach failed', { caseId, error: attachErr.message });
-        });
+        })]);
 
         // Stamp the visible case code (needs the autoincrement id, hence a
         // follow-up UPDATE). Server-generated only — anything the client sent
@@ -605,8 +607,9 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                 status: 'success'
             });
 
-            // Create version snapshot — of what was STORED (see POST).
-            createCaseVersion(caseId, req.user.id, 'updated', 'Case configuration updated', {
+            // Create version snapshot — of what was STORED (see POST);
+            // settled before the response, like the specialists below.
+            const versioned = createCaseVersion(caseId, req.user.id, 'updated', 'Case configuration updated', {
                 name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenantId(req)
             });
 
@@ -614,9 +617,9 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
             // cardiologist on the phone. Settled before the response, as on
             // create, so the editor's agent list already shows it; a failure
             // is logged, not fatal — session start and the boot sweep repeat it.
-            attachStandingSpecialists({ caseId }).catch((attachErr) => {
+            Promise.all([versioned, attachStandingSpecialists({ caseId }).catch((attachErr) => {
                 (req.log || routesCasesLog).warn('standing specialist attach failed', { caseId, error: attachErr.message });
-            }).then(() => {
+            })]).then(() => {
                 // Echo the config actually stored (immutable case_language pinned).
                 res.json({ id: caseId, ...req.body, config: safeConfig, ...withWarnings(warnings) });
             });
@@ -1403,6 +1406,8 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
                     });
 
                     // Snapshot what was STORED (normalised), same as POST/PUT.
+                    // Answer after the new version lands, so the History panel's
+                    // reload shows it.
                     createCaseVersion(currentCase.id, req.user.id, 'restored', `Restored from version ${version.version_number}`, {
                         name: snapshot.name,
                         description: snapshot.description,
@@ -1410,9 +1415,9 @@ router.post('/cases/:caseId/restore/:versionId', authenticateToken, requireAdmin
                         config: safeConfig,
                         scenario: scenarioWithSource,
                         tenant_id: tenantId(req),
+                    }).then(() => {
+                        res.json({ message: 'Case restored successfully', restoredFromVersion: version.version_number, ...withWarnings(warnings) });
                     });
-
-                    res.json({ message: 'Case restored successfully', restoredFromVersion: version.version_number, ...withWarnings(warnings) });
                 });
             }
         );

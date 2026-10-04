@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.11] — 2026-10-04
+
+- **Case versions are numbered atomically and exist before the save answers.** A version was numbered by
+  reading the highest number and inserting separately, after the response had gone out: two quick saves
+  (the editor auto-saves on every step) could share a number, and the version a save created could be
+  missing from a History list read right after it. One `INSERT … SELECT MAX+1` statement now writes it,
+  and create, update and restore answer only once it has landed.
+
 ## [3.0.0-rc.10] — 2026-10-04
 
 - **The audits and the e2e journey now hold the new contracts.** `audit-investigations.sh` and
