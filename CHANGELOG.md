@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.7] — 2026-10-04
+
+- **A paused or remounted monitor keeps the patient's real vitals.** The restore of the session's last
+  reading raced the case-load effect, which reset to the admission vitals when the case snapshot landed
+  late — a falsely recovered patient. The restored reading now wins in either order.
+- **Alarms survive a reload.** The center's live alarms are memory-only; the monitor now re-asserts an
+  unacknowledged alarm it still holds (with its reading) once after a reload. An ended case raises no
+  new alarms, and its clock keeps the elapsed time at the end instead of showing 0:00.
+- **Treatment effects stay applied.** The jitter loop rebuilt the display from untreated values, so with
+  any treatment running the numbers flickered between treated and untreated every second. Doses are
+  applied once (morphine 4 mg no longer acts like 8 mg) and the order form previews the effect at the
+  typed dose.
+- **Cleaner vitals history.** Nothing is persisted until the session's own reading has been restored and
+  the clock is anchored to the server start time — no admission-vitals rows at minute 0 on room switch.
+- **Muted sources stay in Recent activity**; muting still silences toasts, banners and audio.
+- **Layout and accessibility.** The simulator drawer is inert while closed and its tabs wrap; alarm rows,
+  the treatment summary and the order buttons no longer overlap on a tablet or a crowded monitor; the
+  treatment order form is labelled field by field and no longer sits inside a button.
+
 ## [3.0.0-rc.6] — 2026-10-04
 
 - **Saving a case's labs no longer erases learners' lab orders.** `PUT /cases/:id/labs` (fired by the

@@ -36,6 +36,14 @@ export function routeNotification(notification, prefs, transient) {
     const fromMatrix = DEFAULT_ROUTING[`${matrixSource}/${severity}`] || [];
     let surfaces = explicit && explicit.length > 0 ? [...explicit] : [...fromMatrix];
     const persistedOnly = surfaces.includes(SURFACES.BACKEND) ? [SURFACES.BACKEND] : [];
+    // What the BLANKET rules (DND, pause, minSeverity, source mute) leave: the
+    // record, both of it — the server's and the in-app history. They are
+    // volume controls; the history is not loud, and it is exactly where a
+    // learner looks for what they missed while muted (QA 2026-10-04, PRV-35:
+    // a muted source vanished from Recent activity). Ack and snooze keep
+    // `persistedOnly`: those are "I have seen THIS one", so it need not be
+    // listed again.
+    const recordOnly = surfaces.filter(s => s === SURFACES.HISTORY || s === SURFACES.BACKEND);
 
     // Acked: explicit user action on this exact key. Honor it regardless of
     // severity — if the clinician acks a critical alarm, they have seen it
@@ -64,17 +72,17 @@ export function routeNotification(notification, prefs, transient) {
     const now = Date.now();
     const isPaused = prefs.dnd || (prefs.pausedUntil && now < prefs.pausedUntil);
     if (isPaused && !isCriticalClinical) {
-        return persistedOnly;
+        return recordOnly;
     }
 
     // Severity threshold.
     if (severityRank(severity) < severityRank(prefs.minSeverity) && !isCriticalClinical) {
-        return persistedOnly;
+        return recordOnly;
     }
 
     // Source mute.
     if (prefs.mutedSources.includes(matrixSource) && !isCriticalClinical) {
-        return persistedOnly;
+        return recordOnly;
     }
 
     // Strip muted surfaces.

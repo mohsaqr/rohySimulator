@@ -33,13 +33,29 @@ function pickSeverity(vital, value) {
 // breaches, and reports them to the central NotificationCenter. Acknowledge,
 // snooze, mute, history, audio, backend logging — all of that lives in the
 // center now. This hook only owns "is this vital out of range?".
-export const useAlarms = (vitals, sessionId) => {
+// `enabled: false` stops the hook producing anything: an ended case's monitor
+// is frozen and End & Debrief has already acknowledged every alarm, so a
+// breach sampled after that point is not a clinical event (QA 2026-10-04,
+// PRV-28 — a remount after the end raised a live CRITICAL alarm beside a
+// frozen monitor showing normal values).
+export const useAlarms = (vitals, sessionId, { enabled = true } = {}) => {
     const { notify, resolve, ack, ackAll, snooze, snoozeAll, active, snoozed, acked, prefs, setPrefs } = useNotifications();
 
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [thresholdsLoaded, setThresholdsLoaded] = useState(false);
     const lastFireRef = useRef(new Map()); // alarmKey → ts of last *transition* fire
     const activeKeysRef = useRef(new Set()); // alarmKeys currently alive (for resolve detection)
+    const lastInputRef = useRef(new Map()); // alarmKey → the notify() input of its last fire
+    // Keys restored from storage at mount that have not yet been checked
+    // against the center (see the re-assert pass in check()). Only restored
+    // keys qualify, each at most once: a key fired during THIS mount was
+    // handed to the center by this mount, so its absence there means the
+    // learner or the center removed it, not that a page was lost.
+    const pendingReassertRef = useRef(new Set());
+    // The center's live alarm keys, read by check() without making `active`
+    // a dependency of the 2 s loop.
+    const centerKeysRef = useRef(new Set());
+    const snoozedKeysRef = useRef(new Set());
 
     // The hook unmounts with PatientMonitor on every room switch. Without
     // persistence the refs above reset, every still-breaching vital counts
@@ -59,9 +75,10 @@ export const useAlarms = (vitals, sessionId) => {
             try {
                 const raw = sessionStorage.getItem(fireStateKey);
                 if (raw) {
-                    const { keys, fires } = JSON.parse(raw);
+                    const { keys, fires, inputs } = JSON.parse(raw);
                     activeKeysRef.current = new Set(Array.isArray(keys) ? keys : []);
                     lastFireRef.current = new Map(Array.isArray(fires) ? fires : []);
+                    lastInputRef.current = new Map(Array.isArray(inputs) ? inputs : []);
                     restored = true;
                 }
             } catch { /* corrupt entry — fall back to fresh state */ }
@@ -69,7 +86,9 @@ export const useAlarms = (vitals, sessionId) => {
         if (!restored) {
             activeKeysRef.current = new Set();
             lastFireRef.current = new Map();
+            lastInputRef.current = new Map();
         }
+        pendingReassertRef.current = new Set(activeKeysRef.current);
     }, [fireStateKey]);
     const persistFireState = useCallback(() => {
         if (!fireStateKey) return;
@@ -77,6 +96,7 @@ export const useAlarms = (vitals, sessionId) => {
             sessionStorage.setItem(fireStateKey, JSON.stringify({
                 keys: Array.from(activeKeysRef.current),
                 fires: Array.from(lastFireRef.current.entries()),
+                inputs: Array.from(lastInputRef.current.entries()),
             }));
         } catch { /* storage blocked — worst case is one re-fire after remount */ }
     }, [fireStateKey]);
@@ -117,9 +137,11 @@ export const useAlarms = (vitals, sessionId) => {
     // after dedup window) and *resolve()*s on breach→normal — fixes the
     // legacy 5-second-spam logging behaviour.
     const check = useCallback(() => {
-        if (!vitals || !thresholdsLoaded) return;
+        if (!enabled || !vitals || !thresholdsLoaded) return;
         const now = Date.now();
         const seen = new Set();
+        const breachInputs = new Map(); // alarmKey → notify() input for this sample
+        const firedNow = new Set();
         let fireStateDirty = false;
 
         Object.entries(vitals).forEach(([vital, value]) => {
@@ -149,24 +171,28 @@ export const useAlarms = (vitals, sessionId) => {
             const ageMs = now - last;
             const isFirstFire = !activeKeysRef.current.has(key);
             const isPeriodicRefresh = ageMs > 5 * 60 * 1000;
+            const input = {
+                source: SOURCES.CLINICAL,
+                severity,
+                key,
+                title: `${vital.toUpperCase()} ${kind === 'low' ? 'low' : 'high'}`,
+                message: `${vital} = ${num} (limit ${kind === 'low' ? '≥' : '≤'} ${bound})`,
+                audioPattern,
+                requiresAck: true,
+                ttlMs: 0,
+                data: {
+                    vital,
+                    thresholdType: kind,
+                    thresholdValue: bound,
+                    actualValue: num,
+                    sessionId, // BackendSurface uses this when posting to /alarms/log
+                },
+            };
+            breachInputs.set(key, input);
             if (isFirstFire || isPeriodicRefresh) {
-                notify({
-                    source: SOURCES.CLINICAL,
-                    severity,
-                    key,
-                    title: `${vital.toUpperCase()} ${kind === 'low' ? 'low' : 'high'}`,
-                    message: `${vital} = ${num} (limit ${kind === 'low' ? '≥' : '≤'} ${bound})`,
-                    audioPattern,
-                    requiresAck: true,
-                    ttlMs: 0,
-                    data: {
-                        vital,
-                        thresholdType: kind,
-                        thresholdValue: bound,
-                        actualValue: num,
-                        sessionId, // BackendSurface uses this when posting to /alarms/log
-                    },
-                });
+                notify(input);
+                lastInputRef.current.set(key, input);
+                firedNow.add(key);
                 // The FIRING is a learning event too — with the room and the
                 // vitals snapshot EventLogger stamps — not only an alarm_events
                 // row. TRIGGERED_ALARM had no producer before this line.
@@ -192,16 +218,57 @@ export const useAlarms = (vitals, sessionId) => {
         // recovered — that combination clears the acked state in the center
         // so the next breach can re-arm the alarm cleanly.
         const ackedSet = new Set(acked);
+
+        // Re-assert what the center lost (QA 2026-10-04, PRV-28). The fire-
+        // state above survives a reload (sessionStorage), but the center's
+        // `active` list is memory only — so after a reload every alarm that
+        // was still sounding counted as "already fired" and the learner got
+        // no banner, no bell count and no audio until the 5-minute refresh,
+        // while the vital sat below its limit. An alarm this hook still
+        // holds live, that the center no longer shows and the learner has
+        // neither acked nor snoozed, is put back — with the current reading
+        // if the vital is still out of range, or the reading it latched at.
+        // A room switch keeps the center (it lives above the rooms), so this
+        // never fires there. The re-asserted alarm logs a fresh
+        // alarm_events row, as the 5-minute refresh does: the row id that
+        // an ack would have stamped was lost with the page.
+        for (const key of Array.from(pendingReassertRef.current)) {
+            pendingReassertRef.current.delete(key);
+            if (firedNow.has(key) || !activeKeysRef.current.has(key)) continue;
+            if (centerKeysRef.current.has(key) || ackedSet.has(key) || snoozedKeysRef.current.has(key)) continue;
+            const input = breachInputs.get(key) ?? lastInputRef.current.get(key);
+            if (!input) {
+                // Fire-state written before inputs were kept, for a vital
+                // that has since recovered: nothing faithful to show. Forget
+                // it so its next breach fires fresh.
+                activeKeysRef.current.delete(key);
+                lastFireRef.current.delete(key);
+                fireStateDirty = true;
+                continue;
+            }
+            notify(input);
+        }
+
         for (const key of Array.from(activeKeysRef.current)) {
             if (seen.has(key)) continue;
             if (!ackedSet.has(key)) continue; // latched, waiting for ack
             resolve(key);
             activeKeysRef.current.delete(key);
             lastFireRef.current.delete(key);
+            lastInputRef.current.delete(key);
             fireStateDirty = true;
         }
         if (fireStateDirty) persistFireState();
-    }, [vitals, thresholds, thresholdsLoaded, notify, resolve, sessionId, acked, persistFireState]);
+    }, [enabled, vitals, thresholds, thresholdsLoaded, notify, resolve, sessionId, acked, persistFireState]);
+
+    // Mirrors for check()'s re-assert pass. Declared BEFORE the loop effect
+    // so, on mount, the center's state is in the refs when check() first runs.
+    useEffect(() => {
+        centerKeysRef.current = new Set(active.map(n => n.key));
+    }, [active]);
+    useEffect(() => {
+        snoozedKeysRef.current = new Set(snoozed.map(s => s.key));
+    }, [snoozed]);
 
     useEffect(() => {
         check();

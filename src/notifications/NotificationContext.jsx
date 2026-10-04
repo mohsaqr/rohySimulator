@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { AUDIO_PATTERNS } from './types';
+import { AUDIO_PATTERNS, SURFACES } from './types';
 import { DEFAULT_TTL_MS, DEFAULT_AUDIO_PATTERN, HISTORY_CAP } from './defaults';
 import { routeNotification, deriveKey } from './routing';
 import {
@@ -104,6 +104,10 @@ export function NotificationProvider({ children }) {
         const transient = { snoozed, acked };
         const finalSurfaces = routeNotification(notification, prefs, transient);
         notification.routedSurfaces = finalSurfaces;
+        // HISTORY is read from `history` (below), not from `active` or a
+        // subscriber — so a notification a mute left in the history only
+        // (PRV-35) is, for `active` and the subscribers, as silent as before.
+        const reachesLiveSurface = finalSurfaces.some(s => s !== SURFACES.HISTORY);
 
         // Dedup/coalesce: if the same key is already active and within the
         // dedup window, just bump count + lastSeenAt instead of stacking.
@@ -122,7 +126,7 @@ export function NotificationProvider({ children }) {
                 return next;
             }
             // Either new or outside dedup window — replace.
-            if (finalSurfaces.length === 0) {
+            if (!reachesLiveSurface) {
                 // Still record in history below, but don't show on visible surfaces.
                 return prev;
             }
@@ -139,7 +143,7 @@ export function NotificationProvider({ children }) {
         });
 
         // Fire subscribers (audio/backend/console). They self-filter by surface.
-        if (finalSurfaces.length > 0) {
+        if (reachesLiveSurface) {
             subscribersRef.current.forEach(fn => {
                 try { fn({ type: 'notify', notification }); } catch (e) {
                     console.warn('[NotificationCenter] subscriber error:', e);

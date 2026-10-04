@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Heart, Activity, Bell, Settings, Play, Pause, AlertCircle, X, Monitor, FileJson, Save, Download, Upload, Volume2, VolumeX, Pencil, Pill } from 'lucide-react';
 import defaultSettings from '../../settings.json';
@@ -32,6 +32,7 @@ import {
    pausedMs,
    togglePauseAnchor,
 } from '../../utils/sessionAnchors';
+import { withTreatmentEffects } from './treatmentVitals.js';
 import { RHYTHM_IDS, RHYTHM_LABEL_KEYS, resolveRhythm } from '../../services/rhythms';
 // Waveform physiology lives in one module, shared with the 3D room.
 import { GenerateECGRaw } from '../../services/ecgWaveform';
@@ -285,16 +286,25 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    const [elapsedTime, setElapsedTime] = useState(0);
    const sessionStartMsRef = useRef(null);
    const mountStartMsRef = useRef(Date.now());
+   // Bumped when the server's start_time lands, so the clock effect
+   // recomputes. An ended case has no ticking interval to pick it up, and a
+   // remount after the end computed the clock from the MOUNT time — later
+   // than the end, so it clamped to 0:00 (QA 2026-10-04, PRV-28).
+   const [sessionStartLoadedAt, setSessionStartLoadedAt] = useState(null);
 
    // Elapsed case time = wall clock since the session's start, minus every
    // millisecond the learner has held the case paused (ISSUE-0021). Both the
    // one-second tick and the pause button compute it here so the display can
    // never disagree with the anchor.
-   const computeElapsedSec = () => {
+   // Stable across renders (it reads refs plus the two case-end props), so
+   // effects can depend on it — the vitals persist reads the anchored elapsed
+   // time from here rather than from `elapsedTime` state, which lags one
+   // commit behind the anchor.
+   const computeElapsedSec = useCallback(() => {
       const nowMs = caseEnded && caseEndedAt != null ? caseEndedAt : Date.now();
       const startMs = sessionStartMsRef.current ?? mountStartMsRef.current;
       return Math.max(0, Math.floor((nowMs - startMs - pausedMs(pauseAnchorRef.current, nowMs)) / 1000));
-   };
+   }, [caseEnded, caseEndedAt]);
 
    // Platform settings for monitor visibility
    const [monitorSettings, setMonitorSettings] = useState({
@@ -326,7 +336,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
    // Alarm System Hook — audio context, persistence, mute, ack/snooze all
    // live in the central NotificationCenter now; this hook just produces.
-   const alarmSystem = useAlarms(displayVitals, sessionId);
+   // A case that has ended raises no alarms (PRV-28): the monitor is frozen.
+   const alarmSystem = useAlarms(displayVitals, sessionId, { enabled: !caseEnded });
 
    // Alarm → the patient glances at his own monitor. The monitor is the
    // right column of the screen, i.e. the avatar's LEFT (positive yaw for a
@@ -360,25 +371,37 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // actually persist — has caught up.
    const caseVitalsAppliedRef = useRef(false);
    const [vitalsBaselineReady, setVitalsBaselineReady] = useState(false);
+   // …and on the session's own last reading having been fetched (or found
+   // absent). The case-load effect applies the baseline as soon as the case
+   // is known, which on a remount is usually BEFORE the restore lands — so
+   // every room switch wrote one row of ADMISSION vitals (BP 160 after the
+   // patient had dropped to 99) into the session's record (found in the
+   // PRV-28 live check, 2026-10-04).
+   // Keyed on the session it settled for, so a new session starts unsettled
+   // without an effect having to reset it.
+   const [restoreSettledFor, setRestoreSettledFor] = useState(null);
+   const vitalsRestoreSettled = sessionId != null && restoreSettledFor === sessionId;
+   // The session whose restored reading was just applied: the params-sync
+   // effect settles it in the SAME commit that puts that reading on the
+   // display. Settling straight from the restore let the persist effect run
+   // once more against the not-yet-updated display — the baseline.
+   const restoreAppliedRef = useRef(null);
+
+   // The live treatment aggregate, for the jitter loop (which must not take
+   // it as a dependency — its interval is stable by design).
+   const treatmentAggRef = useRef(treatmentEffects.aggregate || {});
+   useEffect(() => { treatmentAggRef.current = treatmentEffects.aggregate || {}; }, [treatmentEffects.aggregate]);
 
    // Sync params changes to simulation ref immediately (including treatment effects)
    useEffect(() => {
       simulationParams.current = params;
 
-      // Apply treatment effects to base params
-      const treatmentAggregates = treatmentEffects.aggregate || {};
-      const vitalsWithEffects = {
-         hr: Math.max(20, Math.min(250, params.hr + (treatmentAggregates.hr || 0))),
-         spo2: Math.max(50, Math.min(100, params.spo2 + (treatmentAggregates.spo2 || 0))),
-         rr: Math.max(4, Math.min(60, params.rr + (treatmentAggregates.rr || 0))),
-         bpSys: Math.max(40, Math.min(300, params.bpSys + (treatmentAggregates.bp_sys || 0))),
-         bpDia: Math.max(20, Math.min(200, params.bpDia + (treatmentAggregates.bp_dia || 0))),
-         temp: params.temp + (treatmentAggregates.temp || 0),
-         etco2: params.etco2 + (treatmentAggregates.etco2 || 0)
-      };
-
       // Always sync displayVitals when params change (scenario will override via its own loop)
-      setDisplayVitals(vitalsWithEffects);
+      setDisplayVitals(withTreatmentEffects(params, treatmentEffects.aggregate));
+      if (restoreAppliedRef.current != null) {
+         setRestoreSettledFor(restoreAppliedRef.current);
+         restoreAppliedRef.current = null;
+      }
 
       // #8: displayVitals now carries the case's own vitals, so the next
       // commit may start persisting. Doing it here rather than in the
@@ -391,16 +414,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    useEffect(() => {
       if (!treatmentEffects.count) return; // No active treatments
 
-      const treatmentAggregates = treatmentEffects.aggregate || {};
-      setDisplayVitals(_prev => ({
-         hr: Math.max(20, Math.min(250, simulationParams.current.hr + (treatmentAggregates.hr || 0))),
-         spo2: Math.max(50, Math.min(100, simulationParams.current.spo2 + (treatmentAggregates.spo2 || 0))),
-         rr: Math.max(4, Math.min(60, simulationParams.current.rr + (treatmentAggregates.rr || 0))),
-         bpSys: Math.max(40, Math.min(300, simulationParams.current.bpSys + (treatmentAggregates.bp_sys || 0))),
-         bpDia: Math.max(20, Math.min(200, simulationParams.current.bpDia + (treatmentAggregates.bp_dia || 0))),
-         temp: simulationParams.current.temp + (treatmentAggregates.temp || 0),
-         etco2: (simulationParams.current.etco2 || 38) + (treatmentAggregates.etco2 || 0)
-      }));
+      setDisplayVitals(withTreatmentEffects(simulationParams.current, treatmentEffects.aggregate));
    }, [treatmentEffects.aggregate, treatmentEffects.count]);
    
    // Push current vitals into the EventLogger singleton so every emitted
@@ -421,7 +435,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       if (caseEnded) return undefined;
       const timer = setInterval(() => setElapsedTime(computeElapsedSec()), 1000);
       return () => clearInterval(timer);
-   }, [sessionId, caseEnded, caseEndedAt]);
+   }, [sessionId, caseEnded, caseEndedAt, sessionStartLoadedAt, computeElapsedSec]);
 
    // Pause follows the SESSION, not this component's lifetime (ISSUE-0021).
    // Re-read on every session change so a remount restores the learner's
@@ -540,7 +554,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    const lastPersistedVitalsRef = useRef(null);
    useEffect(() => {
       if (!sessionId) return;
-      if (!vitalsBaselineReady) return;
+      if (!vitalsBaselineReady || !vitalsRestoreSettled) return;
+      // …and on the session clock being anchored to the server's start_time.
+      // Before it is, elapsedTime counts from this MOUNT, so every remount
+      // wrote its first row at elapsed_ms 0 — minute zero of the session's
+      // timeline (found in the PRV-28 live check, 2026-10-04).
+      if (sessionStartLoadedAt == null) return;
       const prev = lastPersistedVitalsRef.current ?? displayVitals;
       const current = displayVitals;
       const DEADBAND = { hr: 10, spo2: 5, bpSys: 10, bpDia: 10, rr: 3, temp: 0.5 };
@@ -557,7 +576,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       if (!crossed) return;
       lastPersistedVitalsRef.current = current;
       apiPost(`/sessions/${sessionId}/vitals`, {
-         elapsed_ms: elapsedTime * 1000,
+         elapsed_ms: computeElapsedSec() * 1000,
          hr: current.hr,
          rhythm,
          spo2: current.spo2,
@@ -568,7 +587,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          etco2: current.etco2,
          source: activeScenario ? 'scenario' : 'monitor',
       }).catch(err => console.warn('[Vitals] persist failed:', err.message));
-   }, [displayVitals, sessionId, rhythm, activeScenario, elapsedTime, vitalsBaselineReady]);
+   }, [displayVitals, sessionId, rhythm, activeScenario, vitalsBaselineReady, vitalsRestoreSettled, sessionStartLoadedAt, computeElapsedSec]);
 
    // On session restore, fetch the most recent persisted vitals snapshot
    // and seed `params` with it so the monitor resumes from where the
@@ -581,7 +600,19 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    // interpolates only hr/spo2/rr/bpSys/bpDia. Walk back to the newest row
    // that is an actual reading; if every row is a phantom we restore
    // nothing and the case baseline stands.
+   //
+   // QA 2026-10-04 (PRV-28): the restored reading is also parked in
+   // `restoredVitalsRef`, because the case-load effect below re-runs when the
+   // session's case snapshot arrives and used to reset `params` to the case
+   // baseline. Whenever that re-run landed after this restore, a remounted
+   // (and especially a paused) monitor showed the patient's ADMISSION vitals —
+   // a falsely recovered patient. The case-load effect now overlays the parked
+   // reading on its baseline, so the outcome no longer depends on which fetch
+   // returns first.
+   const restoredVitalsRef = useRef(null);
    useEffect(() => {
+      restoredVitalsRef.current = null;
+      restoreAppliedRef.current = null;
       if (!sessionId) return;
       let cancelled = false;
       (async () => {
@@ -602,11 +633,22 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             if (Number.isFinite(last.temp)) restored.temp = last.temp;
             if (Number.isFinite(last.etco2)) restored.etco2 = last.etco2;
             if (Object.keys(restored).length > 0) {
+               restoredVitalsRef.current = {
+                  params: restored,
+                  rhythm: last.rhythm ? canonicalRhythm(last.rhythm) : null,
+               };
+               restoreAppliedRef.current = sessionId;
                setParams(prev => ({ ...prev, ...restored }));
                if (last.rhythm) setRhythm(canonicalRhythm(last.rhythm));
             }
          } catch (e) {
             console.warn('[Monitor] vitals restore failed:', e.message);
+         } finally {
+            // Nothing applied (absent, all phantom, failed): the display is
+            // already right, so persisting may begin now. A reading that WAS
+            // applied settles in the params-sync effect instead (see
+            // restoreAppliedRef).
+            if (!cancelled && restoreAppliedRef.current == null) setRestoreSettledFor(sessionId);
          }
       })();
       return () => { cancelled = true; };
@@ -630,7 +672,10 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             // Anchor the session clock to the server's start_time so the
             // elapsed display survives remounts and page refreshes.
             const startMs = parseUtcTimestamp(data?.session?.start_time);
-            if (startMs) sessionStartMsRef.current = startMs;
+            if (startMs) {
+               sessionStartMsRef.current = startMs;
+               setSessionStartLoadedAt(startMs);
+            }
             const raw = data?.session?.case_snapshot;
             if (!raw) return;
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -679,7 +724,11 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                etco2: initialVitals?.etco2 ?? scenarioParams?.etco2 ?? legacyConfig?.etco2 ?? FACTORY_DEFAULTS.params.etco2
             };
             setCaseBaseline(baselineParams);
-            setParams(baselineParams);
+            // The baseline is what "reset" returns to; what the monitor
+            // SHOWS is the session's own latest reading when it has one
+            // (PRV-28, see restoredVitalsRef above).
+            const restoredSession = restoredVitalsRef.current;
+            setParams({ ...baselineParams, ...(restoredSession?.params ?? {}) });
             // #8: `params` is about to become the case's vitals, but
             // `displayVitals` (what we persist) only catches up in the
             // params-sync effect one commit later. Arm the ref here and let
@@ -692,7 +741,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             const caseRhythm = canonicalRhythm(initialVitals?.rhythm || scenarioRhythm || legacyConfig?.rhythm);
             if (caseRhythm) {
                setCaseBaselineRhythm(caseRhythm);
-               setRhythm(caseRhythm);
+               setRhythm(restoredSession?.rhythm ?? caseRhythm);
             }
 
             // Set ECG conditions from case
@@ -1046,7 +1095,12 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       if (caseEnded || !isPlaying) return undefined;
 
       const interval = setInterval(() => {
-         const p = simulationParams.current;
+         // Jitter around the TREATED values. It used to jitter the raw
+         // params, so with any treatment running the display alternated each
+         // second between treated and untreated readings (BP 99 ↔ 118), every
+         // flip re-fired alarms and wrote a vitals row (found in the PRV-37
+         // live check, 2026-10-04).
+         const p = { ...simulationParams.current, ...withTreatmentEffects(simulationParams.current, treatmentAggRef.current) };
          const rhythmType = rhythm; // Closure capture or ref? Rhythm needs to be in ref too if used here
 
          if (rhythmType === 'Asystole' || rhythmType === 'VFib') {
@@ -1501,8 +1555,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          {/* MAIN LAYOUT */}
          <div className="flex flex-1 relative overflow-hidden">
 
-            {/* WAVEFORMS (LEFT) */}
-            <div className="flex-1 flex flex-col bg-black relative">
+            {/* WAVEFORMS (LEFT) — min-w-0 so nothing inside (an alarm row,
+                say) can widen it at the vital-sign column's expense (PRV-36). */}
+            <div className="flex-1 min-w-0 flex flex-col bg-black relative">
 
                {/* Channel 1: ECG — a gaze attention target (AoiRegion), so
                    analytics can answer "was the trainee watching the trace?"
@@ -1538,7 +1593,24 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
                {/* Active clinical alarms — render directly below RESP. Each
                    row shows the alarm message with an Acknowledge button. */}
-               <InlineClinicalAlarms />
+               {/* At lg+: alarms and the treatment summary scroll together
+                   in the free space under the traces. The bottom MARGIN (not
+                   padding) makes the scroll viewport itself stop above the
+                   band the App-level order buttons float in — five alarm rows
+                   pushed the summary under them (PRV-36 live check). Below lg
+                   the column is already full; there the rows keep their
+                   natural height. */}
+               <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:mb-20">
+                  <InlineClinicalAlarms />
+
+                  {/* At the foot of the 256px vitals column the treatment
+                      summary had ~33px left at 1440x900 and its effect lines sat
+                      below the fold behind the Diag pill (QA 2026-10-04,
+                      PRV-36). The waveform column has the room. */}
+                  <div className="max-lg:hidden px-3 pt-3">
+                     <TreatmentEffectsSummary effects={treatmentEffects} />
+                  </div>
+               </div>
 
             </div>
 
@@ -1642,64 +1714,49 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   </div>
                </div>
 
-               {/* Treatment Effects Indicator */}
-               {treatmentEffects.count > 0 && (
-                  <div className="p-3 bg-pink-900/20 border-t border-pink-800/50">
-                     <div className="flex items-center gap-2 mb-2">
-                        <Pill className="w-4 h-4 text-pink-400" />
-                        <span className="text-xs font-bold text-pink-300">
-                           {t('active_treatments', { count: treatmentEffects.count })}
-                        </span>
-                     </div>
-                     <div className="grid grid-cols-3 gap-1 text-xs">
-                        {treatmentEffects.aggregate.hr !== 0 && (
-                           <div className={`${treatmentEffects.aggregate.hr > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              HR {treatmentEffects.aggregate.hr > 0 ? '+' : ''}{treatmentEffects.aggregate.hr}
-                           </div>
-                        )}
-                        {treatmentEffects.aggregate.bp_sys !== 0 && (
-                           <div className={`${treatmentEffects.aggregate.bp_sys > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              BP {treatmentEffects.aggregate.bp_sys > 0 ? '+' : ''}{treatmentEffects.aggregate.bp_sys}
-                           </div>
-                        )}
-                        {treatmentEffects.aggregate.spo2 !== 0 && (
-                           <div className={`${treatmentEffects.aggregate.spo2 > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              SpO2 {treatmentEffects.aggregate.spo2 > 0 ? '+' : ''}{treatmentEffects.aggregate.spo2}%
-                           </div>
-                        )}
-                        {treatmentEffects.aggregate.rr !== 0 && (
-                           <div className={`${treatmentEffects.aggregate.rr > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              RR {treatmentEffects.aggregate.rr > 0 ? '+' : ''}{treatmentEffects.aggregate.rr}
-                           </div>
-                        )}
-                     </div>
-                  </div>
-               )}
+               {/* Treatment effects — here only below `lg`; wider, it sits
+                   under the alarm rows in the waveform column (PRV-36). */}
+               <div className="lg:hidden">
+                  <TreatmentEffectsSummary effects={treatmentEffects} />
+               </div>
 
             </AoiRegion>
          </div>
 
-         {/* CONTROLS OVERLAY (DRAWER) */}
+         {/* CONTROLS OVERLAY (DRAWER) — `inert` while closed: slid off
+             screen it still held two Tab stops, and keyboard focus vanished
+             into it (QA 2026-10-04, PRV-31). */}
          <div
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="monitor-controls-title"
+            inert={!controlsOpen}
+            aria-hidden={!controlsOpen}
             className={`fixed inset-y-0 right-0 w-96 bg-neutral-900 border-l border-neutral-700 shadow-2xl transform transition-transform duration-300 ease-out z-50 flex flex-col ${controlsOpen ? 'translate-x-0' : 'translate-x-full'}`}
          >
             <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-neutral-800">
-               <h2 className="text-white font-bold text-lg flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-blue-500" />
+               <h2 id="monitor-controls-title" className="text-white font-bold text-lg flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-blue-500" aria-hidden="true" />
                   {t('simulator_controls')}
                </h2>
-               <button onClick={handleControlsClose} className="text-neutral-400 hover:text-white">
-                  <X className="w-6 h-6" />
+               <button type="button" onClick={handleControlsClose} aria-label={t('close_controls')} className="text-neutral-400 hover:text-white">
+                  <X className="w-6 h-6" aria-hidden="true" />
                </button>
             </div>
 
             {/* Tabs - Students only see alarms tab */}
-            <div className="flex p-1 bg-neutral-900 border-b border-neutral-800 overflow-x-auto">
+            {/* Wraps instead of scrolling: five uppercase tabs did not fit the
+                384px drawer, and the last one (LABS) sat half off the edge
+                behind a scrollbar nobody saw (QA 2026-10-04, PRV-36). */}
+            <div role="tablist" aria-label={t('simulator_controls')} className="flex flex-wrap gap-1 p-1 bg-neutral-900 border-b border-neutral-800">
                {(isAdmin ? ['rhythm', 'vitals', 'scenarios', 'alarms', 'labs'] : ['alarms']).map(tab => (
                   <button
                      key={tab}
+                     type="button"
+                     role="tab"
+                     aria-selected={activeTab === tab}
                      onClick={() => handleTabChange(tab)}
-                     className={`flex-1 py-2 px-2 text-sm font-bold uppercase tracking-wider rounded-md transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                     className={`flex-auto py-2 px-2 text-xs font-bold uppercase tracking-wide rounded-md transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
                   >
                      {t(TAB_KEYS[tab])}
                   </button>
@@ -2609,6 +2666,45 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
    );
 }
 
+// The active-treatment effect summary (PRV-36: rendered in the waveform
+// column at lg+, in the scrollable vitals column below it).
+function TreatmentEffectsSummary({ effects }) {
+   const { t } = useTranslation('monitor');
+   if (!effects?.count) return null;
+   return (
+      <div className="p-3 bg-pink-900/20 border-t border-pink-800/50">
+         <div className="flex items-center gap-2 mb-2">
+            <Pill className="w-4 h-4 text-pink-400" />
+            <span className="text-xs font-bold text-pink-300">
+               {t('active_treatments', { count: effects.count })}
+            </span>
+         </div>
+         <div className="grid grid-cols-3 gap-1 text-xs">
+            {effects.aggregate.hr !== 0 && (
+               <div className={`${effects.aggregate.hr > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  HR {effects.aggregate.hr > 0 ? '+' : ''}{effects.aggregate.hr}
+               </div>
+            )}
+            {effects.aggregate.bp_sys !== 0 && (
+               <div className={`${effects.aggregate.bp_sys > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  BP {effects.aggregate.bp_sys > 0 ? '+' : ''}{effects.aggregate.bp_sys}
+               </div>
+            )}
+            {effects.aggregate.spo2 !== 0 && (
+               <div className={`${effects.aggregate.spo2 > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  SpO2 {effects.aggregate.spo2 > 0 ? '+' : ''}{effects.aggregate.spo2}%
+               </div>
+            )}
+            {effects.aggregate.rr !== 0 && (
+               <div className={`${effects.aggregate.rr > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  RR {effects.aggregate.rr > 0 ? '+' : ''}{effects.aggregate.rr}
+               </div>
+            )}
+         </div>
+      </div>
+   );
+}
+
 // Active-clinical-alarms strip rendered directly below the RESP wave inside
 // the monitor pane. Filtering by source (rather than routedSurfaces) is
 // intentional — clinical alarms always show here regardless of the routing
@@ -2627,7 +2723,14 @@ function InlineClinicalAlarms() {
          {alarms.map(n => (
             <div
                key={n.id}
-               className="flex items-center gap-3 px-4 py-2 border-b border-red-900/60 bg-red-900/40"
+               // max-lg:pl-40: stacked below `lg`, the App-level order buttons
+               // (OrdersDrawer) float over this band's left edge; the row
+               // starts after them so the message, Snooze and Acknowledge
+               // stay reachable (QA 2026-10-04, PRV-36). flex-wrap + min-w-0:
+               // the row must never set the waveform column's minimum width —
+               // unwrapped, its shrink-0 pieces widened that column and pushed
+               // the vital-sign numbers off the screen.
+               className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 px-4 max-lg:pl-40 py-2 border-b border-red-900/60 bg-red-900/40"
             >
                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                <span className="font-mono text-xs font-bold uppercase tracking-wider text-red-300 shrink-0">

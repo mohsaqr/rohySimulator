@@ -9,7 +9,12 @@
  * 2. Peak (onset → peak_minutes): Sustained at 1.0
  * 3. Decline (peak → duration): Exponential decay
  *
- * Net Effect = Σ (base_effect × strength × dose_multiplier)
+ * Net Effect = Σ (peak_effect × strength)
+ *
+ * `peak_*_effect` already carries the dose: the administer route stores
+ * base_effect × dose_multiplier (orders-routes.js). Multiplying by
+ * dose_multiplier again here applied the dose twice — morphine 4 mg against a
+ * 2 mg base drove RR down by 16 instead of 8 (QA 2026-10-04, PRV-37).
  */
 
 class TreatmentEffectsEngine {
@@ -79,8 +84,8 @@ class TreatmentEffectsEngine {
         // Clamp strength to [0, 1]
         strength = Math.max(0, Math.min(1, strength));
 
-        // Calculate current effects based on strength and dose multiplier
-        const doseMultiplier = treatment.dose_multiplier || 1.0;
+        // Current effect = stored peak × strength. The peak is already
+        // dose-scaled server-side; see the header note.
 
         return {
             id: treatment.id,
@@ -92,12 +97,12 @@ class TreatmentEffectsEngine {
             elapsed_minutes: elapsedMinutes,
             is_continuous: isContinuous,
             effects: {
-                hr: Math.round((treatment.peak_hr_effect || 0) * strength * doseMultiplier),
-                bp_sys: Math.round((treatment.peak_bp_sys_effect || 0) * strength * doseMultiplier),
-                bp_dia: Math.round((treatment.peak_bp_dia_effect || 0) * strength * doseMultiplier),
-                rr: Math.round((treatment.peak_rr_effect || 0) * strength * doseMultiplier),
-                spo2: Math.round((treatment.peak_spo2_effect || 0) * strength * doseMultiplier),
-                temp: (treatment.peak_temp_effect || 0) * strength * doseMultiplier
+                hr: Math.round((treatment.peak_hr_effect || 0) * strength),
+                bp_sys: Math.round((treatment.peak_bp_sys_effect || 0) * strength),
+                bp_dia: Math.round((treatment.peak_bp_dia_effect || 0) * strength),
+                rr: Math.round((treatment.peak_rr_effect || 0) * strength),
+                spo2: Math.round((treatment.peak_spo2_effect || 0) * strength),
+                temp: (treatment.peak_temp_effect || 0) * strength
             }
         };
     }

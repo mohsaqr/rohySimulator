@@ -162,22 +162,30 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
                 rooms like the 3D room) docks it at the very left so it
                 never covers the room's own bottom-center surfaces. */}
             {!isOpen && (
+                // Below `lg` the chat and the monitor STACK, so the seam this
+                // strip anchors to is no longer a column edge — it fell on the
+                // monitor's numeric column, covering the RESP value and the
+                // first alarm row's Acknowledge (QA 2026-10-04, PRV-36).
+                // Stacked, it docks left, over the waveforms.
                 <div
-                    className="fixed z-40 flex gap-2"
+                    className="fixed z-40 flex gap-2 max-lg:left-4!"
                     style={{ bottom: '88px', left: fabAlign === 'left' ? '1rem' : 'calc(max(35vw, 350px) + 1rem)' }}
                 >
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => handleDrawerOpen(tab.id)}
-                            className={`relative px-4 py-2.5 rounded-full flex items-center gap-2 font-semibold text-sm shadow-lg ring-1 ring-black/40 transition-all hover:scale-105 ${
+                            className={`relative px-4 max-lg:px-3 py-2.5 rounded-full flex items-center gap-2 font-semibold text-sm shadow-lg ring-1 ring-black/40 transition-all hover:scale-105 ${
                                 tab.id === 'records' ? 'bg-amber-600 hover:bg-amber-500 text-white' :
                                 tab.id === 'memory' ? 'bg-rose-600 hover:bg-rose-500 text-white' :
                                 'bg-neutral-700 hover:bg-neutral-600 text-white'
                             }`}
                         >
-                            <tab.icon className="w-4 h-4" />
-                            {tab.label}
+                            <tab.icon className="w-4 h-4" aria-hidden="true" />
+                            {/* Icon-only when stacked, so the strip stays
+                                inside the band the monitor's alarm rows keep
+                                free for it (PRV-36). The name stays for AT. */}
+                            <span className="max-lg:sr-only">{tab.label}</span>
                             {tab.count > 0 && (
                                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                                     {tab.count}
@@ -236,6 +244,7 @@ export default function OrdersDrawer({ caseId, sessionId, caseData, isAdmin = fa
                                     onClick={() => setDrawerHeight(h => h === '50vh' ? '80vh' : '50vh')}
                                     className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
                                     title={drawerHeight === '50vh' ? t('expand') : t('collapse')}
+                                    aria-label={drawerHeight === '50vh' ? t('expand') : t('collapse')}
                                 >
                                     {drawerHeight === '50vh' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                 </button>

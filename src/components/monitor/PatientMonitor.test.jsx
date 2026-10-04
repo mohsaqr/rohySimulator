@@ -116,6 +116,21 @@ vi.mock('../../hooks/useAlarms', () => ({
 }));
 
 import PatientMonitor from './PatientMonitor.jsx';
+
+// RTL's waitFor polls with setInterval, which these suites fake; it then
+// re-checks only on DOM mutations. A network write that lands after the last
+// render (the vitals persist waits for the session's restore to settle) is
+// never re-checked. Poll on the real setTimeout instead.
+async function waitForReal(assertion, { timeout = 3000, interval = 20 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) { // poll loop: bounded by `deadline`
+        try { return assertion(); } catch (err) {
+            if (Date.now() > deadline) throw err;
+            await new Promise((r) => setTimeout(r, interval));
+        }
+    }
+}
+
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
 // --- msw fixture helpers ------------------------------------------------
@@ -141,7 +156,9 @@ function defaultHandlers() {
         http.get('*/api/sessions/:sessionId', ({ params }) => {
             const snap = state.snapshotBySessionId[params.sessionId];
             return HttpResponse.json({
-                session: { case_snapshot: snap ?? null },
+                // start_time: real sessions carry one; the vitals persist
+                // waits for the clock to anchor to it.
+                session: { start_time: new Date(Date.now() - 60_000).toISOString(), case_snapshot: snap ?? null },
             });
         }),
         // GET vitals — restore on mount
@@ -372,7 +389,7 @@ describe('PatientMonitor — Stage-1 vitals persistence (deadband)', () => {
         // (lastPersistedVitalsRef === null forces `crossed = true`). This
         // gives every session a baseline row.
         mount({ sessionId: 4242 });
-        await waitFor(() => {
+        await waitForReal(() => {
             const ours = state.posted.filter(p => p.sessionId === '4242');
             expect(ours.length).toBeGreaterThanOrEqual(1);
             expect(ours[0].body).toMatchObject({ hr: expect.any(Number) });
@@ -391,7 +408,7 @@ describe('PatientMonitor — Stage-1 vitals persistence (deadband)', () => {
         // CONTRACT: server-side analytics differentiate scenario-driven
         // from learner-driven changes via the `source` tag.
         mount({ sessionId: 7 });
-        await waitFor(() => {
+        await waitForReal(() => {
             const ours = state.posted.find(p => p.sessionId === '7');
             expect(ours).toBeTruthy();
             expect(ours.body.rhythm).toBe('NSR');
@@ -719,7 +736,8 @@ describe('PatientMonitor — caseEnded freezes the monitor (ISSUE-0015)', () => 
         const src = fs.readFileSync(path.resolve(__dirname, 'PatientMonitor.jsx'), 'utf8');
         expect(src).toMatch(/if \(!activeScenario \|\| !scenarioPlaying \|\| caseEnded\) return;/);
         // The jitter loop also holds while the learner has paused (ISSUE-0021).
-        expect(src).toMatch(/if \(caseEnded \|\| !isPlaying\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{\s*const p = simulationParams\.current;/);
+        // …and jitters around the TREATED values (withTreatmentEffects), never the raw params.
+        expect(src).toMatch(/if \(caseEnded \|\| !isPlaying\) return undefined;[\s\S]*?const interval = setInterval\(\(\) => \{[\s\S]*?const p = \{ \.\.\.simulationParams\.current, \.\.\.withTreatmentEffects\(simulationParams\.current, treatmentAggRef\.current\) \};/);
         expect(src).toMatch(/if \(isPlaying && !caseEnded\) \{/);
     });
 });
@@ -808,7 +826,7 @@ describe('PatientMonitor — scenario.alternatives (ISSUE-0012)', () => {
     async function openScenariosTab(utils) {
         const { findByTitle, findByRole } = utils;
         fireEvent.click(await findByTitle(/monitor settings/i));
-        fireEvent.click(await findByRole('button', { name: /^scenarios$/i }));
+        fireEvent.click(await findByRole('tab', { name: /^scenarios$/i }));
     }
 
     it('lists each alternative with a timeline beside the case scenario; frameless ones are skipped', async () => {

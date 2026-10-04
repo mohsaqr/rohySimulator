@@ -70,14 +70,32 @@ const STABLE_ALARMS = Object.freeze({
     muted: false,
     toggleMute: () => {},
 });
+// Swappable per test (read lazily at hook-call time). Keep the object
+// identity stable within a test, for the reason above.
+let treatmentEffectsState = STABLE_TREATMENT_EFFECTS;
 vi.mock('../../hooks/useTreatmentEffects', () => ({
-    useTreatmentEffects: () => STABLE_TREATMENT_EFFECTS,
+    useTreatmentEffects: () => treatmentEffectsState,
 }));
 vi.mock('../../hooks/useAlarms', () => ({
     useAlarms: () => STABLE_ALARMS,
 }));
 
 import PatientMonitor from './PatientMonitor.jsx';
+
+// RTL's waitFor polls with setInterval, which these suites fake; it then
+// re-checks only on DOM mutations. A network write that lands after the last
+// render (the vitals persist waits for the session's restore to settle) is
+// never re-checked. Poll on the real setTimeout instead.
+async function waitForReal(assertion, { timeout = 3000, interval = 20 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) { // poll loop: bounded by `deadline`
+        try { return assertion(); } catch (err) {
+            if (Date.now() > deadline) throw err;
+            await new Promise((r) => setTimeout(r, interval));
+        }
+    }
+}
+
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
 // The factory baseline the monitor mounts with — the exact shape of a
@@ -101,7 +119,9 @@ function defaultHandlers() {
             })
         ),
         http.get('*/api/sessions/:sessionId', () =>
-            HttpResponse.json({ session: { case_snapshot: null } })
+            // start_time: real sessions always carry one, and the vitals
+            // persist waits for the clock to anchor to it.
+            HttpResponse.json({ session: { start_time: new Date(Date.now() - 60_000).toISOString(), case_snapshot: null } })
         ),
         http.get('*/api/sessions/:sessionId/vitals', () =>
             HttpResponse.json(state.vitalsStore)
@@ -118,6 +138,7 @@ function defaultHandlers() {
 const server = setupServer(...defaultHandlers());
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => {
+    treatmentEffectsState = STABLE_TREATMENT_EFFECTS;
     server.resetHandlers(...defaultHandlers());
     state.vitalsStore = { vitals: [] };
     state.posted = [];
@@ -188,7 +209,7 @@ describe('PatientMonitor — #8 vitals persist gate', () => {
     it('never persists the factory-default row, and the first row is the case baseline', async () => {
         mount({ sessionId: 3131 });
 
-        await waitFor(() => expect(state.posted.length).toBeGreaterThanOrEqual(1));
+        await waitForReal(() => expect(state.posted.length).toBeGreaterThanOrEqual(1));
 
         expect(state.posted.some(isFactoryRow)).toBe(false);
         expect(state.posted[0].hr).toBe(118);
@@ -203,7 +224,7 @@ describe('PatientMonitor — #8 vitals persist gate', () => {
     // baseline row still has to be written.
     it('still writes exactly one baseline row for a fresh session', async () => {
         mount({ sessionId: 3132 });
-        await waitFor(() => expect(state.posted.length).toBe(1));
+        await waitForReal(() => expect(state.posted.length).toBe(1));
     });
 });
 
@@ -256,3 +277,146 @@ describe('PatientMonitor — #24 no fake NIBP clock', () => {
         expect(container.textContent).not.toContain('14:02');
     });
 });
+
+describe('PatientMonitor — PRV-28 restored vitals survive the snapshot arriving late', () => {
+    // Regression lock: a remounted monitor showed the patient's ADMISSION vitals instead of the session's latest reading when the case snapshot arrived after the vitals restore (QA 2026-10-04, PRV-28)
+    //
+    // The case-load effect re-runs when `caseSnapshot` lands and used to
+    // reset `params` to the case baseline, clobbering the restored reading.
+    // Delaying /sessions/:id makes that order deterministic.
+    it('keeps the restored reading after the case-load effect re-runs', async () => {
+        state.vitalsStore = {
+            vitals: [{ hr: 133, spo2: 87, bp_sys: 101, bp_dia: 63, rr: 30, temp: 38.9, etco2: 29, rhythm: 'NSR' }],
+        };
+        let snapshotServed = false;
+        server.use(
+            http.get('*/api/sessions/:sessionId', async ({ params }) => {
+                if (params.sessionId.endsWith('vitals')) return undefined;
+                await new Promise((resolve) => setTimeout(resolve, 150));
+                snapshotServed = true;
+                return HttpResponse.json({
+                    session: { start_time: new Date(Date.now() - 60_000).toISOString(), case_snapshot: { scenario: { timeline: [] } } },
+                });
+            }),
+        );
+        const { container } = mount({ sessionId: 3135 });
+
+        await waitFor(() => expect(container.textContent).toContain('133'), { timeout: 3000 });
+        await waitFor(() => expect(snapshotServed).toBe(true), { timeout: 3000 });
+        // Let the case-load re-run triggered by the snapshot commit.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(container.textContent).toContain('133');
+        expect(container.textContent).toContain('87');
+        expect(container.textContent).not.toContain('118');
+    });
+});
+
+describe('PatientMonitor — PRV-28 ended case keeps its frozen clock across a remount', () => {
+    // Regression lock: returning to the patient room after End & Debrief showed the case clock at 0:00 — it was computed from the mount time before the server's start_time arrived, and an ended case has no interval to correct it (QA 2026-10-04, PRV-28)
+    it('shows the elapsed time at the end, not 0:00', async () => {
+        const startMs = Date.UTC(2026, 9, 4, 9, 0, 0);
+        const endedAt = startMs + 125_000; // 2:05 into the case
+        server.use(
+            http.get('*/api/sessions/:sessionId', async ({ params }) => {
+                if (params.sessionId.endsWith('vitals')) return undefined;
+                // Arrives after the mount-time computation, as in the browser.
+                await new Promise((resolve) => setTimeout(resolve, 50));
+                return HttpResponse.json({
+                    session: { start_time: '2026-10-04 09:00:00', case_snapshot: null },
+                });
+            }),
+        );
+        const { container } = mount({ sessionId: 3136, caseEnded: true, caseEndedAt: endedAt });
+
+        await waitFor(() => {
+            const clock = container.querySelector('[data-elapsed-seconds]');
+            expect(clock?.getAttribute('data-elapsed-seconds')).toBe('125');
+        }, { timeout: 3000 });
+    });
+});
+
+describe('PatientMonitor — PRV-31 off-canvas controls drawer', () => {
+    // Regression lock: the closed simulator-controls drawer sat off screen but kept two Tab stops, so keyboard focus vanished into it; its close button had no name (QA 2026-10-04, PRV-31)
+    it('is inert and hidden while closed, and its close button is named', async () => {
+        const { container } = mount({ sessionId: null });
+        await waitFor(() => expect(container.textContent).toContain('118'));
+        const drawer = document.querySelector('[aria-labelledby="monitor-controls-title"]');
+        expect(drawer).not.toBeNull();
+        expect(drawer.hasAttribute('inert')).toBe(true);
+        expect(drawer.getAttribute('aria-hidden')).toBe('true');
+        expect(drawer.querySelector('button[aria-label="Close simulator controls"]')).not.toBeNull();
+    });
+});
+
+describe('PatientMonitor — the jitter keeps treatment effects applied', () => {
+    // Regression lock: the jitter loop rebuilt the display from the RAW params, so with a treatment running the numbers alternated every second between treated and untreated (BP 99 ↔ 118), re-firing alarms and writing a vitals row per flip (found in the PRV-37 live check, 2026-10-04)
+    it('never shows the untreated systolic once a BP-lowering treatment is active', async () => {
+        treatmentEffectsState = Object.freeze({
+            effects: Object.freeze([]),
+            aggregate: Object.freeze({ hr: 0, bp_sys: -40, bp_dia: -20, rr: 0, spo2: 0, temp: 0 }),
+            count: 1, loading: false, error: null, refresh: () => {},
+        });
+        const { container } = mount({ sessionId: null });
+        // Case baseline systolic 88 → treated 48. Untreated would read 86–90.
+        await waitFor(() => expect(container.textContent).toMatch(/4[6-9]\//));
+        const readings = [];
+        for (let i = 0; i < 6; i += 1) {
+            await vi.advanceTimersByTimeAsync(1000);
+            const m = container.textContent.match(/(\d{2,3})\/(\d{2,3})/);
+            if (m) readings.push(Number(m[1]));
+        }
+        expect(readings.length).toBeGreaterThan(0);
+        readings.forEach((sys) => expect(sys).toBeLessThan(60));
+    });
+});
+
+describe('PatientMonitor — a remount never records the admission vitals', () => {
+    // Regression lock: on a remount the case-load effect applied the case baseline before the session's own last reading arrived, and the persist gate wrote that ADMISSION reading as a new row each room switch (found in the PRV-28 live check, 2026-10-04)
+    it('writes nothing until the restore has landed, and never the baseline over a restored reading', async () => {
+        state.vitalsStore = {
+            vitals: [{ hr: 133, spo2: 87, bp_sys: 101, bp_dia: 63, rr: 30, temp: 38.9, etco2: 29, rhythm: 'NSR' }],
+        };
+        let releaseRestore;
+        const restoreGate = new Promise((r) => { releaseRestore = r; });
+        server.use(
+            http.get('*/api/sessions/:sessionId/vitals', async () => {
+                await restoreGate;
+                return HttpResponse.json(state.vitalsStore);
+            }),
+        );
+        const { container } = mount({ sessionId: 3137 });
+        await waitFor(() => expect(container.textContent).toContain('118'));
+        await new Promise((r) => setTimeout(r, 100));
+        expect(state.posted).toEqual([]);
+
+        releaseRestore();
+        await waitFor(() => expect(container.textContent).toContain('133'));
+        await new Promise((r) => setTimeout(r, 100));
+        expect(state.posted.some((row) => row.hr === 118 && row.bp_sys === 88)).toBe(false);
+    });
+});
+
+describe('PatientMonitor — no vitals row before the session clock is anchored', () => {
+    // Regression lock: before the server start_time arrived, elapsedTime counted from the mount, so every remount wrote its first row at elapsed_ms 0 — minute zero of the session timeline (found in the PRV-28 live check, 2026-10-04)
+    it('holds the first write until start_time is known, then stamps the true elapsed time', async () => {
+        let releaseSession;
+        const sessionGate = new Promise((r) => { releaseSession = r; });
+        server.use(
+            http.get('*/api/sessions/:sessionId', async ({ params }) => {
+                if (params.sessionId.endsWith('vitals')) return undefined;
+                await sessionGate;
+                return HttpResponse.json({ session: { start_time: new Date(Date.now() - 600_000).toISOString(), case_snapshot: null } });
+            }),
+        );
+        const { container } = mount({ sessionId: 3138 });
+        await waitFor(() => expect(container.textContent).toContain('118'));
+        await new Promise((r) => setTimeout(r, 150));
+        expect(state.posted).toEqual([]);
+
+        releaseSession();
+        await waitForReal(() => expect(state.posted.length).toBeGreaterThanOrEqual(1));
+        expect(state.posted[0].elapsed_ms).toBeGreaterThanOrEqual(590_000);
+    });
+});
+
