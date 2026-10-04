@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.19] — 2026-10-04
+
+- **Terms of use in the reader's language.** The agreement is shown in the user's interface language
+  when a translation renders the current version, with shipped machine translations of the default text
+  (de, es, it, fi, sv, fr, kk). Administrators can add or edit translations per language in Settings;
+  a translation of an older version is never shown as current — readers get the main text and are told
+  so. Accepting in any language accepts that version; the acceptance now records the language read
+  (migration 0066).
+- **Translations:** the password rules in German, Spanish, Italian, Finnish and Swedish still said "at
+  least 6 characters" — they now state the actual policy (8–128 characters, an uppercase letter, a
+  lowercase letter and a number). Every locale is fully translated (no new or stale keys).
+
 ## [3.0.0-rc.18] — 2026-10-04
 
 - **No case titles in a learner's analytics.** Learning events, moments, chat turns, case insights, the

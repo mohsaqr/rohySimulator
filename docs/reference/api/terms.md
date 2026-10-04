@@ -9,8 +9,8 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/platform-settings/terms` | `authenticateToken, requireAdmin` | `server/routes/terms-routes.js:155` |
-| `PUT` | `/api/platform-settings/terms` | `authenticateToken, requireAdmin` | `server/routes/terms-routes.js:170` |
-| `GET` | `/api/terms` | `(none)` | `server/routes/terms-routes.js:88` |
-| `POST` | `/api/terms/accept` | `authenticateToken` | `server/routes/terms-routes.js:115` |
-| `GET` | `/api/terms/status` | `authenticateToken` | `server/routes/terms-routes.js:97` |
+| `GET` | `/api/platform-settings/terms` | `authenticateToken, requireAdmin` | `server/routes/terms-routes.js:216` |
+| `PUT` | `/api/platform-settings/terms` | `authenticateToken, requireAdmin` | `server/routes/terms-routes.js:232` |
+| `GET` | `/api/terms` | `(none)` | `server/routes/terms-routes.js:147` |
+| `POST` | `/api/terms/accept` | `authenticateToken` | `server/routes/terms-routes.js:174` |
+| `GET` | `/api/terms/status` | `authenticateToken` | `server/routes/terms-routes.js:156` |

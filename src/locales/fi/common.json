@@ -17,6 +17,9 @@
   "error_boundary_body": "Muu sovellus toimii normaalisti. Voit yrittää uudelleen, vaihtaa huonetta tai ladata sivun uudelleen, jos ongelma jatkuu.",
   "error_boundary_retry": "Yritä uudelleen",
   "error_boundary_title": "Tässä näkymässä tapahtui virhe",
+  "gender_female": "Nainen",
+  "gender_male": "Mies",
+  "gender_other": "Muu",
   "level_value": "Taso {value}",
   "loading": "Ladataan…",
   "next": "Seuraava",
@@ -298,8 +301,5 @@
   "voice_engine_unavailable": "ei saatavilla",
   "voice_group_other": "Muu",
   "voice_unplayable_note": "Määritetty ääni {requested} ei toistu palvelussa {provider} — mitään ei puhuta ennen kuin tämä on korjattu.",
-  "yes": "Kyllä",
-  "gender_male": "Mies",
-  "gender_female": "Nainen",
-  "gender_other": "Muu"
+  "yes": "Kyllä"
 }

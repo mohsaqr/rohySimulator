@@ -17,6 +17,9 @@
   "error_boundary_body": "Resten av appen påverkas inte. Du kan försöka igen, byta rum eller ladda om sidan om problemet kvarstår.",
   "error_boundary_retry": "Försök igen",
   "error_boundary_title": "Något gick fel i den här vyn",
+  "gender_female": "Kvinna",
+  "gender_male": "Man",
+  "gender_other": "Annat",
   "level_value": "Nivå {value}",
   "loading": "Laddar…",
   "next": "Nästa",
@@ -298,8 +301,5 @@
   "voice_engine_unavailable": "inte tillgänglig",
   "voice_group_other": "Övrigt",
   "voice_unplayable_note": "Den konfigurerade rösten {requested} kan inte spelas upp på {provider} — inget kommer att läsas upp förrän detta är åtgärdat.",
-  "yes": "Ja",
-  "gender_male": "Man",
-  "gender_female": "Kvinna",
-  "gender_other": "Annat"
+  "yes": "Ja"
 }

@@ -20,8 +20,12 @@ import { apiFetch, ApiError } from '../../services/apiClient';
 import TermsDocument from './TermsDocument';
 
 export default function TermsGate({ children }) {
-    const { t } = useTranslation('auth');
+    const { t, i18n } = useTranslation('auth');
     const { user, logout } = useAuth();
+    // The agreement in the reader's UI language, when a translation renders
+    // the current version (the server falls back to English and says so).
+    const lang = i18n.resolvedLanguage || i18n.language || 'en';
+    const statusPath = `/terms/status?lang=${encodeURIComponent(lang)}`;
     const [terms, setTerms] = useState(null);    // status payload, or null while loading
     const [phase, setPhase] = useState('loading'); // 'loading' | 'pending' | 'ready'
     const [agreed, setAgreed] = useState(false);
@@ -32,18 +36,18 @@ export default function TermsGate({ children }) {
 
     const load = useCallback(async () => {
         try {
-            const data = await apiFetch('/terms/status');
+            const data = await apiFetch(statusPath);
             setTerms(data?.terms || null);
             setPhase(data?.terms?.pending ? 'pending' : 'ready');
         } catch (err) {
             console.error('[TermsGate] status probe failed, continuing:', err);
             setPhase('ready');
         }
-    }, []);
+    }, [statusPath]);
 
     useEffect(() => {
         let cancelled = false;
-        apiFetch('/terms/status')
+        apiFetch(statusPath)
             .then((data) => {
                 if (cancelled) return;
                 setTerms(data?.terms || null);
@@ -54,7 +58,7 @@ export default function TermsGate({ children }) {
                 if (!cancelled) setPhase('ready');
             });
         return () => { cancelled = true; };
-    }, [user?.id]);
+    }, [user?.id, statusPath]);
 
     // The checkbox unlocks once the text has been scrolled to the end — a small
     // piece of friction that makes "I have read this" less of a fiction. A text
@@ -78,7 +82,9 @@ export default function TermsGate({ children }) {
         setSaving(true);
         setError(null);
         try {
-            const data = await apiFetch('/terms/accept', { method: 'POST', json: { version: terms.version } });
+            // `lang` is the language actually shown, so the server snapshots the
+            // text this person read.
+            const data = await apiFetch('/terms/accept', { method: 'POST', json: { version: terms.version, lang: terms.lang } });
             setTerms(data?.terms || terms);
             setPhase('ready');
         } catch (err) {
@@ -103,6 +109,7 @@ export default function TermsGate({ children }) {
                     <div>
                         <h1 className="text-lg font-semibold text-white">{terms.title}</h1>
                         <p className="mt-1 text-sm text-neutral-400">{t('terms_gate_intro')}</p>
+                        {terms.is_fallback && <p className="mt-1 text-xs text-amber-400">{t('terms_not_translated')}</p>}
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-neutral-700 px-2.5 py-1 text-xs text-neutral-400">
                         <FileText className="h-3.5 w-3.5" aria-hidden="true" />

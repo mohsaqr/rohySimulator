@@ -11,7 +11,7 @@ import { apiFetch } from '../../services/apiClient';
 
 const logout = vi.fn();
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (k, v) => (v?.version ? `${k}:${v.version}` : k) }),
+    useTranslation: () => ({ t: (k, v) => (v?.version ? `${k}:${v.version}` : k), i18n: { language: 'de', resolvedLanguage: 'de' } }),
 }));
 vi.mock('../../contexts/AuthContext', () => ({
     useAuth: () => ({ user: { id: 7, username: 'ada' }, logout }),
@@ -23,7 +23,8 @@ vi.mock('../../services/apiClient', () => {
     return { apiFetch: vi.fn(), ApiError };
 });
 
-const TERMS = { required: true, title: 'Rohy terms', body: '## 1. One\n\nText.', version: '1.0', accepted: false, pending: true };
+const TERMS = { required: true, title: 'Rohy terms', body: '## 1. One\n\nText.', version: '1.0', accepted: false, pending: true, lang: 'de', is_fallback: false };
+const STATUS = '/terms/status?lang=de';
 
 function renderGate() {
     return render(<TermsGate><div data-testid="main-app" /></TermsGate>);
@@ -51,7 +52,7 @@ describe('TermsGate', () => {
     });
 
     it('holds the app back until the current version is accepted', async () => {
-        apiFetch.mockImplementation((url) => (url === '/terms/status'
+        apiFetch.mockImplementation((url) => (url === STATUS
             ? Promise.resolve({ terms: TERMS })
             : Promise.resolve({ terms: { ...TERMS, accepted: true, pending: false } })));
         renderGate();
@@ -70,7 +71,8 @@ describe('TermsGate', () => {
 
         fireEvent.click(accept);
         expect(await screen.findByTestId('main-app')).toBeInTheDocument();
-        expect(apiFetch).toHaveBeenCalledWith('/terms/accept', { method: 'POST', json: { version: '1.0' } });
+        // The language shown goes back with the acceptance, so the snapshot is what was read.
+        expect(apiFetch).toHaveBeenCalledWith('/terms/accept', { method: 'POST', json: { version: '1.0', lang: 'de' } });
     });
 
     it('signs out when the person declines', async () => {
@@ -86,7 +88,7 @@ describe('TermsGate', () => {
         const { ApiError } = await import('../../services/apiClient');
         let statusCalls = 0;
         apiFetch.mockImplementation((url) => {
-            if (url === '/terms/status') {
+            if (url === STATUS) {
                 statusCalls += 1;
                 return Promise.resolve({ terms: statusCalls === 1 ? TERMS : { ...TERMS, version: '1.1', title: 'Rohy terms v1.1' } });
             }
@@ -108,5 +110,12 @@ describe('TermsGate', () => {
         apiFetch.mockRejectedValue(new Error('offline'));
         renderGate();
         expect(await screen.findByTestId('main-app')).toBeInTheDocument();
+    });
+
+    it('asks for the agreement in the reader language and says so when English stands in', async () => {
+        apiFetch.mockResolvedValue({ terms: { ...TERMS, lang: 'en', is_fallback: true } });
+        renderGate();
+        expect(await screen.findByText('terms_not_translated')).toBeInTheDocument();
+        expect(apiFetch).toHaveBeenCalledWith(STATUS);
     });
 });
