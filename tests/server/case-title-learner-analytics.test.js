@@ -33,7 +33,9 @@ let server; let studentToken; let educatorToken; let caseId; let caseCode; let s
 const pRun = (db, sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, function done(err) { err ? reject(err) : resolve(this); }));
 
 beforeAll(async () => {
-    server = await startTestServer();
+    // Oyon on, so /addons/oyon/student/me is exercised rather than answering
+    // 503 (add-on off) — CI's unit job has no OYON_ENABLED in its environment.
+    server = await startTestServer({ env: { OYON_ENABLED: '1' } });
     const db = await new Promise((resolve, reject) => { const d = new (sqlite3.verbose().Database)(server.dbPath, (e) => (e ? reject(e) : resolve(d))); });
     try {
         const hash = await bcrypt.hash(PASSWORD, 4);
@@ -83,8 +85,11 @@ describe('a learner reading their own analytics never receives the case title', 
         expect(events.find((e) => e.case_id === caseId).case_name).toBe(caseCode);
         expect(sessions.find((s) => s.id === sessionId).case_name).toBe(caseCode);
         expect(await (await get(studentToken, '/export/learning-events')).text()).toContain(caseCode);
-        const own = await (await get(studentToken, '/addons/oyon/student/me')).json();
-        if (own.records) expect(own.records.every((r) => r.case_title_snapshot === caseCode)).toBe(true);
+        const ownRes = await get(studentToken, '/addons/oyon/student/me');
+        expect(ownRes.status).toBe(200);
+        const own = await ownRes.json();
+        expect(own.records.length).toBeGreaterThan(0);
+        expect(own.records.every((r) => r.case_title_snapshot === caseCode)).toBe(true);
     });
 
     it('an educator still sees the title', async () => {
