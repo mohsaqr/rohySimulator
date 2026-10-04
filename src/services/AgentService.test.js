@@ -897,7 +897,10 @@ describe('AgentService.sendAgentMessage', () => {
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(llmReq).toBeTruthy();
         expect(llmReq.body.session_id).toBe('sess-1');
-        expect(llmReq.body.system_prompt).toContain('Case: Agent Case');
+        // The authoring title ("Case: …") is answer-key material: absent for an
+        // agent whose knowledge.answerKey is off, the default (PRV-32).
+        expect(llmReq.body.system_prompt).not.toContain('Case: Agent Case');
+        expect(llmReq.body.system_prompt).toContain('Patient: Case Patient');
         expect(llmReq.body.system_prompt).toContain('Chief Complaint: Chest pain');
         expect(llmReq.body.messages).toEqual([
             { role: 'assistant', content: 'previous reply' },
@@ -921,12 +924,12 @@ describe('AgentService.sendAgentMessage', () => {
             system_prompt: 'SECRET: the answer is NSTEMI.',
         };
         await AgentService.sendAgentMessage('sess-1', agent, 'hi', null, [], null, [],
-            { name: 'Situation Case', config: {} });
+            { name: 'Situation Case', config: { patient_name: 'Situation Patient' } });
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(JSON.stringify(llmReq.body)).not.toContain('SECRET: the answer is NSTEMI.');
         // Not vacuous: an empty system_prompt would also lack the anchor.
         expect(typeof llmReq.body.system_prompt).toBe('string');
-        expect(llmReq.body.system_prompt).toContain('Case: Situation Case');
+        expect(llmReq.body.system_prompt).toContain('Patient: Situation Patient');
         expect(llmReq.body.system_prompt).not.toMatch(/## ROLE/);
     });
 

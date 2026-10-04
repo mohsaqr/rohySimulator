@@ -82,31 +82,29 @@ describe('StudentFirstRun — first case card', () => {
     });
 });
 
-// Regression lock: the emotion-capture card records the contract it SHOWS.
+// Regression lock: emotion-capture consent was pre-ticked, so Start recorded consent nobody gave (QA 2026-10-04, PRV-22)
 //
-// Its checkbox says "Allow camera-based emotion capture during my sessions" and
-// it is pre-checked. It used to record the tenant's ADVERTISED version, so a
-// student who clicked Start without unticking it was stored as accepting v2 —
-// typing, interaction and discourse — and, on a tenant with voice on, v3:
-// microphone capture, from a card that never mentions a microphone. The
-// advertised version is set to v3 here because that is the worst case.
+// The box now starts unticked: a student who presses Start without touching
+// it gives no consent. Ticking it records the contract the card SHOWS —
+// camera-only v1 — never the tenant's advertised version (v3 here, the worst
+// case: typing, interaction, discourse and microphone).
 describe('StudentFirstRun — emotion-capture consent', () => {
-    it('records camera-only consent, whatever version the tenant advertises', async () => {
+    it('starts unticked, and Start without ticking records no consent', async () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
 
         const box = await screen.findByLabelText(/Allow camera-based emotion capture/i);
-        expect(box).toBeChecked();
+        expect(box).not.toBeChecked();
 
         fireEvent.click(screen.getByRole('button', { name: /Start/i }));
 
         await waitFor(() => expect(apiPut).toHaveBeenCalled());
         const [, body] = apiPut.mock.calls.find(([path]) => path === '/users/preferences');
-        expect(body.onboarding_settings.oyon_consent).toBe(true);
-        expect(body.onboarding_settings.oyon_consent_version).toBe('oyon-consent-v1');
+        expect(body.onboarding_settings.oyon_consent).toBe(false);
+        expect(body.onboarding_settings.oyon_consent_version).toBeNull();
     });
 
-    it('records no version when the learner unticks the box', async () => {
+    it('records camera-only consent when the learner ticks the box, whatever the tenant advertises', async () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
 
@@ -115,7 +113,7 @@ describe('StudentFirstRun — emotion-capture consent', () => {
 
         await waitFor(() => expect(apiPut).toHaveBeenCalled());
         const [, body] = apiPut.mock.calls.find(([path]) => path === '/users/preferences');
-        expect(body.onboarding_settings.oyon_consent).toBe(false);
-        expect(body.onboarding_settings.oyon_consent_version).toBeNull();
+        expect(body.onboarding_settings.oyon_consent).toBe(true);
+        expect(body.onboarding_settings.oyon_consent_version).toBe('oyon-consent-v1');
     });
 });

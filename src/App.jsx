@@ -1173,7 +1173,9 @@ function MainApp() {
             <PluginRoom
                pluginId={currentRoom}
                topBarControls={topBarControls}
-               caseTitle={activeCase?.name ?? null}
+               // The patient's name, as every core room shows — never the
+               // authoring title, which names the diagnosis (QA PRV-21).
+               caseTitle={activeCase?.config?.patient_name || null}
                session={pluginSession}
                caseConfig={pluginCaseConfig}
                eventLogger={EventLogger}
@@ -1244,7 +1246,9 @@ function MainApp() {
 
             {/* Top Left: Patient Visual — a smaller slice when stacked, so
                 the chat below it keeps a usable number of lines. */}
-            <div className="h-[30%] lg:h-[45%] border-b border-neutral-800 relative">
+            {/* `@container`: the header buttons below size their labels to
+                THIS column, not the viewport (PRV-33). */}
+            <div className="@container h-[30%] lg:h-[45%] border-b border-neutral-800 relative">
                <PatientVisual caseData={activeCase} />
 
                {/* The top band over the portrait: the shared TopBarControls
@@ -1282,7 +1286,12 @@ function MainApp() {
                                controls and the centred Oyon pill all share one
                                narrow band, and the three collided on a tablet.
                                `title` + aria-label keep it identifiable. */}
-                           <span className="max-lg:sr-only">{t('end_debrief')}</span>
+                           {/* …and below 30rem of COLUMN width too, whatever
+                               the viewport: a longer label ("Beenden &
+                               Nachbesprechung") wrapped the band onto a second
+                               row over the patient's face (QA 2026-10-04,
+                               PRV-33). Icon-only beats wrapping. */}
+                           <span className="max-lg:sr-only @max-[30rem]:sr-only whitespace-nowrap">{t('end_debrief')}</span>
                         </button>
                      </div>
                   )}
@@ -1299,7 +1308,7 @@ function MainApp() {
                            title={t('case_summary')}
                         >
                            <ClipboardList className="w-4 h-4" />
-                           <span className="max-lg:sr-only">{t('case_summary')}</span>
+                           <span className="max-lg:sr-only @max-[30rem]:sr-only whitespace-nowrap">{t('case_summary')}</span>
                         </button>
                      </div>
                   )}
@@ -1443,16 +1452,30 @@ function MainApp() {
    );
 }
 
+// role=dialog + Escape-to-cancel, and focus starts on Cancel — the safe
+// choice for an irreversible action (QA 2026-10-04, PRV-31: the confirm was
+// an unlabelled div that a keyboard user could not dismiss).
 function EndSessionConfirm({ onCancel, onConfirm }) {
    const { t } = useTranslation('app');
+   useEffect(() => {
+      const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+   }, [onCancel]);
    return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-         <div className="bg-neutral-900 border border-red-800/70 rounded-lg shadow-2xl w-full max-w-md">
+         <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="end-session-confirm-title"
+            aria-describedby="end-session-confirm-body"
+            className="bg-neutral-900 border border-red-800/70 rounded-lg shadow-2xl w-full max-w-md"
+         >
             <div className="px-6 py-5 border-b border-neutral-800 flex items-center gap-3">
-               <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-               <h2 className="text-base font-semibold text-white">{t('end_session_confirm_title')}</h2>
+               <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" aria-hidden="true" />
+               <h2 id="end-session-confirm-title" className="text-base font-semibold text-white">{t('end_session_confirm_title')}</h2>
             </div>
-            <div className="px-6 py-5 text-sm text-neutral-300 space-y-2">
+            <div id="end-session-confirm-body" className="px-6 py-5 text-sm text-neutral-300 space-y-2">
                <p>{t('end_session_confirm_intro')}</p>
                <ul className="list-disc list-inside text-neutral-400 space-y-1 ml-1">
                   <li>{t('end_session_confirm_timeline')}</li>
@@ -1462,13 +1485,16 @@ function EndSessionConfirm({ onCancel, onConfirm }) {
             </div>
             <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
                <button
+                  type="button"
                   data-testid="end-session-cancel"
+                  autoFocus
                   onClick={onCancel}
                   className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
                >
                   {t('cancel')}
                </button>
                <button
+                  type="button"
                   data-testid="end-session-confirm"
                   onClick={onConfirm}
                   className="px-4 py-2 text-sm rounded text-white font-semibold bg-red-700 hover:bg-red-600 flex items-center gap-2"

@@ -219,12 +219,13 @@ export default function RadiologyReportView({ result, patientInfo, onClose, onOp
                     )}
 
                     <div className="p-6 space-y-6">
-                        {resultData.indications && resultData.indications.length > 0 && (
-                            <div>
-                                <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">{t('clinical_indication')}</h3>
-                                <p className="text-slate-700">{resultData.indications.slice(0, 3).join('; ')}</p>
-                            </div>
-                        )}
+                        {/* No "Clinical indication" from `resultData.indications`:
+                            that is the catalogue's list of reasons the study is
+                            ordered IN GENERAL ("Pneumonia; Heart failure; Lung
+                            mass"), and printed as this patient's indication it
+                            put three diagnoses on a STEMI's chest film (QA
+                            2026-10-04, PRV-37). Rows stored before the fix
+                            still carry the list; it is ignored here. */}
 
                         <div>
                             <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">{t('technique')}</h3>

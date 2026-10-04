@@ -504,15 +504,22 @@ describe('buildCaseContext — knowledge-scoped prompt context', () => {
         expect(out).not.toContain('Expected diagnosis');
     });
 
-    it('always includes case name + chief complaint (the safe baseline)', () => {
-        // CONTRACT: any non-minimal filter at minimum identifies the case
+    it('always includes the patient + chief complaint (the safe baseline)', () => {
+        // CONTRACT: any non-minimal filter at minimum identifies the patient
         // and the chief complaint — the discussant needs SOMETHING to
-        // anchor the conversation.
+        // anchor the conversation. The authoring title ("Case: Acute MI") is
+        // NOT part of that baseline: it is often the diagnosis, so it rides
+        // on the answerKey argument, off by default (PRV-32).
         const out = buildCaseContext(fullCase, { scope: 'history' });
-        expect(out).toContain('Case: Acute MI');
+        expect(out).not.toContain('Case: Acute MI');
         expect(out).toContain('Patient: Jane Doe');
         expect(out).toContain('Age: 58');
         expect(out).toContain('Chief Complaint: chest pain');
+    });
+
+    it('names the authoring title only when answerKey is on', () => {
+        expect(buildCaseContext(fullCase, { scope: 'history', answerKey: true })).toContain('Case: Acute MI');
+        expect(buildCaseContext(fullCase, { scope: 'history', answerKey: false })).not.toContain('Case: Acute MI');
     });
 
     it('emits the fence and a note that the configured case is not what happened', () => {

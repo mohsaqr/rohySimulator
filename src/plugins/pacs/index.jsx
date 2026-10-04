@@ -9,22 +9,10 @@ import {
 import { entryById, readArchive } from '../../components/pacs/archive.js';
 import { imagingOrders, mergeOrderedStudies } from './hostImagingOrders.js';
 
-// One `{ log }` wrapper per host logger, so the room receives the SAME
-// eventLogger on every render. Radoyon memoises its logger on this prop's
-// identity (createRadoyonLogger in PacsScreen) and keys the study
-// OPENED/CLOSED effect on that logger — so a fresh object per render closed
-// and re-opened the study on EVERY render, and the events it logged
-// re-rendered the host: a loop. The seeded monkey walker found it
-// (MONKEY_SEED=3, a learner-ordered study opened in PACS): ~95 learning-event
-// batches a second until the per-user limiter answered 429. `ctx.log` is
-// stable for the life of the room (PluginRoom memoises the context), so
-// keying on it is exact.
-const eventLoggers = new WeakMap();
-export function eventLoggerFor(log) {
-    if (typeof log !== 'function') return { log };
-    if (!eventLoggers.has(log)) eventLoggers.set(log, { log });
-    return eventLoggers.get(log);
-}
+// Shared with every plugin adapter — see ../eventLoggerFor.js for why the
+// logger object must keep its identity across renders.
+export { eventLoggerFor } from '../eventLoggerFor.js';
+import { eventLoggerFor } from '../eventLoggerFor.js';
 
 /**
  * The PACS reading room, expressed as an RPS-1 plugin.

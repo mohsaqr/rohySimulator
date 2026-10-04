@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 import { parseConfig } from '../../utils/parseConfig.js';
+import { genderLabel } from '../../utils/genderLabel.js';
 
 const PatientAvatar = lazy(() => import('../chat/PatientAvatar.jsx'));
 
@@ -18,9 +19,11 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
         );
     }
     const cfg = parseConfig(activeCase.config);
-    const name = cfg.patient_name || activeCase.name || t('patient_fallback');
+    // Never `activeCase.name`: that is the authoring title (PRV-21).
+    const name = cfg.patient_name || t('patient_fallback');
     const age = cfg.demographics?.age;
     const gender = cfg.demographics?.gender;
+    const genderText = genderLabel(t, gender);
     // Chief complaint comes from the structured history, falling back to the
     // denormalized `chief_complaint` column. We deliberately do NOT fall back
     // to `activeCase.description` — that field is the case-selection summary
@@ -44,9 +47,9 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
                     </Suspense>
                 </div>
                 <div className="text-base font-semibold text-slate-100">{name}</div>
-                {(age || gender) && (
+                {(age || genderText) && (
                     <div className="text-sm text-slate-400 mt-0.5">
-                        {age ? t('age_y', { age }) : ''}{age && gender ? ' · ' : ''}{gender || ''}
+                        {age ? t('age_y', { age }) : ''}{age && genderText ? ' · ' : ''}{genderText}
                     </div>
                 )}
             </div>

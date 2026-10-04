@@ -358,25 +358,42 @@ function formatLegacyClinicalRecords(config = {}, { answerKey = false } = {}) {
     return sections;
 }
 
-function caseSummary(activeCase = {}) {
+// The authoring title and description name the diagnosis ("Acute Chest Pain -
+// STEMI", "...ECG shows an acute anterior ST-elevation MI..."), so they are
+// answer-key material: emitted only for an agent whose answerKey argument is
+// on. Without this gate every patient and every answerKey-off agent was handed
+// the diagnosis through the summary (QA 2026-10-04, PRV-32).
+function caseSummary(activeCase = {}, { answerKey = false } = {}) {
     const cfg = activeCase.config || {};
     const demo = cfg.demographics || {};
     const parts = [
-        `Case: ${activeCase.name || 'Unnamed'}`,
+        answerKey ? `Case: ${activeCase.name || 'Unnamed'}` : '',
         cfg.patient_name ? `Patient: ${cfg.patient_name}` : '',
         demo.age ? `Age: ${demo.age}` : '',
         demo.gender ? `Gender: ${demo.gender}` : '',
         demo.weight ? `Weight: ${demo.weight}` : '',
         demo.height ? `Height: ${demo.height}` : '',
-        activeCase.description ? `Description: ${activeCase.description}` : '',
+        answerKey && activeCase.description ? `Description: ${activeCase.description}` : '',
     ].filter(Boolean);
     return parts.join('\n');
 }
 
-export function buildPatientCaseDesignContext(activeCase) {
+/**
+ * The hidden case context appended to the patient's prompt.
+ *
+ * `answerKey` is the same argument the discussion agents take: off by default,
+ * because a patient does not know their own diagnosis. On, it adds the case's
+ * authoring title and description to the summary.
+ *
+ * @param {object|null} activeCase
+ * @param {object} [options]
+ * @param {boolean} [options.answerKey=false]
+ * @returns {string}
+ */
+export function buildPatientCaseDesignContext(activeCase, { answerKey = false } = {}) {
     if (!activeCase) return '';
     const cfg = activeCase.config || {};
-    const sections = [['Case Summary', caseSummary(activeCase)]];
+    const sections = [['Case Summary', caseSummary(activeCase, { answerKey })]];
     const mirroredHistory = cfg.clinicalRecords?.history || null;
 
     const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, {
@@ -449,7 +466,7 @@ export function buildDiscussionCaseContext(activeCase, scope = 'chart', { answer
     // `vitals` and `full` both did.
     const withVitals = resolved === 'summary' || chart;
 
-    const sections = [['Summary', caseSummary(activeCase)]];
+    const sections = [['Summary', caseSummary(activeCase, { answerKey })]];
 
     const structured = formatStructuredHistoryForPrompt(cfg.structuredHistory, { demographics: cfg.demographics });
     if (structured && deep) {

@@ -54,6 +54,7 @@ const nurse = {
 };
 
 let llmStatus = 200;
+const llmBodies = [];
 
 function defaultHandlers() {
     llmStatus = 200;
@@ -78,7 +79,8 @@ function defaultHandlers() {
         http.get('*/api/sessions/:sid/team-communications', () => HttpResponse.json({ log: [] })),
         http.get('*/api/agents/templates', () => HttpResponse.json({ templates: [] })),
         http.get('*/api/interactions/:sid', () => HttpResponse.json({ interactions: [] })),
-        http.post('*/api/proxy/llm', () => {
+        http.post('*/api/proxy/llm', async ({ request }) => {
+            llmBodies.push(await request.clone().json().catch(() => null));
             if (llmStatus !== 200) {
                 return HttpResponse.json({ error: 'upstream exploded' }, { status: llmStatus });
             }
@@ -140,6 +142,29 @@ describe('ChatInterface — a failed patient reply is still visible', () => {
         await waitFor(() => {
             expect(screen.getByPlaceholderText(/message alice original/i)).not.toBeDisabled();
         });
+    });
+
+    // Regression lock: the failure was drawn as the PATIENT's bubble (avatar + "Patient" label), and its "Error: …" text was sent to the model on the next turn as the patient's previous reply (QA 2026-10-04, PRV-38)
+    it('draws the failure as an app notice and never sends it on to the model', async () => {
+        llmBodies.length = 0;
+        mount();
+        const input = await screen.findByPlaceholderText(/message alice original/i);
+        llmStatus = 500;
+        fireEvent.change(input, { target: { value: 'How are you?' } });
+        fireEvent.submit(input.closest('form'));
+        const notice = await screen.findByTestId('chat-error-notice', {}, { timeout: 5000 });
+        expect(notice).toHaveAttribute('role', 'alert');
+        expect(notice.textContent).toMatch(/upstream exploded/i);
+        expect(notice.textContent).not.toMatch(/Patient/);
+
+        llmStatus = 200;
+        await waitFor(() => expect(screen.getByPlaceholderText(/message alice original/i)).not.toBeDisabled());
+        fireEvent.change(screen.getByPlaceholderText(/message alice original/i), { target: { value: 'Are you there?' } });
+        fireEvent.submit(screen.getByPlaceholderText(/message alice original/i).closest('form'));
+        await waitFor(() => expect(llmBodies.length).toBeGreaterThanOrEqual(2));
+        const sent = JSON.stringify(llmBodies.at(-1)?.messages ?? []);
+        expect(sent).toContain('Are you there?');
+        expect(sent).not.toMatch(/upstream exploded/i);
     });
 
     it('still renders a successful reply (the happy path is untouched)', async () => {

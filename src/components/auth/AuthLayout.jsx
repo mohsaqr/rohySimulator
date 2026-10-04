@@ -96,7 +96,7 @@ export default function AuthLayout({ children, onOpenTerms = null }) {
                             value={uiLanguage}
                             onChange={(e) => setUiLanguage(e.target.value)}
                             aria-label={t('language', { defaultValue: 'Language' })}
-                            className="appearance-none bg-neutral-900 border border-neutral-800 rounded-lg pl-9 pr-8 py-2 text-sm text-neutral-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                            className="appearance-none bg-neutral-900 border border-neutral-800 rounded-lg pl-9 pr-8 py-2 text-sm text-neutral-300 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                         >
                             {Object.entries(LANGUAGES).map(([code, lang]) => (
                                 <option key={code} value={code}>

@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
 import { caseDisplayLabel } from '../../utils/caseDisplayLabel';
+import { sanitizeResponseText } from '../../utils/plainText';
 import { fetchDiscussantForCase } from '../../services/discussionService';
 import { useDiscussionEngine } from '../../hooks/useDiscussionEngine';
 import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
@@ -143,6 +144,19 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     // Session language wins over the platform-wide STT locale, mirroring the
     // patient-chat rule in ChatInterface.startVoiceTurn: an Italian debrief
     // listens in Italian; English sessions keep the platform setting.
+    // The caption line. The learner's own words while they speak; the
+    // discussant's line once the reveal lag has passed — and it STAYS after
+    // the speech ends, so a learner answering by text can still read the
+    // question (QA 2026-10-04, PRV-30: it vanished with the audio, leaving
+    // the question only in the Transcript drawer). Markdown the model leaked
+    // is stripped, as in the patient chat.
+    let captionLine = null;
+    if (listening && interim) {
+        captionLine = interim;
+    } else if (lastAssistant && (speaking ? subtitleReady : !busy)) {
+        captionLine = sanitizeResponseText(lastAssistant);
+    }
+
     const sttLang = caseLanguage !== DEFAULT_LANGUAGE
         ? sttLocaleFor(caseLanguage)
         : (voiceSettings?.stt_language || 'en-US');
@@ -150,8 +164,14 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     return (
         <div className="h-screen w-screen bg-gradient-to-br from-slate-700 to-slate-900 text-slate-100 flex flex-col overflow-hidden">
             {/* Topbar */}
-            <header className="flex items-center justify-between px-6 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-700">
-                <div className="flex items-center gap-3">
+            {/* Three columns, the middle one as wide as the App-level Oyon
+                pill (published as --oyon-pill-w; 0 when there is no pill).
+                Equal outer columns put that slot on 50vw, where the pill
+                floats — so the header's own content can no longer slide
+                under it (QA 2026-10-04, PRV-30). Same device as the
+                PatientMonitor header. */}
+            <header className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-6 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-700">
+                <div className="flex items-center gap-3 min-w-0">
                     <button
                         type="button"
                         onClick={onClose}
@@ -178,16 +198,19 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 · <span className="text-indigo-200">…</span>
                             </span>
                         ) : discussant?.name ? (
-                            <span className="text-slate-400">
+                            <span className="text-slate-400 truncate min-w-0">
                                 · <span className="text-indigo-200">{discussant.name}</span>
+                                {/* A real space, not a margin: the text read
+                                    aloud and copied was "Name(Role)" (PRV-33). */}
                                 {discussant.roleTitle && (
-                                    <span className="text-slate-500 ml-1">({discussant.roleTitle})</span>
+                                    <span className="text-slate-500">{' '}({discussant.roleTitle})</span>
                                 )}
                             </span>
                         ) : null}
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div aria-hidden="true" style={{ width: 'var(--oyon-pill-w, 0px)' }} />
+                <div className="flex items-center justify-end gap-2 min-w-0 flex-wrap">
                     {topBarControls}
                     <button
                         type="button"
@@ -254,11 +277,29 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                                 />
                             </Suspense>
                         </div>
-                        {/* Discussant name + inline message bubble moved out:
-                            the name now lives in the topbar; the spoken line
-                            renders via the cinema subtitle band (below) so
-                            the central column stays uncluttered. */}
+                        {/* Discussant name lives in the topbar. */}
                     </div>
+
+                    {/* Caption — IN the discussant column, in flow, with its
+                        own scroll. It used to be a `fixed` z-40 band pinned
+                        at 23rem: a long reply grew over "Tap to talk", the
+                        "Type instead" link and the room bar, and the whole
+                        band was a button that swallowed clicks for as long
+                        as the discussant spoke (QA 2026-10-04, PRV-30). */}
+                    {started && captionLine && (
+                        <div className="w-full max-w-2xl flex-1 min-h-0 mt-4 flex flex-col items-center gap-1" data-testid="debrief-caption">
+                            <p className="w-full max-h-48 overflow-y-auto text-center text-base md:text-lg font-medium text-white leading-snug whitespace-pre-wrap break-words">
+                                {captionLine}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setShowTranscript(true)}
+                                className="text-xs text-slate-400 hover:text-indigo-300 underline-offset-2 hover:underline"
+                            >
+                                {t('show_full_transcript')}
+                            </button>
+                        </div>
+                    )}
 
                     <div className="w-full flex flex-col items-center gap-3 mt-6">
                         {!discussant && !loading ? (
@@ -299,62 +340,6 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
 
             </div>
 
-            {/* Cinema subtitle band — mirrors the ChatInterface
-                implementation. Captures BOTH speakers (user STT via the
-                `listening` mirror from VoiceControl; discussant TTS via
-                `speaking` + 30% lag gate). Pixel-anchored under the 256px
-                discussant avatar (topbar ~52px + body pt-6 ~24px + main p-8
-                ~32px + avatar 256px ≈ 364px → top: 23rem gives a small
-                breathing gap). No speaker label; the topbar already
-                identifies the discussant. Renders nothing when neither
-                speaker is active. Click anywhere on the haze to open the
-                full transcript. */}
-            {!showTranscript && started && (() => {
-                let line = null;
-                if (listening && interim) {
-                    line = interim;
-                } else if (speaking && subtitleReady && lastAssistant) {
-                    line = lastAssistant;
-                }
-                if (!line) return null;
-                const hazeMask = 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(0,0,0,1) 25%, rgba(0,0,0,0) 90%)';
-                return (
-                    <button
-                        type="button"
-                        onClick={() => setShowTranscript(true)}
-                        aria-label={t('show_full_transcript')}
-                        // Span only the right 2/3 of the viewport so flex
-                        // centering lands on the discussant column's geometric
-                        // centre, not the viewport's. The body grid is
-                        // `1fr_2fr` with a 24px gap and 24px outer padding —
-                        // the algebra works out to right-column-centre = 2W/3
-                        // exactly (independent of viewport width). So
-                        // `left-1/3 right-0 + flex justify-center` centres on
-                        // 66.67% = the column centre.
-                        className="fixed left-1/3 right-0 z-40 flex justify-center items-center px-6 py-8 text-center group"
-                        style={{ top: '23rem', background: 'transparent' }}
-                    >
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 backdrop-blur-sm"
-                            style={{
-                                backgroundColor: 'rgba(0,0,0,0.30)',
-                                WebkitMaskImage: hazeMask,
-                                maskImage: hazeMask,
-                            }}
-                        />
-                        <div
-                            className="relative max-w-2xl pointer-events-none"
-                            style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 18px rgba(0,0,0,0.75)' }}
-                        >
-                            <p className="text-xl md:text-2xl font-medium text-white leading-snug whitespace-pre-wrap break-words">
-                                {line}
-                            </p>
-                        </div>
-                    </button>
-                );
-            })()}
-
             <NotesDrawer
                 open={showNotes}
                 onClose={() => setShowNotes(false)}
@@ -363,6 +348,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
 
             {showText && (
                 <TextComposerModal
+                    prompt={lastAssistant ? sanitizeResponseText(lastAssistant) : null}
                     onClose={() => setShowText(false)}
                     onSend={(text) => { sendMessage(text); setShowText(false); }}
                     busy={busy}

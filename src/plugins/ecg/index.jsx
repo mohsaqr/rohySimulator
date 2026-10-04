@@ -6,6 +6,7 @@
 import { manifest } from './manifest.js';
 import { EcgRoom } from './EcgRoom.jsx';
 import { EcgCaseAuthor } from './EcgCaseAuthor.jsx';
+import { eventLoggerFor } from '../eventLoggerFor.js';
 import {
   case_document_is_servable,
   case_document_issues,
@@ -26,7 +27,7 @@ export default {
   props: (ctx, persist) => ({
     ecg_case: learner_case(ctx.data),
     // The narrowed logger (RPS-1 1.6); create_ecg_logger wraps `{log}`.
-    event_logger: { log: ctx.log },
+    event_logger: eventLoggerFor(ctx.log),
     exam_mode: ctx.session.examMode,
     t: ctx.t,
     initial_work: persist.state,

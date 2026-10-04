@@ -432,6 +432,27 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         );
     });
 
+    // Regression lock: the chat Send button was an unnamed icon and the composer was labelled only by its placeholder (QA 2026-10-04, PRV-31)
+    it('names the composer and the Send button for assistive tech', async () => {
+        mount(caseFixture);
+        await screen.findByPlaceholderText(/message alice original/i);
+        expect(screen.getByRole('textbox', { name: 'Message' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send message' })).toBeInTheDocument();
+    });
+
+    // Regression lock: every learner's messages were labelled with the invented default "Dr. Carmen" (QA 2026-10-04, PRV-38)
+    it("labels the learner's own messages with their own name when no platform name is set", async () => {
+        server.use(http.get('*/api/platform-settings/chat', () => HttpResponse.json({ doctorName: '', doctorAvatar: '' })));
+        llmResponseText = 'OK.';
+        mount(caseFixture);
+        const input = await screen.findByPlaceholderText(/message alice original/i);
+        fireEvent.change(input, { target: { value: 'Hello there' } });
+        fireEvent.submit(input.closest('form'));
+        await screen.findByText('Hello there');
+        await waitFor(() => expect(screen.getByText('tester')).toBeInTheDocument());
+        expect(screen.queryByText('Dr. Carmen')).toBeNull();
+    });
+
     it('pressing Enter in the input submits the same as the Send button', async () => {
         // CONTRACT: <form onSubmit> path. Enter inside the input fires the
         // form's submit handler. (No explicit keydown handler — we depend on

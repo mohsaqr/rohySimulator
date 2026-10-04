@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Loader2 } from 'lucide-react';
 import { useVoice } from '../../contexts/VoiceContext';
+import { genderLabel } from '../../utils/genderLabel.js';
 import { PATIENT_AOI_ID, FACE_BOX } from '../oyon/screenAois';
 import { useAoiPublisher } from '../oyon/useAoiPublisher';
 
@@ -110,7 +111,9 @@ export default function PatientVisual({ caseData, participant }) {
                         drives avatar routing and nothing the learner reads. */}
                     <div className="text-base font-bold text-white leading-tight truncate">{p.name}</div>
                     {(() => {
-                        const shownGender = p.genderSource === 'guessed' ? '' : (p.gender || '');
+                        // Translated for display; the stored value is the
+                        // English label (PRV-33: "55 v Male" in Finnish).
+                        const shownGender = p.genderSource === 'guessed' ? '' : genderLabel(t, p.gender);
                         if (!p.age && !shownGender) return null;
                         return (
                             <div className="text-[11px] text-neutral-300 leading-tight truncate">

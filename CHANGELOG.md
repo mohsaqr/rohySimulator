@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.8] — 2026-10-04
+
+- **The diagnosis stays out of prompts unless an agent is given it.** The authoring title and summary
+  (often the diagnosis) reach the patient prompt and the agent/discussant briefs only when that agent's
+  `answerKey` argument is on; it is off by default.
+- **Students no longer see the authoring title** in the plugin rooms, the debrief summary or its patient
+  card — the patient's name stands in.
+- **A failed AI reply is an app notice**, not a patient speech bubble, and it is never sent back to the
+  model as something the patient said. Learners' own messages carry their own name.
+- **Debrief you can read.** The discussant's line sits inside its column (no overlay over the controls),
+  without markdown, and stays visible after the audio so a learner answering by text can see the
+  question — which the text composer now shows as well.
+- **The configured voice is the one that plays** (read from the session's case snapshot); an unplayable
+  voice on the alarm-speech path is reported instead of failing silently.
+- **Emotion-capture consent starts unticked.** Plugin rooms no longer re-log "opened" on every render
+  (the ECG room flooded learning events). The exam log comes back after a reload. Radiology reports
+  stop listing generic catalogue indications as the patient's.
+- **Accessibility.** Named Send button and composer, labelled lab search and filter, dialog semantics
+  and Escape on the case summary and End-session confirm, visible focus on the language selects.
+- **Translation fixes.** Patient gender is translated ("55 v Mies"), "Name (Role)" keeps its space, and
+  a long End & Debrief label no longer wraps over the patient's photo.
+
 ## [3.0.0-rc.7] — 2026-10-04
 
 - **A paused or remounted monitor keeps the patient's real vitals.** The restore of the session's last

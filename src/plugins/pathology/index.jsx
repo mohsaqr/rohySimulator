@@ -11,6 +11,7 @@ import {
     readCaseDocument,
 } from '../../components/pathology/hostDocument.js';
 import { hasOpticalProfile } from '../../components/pathology/slideGeometry.js';
+import { eventLoggerFor } from '../eventLoggerFor.js';
 
 /**
  * Host-side tightening of the package's servability gate.
@@ -104,7 +105,7 @@ export default {
         pathologyCase: learnerCase(ctx.data),
         caseTitle: readCaseDocument(ctx.data)?.manifest?.title ?? undefined,
 
-        eventLogger: { log: ctx.log },
+        eventLogger: eventLoggerFor(ctx.log),
         examMode: ctx.session.examMode,
 
         // Upstream used to call `useTranslation()` itself, which quietly made
