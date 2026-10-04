@@ -104,6 +104,12 @@ app.use((req, _res, next) => {
 
 // Routes
 app.use('/api', apiRoutes);
+// Anything under /api that no router claimed is an API miss, so it answers in
+// the API's error shape — not Express's HTML "Cannot GET" page, which
+// apiClient.js cannot read (QA 2026-10-04, PRV-38).
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Not found', code: 'not_found' });
+});
 
 // Full OyonR app. This intentionally serves the copied Oyon tree as-is so
 // Rohy does not recreate Oyon capture, settings, logs, or analytics UI.

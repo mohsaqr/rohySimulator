@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.6] — 2026-10-04
+
+- **Saving a case's labs no longer erases learners' lab orders.** `PUT /cases/:id/labs` (fired by the
+  editor's auto-save) deleted every lab row and every order that referenced one. It now reconciles:
+  matching tests are updated in place, new ones inserted, removed ones soft-deleted — orders keep
+  resolving. Removing a single lab is soft-only too.
+- **Page-close flush keeps its CSRF token.** The unload beacon cannot set headers, so it carries the
+  token in the body; the CSRF check accepts `_csrf` from a JSON body for cookie clients.
+- **A passed AI-engine test is remembered.** The setup checklist reports "Tested" for exactly the saved
+  provider/model/URL/key that passed, and drops back to "Untested" when any of them changes.
+- **Students see the AI label, not its address.** Below educator, `GET /platform-settings/llm` returns
+  provider and model only — no base URL (an internal host for a self-hosted model) and no key flags.
+- **Unknown `/api` paths answer JSON** `{ error, code: 'not_found' }` instead of an HTML page.
+- **"My reports" never registers the install on page load**; only startup and a real report do.
+- **Analytics "Students" counts students** (`uniqueLearners`), not the staff who tested a case.
+- **One dose rule.** `server/shared/treatmentDose.js` is the multiplier the administer route and the
+  order form share; radiology results no longer store the catalogue's generic indications.
+- **Seeded German/Spanish/Italian cases have their accents back** ("42-jähriger", "22 años",
+  "último año"). Migration 0064 corrects existing installs column by column, leaving educator edits.
+- **No invented doctor name.** The chat-name setting has no default; unset, each learner sees their own.
+
 ## [3.0.0-rc.5] — 2026-10-04
 
 - **Counts read as words, not "(s)".** "1 new results", "Ordered 1 test(s)" and "1 study(s)" are now

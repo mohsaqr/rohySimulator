@@ -46,7 +46,7 @@ function readToken() {
 // Read the rohy_csrf cookie value. Set by the server at login (and on
 // /auth/verify) — see server/middleware/csrf.js. Non-HttpOnly by design;
 // document.cookie is the only reader.
-function readCsrfToken() {
+export function readCsrfToken() {
     try {
         if (typeof document === 'undefined' || !document.cookie) return null;
         for (const pair of document.cookie.split(';')) {

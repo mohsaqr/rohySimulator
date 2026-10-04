@@ -23,7 +23,6 @@ import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import { recordServerEvent } from '../lib/learningEventIngest.js';
 import {
     auditSuccess,
-    commitThen,
     logAudit,
     resolveSessionCaseConfig,
     requireSessionRoom,
@@ -31,6 +30,7 @@ import {
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+import { doseMultiplierFor } from '../shared/treatmentDose.js';
 
 const radiologyLog = logger('radiology');
 const routesOrdersLog = logger('routes-orders-labs-radiology');
@@ -598,116 +598,111 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
     });
 });
 
-// PUT /api/cases/:caseId/labs - Bulk-replace all lab rows for a case (Admin only)
+// PUT /api/cases/:caseId/labs - Reconcile a case's lab rows with the editor's list
 //
-// Stage-2 audit: ConfigPanel previously POSTed each lab in the editor's array
-// without any cleanup, so admin removals never deleted DB rows. This endpoint
-// is the atomic replacement: cascade-clean dependent investigation_orders for
-// labs we're about to remove, drop the old lab rows, then insert the new set.
-router.put('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res) => {
+// Regression lock: an editor save deleted every learner's lab orders for the
+// case (QA 2026-10-04, PRV-20). The old version DELETEd all investigation_orders
+// pointing at the case's lab rows, then soft-deleted and re-inserted every row
+// — and the editor calls this on each save and auto-save, so opening a case
+// erased running and finished sessions' lab history.
+//
+// Now it reconciles instead of replacing: a row whose test (name + gender
+// category) is still in the list keeps its id and is updated in place, so the
+// orders that point at it keep their results; new tests are inserted; only a
+// test the educator removed is soft-deleted. Orders are never deleted here —
+// session order reads do not filter on the row's deleted_at, so a removed
+// test still shows in the history of sessions that ordered it.
+const labRowKey = (row) => `${row.test_name}\u0000${row.gender_category ?? ''}`;
+
+router.put('/cases/:caseId/labs', authenticateToken, requireEducator, async (req, res) => {
     const { caseId } = req.params;
     const labs = Array.isArray(req.body?.labs) ? req.body.labs : null;
     if (labs === null) {
         return res.status(400).json({ error: 'body.labs array is required' });
     }
+    if (labs.some(lab => !lab?.test_name)) {
+        return res.status(400).json({ error: 'each lab requires test_name' });
+    }
+    const tenant = tenantId(req);
 
-    dbAdapter.all(
-        `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL`,
-        [caseId, tenantId(req)],
-        (readErr, oldLabs) => {
-            if (readErr) return res.status(500).json({ error: readErr.message });
-
-    dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN IMMEDIATE');
-        // Delete dependent orders for this case's lab investigations first
-        // (FK has no ON DELETE CASCADE — application layer handles it).
-        const orphanSql = `
-            DELETE FROM investigation_orders
-            WHERE investigation_id IN (
-                SELECT id FROM case_investigations
-                WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL
-            )
-        `;
-        dbAdapter.run(orphanSql, [caseId, tenantId(req)], (orphanErr) => {
-            if (orphanErr) {
-                dbAdapter.run('ROLLBACK');
-                return res.status(500).json({ error: orphanErr.message });
+    try {
+        const result = await dbAdapter.transaction(async () => {
+            const oldLabs = await dbAdapter.all(
+                `SELECT * FROM case_investigations
+                 WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL
+                 ORDER BY id`,
+                [caseId, tenant]
+            );
+            // Pool existing rows by key; each incoming lab claims at most one.
+            const pool = new Map();
+            for (const row of oldLabs) {
+                const key = labRowKey(row);
+                if (!pool.has(key)) pool.set(key, []);
+                pool.get(key).push(row);
             }
-            dbAdapter.run(
-                `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND deleted_at IS NULL`,
-                [caseId, tenantId(req)],
-                function(deleteErr) {
-                    if (deleteErr) {
-                        dbAdapter.run('ROLLBACK');
-                        return res.status(500).json({ error: deleteErr.message });
-                    }
-                    const deleted = this.changes ?? 0;
-                    if (labs.length === 0) {
-                        return commitThen(req, res, () => {
-                            auditSuccess(req, {
-                                action: 'bulk_replace_case_labs',
-                                resourceType: 'case',
-                                resourceId: caseId,
-                                oldValue: { labs: oldLabs || [] },
-                                newValue: { labs: [] },
-                                metadata: { inserted: 0, deleted }
-                            });
-                            res.json({ inserted: 0, deleted });
-                        });
-                    }
-                    const insertSql = `
-                        INSERT INTO case_investigations (
+            let updated = 0;
+            let inserted = 0;
+            for (const lab of labs) {
+                const values = [
+                    lab.test_group ?? null, lab.gender_category ?? null,
+                    lab.min_value ?? null, lab.max_value ?? null, lab.current_value ?? null,
+                    lab.unit ?? null, JSON.stringify(lab.normal_samples || []),
+                    lab.is_abnormal ? 1 : 0,
+                    // Preserve "unset" (NULL = follow the case default)
+                    // instead of freezing DEFAULT into the row on every save.
+                    lab.turnaround_minutes ?? null,
+                ];
+                const match = pool.get(labRowKey(lab))?.shift();
+                if (match) {
+                    await dbAdapter.run(
+                        `UPDATE case_investigations SET
+                            test_group = ?, gender_category = ?, min_value = ?, max_value = ?,
+                            current_value = ?, unit = ?, normal_samples = ?, is_abnormal = ?,
+                            turnaround_minutes = ?
+                         WHERE id = ? AND tenant_id = ?`,
+                        [...values, match.id, tenant]
+                    );
+                    updated++;
+                } else {
+                    await dbAdapter.run(
+                        `INSERT INTO case_investigations (
                             case_id, investigation_type, test_name, test_group, gender_category,
                             min_value, max_value, current_value, unit, normal_samples,
                             is_abnormal, turnaround_minutes, tenant_id
-                        ) VALUES (?, 'lab', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `;
-                    let pending = labs.length;
-                    let failed = false;
-                    labs.forEach(lab => {
-                        if (failed) return;
-                        if (!lab?.test_name) {
-                            failed = true;
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(400).json({ error: 'each lab requires test_name' });
-                        }
-                        dbAdapter.run(insertSql, [
-                            caseId, lab.test_name, lab.test_group ?? null,
-                            lab.gender_category ?? null, lab.min_value ?? null,
-                            lab.max_value ?? null, lab.current_value ?? null,
-                            lab.unit ?? null, JSON.stringify(lab.normal_samples || []),
-                            // Preserve "unset" (NULL = follow the case
-                            // default) instead of freezing DEFAULT into the
-                            // row on every bulk save.
-                            lab.is_abnormal ? 1 : 0, lab.turnaround_minutes ?? null, tenantId(req)
-                        ], (insertErr) => {
-                            if (insertErr && !failed) {
-                                failed = true;
-                                dbAdapter.run('ROLLBACK');
-                                return res.status(500).json({ error: insertErr.message });
-                            }
-                            pending--;
-                            if (pending === 0 && !failed) {
-                                commitThen(req, res, () => {
-                                    auditSuccess(req, {
-                                        action: 'bulk_replace_case_labs',
-                                        resourceType: 'case',
-                                        resourceId: caseId,
-                                        oldValue: { labs: oldLabs || [] },
-                                        newValue: { labs },
-                                        metadata: { inserted: labs.length }
-                                    });
-                                    res.json({ inserted: labs.length, message: 'Labs replaced' });
-                                });
-                            }
-                        });
-                    });
+                        ) VALUES (?, 'lab', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [caseId, lab.test_name, ...values, tenant]
+                    );
+                    inserted++;
                 }
-            );
+            }
+            const removedIds = [...pool.values()].flat().map(row => row.id);
+            for (const id of removedIds) {
+                await dbAdapter.run(
+                    `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+                    [id, tenant]
+                );
+            }
+            return { oldLabs, updated, inserted, removed: removedIds.length };
         });
-    });
-        }
-    );
+
+        auditSuccess(req, {
+            action: 'bulk_replace_case_labs',
+            resourceType: 'case',
+            resourceId: caseId,
+            oldValue: { labs: result.oldLabs },
+            newValue: { labs },
+            metadata: { updated: result.updated, inserted: result.inserted, removed: result.removed }
+        });
+        res.json({
+            updated: result.updated,
+            inserted: result.inserted,
+            removed: result.removed,
+            message: 'Labs saved'
+        });
+    } catch (err) {
+        req.log.error('case labs reconcile failed', { caseId, error: err.message });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // PUT /api/cases/:caseId/labs/:labId - Update lab values (Admin only)
@@ -778,65 +773,40 @@ router.put('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (re
     });
 });
 
-// DELETE /api/cases/:caseId/labs/:labId - Remove lab from case (Admin only)
+// DELETE /api/cases/:caseId/labs/:labId - Remove one lab from a case
 //
-// Stage-2 audit (deferred L6 from Stage 1): SQLite can't add ON DELETE CASCADE
-// to an existing FK without a table rebuild, so dependent investigation_orders
-// rows are cleaned up here in the application layer before the parent row is
-// deleted. Otherwise GET /sessions/:id/lab-results would JOIN against missing
-// case_investigations rows and either error or silently drop entries.
-router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, (req, res) => {
+// Soft delete only. This used to DELETE the learner orders pointing at the row
+// first (a leftover from when the row itself was hard-deleted), so removing a
+// test from a case erased it from every session that had ordered it (QA
+// 2026-10-04, PRV-20). The row survives with deleted_at set, and session order
+// reads do not filter on it, so the orders keep resolving.
+router.delete('/cases/:caseId/labs/:labId', authenticateToken, requireEducator, async (req, res) => {
     const { labId, caseId } = req.params;
-
-    dbAdapter.get('SELECT * FROM case_investigations WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL', [labId, caseId, tenantId(req)], (readErr, oldLab) => {
-        if (readErr) return res.status(500).json({ error: readErr.message });
-        if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
-
-    dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN IMMEDIATE');
-        // Regular `function` (not arrow) so SQLite binds `this.changes` for
-        // the orphan-row count.
-        dbAdapter.run(
-            `DELETE FROM investigation_orders WHERE investigation_id = ?`,
-            [labId],
-            function (orphanErr) {
-                if (orphanErr) {
-                    dbAdapter.run('ROLLBACK');
-                    return res.status(500).json({ error: orphanErr.message });
-                }
-                const orphans = this.changes ?? 0;
-                dbAdapter.run(
-                    `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
-                    [labId, caseId, tenantId(req)],
-                    function (deleteErr) {
-                        if (deleteErr) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(500).json({ error: deleteErr.message });
-                        }
-                        if (this.changes === 0) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(404).json({ error: 'Lab test not found' });
-                        }
-                        commitThen(req, res, () => {
-                            auditSuccess(req, {
-                                action: 'delete_case_lab',
-                                resourceType: 'case_lab',
-                                resourceId: labId,
-                                resourceName: oldLab.test_name,
-                                oldValue: oldLab,
-                                metadata: { case_id: caseId, orphan_orders_removed: orphans }
-                            });
-                            res.json({
-                                message: 'Lab test removed from case',
-                                orphan_orders_removed: orphans
-                            });
-                        });
-                    }
-                );
-            }
+    const tenant = tenantId(req);
+    try {
+        const oldLab = await dbAdapter.get(
+            'SELECT * FROM case_investigations WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL',
+            [labId, caseId, tenant]
         );
-    });
-    });
+        if (!oldLab) return res.status(404).json({ error: 'Lab test not found' });
+        await dbAdapter.run(
+            `UPDATE case_investigations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+            [labId, caseId, tenant]
+        );
+        const kept = await dbAdapter.get('SELECT COUNT(*) AS n FROM investigation_orders WHERE investigation_id = ?', [labId]);
+        auditSuccess(req, {
+            action: 'delete_case_lab',
+            resourceType: 'case_lab',
+            resourceId: labId,
+            resourceName: oldLab.test_name,
+            oldValue: oldLab,
+            metadata: { case_id: caseId, learner_orders_kept: kept?.n ?? 0 }
+        });
+        res.json({ message: 'Lab test removed from case', learner_orders_kept: kept?.n ?? 0 });
+    } catch (err) {
+        req.log.error('case lab delete failed', { caseId, labId, error: err.message });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/sessions/:sessionId/available-labs - Get available labs for session's case
@@ -1717,8 +1687,10 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
             const videoUrl = configuredResult?.videoUrl || null;
 
             // Build result data including configured findings
+            // No `indications`: the catalogue's common_indications are not
+            // this patient's indication, and the report printed them as if
+            // they were (PRV-37).
             const resultData = {
-                indications: study?.common_indications || [],
                 body_region: bodyRegion,
                 findings: findings,
                 interpretation: interpretation,
@@ -2197,13 +2169,8 @@ router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req,
                 // already numeric.
                 let payload;
                 try {
-                    let doseMultiplier = 1.0;
-                    const baseDose = num(effect.base_dose, 0);
-                    const doseValue = num(order.dose_value, 0);
-                    if (effect.dose_dependent && baseDose > 0 && doseValue > 0) {
-                        doseMultiplier = Math.min(doseValue / baseDose, num(effect.max_effect_multiplier, 2.0));
-                    }
-                    if (!Number.isFinite(doseMultiplier)) doseMultiplier = 1.0;
+                    // Shared with the order form's preview (PRV-37).
+                    const doseMultiplier = doseMultiplierFor(effect, order.dose_value);
 
                     let expiresAt = null;
                     const durationMin = num(effect.duration_minutes, 0);

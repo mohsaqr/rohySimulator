@@ -112,7 +112,14 @@ export function csrfRequired(req) {
 export function verifyCsrf(req) {
     const cookieToken = readCookie(req, CSRF_COOKIE_NAME);
     const headerValue = req.headers?.[CSRF_HEADER_NAME];
-    const headerToken = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    // The token may also ride in the JSON body as `_csrf`. navigator.sendBeacon
+    // cannot set headers, so the learning-event flush on page unload carried
+    // no token and every one was refused — the last events before each reload
+    // or tab close were lost (QA 2026-10-04, PRV-24). A body token is exactly
+    // as strong as the header: a cross-site page cannot read the cookie to
+    // copy it. The header still wins when both are present.
+    const bodyToken = typeof req.body?._csrf === 'string' ? req.body._csrf : undefined;
+    const headerToken = (Array.isArray(headerValue) ? headerValue[0] : headerValue) ?? bodyToken;
 
     if (!cookieToken || !headerToken) {
         return { status: 403, body: { error: 'CSRF token missing' } };

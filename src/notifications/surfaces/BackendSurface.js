@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useNotifications } from '../useNotifications';
 import { SURFACES, SOURCES } from '../types';
-import { apiPost, apiPut } from '../../services/apiClient';
+import { apiPost, apiPut, readCsrfToken } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
 import { VERBS } from '../../../server/shared/learningVerbs.js';
 
@@ -317,10 +317,13 @@ function sendTelemetry(events, immediate) {
 
     if (immediate && navigator.sendBeacon) {
         // sendBeacon carries no custom headers, so the bearer token cannot
-        // ride along — the same-origin HttpOnly auth COOKIE does, which is
-        // why /learning-events/batch (which is authenticated) still accepts
-        // an unload flush.
-        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        // ride along — the same-origin HttpOnly auth COOKIE does. But a cookie
+        // request is a CSRF-checked request, and without the X-CSRF-Token
+        // header every unload flush was refused 403 (QA 2026-10-04, PRV-24).
+        // The double-submit token rides in the body as `_csrf` instead.
+        const csrf = readCsrfToken();
+        const beaconPayload = csrf ? { ...payload, _csrf: csrf } : payload;
+        const blob = new Blob([JSON.stringify(beaconPayload)], { type: 'application/json' });
         const queued = navigator.sendBeacon(apiUrl('/learning-events/batch'), blob);
         if (queued) return;
         // sendBeacon returns false when the user-agent's queue is full or
@@ -330,8 +333,8 @@ function sendTelemetry(events, immediate) {
         try {
             fetch(apiUrl('/learning-events/batch'), {
                 method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: { 'content-type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
+                body: JSON.stringify(beaconPayload),
                 keepalive: true,
                 credentials: 'include',
             }).catch(() => { /* best-effort */ });
