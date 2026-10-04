@@ -400,6 +400,21 @@ describe('NotificationProvider — mute hierarchy', () => {
         expect(sub).toHaveBeenCalledTimes(1);
     });
 
+    // Regression lock: a muted source disappeared from Recent activity — the mute stripped HISTORY too (QA 2026-10-04, PRV-35)
+    it('a muted source is still listed by the history surface, and nothing live fires for it', () => {
+        const ref = mountCenter();
+        const sub = vi.fn();
+        act(() => { ref.current.subscribe(sub); });
+        act(() => { ref.current.setPrefs({ mutedSources: [SOURCES.SYSTEM] }); });
+        act(() => {
+            ref.current.notify({ source: SOURCES.SYSTEM, severity: SEVERITY.ERROR, message: 'Muted but listed', key: 'sys:listed' });
+        });
+        expect(sub).not.toHaveBeenCalled();
+        expect(ref.current.active.some(n => n.key === 'sys:listed')).toBe(false);
+        const entry = ref.current.history.find(h => h.key === 'sys:listed');
+        expect(entry.routedSurfaces).toContain(SURFACES.HISTORY);
+    });
+
     it('audioMuted strips the AUDIO surface from routed surfaces', () => {
         const ref = mountCenter();
         const sub = vi.fn();

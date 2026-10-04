@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useId, useState, useEffect, useRef } from 'react';
 import {
     Pill, Droplets, Wind, HeartPulse,
     Search, AlertTriangle, Clock,
@@ -25,10 +25,23 @@ const TREATMENT_TYPE_OBJECT = Object.freeze({
 });
 import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient';
 import { categoryClass } from './treatmentTheme';
+import { doseMultiplierFor } from '../../../server/shared/treatmentDose.js';
 
 // Backend order statuses -> static i18n keys (never t(variable) — every
 // enum value gets an explicit key; unknown values fall back to the raw
 // backend string).
+// One whole sentence per category. The placeholder used to splice a
+// lower-cased category label into "Search {category}...", which put German
+// nouns in lower case ("medikamente durchsuchen...") and could not give any
+// language its own word order (QA 2026-10-04, PRV-33). Static keys, so the
+// extractor sees them.
+const SEARCH_PLACEHOLDER_KEYS = {
+    medication: 'search_placeholder_medication',
+    iv_fluid: 'search_placeholder_iv_fluid',
+    oxygen: 'search_placeholder_oxygen',
+    nursing: 'search_placeholder_nursing',
+};
+
 const STATUS_LABEL_KEYS = {
     ordered: 'status_ordered',
     in_progress: 'status_in_progress',
@@ -42,6 +55,10 @@ const STATUS_LABEL_KEYS = {
  * Handles medications, IV fluids, oxygen therapy, and nursing interventions
  */
 export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) {
+    // Field ids for the order form's <label htmlFor>: the labels were plain
+    // text beside the fields, so a screen reader announced every select as
+    // an unnamed combobox (QA 2026-10-04, PRV-31).
+    const fieldId = useId();
     const [activeCategory, setActiveCategory] = useState('medication');
     const [treatments, setTreatments] = useState({
         medication: [],
@@ -268,8 +285,8 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         <h4 className="font-bold text-white">{treatment_name}</h4>
                         {description && <p className="text-xs text-neutral-400 mt-1">{description}</p>}
                     </div>
-                    <button onClick={() => setSelectedTreatment(null)} className="text-neutral-400 hover:text-white">
-                        <X className="w-4 h-4" />
+                    <button type="button" onClick={() => setSelectedTreatment(null)} aria-label={t('close_order_form')} className="text-neutral-400 hover:text-white">
+                        <X className="w-4 h-4" aria-hidden="true" />
                     </button>
                 </div>
 
@@ -288,16 +305,18 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'medication' && (
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-neutral-400">{t('dose')}</label>
+                            <label htmlFor={`${fieldId}-dose`} className="text-xs text-neutral-400">{t('dose')}</label>
                             <div className="flex gap-1">
                                 <input
                                     type="number"
+                                    id={`${fieldId}-dose`}
                                     value={orderForm.dose_value}
                                     onChange={(e) => setOrderForm(f => ({ ...f, dose_value: e.target.value }))}
                                     placeholder={base_dose || '0'}
                                     className="flex-1 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                 />
                                 <select
+                                    aria-label={t('dose_unit_label')}
                                     value={orderForm.dose_unit}
                                     onChange={(e) => setOrderForm(f => ({ ...f, dose_unit: e.target.value }))}
                                     className="px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
@@ -312,9 +331,10 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">{t('route')}</label>
+                            <label htmlFor={`${fieldId}-route`} className="text-xs text-neutral-400">{t('route')}</label>
                             <select
-                                value={orderForm.route}
+                                id={`${fieldId}-route`}
+                                    value={orderForm.route}
                                 onChange={(e) => setOrderForm(f => ({ ...f, route: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
@@ -329,9 +349,10 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">{t('frequency')}</label>
+                            <label htmlFor={`${fieldId}-frequency`} className="text-xs text-neutral-400">{t('frequency')}</label>
                             <select
-                                value={orderForm.frequency}
+                                id={`${fieldId}-frequency`}
+                                    value={orderForm.frequency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, frequency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                             >
@@ -347,8 +368,9 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">{t('urgency')}</label>
+                            <label htmlFor={`${fieldId}-urgency`} className="text-xs text-neutral-400">{t('urgency')}</label>
                             <select
+                                id={`${fieldId}-urgency`}
                                 value={orderForm.urgency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, urgency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
@@ -365,16 +387,18 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                 {treatment_type === 'iv_fluid' && (
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs text-neutral-400">{t('rate')}</label>
+                            <label htmlFor={`${fieldId}-rate`} className="text-xs text-neutral-400">{t('rate')}</label>
                             <div className="flex gap-1">
                                 <input
                                     type="number"
+                                    id={`${fieldId}-rate`}
                                     value={orderForm.rate_value}
                                     onChange={(e) => setOrderForm(f => ({ ...f, rate_value: e.target.value }))}
                                     placeholder="125"
                                     className="flex-1 px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                                 />
                                 <select
+                                    aria-label={t('rate_unit_label')}
                                     value={orderForm.rate_unit}
                                     onChange={(e) => setOrderForm(f => ({ ...f, rate_unit: e.target.value }))}
                                     className="px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
@@ -385,8 +409,9 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-neutral-400">{t('urgency')}</label>
+                            <label htmlFor={`${fieldId}-urgency-iv`} className="text-xs text-neutral-400">{t('urgency')}</label>
                             <select
+                                id={`${fieldId}-urgency-iv`}
                                 value={orderForm.urgency}
                                 onChange={(e) => setOrderForm(f => ({ ...f, urgency: e.target.value }))}
                                 className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
@@ -416,27 +441,35 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
 
                 {/* Notes field */}
                 <div>
-                    <label className="text-xs text-neutral-400">{t('notes_optional')}</label>
+                    <label htmlFor={`${fieldId}-notes`} className="text-xs text-neutral-400">{t('notes_optional')}</label>
                     <input
                         type="text"
-                        value={orderForm.notes}
+                        id={`${fieldId}-notes`}
+                                    value={orderForm.notes}
                         onChange={(e) => setOrderForm(f => ({ ...f, notes: e.target.value }))}
                         placeholder={t('additional_instructions_placeholder')}
                         className="w-full px-2 py-1.5 bg-neutral-700 border border-neutral-600 rounded text-sm text-white"
                     />
                 </div>
 
-                {/* Effect preview */}
-                {(selectedTreatment.hr_effect || selectedTreatment.bp_sys_effect || selectedTreatment.spo2_effect) && (
-                    <div className="text-xs text-neutral-400 p-2 bg-neutral-900 rounded">
+                {/* Effect preview — at the dose typed (or the base dose when
+                    none is), the same multiplier the administer route applies
+                    (PRV-37). */}
+                {(selectedTreatment.hr_effect || selectedTreatment.bp_sys_effect || selectedTreatment.spo2_effect) && (() => {
+                    const m = doseMultiplierFor(selectedTreatment, orderForm.dose_value);
+                    const at = (v) => Math.round((Number(v) || 0) * m);
+                    const signed = (v) => `${v > 0 ? '+' : ''}${v}`;
+                    return (
+                    <div className="text-xs text-neutral-400 p-2 bg-neutral-900 rounded" data-testid="expected-effects">
                         <span className="font-bold">{t('expected_effects')}</span>
-                        {selectedTreatment.hr_effect !== 0 && <span className="ml-2">HR {selectedTreatment.hr_effect > 0 ? '+' : ''}{selectedTreatment.hr_effect}</span>}
-                        {selectedTreatment.bp_sys_effect !== 0 && <span className="ml-2">BP {selectedTreatment.bp_sys_effect > 0 ? '+' : ''}{selectedTreatment.bp_sys_effect}/{selectedTreatment.bp_dia_effect > 0 ? '+' : ''}{selectedTreatment.bp_dia_effect}</span>}
-                        {selectedTreatment.spo2_effect !== 0 && <span className="ml-2">SpO2 {selectedTreatment.spo2_effect > 0 ? '+' : ''}{selectedTreatment.spo2_effect}%</span>}
-                        {selectedTreatment.rr_effect !== 0 && <span className="ml-2">RR {selectedTreatment.rr_effect > 0 ? '+' : ''}{selectedTreatment.rr_effect}</span>}
+                        {at(selectedTreatment.hr_effect) !== 0 && <span className="ml-2">HR {signed(at(selectedTreatment.hr_effect))}</span>}
+                        {at(selectedTreatment.bp_sys_effect) !== 0 && <span className="ml-2">BP {signed(at(selectedTreatment.bp_sys_effect))}/{signed(at(selectedTreatment.bp_dia_effect))}</span>}
+                        {at(selectedTreatment.spo2_effect) !== 0 && <span className="ml-2">SpO2 {signed(at(selectedTreatment.spo2_effect))}%</span>}
+                        {at(selectedTreatment.rr_effect) !== 0 && <span className="ml-2">RR {signed(at(selectedTreatment.rr_effect))}</span>}
                         <span className="ml-2 text-neutral-500">{t('onset_peak', { onset: selectedTreatment.onset_minutes, peak: selectedTreatment.peak_minutes })}</span>
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* Order button */}
                 <button
@@ -562,8 +595,9 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                     <input
                         type="text"
                         value={searchQuery}
+                        aria-label={t('search_treatments_label')}
                         onChange={(e) => { setSearchQuery(e.target.value); logSearch(e.target.value); }}
-                        placeholder={t('search_category_placeholder', { category: categories.find(c => c.id === activeCategory)?.label.toLowerCase() })}
+                        placeholder={t(SEARCH_PLACEHOLDER_KEYS[activeCategory] ?? 'search_placeholder_medication')}
                         className="w-full pl-10 pr-4 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder-neutral-500 focus:border-neutral-500 focus:outline-none"
                     />
                 </div>
@@ -581,16 +615,27 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                         filteredTreatments.map(treatment => {
                             const isSelected = selectedTreatment?.id === treatment.id;
                             const color = getCategoryColor(activeCategory);
+                            // The row is a container: its header is the toggle
+                            // BUTTON, the order form its sibling. The form used
+                            // to render inside the <button> — inputs inside a
+                            // button is invalid HTML, and a screen reader read
+                            // the whole form as that button's name (found in
+                            // the PRV-36 layout check, 2026-10-04).
                             return (
-                                <button
+                                <div
                                     key={treatment.id}
-                                    onClick={() => setSelectedTreatment(isSelected ? null : treatment)}
-                                    className={`w-full text-left p-3 rounded border transition-all ${
+                                    className={`rounded border transition-all ${
                                         isSelected
                                             ? categoryClass(color, 'row')
                                             : 'bg-neutral-800/50 border-neutral-700 hover:bg-neutral-800'
                                     }`}
                                 >
+                                    <button
+                                        type="button"
+                                        aria-expanded={isSelected}
+                                        onClick={() => setSelectedTreatment(isSelected ? null : treatment)}
+                                        className="w-full text-left p-3"
+                                    >
                                     <div className="flex items-start justify-between">
                                         <div>
                                             <div className="font-medium text-white flex items-center gap-2">
@@ -609,12 +654,13 @@ export default function TreatmentPanel({ sessionId, _caseId, onEffectsUpdate }) 
                                             <ChevronDown className="w-4 h-4 text-neutral-400" />
                                         )}
                                     </div>
+                                    </button>
                                     {isSelected && (
-                                        <div className="mt-3 pt-3 border-t border-neutral-700" onClick={e => e.stopPropagation()}>
+                                        <div className="mx-3 mb-3 pt-3 border-t border-neutral-700">
                                             {renderOrderForm()}
                                         </div>
                                     )}
-                                </button>
+                                </div>
                             );
                         })
                     )}

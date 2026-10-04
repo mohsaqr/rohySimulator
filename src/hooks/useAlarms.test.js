@@ -213,4 +213,103 @@ describe('useAlarms', () => {
     await waitFor(() => expect(notificationState.notify).toHaveBeenCalledTimes(2));
     expect(notificationState.notify.mock.calls[1][0].data.sessionId).toBe('session-2');
   });
+
+  // Regression lock: an unacknowledged alarm vanished on reload — the fire-state survived in sessionStorage but the center's memory-only active list did not, so the alarm stayed silent until the 5-minute refresh (QA 2026-10-04, PRV-28)
+  describe('re-asserting alarms the center lost on reload', () => {
+    const storedInput = {
+      source: 'clinical', severity: SEVERITY.WARNING, key: 'alarm:spo2_low',
+      title: 'SPO2 low', message: 'spo2 = 88 (limit ≥ 90)', requiresAck: true, ttlMs: 0,
+      data: { vital: 'spo2', thresholdType: 'low', thresholdValue: 90, actualValue: 88, sessionId: 's-reload' },
+    };
+    const parkFireState = (sid = 's-reload', withInput = true) => {
+      window.sessionStorage.setItem(`rohy_alarm_fire_state:${sid}`, JSON.stringify({
+        keys: ['alarm:spo2_low'],
+        fires: [['alarm:spo2_low', Date.now() - 30_000]],
+        ...(withInput ? { inputs: [['alarm:spo2_low', storedInput]] } : {}),
+      }));
+    };
+    beforeEach(() => window.sessionStorage.clear());
+
+    it('puts a still-breaching alarm back after a reload, with the current reading', async () => {
+      parkFireState();
+      renderHook(() => useAlarms({ spo2: 89 }, 's-reload'));
+      await waitFor(() => expect(notificationState.notify).toHaveBeenCalledTimes(1));
+      expect(notificationState.notify.mock.calls[0][0]).toMatchObject({
+        key: 'alarm:spo2_low',
+        data: { actualValue: 89 },
+      });
+    });
+
+    it('puts a latched alarm back with the reading it latched at, though the vital has recovered', async () => {
+      parkFireState();
+      renderHook(() => useAlarms({ spo2: 97 }, 's-reload'));
+      await waitFor(() => expect(notificationState.notify).toHaveBeenCalledTimes(1));
+      expect(notificationState.notify.mock.calls[0][0]).toMatchObject({
+        key: 'alarm:spo2_low',
+        data: { actualValue: 88 },
+      });
+    });
+
+    it('stays quiet on a room switch, where the center still shows the alarm', async () => {
+      parkFireState();
+      notificationState.active = [{ key: 'alarm:spo2_low', source: 'clinical' }];
+      renderHook(() => useAlarms({ spo2: 89 }, 's-reload'));
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(notificationState.notify).not.toHaveBeenCalled();
+    });
+
+    it('does not re-assert an alarm the learner acknowledged or snoozed', async () => {
+      parkFireState();
+      notificationState.acked = ['alarm:spo2_low'];
+      const first = renderHook(() => useAlarms({ spo2: 89 }, 's-reload'));
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      first.unmount();
+
+      notificationState.acked = [];
+      notificationState.snoozed = [{ key: 'alarm:spo2_low', until: Date.now() + 60_000 }];
+      renderHook(() => useAlarms({ spo2: 89 }, 's-reload'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(notificationState.notify).not.toHaveBeenCalled();
+    });
+
+    it('re-asserts once per mount however many checks run', async () => {
+      parkFireState();
+      const { rerender } = renderHook(({ v }) => useAlarms(v, 's-reload'), {
+        initialProps: { v: { spo2: 89 } },
+      });
+      await waitFor(() => expect(notificationState.notify).toHaveBeenCalledTimes(1));
+      await act(async () => { rerender({ v: { spo2: 88 } }); });
+      await act(async () => { rerender({ v: { spo2: 87 } }); });
+      expect(notificationState.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('forgets an old fire-state entry with no stored reading once its vital has recovered', async () => {
+      parkFireState('s-old', false);
+      renderHook(() => useAlarms({ spo2: 97 }, 's-old'));
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(notificationState.notify).not.toHaveBeenCalled();
+      const saved = JSON.parse(window.sessionStorage.getItem('rohy_alarm_fire_state:s-old'));
+      expect(saved.keys).toEqual([]);
+    });
+  });
+
+  // Regression lock: after End & Debrief a remount raised a live CRITICAL alarm next to the frozen monitor — the hook kept sampling once the case was over (QA 2026-10-04, PRV-28)
+  it('raises nothing, and re-asserts nothing, while disabled', async () => {
+    window.sessionStorage.setItem('rohy_alarm_fire_state:s-ended', JSON.stringify({
+      keys: ['alarm:hr_high'], fires: [['alarm:hr_high', Date.now()]],
+    }));
+    const { rerender } = renderHook(({ enabled }) => useAlarms({ bpSys: 40, hr: 130 }, 's-ended', { enabled }), {
+      initialProps: { enabled: false },
+    });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(notificationState.notify).not.toHaveBeenCalled();
+
+    // Re-enabling (a new case) samples again.
+    rerender({ enabled: true });
+    await waitFor(() => expect(notificationState.notify).toHaveBeenCalled());
+  });
 });

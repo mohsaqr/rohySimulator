@@ -54,15 +54,22 @@ describe('routeNotification', () => {
     )).toEqual([SURFACES.BACKEND]);
   });
 
-  it('suppresses non-critical notifications under blanket DND and severity rules', () => {
+  it('silences non-critical notifications under blanket DND and severity rules, keeping only the history', () => {
     const warning = notification({
       source: SOURCES.SYSTEM,
       severity: SEVERITY.WARNING,
       key: 'system:warn',
     });
 
-    expect(routeNotification(warning, { ...DEFAULT_PREFS, dnd: true }, transient())).toEqual([]);
-    expect(routeNotification(warning, { ...DEFAULT_PREFS, minSeverity: SEVERITY.CRITICAL }, transient())).toEqual([]);
+    expect(routeNotification(warning, { ...DEFAULT_PREFS, dnd: true }, transient())).toEqual([SURFACES.HISTORY]);
+    expect(routeNotification(warning, { ...DEFAULT_PREFS, minSeverity: SEVERITY.CRITICAL }, transient())).toEqual([SURFACES.HISTORY]);
+  });
+
+  // Regression lock: muting a source removed it from the in-app history as well as from the loud surfaces, so Recent activity could not show what was missed (QA 2026-10-04, PRV-35)
+  it('keeps a muted source in the history and the record, and off every loud surface', () => {
+    const warning = notification({ severity: SEVERITY.WARNING, key: 'alarm:spo2_low' });
+    const surfaces = routeNotification(warning, { ...DEFAULT_PREFS, mutedSources: [SOURCES.CLINICAL] }, transient());
+    expect(surfaces).toEqual([SURFACES.HISTORY, SURFACES.BACKEND]);
   });
 
   // Regression lock: the minSeverity gate ran before the routing matrix, so
@@ -130,12 +137,15 @@ describe('routeNotification', () => {
     )).toEqual([SURFACES.BACKEND]);
   });
 
-  it('leaves a blanket-muted notification with no BACKEND route fully silent', () => {
-    // SYSTEM/WARNING has no BACKEND row in the matrix — nothing to persist,
-    // so the blanket mutes still produce a completely empty surface list.
+  it('leaves a blanket-muted notification with no BACKEND route silent — history only', () => {
+    // SYSTEM/WARNING has no BACKEND row in the matrix — nothing to persist
+    // server-side, and nothing loud survives DND; it is still listed in the
+    // in-app history (PRV-35).
     const warning = notification({ source: SOURCES.SYSTEM, severity: SEVERITY.WARNING, key: 'system:warn' });
+    const surfaces = routeNotification(warning, { ...DEFAULT_PREFS, dnd: true }, transient());
 
-    expect(routeNotification(warning, { ...DEFAULT_PREFS, dnd: true }, transient())).toEqual([]);
+    expect(surfaces).toEqual([SURFACES.HISTORY]);
+    [SURFACES.TOAST, SURFACES.BANNER, SURFACES.AUDIO, SURFACES.CONSOLE].forEach((s) => expect(surfaces).not.toContain(s));
   });
 
   it('removes muted surfaces after routing', () => {
