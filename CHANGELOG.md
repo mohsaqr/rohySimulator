@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.20] — 2026-10-04
+
+- **Pathology starter slides can be added (PRV-25).** Every slide in the starter library is
+  `measurable: false` (displayable, no optical calibration), and adding one failed with "optics must be
+  an object". Fixed upstream in Pathoyon (68b3dab, re-vendored): such a slide is carried as an
+  unmeasurable asset, validates, and the room shows it uncalibrated — no scale bar, no measurement,
+  no crash. Rohy's room gate now accepts it.
+
 ## [3.0.0-rc.19] — 2026-10-04
 
 - **Terms of use in the reader's language.** The agreement is shown in the user's interface language

@@ -13,6 +13,9 @@ const objectLike = (value) => value !== null && typeof value === 'object' && !Ar
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
 const integer = (value) => Number.isInteger(value);
 
+/** The asset metadata that gives slide pixels a physical scale. */
+const OPTICS_FIELDS = ['nativeObjective', 'nativeMpp', 'downsample'];
+
 function issue(path, code, message) {
     return { severity: 'error', source: 'structure', path, code, message };
 }
@@ -160,8 +163,27 @@ function validateAsset(value, path, add) {
     }
 
     if (requireObject(value.metadata, `${path}.metadata`, add)) {
-        allowOnly(value.metadata, ['widthPx', 'heightPx', 'nativeObjective', 'nativeMpp', 'downsample', 'scaleMm'], `${path}.metadata`, add);
-        Object.entries(value.metadata).forEach(([key, entry]) => requireFinite(entry, `${path}.metadata.${key}`, add, { aboveZero: true }));
+        allowOnly(value.metadata, ['widthPx', 'heightPx', 'nativeObjective', 'nativeMpp', 'downsample', 'scaleMm', 'measurable'], `${path}.metadata`, add);
+        Object.entries(value.metadata)
+            .filter(([key]) => key !== 'measurable')
+            .forEach(([key, entry]) => requireFinite(entry, `${path}.metadata.${key}`, add, { aboveZero: true }));
+        // `measurable` has ONE legal value. Only an unmeasurable asset carries
+        // the flag, so its absence guarantees the optics are complete — the
+        // same rule the asset catalog applies to a revision. `true` would be a
+        // second spelling of "absent", and two spellings drift.
+        if (value.metadata.measurable !== undefined && value.metadata.measurable !== false) {
+            add(`${path}.metadata.measurable`, 'enum', `${path}.metadata.measurable may only be false.`);
+        }
+        // A slide is measurable or it is not. An asset declaring itself
+        // unmeasurable while carrying optics is two answers, and the viewer
+        // would have to guess which one to believe (mirrors the catalog's
+        // validateRevision, which refuses measurable: false WITH optics).
+        if (value.metadata.measurable === false) {
+            OPTICS_FIELDS.filter((key) => value.metadata[key] !== undefined).forEach((key) => {
+                add(`${path}.metadata.${key}`, 'contradictory_metadata',
+                    `${path}.metadata declares measurable: false but also carries ${key}.`);
+            });
+        }
     }
 
     if (requireArray(value.renditions, `${path}.renditions`, add)) {

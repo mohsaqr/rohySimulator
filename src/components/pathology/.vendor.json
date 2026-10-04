@@ -1,11 +1,11 @@
 {
   "package": "pathoyon",
   "version": "0.3.0",
-  "commit": "278656ec1b57a6ea14451a8a51dfd464c883c8e9",
-  "vendoredAt": "2026-09-07",
+  "commit": "68b3dab34f37550182e3edbc9bb79b4bdb10dcd8",
+  "vendoredAt": "2026-10-04",
   "from": "src",
   "files": 57,
-  "sha256": "178d88f85e18a23d46833cda1c4bb92ed0110570eac18389b173ca864212b6ca",
+  "sha256": "1262242f7dcea97eafb36f89af0178b63e331b37f5d025a495ec5898cb966588",
   "hostOwned": [
     "README.md",
     "portability.test.js"

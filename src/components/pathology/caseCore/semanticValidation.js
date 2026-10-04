@@ -12,6 +12,7 @@ const within = (inner, outer) => inner.x >= outer.x && inner.y >= outer.y
     && inner.x + inner.w <= outer.x + outer.w
     && inner.y + inner.h <= outer.y + outer.h;
 const validRect = (rect) => rect.w > 0 && rect.h > 0;
+const isUnmeasurable = (asset) => asset?.metadata?.measurable === false;
 
 function duplicateIds(rows) {
     const seen = new Set();
@@ -101,8 +102,19 @@ export function validateCaseDocuments(manifest, rubric = null, options = {}) {
             if (asset.source.kind === 'external' && !asset.source.uri && asset.renditions.length === 0) {
                 add('error', `${at}.source.uri`, 'missing_source_uri', `External asset "${asset.id}" has no source URI.`);
             }
+            if (asset.kind !== 'wsi' && asset.metadata.measurable !== undefined) {
+                add('error', `${at}.metadata.measurable`, 'unexpected_measurable', `Only a WSI asset can be declared unmeasurable; "${asset.id}" is ${asset.kind}.`);
+            }
             if (asset.kind === 'wsi') {
-                ['widthPx', 'heightPx', 'nativeObjective', 'nativeMpp', 'downsample'].forEach((field) => {
+                // An UNMEASURABLE slide (`metadata.measurable: false`) is
+                // displayable with no optics at all — structural validation
+                // has already refused one that carries optics too. Its pixel
+                // dimensions are optional, because the catalog knows none for
+                // it, but they still come as a pair.
+                const required = isUnmeasurable(asset)
+                    ? (asset.metadata.widthPx === undefined && asset.metadata.heightPx === undefined ? [] : ['widthPx', 'heightPx'])
+                    : ['widthPx', 'heightPx', 'nativeObjective', 'nativeMpp', 'downsample'];
+                required.forEach((field) => {
                     if (!(asset.metadata[field] > 0)) add('error', `${at}.metadata.${field}`, 'missing_wsi_metadata', `WSI asset "${asset.id}" needs positive ${field}.`);
                 });
                 if (!asset.renditions.some((rendition) => ['dzi', 'iiif', 'ome-zarr', 'dicomweb'].includes(rendition.kind))) {
@@ -165,6 +177,22 @@ export function validateCaseDocuments(manifest, rubric = null, options = {}) {
                     }
                     const slide = manifest.slides.find((entry) => entry.id === criteria.slideId);
                     const asset = assetById.get(slide.assetId);
+                    // Every slide criterion is scored against the objective on
+                    // screen — screening power, coverage power, ROI minimum
+                    // power and dwell — and an unmeasurable slide has no
+                    // objective, so the viewer never samples it. Criteria on
+                    // one would score every learner zero through no fault of
+                    // theirs. Said once here; the optics-dependent checks below
+                    // are skipped for it rather than run against undefined.
+                    const unmeasurable = isUnmeasurable(asset);
+                    if (unmeasurable) {
+                        add('error', `${at}.slideId`, 'unscorable_slide', `Slide "${criteria.slideId}" is not measurable, so it has no objective to score screening, coverage or ROI dwell against. Remove its scoring criteria.`);
+                    }
+                    // An unmeasurable slide may not know its pixel size; then
+                    // there is no outline to test containment against.
+                    const slideRect = asset && !(unmeasurable && asset.metadata.widthPx === undefined)
+                        ? { x: 0, y: 0, w: asset.metadata.widthPx, h: asset.metadata.heightPx }
+                        : null;
                     if (!(criteria.weight > 0)) add('error', `${at}.weight`, 'invalid_weight', 'Slide scoring weight must be greater than zero.');
                     if (!(criteria.screeningObjective > 0)) add('error', `${at}.screeningObjective`, 'invalid_objective', 'screeningObjective must be greater than zero.');
                     if (!(criteria.coverageObjective > 0)) add('error', `${at}.coverageObjective`, 'invalid_objective', 'coverageObjective must be greater than zero.');
@@ -173,18 +201,18 @@ export function validateCaseDocuments(manifest, rubric = null, options = {}) {
                     }
                     if (!validRect(criteria.tissueBounds)) {
                         add('error', `${at}.tissueBounds`, 'empty_tissue_bounds', 'tissueBounds must have positive area.');
-                    } else if (asset && !within(criteria.tissueBounds, { x: 0, y: 0, w: asset.metadata.widthPx, h: asset.metadata.heightPx })) {
+                    } else if (slideRect && !within(criteria.tissueBounds, slideRect)) {
                         add('error', `${at}.tissueBounds`, 'tissue_outside_slide', `tissueBounds falls outside slide "${criteria.slideId}".`);
                     }
 
                     duplicateIds(criteria.rois).forEach((id) => add('error', `${at}.rois`, 'duplicate_roi', `Two ROIs share id "${id}" on slide "${criteria.slideId}".`));
-                    const ceiling = asset ? (asset.metadata.nativeObjective / asset.metadata.downsample) * maxZoomPixelRatio : null;
+                    const ceiling = asset && !unmeasurable ? (asset.metadata.nativeObjective / asset.metadata.downsample) * maxZoomPixelRatio : null;
                     criteria.rois.forEach((roi, roiIndex) => {
                         const roiAt = `${at}.rois[${roiIndex}]`;
                         if (!validRect(roi)) add('error', roiAt, 'empty_roi', `ROI "${roi.id}" must have positive area.`);
                         if (!(roi.minObjective > 0)) add('error', `${roiAt}.minObjective`, 'invalid_objective', `ROI "${roi.id}" needs a positive minObjective.`);
                         if (!(roi.dwellMs > 0)) add('error', `${roiAt}.dwellMs`, 'invalid_dwell', `ROI "${roi.id}" needs a positive dwellMs.`);
-                        if (asset && validRect(roi) && !within(roi, { x: 0, y: 0, w: asset.metadata.widthPx, h: asset.metadata.heightPx })) {
+                        if (slideRect && validRect(roi) && !within(roi, slideRect)) {
                             add('error', roiAt, 'roi_outside_slide', `ROI "${roi.id}" falls outside its slide "${criteria.slideId}".`);
                         }
                         if (validRect(criteria.tissueBounds) && validRect(roi) && !within(roi, criteria.tissueBounds)) {

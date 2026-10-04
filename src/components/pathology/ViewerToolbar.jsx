@@ -273,7 +273,7 @@ export function ViewerToolbar({
                     <Redo2 className="h-4 w-4" aria-hidden="true" /><span className="sr-only">{t('redo', 'Redo')}</span>
                 </button>
                 <span className="mx-1 h-5 w-px bg-slate-700/60" aria-hidden="true" />
-                <button type="button" className={btn} onClick={onSnapshot} title={t('snapshot_hint', 'Save this field as a PNG, scale bar included')}>
+                <button type="button" className={btn} disabled={!onSnapshot} onClick={onSnapshot} title={t('snapshot_hint', 'Save this field as a PNG, scale bar included')}>
                     <Camera className="h-4 w-4" aria-hidden="true" /><span className="sr-only">{t('snapshot', 'Snapshot')}</span>
                 </button>
                 <button

@@ -107,6 +107,19 @@ describe('R20 — available() judges the document, not the key', () => {
     // legacy-shaped case (dzi with no nativeObjective/nativeMpp/downsample)
     // passed the gate and then white-screened the app at render time. A slide
     // is servable only when the viewer can actually render it.
+    // Regression lock (PRV-25): every starter-library slide is `measurable: false` with no optics, so adding one threw "optics must be an object" and the room refused it; the slide is now carried as unmeasurable and the room shows it, uncalibrated (pathoyon 68b3dab).
+    it('accepts a starter-library slide that declares itself unmeasurable', () => {
+        const factory = ids();
+        let doc = createStudioDocument({ idFactory: factory, now: () => '2026-08-28T12:00:00.000Z', createdBy: 'tester' });
+        doc = updateStudioEntity(doc, 'specimen', 'specimen-1', { part: 'A', label: 'Heart' });
+        doc = addStudioBlock(doc, 'specimen-1', { label: 'A1' }, factory);
+        const unmeasurable = catalogAsset();
+        delete unmeasurable.revisions[0].optics;
+        unmeasurable.revisions[0].measurable = false;
+        const withStarter = addStudioSlide(doc, 'block-1', unmeasurable, { label: 'A1 — H&E', stainCode: 'HE', stainDisplay: 'H&E' }, factory);
+        expect(descriptor.available({ data: withStarter })).toBe(true);
+    });
+
     it('declines a dzi-only slide with no optical profile (the viewer would throw on it)', () => {
         const legacy = { id: 'c1', slides: [{ id: 's1', label: 'A1', stain: 'H&E', dzi: '/a.dzi' }] };
         expect(descriptor.available({ data: legacy })).toBe(false);
