@@ -28,7 +28,6 @@ import { LANGUAGES } from '../../i18n/languages';
 import { parseConfig } from '../../utils/parseConfig';
 import { getLastTtsRequest, getRecentTtsRequests, auditionWirePayload } from '../../services/voiceService';
 import { getBackendTelemetry } from '../../notifications/surfaces/BackendSurface';
-import { getLastPatientPrompt } from '../../utils/lastPatientPrompt';
 
 const KEY_PREFIX = 'rohy_diag_bar_enabled_';
 const storageKey = (uid) => `${KEY_PREFIX}${uid ?? 'anon'}`;
@@ -101,11 +100,10 @@ export default function DiagnosticBar() {
     const [backendTelemetry, setBackendTelemetry] = useState(() => getBackendTelemetry());
     const [clientLogs, setClientLogs] = useState([]);
     const [clientLogsError, setClientLogsError] = useState(null);
-    // Patient-prompt inspector: opens a modal that dumps the most recently
-    // assembled patient `system_prompt`. Snapshotted from
-    // utils/lastPatientPrompt — ChatInterface.buildPatientSystemPrompt
-    // writes there on every assembly. Without this, "the model ignored my
-    // case" debates relied on guessing what the model actually saw.
+    // Patient-prompt inspector: opens a modal with the patient `system_prompt`
+    // exactly as the server assembles it (GET /sessions/:id/patient-prompt).
+    // Without this, "the model ignored my case" debates relied on guessing
+    // what the model actually saw.
     const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
     const [promptSnapshot, setPromptSnapshot] = useState(null);
     const [promptCopied, setPromptCopied] = useState(false);
@@ -564,20 +562,27 @@ export default function DiagnosticBar() {
                             <Row k="avatar_type" v={voiceSettings?.avatar_type ?? platformAvatars?.avatar_type} />
                         </Section>
                         <Section title="Patient prompt">
-                            <Row
-                                k="last assembled"
-                                v={(() => {
-                                    const snap = getLastPatientPrompt();
-                                    if (!snap) return '(not yet captured)';
-                                    const chars = snap.prompt.length;
-                                    return `${chars} chars · case ${snap.caseName || snap.caseId || '?'}`;
-                                })()}
-                            />
+                            {/* Built by the server (GET /sessions/:id/patient-prompt),
+                                exactly as the proxy sends it; the browser no longer
+                                holds a copy (Phase 1, 2026-10-04). */}
+                            <Row k="source" v={eventStatus.sessionId ? 'server, on demand' : 'no session'} />
                             <button
                                 type="button"
-                                onClick={() => {
-                                    setPromptSnapshot(getLastPatientPrompt());
+                                disabled={!eventStatus.sessionId}
+                                onClick={async () => {
                                     setPromptCopied(false);
+                                    try {
+                                        const data = await apiFetch(`/sessions/${eventStatus.sessionId}/patient-prompt`);
+                                        setPromptSnapshot({
+                                            prompt: data.prompt,
+                                            caseId: data.case_id,
+                                            caseName: null,
+                                            sessionId: eventStatus.sessionId,
+                                            timestamp: new Date().toISOString(),
+                                        });
+                                    } catch (err) {
+                                        setPromptSnapshot({ prompt: `(could not load: ${err.message})`, caseId: null, caseName: null, sessionId: eventStatus.sessionId, timestamp: new Date().toISOString() });
+                                    }
                                     setPromptInspectorOpen(true);
                                 }}
                                 className="mt-1 px-2 py-1 text-[10px] uppercase tracking-wider bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-300 rounded border border-emerald-800"

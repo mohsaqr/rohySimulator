@@ -68,11 +68,10 @@ whatever the host does for the other plugins.
   and one audio path behind them: `speak(line)` for a line the room already
   knows, and `beginSession()` for a reply still being written by the model.
 - `useRoomConversation.js` — the learner's spoken turn. Decides **nothing**
-  about the patient: the persona is the chat room's own assembled system
-  prompt, read from the `lastPatientPrompt` module cache that the (still
-  mounted, hidden, inert) ChatInterface pre-warms, and guarded by case id —
-  a room that cannot prove it holds this patient's persona refuses to ask
-  rather than improvising one. The thread is the session's real
+  about the patient: it sends through the chat room's own patient handler
+  (the still mounted, hidden, inert ChatInterface), and the server builds the
+  patient's prompt from the session (proxy-routes.js, patientPersona.js) —
+  the room never holds or assembles a persona itself. The thread is the session's real
   `/interactions` thread, so a question asked here is in the transcript the
   educator reviews. Each finished sentence is enqueued as the model writes
   it, so the patient starts answering before the reply is complete.

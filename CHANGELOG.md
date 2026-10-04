@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.13] — 2026-10-04
+
+- **The patient is built on the server.** The patient's system prompt used to be assembled in the
+  browser and used verbatim by the AI proxy. The proxy now builds it from what the server owns — the
+  session's frozen case snapshot, the patient template the case resolves to (same rules as before, a
+  female case is never given a male template) and the session's synced record — and ignores any prompt
+  the client sends. The chat names the persona (`agent_llm_config: {persona: 'patient'}`); older clients
+  that name the patient template get the server-built patient too. The patient speaks the case's own
+  language.
+- **The patient no longer learns results.** Session activity in the patient's prompt is limited to what
+  a patient would know — what they were asked, examined for, given, and said — never lab values, orders
+  or the clinician's notes.
+- **One prompt builder.** The assembly moved to `server/shared/patientPrompt.js` together with
+  `casePromptContext`, `aiPromptContext` and `historyGroups`; the `src/` paths re-export them.
+- **Prompt inspector reads the server.** The DiagnosticBar's "Show assembled prompt" fetches the exact
+  prompt from the reviewer-only `GET /sessions/:id/patient-prompt`; the browser keeps no copy.
+
 ## [3.0.0-rc.12] — 2026-10-04
 
 - **The AI proxy no longer answers outside a session.** A request that named no agent and carried no

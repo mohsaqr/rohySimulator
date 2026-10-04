@@ -4,8 +4,6 @@ import { AlertTriangle, Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone
 import { oyonClientLog } from '../oyon/clientLogger';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
-import { buildPersonaBlocks } from '../../utils/personaBlocks';
-import { roleAnchor } from '../../utils/roleAnchor';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
@@ -23,18 +21,6 @@ import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
 import { SOURCES, SEVERITY } from '../../notifications/types';
-import { formatHistoryAsMarkdown } from '../../data/historyGroups';
-import {
-    formatRadiologyAsMarkdown,
-    formatVitalsAsMarkdown,
-    formatRecentActivityAsMarkdown,
-} from '../../data/aiPromptContext';
-import {
-    buildPatientCaseDesignContext,
-    formatPersonaDemographicsForPrompt,
-    formatPersonalityForPrompt,
-} from '../../utils/casePromptContext';
-import { setLastPatientPrompt } from '../../utils/lastPatientPrompt';
 import { usePatientConversation } from '../../contexts/PatientConversationContext';
 import { resolvePatientTemplate } from '../../utils/patientTemplate';
 import { getAffectSnapshot } from '../../utils/latestAffect';
@@ -909,252 +895,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     };
     useEffect(() => { scrollToBottom(); }, [messages, agentConversations, activeTab]);
 
-    // Build rich system prompt for patient chat
-    //
-    // Stage-4 audit: prefer the session's frozen `case_snapshot` over the
-    // live `activeCase` so the persona stays stable for the session's
-    // lifetime. Falls back to `activeCase` only if the snapshot fetch
-    // hasn't completed yet (rare — the effect above runs on mount).
-    const buildPatientSystemPrompt = () => {
-        const sourceConfig = caseSnapshot?.config ?? activeCase.config ?? {};
-        const sourceName = caseSnapshot?.name ?? activeCase.name;
-        const sourceSystemPrompt = caseSnapshot?.system_prompt ?? activeCase.system_prompt;
-        const config = sourceConfig;
-        const demo = config.demographics || {};
-
-        // Case-specific persona ALWAYS leads. The role/name/demographics block
-        // is the model's first anchor — everything below (template baseline,
-        // shared dos/donts, case design context) reads as supporting context.
-        // Absent fields are omitted rather than filled with "Unknown" so the
-        // model can't latch onto fake values.
-        const trimOrEmpty = (v) => (v == null ? '' : String(v).trim());
-        const personaRole = trimOrEmpty(config.persona_type) || 'the patient';
-        // Never the case's authoring title: a case without a patient_name made
-        // the patient introduce himself as "Acute Chest Pain - STEMI" (Phase 0).
-        const personaName = trimOrEmpty(config.patient_name) || 'Patient';
-        // Role anchor leads. See src/utils/roleAnchor.js. Without this,
-        // the admin-authored case.system_prompt (which follows in the
-        // INSTRUCTIONS block) can outweigh the PERSONA header alone —
-        // especially when authored in third-person clinical voice
-        // ("Patient presents with crushing chest pain") which the model
-        // reads as instruction to BE the clinician describing the case.
-        let richSystemPrompt = roleAnchor({ role: personaRole, name: personaName });
-        richSystemPrompt += `## PERSONA\n`;
-        richSystemPrompt += `Role: ${personaRole}\n`;
-        richSystemPrompt += `Name: ${personaName}\n`;
-        const demographicsBlock = formatPersonaDemographicsForPrompt(demo);
-        if (demographicsBlock) {
-            richSystemPrompt += `${demographicsBlock}\n`;
-        }
-
-        // Behavioural sliders the author set on the case (communication style,
-        // emotional state, pain tolerance, cooperativeness, health literacy).
-        // Only non-default values are surfaced — the helper drops defaults so
-        // the prompt stays tight.
-        const personalityBlock = formatPersonalityForPrompt(config.personality);
-        if (personalityBlock) {
-            richSystemPrompt += `\n## PATIENT BEHAVIOUR\n${personalityBlock}\n`;
-        }
-
-        richSystemPrompt += `\n## INSTRUCTIONS\n`;
-        richSystemPrompt += `${sourceSystemPrompt || 'You are a patient.'}\n`;
-        richSystemPrompt += `\nSpeak only what the patient would say aloud. Never use stage directions, narration, or asterisk-wrapped action descriptors (e.g. "*nods*", "*clutches chest*", "*sighs*"). Express feelings through words alone.\n`;
-
-        // Patient agent template prose runs AFTER the case-specific persona +
-        // instructions so the case anchors first and the template reads as
-        // shared behavioral guidance — not a competing persona definition.
-        //
-        // Cross-case guard: only include the template block if it was
-        // resolved for the case currently in focus. During a case switch,
-        // patientTemplate may briefly hold the previous case's template
-        // before the agents loader catches up; in that window, omit the
-        // block rather than glue case B's persona to case A's template.
-        const templateForThisCase = patientTemplate && patientTemplate._caseId === activeCase?.id
-            ? patientTemplate
-            : null;
-        if (templateForThisCase?.systemPrompt) {
-            richSystemPrompt += `\n## PATIENT PERSONA (from template "${templateForThisCase.name}")\n`;
-            richSystemPrompt += `${templateForThisCase.systemPrompt}\n`;
-        }
-        const personaBlocks = templateForThisCase ? buildPersonaBlocks(templateForThisCase.config) : '';
-        if (personaBlocks) {
-            richSystemPrompt += personaBlocks;
-        }
-
-        // answerKey is the persona's explicit argument (config.knowledge),
-        // off unless an educator turned it on: a patient does not know their
-        // own diagnosis.
-        richSystemPrompt += buildPatientCaseDesignContext({
-            ...activeCase,
-            name: sourceName,
-            system_prompt: sourceSystemPrompt,
-            config,
-        }, { answerKey: templateForThisCase?.config?.knowledge?.answerKey === true });
-
-        if (config.constraints) {
-            richSystemPrompt += `\n## CONSTRAINTS\n${config.constraints}\n`;
-        }
-
-        // Append Config Pages as Markdown Context if they exist
-        if (config.pages && config.pages.length > 0) {
-            richSystemPrompt += "\n---\n## PATIENT MEDICAL RECORD (Hidden Context)\n";
-            richSystemPrompt += "Only reveal this information if specifically asked or relevant to the history taking.\n";
-
-            config.pages.forEach(page => {
-                richSystemPrompt += `\n### ${page.title}\n${page.content}\n`;
-            });
-        }
-
-        // Append Clinical Records based on AI Access settings
-        const clinicalRecords = config.clinicalRecords || {};
-        const aiAccess = clinicalRecords.aiAccess || {
-            history: true,
-            physicalExam: true,
-            medications: true,
-            radiology: false,
-            procedures: true,
-            notes: false
-        };
-
-        let hasAnyRecords = false;
-
-        // History & HPI — formatted by the canonical group structure so the
-        // LLM sees the same Present-History / Past-Medical / Personal-&-Social
-        // shape the human authors and views. Single source of truth lives in
-        // src/data/historyGroups.js; consumers must NOT re-implement the flat
-        // → grouped mapping here.
-        if (aiAccess.history && clinicalRecords.history) {
-            const historyMarkdown = formatHistoryAsMarkdown(clinicalRecords.history);
-            if (historyMarkdown) {
-                if (!hasAnyRecords) {
-                    richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-                    hasAnyRecords = true;
-                }
-                richSystemPrompt += `\n### Medical History\n${historyMarkdown}\n`;
-            }
-        }
-
-        // Physical Exam
-        if (aiAccess.physicalExam && clinicalRecords.physicalExam) {
-            const pe = clinicalRecords.physicalExam;
-            const peParts = [];
-            if (pe.general) peParts.push(`General: ${pe.general}`);
-            if (pe.heent) peParts.push(`HEENT: ${pe.heent}`);
-            if (pe.cardiovascular) peParts.push(`Cardiovascular: ${pe.cardiovascular}`);
-            if (pe.respiratory) peParts.push(`Respiratory: ${pe.respiratory}`);
-            if (pe.abdomen) peParts.push(`Abdomen: ${pe.abdomen}`);
-            if (pe.neurological) peParts.push(`Neurological: ${pe.neurological}`);
-            if (pe.extremities) peParts.push(`Extremities/Skin: ${pe.extremities}`);
-
-            if (peParts.length > 0) {
-                if (!hasAnyRecords) {
-                    richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-                    hasAnyRecords = true;
-                }
-                richSystemPrompt += `\n### Physical Examination\n${peParts.join('\n')}\n`;
-            }
-        }
-
-        // Medications
-        if (aiAccess.medications && clinicalRecords.medications?.length > 0) {
-            if (!hasAnyRecords) {
-                richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-                hasAnyRecords = true;
-            }
-            const medList = clinicalRecords.medications.map(m =>
-                `- ${m.name} ${m.dose} ${m.route} ${m.frequency}${m.indication ? ` (for ${m.indication})` : ''}`
-            ).join('\n');
-            richSystemPrompt += `\n### Current Medications\n${medList}\n`;
-        }
-
-        // Radiology — formatted by the shared helper so the LLM sees a stable
-        // text shape (image URLs intentionally omitted; binary assets aren't
-        // useful context for a text model).
-        if (aiAccess.radiology && clinicalRecords.radiology?.length > 0) {
-            const radiologyMarkdown = formatRadiologyAsMarkdown(clinicalRecords.radiology);
-            if (radiologyMarkdown) {
-                if (!hasAnyRecords) {
-                    richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-                    hasAnyRecords = true;
-                }
-                richSystemPrompt += `\n### Radiology Studies\n${radiologyMarkdown}\n`;
-            }
-        }
-
-        // Procedures
-        if (aiAccess.procedures && clinicalRecords.procedures?.length > 0) {
-            if (!hasAnyRecords) {
-                richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-                hasAnyRecords = true;
-            }
-            const procList = clinicalRecords.procedures.map(p =>
-                `- ${p.name}${p.date ? ` (${p.date})` : ''}: ${p.indication || 'No indication documented'}${p.findings ? ` - Findings: ${p.findings}` : ''}${p.complications ? ` - Complications: ${p.complications}` : ''}`
-            ).join('\n');
-            richSystemPrompt += `\n### Procedures\n${procList}\n`;
-        }
-
-        // Clinical Notes
-        if (aiAccess.notes && clinicalRecords.notes?.length > 0) {
-            if (!hasAnyRecords) {
-                richSystemPrompt += "\n---\n## CLINICAL RECORDS (Accessible to AI)\n";
-            }
-            const noteList = clinicalRecords.notes.map(n =>
-                `#### ${n.type}${n.title ? `: ${n.title}` : ''} (${n.date || 'No date'}${n.author ? `, ${n.author}` : ''})\n${n.content || 'No content'}`
-            ).join('\n\n');
-            richSystemPrompt += `\n### Clinical Notes\n${noteList}\n`;
-        }
-
-        // Live patient state — current vitals from PatientRecord. Without this
-        // the AI guesses when asked "how do you feel" / "what's your heart
-        // rate"; with it, the model can answer consistent with the monitor.
-        const vitalsMarkdown = formatVitalsAsMarkdown(patientRecord?.record?.current_state?.vitals);
-        if (vitalsMarkdown) {
-            richSystemPrompt += `\n---\n## CURRENT PATIENT STATE\n${vitalsMarkdown}\n`;
-            richSystemPrompt += `\nAnswer questions about how you currently feel in a way consistent with these vitals.\n`;
-        }
-
-        // Session activity feedback — tells the AI what the student has
-        // already done so far in THIS session. Without it, the AI has no
-        // memory of prior actions (the chat history is the assistant's only
-        // proxy for that, and it doesn't capture non-verbal events like exams
-        // or treatments). Capped at the last 10 events to bound prompt size.
-        const recentActivity = formatRecentActivityAsMarkdown(patientRecord?.record?.events, 10);
-        if (recentActivity) {
-            richSystemPrompt += `\n---\n## SESSION ACTIVITY SO FAR (clinician's actions this encounter)\n${recentActivity}\n`;
-            richSystemPrompt += `\nDo not repeat answers to questions that were already obtained above. Acknowledge prior actions when relevant.\n`;
-        }
-
-        // Stash for the DiagnosticBar "show assembled prompt" inspector.
-        // Bounded to a single value — only the most recent assembly is kept.
-        setLastPatientPrompt({
-            prompt: richSystemPrompt,
-            caseId: activeCase?.id ?? null,
-            caseName: sourceName ?? null,
-            sessionId: sessionId ?? null,
-        });
-
-        return richSystemPrompt;
-    };
-
-    // Pre-assemble the patient prompt once the case + (optional) snapshot +
-    // patient template are ready, so the DiagnosticBar inspector has
-    // something to show before the learner sends their first message.
-    // buildPatientSystemPrompt reads state + props and writes the module
-    // cache via setLastPatientPrompt (the "pre-warm" side effect we want);
-    // the returned string is intentionally discarded here. Live vitals and
-    // session events are deliberately NOT in the dep list — including them
-    // would re-stash the prompt on every monitor tick, churning the cache
-    // for no inspector benefit. The cache is refreshed for real on each
-    // outgoing patient message anyway.
-    useEffect(() => {
-        if (!activeCase) return;
-        try {
-            buildPatientSystemPrompt();
-        } catch {
-            // Don't let inspector pre-warm failures break the chat surface.
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeCase, caseSnapshot, patientTemplate, sessionId]);
+    // The patient's system prompt is built by the SERVER (proxy-routes.js →
+    // services/patientPersona.js) from the session's case snapshot, its
+    // patient template and the session record; this component only sends
+    // the messages and names the persona. It used to assemble the prompt here
+    // and the proxy used it verbatim (Phase 1, 2026-10-04). The DiagnosticBar
+    // fetches the assembled prompt from GET /sessions/:id/patient-prompt.
 
     // Schedule the next questionnaire appearance (2 min from now)
     const startQuestionnaireTimer = useCallback(() => {
@@ -1337,8 +1083,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // Not yet known whether this reply will be voiced (see below).
         conversationBus.publish({ voiced: null });
 
-        const richSystemPrompt = buildPatientSystemPrompt();
-
         // Append an empty assistant message and grow it as tokens stream in
         // (typewriter effect for the chat bubble).
         let assistantIdx = -1;
@@ -1459,11 +1203,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 // "Error: LLM provider unreachable" reached the model as the
                 // patient's own previous reply (QA 2026-10-04, PRV-38).
                 [...messages.filter(m => !m.error), userMsg],
-                richSystemPrompt,
+                null,
                 wantSpeech ? 'voice' : undefined,
                 {
                     source,
-                    agentTemplateId: patientTemplate?.templateId || null,
+                    // The server builds the patient and resolves its template.
+                    persona: 'patient',
                     // Server appends the output-language directive for this code
                     // (systemPromptAssembly) — never inject it into the prompt here.
                     caseLanguage,
