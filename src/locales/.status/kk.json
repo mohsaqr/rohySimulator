@@ -1229,6 +1229,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.terms_not_translated": {
+    "src": "212aa56d5df0",
+    "tgt": "ba49447b369b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.terms_scroll_hint": {
     "src": "90690149ce71",
     "tgt": "76ced487dd5c",
@@ -8332,6 +8342,126 @@
   "authoring_config.terms_title_label": {
     "src": "7e8cd2056da7",
     "tgt": "973afbab5698",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_copy_shipped": {
+    "src": "ff1b4f598bfb",
+    "tgt": "a7c29d9d77d1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_language": {
+    "src": "ff5451dc4c0a",
+    "tgt": "1986517a7ae7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_remove": {
+    "src": "b9b6429199af",
+    "tgt": "8c66141fba87",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_removed": {
+    "src": "5cf08eb5d4b4",
+    "tgt": "124ffad33e4d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_save": {
+    "src": "1d9eb7b9db2c",
+    "tgt": "957261cbdc5f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_saved": {
+    "src": "87880ba6a815",
+    "tgt": "1ecb1d2be586",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_master": {
+    "src": "1a7666a73e6b",
+    "tgt": "625158f17a45",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_shipped": {
+    "src": "09f0d7533fd7",
+    "tgt": "4332c7a2480c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_stale": {
+    "src": "41e96ac52d6f",
+    "tgt": "5e4dc1964a3c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_stored": {
+    "src": "459706e17453",
+    "tgt": "66c5496142d2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_translations_help": {
+    "src": "f311ac9bf98a",
+    "tgt": "5b7ce63bd8e9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_translations_title": {
+    "src": "266a41b90d4f",
+    "tgt": "6ef36432225f",
     "state": "machine",
     "origin": "machine",
     "locked": false,

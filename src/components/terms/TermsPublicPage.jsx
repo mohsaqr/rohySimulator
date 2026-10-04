@@ -9,17 +9,18 @@ import { apiFetch } from '../../services/apiClient';
 import TermsDocument from './TermsDocument';
 
 export default function TermsPublicPage({ onBack }) {
-    const { t } = useTranslation('auth');
+    const { t, i18n } = useTranslation('auth');
+    const lang = i18n.resolvedLanguage || i18n.language || 'en';
     const [terms, setTerms] = useState(null);
     const [failed, setFailed] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
-        apiFetch('/terms')
+        apiFetch(`/terms?lang=${encodeURIComponent(lang)}`)
             .then((data) => { if (!cancelled) setTerms(data?.terms || null); })
             .catch(() => { if (!cancelled) setFailed(true); });
         return () => { cancelled = true; };
-    }, []);
+    }, [lang]);
 
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-100 flex justify-center p-4 sm:p-8">
@@ -44,6 +45,7 @@ export default function TermsPublicPage({ onBack }) {
                                     {t('terms_version', { version: terms.version })}
                                 </span>
                             </header>
+                            {terms.is_fallback && <p className="mb-3 text-xs text-amber-400">{t('terms_not_translated')}</p>}
                             <TermsDocument body={terms.body} />
                         </>
                     )}

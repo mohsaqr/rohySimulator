@@ -17,6 +17,9 @@
   "error_boundary_body": "Der Rest der Anwendung ist nicht betroffen. Sie können es erneut versuchen, den Raum wechseln oder die Seite neu laden, falls das Problem bestehen bleibt.",
   "error_boundary_retry": "Erneut versuchen",
   "error_boundary_title": "In dieser Ansicht ist etwas schiefgelaufen",
+  "gender_female": "Weiblich",
+  "gender_male": "Männlich",
+  "gender_other": "Divers",
   "level_value": "Stufe {value}",
   "loading": "Wird geladen…",
   "next": "Weiter",
@@ -298,8 +301,5 @@
   "voice_engine_unavailable": "nicht verfügbar",
   "voice_group_other": "Sonstige",
   "voice_unplayable_note": "Die konfigurierte Stimme {requested} kann auf {provider} nicht abgespielt werden — es wird nichts gesprochen, bis das behoben ist.",
-  "yes": "Ja",
-  "gender_male": "Männlich",
-  "gender_female": "Weiblich",
-  "gender_other": "Divers"
+  "yes": "Ja"
 }

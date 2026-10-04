@@ -17,6 +17,9 @@
   "error_boundary_body": "El resto de la aplicación no se ve afectado. Puedes reintentar, cambiar de sala o recargar la página si el problema persiste.",
   "error_boundary_retry": "Reintentar",
   "error_boundary_title": "Algo ha salido mal en esta vista",
+  "gender_female": "Mujer",
+  "gender_male": "Hombre",
+  "gender_other": "Otro",
   "level_value": "Nivel {value}",
   "loading": "Cargando…",
   "next": "Siguiente",
@@ -298,8 +301,5 @@
   "voice_engine_unavailable": "no disponible",
   "voice_group_other": "Otro",
   "voice_unplayable_note": "La voz configurada {requested} no puede reproducirse en {provider} — no se hablará nada hasta que esto se solucione.",
-  "yes": "Sí",
-  "gender_male": "Hombre",
-  "gender_female": "Mujer",
-  "gender_other": "Otro"
+  "yes": "Sí"
 }

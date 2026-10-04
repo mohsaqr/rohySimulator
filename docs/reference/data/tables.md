@@ -2104,6 +2104,7 @@ Stores terms acceptances records.
 | `accepted_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
 | `ip_address` | TEXT | — | — |
 | `user_agent` | TEXT | — | — |
+| `language` | TEXT | — | `0066_terms_acceptance_language.sql` |
 
 ## `treatment_effects`
 

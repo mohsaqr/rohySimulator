@@ -17,6 +17,9 @@
   "error_boundary_body": "Il resto dell'applicazione non è interessato. Puoi riprovare, cambiare stanza o ricaricare la pagina se il problema persiste.",
   "error_boundary_retry": "Riprova",
   "error_boundary_title": "Si è verificato un problema in questa vista",
+  "gender_female": "Femmina",
+  "gender_male": "Maschio",
+  "gender_other": "Altro",
   "level_value": "Livello {value}",
   "loading": "Caricamento…",
   "next": "Avanti",
@@ -298,8 +301,5 @@
   "voice_engine_unavailable": "non disponibile",
   "voice_group_other": "Altro",
   "voice_unplayable_note": "La voce configurata {requested} non può essere riprodotta su {provider} — non verrà pronunciato nulla finché non viene corretto.",
-  "yes": "Sì",
-  "gender_male": "Maschio",
-  "gender_female": "Femmina",
-  "gender_other": "Altro"
+  "yes": "Sì"
 }

@@ -1229,6 +1229,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.terms_not_translated": {
+    "src": "212aa56d5df0",
+    "tgt": "480268ddc330",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.terms_scroll_hint": {
     "src": "90690149ce71",
     "tgt": "fdbb6b7a033d",
@@ -8332,6 +8342,126 @@
   "authoring_config.terms_title_label": {
     "src": "7e8cd2056da7",
     "tgt": "4c08a5d5feb2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_copy_shipped": {
+    "src": "ff1b4f598bfb",
+    "tgt": "09124a410fbb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_language": {
+    "src": "ff5451dc4c0a",
+    "tgt": "39d4c2f126c6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_remove": {
+    "src": "b9b6429199af",
+    "tgt": "122bc86e4033",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_removed": {
+    "src": "5cf08eb5d4b4",
+    "tgt": "f524bc3e029b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_save": {
+    "src": "1d9eb7b9db2c",
+    "tgt": "bbefd337493e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_saved": {
+    "src": "87880ba6a815",
+    "tgt": "1a882032b3c3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_master": {
+    "src": "1a7666a73e6b",
+    "tgt": "1214db1b48f2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_shipped": {
+    "src": "09f0d7533fd7",
+    "tgt": "db669d7cdf4e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_stale": {
+    "src": "41e96ac52d6f",
+    "tgt": "20082c711f5c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_tr_status_stored": {
+    "src": "459706e17453",
+    "tgt": "162c37d46932",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_translations_help": {
+    "src": "f311ac9bf98a",
+    "tgt": "30ba928494e9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.terms_translations_title": {
+    "src": "266a41b90d4f",
+    "tgt": "0be02721815c",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -20810,7 +20940,7 @@
     "risk": "low"
   },
   "common.room_ecg_sub": {
-    "src": "394353d9e9d4",
+    "src": "6e0534af16e1",
     "tgt": "8e8ebe714e20",
     "state": "machine",
     "origin": "machine",
@@ -20890,7 +21020,7 @@
     "risk": "low"
   },
   "common.room_pacs_sub": {
-    "src": "9b2142694e6a",
+    "src": "d195d36bd79d",
     "tgt": "d8f44010531a",
     "state": "machine",
     "origin": "machine",
@@ -20920,7 +21050,7 @@
     "risk": "low"
   },
   "common.room_pathology_sub": {
-    "src": "4f9c6c148bdd",
+    "src": "fd2c8f1dc03c",
     "tgt": "11a2aff88523",
     "state": "machine",
     "origin": "machine",
@@ -20930,7 +21060,7 @@
     "risk": "low"
   },
   "common.room_radiology": {
-    "src": "ac75d345f9d5",
+    "src": "ad51cb961843",
     "tgt": "480b8234f125",
     "state": "machine",
     "origin": "machine",
@@ -25870,7 +26000,7 @@
     "risk": "low"
   },
   "help.article_rooms": {
-    "src": "cb27606b6621",
+    "src": "30ab7d813dee",
     "tgt": "8818cbf0dda7",
     "state": "machine",
     "origin": "machine",
@@ -26260,7 +26390,7 @@
     "risk": "low"
   },
   "help.tour_student_rooms_body": {
-    "src": "2166360ca53b",
+    "src": "c0eca5cd3344",
     "tgt": "23eaf71c8fd6",
     "state": "machine",
     "origin": "machine",
@@ -26270,7 +26400,7 @@
     "risk": "low"
   },
   "help.tour_student_rooms_title": {
-    "src": "e0219a1b2278",
+    "src": "30ab7d813dee",
     "tgt": "8818cbf0dda7",
     "state": "machine",
     "origin": "machine",
@@ -33780,8 +33910,8 @@
     "risk": "low"
   },
   "oyon.reconsent_item_voice": {
-    "src": "2a016881a90a",
-    "tgt": "9f9ff094113a",
+    "src": "1c5fcd912251",
+    "tgt": "c93f9035f9f6",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -35600,8 +35730,8 @@
     "risk": "low"
   },
   "profile.password_intro": {
-    "src": "bf2736948f74",
-    "tgt": "fbcbe3ab02c7",
+    "src": "f75fa0adaba5",
+    "tgt": "b01b6edd06c3",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -35610,8 +35740,8 @@
     "risk": "low"
   },
   "profile.password_min_length": {
-    "src": "ad199dce6bd4",
-    "tgt": "5a06bc95bfef",
+    "src": "b756dabd1bd6",
+    "tgt": "b9c171f8f5cf",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -35620,8 +35750,8 @@
     "risk": "low"
   },
   "profile.password_too_short": {
-    "src": "2005290ddda9",
-    "tgt": "d78a7fb2c222",
+    "src": "b756dabd1bd6",
+    "tgt": "b9c171f8f5cf",
     "state": "machine",
     "origin": "machine",
     "locked": false,

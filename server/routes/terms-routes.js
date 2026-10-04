@@ -11,7 +11,19 @@
 //   POST /api/terms/accept           — accept the version the browser showed.
 //   GET  /api/platform-settings/terms — admin: the stored draft and adoption.
 //   PUT  /api/platform-settings/terms — admin: edit title, body, version and
-//                                      whether acceptance is required.
+//                                      whether acceptance is required, and the
+//                                      per-language translations.
+//
+// LANGUAGE. The stored title/body/version are the MASTER (English). A
+// translation (`terms_translations` = {lang: {title, body, version}}) is shown
+// for `?lang=` only while its `version` equals the master's: a translation of
+// an older version is never shown as if it were the current one — the reader
+// gets the master and `is_fallback: true`. While the master is the shipped
+// default, the shipped machine translations (shared/termsTranslations.js)
+// stand in for languages an administrator has not translated. Title and body
+// always come from the same document; they are never mixed. Acceptance stays
+// keyed on (user, version), so accepting in any language accepts that version,
+// and the snapshot records the language read (migration 0066).
 //
 // The agreement is platform-wide (like the registration policy) and stored in
 // platform_settings; acceptances are per person, tenant-scoped, and snapshot the
@@ -26,6 +38,8 @@ import {
     DEFAULT_TERMS_BODY, DEFAULT_TERMS_TITLE, DEFAULT_TERMS_VERSION,
     TERMS_BODY_MAX, TERMS_TITLE_MAX, normalizeTermsVersion, termsVersionError,
 } from '../shared/terms.js';
+import { DEFAULT_TERMS_TRANSLATIONS } from '../shared/termsTranslations.js';
+import { DEFAULT_LANGUAGE, isKnownLanguage } from '../shared/languages.js';
 
 const router = express.Router();
 const termsLog = logger('terms');
@@ -43,10 +57,11 @@ const publicLimiter = rateLimit({
 async function readDraft() {
     const rows = await dbAll(
         `SELECT setting_key, setting_value FROM platform_settings
-          WHERE setting_key IN ('terms_required', 'terms_title', 'terms_body', 'terms_version')`,
+          WHERE setting_key IN ('terms_required', 'terms_title', 'terms_body', 'terms_version', 'terms_translations')`,
     );
     const byKey = Object.fromEntries((rows || []).map((r) => [r.setting_key, r.setting_value]));
     return {
+        translations: parseTranslations(byKey.terms_translations),
         // Not required until an administrator turns it on: the default text is a
         // draft awaiting legal, data-protection and ethics review.
         required: byKey.terms_required === '1',
@@ -56,9 +71,53 @@ async function readDraft() {
     };
 }
 
-/** The agreement as shown: a blank title, body or version falls back to the default. */
-async function readDoc() {
+/** Stored translations, or {} (a malformed value is logged, not fatal). */
+function parseTranslations(raw) {
+    if (!raw) return {};
+    try {
+        const value = JSON.parse(raw);
+        if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    } catch (err) {
+        termsLog.warn('terms_translations is not valid JSON; ignored', { error: err.message });
+    }
+    return {};
+}
+
+/** The language a request asks for: a known code other than the master's, or null. */
+function requestedLanguage(value) {
+    const code = String(value ?? '').trim().toLowerCase().split(/[-_]/)[0];
+    return code && code !== DEFAULT_LANGUAGE && isKnownLanguage(code) ? code : null;
+}
+
+/**
+ * The agreement as shown in `lang`: the translation when it renders the current
+ * version, else the master. `lang` is the language actually shown and
+ * `is_fallback` says the reader asked for another.
+ */
+async function readDocIn(lang) {
     const draft = await readDraft();
+    const master = masterOf(draft);
+    const wanted = requestedLanguage(lang);
+    if (!wanted) return { ...master, lang: DEFAULT_LANGUAGE, is_fallback: false };
+    const stored = draft.translations[wanted];
+    const usable = (entry) => entry && typeof entry.title === 'string' && entry.title.trim()
+        && typeof entry.body === 'string' && entry.body.trim();
+    if (usable(stored) && normalizeTermsVersion(stored.version) === master.version) {
+        return { ...master, title: stored.title.trim(), body: stored.body, lang: wanted, is_fallback: false };
+    }
+    const shipped = DEFAULT_TERMS_TRANSLATIONS[wanted];
+    if (master.is_default && master.version === DEFAULT_TERMS_VERSION && usable(shipped)) {
+        return { ...master, title: shipped.title, body: shipped.body, lang: wanted, is_fallback: false };
+    }
+    return { ...master, lang: DEFAULT_LANGUAGE, is_fallback: true };
+}
+
+/** The master agreement as shown: a blank title, body or version falls back to the default. */
+async function readDoc() {
+    return masterOf(await readDraft());
+}
+
+function masterOf(draft) {
     const title = draft.title.trim() || DEFAULT_TERMS_TITLE;
     const body = draft.body.trim() ? draft.body : DEFAULT_TERMS_BODY;
     return {
@@ -87,7 +146,7 @@ async function adoption(req, version) {
 
 router.get('/terms', publicLimiter, async (req, res) => {
     try {
-        res.json({ terms: await readDoc() });
+        res.json({ terms: await readDocIn(req.query.lang) });
     } catch (err) {
         termsLog.error('terms read failed', { error: err.message });
         res.status(500).json({ error: 'Could not read the terms of use' });
@@ -96,7 +155,7 @@ router.get('/terms', publicLimiter, async (req, res) => {
 
 router.get('/terms/status', authenticateToken, async (req, res) => {
     try {
-        const doc = await readDoc();
+        const doc = await readDocIn(req.query.lang);
         const row = await acceptanceFor(req, doc.version);
         res.json({
             terms: {
@@ -117,7 +176,9 @@ router.post('/terms/accept', authenticateToken, async (req, res) => {
         const shown = normalizeTermsVersion(req.body?.version);
         if (!shown) return res.status(400).json({ error: 'version is required' });
 
-        const doc = await readDoc();
+        // Re-resolve the document in the language the browser showed, so the
+        // snapshot is the text this person actually read.
+        const doc = await readDocIn(req.body?.lang);
         // The administrator published a new version between this page rendering
         // and the click. Recording it would file an acceptance for text this
         // person never read, so refuse and let the client load the current one.
@@ -130,17 +191,17 @@ router.post('/terms/accept', authenticateToken, async (req, res) => {
         }
 
         const result = await dbRun(
-            `INSERT INTO terms_acceptances (tenant_id, user_id, version, title, body, ip_address, user_agent)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO terms_acceptances (tenant_id, user_id, version, title, body, language, ip_address, user_agent)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(user_id, version) DO NOTHING`,
-            [tenantId(req), req.user.id, doc.version, doc.title, doc.body, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null],
+            [tenantId(req), req.user.id, doc.version, doc.title, doc.body, doc.lang, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null],
         );
         if (result?.changes === 1) {
             auditSuccess(req, {
                 action: 'terms.accept',
                 resourceType: 'terms',
                 resourceId: doc.version,
-                newValue: { version: doc.version, title: doc.title },
+                newValue: { version: doc.version, title: doc.title, language: doc.lang },
             });
             req.log.info('terms accepted', { version: doc.version });
         }
@@ -158,7 +219,8 @@ router.get('/platform-settings/terms', authenticateToken, requireAdmin, async (r
         res.json({
             draft,
             terms: doc,
-            defaults: { title: DEFAULT_TERMS_TITLE, body: DEFAULT_TERMS_BODY, version: DEFAULT_TERMS_VERSION },
+            defaults: { title: DEFAULT_TERMS_TITLE, body: DEFAULT_TERMS_BODY, version: DEFAULT_TERMS_VERSION, translations: DEFAULT_TERMS_TRANSLATIONS },
+            translation_status: translationStatus(draft, doc),
             adoption: await adoption(req, doc.version),
         });
     } catch (err) {
@@ -192,11 +254,16 @@ router.put('/platform-settings/terms', authenticateToken, requireAdmin, async (r
             if (problem) return res.status(400).json({ error: problem });
             updates.terms_version = normalizeTermsVersion(body.version);
         }
+        const before = await readDraft();
+        if (body.translations !== undefined) {
+            const merged = mergeTranslations(before.translations, body.translations);
+            if (merged.error) return res.status(400).json({ error: merged.error, code: 'invalid_translation' });
+            updates.terms_translations = JSON.stringify(merged.value);
+        }
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({ error: 'Nothing to update' });
         }
 
-        const before = await readDraft();
         for (const [key, value] of Object.entries(updates)) {
             await dbRun(
                 `INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at)
@@ -210,7 +277,10 @@ router.put('/platform-settings/terms', authenticateToken, requireAdmin, async (r
         // Audited without the text itself: what matters is that the terms
         // changed, to which version, and by whom. The accepted text is already
         // snapshotted on every acceptance row.
-        const summary = (d) => ({ required: d.required, title: d.title, version: d.version, body_chars: d.body.length });
+        const summary = (d) => ({
+            required: d.required, title: d.title, version: d.version, body_chars: d.body.length,
+            translations: Object.fromEntries(Object.entries(d.translations).map(([lang, t]) => [lang, { version: t.version, body_chars: String(t.body ?? '').length }])),
+        });
         auditSuccess(req, {
             action: 'terms.update',
             resourceType: 'terms',
@@ -219,11 +289,54 @@ router.put('/platform-settings/terms', authenticateToken, requireAdmin, async (r
             newValue: summary(after),
         });
         const doc = await readDoc();
-        res.json({ draft: after, terms: doc, adoption: await adoption(req, doc.version) });
+        res.json({ draft: after, terms: doc, translation_status: translationStatus(after, doc), adoption: await adoption(req, doc.version) });
     } catch (err) {
         req.log.error('terms settings update failed', { error: err.message });
         res.status(500).json({ error: 'Could not save the terms of use' });
     }
 });
+
+/**
+ * Per language: what a reader of that language is shown today — the stored
+ * translation, the shipped one, or the master because the translation renders
+ * an older version (`stale`) or does not exist.
+ */
+function translationStatus(draft, master) {
+    return Object.fromEntries(Object.keys(DEFAULT_TERMS_TRANSLATIONS).map((lang) => {
+        const stored = draft.translations[lang];
+        if (stored) {
+            const version = normalizeTermsVersion(stored.version);
+            return [lang, { source: version === master.version ? 'stored' : 'stale', version }];
+        }
+        const shipped = master.is_default && master.version === DEFAULT_TERMS_VERSION;
+        return [lang, { source: shipped ? 'shipped' : 'master', version: shipped ? DEFAULT_TERMS_VERSION : null }];
+    }));
+}
+
+/**
+ * Apply a translations patch: `{lang: {title, body, version}}` sets one,
+ * `{lang: null}` removes it. Every entry is validated like the master.
+ */
+function mergeTranslations(current, patch) {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { error: 'translations must be an object' };
+    const value = { ...current };
+    for (const [rawLang, entry] of Object.entries(patch)) {
+        const lang = String(rawLang).toLowerCase();
+        if (lang === DEFAULT_LANGUAGE || !isKnownLanguage(lang)) return { error: `"${rawLang}" is not a translation language` };
+        if (entry === null) { delete value[lang]; continue; }
+        if (!entry || typeof entry !== 'object') return { error: `translation "${lang}" must be an object or null` };
+        const { title, body, version } = entry;
+        if (typeof title !== 'string' || !title.trim() || title.length > TERMS_TITLE_MAX) {
+            return { error: `translation "${lang}": title must be text of 1 to ${TERMS_TITLE_MAX} characters` };
+        }
+        if (typeof body !== 'string' || !body.trim() || body.length > TERMS_BODY_MAX) {
+            return { error: `translation "${lang}": body must be text of 1 to ${TERMS_BODY_MAX} characters` };
+        }
+        const problem = termsVersionError(version);
+        if (problem) return { error: `translation "${lang}": ${problem}` };
+        value[lang] = { title, body, version: normalizeTermsVersion(version) };
+    }
+    return { value };
+}
 
 export default router;
