@@ -500,7 +500,24 @@ function MainApp() {
          try {
             const saved = localStorage.getItem('rohy_active_session');
             if (saved) {
-               const { activeCase: savedCase, sessionId: savedSessionId } = JSON.parse(saved);
+               const { caseId: savedCaseId, activeCase: legacyCase, sessionId: savedSessionId } = JSON.parse(saved);
+               // Only the case ID is kept on disk; the case itself is fetched
+               // again, so what the learner holds is always the server's
+               // current, role-filtered copy. The blob used to hold the WHOLE
+               // case object — answer key included — in plain localStorage
+               // (Phase 0, 2026-10-04). A pre-change blob still restores
+               // through its embedded id; its stored object is used only if
+               // the fetch fails (offline), and the next save drops it.
+               const restoreId = savedCaseId ?? legacyCase?.id ?? null;
+               let savedCase = null;
+               if (restoreId != null) {
+                  try {
+                     savedCase = await apiFetch(`/cases/${restoreId}`);
+                  } catch (err) {
+                     console.warn('[Session] could not re-fetch the saved case:', err.message);
+                     savedCase = legacyCase ?? null;
+                  }
+               }
                if (savedCase) {
                   setActiveCase(savedCase);
                   restored = true;
@@ -622,7 +639,7 @@ function MainApp() {
    useEffect(() => {
       if (activeCase && sessionValidated) {
          localStorage.setItem('rohy_active_session', JSON.stringify({
-            activeCase,
+            caseId: activeCase.id,
             sessionId,
             timestamp: Date.now()
          }));
@@ -1067,7 +1084,8 @@ function MainApp() {
    // so a new-but-equal object cannot re-run init (the ~180 req/min
    // GET /api/patient-record 404 loop this once caused).
    const patientInfo = activeCase ? {
-      name: activeCase.config?.patient_name || activeCase.name || 'Unknown Patient',
+      // case_code, not the authoring title (often the diagnosis) — Phase 0.
+      name: activeCase.config?.patient_name || activeCase.case_code || 'Unknown Patient',
       age: activeCase.config?.demographics?.age || null,
       gender: activeCase.config?.demographics?.gender || null,
       mrn: activeCase.config?.demographics?.mrn || null,

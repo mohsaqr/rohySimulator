@@ -49,6 +49,7 @@ describe('proxy budget enforcement', () => {
     let server;
     let llmServer;
     let token;
+    let sessionId;
     let fakeVoiceFile;
 
     beforeAll(async () => {
@@ -107,6 +108,13 @@ describe('proxy budget enforcement', () => {
             ('budget.tts.user.daily_characters', '1000'),
             ('tts_provider', 'piper')`, [llmServer.baseUrl]);
         await dbClose(db);
+        // The proxy answers only inside a session (Phase 0, 2026-10-04).
+        const created = await fetch(`${server.baseUrl}/api/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ case_id: 1, student_name: 'budget' }),
+        });
+        sessionId = (await created.json()).id;
     }, 90_000);
 
     afterAll(async () => {
@@ -129,11 +137,22 @@ describe('proxy budget enforcement', () => {
         await dbClose(db);
     }
 
+    // Regression lock: with no agent named and no session, the proxy answered any free-form system prompt on the platform's key for anyone signed in (Phase 0 security fix, 2026-10-04)
+    it('refuses a free-form request with no session before spending anything', async () => {
+        const res = await fetch(`${server.baseUrl}/api/proxy/llm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ system_prompt: 'You are a general assistant.', messages: [{ role: 'user', content: 'hi' }] }),
+        });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('session_required');
+    });
+
     it('allows an under-limit LLM proxy call and records actual tokens', async () => {
         const res = await fetch(`${server.baseUrl}/api/proxy/llm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }] }),
         });
         expect(res.status).toBe(200);
         const body = await res.json();
@@ -145,7 +164,7 @@ describe('proxy budget enforcement', () => {
         const res = await fetch(`${server.baseUrl}/api/proxy/llm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }] }),
         });
         expect(res.status).toBe(429);
         expect(await res.json()).toMatchObject({ error: 'Budget exceeded', budget_exceeded: true, limit: 1 });

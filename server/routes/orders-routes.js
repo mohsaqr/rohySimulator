@@ -1803,10 +1803,6 @@ router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req,
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
-        const caseConfig = resolveSessionCaseConfig(session);
-
-        // Get case-specific treatment configuration
-        const treatmentConfig = caseConfig.treatments || {};
 
         // Get all treatment effects (master data) as available treatments.
         // Platform rows plus this tenant's own library rows (0046 scope model)
@@ -1877,7 +1873,9 @@ router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req,
 
                 res.json({
                     treatments: type ? treatments : grouped,
-                    config: treatmentConfig
+                    // No `config`: it echoed cases.config.treatments — the
+                    // grading rubric — to the student (Phase 0, 2026-10-04).
+                    config: {}
                 });
             }).catch((err) => {
                 (req.log || routesOrdersLog).error('available-treatments failed', { session_id: sessionId, error: err.message });
@@ -2521,6 +2519,38 @@ function normalizeCaseTreatmentFlags(t) {
     return { is_available, is_expected, is_contraindicated };
 }
 
+// GET /api/cases/:caseId/treatments — the case's treatment rubric, for the
+// editor. The rubric lives ONLY in case_treatments: it used to be stored in
+// cases.config.treatments as well, which every student received with the
+// case (Phase 0 security fix, 2026-10-04). Same shape the PUT accepts.
+router.get('/cases/:caseId/treatments', authenticateToken, requireEducator, async (req, res) => {
+    try {
+        const caseRow = await dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ?', [req.params.caseId, tenantId(req)]);
+        if (!caseRow) return res.status(404).json({ error: 'Case not found' });
+        const rows = await dbAdapter.all(
+            `SELECT treatment_type, medication_id, treatment_name, is_available, is_expected, is_contraindicated,
+                    points_if_ordered, feedback_if_ordered, feedback_if_missed, custom_effect_override
+               FROM case_treatments WHERE case_id = ? ORDER BY id`,
+            [caseRow.id]
+        );
+        const treatments = rows.map((r) => {
+            let override = null;
+            try { override = r.custom_effect_override ? JSON.parse(r.custom_effect_override) : null; } catch { override = null; }
+            return {
+                ...r,
+                is_available: Boolean(r.is_available),
+                is_expected: Boolean(r.is_expected),
+                is_contraindicated: Boolean(r.is_contraindicated),
+                custom_effect_override: override,
+            };
+        });
+        res.json({ treatments });
+    } catch (err) {
+        req.log.error('case treatments read failed', { error: err.message });
+        res.status(500).json({ error: 'Could not read the case treatments' });
+    }
+});
+
 // PUT /api/cases/:caseId/treatments - Configure case treatments (admin)
 router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req, res) => {
     const { caseId } = req.params;
@@ -2530,8 +2560,9 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
         return res.status(400).json({ error: 'treatments array is required' });
     }
 
-    // Verify case exists
-    dbAdapter.get('SELECT id FROM cases WHERE id = ?', [caseId], (err, caseRow) => {
+    // Verify the case exists IN THIS TENANT — the lookup used to ignore the
+    // tenant, so an educator could rewrite another tenant's rubric by id.
+    dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ?', [caseId, tenantId(req)], (err, caseRow) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!caseRow) return res.status(404).json({ error: 'Case not found' });
 
@@ -2559,8 +2590,8 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
                     case_id, treatment_type, medication_id, treatment_name,
                     is_available, is_expected, is_contraindicated,
                     points_if_ordered, feedback_if_ordered, feedback_if_missed,
-                    custom_effect_override
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    custom_effect_override, tenant_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             let inserted = 0;
@@ -2579,7 +2610,8 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
                     t.points_if_ordered ?? 0,
                     t.feedback_if_ordered || null,
                     t.feedback_if_missed || null,
-                    t.custom_effect_override ? JSON.stringify(t.custom_effect_override) : null
+                    t.custom_effect_override ? JSON.stringify(t.custom_effect_override) : null,
+                    tenantId(req)
                 ], function(err) {
                     if (!err) inserted++;
                     pending--;

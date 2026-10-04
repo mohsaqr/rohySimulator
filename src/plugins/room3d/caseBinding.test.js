@@ -39,8 +39,11 @@ describe('casePatient', () => {
             presenting_concern: 'Crushing chest pain for 2 hours',
             background: 'Type 2 diabetes, hypertension',
             allergies: 'Sulfa drugs (rash)',
-            case_title: 'Crushing Chest Pain',
+            // The presenting concern, never the authoring title (which here is
+            // a diagnosis-adjacent "Crushing Chest Pain" / "STEMI presentation").
+            case_title: 'Crushing chest pain for 2 hours',
         });
+        expect(JSON.stringify(patient)).not.toContain('STEMI presentation');
         expect(patient.opening_line).toBe('Doctor, my chest hurts so much.');
         expect(patient.arrival_note).toMatch(/^Maria Mercedes Rodriguez presents with crushing chest pain/);
     });

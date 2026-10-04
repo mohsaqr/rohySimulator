@@ -4,7 +4,7 @@
 // useEffect block, ~line 264). The contract:
 //
 //   1. The active session is persisted to localStorage under the key
-//      `rohy_active_session` as JSON: { activeCase, sessionId, timestamp }.
+//      `rohy_active_session` as JSON: { caseId, sessionId, timestamp } (the case is re-fetched).
 //   2. The browser only fires `storage` events in OTHER tabs of the same
 //      origin — not in the tab that did the write. So if a second tab
 //      opens the same session and writes its own rohy_active_session,
@@ -132,7 +132,7 @@ test.describe('multi-tab session handling', () => {
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
             await seedActiveSession(a.context, {
-                activeCase: seedCase,
+                caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
             });
@@ -161,7 +161,7 @@ test.describe('multi-tab session handling', () => {
                 }, {
                     key: STORAGE_KEY,
                     value: JSON.stringify({
-                        activeCase: seedCase,
+                        caseId: seedCase.id,
                         sessionId: sid,
                         timestamp: Date.now() + 1,
                     }),
@@ -185,7 +185,7 @@ test.describe('multi-tab session handling', () => {
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
             await seedActiveSession(a.context, {
-                activeCase: seedCase,
+                caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
             });
@@ -201,7 +201,7 @@ test.describe('multi-tab session handling', () => {
                 }, {
                     key: STORAGE_KEY,
                     value: JSON.stringify({
-                        activeCase: seedCase,
+                        caseId: seedCase.id,
                         sessionId: sid,
                         timestamp: Date.now(),
                     }),
@@ -229,7 +229,7 @@ test.describe('multi-tab session handling', () => {
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
             await seedActiveSession(a.context, {
-                activeCase: seedCase,
+                caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
             });
@@ -244,7 +244,7 @@ test.describe('multi-tab session handling', () => {
                 }, {
                     key: STORAGE_KEY,
                     value: JSON.stringify({
-                        activeCase: seedCase,
+                        caseId: seedCase.id,
                         sessionId: sid,
                         timestamp: Date.now(),
                     }),
@@ -296,7 +296,7 @@ test.describe('multi-tab session handling', () => {
             const sidA = await startSession(request, baseURL, token, seedCase.id);
 
             await seedActiveSession(a.context, {
-                activeCase: seedCase,
+                caseId: seedCase.id,
                 sessionId: sidA,
                 timestamp: Date.now(),
             });
@@ -318,7 +318,7 @@ test.describe('multi-tab session handling', () => {
                 }, {
                     key: STORAGE_KEY,
                     value: JSON.stringify({
-                        activeCase: seedCase,
+                        caseId: seedCase.id,
                         sessionId: sidB,
                         timestamp: Date.now(),
                     }),
@@ -381,7 +381,7 @@ test.describe('multi-tab session handling', () => {
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
             await seedActiveSession(a.context, {
-                activeCase: seedCase,
+                caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
             });

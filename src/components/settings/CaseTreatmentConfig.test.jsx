@@ -242,3 +242,41 @@ describe('CaseTreatmentConfig inside the case editor', () => {
         expect(screen.getByRole('button', { name: 'Contraindicated' })).toBeInTheDocument();
     });
 });
+
+describe('CaseTreatmentConfig loads the saved rubric from case_treatments', () => {
+    // Regression lock: the editor read the rubric from cases.config.treatments — which students received with the case. It now lives in case_treatments only and the editor loads it from GET /cases/:id/treatments (Phase 0 security fix, 2026-10-04)
+    const saved = [{
+        treatment_type: 'medication', treatment_name: 'Aspirin', medication_id: null,
+        is_available: true, is_expected: true, is_contraindicated: false,
+        points_if_ordered: 10, feedback_if_ordered: 'Good.', feedback_if_missed: 'Give aspirin.', custom_effect_override: null,
+    }];
+    const withRubric = (url) => {
+        if (typeof url === 'string' && url.endsWith('/api/treatment-effects')) return Promise.resolve(jsonResponse({ effects: [effect] }));
+        if (typeof url === 'string' && url.endsWith('/api/cases/case-1/treatments')) return Promise.resolve(jsonResponse({ treatments: saved }));
+        return Promise.resolve(jsonResponse({}));
+    };
+
+    it('loads it into the editor and the case draft when the draft holds none', async () => {
+        fetchSpy.mockImplementation(withRubric);
+        const onUpdate = vi.fn();
+        renderWithProviders(
+            <CaseTreatmentConfig caseId="case-1" caseTreatments={[]} onUpdate={onUpdate} />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+        await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(saved));
+    });
+
+    it('never replaces a working copy the educator already has', async () => {
+        fetchSpy.mockImplementation(withRubric);
+        const onUpdate = vi.fn();
+        const draft = [{ ...saved[0], points_if_ordered: 99 }];
+        renderWithProviders(
+            <CaseTreatmentConfig caseId="case-1" caseTreatments={draft} onUpdate={onUpdate} />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+        expect((await screen.findAllByText('Aspirin')).length).toBeGreaterThan(0);
+        expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith('/api/cases/case-1/treatments'))).toBe(false);
+        expect(onUpdate).not.toHaveBeenCalled();
+    });
+});
+

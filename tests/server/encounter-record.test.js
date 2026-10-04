@@ -191,7 +191,7 @@ describe('the /proxy/llm route wiring', () => {
         // The client names a template; the server decides what that template's
         // type may be told. Trusting a body field here would let any
         // authenticated caller ask for the record as a "discussant".
-        expect(proxySrc).toMatch(/SELECT agent_type, .*FROM agent_templates/);
+        expect(proxySrc).toMatch(/SELECT t\.agent_type, [\s\S]*?FROM agent_templates t/);
         expect(proxySrc).toContain('agentType = agentTemplate?.agent_type || null;');
         expect(proxySrc).not.toMatch(/agentType\s*=\s*(req\.body|agent_llm_config)/);
     });

@@ -161,6 +161,11 @@ function normaliseCaseForStorage(req, res, body) {
     // these as top-level fields; without this merge they were silently dropped.
     const scenarioWithSource = mergeScenarioSource(scenario, { scenario_template, scenario_from_repository, scenario_duration });
     const safeConfig = clampInitialVitals(config || {});
+    // The treatment rubric (expected / contraindicated / points / feedback)
+    // lives in case_treatments only — the editor saves it through
+    // PUT /cases/:id/treatments. Kept in config it reached every student with
+    // the case (Phase 0 security fix, 2026-10-04).
+    delete safeConfig.treatments;
     writeBackPatientGender(safeConfig, patientGender);
     const warnings = [];
     canonicaliseCaseRhythms(safeConfig, scenarioWithSource, warnings);

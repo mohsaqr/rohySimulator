@@ -36,13 +36,15 @@ export function casePatient(activeCase, tRoom = (key) => key) {
         pronouns: PRONOUNS[gender] ?? 'they/them',
         speaker: (name.split(/\s+/)[0] || tRoom('speaker_patient')).toUpperCase(),
         presenting_concern: chief_complaint,
-        background: history.pmh || activeCase?.description || tRoom('see_record'),
+        // Never the case's description or authoring title: both often name the
+        // diagnosis, and this card faces the learner (Phase 0, 2026-10-04).
+        background: history.pmh || tRoom('see_record'),
         // An absent record must read as absent — "No known drug allergy" is a
         // clinical claim the case data has not actually made.
         allergies: demographics.allergies || history.allergies || tRoom('not_recorded'),
         location: tRoom('location'),
         bed_label: tRoom('bed_label').toUpperCase(),
-        case_title: activeCase?.name || chief_complaint,
+        case_title: chief_complaint,
         arrival_note: `${name} presents with ${chief_complaint.charAt(0).toLowerCase()}${chief_complaint.slice(1)}`,
         opening_line: greeting || tRoom('opening_line'),
     };

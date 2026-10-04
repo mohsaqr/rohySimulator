@@ -929,7 +929,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // model can't latch onto fake values.
         const trimOrEmpty = (v) => (v == null ? '' : String(v).trim());
         const personaRole = trimOrEmpty(config.persona_type) || 'the patient';
-        const personaName = trimOrEmpty(config.patient_name) || trimOrEmpty(sourceName) || 'Patient';
+        // Never the case's authoring title: a case without a patient_name made
+        // the patient introduce himself as "Acute Chest Pain - STEMI" (Phase 0).
+        const personaName = trimOrEmpty(config.patient_name) || 'Patient';
         // Role anchor leads. See src/utils/roleAnchor.js. Without this,
         // the admin-authored case.system_prompt (which follows in the
         // INSTRUCTIONS block) can outweigh the PERSONA header alone —
