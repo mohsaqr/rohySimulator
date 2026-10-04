@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import {
     authenticateToken,
     requireAdmin,
+    requireReviewer,
     ROLE_RANKS,
     hasRoleAtLeast,
 } from '../middleware/auth.js';
@@ -50,6 +51,8 @@ import {
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
+import { buildSessionPatientPrompt } from '../services/patientPersona.js';
+import { isKnownLanguage } from '../shared/languages.js';
 import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
 import { normalizeKnowledge, serverBuildsSituation } from '../shared/agentKnowledge.js';
 import {
@@ -120,6 +123,35 @@ const extractUpstreamError = (errText) => {
     } catch { /* not json */ }
     return 'Upstream LLM error';
 };
+
+// GET /api/sessions/:id/patient-prompt — the patient's assembled system prompt
+// for this session, exactly as the proxy builds it (minus the per-turn affect
+// note). Reviewers and above: the DiagnosticBar's "show assembled prompt"
+// inspector. The prompt is built server-side now, so the browser no longer
+// holds a copy to show (Phase 1, 2026-10-04).
+router.get('/sessions/:id/patient-prompt', authenticateToken, requireReviewer, async (req, res) => {
+    try {
+        const built = await buildSessionPatientPrompt({ sessionId: req.params.id, tenant: tenantId(req) });
+        if (!built) return res.status(404).json({ error: 'Session not found' });
+        const templateRow = await dbAdapter.get(`SELECT setting_value FROM platform_settings WHERE setting_key = 'llm_system_prompt_template'`);
+        const caseLanguage = isKnownLanguage(built.patientCase.config?.case_language) ? built.patientCase.config.case_language : null;
+        const prompt = assembleSystemPrompt({
+            system_prompt: built.prompt,
+            systemPromptTemplate: templateRow?.setting_value || '',
+            caseLanguage,
+        });
+        res.json({
+            prompt,
+            chars: prompt.length,
+            case_id: built.patientCase.caseId,
+            template_id: built.template?.templateId ?? null,
+            case_language: caseLanguage,
+        });
+    } catch (err) {
+        req.log.error('patient prompt inspect failed', { error: err.message });
+        res.status(500).json({ error: 'Could not assemble the patient prompt' });
+    }
+});
 
 router.post('/proxy/llm', authenticateToken, async (req, res) => {
     const { messages, system_prompt, session_id, agent_llm_config, session_mode, case_language, student_affect } = req.body;
@@ -307,11 +339,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         if (agent_llm_config !== undefined && agent_llm_config !== null) {
             const namesAgent = typeof agent_llm_config === 'object'
                 && !Array.isArray(agent_llm_config)
-                && (agent_llm_config.case_agent_id != null || !!agent_llm_config.agent_template_id);
+                && (agent_llm_config.case_agent_id != null || !!agent_llm_config.agent_template_id
+                    || agent_llm_config.persona === 'patient');
             if (!namesAgent) {
                 (req.log || routesLlmLog).warn('agent_llm_config names no agent', { user_id: userId, session_id: session_id ?? null });
                 return res.status(400).json({
-                    error: 'agent_llm_config must name an agent (case_agent_id or agent_template_id)',
+                    error: 'agent_llm_config must name an agent (case_agent_id, agent_template_id or persona)',
                     code: 'agent_not_named'
                 });
             }
@@ -372,11 +405,36 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (!agentTemplate) {
                 return res.status(404).json({ error: 'Agent template not available for this session', code: 'template_not_allowed' });
             }
+        } else if (agent_llm_config?.persona === 'patient') {
+            if (!session_id) {
+                return res.status(400).json({ error: 'the patient speaks only inside a session', code: 'session_required' });
+            }
         } else if (!session_id) {
             // No agent named and no session: a free-form system prompt answered
             // on the platform's key, by anyone signed in. Every real caller (the
             // patient chat, the debrief) speaks inside a session (Phase 0).
             return res.status(400).json({ error: 'session_id is required', code: 'session_required' });
+        }
+        // The PATIENT is built server-side (services/patientPersona.js) from
+        // the session's case snapshot, its resolved patient template and the
+        // session's record: the client's system_prompt is ignored for it.
+        // Recognised by the explicit marker, or — for clients that predate it —
+        // by a named template whose stored type is 'patient'. The template the
+        // server resolves wins over any id the client named (Phase 1, 2026-10-04).
+        let serverPatient = null;
+        if (agent_llm_config?.persona === 'patient' || (!caseAgent && agentTemplate?.agent_type === 'patient')) {
+            serverPatient = await buildSessionPatientPrompt({ sessionId: session_id, tenant: tenantId(req) });
+            if (!serverPatient) return res.status(404).json({ error: 'Session not found' });
+            const resolvedId = serverPatient.template?.templateId ?? null;
+            if (resolvedId !== agentTemplateId) {
+                agentTemplateId = resolvedId;
+                agentTemplate = resolvedId == null ? null : await dbAdapter.get(
+                    `SELECT agent_type, llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens
+                       FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+                    [resolvedId, tenantId(req)]
+                );
+            }
+            agentType = 'patient';
         }
         // Every llm_request_log row after this point carries the tenant and
         // the agent the request spoke as (NULLs for a non-agent request).
@@ -409,7 +467,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 agent_type: agentType,
                 agent_template_id: agentTemplateId,
                 case_agent_id: caseAgent?.caseAgentId ?? null,
-                persona: caseAgent ? 'server' : 'client',
+                persona: (caseAgent || serverPatient) ? 'server' : 'client',
             });
         }
 
@@ -787,8 +845,18 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // A server-resolved case agent speaks from its authored prompt; what
         // the client sent is only the situation it reported (none, for a
         // specialist — see above).
-        const casePrompt = caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt;
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: case_language, encounterRecordNote, studentAffectNote });
+        if (serverPatient && typeof system_prompt === 'string' && system_prompt.trim()) {
+            (req.log || routesLlmLog).info('client patient prompt dropped', { session_id, chars: system_prompt.length });
+        }
+        const casePrompt = serverPatient
+            ? serverPatient.prompt
+            : (caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt);
+        // The patient speaks the CASE's language (pinned at creation); the
+        // body's case_language is used only for a legacy case without one.
+        const promptLanguage = serverPatient && isKnownLanguage(serverPatient.patientCase.config?.case_language)
+            ? serverPatient.patientCase.config.case_language
+            : case_language;
+        let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: promptLanguage, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };

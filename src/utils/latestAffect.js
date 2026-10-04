@@ -1,6 +1,6 @@
 // Module-level store for the learner's live Oyon affect (Plan A,
-// todo/plan-a-implementation-spec.md). Mirrors the lastPatientPrompt /
-// lastTtsRequest singleton pattern: OyonCaptureWidget (an App-level sibling
+// todo/plan-a-implementation-spec.md). Mirrors the lastTtsRequest
+// singleton pattern: OyonCaptureWidget (an App-level sibling
 // of ChatInterface — they share no React state) publishes here; ChatInterface
 // reads a snapshot only at send time, so the ~2 Hz sample stream never
 // re-renders the chat.

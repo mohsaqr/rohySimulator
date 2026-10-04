@@ -306,6 +306,18 @@ describe('LLMService.streamMessage', () => {
         expect(sentBody).not.toHaveProperty('provider');
     });
 
+    // Regression lock: a server-built persona must not carry a client prompt — the patient's prompt is built server-side (Phase 1, 2026-10-04)
+    it('sends agent_llm_config.persona and no system_prompt for a server-built persona', async () => {
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) return Promise.resolve(new Response('{}', { status: 200 }));
+            return Promise.resolve(sseResponse(['data: [DONE]\n\n']));
+        });
+        await LLMService.streamMessage(SESSION_ID, MESSAGES, null, undefined, { onDelta: () => {}, persona: 'patient', agentTemplateId: 42 });
+        const sentBody = JSON.parse(fetchMock.mock.calls.find(([u]) => String(u).includes('/proxy/llm'))[1].body);
+        expect(sentBody.agent_llm_config).toEqual({ persona: 'patient' });
+        expect(sentBody).not.toHaveProperty('system_prompt');
+    });
+
     it('forwards agent_llm_config.agent_template_id when caller passes agentTemplateId', async () => {
         // CONTRACT (post-v2.1.0): per-persona LLM routing. When the caller
         // (patient chat, discussant, any agent path) sends an

@@ -145,7 +145,7 @@ export const LLMService = {
      * Caller-initiated abort (the `signal` option) still resolves with '' —
      * that is a cancellation, not a failure.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persistInteractions = true, caseLanguage = null, studentAffect = null, source = null } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persona = null, persistInteractions = true, caseLanguage = null, studentAffect = null, source = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -187,9 +187,11 @@ export const LLMService = {
             const body = {
                 session_id: sessionId,
                 messages: wireMessages(messages),
-                system_prompt: systemPrompt || 'You are a patient.',
                 stream: true
             };
+            // A server-built persona (persona: 'patient') sends no prompt: the
+            // server assembles it and would ignore one anyway (Phase 1).
+            if (!persona) body.system_prompt = systemPrompt || 'You are a patient.';
             if (sessionMode) body.session_mode = sessionMode;
             // Patient-dialogue language — server-side directive injection,
             // same contract as sendMessage above.
@@ -206,7 +208,9 @@ export const LLMService = {
             // Resolution is intentionally two-tier — template → platform —
             // with no per-case, per-session, or per-user overlay. The voice
             // 5-tier resolver taught us what that costs.
-            if (agentTemplateId) {
+            if (persona) {
+                body.agent_llm_config = { persona };
+            } else if (agentTemplateId) {
                 body.agent_llm_config = { agent_template_id: agentTemplateId };
             }
 

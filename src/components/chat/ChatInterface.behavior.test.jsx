@@ -14,8 +14,8 @@
 //   6) Send message via Send button posts to the LLM proxy and renders
 //      the assistant response in the transcript
 //   7) Send message via Enter key works the same as Send button
-//   8) System prompt frozen on mount: a follow-up activeCase prop change
-//      is ignored — the chat keeps the original snapshot's system_prompt
+//   8) The patient request names the persona and sends no prompt — the
+//      server builds it from the session snapshot (Phase 1, 2026-10-04)
 //   9) Stage directions are stripped from the rendered transcript
 //  10) Stage directions are NOT included in the TTS request body
 //  11) Empty case (activeCase=null) renders placeholder, no errors
@@ -73,16 +73,6 @@ const caseFixture = {
             tts_rate: 1.11,
             case_voice: 'en-US-Neural2-CASE',
         },
-    },
-};
-
-const swappedCase = {
-    id: 42, // Same id so the session/agent reload effect is a no-op.
-    name: 'New Case Name',
-    system_prompt: 'You are the NEW patient persona — DO NOT USE THIS.',
-    config: {
-        ...caseFixture.config,
-        patient_name: 'Alice Original',
     },
 };
 
@@ -453,23 +443,6 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         expect(screen.queryByText('Dr. Carmen')).toBeNull();
     });
 
-    // Regression lock: with no patient_name, the patient prompt fell back to the case's authoring title — the patient introduced himself as the diagnosis (Phase 0, 2026-10-04)
-    it('never names the patient after the authoring title when patient_name is missing', async () => {
-        const untitled = { ...caseFixture, name: 'Acute Chest Pain - STEMI', config: { ...caseFixture.config, patient_name: undefined } };
-        server.use(http.get('*/api/sessions/:sid', ({ params }) => HttpResponse.json({
-            session: { id: Number(params.sid), case_snapshot: JSON.stringify({ id: untitled.id, name: untitled.name, system_prompt: untitled.system_prompt, config: untitled.config }) },
-        })));
-        llmResponseText = 'OK.';
-        mount(untitled);
-        const input = await screen.findByPlaceholderText(/message/i);
-        fireEvent.change(input, { target: { value: 'Who are you?' } });
-        fireEvent.submit(input.closest('form'));
-        await waitForLlmRequest();
-        const prompt = llmRequests[llmRequests.length - 1].body.system_prompt;
-        expect(prompt).not.toContain('Acute Chest Pain - STEMI');
-        expect(prompt).toContain('## ROLE');
-    });
-
     it('pressing Enter in the input submits the same as the Send button', async () => {
         // CONTRACT: <form onSubmit> path. Enter inside the input fires the
         // form's submit handler. (No explicit keydown handler — we depend on
@@ -531,10 +504,8 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         expect(ttsForAgent.body.rate).toBe(0.95);
     });
 
-    it('LLM system_prompt embeds the case_snapshot (proving the snapshot consumer path)', async () => {
-        // CONTRACT: buildPatientSystemPrompt prefers caseSnapshot.system_prompt
-        // over the live activeCase prop. We assert by sending a patient
-        // message and checking the body the LLM proxy receives.
+    // Regression lock: the patient's system prompt was assembled here and the proxy used it verbatim. The client now names the persona and sends NO prompt; the server builds it from the session's case snapshot (snapshot-wins, frozen persona and no-authoring-title are locked server-side in tests/server/patient-persona-server-built.test.js) (Phase 1, 2026-10-04)
+    it('names the patient persona and sends no system prompt of its own', async () => {
         llmResponseText = 'I see.';
         mount(caseFixture);
 
@@ -544,46 +515,10 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         await waitForLlmRequest();
 
         const body = llmRequests[llmRequests.length - 1].body;
-        expect(body.system_prompt).toContain('ORIGINAL patient persona');
-        expect(body.system_prompt).toContain('Alice Original');
-    });
-
-    it('system prompt is FROZEN: rerendering with a different activeCase keeps the snapshot', async () => {
-        // CONTRACT: caseSnapshot is fetched once on session-id change. A
-        // prop change to activeCase.system_prompt (without changing the
-        // session) MUST be ignored — chat continues with the snapshot's
-        // system_prompt. This is the Stage-4 audit fix.
-        llmResponseText = 'Mm.';
-        const { rerender } = mount(caseFixture);
-
-        // Wait for the session snapshot fetch to settle.
-        await waitFor(() => {
-            expect(sessionRequests.length).toBeGreaterThan(0);
-        });
-
-        // Rerender with the swapped case (different system_prompt, same id).
-        rerender(
-            <>
-                <ChatInterface
-                    activeCase={swappedCase}
-                    onSessionStart={() => {}}
-                    restoredSessionId={999}
-                    sessionStartTime={Date.now()}
-                    currentVitals={null}
-                />
-                <VoiceModeForcer on={false} />
-            </>
-        );
-
-        const input = await screen.findByPlaceholderText(/message alice original/i);
-        fireEvent.change(input, { target: { value: 'Tell me' } });
-        fireEvent.submit(input.closest('form'));
-        await waitForLlmRequest();
-
-        const body = llmRequests[llmRequests.length - 1].body;
-        // The snapshot wins — the swapped prop's system_prompt MUST NOT appear.
-        expect(body.system_prompt).toContain('ORIGINAL patient persona');
-        expect(body.system_prompt).not.toContain('NEW patient persona');
+        expect(body.agent_llm_config).toEqual({ persona: 'patient' });
+        expect(body).not.toHaveProperty('system_prompt');
+        expect(JSON.stringify(body)).not.toContain('ORIGINAL patient persona');
+        expect(body.session_id).toBe(999);
     });
 
     it('stage directions are stripped from the displayed transcript', async () => {
