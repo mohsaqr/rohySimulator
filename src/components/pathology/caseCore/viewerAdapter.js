@@ -46,6 +46,12 @@ export function toLegacyViewerCase(manifest, {
             downsample: asset?.metadata.downsample,
             slideWidthPx: asset?.metadata.widthPx,
             slideHeightPx: asset?.metadata.heightPx,
+            // The same runtime shape materializeSlideAsset() gives an
+            // unmeasurable catalog slide: the flag the room reads to withhold
+            // the ruler, the counting frame and the magnification presets.
+            // Only the unmeasurable case carries it, so every existing slide
+            // keeps exactly the shape it had.
+            ...(asset?.metadata.measurable === false ? { measurable: false } : {}),
         };
     });
 

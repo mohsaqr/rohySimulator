@@ -16,19 +16,21 @@ import { eventLoggerFor } from '../eventLoggerFor.js';
 /**
  * Host-side tightening of the package's servability gate.
  *
- * `caseDocumentIsServable()` admits a slide on `dzi` alone, but the viewer's
- * `opticalProfile()` THROWS on a slide with no optical description (by design:
- * honest magnification) — so a legacy-shaped, dzi-only document passed the
- * gate and then crashed the room at render time. Until the fix lands upstream
- * and is re-vendored, the host asks the stricter question here: material is a
- * slide the viewer can actually render (dzi + complete optics) or a gross
- * photograph. Total by construction, like the gate it wraps.
+ * `caseDocumentIsServable()` admits a slide on `dzi` alone. The viewer can
+ * render a slide with complete optics, and — since pathoyon 68b3dab (PRV-25) —
+ * a slide that DECLARES itself unmeasurable (`measurable: false`, the starter
+ * library's shape: displayable, no scale bar, no measurement). A dzi-only slide
+ * that claims neither is still excluded: validation reports it as
+ * `missing_wsi_metadata`, and the room would have nothing honest to say about
+ * its scale. Material is such a slide or a gross photograph. Total by
+ * construction, like the gate it wraps.
  */
 function hasRenderableMaterial(stored) {
     const viewer = learnerCase(stored);
     if (!viewer) return false;
     const renderableSlide = (viewer.slides ?? []).some(
-        (slide) => typeof slide?.dzi === 'string' && slide.dzi !== '' && hasOpticalProfile(slide),
+        (slide) => typeof slide?.dzi === 'string' && slide.dzi !== ''
+            && (hasOpticalProfile(slide) || slide.measurable === false),
     );
     const photograph = (viewer.specimens ?? []).some((specimen) => (specimen?.images ?? [])
         .some((image) => typeof image?.src === 'string' && image.src !== ''));

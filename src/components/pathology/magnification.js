@@ -16,7 +16,7 @@
  * the top and letting the reader believe they got there.
  */
 
-import { opticalProfile } from './slideGeometry.js';
+import { hasOpticalProfile, opticalProfile } from './slideGeometry.js';
 
 /**
  * The objective powers a light microscope actually carries, plus 1x.
@@ -124,6 +124,26 @@ export function presetAvailability(slide, maxZoomPixelRatio = 1.1) {
         // preset to a floating-point rounding error in archiveObjective.
         reachable: objective <= ceiling * (1 + 1e-9),
     }));
+}
+
+/**
+ * The presets a VIEWER should offer for this slide — none, when it has no
+ * optical profile.
+ *
+ * `presetAvailability()` throws on such a slide, rightly: there is no honest
+ * answer to "can this reach 10x" without an objective. But a room has to
+ * render one anyway — a slide declared `measurable: false`, or one still
+ * awaiting calibration in the editor — and SlideCanvas already shows it as
+ * "uncalibrated". Offering no objective buttons is the same answer in the
+ * toolbar; asking for them was a render-time crash that took the room down.
+ *
+ * @param {object|null} slide
+ * @param {number} [maxZoomPixelRatio=1.1]
+ * @returns {Array<{objective:number, reachable:boolean}>}
+ */
+export function viewerPresets(slide, maxZoomPixelRatio = 1.1) {
+    if (!slide || !hasOpticalProfile(slide)) return [];
+    return presetAvailability(slide, maxZoomPixelRatio);
 }
 
 /**

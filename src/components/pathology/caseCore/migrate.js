@@ -78,6 +78,11 @@ function migrateSlides(legacy, caseId, blockId, warnings) {
             ...(positive(entry.nativeObjective) ? { nativeObjective: entry.nativeObjective } : {}),
             ...(positive(entry.nativeMpp) ? { nativeMpp: entry.nativeMpp } : {}),
             ...(positive(entry.downsample) ? { downsample: entry.downsample } : {}),
+            // A flat slide DECLARED unmeasurable (materializeSlideAsset's shape)
+            // stays declared. Carried as-is: if it also has optics, structural
+            // validation reports the contradiction instead of migration
+            // silently picking one of the two answers.
+            ...(entry.measurable === false ? { measurable: false } : {}),
         };
         assets.push({
             id: assetId,

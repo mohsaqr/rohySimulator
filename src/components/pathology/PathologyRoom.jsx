@@ -15,7 +15,8 @@ import { createViewportEventTracker } from './viewportEvents.js';
 import { createViewerCommands, runViewerCommand } from './viewerCommands.js';
 import { ANNOTATION_KINDS } from './annotationModel.js';
 import { createReport, snapshotFindings, submitReport } from './report.js';
-import { presetAvailability, formatObjective } from './magnification.js';
+import { viewerPresets, formatObjective } from './magnification.js';
+import { hasOpticalProfile } from './slideGeometry.js';
 import { isTypingTarget, resolveCommand } from './keymap.js';
 import { captureField, download } from './snapshot.js';
 import { toLegacyViewerCase } from './caseCore/viewerAdapter.js';
@@ -353,6 +354,10 @@ export function PathologyRoom({
 
     const takeSnapshot = useCallback(() => {
         if (!viewerRef.current || !slideRef.current) return;
+        // A snapshot burns in a scale bar, and a slide with no optical profile
+        // has none to burn in (captureField would throw). The toolbar button
+        // is disabled for such a slide; this guards the call itself.
+        if (!hasOpticalProfile(slideRef.current)) return;
         const { dataUrl, filename } = captureField({
             viewer: viewerRef.current,
             annotationCanvas: drawControlsRef.current?.canvas() ?? null,
@@ -439,7 +444,10 @@ export function PathologyRoom({
     }
 
     const showGross = module === 'gross';
-    const presets = slide ? presetAvailability(slide, 1.1) : [];
+    // No optical profile (a slide declared unmeasurable, or one not yet
+    // calibrated) → no objective presets, rather than a render-time throw.
+    const presets = viewerPresets(slide, 1.1);
+    const canSnapshot = Boolean(slide) && hasOpticalProfile(slide);
     // Recomputed each render rather than cached: a stale findings list offered
     // to a report would attach measurements the slide no longer carries.
     const findings = slide?.nativeMpp ? snapshotFindings(annotations.annotations, slide) : [];
@@ -498,7 +506,7 @@ export function PathologyRoom({
                         onBookmark={() => commands.bookmark()}
                         adjustments={adjustments}
                         onAdjust={setAdjustments}
-                        onSnapshot={takeSnapshot}
+                        onSnapshot={canSnapshot ? takeSnapshot : undefined}
                         onExport={exportAnnotations}
                         onImport={() => fileInputRef.current?.click()}
                         onClear={annotations.clear}

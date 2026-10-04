@@ -327,11 +327,33 @@ export function addStudioBlock(document, specimenId, fields = {}, idFactory = cr
     return nextDocument(document, { ...document.manifest, blocks: [...document.manifest.blocks, block] });
 }
 
+/**
+ * The case-format half of a catalog revision's optics.
+ *
+ * An UNMEASURABLE revision (`measurable: false`, no optics — the catalog
+ * refuses one that carries both) pins `{ measurable: false }` and nothing
+ * else: no micron scale, no objective, no pixel dimensions, because the
+ * catalog holds none for it and inventing one is the failure this package
+ * exists to prevent. The flag lives in `metadata` because that is where a case
+ * asset says what its pixels physically mean. A measurable revision is pinned
+ * exactly as before, with no flag — its absence is the guarantee that the
+ * optics beside it are complete.
+ */
+function caseAssetMetadata(revision) {
+    if (revision.measurable === false) return { measurable: false };
+    const optics = verifiedOptics(revision.optics);
+    return {
+        ...(optics.slideWidthPx ? { widthPx: optics.slideWidthPx, heightPx: optics.slideHeightPx } : {}),
+        nativeObjective: optics.nativeObjective,
+        nativeMpp: optics.nativeMpp,
+        downsample: optics.downsample,
+    };
+}
+
 /** Turn a ready catalog revision into the canonical asset record a case pins. */
 export function catalogAssetToCaseAsset(catalogAsset) {
     const checked = validateCatalogAsset(catalogAsset);
     const revision = selectReadyRevision(checked);
-    const optics = verifiedOptics(revision.optics);
     const id = deterministicId('asset', checked.id, revision.id);
     const manual = checked.sourceId === 'manual';
     return {
@@ -346,12 +368,7 @@ export function catalogAssetToCaseAsset(catalogAsset) {
                 kind: 'catalog', catalogAssetId: checked.id, revision: revision.id,
                 ...(revision.sourceChecksum ? { checksum: revision.sourceChecksum } : {}),
             },
-        metadata: {
-            ...(optics.slideWidthPx ? { widthPx: optics.slideWidthPx, heightPx: optics.slideHeightPx } : {}),
-            nativeObjective: optics.nativeObjective,
-            nativeMpp: optics.nativeMpp,
-            downsample: optics.downsample,
-        },
+        metadata: caseAssetMetadata(revision),
         renditions: [{
             kind: 'dzi', uri: revision.derivatives.dzi.url,
             ...(revision.derivatives.dzi.checksum ? { checksum: revision.derivatives.dzi.checksum } : {}),
