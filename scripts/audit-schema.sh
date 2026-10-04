@@ -93,7 +93,10 @@ CASE_ID=$(json_get "$OUT/cases.json" "cases.0.id")
 [ -n "$CASE_ID" ] || { fail "No case returned by /api/cases"; exit 1; }
 pass "case_id=$CASE_ID"
 
-section "case_investigations delete cleans investigation_orders"
+# Integrity without data loss: deleting a case lab SOFT-deletes it, so the
+# learners' orders that point at it are kept and still reference a real row.
+# Until rc.6 the delete removed those orders (QA 2026-10-04, PRV-20).
+section "case_investigations delete keeps investigation_orders pointing at a real row"
 LAB_NAME="SchemaAuditLab-$RUN_MARKER"
 LAB_PAYLOAD="$OUT/lab.json"
 python3 - "$LAB_PAYLOAD" "$LAB_NAME" <<'PYEOF'
@@ -123,10 +126,11 @@ curl -s -X POST "${ADMIN_AUTH[@]}" "$API/api/sessions/$LAB_SESSION_ID/order-labs
 BEFORE_ORDERS=$(db_scalar "SELECT COUNT(*) FROM investigation_orders WHERE investigation_id = ?" "$LAB_ID")
 curl -s -X DELETE "${ADMIN_AUTH[@]}" "$API/api/cases/$CASE_ID/labs/$LAB_ID" > "$OUT/lab-delete.json"
 AFTER_ORDERS=$(db_scalar "SELECT COUNT(*) FROM investigation_orders WHERE investigation_id = ?" "$LAB_ID")
-if [ "$BEFORE_ORDERS" -gt 0 ] && [ "$AFTER_ORDERS" = "0" ]; then
-    pass "DELETE /cases/:caseId/labs/:labId removed dependent investigation_orders"
+LAB_SOFT_DELETED=$(db_scalar "SELECT COUNT(*) FROM case_investigations WHERE id = ? AND deleted_at IS NOT NULL" "$LAB_ID")
+if [ "$BEFORE_ORDERS" -gt 0 ] && [ "$AFTER_ORDERS" = "$BEFORE_ORDERS" ] && [ "$LAB_SOFT_DELETED" = "1" ]; then
+    pass "DELETE /cases/:caseId/labs/:labId soft-deleted the lab and kept its $AFTER_ORDERS order(s)"
 else
-    fail "Lab delete cleanup failed (before=$BEFORE_ORDERS after=$AFTER_ORDERS)"
+    fail "Lab delete integrity failed (orders before=$BEFORE_ORDERS after=$AFTER_ORDERS, lab soft-deleted=$LAB_SOFT_DELETED)"
 fi
 
 section "agent_templates delete cleans case_agents"

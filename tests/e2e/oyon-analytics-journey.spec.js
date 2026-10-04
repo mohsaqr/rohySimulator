@@ -80,6 +80,11 @@ async function completeWelcome(page) {
     } catch {
         return false;
     }
+    // Camera consent is an explicit opt-in: the box starts unticked (until
+    // rc.8 it was pre-ticked, so Start alone recorded consent — QA PRV-22).
+    // This journey needs capture, so the learner ticks it.
+    const consent = page.getByRole('checkbox', { name: /Allow camera-based emotion capture/i });
+    if (await consent.count()) await consent.check();
     await page.getByRole('button', { name: /^Start$/ }).click();
     await expect(title).toBeHidden({ timeout: 15_000 });
     return true;

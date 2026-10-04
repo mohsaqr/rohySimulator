@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.10] — 2026-10-04
+
+- **The audits and the e2e journey now hold the new contracts.** `audit-investigations.sh` and
+  `audit-schema.sh` asserted the old behaviour that PRV-20 removed — deleting or bulk-replacing a case
+  lab had to erase the learners' orders. They now assert the orders are kept and still reference a real
+  (soft-deleted) lab row. The Oyon analytics journey ticks the camera-consent box, which no longer comes
+  pre-ticked (PRV-22). `audit-investigations.sh` is also safe to rerun against the same database.
+
 ## [3.0.0-rc.9] — 2026-10-04
 
 - **Case version history in the editor.** Every save was already versioned server-side but nothing in the
