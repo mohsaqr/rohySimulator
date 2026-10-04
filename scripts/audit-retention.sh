@@ -8,11 +8,15 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API="${ROHY_API:-http://localhost:3000}"
 DB_PATH="${ROHY_DB:-$ROOT/server/database.sqlite}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-retention-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
@@ -129,7 +133,7 @@ done
 
 section "Setup"
 RUN_TAG="retention-$$-$(date +%s)"
-PASSWORD="RetentionPass123!"
+PASSWORD="$(audit_random_password)"
 ADMIN_TOK=$(login "$ADMIN_USER" "$ADMIN_PASS" "$OUT/admin-login-payload.json" "$OUT/admin-login.json")
 [ -n "$ADMIN_TOK" ] || { fail "seed admin login failed"; exit 1; }
 ADMIN_AUTH=( -H "Authorization: Bearer $ADMIN_TOK" )

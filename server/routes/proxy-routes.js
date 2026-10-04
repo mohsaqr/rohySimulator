@@ -93,6 +93,11 @@ try {
 
 const router = express.Router();
 
+// The locale pipeline's persona (scripts/translate-locales.mjs). The task —
+// strings, glossary, ICU rules — is in the user message; this only fixes the
+// output contract.
+const LOCALIZATION_SYSTEM_PROMPT = 'You are a precise software localization engine. You output only valid JSON.';
+
 const getPlatformSetting = async (key) => {
     const row = await dbAdapter.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key]);
     return row?.setting_value ?? null;
@@ -341,7 +346,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const namesAgent = typeof agent_llm_config === 'object'
                 && !Array.isArray(agent_llm_config)
                 && (agent_llm_config.case_agent_id != null || !!agent_llm_config.agent_template_id
-                    || agent_llm_config.persona === 'patient' || agent_llm_config.persona === 'discussant');
+                    || agent_llm_config.persona === 'patient' || agent_llm_config.persona === 'discussant'
+                    || agent_llm_config.persona === 'localization');
             if (!namesAgent) {
                 (req.log || routesLlmLog).warn('agent_llm_config names no agent', { user_id: userId, session_id: session_id ?? null });
                 return res.status(400).json({
@@ -410,6 +416,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (!session_id) {
                 return res.status(400).json({ error: `the ${agent_llm_config.persona} speaks only inside a session`, code: 'session_required' });
             }
+        } else if (agent_llm_config?.persona === 'localization') {
+            // The locale pipeline (scripts/translate-locales.mjs) translates UI
+            // strings through the platform model, outside any session. Admins
+            // only — they already hold the platform key — and the system
+            // prompt is the server's, never the caller's.
+            if (!hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
+                return res.status(403).json({ error: 'The localization persona is for administrators', code: 'admin_required' });
+            }
         } else if (!session_id) {
             // No agent named and no session: a free-form system prompt answered
             // on the platform's key, by anyone signed in. Every real caller (the
@@ -464,7 +478,8 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
             agentType = 'patient';
         }
-        if (!caseAgent && !serverPatient && !serverDiscussant) {
+        const serverLocalization = agent_llm_config?.persona === 'localization';
+        if (!caseAgent && !serverPatient && !serverDiscussant && !serverLocalization) {
             // A team template named by id alone (no case_agent_id) was the last
             // way to have the client's own system_prompt answered verbatim. A
             // team agent speaks from its case attachment, so name that.
@@ -908,20 +923,26 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // A server-resolved case agent speaks from its authored prompt; what
         // the client sent is only the situation it reported (none, for a
         // specialist — see above).
-        if ((serverPatient || serverDiscussant) && typeof system_prompt === 'string' && system_prompt.trim()) {
+        if ((serverPatient || serverDiscussant || serverLocalization) && typeof system_prompt === 'string' && system_prompt.trim()) {
             (req.log || routesLlmLog).info('client persona prompt dropped', { session_id, persona: agentType, chars: system_prompt.length });
         }
         const casePrompt = serverPatient
             ? serverPatient.prompt
             : serverDiscussant
                 ? serverDiscussant.prompt
-                : (caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt);
+                : serverLocalization
+                    ? LOCALIZATION_SYSTEM_PROMPT
+                    : buildAgentPersonaPrompt(caseAgent, situation, serverBrief);
         // The patient speaks the CASE's language (pinned at creation); the
         // body's case_language is used only for a legacy case without one.
         const promptLanguage = serverPatient && isKnownLanguage(serverPatient.patientCase.config?.case_language)
             ? serverPatient.patientCase.config.case_language
             : case_language;
-        let fullSystemPrompt = assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: promptLanguage, encounterRecordNote, studentAffectNote });
+        // The localization persona is not a clinical voice: no platform persona
+        // template, no case-language lead, no encounter record, no affect.
+        let fullSystemPrompt = serverLocalization
+            ? casePrompt
+            : assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: promptLanguage, encounterRecordNote, studentAffectNote });
 
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };

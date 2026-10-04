@@ -14,9 +14,13 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-physexam-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 

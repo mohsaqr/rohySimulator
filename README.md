@@ -326,7 +326,7 @@ From `deploy/env.example`. The values shown are the ones the template writes.
 | `npm run bench` | `vitest bench --run` | 3 `.bench.js` files under `bench/` |
 | `npm run license:verify` | licence sync in strict mode plus the licence contract test | `tests/server/license-contract.test.js` |
 
-Shell-level checks: 18 `scripts/audit-*.sh` scripts, `scripts/tech-test.sh` for a live deploy, `scripts/smoke.sh` for liveness, and `deploy/preflight.sh`.
+Shell-level checks: 18 `scripts/audit-*.sh` scripts, `scripts/tech-test.sh` for a live deploy, `scripts/smoke.sh` for liveness, and `deploy/preflight.sh`. The audit scripts carry no credentials: export `ROHY_AUDIT_PASS` (and `ROHY_STUDENT_PASS` for the student checks) with the passwords of the accounts they should use — see `scripts/_audit-lib.sh`.
 
 ## Documentation
 

@@ -18,11 +18,16 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 STUDENT_USER="${ROHY_STUDENT_USER:-student}"
-STUDENT_PASS="${ROHY_STUDENT_PASS:-student123}"
+audit_require ROHY_STUDENT_PASS
+STUDENT_PASS="$ROHY_STUDENT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-alarms-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
@@ -66,7 +71,7 @@ login() {
 section "Login admin + student"
 ADMIN_TOK=$(login "$ADMIN_USER" "$ADMIN_PASS" "$OUT/admin.json")
 if [ -z "$ADMIN_TOK" ]; then
-    fail "Admin login failed — is admin/admin123 seeded?"
+    fail "Admin login failed — check ROHY_AUDIT_USER / ROHY_AUDIT_PASS"
     exit 1
 fi
 pass "Admin logged in"
@@ -74,7 +79,7 @@ ADMIN_ID=$(json_get "$OUT/admin.json" "user.id")
 
 STUDENT_TOK=$(login "$STUDENT_USER" "$STUDENT_PASS" "$OUT/student.json")
 if [ -z "$STUDENT_TOK" ]; then
-    fail "Student login failed — is student/student123 seeded?"
+    fail "Student login failed — check ROHY_STUDENT_USER / ROHY_STUDENT_PASS"
     exit 1
 fi
 pass "Student logged in"

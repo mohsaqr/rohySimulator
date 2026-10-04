@@ -362,20 +362,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
       # The audit-*.sh scripts (except audit-observability.sh, which spins
-      # up its own isolated server) all default to ROHY_API=http://localhost:3000
-      # and `admin / admin123` for login. Start a CI-only server with
-      # ALLOW_DEFAULT_USERS=1 so the seeded admin exists, then tear it
-      # down after the loop. Each script is sequential — they share the
-      # default port and can't run in parallel.
+      # up its own isolated server) default to ROHY_API=http://localhost:3000
+      # and carry NO credentials (CWE-798; scripts/_audit-lib.sh). This job
+      # makes per-run random ones, masks them, provisions the server's admin
+      # with them (ROHY_ADMIN_USERNAME/PASSWORD — not the dev defaults), and
+      # creates the student account through the API. Each script is
+      # sequential — they share the port and can't run in parallel.
+      - name: Generate per-run audit credentials
+        run: |
+          gen() { python3 -c 'import secrets, string; pool = string.ascii_letters + string.digits; print("Aa1" + "".join(secrets.choice(pool) for _ in range(24)))'; }
+          ADMIN_PASS="$(gen)"; STUDENT_PASS="$(gen)"; JWT="$(openssl rand -hex 32)"
+          echo "::add-mask::$ADMIN_PASS"; echo "::add-mask::$STUDENT_PASS"; echo "::add-mask::$JWT"
+          {
+            echo "ROHY_AUDIT_USER=admin"
+            echo "ROHY_AUDIT_PASS=$ADMIN_PASS"
+            echo "ROHY_STUDENT_USER=student"
+            echo "ROHY_STUDENT_PASS=$STUDENT_PASS"
+            echo "AUDIT_JWT_SECRET=$JWT"
+          } >> "$GITHUB_ENV"
       - name: Start CI server (port 3000) for audit scripts
         run: |
           mkdir -p /tmp/rohy-audit
           PORT=3000 \
           ROHY_DB=/tmp/rohy-audit/audit.sqlite \
-          JWT_SECRET=audit-ci-only-secret-do-not-reuse-anywhere \
+          JWT_SECRET="$AUDIT_JWT_SECRET" \
           NODE_ENV=production \
           FRONTEND_URL=http://localhost:3000 \
-          ALLOW_DEFAULT_USERS=1 \
+          ROHY_ADMIN_USERNAME="$ROHY_AUDIT_USER" \
+          ROHY_ADMIN_PASSWORD="$ROHY_AUDIT_PASS" \
+          ROHY_ADMIN_EMAIL=admin@audit.local \
           ROHY_DISABLE_AUTH_RATE_LIMIT=1 \
           OYON_ENABLED=1 \
           nohup node server/server.js > /tmp/rohy-audit/server.log 2>&1 &
@@ -390,6 +405,14 @@ jobs:
           echo "✗ audit server failed to boot in 60s"
           tail -100 /tmp/rohy-audit/server.log
           exit 1
+      - name: Create the audit student account
+        run: |
+          TOKEN=$(curl -sf -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$ROHY_AUDIT_USER\",\"password\":\"$ROHY_AUDIT_PASS\"}" | python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])')
+          echo "::add-mask::$TOKEN"
+          curl -sf -X POST http://localhost:3000/api/users/create -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" \
+            -d "{\"username\":\"$ROHY_STUDENT_USER\",\"name\":\"Audit Student\",\"email\":\"student@audit.local\",\"password\":\"$ROHY_STUDENT_PASS\",\"role\":\"student\"}" > /dev/null
+          echo "✓ student account created"
       - name: Run audit scripts
         # Most audit-*.sh scripts hit the API only, but audit-migrations.sh
         # and audit-schema.sh open the SQLite DB directly. They default to
@@ -399,11 +422,11 @@ jobs:
         # JWT_SECRET must match the value the CI server was started with:
         # audit-retention.sh spawns scripts/retention-sweep.js as a
         # subprocess, which imports server/middleware/auth.js — that
-        # process.exit(1)s if JWT_SECRET is unset. Step env doesn't inherit
-        # the server-start step's env, so set it here too (same value).
+        # process.exit(1)s if JWT_SECRET is unset. It is the per-run value
+        # generated above (masked), never a literal in this file.
         env:
           ROHY_DB: /tmp/rohy-audit/audit.sqlite
-          JWT_SECRET: audit-ci-only-secret-do-not-reuse-anywhere
+          JWT_SECRET: ${{ env.AUDIT_JWT_SECRET }}
           # audit-voices.sh defaults to kokoro (the clean-install TTS
           # default) — no CI-specific override needed. Set
           # ROHY_AUDIT_TTS_PROVIDERS here only if CI ever provisions piper

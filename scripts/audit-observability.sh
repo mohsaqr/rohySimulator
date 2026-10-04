@@ -7,6 +7,13 @@
 
 set -eo pipefail
 
+# Credentials come from the environment or are generated here, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+# This script boots its own throwaway server, so it provisions that server's
+# admin (and JWT secret) with values made for this run.
+OBS_ADMIN_PASS="$(audit_random_password)"
+OBS_JWT_SECRET="$(audit_random_password)$(audit_random_password)"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-observability-audit-XXXXXX")
 trap 'cleanup' EXIT
@@ -113,7 +120,9 @@ section "Start isolated server"
     cd "$ROOT"
     PORT="$PORT" \
     ROHY_DB="$DB_PATH" \
-    JWT_SECRET="observability-audit-secret" \
+    JWT_SECRET="$OBS_JWT_SECRET" \
+    ROHY_ADMIN_USERNAME="admin" \
+    ROHY_ADMIN_PASSWORD="$OBS_ADMIN_PASS" \
     ROHY_LOG_LEVEL="debug" \
     ROHY_SLOW_QUERY_MS="0" \
     ROHY_LOG_SKIP_PATHS="/api/proxy/llm,/health,/@vite*,/src*,/node_modules*" \
@@ -151,7 +160,7 @@ fi
 
 section "Authenticated request and slow query"
 curl -s -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"admin123"}' > "$OUT/login.json"
+    -d "{\"username\":\"admin\",\"password\":\"$OBS_ADMIN_PASS\"}" > "$OUT/login.json"
 TOKEN=$(json_get "$OUT/login.json" "token")
 if [ -n "$TOKEN" ]; then
     pass "admin login succeeded"
