@@ -297,7 +297,9 @@ const SRC_HINT = {
     [SOURCES.CLINICAL]: 'Vital alarms, contraindication warnings. Critical clinical alarms cannot be fully muted.',
     [SOURCES.SYSTEM]: 'API failures, TTS errors, validation problems.',
     [SOURCES.USER]: 'Order confirmations, save success, light info toasts.',
-    [SOURCES.TELEMETRY]: 'xAPI learning events. Mute to stop sending events to the backend (your view only).',
+    // Muting never stops the record (routing.js keeps BACKEND under every
+    // mute); the old hint promised it did (QA 2026-10-04, PRV-35).
+    [SOURCES.TELEMETRY]: 'xAPI learning events. Muting hides them from your console; they are still recorded for your course.',
 };
 
 function Section({ title, children }) {

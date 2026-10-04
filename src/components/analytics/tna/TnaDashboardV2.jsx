@@ -646,7 +646,9 @@ export default function TnaDashboardV2({ onClose, embedded = false, defaultSourc
 
         return {
             events: summaryD.totalActivities ?? events.length,
-            users: summaryD.uniqueUsers ?? new Set(events.map((e) => e?.user_id).filter((v) => v != null)).size,
+            // The card says "Students": learners only, never the staff who
+            // tested a case (PRV-38). Older servers lack uniqueLearners.
+            users: summaryD.uniqueLearners ?? summaryD.uniqueUsers ?? new Set(events.map((e) => e?.user_id).filter((v) => v != null)).size,
             sessions: summaryD.uniqueSessions ?? new Set(events.map((e) => e?.session_id).filter(Boolean)).size,
             cases: caseCount,
             resources: objectCount,

@@ -1,3 +1,4 @@
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import renderWithProviders from '../../../tests/utils/renderWithProviders.jsx';
@@ -200,5 +201,44 @@ describe('CaseTreatmentConfig mutual exclusion (bug report 2.9.15 #8)', () => {
             is_expected: false,
             is_contraindicated: true,
         });
+    });
+});
+
+// Regression lock: the editor's Save (or any parent re-render) wiped unsaved treatment marks, and only the step's own button ever persisted them (QA 2026-10-04, PRV-26)
+describe('CaseTreatmentConfig inside the case editor', () => {
+    // Mirrors ConfigPanel: it owns the case draft, passes
+    // `config?.treatments || []` (a new array every render) and re-renders for
+    // reasons of its own — an auto-save, a step change.
+    function EditorHarness({ onDraft }) {
+        const [draft, setDraft] = React.useState({ config: {} });
+        const [, setTick] = React.useState(0);
+        React.useEffect(() => { onDraft(draft); }, [draft, onDraft]);
+        return (
+            <>
+                <button type="button" onClick={() => setTick(n => n + 1)}>parent re-render</button>
+                <CaseTreatmentConfig
+                    caseId="case-1"
+                    caseTreatments={draft.config?.treatments || []}
+                    onUpdate={(treatments) => setDraft(prev => ({ ...prev, config: { ...prev.config, treatments } }))}
+                />
+            </>
+        );
+    }
+
+    it('pushes a mark into the case draft at once and keeps it across a parent re-render', async () => {
+        let latest = null;
+        renderWithProviders(<EditorHarness onDraft={(d) => { latest = d; }} />,
+            { withAuth: false, withNotifications: false, withToast: false });
+        fireEvent.click(await screen.findByText('Aspirin'));
+        fireEvent.click(screen.getByRole('button', { name: 'Contraindicated' }));
+
+        await waitFor(() => expect(latest?.config?.treatments?.[0]).toMatchObject({
+            treatment_name: 'Aspirin', is_contraindicated: true,
+        }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'parent re-render' }));
+        await waitFor(() => expect(latest?.config?.treatments?.[0]?.is_contraindicated).toBe(true));
+        // The mark is still shown, not reset to an empty list.
+        expect(screen.getByRole('button', { name: 'Contraindicated' })).toBeInTheDocument();
     });
 });

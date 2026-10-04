@@ -41,10 +41,24 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
         fetchTreatments();
     }, []);
 
-    // Update configured treatments when caseTreatments prop changes
+    // Follow the parent's copy — but only when its CONTENT differs. The parent
+    // passes `config?.treatments || []`, a new array every render, and this
+    // effect used to copy it in unconditionally: any parent re-render (the
+    // editor's Save, an auto-save) wiped marks the educator had just made
+    // (QA 2026-10-04, PRV-26). Every mark is now also pushed up via onUpdate
+    // as it is made, so the parent's copy never lags behind this one.
     useEffect(() => {
-        setConfiguredTreatments(caseTreatments || []);
+        const incoming = caseTreatments || [];
+        setConfiguredTreatments(prev => (JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming));
     }, [caseTreatments]);
+
+    // Apply a new configured list here AND in the parent's case draft, so the
+    // editor's own Save persists it (ConfigPanel saves config.treatments to the
+    // case_treatments table alongside the labs).
+    const applyConfigured = (next) => {
+        setConfiguredTreatments(next);
+        if (onUpdate) onUpdate(next);
+    };
 
     const fetchTreatments = async () => {
         try {
@@ -72,7 +86,8 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
 
     // Update treatment configuration
     const updateTreatmentConfig = (treatment, updates) => {
-        setConfiguredTreatments(prev => {
+        applyConfigured((() => {
+            const prev = configuredTreatments;
             const existing = prev.find(
                 t => t.treatment_name === treatment.treatment_name && t.treatment_type === treatment.treatment_type
             );
@@ -96,14 +111,14 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
                     ...updates
                 }];
             }
-        });
+        })());
     };
 
     // Remove treatment configuration
     const removeTreatmentConfig = (treatmentName, treatmentType) => {
-        setConfiguredTreatments(prev =>
-            prev.filter(t => !(t.treatment_name === treatmentName && t.treatment_type === treatmentType))
-        );
+        applyConfigured(configuredTreatments.filter(
+            t => !(t.treatment_name === treatmentName && t.treatment_type === treatmentType)
+        ));
     };
 
     // Save configurations

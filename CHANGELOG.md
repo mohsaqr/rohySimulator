@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.9] — 2026-10-04
+
+- **Case version history in the editor.** Every save was already versioned server-side but nothing in the
+  UI reached it; a History button now lists a case's versions and restores one after an explicit second
+  click.
+- **Treatment configuration saves.** The case editor dropped treatment edits (local state reset on every
+  parent render, and the treatments were never sent); they now persist with the case.
+- **Learners pick a patient, not a diagnosis.** The student case list shows the patient's name and chief
+  complaint instead of the authoring title and summary.
+- **Admin create-user follows the password policy** with the same live checklist as registration, and
+  will not submit a password the server would reject.
+- **Setup checklist** reads the remembered AI-engine test; **settings copy** no longer promises a muted
+  telemetry channel stops recording, and the default-voice help says defaults never replace a configured
+  voice. The analytics "Students" card counts students only.
+
 ## [3.0.0-rc.8] — 2026-10-04
 
 - **The diagnosis stays out of prompts unless an agent is given it.** The authoring title and summary
