@@ -122,5 +122,6 @@
   "unmute_alarms": "Poista hälytysten mykistys",
   "unsilence_title": "Poista vaimennus napsauttamalla — hälytys laukeaa uudelleen",
   "using_case_vitals": "Käytetään tapauksen vitaaleja",
-  "wide_qrs": "Leveä QRS"
+  "wide_qrs": "Leveä QRS",
+  "close_controls": "Sulje simulaattorin ohjaimet"
 }

@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "non disponibile",
   "voice_group_other": "Altro",
   "voice_unplayable_note": "La voce configurata {requested} non può essere riprodotta su {provider} — non verrà pronunciato nulla finché non viene corretto.",
-  "yes": "Sì"
+  "yes": "Sì",
+  "gender_male": "Maschio",
+  "gender_female": "Femmina",
+  "gender_other": "Altro"
 }

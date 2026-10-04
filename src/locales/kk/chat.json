@@ -92,5 +92,7 @@
   "wait_relative_0": "Отбасына хабарласуда…",
   "wait_relative_1": "Отбасы күту аймағынан жолға шықты",
   "wait_relative_2": "Отбасы бөлмеге жақындап келеді",
-  "waiting_for_response": "Жауап күтілуде..."
+  "waiting_for_response": "Жауап күтілуде...",
+  "composer_label": "Хабарлама",
+  "send_message": "Хабарлама жіберу"
 }

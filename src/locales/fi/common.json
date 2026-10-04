@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "ei saatavilla",
   "voice_group_other": "Muu",
   "voice_unplayable_note": "Määritetty ääni {requested} ei toistu palvelussa {provider} — mitään ei puhuta ennen kuin tämä on korjattu.",
-  "yes": "Kyllä"
+  "yes": "Kyllä",
+  "gender_male": "Mies",
+  "gender_female": "Nainen",
+  "gender_other": "Muu"
 }

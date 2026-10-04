@@ -122,5 +122,6 @@
   "unmute_alarms": "Stummschaltung aufheben",
   "unsilence_title": "Klicken, um Stummschaltung aufzuheben – Alarm wird erneut ausgelöst",
   "using_case_vitals": "Fall-Vitalparameter werden verwendet",
-  "wide_qrs": "Breiter QRS"
+  "wide_qrs": "Breiter QRS",
+  "close_controls": "Simulatorsteuerung schließen"
 }

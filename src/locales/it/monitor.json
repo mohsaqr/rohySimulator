@@ -122,5 +122,6 @@
   "unmute_alarms": "Riattiva allarmi",
   "unsilence_title": "Clicca per riattivare — l'allarme suonerà di nuovo",
   "using_case_vitals": "In uso i parametri vitali del caso",
-  "wide_qrs": "QRS largo"
+  "wide_qrs": "QRS largo",
+  "close_controls": "Chiudi i controlli del simulatore"
 }

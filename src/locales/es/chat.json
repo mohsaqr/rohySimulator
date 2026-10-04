@@ -92,5 +92,7 @@
   "wait_relative_0": "Contactando a la familia…",
   "wait_relative_1": "Familia en camino desde la sala de espera",
   "wait_relative_2": "La familia se está acercando a la habitación",
-  "waiting_for_response": "Esperando respuesta..."
+  "waiting_for_response": "Esperando respuesta...",
+  "composer_label": "Mensaje",
+  "send_message": "Enviar mensaje"
 }

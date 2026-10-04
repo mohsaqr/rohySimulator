@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "indisponible",
   "voice_group_other": "Autre",
   "voice_unplayable_note": "La voix configurée {requested} ne peut pas être lue sur {provider} — rien ne sera prononcé tant que ce problème n’est pas corrigé.",
-  "yes": "Oui"
+  "yes": "Oui",
+  "gender_male": "Homme",
+  "gender_female": "Femme",
+  "gender_other": "Autre"
 }

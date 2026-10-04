@@ -42,7 +42,7 @@
   "attention_v2_subtitle": "Focus, ouverture oculaire, regard hors écran et qualité du signal pour les filtres actuels.",
   "attention_v2_title": "Attention 2",
   "capture_timeline_hint": "Expression dominante par fenêtre — la couleur de la barre est l'émotion, sa hauteur la probabilité. La plus récente à droite.",
-  "card_note": "L'analyse s'exécute localement dans votre navigateur ; les enregistrements ne sont conservés qu'avec votre consentement ({version}). Vous pouvez arrêter la capture à tout moment depuis la pastille caméra et modifier ce choix dans Paramètres → Oyon.",
+  "card_note": "L'analyse s'exécute localement dans votre navigateur; les enregistrements ne sont conservés qu'avec votre consentement. Vous pouvez arrêter la capture à tout moment depuis la pastille caméra et modifier ce choix dans Paramètres → Oyon.",
   "card_title": "Capture des émotions",
   "card_toggle": "Autoriser la capture des émotions par caméra pendant mes sessions",
   "case_fallback": "cas {id}",
@@ -283,7 +283,7 @@
   "reconsent_item_discourse": "Le style des messages que vous envoyez, par exemple si vous posez une question ou si vous expliquez.",
   "reconsent_item_interaction": "Vos déplacements à l'écran — clics, défilement et le panneau qui retient votre attention.",
   "reconsent_item_typing": "Le rythme de frappe dans la zone de message — pauses et rafales, jamais les mots que vous écrivez.",
-  "reconsent_note": "L'analyse s'exécute localement dans votre navigateur et seuls des résumés sont conservés ({version}). Refuser laisse votre choix actuel de capture des émotions exactement tel quel, et vous pouvez modifier l'un ou l'autre dans Paramètres → Oyon.",
+  "reconsent_note": "L'analyse s'exécute localement dans votre navigateur et seuls des résumés sont conservés. Refuser laisse votre choix actuel de capture des émotions exactement tel quel, et vous pouvez modifier l'un ou l'autre dans Paramètres → Oyon.",
   "reconsent_title": "Nous devons vous redemander votre accord pour la capture",
   "room_chat": "Patient (principal)",
   "room_consultant": "Discutant",
@@ -408,5 +408,5 @@
   "zone_top_right": "en haut à droite",
   "reconsent_item_voice": "La façon dont vous sonnez lorsque vous parlez au patient — hauteur, volume et pauses, résumés pour chaque prise de parole, ainsi que les moments où vous parlez ou vous taisez au cours de celle-ci. L'enregistrement audio lui-même n'est pas conservé.",
   "reconsent_item_ai_assist": "Lorsque l'application vous propose une suggestion d'IA, si vous l'acceptez, la refusez ou l'ignorez.",
-  "reconsent_note_voice": "L'analyse s'exécute localement dans votre navigateur. Les mesures sont conservées, jamais l'enregistrement audio ({version}). Le microphone n'est utilisé que pendant que vous parlez. Refuser laisse votre choix actuel exactement tel quel, et vous pouvez le modifier dans Paramètres → Oyon."
+  "reconsent_note_voice": "L'analyse s'exécute localement dans votre navigateur. Les mesures sont conservées, jamais l'enregistrement audio. Le microphone n'est utilisé que pendant que vous parlez. Refuser laisse votre choix actuel exactement tel quel, et vous pouvez le modifier dans Paramètres → Oyon."
 }

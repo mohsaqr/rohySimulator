@@ -73,5 +73,13 @@
   "urgency_routine": "Routine",
   "urgency_stat": "STAT",
   "urgency_stat_bolus": "STAT (bolo)",
-  "warning_prefix": "Attenzione: {message}"
+  "warning_prefix": "Attenzione: {message}",
+  "search_placeholder_medication": "Cerca farmaci…",
+  "search_placeholder_iv_fluid": "Cerca fluidi EV…",
+  "search_placeholder_oxygen": "Cerca ossigenoterapia…",
+  "search_placeholder_nursing": "Cerca assistenza infermieristica…",
+  "dose_unit_label": "Unità di dose",
+  "rate_unit_label": "Unità di velocità",
+  "search_treatments_label": "Cerca trattamenti",
+  "close_order_form": "Chiudi il modulo di prescrizione"
 }

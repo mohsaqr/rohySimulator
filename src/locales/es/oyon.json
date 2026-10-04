@@ -42,7 +42,7 @@
   "attention_v2_subtitle": "Foco, apertura ocular, mirada fuera de pantalla y calidad de la señal para los filtros actuales.",
   "attention_v2_title": "Atención 2",
   "capture_timeline_hint": "Expresión dominante por ventana: el color de la barra es la emoción y su altura, la probabilidad. La más nueva a la derecha.",
-  "card_note": "El análisis se ejecuta localmente en su navegador; las grabaciones solo se almacenan con su consentimiento ({version}). Puede detener la captura en cualquier momento desde el indicador de cámara y cambiar esta elección en Configuración → Oyon.",
+  "card_note": "El análisis se ejecuta localmente en su navegador; las grabaciones solo se almacenan con su consentimiento. Puede detener la captura en cualquier momento desde el indicador de cámara y cambiar esta elección en Configuración → Oyon.",
   "card_title": "Captura de emociones",
   "card_toggle": "Permitir la captura de emociones por cámara durante mis sesiones",
   "case_fallback": "caso {id}",
@@ -283,7 +283,7 @@
   "reconsent_item_discourse": "El estilo de los mensajes que envías, por ejemplo si preguntas o explicas.",
   "reconsent_item_interaction": "Cómo te mueves por la pantalla: clics, desplazamiento y qué panel tiene tu atención.",
   "reconsent_item_typing": "El ritmo al escribir en el cuadro de mensajes: pausas y ráfagas, nunca las palabras que escribes.",
-  "reconsent_note": "El análisis se ejecuta localmente en tu navegador y solo se guardan resúmenes ({version}). Decir que no deja tu elección actual sobre la captura de emociones tal como está; puedes cambiar cualquiera de las dos en Ajustes → Oyon.",
+  "reconsent_note": "El análisis se ejecuta localmente en tu navegador y solo se guardan resúmenes. Decir que no deja tu elección actual sobre la captura de emociones tal como está; puedes cambiar cualquiera de las dos en Ajustes → Oyon.",
   "reconsent_title": "Necesitamos volver a preguntarte sobre la captura",
   "room_chat": "Paciente (principal)",
   "room_consultant": "Consultor",
@@ -408,5 +408,5 @@
   "zone_top_right": "arriba derecha",
   "reconsent_item_voice": "Cómo suenas mientras hablas con el paciente: tono, volumen y pausas, resumidos para cada turno, y en qué momentos del turno hablas o guardas silencio. La grabación de audio en sí no se guarda.",
   "reconsent_item_ai_assist": "Cuando la aplicación te ofrece una sugerencia de IA, si la aceptas, la rechazas o la descartas.",
-  "reconsent_note_voice": "El análisis se ejecuta localmente en tu navegador. Se guardan mediciones, nunca la grabación de audio ({version}). El micrófono solo se usa mientras hablas. Decir que no deja tu elección actual tal como está; puedes cambiarla en Ajustes → Oyon."
+  "reconsent_note_voice": "El análisis se ejecuta localmente en tu navegador. Se guardan mediciones, nunca la grabación de audio. El micrófono solo se usa mientras hablas. Decir que no deja tu elección actual tal como está; puedes cambiarla en Ajustes → Oyon."
 }

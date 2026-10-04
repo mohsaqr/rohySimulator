@@ -92,5 +92,7 @@
   "wait_relative_0": "Tavoitellaan omaisia…",
   "wait_relative_1": "Omaiset ovat tulossa odotusaulasta",
   "wait_relative_2": "Omaiset lähestyvät huonetta",
-  "waiting_for_response": "Odotetaan vastausta..."
+  "waiting_for_response": "Odotetaan vastausta...",
+  "composer_label": "Viesti",
+  "send_message": "Lähetä viesti"
 }

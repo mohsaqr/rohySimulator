@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.5] — 2026-10-04
+
+- **Counts read as words, not "(s)".** "1 new results", "Ordered 1 test(s)" and "1 study(s)" are now
+  real plurals in every language whose nouns inflect (ICU), so German, Finnish, Spanish, French,
+  Swedish and Italian read naturally for one and for many.
+- **Per-category search prompts.** The treatment search placeholder is one whole sentence per category
+  instead of a lower-cased category spliced into "Search {category}…", which lower-cased German nouns.
+- **New strings in every language.** Labels added for accessibility, the case version history, the
+  debrief composer, gender labels and the setup-wizard copy are translated into de, es, it, fi, sv, fr
+  and kk; the lab and radiology report header no longer carries the retired "VipSim" name.
+
 ## [3.0.0-rc.4] — 2026-10-03
 
 - **Writes answer after they commit.** Six admin and educator write routes (delete a user, delete one or

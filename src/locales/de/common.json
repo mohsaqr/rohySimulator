@@ -298,5 +298,8 @@
   "voice_engine_unavailable": "nicht verfügbar",
   "voice_group_other": "Sonstige",
   "voice_unplayable_note": "Die konfigurierte Stimme {requested} kann auf {provider} nicht abgespielt werden — es wird nichts gesprochen, bis das behoben ist.",
-  "yes": "Ja"
+  "yes": "Ja",
+  "gender_male": "Männlich",
+  "gender_female": "Weiblich",
+  "gender_other": "Divers"
 }

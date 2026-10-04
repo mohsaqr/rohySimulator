@@ -122,5 +122,6 @@
   "unmute_alarms": "Slå på larmljud",
   "unsilence_title": "Klicka för att häva tystningen — larmet ljuder igen",
   "using_case_vitals": "Använder fallets vitalparametrar",
-  "wide_qrs": "Breda QRS"
+  "wide_qrs": "Breda QRS",
+  "close_controls": "Stäng simulatorkontrollerna"
 }

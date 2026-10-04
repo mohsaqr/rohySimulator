@@ -11,6 +11,7 @@
   "close_summary": "Close summary",
   "close_transcript": "Close transcript",
   "composer_placeholder": "Ask the discussant anything…",
+  "composer_replying_to": "The discussant asked",
   "debrief_missed_heading": "Expected treatments not ordered",
   "debrief_missed_pending": "Revealed when the session ends.",
   "debrief_none_missed": "No expected treatments were missed.",

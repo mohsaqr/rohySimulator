@@ -3729,6 +3729,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.case_untitled_patient": {
+    "src": "e046af18ab66",
+    "tgt": "55871fcecfd8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.cases_available": {
     "src": "b0a610dd90f7",
     "tgt": "807cbd235b33",
@@ -3780,8 +3790,18 @@
     "risk": "low"
   },
   "authoring_config.chat_doctor_name_help": {
-    "src": "36ea3c279c62",
-    "tgt": "ab4c33b19b79",
+    "src": "cb159298f598",
+    "tgt": "e5faf6a6df93",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.chat_doctor_name_placeholder": {
+    "src": "84a31a61ac19",
+    "tgt": "caf2caff013a",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -4180,8 +4200,8 @@
     "risk": "low"
   },
   "authoring_config.demo_case_language_help": {
-    "src": "8dec43f89bcb",
-    "tgt": "58026196f5b6",
+    "src": "a50df918891e",
+    "tgt": "dd2df84a89c8",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -8439,6 +8459,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.title_version_history": {
+    "src": "a6df11e706c5",
+    "tgt": "9e889076d273",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.toast_add_agent_failed": {
     "src": "a355df47c9aa",
     "tgt": "d70a0273655b",
@@ -9052,6 +9082,146 @@
   "authoring_config.userfield_title": {
     "src": "44577b16644f",
     "tgt": "bc8513c87847",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_history_close": {
+    "src": "c960f6207629",
+    "tgt": "1ca8716366ef",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_history_empty": {
+    "src": "745127105a41",
+    "tgt": "48cf51e869db",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_history_load_failed": {
+    "src": "0f74e8686b2d",
+    "tgt": "e42074c5bc1d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_history_loading": {
+    "src": "9780e2c99c1b",
+    "tgt": "1ef2f8f6812a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_history_title": {
+    "src": "498bb3f45bb8",
+    "tgt": "a421da5aa3ff",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_label": {
+    "src": "f8b9f81427a5",
+    "tgt": "8cbe99d237ef",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_latest": {
+    "src": "5e1e2bcac305",
+    "tgt": "e8b68e50710d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restore": {
+    "src": "a76e13b98392",
+    "tgt": "63cbe292f9cd",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restore_cancel": {
+    "src": "19766ed6ccb2",
+    "tgt": "2f5c3b9cd7fe",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restore_confirm": {
+    "src": "4f4077f3910c",
+    "tgt": "50668288dcd1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restore_failed": {
+    "src": "74c7cd569b21",
+    "tgt": "338389698f24",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restore_yes": {
+    "src": "2ff3b676c16c",
+    "tgt": "63cbe292f9cd",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restored": {
+    "src": "2a4d7f3db627",
+    "tgt": "7cfb6a0b4adc",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.version_restoring": {
+    "src": "5a4918e0201c",
+    "tgt": "ccb1bf43948a",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -17179,6 +17349,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.composer_label": {
+    "src": "2f77668a9dfb",
+    "tgt": "ad2e2e470611",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.emotion_afraid": {
     "src": "622b605ba6f4",
     "tgt": "a588bd822a83",
@@ -17572,6 +17752,16 @@
   "chat.patient_turn_in_flight": {
     "src": "d66e9816593f",
     "tgt": "0cd74170c8fe",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.send_message": {
+    "src": "93a26b1eaff9",
+    "tgt": "777e2843d896",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -18152,6 +18342,36 @@
   "common.error_boundary_title": {
     "src": "8147f06ae657",
     "tgt": "f770c0fdd3d0",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.gender_female": {
+    "src": "e8cca808ae5a",
+    "tgt": "726d7b8a96a2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.gender_male": {
+    "src": "03f8c1273e3d",
+    "tgt": "e83f0e95b8eb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.gender_other": {
+    "src": "f97e9da0e3b8",
+    "tgt": "dee71d1ef979",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -21092,6 +21312,16 @@
   "discussion.composer_placeholder": {
     "src": "05dcdd0f8bac",
     "tgt": "0fc862344d0b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "discussion.composer_replying_to": {
+    "src": "11e420e55e3d",
+    "tgt": "5920a7aecbdb",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -26290,7 +26520,7 @@
     "risk": "clinical"
   },
   "investigations.dashboard_ready_highlight_lab": {
-    "src": "c25e4b51ad16",
+    "src": "86c7c500a8a2",
     "tgt": "1235fd4f510a",
     "state": "machine",
     "origin": "machine",
@@ -26300,7 +26530,7 @@
     "risk": "clinical"
   },
   "investigations.dashboard_ready_highlight_radiology": {
-    "src": "3fe9bbece0b2",
+    "src": "87c5fbb89ad5",
     "tgt": "3a47fe2a963d",
     "state": "machine",
     "origin": "machine",
@@ -26499,6 +26729,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "investigations.group_filter_label": {
+    "src": "803c1a66fcfb",
+    "tgt": "08b3559214db",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "investigations.group_general": {
     "src": "c910d474dcd7",
     "tgt": "67c06eaa8d56",
@@ -26650,8 +26890,8 @@
     "risk": "clinical"
   },
   "investigations.medical_center": {
-    "src": "f24cbf639dc6",
-    "tgt": "f24cbf639dc6",
+    "src": "e69968929249",
+    "tgt": "0b7c80cef218",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -27740,8 +27980,8 @@
     "risk": "clinical"
   },
   "investigations.toast_ordered_lab": {
-    "src": "b447e486392d",
-    "tgt": "31b537cecfde",
+    "src": "669f195d6a6b",
+    "tgt": "aaa04de21f9c",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -27750,8 +27990,8 @@
     "risk": "clinical"
   },
   "investigations.toast_ordered_lab_instant": {
-    "src": "2f9b9f544487",
-    "tgt": "d7dc5eea931d",
+    "src": "c92fb69b1d6e",
+    "tgt": "0ad30b4d8ab3",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -27760,8 +28000,8 @@
     "risk": "clinical"
   },
   "investigations.toast_ordered_radiology": {
-    "src": "0e39d9c3ce9f",
-    "tgt": "7ebae5a3a1c9",
+    "src": "b082b9772597",
+    "tgt": "c53ed9ea5082",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -27770,8 +28010,8 @@
     "risk": "clinical"
   },
   "investigations.toast_ordered_radiology_instant": {
-    "src": "60cc17e5235c",
-    "tgt": "87dea40172b7",
+    "src": "670985143202",
+    "tgt": "68b96b7baeb8",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -28102,6 +28342,16 @@
   "monitor.clear_settings_title": {
     "src": "50e30eb9aea2",
     "tgt": "ab5ecde44412",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "monitor.close_controls": {
+    "src": "f80c376c66cd",
+    "tgt": "432bdda842a6",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -30020,8 +30270,8 @@
     "risk": "clinical"
   },
   "orders.ordered_labs": {
-    "src": "b18adf2a603d",
-    "tgt": "4d8ad5e9ebe6",
+    "src": "0921d03b192c",
+    "tgt": "e71e8a18143e",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -30030,8 +30280,8 @@
     "risk": "clinical"
   },
   "orders.ordered_radiology": {
-    "src": "df0bcf5f7ffa",
-    "tgt": "8d7052889532",
+    "src": "aab2a0c955d1",
+    "tgt": "c1103f127c35",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -31110,8 +31360,8 @@
     "risk": "low"
   },
   "oyon.card_note": {
-    "src": "a21c82126e52",
-    "tgt": "5e5888c66389",
+    "src": "9d0b071e4406",
+    "tgt": "b150845549f5",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -33540,8 +33790,8 @@
     "risk": "low"
   },
   "oyon.reconsent_note": {
-    "src": "f52cc41b4e72",
-    "tgt": "bf3a5df698ed",
+    "src": "7501450b638b",
+    "tgt": "f672a212747e",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -33550,8 +33800,8 @@
     "risk": "low"
   },
   "oyon.reconsent_note_voice": {
-    "src": "87371500d02f",
-    "tgt": "9b7dc1e514db",
+    "src": "a613cffb7f02",
+    "tgt": "28291a7c2e81",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -42849,6 +43099,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "treatments.close_order_form": {
+    "src": "66b1155b4b8b",
+    "tgt": "78a43578f72b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "treatments.continuous": {
     "src": "04f13cecbc50",
     "tgt": "cf7689b3a82a",
@@ -42882,6 +43142,16 @@
   "treatments.dose": {
     "src": "6b942766c4e4",
     "tgt": "9cd7e56b3c23",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.dose_unit_label": {
+    "src": "72e29993000d",
+    "tgt": "36bd24a02537",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -43229,6 +43499,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "treatments.rate_unit_label": {
+    "src": "d108b4c6deb0",
+    "tgt": "ab15ffb96cb6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "treatments.route": {
     "src": "adc74704d65d",
     "tgt": "980658c475a2",
@@ -43322,6 +43602,56 @@
   "treatments.search_category_placeholder": {
     "src": "39ece8de36e0",
     "tgt": "5f7b9cdfda76",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.search_placeholder_iv_fluid": {
+    "src": "2b8e6bb2fc21",
+    "tgt": "f8a2b5c35316",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.search_placeholder_medication": {
+    "src": "9ca7f65f298c",
+    "tgt": "4592920f13f2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.search_placeholder_nursing": {
+    "src": "735f81b79215",
+    "tgt": "be002710e7ff",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.search_placeholder_oxygen": {
+    "src": "68c4d62a43d7",
+    "tgt": "b0785d833cf2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "treatments.search_treatments_label": {
+    "src": "97836943d54a",
+    "tgt": "2f27f5039a9d",
     "state": "machine",
     "origin": "machine",
     "locked": false,

@@ -73,5 +73,13 @@
   "urgency_routine": "Rutin",
   "urgency_stat": "Akut",
   "urgency_stat_bolus": "Akut (bolus)",
-  "warning_prefix": "Varning: {message}"
+  "warning_prefix": "Varning: {message}",
+  "search_placeholder_medication": "Sök läkemedel…",
+  "search_placeholder_iv_fluid": "Sök intravenösa vätskor…",
+  "search_placeholder_oxygen": "Sök syrgasbehandling…",
+  "search_placeholder_nursing": "Sök omvårdnadsåtgärder…",
+  "dose_unit_label": "Dosenhet",
+  "rate_unit_label": "Hastighetsenhet",
+  "search_treatments_label": "Sök behandlingar",
+  "close_order_form": "Stäng beställningsformuläret"
 }

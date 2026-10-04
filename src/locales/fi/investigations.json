@@ -55,7 +55,7 @@
   "legend_high": "KORKEA – viitealueen yläpuolella",
   "legend_low": "MATALA – viitealueen alapuolella",
   "legend_normal": "Normaali – viitealueella",
-  "medical_center": "VipSim Medical Center",
+  "medical_center": "Rohyn opetussairaala",
   "modality_cardiac": "Sydän",
   "modality_ct": "TT",
   "modality_dexa": "DEXA",
@@ -164,10 +164,10 @@
   "th_test": "Tutkimus",
   "th_unit": "Yksikkö",
   "toast_order_failed": "Tilaus epäonnistui: {message}",
-  "toast_ordered_lab": "Tilattiin {count} koetta",
-  "toast_ordered_lab_instant": "Tilattiin {count} koetta — välittömät tulokset",
-  "toast_ordered_radiology": "Tilattiin {count} tutkimusta",
-  "toast_ordered_radiology_instant": "Tilattiin {count} tutkimusta — välittömät tulokset",
+  "toast_ordered_lab": "Tilattiin {count, plural, one {# koe} other {# koetta}}",
+  "toast_ordered_lab_instant": "Tilattiin {count, plural, one {# koe} other {# koetta}} — välittömät tulokset",
+  "toast_ordered_radiology": "Tilattiin {count, plural, one {# tutkimus} other {# tutkimusta}}",
+  "toast_ordered_radiology_instant": "Tilattiin {count, plural, one {# tutkimus} other {# tutkimusta}} — välittömät tulokset",
   "toast_update_failed": "Laboratorioarvon päivitys epäonnistui",
   "turnaround_short": "{minutes} min",
   "unknown_patient": "Tuntematon potilas",
@@ -181,5 +181,6 @@
   "worklist": "Työlista",
   "worklist_empty_hint": "Valitse luettelosta vasemmalta.",
   "worklist_empty_lab": "Kokeita ei ole vielä tilattu.",
-  "worklist_empty_radiology": "Tutkimuksia ei ole vielä tilattu."
+  "worklist_empty_radiology": "Tutkimuksia ei ole vielä tilattu.",
+  "group_filter_label": "Suodata ryhmän mukaan"
 }

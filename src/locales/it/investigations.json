@@ -19,8 +19,8 @@
   "dashboard_pending_highlight_lab": "{count} esami in attesa",
   "dashboard_pending_highlight_radiology": "{count} studi in attesa",
   "dashboard_ready_body": "nella worklist. Cliccane uno nella worklist a destra per aprirlo — i referti si impilano qui man mano che li leggi.",
-  "dashboard_ready_highlight_lab": "{count} nuovi risultati pronti",
-  "dashboard_ready_highlight_radiology": "{count} nuovi studi pronti",
+  "dashboard_ready_highlight_lab": "{count, plural, one {# nuovo risultato pronto} other {# nuovi risultati pronti}}",
+  "dashboard_ready_highlight_radiology": "{count, plural, one {# nuovo studio pronto} other {# nuovi studi pronti}}",
   "edit_lab_values_desc": "Modifica i valori di laboratorio durante la simulazione. Le modifiche si applicano subito se gli esami sono già stati richiesti.",
   "edit_lab_values_title": "Modifica valori di laboratorio (Istruttore)",
   "electronically_signed": "Firmato elettronicamente",
@@ -55,7 +55,7 @@
   "legend_high": "ALTO - Sopra l'intervallo di riferimento",
   "legend_low": "BASSO - Sotto l'intervallo di riferimento",
   "legend_normal": "Normale - Entro l'intervallo di riferimento",
-  "medical_center": "Centro Medico VipSim",
+  "medical_center": "Ospedale Universitario Rohy",
   "modality_cardiac": "Cardiaco",
   "modality_ct": "TC",
   "modality_dexa": "DEXA",
@@ -181,5 +181,6 @@
   "worklist": "Worklist",
   "worklist_empty_hint": "Scegli dal catalogo a sinistra.",
   "worklist_empty_lab": "Nessun esame richiesto finora.",
-  "worklist_empty_radiology": "Nessuno studio richiesto finora."
+  "worklist_empty_radiology": "Nessuno studio richiesto finora.",
+  "group_filter_label": "Filtra per gruppo"
 }

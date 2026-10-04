@@ -42,7 +42,7 @@
   "attention_v2_subtitle": "Fokus, silmien avoimuus, katse ohi näytön ja signaalin laatu nykyisillä suodattimilla.",
   "attention_v2_title": "Tarkkaavuus 2",
   "capture_timeline_hint": "Vallitseva ilme ikkunaa kohti — palkin väri on tunne ja korkeus sen todennäköisyys. Uusin oikealla.",
-  "card_note": "Analyysi tapahtuu paikallisesti selaimessasi; tallenteet säilytetään vain suostumuksellasi ({version}). Voit pysäyttää tallennuksen milloin tahansa kamerakuvakkeesta ja muuttaa valintaa kohdassa Asetukset → Oyon.",
+  "card_note": "Analyysi tapahtuu paikallisesti selaimessasi; tallenteet säilytetään vain suostumuksellasi. Voit pysäyttää tallennuksen milloin tahansa kamerakuvakkeesta ja muuttaa valintaa kohdassa Asetukset → Oyon.",
   "card_title": "Tunteiden tunnistus",
   "card_toggle": "Salli kamerapohjainen tunteiden tunnistus istuntojeni aikana",
   "case_fallback": "tapaus {id}",
@@ -283,7 +283,7 @@
   "reconsent_item_discourse": "Lähettämiesi viestien tyyli, esimerkiksi kysytkö vai selitätkö.",
   "reconsent_item_interaction": "Miten liikut näytöllä — napsautukset, vieritys ja mikä paneeli on huomiosi kohteena.",
   "reconsent_item_typing": "Kirjoitusrytmi viestikentässä — tauot ja kirjoitusjaksot, ei koskaan kirjoittamiasi sanoja.",
-  "reconsent_note": "Analyysi tehdään paikallisesti selaimessasi ja vain yhteenvedot tallennetaan ({version}). Kieltäytyminen jättää nykyisen tunnetallennusvalintasi ennalleen; voit muuttaa kumpaakin kohdassa Asetukset → Oyon.",
+  "reconsent_note": "Analyysi tehdään paikallisesti selaimessasi ja vain yhteenvedot tallennetaan. Kieltäytyminen jättää nykyisen tunnetallennusvalintasi ennalleen; voit muuttaa kumpaakin kohdassa Asetukset → Oyon.",
   "reconsent_title": "Meidän on kysyttävä tallennuksesta uudelleen",
   "room_chat": "Potilas (pää)",
   "room_consultant": "Keskustelija",
@@ -408,5 +408,5 @@
   "zone_top_right": "ylhäällä oikealla",
   "reconsent_item_voice": "Miltä kuulostat puhuessasi potilaalle — äänenkorkeus, äänenvoimakkuus ja tauot jokaisesta puheenvuorosta tiivistettyinä sekä se, milloin puheenvuoron aikana puhut tai olet hiljaa. Itse äänitallennetta ei säilytetä.",
   "reconsent_item_ai_assist": "Kun sovellus tarjoaa sinulle tekoälyn ehdotuksen, hyväksytkö, hylkäätkö vai ohitatko sen.",
-  "reconsent_note_voice": "Analyysi tehdään paikallisesti selaimessasi. Mittaukset tallennetaan, äänitallennetta ei koskaan ({version}). Mikrofonia käytetään vain puhuessasi. Kieltäytyminen jättää nykyisen valintasi ennalleen; voit muuttaa sitä kohdassa Asetukset → Oyon."
+  "reconsent_note_voice": "Analyysi tehdään paikallisesti selaimessasi. Mittaukset tallennetaan, äänitallennetta ei koskaan. Mikrofonia käytetään vain puhuessasi. Kieltäytyminen jättää nykyisen valintasi ennalleen; voit muuttaa sitä kohdassa Asetukset → Oyon."
 }

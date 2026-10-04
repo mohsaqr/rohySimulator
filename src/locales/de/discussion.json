@@ -74,5 +74,6 @@
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
   "voice_not_supported": "Spracheingabe wird in diesem Browser nicht unterstützt. Verwenden Sie die Schaltfläche zum Tippen unten.",
-  "your_actions": "Deine Maßnahmen"
+  "your_actions": "Deine Maßnahmen",
+  "composer_replying_to": "Die Frage des Tutors"
 }

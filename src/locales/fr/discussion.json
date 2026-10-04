@@ -74,5 +74,6 @@
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
   "voice_not_supported": "La saisie vocale n’est pas prise en charge par ce navigateur. Utilisez le bouton de saisie ci-dessous.",
-  "your_actions": "Vos actions"
+  "your_actions": "Vos actions",
+  "composer_replying_to": "La question du tuteur"
 }

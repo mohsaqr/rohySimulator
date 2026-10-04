@@ -42,7 +42,7 @@
   "attention_v2_subtitle": "Fokus, ögonöppenhet, blick utanför skärmen och signalkvalitet för de aktuella filtren.",
   "attention_v2_title": "Uppmärksamhet 2",
   "capture_timeline_hint": "Dominerande uttryck per fönster — stapelns färg är känslan, dess höjd sannolikheten. Nyast till höger.",
-  "card_note": "Analysen körs lokalt i din webbläsare; inspelningar lagras bara med ditt samtycke ({version}). Du kan när som helst stoppa insamlingen via kameraknappen och ändra valet under Inställningar → Oyon.",
+  "card_note": "Analysen körs lokalt i din webbläsare; inspelningar lagras bara med ditt samtycke. Du kan när som helst stoppa insamlingen via kameraknappen och ändra valet under Inställningar → Oyon.",
   "card_title": "Känsloavläsning",
   "card_toggle": "Tillåt kamerabaserad känsloavläsning under mina sessioner",
   "case_fallback": "fall {id}",
@@ -283,7 +283,7 @@
   "reconsent_item_discourse": "Stilen i meddelandena du skickar, till exempel om du frågar eller förklarar.",
   "reconsent_item_interaction": "Hur du rör dig på skärmen — klick, scrollning och vilken panel som har din uppmärksamhet.",
   "reconsent_item_typing": "Skrivrytmen i meddelandefältet — pauser och skrivskurar, aldrig orden du skriver.",
-  "reconsent_note": "Analysen körs lokalt i din webbläsare och endast sammanfattningar sparas ({version}). Ett nej lämnar ditt nuvarande val om känsloinspelning oförändrat; du kan ändra båda under Inställningar → Oyon.",
+  "reconsent_note": "Analysen körs lokalt i din webbläsare och endast sammanfattningar sparas. Ett nej lämnar ditt nuvarande val om känsloinspelning oförändrat; du kan ändra båda under Inställningar → Oyon.",
   "reconsent_title": "Vi behöver fråga igen om inspelningen",
   "room_chat": "Patient (huvudrum)",
   "room_consultant": "Diskutant",
@@ -408,5 +408,5 @@
   "zone_top_right": "övre höger",
   "reconsent_item_voice": "Hur du låter när du talar med patienten — tonhöjd, ljudstyrka och pauser, sammanfattade för varje replik, samt när du under repliken talar eller tystnar. Själva ljudinspelningen sparas inte.",
   "reconsent_item_ai_assist": "När appen erbjuder dig ett AI-förslag, om du accepterar, avvisar eller stänger det.",
-  "reconsent_note_voice": "Analysen körs lokalt i din webbläsare. Mätvärden sparas, aldrig ljudinspelningen ({version}). Mikrofonen används bara medan du talar. Ett nej lämnar ditt nuvarande val oförändrat; du kan ändra det under Inställningar → Oyon."
+  "reconsent_note_voice": "Analysen körs lokalt i din webbläsare. Mätvärden sparas, aldrig ljudinspelningen. Mikrofonen används bara medan du talar. Ett nej lämnar ditt nuvarande val oförändrat; du kan ändra det under Inställningar → Oyon."
 }
