@@ -420,7 +420,8 @@ export default function UserProfilePanel({ _onClose }) {
                             <select
                                 value={uiLanguage}
                                 onChange={(e) => handleLanguageChange(e.target.value)}
-                                className="w-full px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-200 focus:border-blue-500 focus:outline-none"
+                                aria-label={t('language')}
+                                className="w-full px-3 py-2.5 bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-200 focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             >
                                 {Object.entries(LANGUAGES).map(([code, lang]) => (
                                     <option key={code} value={code}>

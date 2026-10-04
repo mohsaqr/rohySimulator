@@ -515,9 +515,13 @@ export default function AdminSetupWizard({ onClose }) {
     });
     useEffect(() => { EventLogger.tourStarted('admin_setup', 'AdminSetupWizard'); }, []);
     const [closing, setClosing] = useState(false);
-    // Session-local "the Test Connection round-trip passed" — the strongest
-    // signal we have that students can actually chat.
-    const [llmTested, setLlmTested] = useState(false);
+    // "The Test Connection round-trip passed" — the strongest signal we have
+    // that students can actually chat. The server remembers a pass against the
+    // exact saved configuration (status.llm.tested), so reopening the wizard
+    // no longer forgets it (PRV-34). This local value only overrides that
+    // while the admin is working in the step: true right after a pass, false
+    // as soon as they edit a field the pass no longer covers.
+    const [llmTestedOverride, setLlmTested] = useState(null);
 
     const refreshStatus = useCallback(() => {
         apiFetch('/setup/status')
@@ -540,6 +544,8 @@ export default function AdminSetupWizard({ onClose }) {
         }
         onClose();
     };
+
+    const llmTested = llmTestedOverride ?? status?.llm?.tested === true;
 
     const chipFor = (id) => {
         if (!status) return { level: 'off', label: t('status_loading') };

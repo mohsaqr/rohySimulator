@@ -347,10 +347,13 @@ export default function VoiceSettingsTab() {
             <section>
                 <h4 className="text-sm font-bold text-neutral-200 mb-1">Default voices (platform-wide)</h4>
                 <p className="text-[11px] text-neutral-500 mb-2">
-                    Plays for a language's cases when the configured voice can't
-                    play on this server. A <strong>local</strong> voice makes
-                    the fallback immune to API outages. An unset language fails
-                    loudly instead of playing a wrong-language voice.
+                    Speaks for a character that has <strong>no</strong> voice
+                    configured, in that language. It never replaces a configured
+                    voice: a character whose voice can't play here fails with an
+                    error instead. A <strong>local</strong> voice keeps the
+                    default working through API outages; an unset language
+                    stays silent with an error rather than using a
+                    wrong-language voice.
                 </p>
                 <div className="space-y-2">
                     {Object.keys(LANGUAGES).map(lang => (
@@ -633,8 +636,8 @@ function DefaultVoiceRow({ lang, value, catalogue, rate, pitch, onChange }) {
             )}
             {value && valueListed && selectedProvider && isPaidProvider(selectedProvider) && (
                 <p className="text-[11px] text-neutral-500 mt-1">
-                    Heads up: this default is a paid API voice — a local voice makes the
-                    fallback immune to API outages.
+                    Heads up: this default is a paid API voice — a local voice keeps
+                    unconfigured characters speaking through API outages.
                 </p>
             )}
         </div>

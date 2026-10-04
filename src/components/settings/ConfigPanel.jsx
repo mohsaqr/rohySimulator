@@ -41,7 +41,8 @@ import OyonSettingsTab from './OyonSettingsTab';
 import OyonDataLogs from '../analytics/OyonDataLogs';
 import CohortsManagementTab from './CohortsManagementTab';
 import TnaDashboardV2 from '../analytics/tna/TnaDashboardV2';
-import { Bell as BellIcon, BookOpen, Plug } from 'lucide-react';
+import { Bell as BellIcon, BookOpen, Plug, History } from 'lucide-react';
+import CaseVersionHistory from './CaseVersionHistory.jsx';
 
 // Lazy-loaded so the TipTap/react-query editor bundle only loads when a teacher
 // opens the Lessons tab — keeps it out of the main app chunk.
@@ -451,6 +452,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     // their own cohorts, admins see all (the API decides which rows return).
     const canManageCohorts = user?.role === 'educator' || user?.role === 'admin';
     const toast = useToast();
+    // The case whose version history is open (QA PRV-27), or null.
+    const [historyCase, setHistoryCase] = useState(null);
     // Default to 'cases' tab for all users; the parent can pass `initialTab`
     // to land directly on a specific tab — used when the persona editor
     // closes back into ConfigPanel and we want to land on 'agents' or back
@@ -652,18 +655,29 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
             const saved = isUpdate ? await apiPut(path, payload) : await apiPost(path, payload);
             EventLogger.contentSaved(OBJECT_TYPES.CASE, saved?.id ?? editingCase.id ?? 'new', saved?.name ?? editingCase.name, COMPONENTS.CONFIG_PANEL, isUpdate ? 'updated' : 'created');
 
-            // Stage-2 audit: bulk-replace labs in one atomic call. Pre-fix
-            // this looped POST per lab with a "first delete" comment that was
-            // never implemented, so the DB accumulated a duplicate row for
-            // every saved-but-removed lab. PUT /cases/:id/labs deletes orphaned
-            // investigation_orders, drops the old lab rows, and reinserts the
-            // current array under one transaction.
+            // Reconcile the case's lab rows with the editor's list in one
+            // transaction: unchanged tests keep their ids (and the learner
+            // orders that point at them), removed tests are soft-deleted.
             const caseId = saved.id;
             const labs = editingCase.config?.investigations?.labs || [];
             try {
                 await apiPut(`/cases/${caseId}/labs`, { labs });
             } catch (labErr) {
                 console.error('Failed to replace labs:', labErr);
+            }
+
+            // The treatment rubric the runtime grades against lives in the
+            // case_treatments table, which only the Treatments step's own
+            // button used to write: the editor's Save said "Case saved" and
+            // left expected/contraindicated marks unsaved (QA 2026-10-04,
+            // PRV-26). Persist them with every save.
+            if (Array.isArray(editingCase.config?.treatments)) {
+                try {
+                    await apiPut(`/cases/${caseId}/treatments`, { treatments: editingCase.config.treatments });
+                } catch (treatErr) {
+                    console.error('Failed to save treatment configuration:', treatErr);
+                    toast.error(t('toast_save_failed'));
+                }
             }
 
             // Update List
@@ -1016,7 +1030,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 <span>{LANGUAGES[c.config.case_language].native}</span>
                                                             </span>
                                                         )}
-                                                        <span className="font-bold text-gray-900">{c.name}</span>
+                                                        {/* Learners see the patient, never the authoring title or
+                                                            summary: both name the diagnosis (QA PRV-21). */}
+                                                        <span className="font-bold text-gray-900">{canManageCohorts ? c.name : (c.config?.patient_name || c.case_code || t('case_untitled_patient'))}</span>
                                                         {c.case_code && (
                                                             <span
                                                                 className="px-2 py-0.5 font-mono text-xs rounded border bg-gray-100 text-gray-700 border-gray-300"
@@ -1045,7 +1061,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-sm text-gray-600">{c.description}</div>
+                                                    <div className="text-sm text-gray-600">{canManageCohorts ? c.description : (c.config?.structuredHistory?.chiefComplaint || '')}</div>
                                                 </div>
                                                 <div className="flex gap-2 items-center">
                                                     {/* Educator+: Course assignment */}
@@ -1170,6 +1186,15 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             >
                                                                 <Copy className="w-4 h-4" />
                                                             </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setHistoryCase({ id: c.id, name: c.name })}
+                                                                className="p-2 bg-gray-50 text-gray-700 border border-gray-200 rounded text-xs hover:bg-gray-100"
+                                                                title={t('title_version_history')}
+                                                                aria-label={t('title_version_history')}
+                                                            >
+                                                                <History className="w-4 h-4" aria-hidden="true" />
+                                                            </button>
                                                             <button onClick={() => handleDeleteCase(c.id)} className="p-2 bg-red-50 text-red-700 border border-red-200 rounded text-xs hover:bg-red-100">{t('btn_delete')}</button>
                                                         </>
                                                     )}
@@ -1183,6 +1208,21 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                             <div className="text-neutral-500 text-center py-8">
                                                 {isAdmin() ? t('empty_no_cases_admin') : t('empty_no_cases_student')}
                                             </div>
+                                        )}
+                                        {historyCase && (
+                                            <CaseVersionHistory
+                                                caseId={historyCase.id}
+                                                caseName={historyCase.name}
+                                                onClose={() => setHistoryCase(null)}
+                                                onRestored={async () => {
+                                                    try {
+                                                        const data = await apiFetch('/cases');
+                                                        setCases(data.cases || []);
+                                                    } catch (err) {
+                                                        console.error('Failed to refresh cases after restore', err);
+                                                    }
+                                                }}
+                                            />
                                         )}
                                     </div>
                                 </>
@@ -2403,7 +2443,7 @@ function ChatConfiguration() {
     const { t } = useTranslation('authoring_config');
     const toast = useToast();
     const [chatSettings, setChatSettings] = useState({
-        doctorName: 'Dr. Carmen',
+        doctorName: '',
         doctorAvatar: ''
     });
     const [loading, setLoading] = useState(true);
@@ -2477,7 +2517,7 @@ function ChatConfiguration() {
                         type="text"
                         value={chatSettings.doctorName}
                         onChange={(e) => setChatSettings(prev => ({ ...prev, doctorName: e.target.value }))}
-                        placeholder="Dr. Carmen"
+                        placeholder={t('chat_doctor_name_placeholder')}
                         className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                     />
                     <p className="text-xs text-neutral-500 mt-1">{t('chat_doctor_name_help')}</p>

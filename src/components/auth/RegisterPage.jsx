@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, Circle, KeyRound, MailCheck, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, AlertCircle, CheckCircle, KeyRound, MailCheck, Eye, EyeOff } from 'lucide-react';
 import { PASSWORD_RULES, passwordMeetsRules } from '../../utils/passwordRules';
+import PasswordRequirement from './PasswordRequirement';
 
 /**
  * Turn a registration failure into a sentence in the user's own language.
@@ -64,27 +65,6 @@ export function translateRegisterError(err, t) {
 
     if (!raw || raw === 'Registration failed') return t('registration_failed');
     return t('registration_failed_detail', { detail: raw });
-}
-
-/**
- * One row of the live password checklist.
- *
- * Both states used to render the SAME filled tick and differ only by colour
- * (green vs grey), which is nothing at all to a colour-blind user and nothing
- * at all to a screen reader. So the shape changes too — a filled tick when the
- * rule is met, an empty ring when it is not — and the state is spelled out in
- * words for assistive tech. Colour is now the third channel, not the only one.
- */
-function PasswordRequirement({ met, label, metLabel, unmetLabel }) {
-    return (
-        <li className="flex items-center gap-2" data-state={met ? 'met' : 'unmet'}>
-            {met
-                ? <CheckCircle className="w-3 h-3 text-green-500 shrink-0" aria-hidden="true" />
-                : <Circle className="w-3 h-3 text-neutral-600 shrink-0" aria-hidden="true" />}
-            <span className={met ? 'text-green-400' : undefined}>{label}</span>
-            <span className="sr-only">{met ? metLabel : unmetLabel}</span>
-        </li>
-    );
 }
 
 export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, invite, inviteToken, startWithCode = false }) {

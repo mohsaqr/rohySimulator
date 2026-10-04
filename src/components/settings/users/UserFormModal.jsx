@@ -6,6 +6,18 @@ import { ApiError } from '../../../services/apiClient';
 import * as userService from '../../../services/userService';
 import { roleLabel } from '../../../constants/roleLabels';
 import { initials, avatarClass, roleBadgeClass, statusBadgeClass } from './usersUi';
+import { PASSWORD_RULES, passwordMeetsRules } from '../../../utils/passwordRules';
+import PasswordRequirement from '../../auth/PasswordRequirement';
+
+// Labels for the shared rule list, spelled out so the i18n extractor sees
+// every key (the rule ids come from src/utils/passwordRules.js).
+const passwordRuleLabel = (t, key) => ({
+    length: t('auth:password_req_length'),
+    max: t('auth:password_req_max'),
+    upper: t('auth:password_req_upper'),
+    lower: t('auth:password_req_lower'),
+    digit: t('auth:password_req_digit'),
+}[key] ?? key);
 
 const ROLE_RANK = { student: 1, reviewer: 2, educator: 3, admin: 4 };
 const ROLE_OPTIONS = [
@@ -23,7 +35,8 @@ const emptyForm = {
 
 export default function UserFormModal({ user, cohorts = [], myRank, onClose, onSaved }) {
     const isEdit = !!user;
-    const { t } = useTranslation('teacher_users');
+    // `auth` for the shared password-rule strings (qualified `auth:` keys).
+    const { t } = useTranslation(['teacher_users', 'auth']);
     const roleOptLabel = (v) => t('opt_role_' + (v === 'educator' ? 'teacher' : v));
     const statusLabel = (s) => t('opt_status_' + s);
     const toast = useToast();
@@ -58,8 +71,15 @@ export default function UserFormModal({ user, cohorts = [], myRank, onClose, onS
     }, t('toast_enrolled'));
     const unenroll = (cohortId) => guard(() => userService.removeMembership(cohortId, user.id), t('toast_removed'));
 
+    // The admin form ran no password check at all: anything typed went to the
+    // server, which answered 400 for a password the form had accepted. It now
+    // mirrors validatePassword() through the same rule list the register page
+    // uses (QA 2026-10-04, PRV-9). An empty password on edit means "unchanged".
+    const passwordOk = (!form.password && isEdit) || passwordMeetsRules(form.password);
+
     const submit = async (e) => {
         e.preventDefault();
+        if (!passwordOk) return;
         setSaving(true);
         try {
             const payload = {
@@ -119,8 +139,21 @@ export default function UserFormModal({ user, cohorts = [], myRank, onClose, onS
                                     <Field label={t('label_email')} required><input type="email" className="rohy-field w-full px-3 py-2 rounded-lg text-sm" value={form.email} onChange={set('email')} required /></Field>
                                 </Grid>
                                 <Field label={isEdit ? t('label_new_password') : t('label_password')} required={!isEdit}>
-                                    <input type="password" className="rohy-field w-full px-3 py-2 rounded-lg text-sm" value={form.password} onChange={set('password')} required={!isEdit} autoComplete="new-password" />
+                                    <input type="password" className="rohy-field w-full px-3 py-2 rounded-lg text-sm" value={form.password} onChange={set('password')} required={!isEdit} autoComplete="new-password" aria-invalid={form.password ? !passwordOk : undefined} aria-describedby="user-form-password-rules" />
                                 </Field>
+                                {(form.password || !isEdit) && (
+                                    <ul id="user-form-password-rules" className="text-xs text-neutral-500 grid grid-cols-2 gap-x-4 gap-y-1 list-none p-0 m-0">
+                                        {PASSWORD_RULES.map(({ key, test }) => (
+                                            <PasswordRequirement
+                                                key={key}
+                                                met={test(form.password)}
+                                                label={passwordRuleLabel(t, key)}
+                                                metLabel={t('auth:password_req_met')}
+                                                unmetLabel={t('auth:password_req_unmet')}
+                                            />
+                                        ))}
+                                    </ul>
+                                )}
                             </Section>
 
                             {/* Access */}
@@ -192,7 +225,7 @@ export default function UserFormModal({ user, cohorts = [], myRank, onClose, onS
 
                 <div className="flex justify-end gap-2 px-6 py-4 border-t border-neutral-200">
                     <button type="button" className="rohy-btn rohy-btn-ghost" onClick={onClose}>{t('btn_cancel')}</button>
-                    <button type="button" className="rohy-btn rohy-btn-primary" disabled={saving || loading} onClick={submit}>
+                    <button type="button" className="rohy-btn rohy-btn-primary" disabled={saving || loading || !passwordOk} onClick={submit}>
                         {saving ? t('btn_saving') : isEdit ? t('btn_update_user') : t('btn_create_user')}
                     </button>
                 </div>
