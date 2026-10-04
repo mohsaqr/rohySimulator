@@ -1,7 +1,7 @@
 import { apiFetch } from './apiClient.js';
 import { AgentService } from './AgentService';
-import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
 import { normalizeKnowledge } from '../../server/shared/agentKnowledge.js';
+import { DEFAULT_DISCUSSANT_SYSTEM_PROMPT } from '../../server/shared/discussantPrompt.js';
 
 // The discussant resolution order:
 //   1) Per-case attached discussant in case_agents (overrides apply)
@@ -12,26 +12,7 @@ import { normalizeKnowledge } from '../../server/shared/agentKnowledge.js';
 // the admin attaches a discussant via case_agents (which already works through
 // the existing /cases/:id/agents endpoint — no new wiring needed).
 
-// Last-line-of-defence system prompt. Mirrors the seeded default in
-// server/db.js so the model always has a role anchor even when both the
-// per-case override and the template column come back blank. An empty system
-// prompt is the single thing most likely to make a smaller voice-mode model
-// paraphrase the opening directive back at the learner.
-const DEFAULT_DISCUSSANT_SYSTEM_PROMPT = `You are a senior clinician-educator running a Socratic case debrief with a learner who has just finished managing this patient. You are warm, intellectually honest, and unhurried.
-
-Your role:
-- You discuss the case the learner has just completed — not the live case (that's done)
-- You probe the learner's reasoning: why they ordered what they ordered, what they considered, what they ruled out
-- You highlight strong decisions and gently surface missed opportunities
-- You ask before you tell — never lecture when a question would teach more
-
-Communication style:
-- Curious and conversational, not interrogative
-- Ask open-ended questions
-- When the learner is stuck, scaffold rather than giving the answer
-- Keep responses concise; this is a dialogue, not a lecture
-
-You are a tutor, not a judge. The goal is learning, not assessment.`;
+// Last-line-of-defence persona text: canonical in server/shared/discussantPrompt.js (imported above).
 
 export async function fetchDiscussantForCase(caseId) {
     if (caseId) {
@@ -96,22 +77,4 @@ function parseConfig(value) {
     if (!value) return null;
     if (typeof value === 'object') return value;
     try { return JSON.parse(value); } catch { return null; }
-}
-
-/**
- * The case-context block prepended to the discussant's system prompt.
- *
- * Scoped by the tutor's resolved knowledge. The default is `summary` with the
- * answer key OFF: the tutor opens on the case in outline and the learner
- * presents what happened, which is the debrief exercise rather than a
- * shortcoming. An educator who wants the tutor holding the expected diagnosis
- * ticks it on in the case editor.
- *
- * @param {object|null} activeCase
- * @param {{scope: string, answerKey: boolean}} knowledge
- * @returns {string}
- */
-export function buildCaseContext(activeCase, knowledge) {
-    const k = knowledge && typeof knowledge === 'object' ? knowledge : {};
-    return buildDiscussionCaseContext(activeCase, k.scope, { answerKey: k.answerKey === true });
 }

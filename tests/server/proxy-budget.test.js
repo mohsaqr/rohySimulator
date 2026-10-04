@@ -152,7 +152,7 @@ describe('proxy budget enforcement', () => {
         const res = await fetch(`${server.baseUrl}/api/proxy/llm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }] }),
+            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }], agent_llm_config: { persona: 'patient' } }),
         });
         expect(res.status).toBe(200);
         const body = await res.json();
@@ -164,7 +164,7 @@ describe('proxy budget enforcement', () => {
         const res = await fetch(`${server.baseUrl}/api/proxy/llm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }] }),
+            body: JSON.stringify({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }], agent_llm_config: { persona: 'patient' } }),
         });
         expect(res.status).toBe(429);
         expect(await res.json()).toMatchObject({ error: 'Budget exceeded', budget_exceeded: true, limit: 1 });

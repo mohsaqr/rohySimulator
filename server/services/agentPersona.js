@@ -43,22 +43,6 @@ function parseConfigColumn(raw, column, caseAgentId) {
     return {};
 }
 
-/** Agent types whose prompt the learner's browser still assembles. */
-export const CLIENT_BUILT_PROMPT_TYPES = Object.freeze(['patient', 'discussant']);
-
-/**
- * May a learner's client be sent this agent type's authored prompt?
- *
- * An ALLOW list: an agent type added later is server-built, and private, by
- * default.
- *
- * @param {string|null|undefined} agentType
- * @returns {boolean}
- */
-export function learnerMayHoldPrompt(agentType) {
-    return CLIENT_BUILT_PROMPT_TYPES.includes(agentType);
-}
-
 /**
  * The system prompt for a team agent.
  *

@@ -168,7 +168,7 @@ describe('API fuzzer findings stay fixed', () => {
     it('an unreachable LLM provider is a 502, not a 500', async () => {
         // The proxy answers only inside a session (Phase 0, 2026-10-04).
         const session = await (await post('/api/sessions', { body: { case_id: 1, student_name: 'fuzz' } })).json();
-        const res = await post('/api/proxy/llm', { body: { session_id: session.id, messages: [{ role: 'user', content: 'hello' }] } });
+        const res = await post('/api/proxy/llm', { body: { session_id: session.id, messages: [{ role: 'user', content: 'hello' }], agent_llm_config: { persona: 'patient' } } });
         expect(res.status).toBe(502);
         expect((await res.json()).error).toBe('LLM provider unreachable');
     });

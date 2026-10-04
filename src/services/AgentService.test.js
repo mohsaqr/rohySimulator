@@ -258,7 +258,6 @@ describe('AgentService — module shape', () => {
             'getSessionAgents', 'pageAgent', 'arriveAgent', 'departAgent', 'getAgentStatus',
             'getConversation', 'addMessage', 'clearConversation',
             'getTeamCommunications', 'addTeamCommunication',
-            'buildDebriefingContext',
             'sendAgentMessage', 'extractKeyPoints',
             'isAgentAvailable', 'getAgentDisplayStatus',
         ];
@@ -629,133 +628,6 @@ describe('AgentService team communications', () => {
 // Pure helpers — no network
 // ---------------------------------------------------------------------------
 
-describe('AgentService.buildDebriefingContext', () => {
-    it('produces a string with patient + vitals + filtered team log sections', () => {
-        const agent = {
-            agent_type: 'nurse',
-            context_filter: 'full',
-            memory_access: { OBTAINED: true, EXAMINED: true },
-        };
-        const patientRecord = {
-            record: {
-                patient: { name: 'Jane Doe', age: 55, gender: 'F', chief_complaint: 'Chest pain' },
-            },
-        };
-        const teamLog = [
-            { agent_type: 'nurse', key_points: 'BP 140/90' },
-            { agent_type: 'doctor', key_points: 'EKG ordered' },
-        ];
-        const vitals = { hr: 90, spo2: 96, bpSys: 140, bpDia: 90 };
-        const out = AgentService.buildDebriefingContext(agent, patientRecord, teamLog, vitals);
-        expect(out).toContain('PATIENT BRIEFING');
-        expect(out).toContain('Jane Doe');
-        expect(out).toContain('Chief Complaint: Chest pain');
-        expect(out).toContain('CURRENT VITALS');
-        expect(out).toContain('HR: 90bpm');
-        expect(out).toContain('SpO2: 96%');
-        expect(out).toContain('TEAM COMMUNICATIONS');
-        expect(out).toContain('[doctor]: EKG ordered');
-    });
-
-    it('includes filtered authored case design when an active case is supplied', () => {
-        const agent = { agent_type: 'nurse', context_filter: 'full' };
-        const activeCase = {
-            name: 'Configured Case',
-            config: {
-                patient_name: 'Alex Patient',
-                demographics: { age: 44, gender: 'female' },
-                structuredHistory: {
-                    chiefComplaint: 'Shortness of breath',
-                    hpi: 'Worse when lying flat',
-                },
-                initialVitals: { hr: 118, bpSys: 100, bpDia: 64, spo2: 90 },
-                diagnosis: 'Pulmonary edema',
-            },
-        };
-        const out = AgentService.buildDebriefingContext(agent, null, [], null, activeCase);
-        expect(out).toContain('CASE CONTEXT');
-        expect(out).toContain('Patient: Alex Patient');
-        expect(out).toContain('History of Present Illness: Worse when lying flat');
-        expect(out).toContain('HR: 118 bpm');
-        expect(out).toContain('Expected diagnosis: Pulmonary edema');
-    });
-
-    // Regression lock: a SEEDED nurse does not get the answer key.
-    //
-    // The test above is the legacy path — an agent carrying no
-    // `config.knowledge`, which still maps `context_filter: 'full'` to the
-    // chart WITH the key so nothing silently narrows on upgrade. Once the
-    // seeder has written `config.knowledge`, the same nurse gets the chart and
-    // NOT the expected diagnosis. That split is the whole point of the change,
-    // and it is decided on the client for every scope the browser still
-    // assembles, so it needs locking here and not only in the proxy tests.
-    it('withholds the answer key once config.knowledge is stored', () => {
-        const activeCase = {
-            name: 'Configured Case',
-            config: {
-                patient_name: 'Alex Patient',
-                structuredHistory: { chiefComplaint: 'Shortness of breath', hpi: 'Worse when lying flat' },
-                initialVitals: { hr: 118, bpSys: 100, bpDia: 64, spo2: 90 },
-                diagnosis: 'Pulmonary edema',
-                treatment_plan: 'Diuresis',
-            },
-        };
-        const seeded = {
-            agent_type: 'nurse',
-            context_filter: 'full',
-            config: { knowledge: { scope: 'chart', answerKey: false, record: true } },
-        };
-        const out = AgentService.buildDebriefingContext(seeded, null, [], null, activeCase);
-        expect(out).toContain('History of Present Illness: Worse when lying flat');
-        expect(out).toContain('HR: 118 bpm');
-        expect(out).not.toContain('Expected diagnosis');
-        expect(out).not.toContain('Expected treatment plan');
-    });
-
-    // Regression lock: the family member does not read the monitor.
-    //
-    // `=== CURRENT VITALS ===` had no agent-type gate of any kind, so the live
-    // haemodynamics went to whoever was talking — including the relative,
-    // whose scope withholds even the CONFIGURED vitals. Scoping the case
-    // context alone did not close this; it is a separate block.
-    it('gives the live monitor only to an agent that has the chart', () => {
-        const vitals = { hr: 118, spo2: 91, bpSys: 90, bpDia: 60 };
-        const withScope = (agent_type, scope) => AgentService.buildDebriefingContext(
-            { agent_type, config: { knowledge: { scope } } }, null, [], vitals,
-        );
-        expect(withScope('nurse', 'chart')).toContain('HR: 118bpm');
-        expect(withScope('relative', 'history')).not.toContain('CURRENT VITALS');
-        expect(withScope('discussant', 'summary')).not.toContain('CURRENT VITALS');
-        expect(withScope('consultant', 'none')).not.toContain('CURRENT VITALS');
-    });
-
-    it('sends nothing at all for a scope the server assembles itself', () => {
-        // `none` and `handover` are built server-side from rows the server
-        // read; the route drops whatever this returns. Narrowing here saves a
-        // payload — it is not the security boundary.
-        const activeCase = { name: 'C', config: { diagnosis: 'Pulmonary edema', structuredHistory: { hpi: 'x' } } };
-        for (const scope of ['none', 'handover']) {
-            const agent = { agent_type: 'consultant', context_filter: 'full', config: { knowledge: { scope } } };
-            const out = AgentService.buildDebriefingContext(agent, null, [], null, activeCase);
-            expect(out, scope).not.toContain('CASE CONTEXT');
-            expect(out, scope).not.toContain('Pulmonary edema');
-        }
-    });
-
-    it('honours context_filter="history" by dropping non-matching agent_type entries', () => {
-        const agent = { agent_type: 'nurse', context_filter: 'history' };
-        const teamLog = [
-            { agent_type: 'doctor', key_points: 'doctor stuff' },
-            { agent_type: 'nurse', key_points: 'nurse stuff' },
-            { agent_type: 'relative', key_points: 'family update' },
-        ];
-        const out = AgentService.buildDebriefingContext(agent, null, teamLog, null);
-        expect(out).toContain('nurse stuff');
-        expect(out).toContain('family update'); // relative is always allowed
-        expect(out).not.toContain('doctor stuff');
-    });
-});
-
 describe('AgentService.extractKeyPoints', () => {
     it('returns null for very short content', () => {
         expect(AgentService.extractKeyPoints('hi', 'nurse')).toBeNull();
@@ -867,7 +739,7 @@ describe('AgentService.getAgentDisplayStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('AgentService.sendAgentMessage', () => {
-    it('happy path: names the case agent and sends only the situation', async () => {
+    it('happy path: names the case agent and sends only the conversation', async () => {
         const agent = {
             case_agent_id: 7,
             agent_template_id: 'tpl-1',
@@ -897,11 +769,11 @@ describe('AgentService.sendAgentMessage', () => {
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(llmReq).toBeTruthy();
         expect(llmReq.body.session_id).toBe('sess-1');
-        // The authoring title ("Case: …") is answer-key material: absent for an
-        // agent whose knowledge.answerKey is off, the default (PRV-32).
-        expect(llmReq.body.system_prompt).not.toContain('Case: Agent Case');
-        expect(llmReq.body.system_prompt).toContain('Patient: Case Patient');
-        expect(llmReq.body.system_prompt).toContain('Chief Complaint: Chest pain');
+        // No situation is sent: the server builds what the agent is told from
+        // the session's case (services/agentSituation.js, Phase 2, 2026-10-04),
+        // so none of the browser's case copy travels with the request.
+        expect(llmReq.body).not.toHaveProperty('system_prompt');
+        expect(JSON.stringify(llmReq.body)).not.toContain('Case Patient');
         expect(llmReq.body.messages).toEqual([
             { role: 'assistant', content: 'previous reply' },
             { role: 'user', content: 'BP is rising' },
@@ -927,10 +799,10 @@ describe('AgentService.sendAgentMessage', () => {
             { name: 'Situation Case', config: { patient_name: 'Situation Patient' } });
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(JSON.stringify(llmReq.body)).not.toContain('SECRET: the answer is NSTEMI.');
-        // Not vacuous: an empty system_prompt would also lack the anchor.
-        expect(typeof llmReq.body.system_prompt).toBe('string');
-        expect(llmReq.body.system_prompt).toContain('Patient: Situation Patient');
-        expect(llmReq.body.system_prompt).not.toMatch(/## ROLE/);
+        // Nothing persona- or case-shaped is posted at all.
+        expect(llmReq.body).not.toHaveProperty('system_prompt');
+        expect(JSON.stringify(llmReq.body)).not.toMatch(/## ROLE/);
+        expect(llmReq.body.agent_llm_config).toEqual({ case_agent_id: 3 });
     });
 
     // Regression lock: an agent with no case_agent_id posted

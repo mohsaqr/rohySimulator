@@ -628,15 +628,17 @@ describe('POST /proxy/llm attribution in llm_request_log', () => {
         });
     });
 
-    it('leaves the agent columns NULL for a request that names no agent', async () => {
+    // A request must name its persona now (Phase 2, 2026-10-04); the server-built
+    // patient is attributed as 'patient', with no case agent.
+    it('records agent_type patient, and no case agent, for the server-built patient', async () => {
         const res = await sendAs(studentToken, 'POST', '/api/proxy/llm', {
             session_id: sessionId,
             messages: [{ role: 'user', content: 'hello' }],
-            system_prompt: 'You are the patient.',
+            agent_llm_config: { persona: 'patient' },
         });
         expect(res.status).toBe(200);
         const rows = await waitForLogRows(2);
-        expect(rows[1]).toEqual({ tenant_id: 1, agent_type: null, case_agent_id: null, status: 'success' });
+        expect(rows[1]).toEqual({ tenant_id: 1, agent_type: 'patient', case_agent_id: null, status: 'success' });
     });
 
     it('records the agent type, and no case agent, for a request named by agent_template_id', async () => {

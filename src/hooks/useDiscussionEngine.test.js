@@ -53,12 +53,8 @@ vi.mock('../services/voiceService', () => {
 vi.mock('../services/discussionService', () => ({
     // CONTRACT: useDiscussionEngine does NOT call fetchDiscussantForCase
     // itself — the discussant is passed in as a prop by the caller (the
-    // discussion screen). It DOES call buildCaseContext on every send, so
-    // we mock that.
+    // discussion screen). The case context is built server-side now.
     fetchDiscussantForCase: vi.fn(),
-    buildCaseContext: vi.fn((activeCase, filter) =>
-        `\n[CASE:${activeCase?.id ?? 'none'}|filter:${filter ?? 'none'}]`
-    ),
 }));
 
 vi.mock('../utils/voiceResolver', () => ({
@@ -357,17 +353,17 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         const { result } = renderHook(() => useDiscussionEngine(makeProps()));
         await act(async () => { await result.current.startConversation(); });
 
-        // The opening directive is in the SYSTEM prompt, not the user turn.
-        expect(capturedSystemPrompt).toMatch(/OPENING TURN/);
-        expect(capturedSystemPrompt).toMatch(/Do NOT restate/);
+        // No client-built prompt: the server builds the discussant prompt and
+        // appends its opening directive in the SYSTEM role when told this is
+        // the opening turn (Phase 2, 2026-10-04).
+        expect(capturedSystemPrompt).toBe(null);
+        expect(capturedOpts.persona).toBe('discussant');
+        expect(capturedOpts.discussionOpening).toBe(true);
         // The user turn is a bracketed system-style sentinel — unambiguous
         // for small models: parsed as instruction, not as a greeting.
         expect(capturedMessages.at(-1).role).toBe('user');
         expect(capturedMessages.at(-1).content).toBe('[System: open the case debrief now.]');
         expect(capturedMessages.at(-1).content).not.toMatch(/^Hello\.?$/i);
-        // Role-anchor block must lead the system prompt — see roleAnchor.js.
-        expect(capturedSystemPrompt).toMatch(/## ROLE/);
-        expect(capturedSystemPrompt).toMatch(/Respond ONLY as/);
         // `silent: true` is passed through so the sentinel is not written to
         // /interactions as a learner utterance.
         expect(capturedOpts.silent).toBe(true);
@@ -412,43 +408,26 @@ describe('useDiscussionEngine — message state & silentUser', () => {
         }
     });
 
-    it('forwards discussant.templateId as agentTemplateId to LLMService.streamMessage (per-persona LLM)', async () => {
-        // CONTRACT (post-v2.1.0): the discussant routes to its template's
-        // LLM, not the platform default. The hook forwards
-        // discussant.templateId via opts.agentTemplateId; LLMService then
-        // includes `agent_llm_config: { agent_template_id }` in the body.
-        let capturedOpts;
-        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, opts) => {
-            capturedOpts = opts;
+    // Regression lock: the discussant's prompt — case context included — was assembled in the browser from its copy of the whole case. The hook now names the persona; the server resolves the discussant and builds its prompt (Phase 2, 2026-10-04)
+    it('names the discussant persona and sends no prompt or template id of its own', async () => {
+        let captured;
+        LLMService.streamMessage.mockImplementation(async (_s, _m, sp, _mo, opts) => {
+            captured = { sp, opts };
             opts.onDelta('ok.');
             return 'ok.';
         });
         const props = makeProps({
             discussant: {
-                systemPrompt: 'You are a clinical educator.',
-                voice: { gender: 'male' },
-                rawConfig: {},
-                contextFilter: null,
-                _caseId: 'case-1',
-                templateId: 'tpl-discussant-7',
+                systemPrompt: 'You are a clinical educator.', voice: { gender: 'male' }, rawConfig: {},
+                contextFilter: null, _caseId: 'case-1', templateId: 'tpl-discussant-7',
             },
         });
         const { result } = renderHook(() => useDiscussionEngine(props));
         await act(async () => { await result.current.sendMessage('hi'); });
-        expect(capturedOpts.agentTemplateId).toBe('tpl-discussant-7');
-    });
-
-    it('passes null agentTemplateId when discussant has no templateId (falls back to platform default)', async () => {
-        let capturedOpts;
-        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, opts) => {
-            capturedOpts = opts;
-            opts.onDelta('ok.');
-            return 'ok.';
-        });
-        // makeProps default discussant has no templateId field.
-        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
-        await act(async () => { await result.current.sendMessage('hi'); });
-        expect(capturedOpts.agentTemplateId).toBe(null);
+        expect(captured.sp).toBe(null);
+        expect(captured.opts.persona).toBe('discussant');
+        expect(captured.opts.discussionOpening).toBe(false);
+        expect(captured.opts).not.toHaveProperty('agentTemplateId');
     });
 
     it('refuses to send when discussant has no _caseId stamp (strict guard, no implicit pass)', async () => {

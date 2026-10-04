@@ -14,8 +14,6 @@
  */
 
 import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from './apiClient.js';
-import { buildDiscussionCaseContext } from '../utils/casePromptContext.js';
-import { normalizeKnowledge, scopeAtLeast } from '../../server/shared/agentKnowledge.js';
 
 async function tryReturning(fallback, fn, label) {
   try {
@@ -244,97 +242,6 @@ export const AgentService = {
   // ==================== DEBRIEFING & LLM INTEGRATION ====================
 
   /**
-   * Build the situation an agent is told about, as this browser sees it.
-   *
-   * Scoped by the agent's `config.knowledge` (server/shared/agentKnowledge.js),
-   * falling back to the legacy `context_filter` column for an agent nobody has
-   * migrated.
-   *
-   * NOTE ON TRUST. For `none` and `handover` the server DROPS whatever this
-   * returns and builds the block itself (services/situationBrief.js), because
-   * an agent that is supposed to know only what the learner tells it must not
-   * have its ignorance enforced by the learner's own browser. The narrowing
-   * here saves a payload; it is not the security boundary.
-   *
-   * `memory_access` used to be read here to filter the record by verb. It
-   * never worked: no route projection returned the column, and the branch that
-   * consumed it called `getFilteredNarrative`, a method defined nowhere in the
-   * repo. Both are gone. What the learner actually did is now rendered
-   * server-side from rows the server read itself (services/encounterRecord.js)
-   * and gated by `knowledge.record`.
-   */
-  buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase = null) {
-    const lines = [];
-
-    const knowledge = normalizeKnowledge({
-      knowledge: agent?.config?.knowledge,
-      agentType: agent?.agent_type,
-      contextFilter: agent?.context_filter,
-    }).value;
-
-    const caseContext = buildDiscussionCaseContext(activeCase, knowledge.scope, { answerKey: knowledge.answerKey });
-    if (caseContext) {
-      lines.push(caseContext.trim());
-    }
-
-    if (patientRecord) {
-      lines.push('=== PATIENT BRIEFING ===');
-
-      if (patientRecord.toNarrative && typeof patientRecord.toNarrative === 'function') {
-        const narrative = patientRecord.toNarrative('context');
-        if (narrative) lines.push(narrative);
-      } else {
-        const patient = patientRecord.record?.patient;
-        if (patient) {
-          lines.push(`Patient: ${patient.name || 'Unknown'}, ${patient.age || '?'} y/o ${patient.gender || ''}`);
-          if (patient.chief_complaint) {
-            lines.push(`Chief Complaint: ${patient.chief_complaint}`);
-          }
-        }
-      }
-    }
-
-    // The live monitor. Gated on the chart scope like everything else: an
-    // agent that is not given the configured vitals has no business reading
-    // the current ones off the screen either. This block had NO agent-type
-    // gate at all, so the family member was handed the learner's live
-    // haemodynamics — the one leak the case-context scoping alone did not
-    // close. A `handover` agent still gets observations, server-built from
-    // session_vitals, in its own brief.
-    if (currentVitals && scopeAtLeast(knowledge.scope, 'chart')) {
-      lines.push('');
-      lines.push('=== CURRENT VITALS ===');
-      const vitalLabels = { hr: 'HR', spo2: 'SpO2', rr: 'RR', bpSys: 'BP Sys', bpDia: 'BP Dia', temp: 'Temp', etco2: 'ETCO2' };
-      const vitalUnits = { hr: 'bpm', spo2: '%', rr: '/min', bpSys: 'mmHg', bpDia: 'mmHg', temp: '°C', etco2: 'mmHg' };
-      Object.entries(currentVitals).forEach(([key, value]) => {
-        if (vitalLabels[key] && value !== undefined) {
-          lines.push(`${vitalLabels[key]}: ${value}${vitalUnits[key] || ''}`);
-        }
-      });
-    }
-
-    if (teamLog && teamLog.length > 0) {
-      // An agent that was not given the chart is not given the whole team's
-      // traffic either. Previously keyed on `context_filter === 'history'`;
-      // now any scope below `chart` narrows it, which additionally catches
-      // `summary` (the old `vitals`).
-      const relevantLogs = scopeAtLeast(knowledge.scope, 'chart')
-        ? teamLog
-        : teamLog.filter(l => l.agent_type === 'relative' || l.agent_type === agent.agent_type);
-
-      if (relevantLogs.length > 0) {
-        lines.push('');
-        lines.push('=== TEAM COMMUNICATIONS ===');
-        relevantLogs.slice(0, 10).forEach(entry => {
-          lines.push(`[${entry.agent_type}]: ${entry.key_points}`);
-        });
-      }
-    }
-
-    return lines.join('\n');
-  },
-
-  /**
    * Send a message to an agent via the LLM proxy
    * Handles the full flow: build context, send message, log response
    */
@@ -343,7 +250,7 @@ export const AgentService = {
   // ('chat' | 'call', default 'chat') and `callId` (the call a turn belongs
   // to). channel/callId are written on BOTH the learner's and the agent's
   // turn; they do not change what is sent to the model.
-  async sendAgentMessage(sessionId, agent, userMessage, patientRecord, teamLog, currentVitals, conversationHistory = [], activeCase = null, { caseLanguage = null, channel = 'chat', callId = null } = {}) {
+  async sendAgentMessage(sessionId, agent, userMessage, _patientRecord, _teamLog, _currentVitals, conversationHistory = [], _activeCase = null, { caseLanguage = null, channel = 'chat', callId = null } = {}) {
     // The server builds a team agent's persona from its case agent id. Without
     // one, /proxy/llm would have nothing to build it from, so refuse before
     // writing the learner's turn or calling the model — an agent that answers
@@ -357,10 +264,12 @@ export const AgentService = {
       const turnTags = { channel, callId };
       await this.addMessage(sessionId, agent.agent_type, 'user', userMessage, turnTags);
 
-      // Only the situation this browser can see. The server leads with the
-      // role anchor and the agent's authored prompt, which a learner's client
-      // is no longer sent (server/services/agentPersona.js).
-      const situation = this.buildDebriefingContext(agent, patientRecord, teamLog, currentVitals, activeCase);
+      // No situation is sent: the server builds the agent's persona AND what
+      // it is told about the case (its knowledge scope's case context, the
+      // live vitals at chart scope, the team's traffic) from rows it reads
+      // itself — services/agentSituation.js (Phase 2, 2026-10-04). The
+      // patientRecord / teamLog / currentVitals / activeCase parameters are
+      // kept for callers' signatures and are no longer read.
 
       const messages = [
         ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
@@ -370,7 +279,6 @@ export const AgentService = {
       const requestBody = {
         session_id: sessionId,
         messages,
-        system_prompt: situation,
         agent_llm_config: { case_agent_id: agent.case_agent_id }
       };
       // Session dialogue language — the server appends the registry's
