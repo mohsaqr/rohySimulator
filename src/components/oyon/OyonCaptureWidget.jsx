@@ -43,7 +43,9 @@ const LOAD_FAILED = Symbol('oyon-load-failed');
  * asset-base so air-gapped deploys never touch a CDN.
  */
 export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnalytics } = {}) {
-   const { t } = useTranslation('oyon');
+   const { t, i18n } = useTranslation('oyon');
+   // The pill's own text follows the UI language (Oyon 3.3.3 `lang`).
+   const uiLanguage = i18n.resolvedLanguage || i18n.language || 'en';
    const [tenantEnabled, setTenantEnabled] = useState(false);
    const [runtimeConfig, setRuntimeConfig] = useState(null);
    const [status, setStatus] = useState('idle');
@@ -61,6 +63,9 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
    const sessionRef = useRef(sessionId);
    const caseRef = useRef(caseId);
    const roomRef = useRef(room);
+   // Read at element creation; kept OUT of the mount effect's dependencies
+   // so a language switch never tears the camera element down.
+   const languageRef = useRef(uiLanguage);
    const runningRef = useRef(false);
    // Persistence gate: true only once consent for the CURRENT session has
    // been recorded server-side. Windows arriving while the gate is closed
@@ -242,6 +247,7 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
             // Same-origin models + WASM (air-gap contract) — see captureBridge.
             el.setAttribute('asset-base', OYON_ASSET_BASE);
             el.setAttribute('settings', JSON.stringify(elementSettings(runtimeConfig)));
+            el.setAttribute('lang', languageRef.current);
             if (sessionRef.current) el.setAttribute('session-id', String(sessionRef.current));
             el.addEventListener('oyon:status', onStatus);
             el.addEventListener('oyon:sample', onSample);
@@ -283,6 +289,13 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          persistGateRef.current = false;
       };
    }, [tenantEnabled, runtimeConfig, ensureConsent]);
+
+   // Language applies LIVE too: the element re-renders the pill's text on a
+   // `lang` change and leaves the capture running (Oyon 3.3.3).
+   useEffect(() => {
+      languageRef.current = uiLanguage;
+      elRef.current?.setAttribute('lang', uiLanguage);
+   }, [uiLanguage]);
 
    // Identity applies LIVE: on a session switch mid-capture the element
    // re-keys subsequent windows immediately, and consent (a per-session

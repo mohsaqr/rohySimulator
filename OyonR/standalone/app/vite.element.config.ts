@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { makeAliases } from './vite.aliases';
@@ -18,8 +18,40 @@ import { makeAliases } from './vite.aliases';
  */
 const repoRoot = path.resolve(__dirname, '../..');
 
+/*
+ * WebGazer is an OPTIONAL peer (GPL-3.0, ~1.3 MB) that the adapter loads with
+ * `await import('webgazer')`. With `inlineDynamicImports` there is no lazy
+ * chunk to defer it to, so whatever that import resolves to is evaluated at
+ * the element's TOP LEVEL, and the result used to depend on the build
+ * machine's node_modules:
+ *   - webgazer absent (a clean `npm ci` — it is not in the lockfile): Vite's
+ *     missing-optional-peer stub, `throw new Error('Could not resolve
+ *     "webgazer" imported by "oyon".')`, ran at load and killed the element
+ *     in every host (Rohy hand-patched its vendored copy for 3.3.2);
+ *   - webgazer present (a stale install): the whole GPL library was inlined
+ *     and executed on load in every host, used or not.
+ * Resolve it to an empty module instead, always. The adapter treats an
+ * import with no usable WebGazer as "not bundled" and falls back to its
+ * script tag (`scriptUrl`), so `gaze-engine="webgazer"` still works; the
+ * default mediapipe engine never touches it. scripts/verify-element-bundle.mjs
+ * fails the build if either failure mode reappears.
+ */
+const WEBGAZER_STUB_ID = '\0oyon-webgazer-not-bundled';
+function webgazerNotBundled(): Plugin {
+  return {
+    name: 'oyon-webgazer-not-bundled',
+    enforce: 'pre',
+    resolveId(source) {
+      return source === 'webgazer' ? WEBGAZER_STUB_ID : null;
+    },
+    load(id) {
+      return id === WEBGAZER_STUB_ID ? 'export default null;\n' : null;
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [webgazerNotBundled(), react()],
   resolve: {
     alias: makeAliases(__dirname, repoRoot),
   },

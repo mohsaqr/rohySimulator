@@ -30,3 +30,23 @@
     outline-offset: 2px;
   }
 }
+
+/*
+ * Capture-pill focus ring. The global :focus-visible ring above is the info
+ * blue (#2563eb), which all but disappears against the pill's dark glass —
+ * and the pill floats over whatever the host page paints behind it. This ring
+ * is two-tone so it reads on ANY background: a light cyan band (cyan-200,
+ * ~15:1 against the pill) sandwiched between dark halos drawn by box-shadow.
+ * Edge 0–2px dark, 2–4px cyan outline, 4–6px dark. In forced-colors mode the
+ * box-shadow is dropped by the UA and the outline keeps a system colour.
+ * Unlayered on purpose: it must win over the base-layer :focus-visible rule
+ * and must not be purged.
+ */
+.oyon-pill-focus:focus {
+  outline: none;
+}
+.oyon-pill-focus:focus-visible {
+  outline: 2px solid #a5f3fc;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(2, 6, 23, 0.92);
+}

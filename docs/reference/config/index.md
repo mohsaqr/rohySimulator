@@ -44,10 +44,10 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_ADMIN_PASSWORD` | No | — | Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. **⚠ secret — see security note above.** | `server/seeders/users.js:57` |
 | `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:56` |
 | `ROHY_CONTENT_TOKEN` | No | — | A GitHub token with read access to the content repository, read by `npm run setup:content` if set. The content repository is now PUBLIC, so no credential is needed and this variable can be left unset; it remains supported for a deployment that mirrors the archives behind its own private release. Install-time only: nothing at runtime reads it. `GITHUB_TOKEN` is accepted as a fallback, as is the `gh` CLI when the machine is logged in. Installing from a local file with `--from` needs no token at all, because the installer trusts the archive's SHA-256 rather than the host it came from. **⚠ secret — see security note above.** | `scripts/setup-content.mjs:90` |
-| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:81`<br>`server/routes/registration-routes.js:38`<br>`server/routes/terms-routes.js:36` |
+| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:81`<br>`server/routes/registration-routes.js:38`<br>`server/routes/terms-routes.js:50` |
 | `ROHY_PLUGIN_ORIGIN_TOKENS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;token&gt;` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy's own server-to-server fetch as `Authorization: Bearer &lt;token&gt;` — never returned to a browser, never logged, and never the caller's own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation's access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. **⚠ secret — see security note above.** | `server/lib/pluginOriginTokens.js:84` |
 | `ROHY_PROVA_INSTALLATION_KEY` | No | `'' (empty string)` | An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova's unverified queue until someone trusts the installation. **⚠ secret — see security note above.** | `server/routes/report-routes.js:53` |
-| `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:120` |
+| `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:121` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:67` |
 | `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:59` |
 | `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:60` |
@@ -86,10 +86,10 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:624` |
+| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:639` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:138` |
 | `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1765`<br>`server/routes/admin-routes.js:1790`<br>`server/routes/admin-routes.js:1791`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1792`<br>`server/routes/admin-routes.js:1793`<br>`server/routes/proxy-routes.js:630`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1792`<br>`server/routes/admin-routes.js:1793`<br>`server/routes/proxy-routes.js:645`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |
@@ -123,7 +123,7 @@ The following variables carry credentials or signing material. Never commit them
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
 | `GITHUB_ACTIONS` | No | — | _see source_ | `scripts/check-prod-version.mjs:128` |
-| `ROHY_BASE_URL` | No | `http://localhost:3000` | _see source_ | `scripts/llm-language-smoke.mjs:26`<br>`scripts/translate-locales.mjs:48` |
+| `ROHY_BASE_URL` | No | `http://localhost:3000` | _see source_ | `scripts/llm-language-smoke.mjs:26`<br>`scripts/translate-locales.mjs:49` |
 | `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:94` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
 | `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:72` |

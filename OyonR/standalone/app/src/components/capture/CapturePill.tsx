@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Camera, Pause, Play, Square, ExternalLink, Loader2, Crosshair } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
@@ -10,6 +10,7 @@ import type {
 import { useRuntime } from '@/lib/RuntimeProvider';
 import { useBridge } from '@/lib/hostBridge';
 import { useSessionContext } from '@/lib/sessionContext';
+import { formatPillString, pillEmotionLabel, pillStrings } from '@/lib/pillStrings';
 
 /*
  * CapturePill — the canonical Oyon capture control, rendered as the sole UI in
@@ -31,22 +32,47 @@ import { useSessionContext } from '@/lib/sessionContext';
  *   - gaze calibration is wired through `GazeCalibrationPanel` here, where the
  *     original deferred to a separate modal;
  *   - the original's "Off" / `disabled` headline is dropped — Oyon's
- *     RuntimeStatus has no `disabled` state.
+ *     RuntimeStatus has no `disabled` state;
+ *   - every string comes from src/lib/pillStrings.js in the host's `lang`
+ *     (with `labels` overrides), read from the bridge — never from the
+ *     runtime — so a language switch re-renders text without restarting
+ *     capture;
+ *   - accessibility: the pill is a labelled group; every control has an
+ *     accessible name (aria-label; the title stays as the hover tooltip and
+ *     accessible description), its icon is aria-hidden, and an unavailable
+ *     control is aria-disabled but still focusable, so a keyboard or screen
+ *     reader user can reach it and hear why it is unavailable; buttons draw
+ *     their own high-contrast focus ring (`.oyon-pill-focus`, globals.css),
+ *     because the global blue ring is lost against the dark glass; the
+ *     headline is a polite live region announcing Ready / Camera… / Error
+ *     and, while capturing, a stable "Capturing" / "Paused" — the live
+ *     emotion word itself is aria-hidden so it never chatters.
  */
 
-// IconBtn — verbatim from the chatoyon/Rohy OyonCaptureWidget.IconBtn.
+// IconBtn — shape from the chatoyon/Rohy OyonCaptureWidget.IconBtn, made
+// accessible: `label` is the accessible name (required — an icon-only button
+// has no other), `title` the tooltip/description (defaults to the label), and
+// `disabled` maps to aria-disabled rather than the native attribute, so the
+// control stays in the tab order and announces itself as unavailable instead
+// of silently vanishing. Clicks while disabled are swallowed here.
 function IconBtn({
-  children, onClick, disabled, title, danger,
+  children, onClick, disabled, label, title, danger,
 }: {
-  children: ReactNode; onClick?: () => void; disabled?: boolean; title?: string; danger?: boolean;
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  label: string;
+  title?: string;
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-50 ${
+      onClick={disabled ? undefined : onClick}
+      aria-disabled={disabled ? true : undefined}
+      aria-label={label}
+      title={title ?? label}
+      className={`oyon-pill-focus grid h-7 w-7 shrink-0 place-items-center rounded-full aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
         danger ? 'text-red-200 hover:bg-red-500/20' : 'hover:bg-white/15'
       }`}
     >
@@ -77,6 +103,12 @@ export function CapturePill() {
   const chromeMode = useBridge((s) => s.chromeMode);
   const userId = useBridge((s) => s.userId);
   const emitHostEvent = useBridge((s) => s.emitHostEvent);
+  // Presentation-only bridge fields: a host changing `lang` / `labels`
+  // re-renders this component and nothing else — the runtime never reads
+  // them, so capture keeps running.
+  const lang = useBridge((s) => s.lang);
+  const labels = useBridge((s) => s.labels);
+  const t = useMemo(() => pillStrings(lang, labels), [lang, labels]);
   const gazeCalibrated = calibration.status === 'ok';
 
   // Full-screen calibration overlay — always mounted so the imperative ref is
@@ -105,12 +137,17 @@ export function CapturePill() {
       : String(error)
     : null;
 
-  // headlineText — Rohy's wording (OyonCaptureWidget liveWord/headlineText).
+  // headlineText — Rohy's states (OyonCaptureWidget liveWord/headlineText),
+  // localised. idle / ready / stopping / stopped → "Ready" (waiting to
+  // (re)start capture).
   const headlineText = status === 'error'
-    ? 'Error'
-    : active ? (dom || '…')
-      : starting ? 'camera…'
-        : 'Ready'; // idle / ready / stopping / stopped — waiting to (re)start capture
+    ? t.error
+    : active ? (dom ? pillEmotionLabel(t, dom) : '…')
+      : starting ? t.starting
+        : t.ready;
+  // While capturing, the visible headline is the live emotion word, which can
+  // change every few hundred ms. Screen readers get a stable status instead.
+  const liveStatusText = paused ? t.paused : t.capturing;
 
   async function handleCalibrate() {
     if (!panelRef.current || !runtime) return;
@@ -139,16 +176,27 @@ export function CapturePill() {
   // captureControls — verbatim shape from Rohy: a Start button when not
   // running, else a pause/resume toggle + a danger stop.
   const captureControls = !active ? (
-    <IconBtn onClick={() => void start()} disabled={starting} title="Start capture">
-      {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+    <IconBtn
+      onClick={() => void start()}
+      disabled={starting}
+      label={starting ? t.startingCapture : t.startCapture}
+    >
+      {starting
+        ? <Loader2 aria-hidden="true" focusable="false" className="h-4 w-4 animate-spin" />
+        : <Camera aria-hidden="true" focusable="false" className="h-4 w-4" />}
     </IconBtn>
   ) : (
     <>
-      <IconBtn onClick={() => (paused ? resume() : pause())} title={paused ? 'Resume' : 'Pause'}>
-        {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+      <IconBtn
+        onClick={() => (paused ? resume() : pause())}
+        label={paused ? t.resumeCapture : t.pauseCapture}
+      >
+        {paused
+          ? <Play aria-hidden="true" focusable="false" className="h-4 w-4" />
+          : <Pause aria-hidden="true" focusable="false" className="h-4 w-4" />}
       </IconBtn>
-      <IconBtn onClick={() => void stop()} title="Stop" danger>
-        <Square className="h-4 w-4" />
+      <IconBtn onClick={() => void stop()} label={t.stopCapture} danger>
+        <Square aria-hidden="true" focusable="false" className="h-4 w-4" />
       </IconBtn>
     </>
   );
@@ -163,11 +211,15 @@ export function CapturePill() {
         ? 'no-signal'
         : 'waiting';
   const gazeTitle = {
-    error: `Gaze error: ${gazeDiag?.error}`,
-    active: `Gaze active: ${gazeSampleCount} samples`,
-    'no-signal': `Gaze running: adapter status "${gazeDiag?.status}", no usable sample yet.`,
-    waiting: `Gaze status: ${gazeDiag?.status ?? 'waiting'}`,
+    error: formatPillString(t.gazeError, { error: String(gazeDiag?.error) }),
+    active: formatPillString(t.gazeActive, { count: gazeSampleCount }),
+    'no-signal': formatPillString(t.gazeNoSignal, { status: gazeDiag?.status }),
+    waiting: formatPillString(t.gazeWaiting, { status: gazeDiag?.status ?? t.gazeWaitingStatus }),
   }[gazeState];
+  const calibrateLabel = calibrating
+    ? t.calibratingGaze
+    : gazeCalibrated ? t.recalibrateGaze : t.calibrateGaze;
+  const analyticsLabel = sessionId ? t.openAnalytics : t.openAnalyticsUnavailable;
   const gazeTone = {
     error: 'text-red-300',
     active: 'text-emerald-300',
@@ -177,19 +229,30 @@ export function CapturePill() {
 
   return (
     <span
+      role="group"
+      aria-label={t.pillLabel}
+      lang={lang}
       className={`inline-flex w-fit items-center gap-2 rounded-full border py-2 pl-3 pr-1.5 text-sm text-cyan-50 ${
         status === 'error' ? 'border-red-500/50 bg-red-950/40' : 'border-white/10 bg-black/40'
       }`}
     >
       <span
+        aria-hidden="true"
         className={`h-2 w-2 shrink-0 rounded-full ${liveNow ? 'animate-pulse' : ''}`}
         style={{ background: status === 'error' ? '#f87171' : tone.dot }}
       />
-      <span title={errMsg ?? ''} className="max-w-[110px] truncate font-semibold capitalize leading-none tracking-wide">
-        {headlineText}
+      <span
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        title={errMsg ?? undefined}
+        className="max-w-[110px] truncate font-semibold capitalize leading-none tracking-wide"
+      >
+        <span aria-hidden={active ? true : undefined}>{headlineText}</span>
+        {active && <span className="sr-only">{liveStatusText}</span>}
       </span>
       {active && conf != null && (
-        <span className="shrink-0 text-xs leading-none tabular-nums text-cyan-100/70">{conf}%</span>
+        <span aria-hidden="true" className="shrink-0 text-xs leading-none tabular-nums text-cyan-100/70">{conf}%</span>
       )}
       {captureControls}
       {/* Manual gaze calibration — only while capture is live (the overlay
@@ -198,12 +261,13 @@ export function CapturePill() {
         <IconBtn
           onClick={handleCalibrate}
           disabled={calibrating || !runtime}
-          title={gazeCalibrated ? `Re-calibrate gaze. ${gazeTitle}` : `Calibrate gaze tracking. ${gazeTitle}`}
+          label={calibrateLabel}
+          title={`${calibrateLabel}. ${gazeTitle}`}
         >
           {calibrating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 aria-hidden="true" focusable="false" className="h-4 w-4 animate-spin" />
           ) : (
-            <Crosshair className={`h-4 w-4 ${gazeTone}`} />
+            <Crosshair aria-hidden="true" focusable="false" className={`h-4 w-4 ${gazeTone}`} />
           )}
         </IconBtn>
       )}
@@ -214,19 +278,18 @@ export function CapturePill() {
         <IconBtn
           onClick={handleOpenAnalytics}
           disabled={!sessionId}
-          title={sessionId
-            ? 'Open Oyon analytics for this session'
-            : 'Start capture before opening session analytics'}
+          label={analyticsLabel}
         >
-          <ExternalLink className="h-4 w-4" />
+          <ExternalLink aria-hidden="true" focusable="false" className="h-4 w-4" />
         </IconBtn>
       ) : (
         <Link
           to="/analyze"
-          title="Open Oyon analytics for this session"
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-cyan-100/80 hover:bg-white/10"
+          aria-label={t.openAnalytics}
+          title={t.openAnalytics}
+          className="oyon-pill-focus grid h-7 w-7 shrink-0 place-items-center rounded-full text-cyan-100/80 hover:bg-white/10"
         >
-          <ExternalLink className="h-4 w-4" />
+          <ExternalLink aria-hidden="true" focusable="false" className="h-4 w-4" />
         </Link>
       )}
       {/* Full-screen overlay panel — mounted always so the imperative ref is

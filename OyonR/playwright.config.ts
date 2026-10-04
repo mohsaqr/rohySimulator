@@ -9,6 +9,8 @@ const reuseExistingServer = process.env.OYON_E2E_FRESH !== '1';
  *
  *   tests/e2e/standalone-app.spec.ts  → the React app shell (:5174)
  *   tests/e2e/embed-element.spec.ts   → <oyon-app> on a host page (:5173)
+ *   tests/e2e/embed-pill.spec.ts      → the chrome="capture" pill: lang/labels,
+ *                                       accessibility, no restart on lang change
  *
  * Run with `npm run test:e2e` (builds the element bundle first via
  * globalSetup if missing). Capture tests use a synthetic canvas face
