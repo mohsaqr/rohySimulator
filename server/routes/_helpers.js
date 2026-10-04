@@ -903,29 +903,33 @@ export function resolveSessionCaseScenario(row) {
     return null;
 }
 
+/**
+ * Append a version snapshot of a case. Resolves once the row is written.
+ *
+ * ONE statement: the next version number is computed inside the INSERT, so
+ * it is atomic. It used to be a SELECT MAX followed by a separate INSERT,
+ * fire-and-forget — two quick saves could take the same number, and a route
+ * answered before its version existed, so a History list (or a restore)
+ * read right after a save could miss it (a CI flake in
+ * case-gender-i18n.test.js, 2026-10-04). Callers await it before answering.
+ * A failure is logged and resolved, never rejected: a missing version must
+ * not fail the save it describes.
+ *
+ * @returns {Promise<void>}
+ */
 export function createCaseVersion(caseId, userId, changeType, description, configSnapshot) {
-    // Get current version number
-    dbAdapter.get(
-        `SELECT COALESCE(MAX(version_number), 0) + 1 as next_version FROM case_versions WHERE case_id = ?`,
-        [caseId],
-        (err, row) => {
-            if (err) {
-                routesCasesLog.error('case version lookup failed', { error: err.message });
-                return;
+    return new Promise((resolve) => {
+        dbAdapter.run(
+            `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot, tenant_id)
+             SELECT ?, COALESCE(MAX(version_number), 0) + 1, ?, ?, ?, ?, ?
+               FROM case_versions WHERE case_id = ?`,
+            [caseId, userId, changeType, description, JSON.stringify(configSnapshot), configSnapshot?.tenant_id || 1, caseId],
+            (err) => {
+                if (err) routesCasesLog.error('case version create failed', { error: err.message });
+                resolve();
             }
-            const versionNumber = row?.next_version || 1;
-            dbAdapter.run(
-                `INSERT INTO case_versions (case_id, version_number, changed_by, change_type, changes_description, config_snapshot, tenant_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [caseId, versionNumber, userId, changeType, description, JSON.stringify(configSnapshot), configSnapshot?.tenant_id || 1],
-                (err) => {
-                    if (err) {
-                        routesCasesLog.error('case version create failed', { error: err.message });
-                    }
-                }
-            );
-        }
-    );
+        );
+    });
 }
 
 /**
