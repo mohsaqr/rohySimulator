@@ -5,7 +5,7 @@
  * Host and batch contract versions change only when their public wire/API
  * shapes change; they are intentionally independent from patch releases.
  */
-export const OYON_VERSION = '3.3.2';
+export const OYON_VERSION = '3.3.3';
 export const OYON_HOST_CONTRACT_VERSION = '3.1';
 
 /**

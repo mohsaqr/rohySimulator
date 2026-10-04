@@ -6,6 +6,14 @@ import OyonCaptureWidget from './OyonCaptureWidget.jsx';
 const mocks = vi.hoisted(() => ({
     apiFetch: vi.fn(),
     loadOyonElement: vi.fn(),
+    language: 'en',
+}));
+
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({
+        t: (key) => key,
+        i18n: { language: mocks.language, resolvedLanguage: mocks.language },
+    }),
 }));
 
 vi.mock('../../services/apiClient', () => ({
@@ -73,5 +81,21 @@ describe('OyonCaptureWidget persistence gate', () => {
         const [, request] = apiCalls('/addons/oyon/emotion-records')[0];
         expect(request.json.session_id).toBe('s-1');
         expect(request.json.events[0].room).toBe('consultant');
+    });
+
+    // Regression lock: the capture pill spoke English in every UI language (Oyon had no lang input); rohy now passes the UI language at creation and live, without tearing the camera element down (Oyon 3.3.3, 2026-10-04)
+    it('passes the UI language to the element, and follows a switch without replacing it', async () => {
+        mocks.language = 'de';
+        const { container, rerender } = render(<OyonCaptureWidget sessionId="s-1" caseId="case-1" room="chat" />);
+        await waitFor(() => expect(container.querySelector('oyon-app')).toBeTruthy());
+        const el = container.querySelector('oyon-app');
+        expect(el.getAttribute('lang')).toBe('de');
+
+        mocks.language = 'fi';
+        rerender(<OyonCaptureWidget sessionId="s-1" caseId="case-1" room="chat" />);
+        await waitFor(() => expect(el.getAttribute('lang')).toBe('fi'));
+        expect(container.querySelector('oyon-app')).toBe(el);
+        expect(mocks.loadOyonElement).toHaveBeenCalledTimes(1);
+        mocks.language = 'en';
     });
 });

@@ -350,6 +350,12 @@ export function normalizeWebGazerPrediction(
 ): GazeSample | null;
 
 /**
+ * Pick the WebGazer instance out of a module load result (ES namespace,
+ * CommonJS export or the global). Null unless it exposes `setGazeListener()`.
+ */
+export function resolveWebGazerModule(mod: unknown): unknown | null;
+
+/**
  * One target dot in a calibration sequence — normalized [-0.5, 0.5] on each
  * axis, same convention as `GazeSample`.
  */

@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.21] — 2026-10-04
+
+- **Oyon 3.3.3: the capture pill speaks the interface language and can be used by keyboard and screen
+  reader.** Every pill string follows rohy's UI language (en, de, es, it, fi, sv, fr, kk; rohy passes
+  `lang` at creation and live, without restarting the camera); every button has an accessible name; the
+  status line is announced; a visible focus ring. The element no longer depends on a hand-edited bundle:
+  WebGazer is never inlined and its top-level "could not resolve" throw is gone at the source, with a
+  build check that fails on either. `scripts/update-oyonr.sh` now expects 3.3.3 and no longer copies
+  untracked build output and editor files from the source checkout.
+
 ## [3.0.0-rc.20] — 2026-10-04
 
 - **Pathology starter slides can be added (PRV-25).** Every slide in the starter library is

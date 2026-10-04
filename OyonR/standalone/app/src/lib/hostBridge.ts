@@ -2,6 +2,7 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { create } from 'zustand';
 import { useStore, type StoreApi, type UseBoundStore } from 'zustand';
 import type { EmotionWindow } from 'oyon';
+import type { PillLabels, PillLang } from './pillStrings';
 
 /*
  * Host bridge — everything the <oyon-app> custom element needs to tell the
@@ -140,6 +141,20 @@ export interface HostBridgeState {
    * ignored key-by-key. Null ⇒ use the settings store (unchanged behavior).
    */
   settingsOverride: Record<string, unknown> | null;
+  /**
+   * Language of the capture pill (the <oyon-app> `lang` attribute, normalised
+   * by parsePillLang: 'de-DE' → 'de', unknown → 'en'). Pure presentation —
+   * the runtime never reads it, so a live change re-renders the pill text
+   * without touching the camera or the capture session.
+   */
+  lang: PillLang;
+  /**
+   * Host string overrides for the capture pill (the <oyon-app> `labels`
+   * attribute, validated by parsePillLabels). Win over the built-in table for
+   * the current `lang`. Null ⇒ built-in strings only. Presentation only, like
+   * `lang`.
+   */
+  labels: PillLabels | null;
   setBridge: (
     // `chromeless` is intentionally NOT settable: it is strictly derived from
     // `chromeMode` (below), so it cannot be patched into an inconsistent pair.
@@ -158,6 +173,8 @@ export interface HostBridgeState {
         | 'gazeEngineOverride'
         | 'gazeAois'
         | 'settingsOverride'
+        | 'lang'
+        | 'labels'
       >
     >,
   ) => void;
@@ -194,6 +211,8 @@ export function createHostBridgeStore(): HostBridgeStore {
     gazeEngineOverride: null,
     gazeAois: null,
     settingsOverride: null,
+    lang: 'en',
+    labels: null,
     // `chromeless` is kept strictly derived from `chromeMode` so the viewer
     // stub gate can NEVER drift from the viewer mode: every update that carries
     // chromeMode re-derives chromeless === (chromeMode === 'none'), and callers

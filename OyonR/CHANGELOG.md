@@ -1,5 +1,95 @@
 # Changelog
 
+## 3.3.3 - 2026-10-04
+
+### The capture pill speaks the host's language
+
+`<oyon-app>` gains two attributes for the capture pill (`chrome="capture"` and
+`"capture-analytics"`):
+
+- **`lang`** — a BCP-47 tag (`de`, `de-DE`, `kk-KZ`; only the primary subtag
+  counts). Built-in strings for `en`, `de`, `es`, `it`, `fi`, `sv`, `fr` and
+  `kk`, the languages Rohy ships. Anything else falls back to English with a
+  console warning.
+- **`labels`** — a JSON object overriding any pill string by key (see
+  `standalone/app/src/lib/pillStrings.js`). Unknown keys and non-string or
+  blank values are dropped with a warning; invalid JSON is ignored and never
+  throws.
+
+Both apply live and are presentation-only: they live in the element's host
+bridge, which the runtime never reads, so switching language mid-capture
+re-renders the text without restarting the camera, the runtime or the
+session. The emotion word in the headline is localised too; English keeps
+the classifier's own wording. Translations are machine-assisted, written as
+natural UI strings, and plural-free ("samples: 12", never "12 samples").
+"Capture" is rendered as capture or measurement, never "recording": Oyon
+keeps no video.
+
+### The capture pill can be reached by keyboard and screen reader
+
+- Every pill control has an accessible name (`aria-label`); its tooltip is
+  kept as the description. Icons are `aria-hidden`.
+- A control that is unavailable (↗ before a session exists, Start while the
+  camera starts, Calibrate while calibrating) is `aria-disabled` rather than
+  natively disabled, so it stays in the tab order and announces why it is
+  unavailable. A click on it does nothing.
+- Pill controls draw their own focus ring: a light cyan outline between dark
+  halos, which reads on the dark glass and on any host background. Before
+  this, the only ring was the global info blue, which was close to invisible
+  against the pill.
+- The headline is a polite live region. It announces Ready, Camera… and
+  Error, and while capturing a steady "Capturing" or "Paused". The live
+  emotion word is hidden from assistive tech, so it does not announce every
+  change. The pill is a labelled group and carries the resolved `lang`, so
+  screen readers pronounce it in the right language.
+
+### The element bundle no longer depends on whether webgazer is installed
+
+The element is one inlined module, so `await import('webgazer')` was
+evaluated at its top level, and the result depended on the build machine:
+
+- **webgazer absent** (a clean `npm ci`; it is an optional peer and not in
+  the lockfile): Vite's missing-peer stub,
+  `throw new Error('Could not resolve "webgazer" imported by "oyon".')`, ran
+  on load and the element never defined. The 3.3.2 element shipped like
+  this, and Rohy hand-patched its vendored copy.
+- **webgazer present** (a stale install): the whole GPL-3.0 library, about
+  1.3 MB, was inlined and executed on load in every host, whether or not the
+  webgazer engine was selected.
+
+The element build now always resolves `webgazer` to an empty module.
+`WebGazerAdapter` treats an import that yields no usable WebGazer like a
+failed import and falls back to its script tag (`scriptUrl`), so
+`gaze-engine="webgazer"` still works in the element. The default mediapipe
+engine never touches it. `build:element` now runs
+`scripts/verify-element-bundle.mjs`, which fails the build if the bundle
+contains any unresolved-import stub or inlined WebGazer code. The element
+bundle is about 4.6 MB, down from 5.9 MB on a machine with webgazer
+installed.
+
+### Tests
+
+- `tests/app-pill-a11y.test.js` (in `npm test`) covers the string table
+  (every language, every key, matching placeholders, plural-free counts),
+  `lang` normalisation, `labels` validation (bad JSON, non-objects, unknown
+  keys, `__proto__`), overrides, emotion labels, source contracts for the
+  pill, element and runtime, and the WebGazer fallback.
+- `tests/e2e/embed-pill.spec.ts` checks the built element in Chromium: live
+  `lang`/`labels` switching and fallbacks, an accessible name on every
+  control, `aria-hidden` icons, the aria-disabled control staying in the tab
+  order, the computed focus ring after a keyboard Tab, and a `lang` switch
+  mid-capture. That last test checks there is no new `getUserMedia` call, no
+  ended track, the same runtime controls object and no lifecycle transition.
+
+- `tests/e2e/standalone-app.spec.ts` looks for the analytics tab by its
+  current name, "Dynamics". It had been failing since the tab was renamed
+  from "Affect dynamics". The new line is word for word the patch Rohy's
+  `scripts/apply-oyon-patches.mjs` applies after each sync, so that script
+  will now report it as unchanged.
+
+The host contract version stays at `3.1`: both attributes are optional and
+additive.
+
 ## 3.3.2 - 2026-07-26
 
 ### Every license now carries both an embedded text and a live link

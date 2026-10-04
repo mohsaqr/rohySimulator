@@ -12,6 +12,7 @@ import {
   type HostBridgeStore,
 } from '@/lib/hostBridge';
 import elementCss from '@/styles/element.css?inline';
+import { parsePillLabels, parsePillLang, type PillLabels, type PillLang } from '@/lib/pillStrings';
 import {
   OYON_HOST_CONTRACT_VERSION,
   OYON_VERSION,
@@ -26,8 +27,8 @@ import {
  *
  * Host contract (see docs/EMBEDDING.md):
  *   attributes  user-id, user-label, session-id, api-base-url, asset-base,
- *               page, sample-events, sample-event-hz
- *               (identity and sample-event attrs apply live)
+ *               page, sample-events, sample-event-hz, lang, labels
+ *               (identity, sample-event, lang and labels attrs apply live)
  *   property    getToken: () => string | Promise<string>
  *   methods     start(), stop()
  *   events      oyon:window  { windows, sessionId, userId }
@@ -151,6 +152,18 @@ const OBSERVED = [
   'sample-events',
   'sample-event-hz',
   'live-samples',
+  // lang picks the capture pill's language (BCP-47-ish: 'de', 'de-DE', 'kk-KZ'
+  // → primary subtag; en, de, es, it, fi, sv, fr, kk have tables; anything
+  // else → 'en' with a console warning). labels carries a JSON object of
+  // string overrides keyed like src/lib/pillStrings.js (unknown keys and
+  // non-string values are dropped with a warning; invalid JSON is ignored).
+  // Both are PRESENTATION ONLY and apply live: they land in the bridge, which
+  // the runtime never reads, so a change re-renders the pill text and never
+  // restarts the camera or the capture session. The pill root carries the
+  // resolved language as its own `lang`, so assistive tech pronounces the
+  // strings in the language they are actually written in.
+  'lang',
+  'labels',
   // chrome selects the delivery shell:
   //   absent       → 'full'    : today's full app, untouched.
   //   "none"       → 'none'    : viewer-only — drops capture chrome
@@ -244,6 +257,28 @@ function parseSettingsAttribute(value: string | null): Record<string, unknown> |
   return null;
 }
 
+/** Parse `lang` for the pill; warn (never throw) on a language with no table. */
+function pillLangAttribute(value: string | null): PillLang {
+  const { lang, recognized } = parsePillLang(value);
+  if (!recognized) {
+    try {
+      console.warn(`[oyon-app] no capture-pill strings for lang="${value}" — using English.`);
+    } catch { /* no console */ }
+  }
+  return lang;
+}
+
+/** Parse `labels` for the pill; warn (never throw) about everything dropped. */
+function pillLabelsAttribute(value: string | null): PillLabels | null {
+  const { labels, problems } = parsePillLabels(value);
+  if (problems.length > 0) {
+    try {
+      console.warn(`[oyon-app] ${problems.join('; ')}.`);
+    } catch { /* no console */ }
+  }
+  return labels;
+}
+
 export class OyonAppElement extends HTMLElement {
   static readonly version = OYON_VERSION;
   static readonly hostContractVersion = OYON_HOST_CONTRACT_VERSION;
@@ -313,6 +348,8 @@ export class OyonAppElement extends HTMLElement {
       apiBaseUrl: this.getAttribute('api-base-url'),
       gazeEngineOverride: this.getAttribute('gaze-engine')?.trim().toLowerCase() || null,
       settingsOverride: parseSettingsAttribute(this.getAttribute('settings')),
+      lang: pillLangAttribute(this.getAttribute('lang')),
+      labels: pillLabelsAttribute(this.getAttribute('labels')),
       // Lazy passthrough, resolved at REQUEST time — never at connect time.
       // For a parser-created element, connectedCallback fires during
       // upgrade, before any host script can assign `el.getToken`; snapshot-
@@ -416,6 +453,8 @@ export class OyonAppElement extends HTMLElement {
           gazeEngineOverride: null,
           gazeAois: null,
           settingsOverride: null,
+          lang: 'en',
+          labels: null,
           assetBase: null,
           apiBaseUrl: null,
           getToken: null,
@@ -453,6 +492,13 @@ export class OyonAppElement extends HTMLElement {
         // Same contract as gaze-engine: snapshotted at start() — a live
         // attribute change never reconfigures a running capture.
         this.bridge?.getState().setBridge({ settingsOverride: parseSettingsAttribute(value) });
+        break;
+      case 'lang':
+        // Presentation only: the pill re-renders, the runtime is untouched.
+        this.bridge?.getState().setBridge({ lang: pillLangAttribute(value) });
+        break;
+      case 'labels':
+        this.bridge?.getState().setBridge({ labels: pillLabelsAttribute(value) });
         break;
       case 'sample-events':
       case 'sample-event-hz':

@@ -10,7 +10,7 @@
 //      actually defined and REJECTS on load error or timeout — a dead
 //      element is a visible failure, never a silently-empty pill.
 
-export const OYON_ELEMENT_SRC = '/oyon/standalone/app/dist-element/oyon-app.element.js?v=3.3.2';
+export const OYON_ELEMENT_SRC = '/oyon/standalone/app/dist-element/oyon-app.element.js?v=3.3.3';
 
 const SCRIPT_MARKER = 'data-oyon-element';
 const LOAD_TIMEOUT_MS = 30000; // generous for a 5 MB module on a slow link

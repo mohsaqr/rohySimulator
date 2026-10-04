@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build && npm run build:trim",
     "build:full": "tsc -b && vite build",
     "build:trim": "node scripts/trim-bundled-wasm.mjs",
-    "build:element": "vite build -c vite.element.config.ts && node scripts/trim-bundled-wasm.mjs dist-element",
+    "build:element": "vite build -c vite.element.config.ts && node scripts/trim-bundled-wasm.mjs dist-element && node scripts/verify-element-bundle.mjs dist-element",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },
