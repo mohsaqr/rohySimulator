@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.18] — 2026-10-04
+
+- **No case titles in a learner's analytics.** Learning events, moments, chat turns, case insights, the
+  CSV export and the learner's own Oyon records carried the authoring title (often the diagnosis);
+  below reviewer they now carry the case code.
+
 ## [3.0.0-rc.17] — 2026-10-04
 
 - **No hardcoded credentials in the audit scripts (CWE-798).** The `audit-*.sh` scripts fell back to

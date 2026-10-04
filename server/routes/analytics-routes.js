@@ -18,7 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
-import { projectCaseSnapshotForRole, readsWholeCase } from '../services/caseProjection.js';
+import { projectCaseSnapshotForRole, readsWholeCase, withLearnerCaseLabels } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     authenticateToken,
@@ -1052,7 +1052,7 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
 
     const params = canReview ? [tenantId(req), limit] : [tenantId(req), req.user.id, limit];
 
-    dbAdapter.all(sql, params, (err, rows) => {
+    dbAdapter.all(sql, params, async (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields and add session info
@@ -1064,10 +1064,11 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
         // Get unique sessions for filtering
         const sessions = [...new Map(events.filter(e => e.session_id).map(e => [
             e.session_id,
-            { id: e.session_id, case_name: e.case_name, username: e.username }
+            { id: e.session_id, case_id: e.case_id, case_name: e.case_name, username: e.username }
         ])).values()];
 
-        res.json({ events, sessions });
+        // A learner's own events carry the case code, not the authoring title.
+        res.json(await withLearnerCaseLabels({ events, sessions }, req.user.role, tenantId(req), dbAdapter));
     });
 });
 
@@ -1319,7 +1320,7 @@ router.get('/learning-events/moments', authenticateToken, async (req, res) => {
     );
     try {
         const moments = await fetchEnrichedMoments(req, limit);
-        res.json({ moments, total: moments.length });
+        res.json(await withLearnerCaseLabels({ moments, total: moments.length }, req.user.role, tenantId(req), dbAdapter));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1390,10 +1391,10 @@ router.get('/chat-log/turns', authenticateToken, (req, res) => {
             ? [tenantId(req), ...sessionIds]
             : [tenantId(req), ...sessionIds, req.user.id];
 
-        dbAdapter.all(winSql, winParams, (wErr, winRows) => {
+        dbAdapter.all(winSql, winParams, async (wErr, winRows) => {
             if (wErr) return res.status(500).json({ error: wErr.message });
             const rows = turnRowsFrom(messages, winRows || []);
-            res.json({ events: rows.slice(0, limit), total: rows.length });
+            res.json(await withLearnerCaseLabels({ events: rows.slice(0, limit), total: rows.length }, req.user.role, tenantId(req), dbAdapter));
         });
     });
 });
@@ -1608,7 +1609,7 @@ router.get('/analytics/case-insights', authenticateToken, async (req, res) => {
             .sort((a, b) => (parseTimestampMs(b.ts) ?? 0) - (parseTimestampMs(a.ts) ?? 0))
             .slice(0, CASE_INSIGHTS_TRIGGER_LIMIT);
 
-        res.json({ triggers, summary: actionAffectSummary(moments) });
+        res.json(await withLearnerCaseLabels({ triggers, summary: actionAffectSummary(moments) }, req.user.role, tenantId(req), dbAdapter));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1795,7 +1796,7 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
         // the joins should be scoped too.
         const dataSql = `
             SELECT
-                le.timestamp, le.user_id, u.username, le.case_id, c.name AS case_name,
+                le.timestamp, le.user_id, u.username, le.case_id, c.name AS case_name, c.case_code,
                 le.session_id, le.verb, le.object_type, le.object_id, le.object_name,
                 le.component, le.parent_component, le.result, le.duration_ms,
                 le.message_role, le.message_content, le.severity, le.category, le.context,
@@ -1839,9 +1840,12 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
                 });
                 return;
             }
-            for (const r of rows) {
+            // A learner exporting their own events gets the case code in the
+            // case_name column, never the authoring title.
+            const wholeCase = readsWholeCase(req.user.role);
+            for (const r of rows) { // a CSV line per row, written as it is built
                 const cells = [
-                    r.timestamp, r.user_id, r.username, r.case_id, r.case_name, r.session_id,
+                    r.timestamp, r.user_id, r.username, r.case_id, wholeCase ? r.case_name : (r.case_code ?? `Case ${r.case_id}`), r.session_id,
                     r.verb, r.object_type, r.object_id, r.object_name,
                     r.component, r.parent_component, r.result, r.duration_ms,
                     r.message_role, r.message_content, r.severity, r.category, r.context,

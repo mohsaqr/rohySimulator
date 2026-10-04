@@ -6,6 +6,12 @@ import { validateEmotionBatch, isModalityOnlyEvent } from 'oyon/validation';
 import { OYON_EVENT_SOURCES, OYON_MODALITIES, OYON_STATE_VOCABULARIES, OYON_WINDOW_KINDS } from 'oyon/version';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
+import { withLearnerCaseLabels } from '../services/caseProjection.js';
+
+// A learner reading their own Oyon records gets the case code where the stored
+// snapshot holds the authoring title (services/caseProjection.js). The title
+// is still stored: educators read it.
+const learnerLabels = (req, payload) => withLearnerCaseLabels(payload, req.user.role, tenantId(req), { all: dbAll });
 import { logger } from '../logger.js';
 import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
 import { DEFAULT_RUNTIME, ensureSettings } from '../lib/oyonSettings.js';
@@ -526,10 +532,10 @@ router.get('/emotion-records', authenticateToken, async (req, res) => {
         total,
         filters: pickFilterFields(req),
     });
-    res.json({
+    res.json(await learnerLabels(req, {
         records: rows.map(hydrateRecord).map(r => redactRow(r)),
         total,
-    });
+    }));
 });
 
 /*
@@ -603,11 +609,11 @@ router.get('/signal-windows', authenticateToken, async (req, res) => {
         returned: rows.length,
         total,
     });
-    res.json({
+    res.json(await learnerLabels(req, {
         windows: rows.map(hydrateSignalWindow).map(r => redactRow(r)),
         total,
         modalities: modalityRows.map(r => ({ modality: r.modality, count: Number(r.count) || 0 })),
-    });
+    }));
 });
 
 /*
@@ -797,10 +803,10 @@ router.get('/signal-events', authenticateToken, async (req, res) => {
         returned: rows.length,
         total,
     });
-    res.json({
+    res.json(await learnerLabels(req, {
         events: rows.map(({ detail_json: detailJson, ...row }) => redactRow({ ...row, detail: parseJson(detailJson) })),
         total,
-    });
+    }));
 });
 
 // ──────────────────────────────────────────────────────────────────────
@@ -924,7 +930,7 @@ router.get('/analytics/cases', authenticateToken, async (req, res) => {
         scope: 'cases', user_id: req.user.id, role: req.user.role,
         returned: cases.length, filters: pickFilterFields(req),
     });
-    res.json({ cases });
+    res.json(await learnerLabels(req, { cases }));
 });
 
 router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) => {
@@ -942,7 +948,7 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
     // path read-light: one indexed query per session.
     const visCol = rowVisibilityColumn(req.user);
     if (!visCol) {
-        return res.json({
+        return res.json(await learnerLabels(req, {
             session: {
                 id: session.id,
                 user_id: session.user_id,
@@ -953,7 +959,7 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
                 case_title: session.live_case_name,
             },
             oyon_windows: [],
-        });
+        }));
     }
     const windows = await dbAll(
         `SELECT r.*, u.username, u.role AS user_role
@@ -969,7 +975,7 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
         windows: windows.length,
     });
 
-    res.json({
+    res.json(await learnerLabels(req, {
         session: {
             id: session.id,
             user_id: session.user_id,
@@ -980,7 +986,7 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
             case_title: session.live_case_name,
         },
         oyon_windows: windows.map(hydrateRecord).map(r => redactRow(r)),
-    });
+    }));
 });
 
 router.get('/student/me', authenticateToken, async (req, res) => {
@@ -996,7 +1002,7 @@ router.get('/student/me', authenticateToken, async (req, res) => {
         [tenantId(req), String(req.user.id), limit(req.query.limit, 100)]
     );
     oyonLog.debug('student self-records read', { user_id: req.user.id, returned: rows.length });
-    res.json({ records: rows.map(hydrateRecord) });
+    res.json(await learnerLabels(req, { records: rows.map(hydrateRecord) }));
 });
 
 router.get('/admin/health', authenticateToken, async (req, res) => {
