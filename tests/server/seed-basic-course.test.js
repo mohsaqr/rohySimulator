@@ -151,4 +151,22 @@ describe('fresh-DB seed: Basic course with its test content', () => {
             expect(membership).toBeTruthy();
         });
     });
+
+    // Regression lock: a fresh install's default case had no agents, no rubric and no ECG — seeders/cases.js only inserts the row; the boot upgrader (seedStemiCase.js) and the standing-specialist sweep complete it (Phase 4, 2026-10-04)
+    it('the default case comes up complete: its team, the cardiologist its ECG brings, and its rubric', async () => {
+        const { stemi, agents, rubric } = await withDb(async (db) => {
+            const row = await pGet(db, `SELECT id, config FROM cases WHERE is_default = 1 AND deleted_at IS NULL`);
+            return {
+                stemi: row,
+                agents: await pAll(db, `SELECT t.agent_type FROM case_agents ca JOIN agent_templates t ON t.id = ca.agent_template_id WHERE ca.case_id = ?`, [row.id]),
+                rubric: await pAll(db, `SELECT treatment_name FROM case_treatments WHERE case_id = ?`, [row.id]),
+            };
+        });
+        expect(JSON.parse(stemi.config).seed_revision).toBe('stemi-v2');
+        expect(JSON.parse(stemi.config).ecg.manifest.recordings).toHaveLength(1);
+        expect(agents.map((a) => a.agent_type).sort()).toEqual(
+            ['cardiologist', 'consultant', 'discussant', 'laboratorian', 'nurse', 'radiologist', 'relative'],
+        );
+        expect(rubric.map((r) => r.treatment_name)).toContain('Aspirin');
+    });
 });

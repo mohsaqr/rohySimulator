@@ -309,6 +309,8 @@ describe('the server', () => {
             const before = llm.bodies.length;
             await refused(await ask(ids.offSession), 'room_disabled');
             expect(llm.bodies.length).toBe(before);
+            // The tutor also waits for the case to end (discussant_locked).
+            expect((await as(student, 'PUT', `/api/sessions/${ids.onSession}/end`)).status).toBeLessThan(300);
             expect((await ask(ids.onSession)).status).toBe(200);
         });
     });

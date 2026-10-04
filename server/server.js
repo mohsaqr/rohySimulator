@@ -21,6 +21,7 @@ import { ensureCaseCodes } from './seeders/cases.js';
 import { attachStandingSpecialistsToAllCases } from './services/standingSpecialists.js';
 import seedStemiCourse from './seedStemiCourse.js';
 import { seedLanguageCases } from './seedLanguageCases.js';
+import seedStemiCase from './seedStemiCase.js';
 import { seedLlmDefaults } from './seeders/llmSettings.js';
 import { loadKokoro, kokoroIdleUnloadMs } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
@@ -329,6 +330,13 @@ async function initializeAndStart() {
     // them into the single default "Basic course" alongside the English default
     // case — one default course holding one case per language. Non-fatal.
     await seedLanguageCases();
+
+    // Bring each tenant's default STEMI case to v2 once: in place where it is
+    // exactly as shipped, beside it where an educator changed it, and attach
+    // its agents and rubric. Before the case-code and standing-specialist
+    // sweeps, so an inserted v2 gets its code and its ECG brings the
+    // cardiologist on this same boot. Non-fatal.
+    await seedStemiCase();
 
     // Every case must carry a visible language-bearing case_code (IT-0042).
     // Migration 0035 backfilled pre-existing rows; this sweep covers rows the

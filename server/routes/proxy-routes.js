@@ -521,6 +521,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
         }
 
+        // The debrief tutor holds the answer key (config.knowledge.answerKey),
+        // so it speaks only once the case has ended — unless the educator set
+        // `unlock_trigger: 'always'`. The client enforced this alone: a tutor
+        // attached to the case showed as a chat tab, and its case_agent_id (or
+        // `persona: 'discussant'`) reached it mid-case. Either route, same gate.
+        if (session_id != null && agentType === 'discussant' && !hasRoleAtLeast(req.user, ROLE_RANKS.reviewer)) {
+            const unlockTrigger = (caseAgent?.config ?? serverDiscussant?.discussant?.config ?? {}).unlock_trigger || 'after_case_ended';
+            if (unlockTrigger !== 'always') {
+                const ended = await dbAdapter.get('SELECT end_time FROM sessions WHERE id = ? AND tenant_id = ?', [session_id, tenantId(req)]);
+                if (!ended?.end_time) {
+                    (req.log || routesLlmLog).info('discussant refused before the case ended', { session_id, case_agent_id: caseAgent?.caseAgentId ?? null });
+                    return res.status(403).json({ error: 'The debrief opens when the case ends', code: 'discussant_locked' });
+                }
+            }
+        }
+
         // Priority: agent > session > platform
         let provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
         const baseModel = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;

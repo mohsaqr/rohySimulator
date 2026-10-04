@@ -40,7 +40,10 @@ import { isSpecialistType } from '../../../server/shared/specialties.js';
 // through the on-call phone (src/components/oncall), not a chat tab.
 export function visibleAgentTabs(agents) {
     if (!Array.isArray(agents)) return [];
-    return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient' && !isSpecialistType(a.agent_type));
+    // Not the discussant either: it has its own room (the debrief), opens when
+    // the case ends, and holds the answer key — a chat tab put it one click
+    // away mid-case.
+    return agents.filter(a => a && a.enabled !== false && a.agent_type !== 'patient' && a.agent_type !== 'discussant' && !isSpecialistType(a.agent_type));
 }
 
 // Per-case memory of which chat tab was open (see the effects in the
@@ -1659,7 +1662,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     if (key !== activeTab) EventLogger.tabSwitched(key, COMPONENTS.CHAT_INTERFACE, { kind: key === 'patient' ? 'patient' : 'agent' });
                     setActiveTab(key);
                 }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-2 px-3 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive
                         ? 'bg-neutral-900 text-white border-t border-l border-r border-neutral-700'
                         : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800/80'
@@ -1697,7 +1700,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     return (
         <div className="flex flex-col h-full bg-neutral-900 text-white font-sans border-t border-neutral-800">
             {/* Tab Bar */}
+            {/* The tabs scroll on their own and the voice controls sit outside
+                them: with five agents the strip overflowed unclipped and pushed
+                the Voice toggle under the monitor, where it could not be
+                clicked (STEMI v2, 2026-10-04). */}
             <div className="flex items-end gap-1 px-2 pt-2 bg-neutral-950 border-b border-neutral-800">
+                <div className="flex items-end gap-1 min-w-0 flex-1 overflow-x-auto" data-testid="chat-tab-strip">
                 {renderTab('patient', patientName, <Bot className="w-4 h-4 text-emerald-400" />)}
                 {/* Bug 10 (16.5.2026): patient already has its own tab
                     above — visibleAgentTabs() drops agent_type==='patient'
@@ -1711,8 +1719,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         status
                     );
                 })}
+                </div>
                 {voiceModeAvailable && (
-                    <div className="ml-auto mb-1 flex items-center gap-1.5">
+                    <div className="ml-auto mb-1 flex shrink-0 items-center gap-1.5">
                         {voiceMode && (
                             <button
                                 onClick={() => setShowTranscript(s => !s)}

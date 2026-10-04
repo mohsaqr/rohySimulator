@@ -694,7 +694,7 @@ function MainApp() {
    // sticky caseEnded flag so the patient-room chrome reflects it, and
    // routes the user straight into the debrief room. Idempotent on the
    // server (see sessions-routes.js:211), so a stray double-click is safe.
-   const handleEndSession = () => {
+   const handleEndSession = async () => {
       if (!sessionId) return;
       EventLogger.log('CLICKED', 'button', {
          objectId: 'end-session',
@@ -705,7 +705,11 @@ function MainApp() {
       // all until here, so BackendSurface's flush-on-end branch was dead code
       // and no analytics could see where a session stopped.
       EventLogger.sessionEnded(sessionStartedAtRef.current ? Date.now() - sessionStartedAtRef.current : null, 'explicit');
-      endSessionOnServer(sessionId);
+      // Awaited: the debrief tutor speaks only once the server has the
+      // session's end_time (proxy-routes, discussant_locked), and its opening
+      // turn fires as soon as the debrief room mounts. endSessionOnServer
+      // never throws.
+      await endSessionOnServer(sessionId);
       // Bug 7 (16.5.2026): clinical alarms latch until acked, and the
       // AudioSurface keeps beeping any active alarm. Ending the case is an
       // explicit "I'm done with the patient" — acknowledge outstanding
