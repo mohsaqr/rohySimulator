@@ -7,7 +7,8 @@
 // tests/server/analytics-tna.test.js (real server, real SQLite); this
 // file guards the JS the cohort scope newly depends on.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { createTestDb } from '../utils/seedDb.js';
 import {
     buildEventFilter,
     summary,
@@ -86,7 +87,7 @@ describe('summary', () => {
             [{ totalActivities: 10, uniqueUsers: 3, uniqueSessions: 4 }]]]);
         const out = await summary(db, buildEventFilter({ tenantId: 1 }));
         expect(out).toEqual({
-            totalActivities: 10, uniqueUsers: 3, uniqueSessions: 4, avgPerUser: 3,
+            totalActivities: 10, uniqueUsers: 3, uniqueSessions: 4, uniqueLearners: 0, avgPerUser: 3,
         });
     });
 
@@ -95,6 +96,34 @@ describe('summary', () => {
             [{ totalActivities: 0, uniqueUsers: 0, uniqueSessions: 0 }]]]);
         const out = await summary(db, buildEventFilter({ tenantId: 1 }));
         expect(out.avgPerUser).toBe(0);
+    });
+});
+
+// Regression lock: the analytics "Students" card counted every distinct user, so the admin who tested a case appeared as a student (QA 2026-10-04, PRV-38)
+describe('summary against a real database', () => {
+    let testDb;
+    afterAll(async () => { await testDb?.cleanup(); });
+
+    it('uniqueLearners counts student accounts only; uniqueUsers still counts everyone', async () => {
+        testDb = await createTestDb({ label: 'agg-learners' });
+        const users = [['learner-a', 'student'], ['learner-b', 'student'], ['the-admin', 'admin'], ['the-educator', 'educator']];
+        for (const [username, role] of users) {
+            await testDb.run(
+                `INSERT INTO users (username, name, email, password_hash, role, tenant_id) VALUES (?, ?, ?, 'x', ?, 1)`,
+                [username, username, `${username}@example.com`, role],
+            );
+        }
+        const ids = await testDb.all(`SELECT id, username FROM users WHERE username IN ('learner-a','learner-b','the-admin','the-educator')`);
+        for (const { id } of ids) {
+            await testDb.run(
+                `INSERT INTO learning_events (tenant_id, user_id, verb, object_type, timestamp) VALUES (1, ?, 'OPENED', 'case', '2026-10-04T10:00:00Z')`,
+                [id],
+            );
+        }
+        const out = await summary({ get: (sql, p) => testDb.get(sql, p) }, buildEventFilter({ tenantId: 1 }));
+        expect(out.uniqueUsers).toBe(4);
+        expect(out.uniqueLearners).toBe(2);
+        expect(out.totalActivities).toBe(4);
     });
 });
 

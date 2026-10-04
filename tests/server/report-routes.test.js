@@ -96,6 +96,16 @@ describe('report relay (configured)', () => {
         expect(prova.seen.reports).toHaveLength(0);
     });
 
+    // Regression lock: the My-reports badge's first read registered the installation with Prova on page load, before anyone had reported anything (QA 2026-10-04, PRV-38)
+    it('a read before any report neither registers nor calls Prova', async () => {
+        const res = await fetch(`${server.baseUrl}/api/reports/mine`, { headers: { authorization: `Bearer ${token}` } });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ reports: [], news: 0 });
+        expect(prova.seen.registrations).toHaveLength(0);
+        expect(prova.seen.mine).toHaveLength(0);
+        expect(fs.existsSync(path.join(keyDir, 'report-key.json'))).toBe(false);
+    });
+
     it('relays with the signed-in username and Rohy\'s version; the key is registered once, 0600, never answered', async () => {
         const res = await post(report());
         expect(res.status).toBe(201);

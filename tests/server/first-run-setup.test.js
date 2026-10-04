@@ -224,4 +224,64 @@ describe('first-run setup backend', () => {
             });
         });
     });
+
+    // Regression lock: a passed AI-engine test was component state, so reopening the setup wizard showed "Untested" and "Students cannot talk to patients" again (QA 2026-10-04, PRV-34)
+    describe('llm test result survives the wizard', () => {
+        let llm;
+        let llmFails = false;
+        beforeAll(async () => {
+            const http = await import('node:http');
+            llm = http.createServer((req, res) => {
+                if (llmFails) { res.writeHead(500); res.end('down'); return; }
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ choices: [{ message: { content: 'test successful' } }] }));
+            });
+            await new Promise((r) => llm.listen(0, '127.0.0.1', r));
+        });
+        afterAll(() => new Promise((r) => llm.close(r)));
+
+        const tested = async () => (await (await admin('/api/setup/status')).json()).llm.tested;
+        const save = (patch) => admin('/api/platform-settings/llm', { method: 'PUT', body: JSON.stringify(patch) });
+
+        it('reports tested only for the exact configuration that passed', async () => {
+            const baseUrl = `http://127.0.0.1:${llm.address().port}/v1`;
+            await save({ provider: 'lmstudio', baseUrl, model: 'model-a', enabled: true });
+            expect(await tested()).toBe(false);
+
+            const res = await admin('/api/platform-settings/llm/test', { method: 'POST', body: '{}' });
+            expect((await res.json()).success).toBe(true);
+            expect(await tested()).toBe(true);
+            // Asked again — as the wizard does when it is reopened.
+            expect(await tested()).toBe(true);
+
+            await save({ model: 'model-b' });
+            expect(await tested()).toBe(false);
+        });
+
+        it('a failed test retracts an earlier pass', async () => {
+            await admin('/api/platform-settings/llm/test', { method: 'POST', body: '{}' });
+            expect(await tested()).toBe(true);
+            llmFails = true;
+            const res = await admin('/api/platform-settings/llm/test', { method: 'POST', body: '{}' });
+            expect(res.status).toBe(400);
+            expect(await tested()).toBe(false);
+            llmFails = false;
+        });
+    });
+
+    // Regression lock: a student could read the platform LLM base URL (an internal host:port for a self-hosted model) and whether an API key is set (QA 2026-10-04, PRV-38)
+    it('GET /platform-settings/llm gives a student the provider/model label only', async () => {
+        await admin('/api/platform-settings/llm', { method: 'PUT', body: JSON.stringify({ provider: 'lmstudio', baseUrl: 'http://10.0.0.5:1234/v1', model: 'm' }) });
+        const asStudent = await (await student('/api/platform-settings/llm')).json();
+        expect(asStudent.provider).toBe('lmstudio');
+        expect(asStudent.model).toBe('m');
+        expect(asStudent).not.toHaveProperty('baseUrl');
+        expect(asStudent).not.toHaveProperty('apiKey');
+        expect(asStudent).not.toHaveProperty('apiKeySet');
+        expect(asStudent).not.toHaveProperty('systemPromptTemplate');
+
+        const asAdmin = await (await admin('/api/platform-settings/llm')).json();
+        expect(asAdmin.baseUrl).toBe('http://10.0.0.5:1234/v1');
+        expect(asAdmin).toHaveProperty('apiKeySet');
+    });
 });

@@ -117,6 +117,13 @@ router.post('/report', authenticateToken, requireAuth, async (req, res) => {
 router.get('/reports/mine', authenticateToken, requireAuth, async (req, res) => {
     const r = currentRelay(req);
     if (!r) return res.json({ reports: [], news: 0, code: REPORT_NOT_CONFIGURED });
+    // A READ never registers this installation. With no key yet nobody here
+    // has reported anything, so there is nothing to list — and registering
+    // from the badge's first poll put an install into Prova on page load
+    // (and, when Prova answered 429, a failed request on the console) before
+    // anyone had sent a report (QA 2026-10-04, PRV-38). Startup and the first
+    // POST /report still register.
+    if (!r.hasKey()) return res.json({ reports: [], news: 0 });
     try {
         return passOn(res, await r.mine({ user: req.user.username, seen: req.query.seen === '1' }));
     } catch (err) {

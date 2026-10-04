@@ -1,4 +1,5 @@
 import express from 'express';
+import { createHash } from 'node:crypto';
 import dbAdapter from '../dbAdapter.js';
 import { dbPath } from '../db.js';
 import path from 'path';
@@ -1125,6 +1126,18 @@ const getPlatformSetting = (key) => {
     });
 };
 
+// A passed POST /platform-settings/llm/test is remembered as a fingerprint of
+// the exact stored configuration it exercised (provider, model, base URL, key),
+// so GET /setup/status can say "Tested" after the wizard is closed and
+// reopened — and stops saying it the moment any of the four changes (QA
+// 2026-10-04, PRV-34: the result lived in component state and was forgotten).
+// Hashed rather than stored raw so the key does not land in a second row.
+const LLM_LAST_TEST_KEY = 'llm_last_test_ok';
+const llmConfigFingerprint = async () => {
+    const parts = await Promise.all(['llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key'].map(getPlatformSetting));
+    return createHash('sha256').update(JSON.stringify(parts.map(v => v ?? ''))).digest('hex');
+};
+
 // Helper function to set a platform setting
 const setPlatformSetting = (key, value, userId) => {
     return new Promise((resolve, reject) => {
@@ -1273,11 +1286,13 @@ router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) =>
     try {
         const [
             provider, model, baseUrl, apiKey, llmEnabled,
-            voiceEnabled, defaultLang, setupCompleted, affectRaw
+            voiceEnabled, defaultLang, setupCompleted, affectRaw, llmLastTest
         ] = await Promise.all([
             'llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key', 'llm_enabled',
-            'voice_mode_enabled', 'default_ui_language', 'setup_completed', 'affect_routing'
+            'voice_mode_enabled', 'default_ui_language', 'setup_completed', 'affect_routing',
+            LLM_LAST_TEST_KEY
         ].map(getPlatformSetting));
+        const llmTested = Boolean(llmLastTest) && llmLastTest === await llmConfigFingerprint();
 
         const voiceDefaultRows = await Promise.all(
             Object.keys(LANGUAGES).map(async (code) => [code, Boolean(await getPlatformSetting(defaultVoiceKey(code)))])
@@ -1312,7 +1327,8 @@ router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) =>
                 model: model || '',
                 base_url: baseUrl || '',
                 key_present: Boolean(apiKey),
-                enabled: llmEnabled !== 'false'
+                enabled: llmEnabled !== 'false',
+                tested: llmTested
             },
             language: {
                 default_ui_language: defaultLang && LANGUAGES[defaultLang] ? defaultLang : 'en'
@@ -1415,6 +1431,16 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
         // call from a student account returns the template field omitted.
         if (hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
             response.systemPromptTemplate = settings.llm_system_prompt_template || DEFAULT_LLM_SETTINGS.systemPromptTemplate;
+        } else {
+            // Below educator, the runtime label only: the DiagnosticBar shows
+            // "LLM: provider/model" and reads nothing else. The base URL is a
+            // vendor endpoint for a hosted model but an INTERNAL host:port for
+            // a self-hosted one (LM Studio, Ollama), and the key fields say
+            // whether a secret exists — neither is a learner's business
+            // (QA 2026-10-04, PRV-38).
+            delete response.baseUrl;
+            delete response.apiKey;
+            delete response.apiKeySet;
         }
 
         res.json(response);
@@ -1488,6 +1514,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
 
         if (!testResponse.ok) {
             const errText = await testResponse.text();
+            await setPlatformSetting(LLM_LAST_TEST_KEY, '', req.user.id);
             return res.status(400).json({
                 success: false,
                 error: `LLM API returned ${testResponse.status}: ${errText}`
@@ -1504,6 +1531,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
             responseContent = data.choices?.[0]?.message?.content || 'No response content';
         }
 
+        await setPlatformSetting(LLM_LAST_TEST_KEY, await llmConfigFingerprint(), req.user.id);
         res.json({
             success: true,
             message: 'Connection successful',
@@ -1511,6 +1539,10 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
         });
     } catch (err) {
         (req.log || routesLlmLog).error('llm test failed', { error: err.message });
+        // A failed round-trip retracts an earlier pass. Best effort: the
+        // test's own error is what the admin needs to see.
+        await setPlatformSetting(LLM_LAST_TEST_KEY, '', req.user.id)
+            .catch(e => (req.log || routesLlmLog).warn('could not clear llm test flag', { error: e.message }));
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -1662,9 +1694,11 @@ router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async 
     }
 });
 
-// Default doctor/chat settings
+// Default doctor/chat settings. No default name: unset, each learner's own
+// name labels their messages (ChatInterface). "Dr. Carmen" used to label
+// every learner (QA 2026-10-04, PRV-38).
 const DEFAULT_CHAT_SETTINGS = {
-    doctorName: 'Dr. Carmen',
+    doctorName: '',
     doctorAvatar: ''
 };
 

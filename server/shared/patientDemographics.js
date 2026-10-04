@@ -43,6 +43,28 @@
  */
 export const PATIENT_GENDERS = ['Male', 'Female', 'Other'];
 
+/**
+ * The catalogue key (in the `common` namespace) for showing a stored gender.
+ *
+ * The stored value is the English label (above), and three learner-facing
+ * surfaces printed it raw — "55 v Male" under a Finnish UI (QA 2026-10-04,
+ * PRV-33). Older seeds also wrote lowercase ("male"), hence the
+ * case-insensitive match. An unrecognised value returns null and the caller
+ * shows nothing rather than an untranslated word.
+ *
+ * @param {unknown} value  a stored gender, e.g. 'Male', 'female'
+ * @returns {'gender_male'|'gender_female'|'gender_other'|null}
+ */
+export function genderDisplayKey(value) {
+    if (typeof value !== 'string') return null;
+    switch (value.trim().toLowerCase()) {
+        case 'male': return 'gender_male';
+        case 'female': return 'gender_female';
+        case 'other': return 'gender_other';
+        default: return null;
+    }
+}
+
 /** Free-text in the DB (`config` JSON), but fixed here so it stops varying by locale. */
 export const MARITAL_STATUSES = ['Single', 'Married', 'Divorced', 'Widowed', 'Separated'];
 

@@ -123,10 +123,16 @@ function buildEventFilter({
 // GET /analytics/summary contract.
 async function summary(dbAdapter, filter) {
     const { where, params } = filter;
+    // `uniqueLearners` counts student accounts only. The dashboard card that
+    // says "Students" read uniqueUsers, so the admin who tested a case was
+    // counted as a student (QA 2026-10-04, PRV-38). uniqueUsers stays — it is
+    // the denominator of avgPerUser and describes the same population as
+    // every other aggregate here.
     const row = await dbAdapter.get(
         `SELECT COUNT(*) AS totalActivities,
                 COUNT(DISTINCT user_id) AS uniqueUsers,
-                COUNT(DISTINCT session_id) AS uniqueSessions
+                COUNT(DISTINCT session_id) AS uniqueSessions,
+                COUNT(DISTINCT CASE WHEN user_id IN (SELECT id FROM users WHERE role = 'student') THEN user_id END) AS uniqueLearners
            FROM learning_events ${where}`,
         params
     );
@@ -135,6 +141,7 @@ async function summary(dbAdapter, filter) {
     return {
         totalActivities: total,
         uniqueUsers: users,
+        uniqueLearners: row?.uniqueLearners || 0,
         uniqueSessions: row?.uniqueSessions || 0,
         avgPerUser: users > 0 ? Math.round(total / users) : 0,
     };

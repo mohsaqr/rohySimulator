@@ -5,6 +5,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 vi.mock('../../services/apiClient', () => ({
     apiPost: vi.fn(),
     apiPut: vi.fn(),
+    readCsrfToken: vi.fn(() => 'csrf-token-from-cookie'),
 }));
 
 // getToken() returns null on purpose: under cookie auth there IS no
@@ -121,5 +122,52 @@ describe('BackendSurface — alarm logging under cookie auth (no localStorage to
         );
         // And the failure counter did NOT tick — this was a success path.
         expect(getBackendTelemetry().alarmLogFailures).toBe(0);
+    });
+});
+
+// Regression lock: the unload flush (sendBeacon) carried no CSRF token, so every one was refused 403 and the last events before a reload/tab close were lost (QA 2026-10-04, PRV-24)
+describe('BackendSurface — unload flush carries the CSRF token', () => {
+    function Probe({ onCtx }) {
+        const ctx = useNotifications();
+        useEffect(() => { onCtx(ctx); });
+        return null;
+    }
+
+    it('puts _csrf in the sendBeacon payload', async () => {
+        const sent = [];
+        const original = navigator.sendBeacon;
+        navigator.sendBeacon = vi.fn((url, blob) => { sent.push({ url, blob }); return true; });
+        try {
+            let ctx = null;
+            renderWithProviders(
+                <>
+                    <Probe onCtx={(c) => { ctx = c; }} />
+                    <BackendSurface sessionId="sess-9" userId={7} caseId={3} />
+                </>,
+                { withToast: false, withVoice: false },
+            );
+            // ENDED_SESSION drains the queue immediately through the beacon path.
+            act(() => {
+                ctx.notify({
+                    source: SOURCES.TELEMETRY,
+                    severity: SEVERITY.INFO,
+                    key: 'session:end',
+                    message: 'Session ended',
+                    data: { verb: 'ENDED_SESSION', objectType: 'session', sessionId: 'sess-9' },
+                });
+            });
+            await act(async () => { await Promise.resolve(); });
+            expect(sent.length).toBeGreaterThan(0);
+            const text = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsText(sent[0].blob);
+            });
+            const body = JSON.parse(text);
+            expect(body._csrf).toBe('csrf-token-from-cookie');
+            expect(Array.isArray(body.events)).toBe(true);
+        } finally {
+            navigator.sendBeacon = original;
+        }
     });
 });
