@@ -198,6 +198,9 @@ let studentToken;
 let educatorToken;
 let caseId;
 let sessionId;
+let otherCaseTemplateId;
+let consultantTemplateId;
+let patientTemplateId;
 let consultantAgentId;
 let disabledAgentId;
 let otherCaseAgentId;
@@ -271,6 +274,9 @@ beforeAll(async () => {
         const nurseTpl = await addTemplate('nurse', 'Nurse', 'Bedside nurse', 'nurse prompt');
         const otherTpl = await addTemplate('consultant', 'Dr Other', 'Consultant', OTHER_CASE_PROMPT);
 
+        otherCaseTemplateId = otherTpl;
+        consultantTemplateId = consultantTpl;
+        patientTemplateId = patientTpl;
         consultantAgentId = await attach(caseId, consultantTpl);
         await attach(caseId, patientTpl);
         disabledAgentId = await attach(caseId, nurseTpl, 0);
@@ -534,6 +540,42 @@ describe('POST /proxy/llm with case_agent_id', () => {
 // to know only what the learner tells it cannot have that enforced by the
 // learner's own browser.
 // ---------------------------------------------------------------------------
+
+// Regression lock: a bare agent_template_id loaded ANY template in the tenant, so a learner could borrow another agent's routing (provider, model, key) by naming its id (Phase 0 security fix, 2026-10-04)
+describe('POST /proxy/llm with a bare agent_template_id', () => {
+    it('refuses a team-agent template that belongs to another case, without calling the model', async () => {
+        const before = llm.bodies.length;
+        const res = await proxyAs(studentToken, {
+            session_id: sessionId,
+            messages: [{ role: 'user', content: 'hi' }],
+            agent_llm_config: { agent_template_id: otherCaseTemplateId },
+        });
+        expect(res.status).toBe(404);
+        expect((await res.json()).code).toBe('template_not_allowed');
+        expect(llm.bodies.length).toBe(before);
+    });
+
+    it('refuses a template id with no session', async () => {
+        const res = await proxyAs(studentToken, {
+            messages: [{ role: 'user', content: 'hi' }],
+            agent_llm_config: { agent_template_id: patientTemplateId },
+        });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('session_required');
+    });
+
+    it('still accepts the patient template and a team template attached to this case', async () => {
+        for (const id of [patientTemplateId, consultantTemplateId]) {
+            const res = await proxyAs(studentToken, {
+                session_id: sessionId,
+                messages: [{ role: 'user', content: 'hi' }],
+                system_prompt: 'situation',
+                agent_llm_config: { agent_template_id: id },
+            });
+            expect(res.status).toBe(200);
+        }
+    });
+});
 
 describe('POST /proxy/llm — config.knowledge scopes', () => {
     const systemTextOf = (body) => (body.messages || [])

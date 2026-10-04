@@ -112,7 +112,7 @@ export async function enterLiveCase(page, baseURL, tag, theCase) {
             }
             window.localStorage.setItem('token', token);
             window.localStorage.setItem('rohy_active_session', JSON.stringify({
-                activeCase: caseRow, sessionId: session, timestamp: Date.now(),
+                caseId: caseRow.id, sessionId: session, timestamp: Date.now(),
             }));
         } catch { /* private mode — the app starts cold and the spec says so */ }
     }, [sessionId, activeCase, _token]);

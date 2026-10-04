@@ -60,6 +60,24 @@ export default function CaseTreatmentConfig({ caseId, caseTreatments = [], onUpd
         if (onUpdate) onUpdate(next);
     };
 
+    // The saved rubric lives in case_treatments (GET /cases/:id/treatments);
+    // the case's config no longer carries it (Phase 0, 2026-10-04). Load it
+    // once for a saved case — unless the parent already holds a working copy,
+    // which would be this session's unsaved edits and must not be replaced.
+    useEffect(() => {
+        if (!caseId || (caseTreatments && caseTreatments.length > 0)) return undefined;
+        let cancelled = false;
+        apiFetch(`/cases/${caseId}/treatments`)
+            .then((data) => {
+                if (cancelled || !Array.isArray(data?.treatments) || data.treatments.length === 0) return;
+                applyConfigured(data.treatments);
+            })
+            .catch((err) => console.warn('[CaseTreatmentConfig] rubric load failed:', err.message));
+        return () => { cancelled = true; };
+        // Once per case: the working copy takes over after the first load.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [caseId]);
+
     const fetchTreatments = async () => {
         try {
             const data = await apiFetch('/treatment-effects');

@@ -349,14 +349,34 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 llm_max_tokens: caseAgent.llm.maxTokens,
             };
         } else if (agent_llm_config?.agent_template_id) {
+            // A bare template id is how the two client-built personas (patient,
+            // discussant) name themselves, always inside a session. It used to
+            // load ANY template in the tenant, so a caller could borrow another
+            // agent's routing (provider, model, key) by naming its id. Now the
+            // template must be one of those two types, or attached to the
+            // session's own case (Phase 0 hardening, 2026-10-04).
+            if (!session_id) {
+                return res.status(400).json({ error: 'agent_template_id requires session_id', code: 'session_required' });
+            }
             agentTemplateId = agent_llm_config.agent_template_id;
-            agentTemplate = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT agent_type, llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
-                    [agentTemplateId, tenantId(req)], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                });
-            });
+            agentTemplate = await dbAdapter.get(
+                `SELECT t.agent_type, t.llm_provider, t.llm_model, t.llm_api_key, t.llm_endpoint, t.llm_temperature, t.llm_max_tokens
+                   FROM agent_templates t
+                  WHERE t.id = ? AND t.tenant_id = ? AND t.deleted_at IS NULL
+                    AND (t.agent_type IN ('patient', 'discussant')
+                         OR EXISTS (SELECT 1 FROM case_agents ca
+                                      JOIN sessions s ON s.case_id = ca.case_id
+                                     WHERE ca.agent_template_id = t.id AND s.id = ?))`,
+                [agentTemplateId, tenantId(req), session_id]
+            );
+            if (!agentTemplate) {
+                return res.status(404).json({ error: 'Agent template not available for this session', code: 'template_not_allowed' });
+            }
+        } else if (!session_id) {
+            // No agent named and no session: a free-form system prompt answered
+            // on the platform's key, by anyone signed in. Every real caller (the
+            // patient chat, the debrief) speaks inside a session (Phase 0).
+            return res.status(400).json({ error: 'session_id is required', code: 'session_required' });
         }
         // Every llm_request_log row after this point carries the tenant and
         // the agent the request spoke as (NULLs for a non-agent request).

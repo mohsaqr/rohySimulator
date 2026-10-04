@@ -166,7 +166,9 @@ describe('API fuzzer findings stay fixed', () => {
 
     // Regression lock: "fetch failed" from an unreachable provider was a 500.
     it('an unreachable LLM provider is a 502, not a 500', async () => {
-        const res = await post('/api/proxy/llm', { body: { messages: [{ role: 'user', content: 'hello' }] } });
+        // The proxy answers only inside a session (Phase 0, 2026-10-04).
+        const session = await (await post('/api/sessions', { body: { case_id: 1, student_name: 'fuzz' } })).json();
+        const res = await post('/api/proxy/llm', { body: { session_id: session.id, messages: [{ role: 'user', content: 'hello' }] } });
         expect(res.status).toBe(502);
         expect((await res.json()).error).toBe('LLM provider unreachable');
     });

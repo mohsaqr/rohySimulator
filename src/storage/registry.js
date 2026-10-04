@@ -38,7 +38,7 @@ export const STORAGE_REGISTRY = Object.freeze({
     // ── App shell + persistence rule ────────────────────────────────────────
     rohy_active_session: {
         owner: 'src/App.jsx',
-        purpose: 'Active case + sessionId blob restored on refresh.',
+        purpose: 'Active case ID + sessionId, restored on refresh (the case is re-fetched, never stored).',
         lifetime: 'session',
     },
     rohy_chat_history: {

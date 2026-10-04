@@ -453,6 +453,23 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         expect(screen.queryByText('Dr. Carmen')).toBeNull();
     });
 
+    // Regression lock: with no patient_name, the patient prompt fell back to the case's authoring title — the patient introduced himself as the diagnosis (Phase 0, 2026-10-04)
+    it('never names the patient after the authoring title when patient_name is missing', async () => {
+        const untitled = { ...caseFixture, name: 'Acute Chest Pain - STEMI', config: { ...caseFixture.config, patient_name: undefined } };
+        server.use(http.get('*/api/sessions/:sid', ({ params }) => HttpResponse.json({
+            session: { id: Number(params.sid), case_snapshot: JSON.stringify({ id: untitled.id, name: untitled.name, system_prompt: untitled.system_prompt, config: untitled.config }) },
+        })));
+        llmResponseText = 'OK.';
+        mount(untitled);
+        const input = await screen.findByPlaceholderText(/message/i);
+        fireEvent.change(input, { target: { value: 'Who are you?' } });
+        fireEvent.submit(input.closest('form'));
+        await waitForLlmRequest();
+        const prompt = llmRequests[llmRequests.length - 1].body.system_prompt;
+        expect(prompt).not.toContain('Acute Chest Pain - STEMI');
+        expect(prompt).toContain('## ROLE');
+    });
+
     it('pressing Enter in the input submits the same as the Send button', async () => {
         // CONTRACT: <form onSubmit> path. Enter inside the input fires the
         // form's submit handler. (No explicit keydown handler — we depend on

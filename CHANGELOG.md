@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.12] — 2026-10-04
+
+- **The AI proxy no longer answers outside a session.** A request that named no agent and carried no
+  session was answered with whatever system prompt it sent, on the platform's key, for anyone signed in.
+  It is now 400 `session_required`. A bare template id must also come with a session and name a patient
+  or discussant template, or one attached to that session's case — it used to load any template in the
+  tenant, borrowing its provider, model and key.
+- **The treatment rubric is no longer sent to students.** Expected, contraindicated, points and feedback
+  were also stored in `cases.config.treatments`, which students receive with the case, and
+  `available-treatments` echoed it. The rubric now lives only in `case_treatments`: the server strips it
+  on every save, the editor reads it from the new educator-only `GET /cases/:id/treatments`, and migration
+  0065 backfills rows where a case had only the config copy before removing it from cases and session
+  snapshots. The rubric PUT is now tenant-scoped.
+- **No more authoring title in learner-facing places.** The patient could introduce himself by the case
+  title when no patient name was set; the 3D bedside showed the title and description; the editor
+  auto-generated "You are <title>. <description>" as the system prompt. All now use the patient's name
+  or the presenting complaint.
+- **The browser stores only the case id.** The saved session held the whole case object (answer key
+  included) in localStorage; it now keeps the id and re-fetches the case on reload.
+
 ## [3.0.0-rc.11] — 2026-10-04
 
 - **Case versions are numbered atomically and exist before the save answers.** A version was numbered by

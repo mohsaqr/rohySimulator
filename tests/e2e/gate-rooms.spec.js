@@ -288,7 +288,7 @@ test.describe('coming back to a case', () => {
                 window.localStorage.setItem(`rohy.onboarding.${role}.v1`, 'done');
             }
             window.localStorage.setItem('rohy_active_session', JSON.stringify({
-                activeCase: caseRow, sessionId: session, timestamp: Date.now(),
+                caseId: caseRow.id, sessionId: session, timestamp: Date.now(),
             }));
         }, [sessionId, activeCase]);
         await page.reload();

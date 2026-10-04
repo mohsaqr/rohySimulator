@@ -571,14 +571,17 @@ test.describe('scenario engine', () => {
         // into this exact session on load (matches the format used by
         // App.jsx#validateAndRestoreSession).
         await page.addInitScript(
-            ({ activeCase, sessionId, ts }) => {
+            // Only the case id is stored; the app re-fetches the case (Phase 0,
+            // 2026-10-04). The monitor runs the SESSION SNAPSHOT's scenario
+            // either way, which is what this test is about.
+            ({ caseId, sessionId, ts }) => {
                 window.localStorage.setItem(
                     'rohy_active_session',
-                    JSON.stringify({ activeCase, sessionId, timestamp: ts }),
+                    JSON.stringify({ caseId, sessionId, timestamp: ts }),
                 );
             },
             {
-                activeCase: { ...originalCase, scenario: FAST_HR_SCENARIO },
+                caseId: originalCase.id,
                 sessionId,
                 ts: Date.now(),
             },

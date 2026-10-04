@@ -633,8 +633,12 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         const isUpdate = !!editingCase.id;
         const path = isUpdate ? `/cases/${editingCase.id}` : '/cases';
 
-        // Auto-generate system prompt if empty
-        const sysPrompt = editingCase.system_prompt || `You are ${editingCase.name}. ${editingCase.description}`;
+        // Auto-generate system prompt if empty — from the patient's name only.
+        // It used to be "You are <title>. <description>": the authoring title
+        // and summary usually name the diagnosis, and the patient then knew it
+        // (Phase 0, 2026-10-04).
+        const autoName = editingCase.config?.patient_name?.trim();
+        const sysPrompt = editingCase.system_prompt || (autoName ? `You are ${autoName}, the patient.` : 'You are the patient.');
 
         // Ensure config exists
         const config = editingCase.config || {};
