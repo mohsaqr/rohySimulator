@@ -12,10 +12,13 @@
 # Asserts:
 #   1. POST /cases/:id/labs is now an UPSERT — re-POSTing the same test_name
 #      updates the existing row instead of duplicating it.
-#   2. PUT /cases/:id/labs bulk-replaces the lab array atomically — labs
-#      removed from the payload disappear from the DB.
-#   3. DELETE /cases/:id/labs/:labId cascades to investigation_orders so the
-#      orders table never holds dead FK references.
+#   2. PUT /cases/:id/labs reconciles the lab array atomically — labs
+#      removed from the payload disappear from the case's listings (soft
+#      delete) while every learner order for them is KEPT and still resolves.
+#   3. DELETE /cases/:id/labs/:labId soft-deletes the lab and keeps learners'
+#      orders (reports learner_orders_kept). Until rc.6 both of these deleted
+#      the orders — an editor auto-save erased every learner's lab orders for
+#      the case (QA 2026-10-04, PRV-20).
 #   4. POST /sessions/:id/order-labs is idempotent — re-ordering the same
 #      lab returns skipped_duplicates and does NOT create a second order row.
 #   5. POST /sessions/:id/order-radiology is idempotent on (session, name) —
@@ -185,15 +188,16 @@ else
     cat "$ORDER1_OUT"
 fi
 
-# Now PUT a labs array that DOES NOT contain our audit lab. The bulk replace
-# should drop LAB_ID_1 from case_investigations AND the matching order rows
-# from investigation_orders.
+# Now PUT a labs array that DOES NOT contain our audit lab. The reconcile
+# should drop LAB_ID_1 from the case's listings and KEEP the learner's order.
 PUT_PAYLOAD="$OUT/put_labs.json"
-python3 - "$PUT_PAYLOAD" <<'PYEOF'
+# A per-run name, so a rerun against the same database inserts it again
+# rather than finding (and updating) the previous run's row.
+python3 - "$PUT_PAYLOAD" "PostAuditOnlyLab-$LAB_NAME" <<'PYEOF'
 import json, sys
 with open(sys.argv[1], 'w') as f:
     json.dump({"labs": [{
-        "test_name": "PostAuditOnlyLab",
+        "test_name": sys.argv[2],
         "min_value": 0,
         "max_value": 100,
         "current_value": 42
@@ -235,7 +239,8 @@ else
     fail "Bulk PUT did not remove the audit lab from available-labs"
 fi
 
-# Verify orphan investigation_orders for the dropped lab were cleaned up.
+# The learner's order for the dropped lab must survive, still resolving to
+# its test name (the session's order list joins soft-deleted lab rows).
 ORDERS_OUT="$OUT/orders.json"
 curl -s "${AUTH[@]}" "$API/api/sessions/$SESSION_ID/orders" > "$ORDERS_OUT"
 ORPHAN_COUNT=$(python3 - "$ORDERS_OUT" "$LAB_NAME" <<'PYEOF'
@@ -248,14 +253,14 @@ count = sum(1 for o in orders if o.get('test_name') == target)
 print(count)
 PYEOF
 )
-if [ "$ORPHAN_COUNT" = "0" ]; then
-    pass "Bulk PUT cascade-cleaned investigation_orders for removed labs"
+if [ "$ORPHAN_COUNT" = "1" ]; then
+    pass "Bulk PUT kept the learner's order for the removed lab (still resolves)"
 else
-    fail "Bulk PUT left $ORPHAN_COUNT orphan investigation_orders rows"
+    fail "Bulk PUT left $ORPHAN_COUNT orders for the removed lab (expected 1 — learner orders are kept)"
 fi
 
-# ── 3. DELETE cascades to investigation_orders ─────────────────────────────
-section "DELETE /cases/:id/labs/:labId cascades orphans"
+# ── 3. DELETE soft-deletes and keeps learner orders ────────────────────────
+section "DELETE /cases/:id/labs/:labId keeps learner orders"
 
 # Reseed the audit lab via POST (UPSERT will create since PUT removed it).
 curl -s -X POST "${AUTH[@]}" "$API/api/cases/$CASE_ID/labs" \
@@ -269,14 +274,14 @@ curl -s -X POST "${AUTH[@]}" "$API/api/sessions/$SESSION_ID/order-labs" \
 
 DEL_OUT="$OUT/del.json"
 curl -s -X DELETE "${AUTH[@]}" "$API/api/cases/$CASE_ID/labs/$LAB_ID_RESEED" > "$DEL_OUT"
-ORPHANS_REMOVED=$(json_get "$DEL_OUT" "orphan_orders_removed")
-if [ -n "$ORPHANS_REMOVED" ] && [ "$ORPHANS_REMOVED" != "0" ]; then
-    pass "DELETE /labs/:id reported orphan_orders_removed=$ORPHANS_REMOVED"
+ORDERS_KEPT=$(json_get "$DEL_OUT" "learner_orders_kept")
+if [ -n "$ORDERS_KEPT" ] && [ "$ORDERS_KEPT" != "0" ]; then
+    pass "DELETE /labs/:id reported learner_orders_kept=$ORDERS_KEPT"
 else
-    fail "DELETE /labs/:id did not report orphan cleanup, got: $(cat "$DEL_OUT")"
+    fail "DELETE /labs/:id did not report kept learner orders, got: $(cat "$DEL_OUT")"
 fi
 
-# Confirm no orders for this lab remain.
+# Confirm the learner's order for this lab is still there.
 curl -s "${AUTH[@]}" "$API/api/sessions/$SESSION_ID/orders" > "$ORDERS_OUT"
 DEL_ORPHAN_COUNT=$(python3 - "$ORDERS_OUT" "$LAB_ID_RESEED" <<'PYEOF'
 import json, sys
@@ -288,10 +293,10 @@ count = sum(1 for o in orders if o.get('investigation_id') == target)
 print(count)
 PYEOF
 )
-if [ "$DEL_ORPHAN_COUNT" = "0" ]; then
-    pass "investigation_orders contains 0 rows for the deleted lab"
+if [ "$DEL_ORPHAN_COUNT" = "1" ]; then
+    pass "investigation_orders kept the learner's row for the deleted lab"
 else
-    fail "investigation_orders still has $DEL_ORPHAN_COUNT rows for the deleted lab"
+    fail "investigation_orders has $DEL_ORPHAN_COUNT rows for the deleted lab (expected 1)"
 fi
 
 # ── 4. /order-labs idempotency ─────────────────────────────────────────────
