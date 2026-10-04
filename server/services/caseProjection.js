@@ -155,3 +155,61 @@ export function projectCaseSnapshotForRole(snapshot, manifests, role) {
     }
     return isString ? JSON.stringify(projected) : projected;
 }
+
+// ---------------------------------------------------------------------------
+// Case titles in analytics payloads
+// ---------------------------------------------------------------------------
+
+/** Keys that carry a case's authoring title in analytics / Oyon payloads. */
+export const CASE_TITLE_KEYS = Object.freeze(['case_name', 'case_title', 'case_title_snapshot', 'caseTitle', 'live_case_name']);
+
+/**
+ * Replace every case title in `payload` with the case's code (EN-0001) for a
+ * caller below reviewer. The authoring title often names the diagnosis, and
+ * these routes answer a learner about their OWN sessions, events and Oyon
+ * records — the same identity the case browser shows them is the code.
+ *
+ * Walks plain objects and arrays; an object carrying a title key is relabelled
+ * from its own `case_id` (or `caseId`), or set to null when it has none.
+ * Returns the payload untouched for reviewer and above. One query.
+ *
+ * @param {*} payload
+ * @param {string} role
+ * @param {number} tenant
+ * @param {{all: Function}} store dbAdapter, or anything with its `all(sql, params)` (injected: this module is otherwise pure)
+ * @returns {Promise<*>}
+ */
+export async function withLearnerCaseLabels(payload, role, tenant, store) {
+    if (readsWholeCase(role)) return payload;
+    const ids = new Set();
+    const titled = (node) => isPlainObject(node) && CASE_TITLE_KEYS.some((key) => Object.hasOwn(node, key));
+    const caseIdOf = (node) => node.case_id ?? node.caseId ?? null;
+    const collect = (node) => {
+        if (Array.isArray(node)) { node.forEach(collect); return; }
+        if (!isPlainObject(node)) return;
+        if (titled(node) && caseIdOf(node) != null) ids.add(Number(caseIdOf(node)));
+        Object.values(node).forEach(collect);
+    };
+    collect(payload);
+    const codes = new Map();
+    if (ids.size > 0) {
+        const list = [...ids].filter(Number.isFinite);
+        const rows = list.length === 0 ? [] : await store.all(
+            'SELECT id, case_code FROM cases WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))',
+            [tenant, JSON.stringify(list)]
+        );
+        rows.forEach((row) => codes.set(Number(row.id), row.case_code));
+    }
+    const relabel = (node) => {
+        if (Array.isArray(node)) return node.map(relabel);
+        if (!isPlainObject(node)) return node;
+        const out = Object.fromEntries(Object.entries(node).map(([key, value]) => [key, relabel(value)]));
+        if (titled(node)) {
+            const id = caseIdOf(node);
+            const label = id == null ? null : (codes.get(Number(id)) ?? `Case ${id}`);
+            CASE_TITLE_KEYS.forEach((key) => { if (Object.hasOwn(out, key)) out[key] = label; });
+        }
+        return out;
+    };
+    return relabel(payload);
+}
