@@ -100,4 +100,13 @@ describe('the rubric stays out of what students receive', () => {
         const { treatments } = await (await admin(`/api/cases/${caseId}/treatments`)).json();
         expect(treatments).toHaveLength(3);
     });
+
+    // Regression lock: the PUT deleted the rubric and fired its inserts one by one outside a transaction, so a bad row left a partial rubric saved and reported success (Phase 3, 2026-10-04)
+    it('a save with one bad row changes nothing and says so', async () => {
+        const broken = [RUBRIC[0], { treatment_type: 'not-a-type', treatment_name: 'Bad' }];
+        const put = await admin(`/api/cases/${caseId}/treatments`, { method: 'PUT', body: JSON.stringify({ treatments: broken }) });
+        expect(put.status).toBe(500);
+        const { treatments } = await (await admin(`/api/cases/${caseId}/treatments`)).json();
+        expect(treatments.map((t) => t.treatment_name)).toEqual(['Aspirin', 'Ibuprofen', 'Hidden']);
+    });
 });

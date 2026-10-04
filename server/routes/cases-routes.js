@@ -20,7 +20,8 @@ import { PATIENT_GENDERS, resolvePatientGender } from '../shared/patientDemograp
 import { RHYTHM_IDS, resolveRhythm } from '../shared/rhythms.js';
 import { DEFAULT_LANGUAGE, LANGUAGES, isKnownLanguage } from '../shared/languages.js';
 import { SCENARIO_CATEGORY_IDS, resolveScenarioCategory } from '../shared/scenarioCategories.js';
-import { validatePluginDocuments, projectPluginDocumentsForRole } from '../shared/pluginDocument.js';
+import { validatePluginDocuments } from '../shared/pluginDocument.js';
+import { projectCaseForRole } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { normaliseCaseRooms } from '../shared/caseRooms.js';
@@ -281,13 +282,15 @@ router.get('/cases', authenticateToken, async (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields
-        const cases = rows.map(row => ({
+        // Below reviewer, an allow-list of what the learner runtime reads
+        // (services/caseProjection.js) — not the title, prompt or answer key.
+        const cases = rows.map(row => projectCaseForRole({
             ...row,
-            config: projectPluginDocumentsForRole(row.config ? JSON.parse(row.config) : {}, PLUGIN_MANIFESTS, req.user.role),
+            config: row.config ? JSON.parse(row.config) : {},
             scenario: row.scenario ? JSON.parse(row.scenario) : null,
             is_available: Boolean(row.is_available),
             is_default: Boolean(row.is_default)
-        }));
+        }, PLUGIN_MANIFESTS, req.user.role));
 
         // Annotate each case with `active_session_count` so the editor
         // can warn admins that mid-session edits will be live to learners
@@ -334,13 +337,13 @@ router.get('/cases/:id', authenticateToken, async (req, res) => {
     dbAdapter.get(sql, params, (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Case not found' });
-        res.json({
+        res.json(projectCaseForRole({
             ...row,
-            config: projectPluginDocumentsForRole(row.config ? JSON.parse(row.config) : {}, PLUGIN_MANIFESTS, req.user.role),
+            config: row.config ? JSON.parse(row.config) : {},
             scenario: row.scenario ? JSON.parse(row.scenario) : null,
             is_available: Boolean(row.is_available),
             is_default: Boolean(row.is_default)
-        });
+        }, PLUGIN_MANIFESTS, req.user.role));
     });
 });
 

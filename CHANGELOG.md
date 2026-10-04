@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.15] — 2026-10-04
+
+- **Students receive only the case fields their screens use.** `GET /cases`, `GET /cases/:id`, the
+  session's `case_snapshot` (`GET /sessions/:id`) and `/analytics/sessions*` used to send learners the case
+  as stored: the authoring title (often the diagnosis), description, system prompt, expected diagnosis,
+  the author's notes to the AI, persona settings and scenario alternatives. Below reviewer these are now an
+  allow-list (`server/services/caseProjection.js`) of what the learner runtime reads: patient identity,
+  presenting complaint, history, records, vitals and alarms, exam findings, voice, avatar, rooms, plugin
+  documents (after their own learner projection) and the scenario timeline. A key added to cases later is
+  private until it is named there. Reviewers and above are unchanged. The session routes also stop sending
+  learners the joined case title and description.
+- **Case investigations are an authoring view.** `GET /cases/:id/investigations` returned every result
+  value to any signed-in user; it now requires educator. Learners get results through the session order
+  routes, when ordered.
+- **Saving a treatment rubric is atomic.** The delete and the inserts ran as separate statements, so a bad
+  row left a partial rubric saved and reported success. They now run in one transaction, in order; a failed
+  save changes nothing and answers 500.
+- Telemetry and the monitor's scenario label fall back to the case code where a learner's case has no title.
+
 ## [3.0.0-rc.14] — 2026-10-04
 
 - **The debrief discussant is built on the server.** Its prompt — persona, the case context its

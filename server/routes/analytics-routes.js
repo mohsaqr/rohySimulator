@@ -18,7 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
-import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
+import { projectCaseSnapshotForRole, readsWholeCase } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import {
     authenticateToken,
@@ -237,12 +237,20 @@ router.get('/analytics/sessions', authenticateToken, (req, res) => {
 
     dbAdapter.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ sessions: redactRows(rows.map((row) => ({
+        res.json({ sessions: redactRows(rows.map((row) => withoutCaseTitle({
             ...row,
             case_snapshot: projectCaseSnapshotForRole(row.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
-        }))) });
+        }, req.user.role))) });
     });
 });
+
+// The joined authoring title and description often name the diagnosis; a
+// learner reading their own sessions gets neither (services/caseProjection.js).
+function withoutCaseTitle(row, role) {
+    if (readsWholeCase(role)) return row;
+    const { case_name: _name, description: _description, ...rest } = row;
+    return rest;
+}
 
 // GET /api/analytics/sessions/:id - Get session details with chat log
 router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
@@ -269,10 +277,10 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         dbAdapter.all(interactionsSql, [req.params.id], (err, interactions) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({
-                session: redactRow({
+                session: redactRow(withoutCaseTitle({
                     ...session,
                     case_snapshot: projectCaseSnapshotForRole(session.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
-                }),
+                }, req.user.role)),
                 interactions,
             });
         });

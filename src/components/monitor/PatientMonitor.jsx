@@ -791,7 +791,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
          if (scenarioSource) {
             const caseScenario = {
                id: `case_${caseData.id}`,
-               name: t('case_scenario_name', { name: caseData.name }),
+               name: t('case_scenario_name', { name: caseData.name ?? caseData.case_code ?? caseData.id }),
                description: scenarioSource.description || t('case_scenario_description_fallback'),
                timeline: scenarioSource.timeline || []
             };

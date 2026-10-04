@@ -51,7 +51,9 @@ try {
 
 const router = express.Router();
 
-router.get('/cases/:id/investigations', authenticateToken, (req, res) => {
+// Every result value of the case: an authoring view, never a learner's (they
+// receive results through the session order routes, when ordered).
+router.get('/cases/:id/investigations', authenticateToken, requireEducator, (req, res) => {
     const caseId = req.params.id;
     
     const sql = `SELECT * FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND deleted_at IS NULL`;
@@ -2552,7 +2554,7 @@ router.get('/cases/:caseId/treatments', authenticateToken, requireEducator, asyn
 });
 
 // PUT /api/cases/:caseId/treatments - Configure case treatments (admin)
-router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req, res) => {
+router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, async (req, res) => {
     const { caseId } = req.params;
     const { treatments } = req.body;
 
@@ -2560,79 +2562,61 @@ router.put('/cases/:caseId/treatments', authenticateToken, requireEducator, (req
         return res.status(400).json({ error: 'treatments array is required' });
     }
 
-    // Verify the case exists IN THIS TENANT — the lookup used to ignore the
-    // tenant, so an educator could rewrite another tenant's rubric by id.
-    dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ?', [caseId, tenantId(req)], (err, caseRow) => {
-        if (err) return res.status(500).json({ error: err.message });
+    try {
+        // Verify the case exists IN THIS TENANT — the lookup used to ignore the
+        // tenant, so an educator could rewrite another tenant's rubric by id.
+        const caseRow = await dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ?', [caseId, tenantId(req)]);
         if (!caseRow) return res.status(404).json({ error: 'Case not found' });
 
-        dbAdapter.all('SELECT * FROM case_treatments WHERE case_id = ?', [caseId], (readErr, oldTreatments) => {
-            if (readErr) return res.status(500).json({ error: readErr.message });
-
-        // Delete existing case treatments and insert new ones
-        dbAdapter.run('DELETE FROM case_treatments WHERE case_id = ?', [caseId], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            if (treatments.length === 0) {
-                auditSuccess(req, {
-                    action: 'configure_case_treatments',
-                    resourceType: 'case',
-                    resourceId: caseId,
-                    oldValue: { treatments: oldTreatments || [] },
-                    newValue: { treatments: [] },
-                    metadata: { treatment_count: 0 }
-                });
-                return res.json({ message: 'Case treatments cleared', count: 0 });
-            }
-
-            const insertSql = `
-                INSERT INTO case_treatments (
-                    case_id, treatment_type, medication_id, treatment_name,
-                    is_available, is_expected, is_contraindicated,
-                    points_if_ordered, feedback_if_ordered, feedback_if_missed,
-                    custom_effect_override, tenant_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-
-            let inserted = 0;
-            let pending = treatments.length;
-
-            treatments.forEach(t => {
+        // One transaction, inserts in order: the DELETE and the inserts used to
+        // run as separate fire-and-forget statements, so a failed insert left a
+        // partial rubric saved (and counted as success), and the rows' order —
+        // which the editor reads back by id — was whatever the queue made it.
+        const oldTreatments = await dbAdapter.transaction(async () => {
+            const old = await dbAdapter.all('SELECT * FROM case_treatments WHERE case_id = ?', [caseRow.id]);
+            await dbAdapter.run('DELETE FROM case_treatments WHERE case_id = ?', [caseRow.id]);
+            for (const t of treatments) { // sequential on purpose: one sqlite handle, ordered ids
                 const flags = normalizeCaseTreatmentFlags(t);
-                dbAdapter.run(insertSql, [
-                    caseId,
-                    t.treatment_type,
-                    t.medication_id || null,
-                    t.treatment_name,
-                    flags.is_available,
-                    flags.is_expected,
-                    flags.is_contraindicated,
-                    t.points_if_ordered ?? 0,
-                    t.feedback_if_ordered || null,
-                    t.feedback_if_missed || null,
-                    t.custom_effect_override ? JSON.stringify(t.custom_effect_override) : null,
-                    tenantId(req)
-                ], function(err) {
-                    if (!err) inserted++;
-                    pending--;
-                    if (pending === 0) {
-                        logAudit({
-                            userId: req.user.id,
-                            username: req.user.username,
-                            action: 'configure_case_treatments',
-                            resourceType: 'case',
-                            resourceId: caseId,
-                            oldValue: { treatments: oldTreatments || [] },
-                            newValue: { treatments },
-                            metadata: { treatment_count: inserted }
-                        });
-                        res.json({ message: `Case treatments configured`, count: inserted });
-                    }
-                });
-            });
+                await dbAdapter.run(
+                    `INSERT INTO case_treatments (
+                        case_id, treatment_type, medication_id, treatment_name,
+                        is_available, is_expected, is_contraindicated,
+                        points_if_ordered, feedback_if_ordered, feedback_if_missed,
+                        custom_effect_override, tenant_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        caseRow.id,
+                        t.treatment_type,
+                        t.medication_id || null,
+                        t.treatment_name,
+                        flags.is_available,
+                        flags.is_expected,
+                        flags.is_contraindicated,
+                        t.points_if_ordered ?? 0,
+                        t.feedback_if_ordered || null,
+                        t.feedback_if_missed || null,
+                        t.custom_effect_override ? JSON.stringify(t.custom_effect_override) : null,
+                        tenantId(req),
+                    ]
+                );
+            }
+            return old;
         });
+
+        auditSuccess(req, {
+            action: 'configure_case_treatments',
+            resourceType: 'case',
+            resourceId: caseId,
+            oldValue: { treatments: oldTreatments || [] },
+            newValue: { treatments },
+            metadata: { treatment_count: treatments.length },
         });
-    });
+        if (treatments.length === 0) return res.json({ message: 'Case treatments cleared', count: 0 });
+        res.json({ message: 'Case treatments configured', count: treatments.length });
+    } catch (err) {
+        (req.log || routesOrdersLog).error('case treatments save failed', { case_id: caseId, error: err.message });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /api/treatment-effects - Get all treatment effects (master data).

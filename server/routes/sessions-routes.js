@@ -13,7 +13,7 @@ import {
 
 
 import { logger } from '../logger.js';
-import { projectCaseSnapshotForRole } from '../shared/pluginDocument.js';
+import { projectCaseSnapshotForRole, readsWholeCase } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
@@ -298,10 +298,13 @@ router.get('/sessions/:id', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // A learner reads their own session — with the plugin answer keys
-        // stripped from the pinned case (RPS-1 §11a.4, document.learnerOmit).
+        // A learner reads their own session — with the pinned case narrowed
+        // to what their runtime reads (services/caseProjection.js) and no
+        // authoring title.
+        const { case_name: caseName, ...rest } = session;
         res.json({ session: redactRow({
-            ...session,
+            ...rest,
+            ...(readsWholeCase(req.user.role) ? { case_name: caseName } : {}),
             case_snapshot: projectCaseSnapshotForRole(session.case_snapshot, PLUGIN_MANIFESTS, req.user.role),
         }) });
     });

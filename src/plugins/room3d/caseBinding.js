@@ -14,7 +14,7 @@ export function casePatient(activeCase, tRoom = (key) => key) {
     const config = activeCase?.config ?? {};
     const demographics = config.demographics ?? {};
     const history = config.structuredHistory ?? {};
-    const name = config.patient_name || activeCase?.patient_name || activeCase?.name || tRoom('unknown_patient');
+    const name = config.patient_name || activeCase?.patient_name || tRoom('unknown_patient');
     const age = demographics.age ?? activeCase?.patient_age ?? null;
     const gender = String(demographics.gender ?? activeCase?.patient_gender ?? '').toLowerCase();
     const chief_complaint = history.chiefComplaint || activeCase?.chief_complaint || tRoom('acute_presentation');

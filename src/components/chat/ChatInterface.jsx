@@ -870,7 +870,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 setSessionId(sid);
 
                 // Log session start
-                EventLogger.sessionStarted(sid, activeCase.id, activeCase.name);
+                EventLogger.sessionStarted(sid, activeCase.id, activeCase.name ?? activeCase.case_code);
 
                 // Notify parent of session start
                 if (onSessionStart) {
