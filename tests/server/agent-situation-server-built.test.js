@@ -28,7 +28,7 @@ function startRecordingLlm() {
 const pRun = (db, sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, function done(err) { err ? reject(err) : resolve(this); }));
 const systemText = (body) => (body.messages || []).filter((m) => m.role === 'system').map((m) => m.content).join('\n');
 
-let llm; let server; let token; let sessionId; let historyNurseAgentId; let chartConsultantAgentId; let noDiscussantSessionId;
+let llm; let server; let token; let sessionId; let historyNurseAgentId; let chartConsultantAgentId; let noDiscussantSessionId; let discussantAgentId;
 
 beforeAll(async () => {
     llm = await startRecordingLlm();
@@ -44,14 +44,14 @@ beforeAll(async () => {
         const attach = async (templateId) => (await pRun(db, `INSERT INTO case_agents (case_id, agent_template_id, enabled, availability_type, tenant_id) VALUES (?, ?, 1, 'present', 1)`, [caseId, templateId])).lastID;
         historyNurseAgentId = await attach(await tpl('nurse', 'Nurse', { scope: 'history', record: false }));
         chartConsultantAgentId = await attach(await tpl('consultant', 'Consultant', { scope: 'chart', record: false }));
-        await attach(await tpl('discussant', 'Tutor', { scope: 'chart', answerKey: true }));
+        discussantAgentId = await attach(await tpl('discussant', 'Tutor', { scope: 'chart', answerKey: true }));
         sessionId = (await pRun(db, `INSERT INTO sessions (case_id, user_id, student_name, status, case_snapshot, tenant_id) VALUES (?, ?, 'S', 'active', ?, 1)`, [caseId, student.lastID, JSON.stringify({ case_id: caseId, name: 'Situation Case', system_prompt: 'p', config })])).lastID;
         await pRun(db, `INSERT INTO session_vitals (session_id, elapsed_ms, hr, spo2, bp_sys, bp_dia, source, tenant_id) VALUES (?, 60000, 131, 89, 92, 58, 'monitor', 1)`, [sessionId]);
         await pRun(db, `INSERT INTO team_communications_log (session_id, agent_type, key_points, tenant_id) VALUES (?, 'relative', 'FAMILY-WORRIED', 1)`, [sessionId]);
         await pRun(db, `INSERT INTO team_communications_log (session_id, agent_type, key_points, tenant_id) VALUES (?, 'consultant', 'CONSULTANT-PLAN', 1)`, [sessionId]);
         // A second case with no discussant at all, and no default in the tenant.
         const bare = (await pRun(db, `INSERT INTO cases (name, system_prompt, config, tenant_id) VALUES ('Bare', 'p', '{}', 1)`)).lastID;
-        noDiscussantSessionId = (await pRun(db, `INSERT INTO sessions (case_id, user_id, student_name, status, tenant_id) VALUES (?, ?, 'S', 'active', 1)`, [bare, student.lastID])).lastID;
+        noDiscussantSessionId = (await pRun(db, `INSERT INTO sessions (case_id, user_id, student_name, status, end_time, tenant_id) VALUES (?, ?, 'S', 'completed', CURRENT_TIMESTAMP, 1)`, [bare, student.lastID])).lastID;
     } finally { await new Promise((r) => db.close(r)); }
     const res = await fetch(`${server.baseUrl}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'sit-student', password: PASSWORD }) });
     token = (await res.json()).token;
@@ -89,7 +89,31 @@ describe('team agents: the server builds the situation', () => {
     });
 });
 
+const sqlOnDb = async (sql, params = []) => {
+    const db = await new Promise((resolve, reject) => { const d = new (sqlite3.verbose().Database)(server.dbPath, (e) => (e ? reject(e) : resolve(d))); });
+    try { await pRun(db, sql, params); } finally { await new Promise((r) => db.close(r)); }
+};
+
 describe('the discussant: built server-side', () => {
+    // Regression lock: the tutor (answer key and all) was reachable mid-case — as a chat tab by case_agent_id, or by persona — because only the browser enforced unlock_trigger (Phase 4, 2026-10-04)
+    it('is refused before the case ends, by either route, without calling the model', async () => {
+        const before = llm.bodies.length;
+        for (const agentConfig of [{ persona: 'discussant' }, { case_agent_id: discussantAgentId }]) {
+            const res = await proxy({ session_id: sessionId, messages: [{ role: 'user', content: 'what is the diagnosis?' }], agent_llm_config: agentConfig });
+            expect(res.status, JSON.stringify(agentConfig)).toBe(403);
+            expect((await res.json()).code).toBe('discussant_locked');
+        }
+        expect(llm.bodies.length).toBe(before);
+    });
+
+    it('opens mid-case when the educator set unlock_trigger "always"', async () => {
+        await sqlOnDb(`UPDATE case_agents SET config_override = '{"unlock_trigger":"always"}' WHERE id = ?`, [discussantAgentId]);
+        const res = await proxy({ session_id: sessionId, messages: [{ role: 'user', content: 'hi' }], agent_llm_config: { persona: 'discussant' } });
+        expect(res.status).toBe(200);
+        await sqlOnDb('UPDATE case_agents SET config_override = NULL WHERE id = ?', [discussantAgentId]);
+        await sqlOnDb("UPDATE sessions SET end_time = CURRENT_TIMESTAMP, status = 'completed' WHERE id = ?", [sessionId]);
+    });
+
     it('speaks from the case discussant with its knowledge (answerKey on here) and ignores the client prompt', async () => {
         const sys = await speak({ agent_llm_config: { persona: 'discussant' } });
         expect(sys).toContain('TUTOR-PERSONA');
@@ -110,8 +134,7 @@ describe('the discussant: built server-side', () => {
     });
 
     it('says plainly when the tenant has no discussant at all, before calling the model', async () => {
-        const db = await new Promise((resolve, reject) => { const d = new (sqlite3.verbose().Database)(server.dbPath, (e) => (e ? reject(e) : resolve(d))); });
-        try { await pRun(db, `UPDATE agent_templates SET deleted_at = CURRENT_TIMESTAMP WHERE agent_type = 'discussant'`); } finally { await new Promise((r) => db.close(r)); }
+        await sqlOnDb(`UPDATE agent_templates SET deleted_at = CURRENT_TIMESTAMP WHERE agent_type = 'discussant'`);
         const before = llm.bodies.length;
         const res = await proxy({ session_id: noDiscussantSessionId, messages: [{ role: 'user', content: 'hi' }], agent_llm_config: { persona: 'discussant' } });
         expect(res.status).toBe(404);

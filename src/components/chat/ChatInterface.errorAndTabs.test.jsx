@@ -222,3 +222,24 @@ describe('ChatInterface — the open tab survives a room round-trip', () => {
         }, { timeout: 5000 });
     });
 });
+
+describe('ChatInterface — a full tab strip never hides the voice toggle', () => {
+    // Regression lock: with five agents (STEMI v2) the tab strip overflowed unclipped and pushed the Voice toggle under the monitor canvas, where no click reached it; the tabs now scroll in their own container and the toggle sits outside it (2026-10-04)
+    it('keeps the toggle outside the scrolling tab strip', async () => {
+        const many = ['nurse', 'relative', 'consultant', 'discussant', 'cardiologist'].map((agent_type, i) => ({
+            ...nurse, id: 20 + i, agent_template_id: `tpl-${agent_type}`, agent_type, name: `Agent With A Long Name ${i}`,
+        }));
+        server.use(
+            http.get('*/api/platform-settings/voice', () => HttpResponse.json({ ...platformVoice, voice_mode_enabled: true })),
+            http.get('*/api/sessions/:sid/agents', () => HttpResponse.json({ agents: many })),
+        );
+        mount();
+        const toggle = await screen.findByTitle(/switch to voice mode/i);
+        await screen.findByRole('button', { name: /agent with a long name 2/i }); // specialists ring on the phone; the discussant has its own room
+        const strip = screen.getByTestId('chat-tab-strip');
+        expect(strip.contains(toggle)).toBe(false);
+        expect(strip.className).toMatch(/overflow-x-auto/);
+        expect(strip.className).toMatch(/min-w-0/);
+        expect(toggle.parentElement.className).toMatch(/shrink-0/);
+    });
+});

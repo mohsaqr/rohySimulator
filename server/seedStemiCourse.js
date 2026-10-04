@@ -7,6 +7,7 @@
 // so existing installs get the content without a destructive migration and
 // fresh installs get it right after the 0031 default-course backfill.
 import dbAdapter from './dbAdapter.js';
+import { LEGACY_MCQ_QUESTIONS } from './seeders/stemiLegacy.js';
 import { logger } from './logger.js';
 import { DEFAULT_COURSE_NAME } from './shared/defaultCourse.js';
 
@@ -59,98 +60,109 @@ clinical-reasoning survey.</em></p>
 // 10 MCQs — a mix of basic knowledge and "problems in STEMI" (pitfalls,
 // complications, decision-making). Each: question, options[], correctIndex,
 // explanation. Apostrophes are avoided so the attribute stays clean.
-const MCQ_QUESTIONS = [
+// v2 (3.0.0-rc.16): anterior-focused, to match the default case. The v1 set
+// is frozen in seeders/stemiLegacy.js so upgradeStemiQuiz() can tell an
+// untouched quiz from an edited one.
+//
+// Authored with the correct option FIRST, for review; ANSWER_POSITIONS moves
+// it, because the lesson's quiz block shows options in stored order and an
+// answer that is always "A" teaches the wrong skill.
+const ANSWER_POSITIONS = [2, 0, 3, 1, 2, 3, 0, 1, 3, 2];
+const AUTHORED_MCQ_QUESTIONS = [
     {
-        question: 'What is the underlying pathophysiology of a STEMI?',
+        question: 'A man with 45 minutes of chest pain has ST elevation of 3 mm in V2 and V3 and 2 mm in V1 and V4, with ST depression in III and aVF. Which artery is most likely occluded?',
+        options: ['Proximal left anterior descending', 'Right coronary', 'Left circumflex', 'Left main stem'],
+        correctIndex: 0,
+        explanation: 'ST elevation across V1 to V4 is the anterior territory, supplied by the LAD. The reciprocal inferior depression fits a proximal occlusion of a large vessel.',
+    },
+    {
+        question: 'What does reciprocal ST depression in the inferior leads add to anterior ST elevation?',
         options: [
-            'Complete thrombotic occlusion of a coronary artery',
-            'Partial, non-occlusive coronary thrombus',
-            'Coronary vasospasm without thrombus',
-            'Demand ischaemia from tachycardia',
+            'It supports a true coronary occlusion rather than a mimic such as pericarditis',
+            'It means a second artery is also occluded',
+            'It shows the infarct is already completed',
+            'It rules out the need for reperfusion',
         ],
         correctIndex: 0,
-        explanation: 'STEMI results from complete, usually thrombotic, occlusion of a coronary artery causing transmural ischaemia. Partial occlusion typically produces NSTEMI/unstable angina.',
+        explanation: 'Reciprocal change is the electrical mirror of regional transmural injury. Diffuse ST elevation without reciprocal change, with PR depression, points instead to pericarditis.',
     },
     {
-        question: 'ST elevation must be present in how many leads to meet STEMI criteria?',
-        options: ['Any single lead', 'Two contiguous leads', 'Any three leads', 'All leads in one territory'],
-        correctIndex: 1,
-        explanation: 'The threshold is new ST elevation at the J-point in at least two anatomically contiguous leads.',
-    },
-    {
-        question: 'An inferior STEMI is best identified in which leads?',
-        options: ['V1 to V4', 'I, aVL, V5, V6', 'II, III, aVF', 'aVR and V1'],
-        correctIndex: 2,
-        explanation: 'Leads II, III and aVF look at the inferior wall, usually supplied by the right coronary artery.',
-    },
-    {
-        question: 'Which is the preferred reperfusion strategy when it can be delivered in time?',
-        options: ['Fibrinolysis', 'Primary PCI', 'Dual antiplatelets alone', 'Elective angiography in 72 hours'],
-        correctIndex: 1,
-        explanation: 'Primary PCI is preferred when first-medical-contact-to-device time is within guideline limits (about 120 minutes); otherwise give fibrinolysis and transfer.',
-    },
-    {
-        question: 'In a patient with an inferior STEMI, why should you obtain a right-sided ECG?',
+        question: 'ST elevation in aVL alongside V1 to V4 suggests what about the LAD occlusion?',
         options: [
-            'To exclude a pulmonary embolism',
-            'To detect right ventricular infarction',
-            'To confirm atrial fibrillation',
-            'To measure the QT interval',
+            'It is proximal, before the first diagonal branch, so a larger territory is at risk',
+            'It is distal, beyond the apex',
+            'It involves the right ventricle',
+            'It is a lead placement error',
         ],
-        correctIndex: 1,
-        explanation: 'Inferior STEMI can involve the right ventricle (ST elevation in V4R). RV infarction is preload-dependent, so nitrates can cause dangerous hypotension.',
+        correctIndex: 0,
+        explanation: 'aVL looks at the high lateral wall supplied by the first diagonal. Its involvement places the occlusion proximal to that branch.',
     },
     {
-        question: 'Which drug is relatively contraindicated in suspected right ventricular infarction?',
-        options: ['Aspirin', 'Nitroglycerin', 'Heparin', 'Morphine'],
-        correctIndex: 1,
-        explanation: 'RV infarction is preload-dependent; nitrates reduce preload and can precipitate profound hypotension.',
+        question: 'For a man over 40, what new J-point elevation in V2 and V3 meets the threshold for STEMI?',
+        options: ['At least 2 mm', 'At least 1 mm', 'At least 2.5 mm', 'At least 0.5 mm'],
+        correctIndex: 0,
+        explanation: 'In V2 and V3 the threshold is 2 mm in men aged 40 or over, 2.5 mm in men under 40 and 1.5 mm in women; in other leads it is 1 mm, in two contiguous leads.',
     },
     {
-        question: 'New left bundle branch block with an ischaemic presentation should be treated as:',
+        question: 'The ECG shows a STEMI and the troponin has not come back. What is the next step?',
         options: [
-            'A benign finding needing no action',
-            'A STEMI-equivalent warranting urgent reperfusion assessment',
-            'A reason to withhold aspirin',
-            'An indication for immediate fibrinolysis regardless of PCI access',
+            'Activate the catheter laboratory now',
+            'Wait for the troponin to confirm the diagnosis',
+            'Repeat the ECG in 30 minutes',
+            'Arrange an echocardiogram first',
         ],
-        correctIndex: 1,
-        explanation: 'New or presumed-new LBBB with a compatible clinical picture is treated as a STEMI-equivalent and prompts urgent reperfusion evaluation.',
+        correctIndex: 0,
+        explanation: 'STEMI is an ECG diagnosis. Every minute of occlusion costs myocardium; reperfusion must never wait for a biomarker.',
     },
     {
-        question: 'Which ECG pattern suggests a posterior STEMI?',
-        options: [
-            'ST elevation in V1 to V3',
-            'Tall R waves and ST depression in V1 to V3',
-            'Diffuse concave ST elevation with PR depression',
-            'Deep Q waves in aVR only',
-        ],
-        correctIndex: 1,
-        explanation: 'Posterior infarction is mirrored anteriorly as tall R waves and horizontal ST depression in V1 to V3; posterior leads (V7 to V9) confirm it.',
+        question: 'Primary PCI can be delivered within 120 minutes of first medical contact. Which reperfusion strategy is preferred?',
+        options: ['Primary PCI', 'Fibrinolysis, then transfer', 'Fibrinolysis alone', 'Medical therapy and a delayed angiogram'],
+        correctIndex: 0,
+        explanation: 'Primary PCI is preferred when it can be delivered within 120 minutes. Fibrinolysis is for when it cannot, and it adds bleeding risk.',
     },
     {
-        question: 'A common mechanical complication in the days after a STEMI is:',
+        question: 'He is breathing comfortably with a saturation of 95 percent on room air. Should you give oxygen?',
         options: [
-            'Aortic dissection',
-            'Papillary muscle rupture causing acute mitral regurgitation',
-            'Pulmonary fibrosis',
-            'Constrictive pericarditis',
+            'No - give oxygen only if saturation falls below 90 percent',
+            'Yes - high-flow oxygen limits infarct size',
+            'Yes - 2 litres by nasal cannula for every infarct',
+            'Only once the troponin is raised',
         ],
-        correctIndex: 1,
-        explanation: 'Papillary muscle rupture, ventricular septal rupture and free-wall rupture are feared mechanical complications, typically in the first days post-infarct.',
+        correctIndex: 0,
+        explanation: 'Routine oxygen does not benefit a non-hypoxaemic patient with myocardial infarction, and hyperoxia may be harmful.',
     },
     {
-        question: 'Which is the most appropriate use of oxygen in an acute STEMI?',
+        question: 'Ongoing chest pain with upsloping ST depression at the J point and tall, symmetrical T waves across V1 to V6. What is this?',
         options: [
-            'High-flow oxygen for every patient',
-            'Only when the patient is hypoxaemic (e.g. SpO2 below 90%)',
-            'Never, oxygen is harmful in STEMI',
-            'Only if the patient reports breathlessness',
+            'The de Winter pattern - treat as a STEMI equivalent',
+            'The Wellens pattern - a pain-free warning sign',
+            'Left ventricular hypertrophy with strain',
+            'Normal early repolarisation',
         ],
-        correctIndex: 1,
-        explanation: 'Routine supplemental oxygen in non-hypoxaemic patients confers no benefit and may cause harm; give oxygen only for hypoxaemia.',
+        correctIndex: 0,
+        explanation: 'The de Winter pattern signals an acute proximal LAD occlusion without classic ST elevation and needs immediate reperfusion. Wellens T waves are seen pain-free, after reperfusion of a critical LAD lesion.',
+    },
+    {
+        question: 'What is the most common cause of death in the first hours of an anterior STEMI?',
+        options: ['Ventricular fibrillation', 'Cardiac rupture', 'Complete heart block', 'Pulmonary embolism'],
+        correctIndex: 0,
+        explanation: 'Most early deaths are arrhythmic. Continuous monitoring with a defibrillator at hand is part of the first ten minutes.',
+    },
+    {
+        question: 'Four days after an anterior STEMI he becomes hypotensive with a new harsh holosystolic murmur at the left sternal edge. What is the most likely cause?',
+        options: ['Ventricular septal rupture', 'Pericarditis', 'Left ventricular thrombus', 'Aortic dissection'],
+        correctIndex: 0,
+        explanation: 'Septal rupture typically follows an anterior infarct in the first days and presents with shock and a new murmur. Papillary muscle rupture, with acute mitral regurgitation, is more typical of inferior and posterior infarcts.',
     },
 ];
+
+/** Move an authored question's correct option (first) to `index`. */
+function answerAt(question, index) {
+    const [correct, ...rest] = question.options;
+    return { ...question, options: [...rest.slice(0, index), correct, ...rest.slice(index)], correctIndex: index };
+}
+
+export const MCQ_QUESTIONS = AUTHORED_MCQ_QUESTIONS.map((q, i) => answerAt(q, ANSWER_POSITIONS[i]));
 
 const SURVEY_QUESTIONS = [
     {
@@ -174,6 +186,27 @@ const SURVEY_QUESTIONS = [
 ];
 
 // Seed ONE "Basic course" cohort (idempotent: guarded by the lesson title).
+/** The lesson's quiz section, as TipTap stores it. */
+export function quizHtml(questions) {
+    return `<lecture-mcq data-questions='${attr(JSON.stringify(questions))}'></lecture-mcq>`;
+}
+
+/**
+ * Bring a quiz that is still exactly as shipped to the v2 questions. A quiz an
+ * educator edited no longer equals the v1 HTML byte for byte, so it is left
+ * alone. Idempotent: once replaced, nothing equals v1 any more.
+ */
+export async function upgradeStemiQuiz() {
+    const { changes } = await dbAdapter.run(
+        `UPDATE lesson_sections SET content = ?
+          WHERE content = ?
+            AND lesson_id IN (SELECT id FROM lessons WHERE title = ? AND deleted_at IS NULL)`,
+        [quizHtml(MCQ_QUESTIONS), quizHtml(LEGACY_MCQ_QUESTIONS), LESSON_TITLE]
+    );
+    if (changes) log.info('STEMI quiz upgraded to v2', { sections: changes });
+    return changes;
+}
+
 async function seedCohort(cohort) {
     const existing = await dbAdapter.get(
         `SELECT id FROM lessons WHERE cohort_id = ? AND title = ? AND deleted_at IS NULL`,
@@ -200,7 +233,7 @@ async function seedCohort(cohort) {
         );
 
         // Section 2 — the 10-question MCQ block (a single lecture-mcq stepper).
-        const mcqHtml = `<lecture-mcq data-questions='${attr(JSON.stringify(MCQ_QUESTIONS))}'></lecture-mcq>`;
+        const mcqHtml = quizHtml(MCQ_QUESTIONS);
         await dbAdapter.run(
             `INSERT INTO lesson_sections (lesson_id, title, type, content, order_index)
              VALUES (?,?,?,?,?)`,
@@ -317,6 +350,7 @@ export async function seedStemiCourse() {
         for (const cohort of cohorts) {
             await seedCohort(cohort);
         }
+        await upgradeStemiQuiz();
         await ensureBasicCourseCaseLink();
     } catch (err) {
         // Non-fatal: a seed failure must never stop the server booting.

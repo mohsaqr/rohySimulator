@@ -17,7 +17,12 @@ describe('visibleAgentTabs (Bug 10)', () => {
     it('excludes any agent_type==="patient" (no duplicate patient tab)', () => {
         const types = visibleAgentTabs(agents).map(a => a.agent_type);
         expect(types).not.toContain('patient');
-        expect(types).toEqual(['discussant', 'nurse']); // consultant disabled
+        expect(types).toEqual(['nurse']); // consultant disabled, discussant has its own room
+    });
+
+    // Regression lock: an attached discussant (answer key and all) showed as a chat tab mid-case (STEMI v2, 2026-10-04)
+    it('excludes the discussant, whose room is the debrief', () => {
+        expect(visibleAgentTabs([{ agent_type: 'discussant', name: 'Tutor', enabled: true }])).toEqual([]);
     });
 
     it('still excludes a renamed patient template (gate is on type, not name)', () => {

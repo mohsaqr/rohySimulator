@@ -9,6 +9,49 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.16] — 2026-10-04
+
+- **The default STEMI case, v2.** John Martinez (55, anterior STEMI, Killip I) is rebuilt to use what
+  rohy has grown since he was written, and to stop giving the answer away:
+  - **Nothing a learner receives names the diagnosis or the plan.** The triage note no longer reads the
+    ECG ("anterior STEMI … cath lab contacted"), the monitor's step labels are neutral ("Arrival",
+    "10 minutes"), the exam no longer mentions defibrillator pads, radial access or a femoral backup
+    site, and the patient's prompt no longer tells the model he is having an infarct.
+  - **The Records tab holds what a chart holds** before the learner arrives — past history, medicines,
+    procedures, a triage note, a GP letter — not the HPI and the full examination.
+  - **A real 12-lead in the ECG room** (anterior injury pattern with reciprocal inferior change, no Q
+    waves yet), so the on-call cardiologist now stands on the case and has findings to give. The
+    radiology room's ECG and angiogram entries no longer hold the answer (and no longer fall through to
+    the database's "normal sinus rhythm" / "angiographically normal coronaries").
+  - **Killip I throughout:** clear lungs, an S4 you can hear (a synthetic clip,
+    `public/sounds/s4-gallop.wav`, from `scripts/generate-auscultation-audio.mjs`), a normal chest film
+    (a PA order opens the archive's real normal radiograph), a focused echo report. Exam flags now match
+    their text. One troponin (hs-TnT).
+  - **The monitor plays the untreated course** and no longer reperfuses by itself at 30 minutes; the
+    post-PCI course is an alternative the instructor starts, beside VF arrest and cardiogenic shock.
+  - **A team:** the nurse (chart), his wife Elena (history), an on-call interventional cardiologist,
+    Dr. Priya Raman (handover), and the debrief tutor (chart, with the answer key, after the case ends).
+  - **A treatment rubric** (aspirin, ticagrelor, heparin, statin expected; fibrinolysis, NSAIDs and
+    high-flow oxygen at 95 % flagged), a 3D bedside, his voice and photo.
+- **Existing installs are upgraded once, without overwriting anyone's work.** A boot step
+  (`server/seedStemiCase.js`) replaces the case in place only if it is exactly as shipped (never
+  edited, a shipped prompt, no rubric, no agents beyond the standing specialists); otherwise it adds
+  "Acute Chest Pain - STEMI (v2)" beside it in the default course. A deleted case stays deleted. Running
+  sessions keep their frozen case.
+- **The lesson quiz is anterior-focused** (localisation, reciprocal change, aVL, thresholds, not waiting
+  for troponin, PCI over lysis, oxygen, de Winter, early VF, septal rupture), with the answers spread
+  across positions. An untouched quiz is upgraded; an edited one is left alone.
+- **Case-authoring guide:** scenario step labels reach learners — keep them neutral.
+- **The debrief tutor opens when the case ends — enforced by the server.** Only the browser enforced
+  `unlock_trigger`, and a tutor attached to a case showed as a chat tab, so its answer key was one click
+  (or one request) away mid-case. The proxy now answers 403 `discussant_locked` until the session has
+  ended, by either route, unless the educator chose "Always available"; the tutor no longer has a chat
+  tab (its room is the debrief); and ending the case waits for the server to record the end before the
+  debrief opens.
+- **A full chat tab strip no longer hides the voice toggle.** With five agents the tabs overflowed
+  unclipped and pushed "Voice" under the monitor, where it could not be clicked; the tabs now scroll on
+  their own and the toggle stays put.
+
 ## [3.0.0-rc.15] — 2026-10-04
 
 - **Students receive only the case fields their screens use.** `GET /cases`, `GET /cases/:id`, the
