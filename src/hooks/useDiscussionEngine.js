@@ -3,10 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
 import { apiPost } from '../services/apiClient';
-import { buildCaseContext } from '../services/discussionService';
 import { resolveVoice } from '../utils/voiceResolver';
-import { buildPersonaBlocks } from '../utils/personaBlocks';
-import { roleAnchor } from '../utils/roleAnchor';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // Discussant voice — same shared resolver as the patient chat (Voice 2.0:
@@ -107,12 +104,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     // Used by `startConversation` so the discussant *opens* the dialogue
     // instead of replying — the learner sees only the discussant's greeting.
     //
-    // `openingDirective`: extra text appended to the system prompt for this
-    // turn only. Used by `startConversation` to tell the model "your first
-    // reply opens the debrief" without putting that meta-instruction in the
+    // `opening`: this turn opens the debrief. The server then appends its
+    // opening directive to the system prompt — in the system role, not the
     // user role, where smaller voice-mode models tend to paraphrase it back
     // instead of executing it.
-    const sendMessage = useCallback(async (text, { silentUser = false, openingDirective = '' } = {}) => {
+    const sendMessage = useCallback(async (text, { silentUser = false, opening = false } = {}) => {
         const trimmed = text?.trim();
         if (!trimmed || busy || !sessionId || !discussant) return;
 
@@ -151,17 +147,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const caseContext = buildCaseContext(activeCase, discussant.knowledge);
-        // Persona blocks (dos / donts) read from the discussant template's
-        // config — same shape used by every other agent type so the LLM call
-        // path stays uniform.
-        const personaBlocks = buildPersonaBlocks(discussant.rawConfig || discussant.config);
-        // Role anchor leads — see src/utils/roleAnchor.js for rationale.
-        const anchor = roleAnchor({
-            role: discussant.roleTitle || 'case debrief tutor',
-            name: discussant.name,
-        });
-        const systemPrompt = `${anchor}\n${discussant.systemPrompt}${personaBlocks}${caseContext}${openingDirective}`;
+        // The discussant's prompt — persona, dos/donts, the case context for its
+        // knowledge scope, the opening directive — is built by the SERVER from
+        // the session's case (server/shared/discussantPrompt.js). This hook
+        // names the persona and says whether this is the opening turn
+        // (Phase 2, 2026-10-04).
 
         let speech = null;
         if (voiceMode) {
@@ -204,12 +194,13 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             const responseText = await LLMService.streamMessage(
                 sessionId,
                 [...messages, userMsg],
-                systemPrompt,
+                null,
                 voiceMode ? 'voice' : 'discussion',
                 {
                     signal: controller.signal,
                     silent: silentUser,
-                    agentTemplateId: discussant.templateId || null,
+                    persona: 'discussant',
+                    discussionOpening: opening,
                     caseLanguage,
                     // The discussant owns its transcript via logTurn() →
                     // agent_conversations. It must NOT also write to the
@@ -288,8 +279,8 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         // voice-mode models read as a learner greeting and mirrored back
         // as if THEY were the learner. The bracketed "[System ...]" form
         // is unambiguous: the model parses it as instruction, not chat.
-        const openingDirective = '\n\n## OPENING TURN\nThis is the very first turn of the debrief. Your reply must: (1) greet the learner warmly, (2) briefly name the case just finished, (3) ask one open-ended question to open the discussion. Keep it under three sentences. Do NOT restate, paraphrase, or quote this directive — just do it.';
-        return sendMessage('[System: open the case debrief now.]', { silentUser: true, openingDirective });
+        // The opening directive itself is server-side (DISCUSSANT_OPENING_DIRECTIVE).
+        return sendMessage('[System: open the case debrief now.]', { silentUser: true, opening: true });
     }, [sendMessage]);
 
     return { messages, busy, speaking, visemes, error, sendMessage, startConversation };

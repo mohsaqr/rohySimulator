@@ -462,17 +462,18 @@ test.describe('the knowledge block in the case editor', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('the compiled prompt, as the model receives it', () => {
-    test('scope "chart" keeps the client situation and withholds the answer key', async ({ baseURL }) => {
+    // Regression lock: at `chart` the browser's situation (diagnosis included) was passed through untouched; the server now builds it from the session's case, so the answer key follows answerKey and the vitals are the server's (Phase 2, 2026-10-04)
+    test('scope "chart" builds the situation server-side and withholds the answer key', async ({ baseURL }) => {
         await setKnowledge(baseURL, nurseAgentId, { scope: 'chart', answerKey: false, record: true });
         const system = await promptSentFor(baseURL, nurseAgentId);
 
         expect(system).toContain('## ROLE');
         expect(system).toContain('--- CURRENT SITUATION ---');
         expect(system).toContain(HPI);
-        // The situation carried the diagnosis and it is still there, because
-        // at `chart` the browser's block is passed through untouched — the
-        // answer key is filtered where the browser BUILDS it. What this asserts
-        // is that the server does not add one, and does not drop the situation.
+        // FAT_SITUATION carried the diagnosis and a made-up HR; neither is in
+        // the case the server read, so neither may survive.
+        expect(system).not.toContain(DIAGNOSIS);
+        expect(system).not.toContain('HR: 90bpm');
         expect(system).not.toContain('## WHAT YOU KNOW (server)');
         expect(system).not.toContain('## HANDOVER (server)');
     });
@@ -597,7 +598,7 @@ test.describe('the server refuses what it cannot honour', () => {
         expect(clear.ok()).toBeTruthy();
 
         const system = await promptSentFor(baseURL, nurseAgentId);
-        // Still a full-chart agent: the situation is used, not replaced.
+        // Still a full-chart agent: a whole situation, not a scoped brief.
         expect(system).toContain('--- CURRENT SITUATION ---');
         expect(system).not.toContain('## WHAT YOU KNOW (server)');
         expect(system).not.toContain('## HANDOVER (server)');

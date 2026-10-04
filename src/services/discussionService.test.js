@@ -35,10 +35,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import {
-    fetchDiscussantForCase,
-    buildCaseContext,
-} from './discussionService.js';
+import { fetchDiscussantForCase } from './discussionService.js';
+import { buildDiscussionCaseContext } from '../../server/shared/casePromptContext.js';
+
+// The discussant's case context is built server-side now (Phase 2,
+// 2026-10-04, server/shared/discussantPrompt.js); the scope rules below are
+// the shared builder's, exercised through the same (case, knowledge) shape.
+const buildCaseContext = (activeCase, knowledge) => {
+    const k = knowledge && typeof knowledge === 'object' ? knowledge : {};
+    return buildDiscussionCaseContext(activeCase, k.scope, { answerKey: k.answerKey === true });
+};
 
 // ---------------------------------------------------------------------------
 // msw mock state

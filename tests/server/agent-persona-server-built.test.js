@@ -20,11 +20,7 @@ import http from 'node:http';
 import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
-import {
-    buildAgentPersonaPrompt,
-    learnerMayHoldPrompt,
-    CLIENT_BUILT_PROMPT_TYPES,
-} from '../../server/services/agentPersona.js';
+import { buildAgentPersonaPrompt } from '../../server/services/agentPersona.js';
 
 const PASSWORD = 'PersonaTests1!';
 const SECRET_CONSULTANT_PROMPT = 'CONSULTANT-SCRIPT: the troponin is flat; this is not an NSTEMI.';
@@ -170,20 +166,6 @@ describe('buildAgentPersonaPrompt', () => {
         for (const brief of ['', '   ', undefined, null, 42]) {
             const out = buildAgentPersonaPrompt({ agentType: 'nurse', prompt: 'AUTHORED' }, '', brief);
             expect(out.trimEnd().endsWith('AUTHORED')).toBe(true);
-        }
-    });
-});
-
-describe('learnerMayHoldPrompt', () => {
-    it('is an allow list of exactly the client-built types', () => {
-        expect([...CLIENT_BUILT_PROMPT_TYPES].sort()).toEqual(['discussant', 'patient']);
-        expect(learnerMayHoldPrompt('patient')).toBe(true);
-        expect(learnerMayHoldPrompt('discussant')).toBe(true);
-    });
-
-    it('withholds every other type, including ones that do not exist yet', () => {
-        for (const type of ['consultant', 'nurse', 'relative', 'pathologist', '', null, undefined]) {
-            expect(learnerMayHoldPrompt(type), String(type)).toBe(false);
         }
     });
 });
@@ -353,12 +335,16 @@ describe('GET /sessions/:id/agents as the learner who owns the session', () => {
         expect(Number.isInteger(consultant.agent_template_id)).toBe(true);
     });
 
-    it('never carries a team agent prompt, but keeps the patient prompt the chat assembles', async () => {
+    // Regression lock: the patient and discussant prompts reached the learner because the browser assembled them; the server builds both now, so no agent's prompt leaves (Phase 2, 2026-10-04)
+    it('never carries an agent prompt of any type, nor the knowledge config', async () => {
         const res = await getAs(studentToken, `/api/sessions/${sessionId}/agents`);
         const { agents } = await res.json();
         expect(JSON.stringify(agents)).not.toContain(SECRET_CONSULTANT_PROMPT);
-        expect(agents.find((a) => a.agent_type === 'consultant').system_prompt).toBeNull();
-        expect(agents.find((a) => a.agent_type === 'patient').system_prompt).toBe(PATIENT_PROMPT);
+        expect(JSON.stringify(agents)).not.toContain(PATIENT_PROMPT);
+        for (const agent of agents) {
+            expect(agent.system_prompt, agent.agent_type).toBeNull();
+            expect(Object.keys(agent.config).every((k) => ['voice', 'gender', 'unlock_trigger', 'show_encounter_record'].includes(k)), agent.agent_type).toBe(true);
+        }
     });
 
     // Regression lock: the list joined agent_templates without
@@ -395,12 +381,12 @@ describe('GET /sessions/:id/agents as an educator viewing a learner session', ()
 });
 
 describe('GET /cases/:id/agents', () => {
-    it('withholds team agent prompts from a learner', async () => {
+    it('withholds every agent prompt from a learner, the patient\'s included', async () => {
         const res = await getAs(studentToken, `/api/cases/${caseId}/agents`);
         expect(res.status).toBe(200);
         const { agents } = await res.json();
         expect(JSON.stringify(agents)).not.toContain(SECRET_CONSULTANT_PROMPT);
-        expect(agents.find((a) => a.agent_type === 'patient').system_prompt).toBe(PATIENT_PROMPT);
+        expect(agents.find((a) => a.agent_type === 'patient').system_prompt).toBeNull();
     });
 
     it('still gives an educator every prompt, for the case editor', async () => {
@@ -437,8 +423,10 @@ describe('POST /proxy/llm with case_agent_id', () => {
         expect(system).toMatch(/You are: On-call cardiologist\./);
         expect(system).toMatch(/Your name: Dr Haddad\./);
         expect(system.indexOf(SECRET_CONSULTANT_PROMPT)).toBeGreaterThan(system.indexOf('## ROLE'));
+        // The situation follows the persona — built by the server now, so the
+        // client's "HR: 90bpm" never arrives (Phase 2, 2026-10-04).
         expect(system.indexOf('--- CURRENT SITUATION ---')).toBeGreaterThan(system.indexOf(SECRET_CONSULTANT_PROMPT));
-        expect(system).toContain('HR: 90bpm');
+        expect(system).not.toContain('HR: 90bpm');
     });
 
     it('refuses an agent attached to a different case, without calling the model', async () => {
@@ -486,7 +474,8 @@ describe('POST /proxy/llm with case_agent_id', () => {
         }
     });
 
-    it('still accepts an explicit null agent_llm_config as "no agent"', async () => {
+    // Regression lock: a session request that named no persona was answered with the client's own prompt — the last client-built path (Phase 2, 2026-10-04)
+    it('refuses an explicit null agent_llm_config: every caller names the persona now', async () => {
         const before = llm.bodies.length;
         const res = await proxyAs(studentToken, {
             session_id: sessionId,
@@ -494,8 +483,9 @@ describe('POST /proxy/llm with case_agent_id', () => {
             system_prompt: 'CLIENT-BUILT PATIENT PERSONA',
             agent_llm_config: null,
         });
-        expect(res.status).toBe(200);
-        expect(llm.bodies.length).toBe(before + 1);
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('persona_required');
+        expect(llm.bodies.length).toBe(before);
     });
 
     it('refuses a disabled case agent', async () => {
@@ -515,19 +505,16 @@ describe('POST /proxy/llm with case_agent_id', () => {
         expect(res.status).toBe(400);
     });
 
-    it('leaves a request with no agent exactly as the client built it', async () => {
+    it('refuses a request with no agent rather than answering the client prompt as anyone', async () => {
         const before = llm.bodies.length;
         const res = await proxyAs(studentToken, {
             session_id: sessionId,
             messages: [{ role: 'user', content: 'hi' }],
             system_prompt: 'CLIENT-BUILT PATIENT PERSONA',
         });
-        expect(res.status).toBe(200);
-        // Not a stale body from an earlier test.
-        expect(llm.bodies.length).toBe(before + 1);
-        const system = systemTextOf(llm.bodies.at(-1));
-        expect(system).toContain('CLIENT-BUILT PATIENT PERSONA');
-        expect(system).not.toContain('## ROLE');
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('persona_required');
+        expect(llm.bodies.length).toBe(before);
     });
 });
 
@@ -564,16 +551,27 @@ describe('POST /proxy/llm with a bare agent_template_id', () => {
         expect((await res.json()).code).toBe('session_required');
     });
 
-    it('still accepts the patient template and a team template attached to this case', async () => {
-        for (const id of [patientTemplateId, consultantTemplateId]) {
-            const res = await proxyAs(studentToken, {
-                session_id: sessionId,
-                messages: [{ role: 'user', content: 'hi' }],
-                system_prompt: 'situation',
-                agent_llm_config: { agent_template_id: id },
-            });
-            expect(res.status).toBe(200);
-        }
+    it('still accepts the patient template', async () => {
+        const res = await proxyAs(studentToken, {
+            session_id: sessionId,
+            messages: [{ role: 'user', content: 'hi' }],
+            agent_llm_config: { agent_template_id: patientTemplateId },
+        });
+        expect(res.status).toBe(200);
+    });
+
+    // Regression lock: a team template named by id alone (no case_agent_id) had the client's system_prompt answered verbatim — the last client-built prompt path (Phase 2, 2026-10-04)
+    it('refuses a team template named without its case agent, without calling the model', async () => {
+        const before = llm.bodies.length;
+        const res = await proxyAs(studentToken, {
+            session_id: sessionId,
+            messages: [{ role: 'user', content: 'hi' }],
+            system_prompt: 'situation',
+            agent_llm_config: { agent_template_id: consultantTemplateId },
+        });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe('persona_required');
+        expect(llm.bodies.length).toBe(before);
     });
 });
 
@@ -669,13 +667,17 @@ describe('POST /proxy/llm — config.knowledge scopes', () => {
         expect(system).toContain(RECORD_ITEM);
     });
 
-    it('scope "chart": the client situation is used, as it always was', async () => {
+    // Regression lock: at summary/history/chart the browser's situation — built from its copy of the whole case, answer key included — was used verbatim. The server now builds it from the session's case, vitals and team log (Phase 2, 2026-10-04)
+    it('scope "chart": the server builds the situation; the client\'s is dropped', async () => {
         const system = await speakTo(chartNurseId);
         expect(system).toContain('--- CURRENT SITUATION ---');
         expect(system).toContain('=== CASE CONTEXT ===');
         expect(system).toContain(SCOPED_HPI);
-        expect(system).toContain('HR: 90bpm');
-        // No server-built block: nothing to replace the situation with.
+        // Server vitals (session_vitals), not the client's "HR: 90bpm".
+        expect(system).toContain('HR: 118bpm');
+        expect(system).not.toContain('HR: 90bpm');
+        // answerKey is off for this nurse: the client's leaked expectation is gone.
+        expect(system).not.toContain(SCOPED_DIAGNOSIS);
         expect(system).not.toContain('## HANDOVER (server)');
         expect(system).not.toContain('## WHAT YOU KNOW (server)');
     });

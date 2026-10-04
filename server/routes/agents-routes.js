@@ -26,7 +26,6 @@ import {
 } from './_helpers.js';
 import { specialistAnswers } from '../shared/caseRooms.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
-import { CLIENT_BUILT_PROMPT_TYPES, learnerMayHoldPrompt } from '../services/agentPersona.js';
 import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/specialties.js';
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 
@@ -140,38 +139,51 @@ function configOverrideProblem(configOverride, agentType) {
 //     for the debrief tutor, its `config.unlock_trigger` and
 //     `config.show_encounter_record`.
 //
-// The client assembles the system prompt and posts it to /proxy/llm, so those
-// two prompts must reach the learner's browser; withholding them would mute
-// the persona and the debrief. Everything else must not. So a learner sees
-// ONLY the agent types their own runtime resolves, and only the columns it
-// reads — no LLM routing, no memory access, no authorship, no timestamps, and
-// no template of any other type (nurse, consultant, relative, …), whose
-// prompts a learner has no runtime reason to hold.
-// The same list the server-built persona reads (services/agentPersona.js):
-// the types whose prompt the browser still assembles.
-const LEARNER_VISIBLE_AGENT_TYPES = CLIENT_BUILT_PROMPT_TYPES;
+// Every prompt is now built by the SERVER — the patient (services/
+// patientPersona.js), the discussant (services/agentSituation.js) and the
+// team (services/agentPersona.js) — so no authored prompt has a reason to
+// reach a learner's browser. What the learner's runtime still reads from a
+// template is presentation: the name, title and avatar it draws, the voice it
+// speaks in, and when the debrief tutor unlocks. A learner sees ONLY the two
+// types their runtime resolves itself (patient, discussant), only those
+// columns, and only those config keys — no prompt, no knowledge scope, no
+// disclosure rules, no LLM routing, no authorship, no timestamps. Both lists
+// are ALLOW lists: a column or key added later is private by default.
+const LEARNER_VISIBLE_AGENT_TYPES = Object.freeze(['patient', 'discussant']);
 const LEARNER_TEMPLATE_FIELDS = Object.freeze([
     'id', 'agent_type', 'name', 'role_title', 'avatar_url',
-    'system_prompt', 'context_filter', 'communication_style',
+    'context_filter', 'communication_style',
 ]);
+const LEARNER_CONFIG_KEYS = Object.freeze(['voice', 'gender', 'unlock_trigger', 'show_encounter_record']);
 
 const isEducatorOrAbove = (user) => hasRoleAtLeast(user, ROLE_RANKS.educator);
 
 /**
- * The authored prompt of a case agent, as the caller may receive it.
- *
- * The per-case routes follow the template library's rule: an educator gets
- * the prompt; a learner gets it only for a type their browser still
- * assembles. Every other type is built server-side from `case_agent_id`
- * (services/agentPersona.js), so its prompt has no reason to leave.
+ * The authored prompt of a case agent, as the caller may receive it: an
+ * educator's editor gets it, a learner never does (the server builds every
+ * persona from the case agent or the session).
  *
  * @param {object} user        req.user
- * @param {string} agentType
  * @param {string|null} prompt override or template prompt
  * @returns {string|null}      the prompt, or null when withheld
  */
-function casePromptFor(user, agentType, prompt) {
-    return isEducatorOrAbove(user) || learnerMayHoldPrompt(agentType) ? prompt : null;
+function casePromptFor(user, prompt) {
+    return isEducatorOrAbove(user) ? prompt : null;
+}
+
+/**
+ * An agent's config as the caller may receive it: whole for an educator, the
+ * presentation keys only for a learner.
+ *
+ * @param {object} user   req.user
+ * @param {object} config merged template + override config
+ * @returns {object}
+ */
+function agentConfigFor(user, config) {
+    if (isEducatorOrAbove(user)) return config;
+    const out = {};
+    for (const key of LEARNER_CONFIG_KEYS) if (config?.[key] !== undefined) out[key] = config[key];
+    return out;
 }
 
 /**
@@ -190,7 +202,7 @@ function projectAgentTemplate(row, user) {
     if (isEducatorOrAbove(user)) {
         return { ...redactRow(row), config, is_default: row.is_default === 1 };
     }
-    const out = { is_default: row.is_default === 1, config };
+    const out = { is_default: row.is_default === 1, config: agentConfigFor(user, config) };
     for (const field of LEARNER_TEMPLATE_FIELDS) out[field] = row[field] ?? null;
     return out;
 }
@@ -968,7 +980,7 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             name: a.name_override || a.template_name,
             role_title: a.template_role_title,
             avatar_url: a.template_avatar,
-            system_prompt: casePromptFor(req.user, a.agent_type, a.system_prompt_override || a.template_system_prompt),
+            system_prompt: casePromptFor(req.user, a.system_prompt_override || a.template_system_prompt),
             context_filter: a.template_context_filter,
             communication_style: a.template_communication_style,
             // Availability config
@@ -979,10 +991,10 @@ router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
             response_time_min: a.response_time_min,
             response_time_max: a.response_time_max,
             // Merged config
-            config: {
+            config: agentConfigFor(req.user, {
                 ...JSON.parse(a.template_config || '{}'),
                 ...JSON.parse(a.config_override || '{}')
-            },
+            }),
             // Keep override flags for editing
             has_name_override: !!a.name_override,
             has_prompt_override: !!a.system_prompt_override,
@@ -1459,7 +1471,7 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             name: a.name_override || a.template_name,
             role_title: a.role_title,
             avatar_url: a.avatar_url,
-            system_prompt: casePromptFor(req.user, a.agent_type, a.system_prompt_override || a.template_system_prompt),
+            system_prompt: casePromptFor(req.user, a.system_prompt_override || a.template_system_prompt),
             context_filter: a.context_filter,
             communication_style: a.communication_style,
             availability_type: a.availability_type,
@@ -1468,10 +1480,10 @@ router.get('/sessions/:sessionId/agents', authenticateToken, async (req, res) =>
             depart_at_minute: a.depart_at_minute,
             response_time_min: a.response_time_min,
             response_time_max: a.response_time_max,
-            config: {
+            config: agentConfigFor(req.user, {
                 ...JSON.parse(a.template_config || '{}'),
                 ...JSON.parse(a.config_override || '{}')
-            },
+            }),
             // Session state — timestamps converted to ISO `…Z` so
             // the client's `new Date()` parses as UTC regardless of
             // local time zone. SQLite stores them in UTC but without

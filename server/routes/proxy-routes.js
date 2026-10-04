@@ -52,6 +52,7 @@ import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/ll
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { buildSessionPatientPrompt } from '../services/patientPersona.js';
+import { buildSessionDiscussantPrompt, buildTeamAgentSituation } from '../services/agentSituation.js';
 import { isKnownLanguage } from '../shared/languages.js';
 import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
 import { normalizeKnowledge, serverBuildsSituation } from '../shared/agentKnowledge.js';
@@ -340,7 +341,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const namesAgent = typeof agent_llm_config === 'object'
                 && !Array.isArray(agent_llm_config)
                 && (agent_llm_config.case_agent_id != null || !!agent_llm_config.agent_template_id
-                    || agent_llm_config.persona === 'patient');
+                    || agent_llm_config.persona === 'patient' || agent_llm_config.persona === 'discussant');
             if (!namesAgent) {
                 (req.log || routesLlmLog).warn('agent_llm_config names no agent', { user_id: userId, session_id: session_id ?? null });
                 return res.status(400).json({
@@ -405,15 +406,21 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (!agentTemplate) {
                 return res.status(404).json({ error: 'Agent template not available for this session', code: 'template_not_allowed' });
             }
-        } else if (agent_llm_config?.persona === 'patient') {
+        } else if (agent_llm_config?.persona === 'patient' || agent_llm_config?.persona === 'discussant') {
             if (!session_id) {
-                return res.status(400).json({ error: 'the patient speaks only inside a session', code: 'session_required' });
+                return res.status(400).json({ error: `the ${agent_llm_config.persona} speaks only inside a session`, code: 'session_required' });
             }
         } else if (!session_id) {
             // No agent named and no session: a free-form system prompt answered
             // on the platform's key, by anyone signed in. Every real caller (the
             // patient chat, the debrief) speaks inside a session (Phase 0).
             return res.status(400).json({ error: 'session_id is required', code: 'session_required' });
+        } else {
+            // A session but no persona: the last client-built prompt path. Every
+            // caller now names who speaks — the patient and the discussant are
+            // built here, team agents by case agent id — so a bare prompt is no
+            // longer answered as anyone (Phase 2, 2026-10-04).
+            return res.status(400).json({ error: 'name the persona (agent_llm_config)', code: 'persona_required' });
         }
         // The PATIENT is built server-side (services/patientPersona.js) from
         // the session's case snapshot, its resolved patient template and the
@@ -422,7 +429,28 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // by a named template whose stored type is 'patient'. The template the
         // server resolves wins over any id the client named (Phase 1, 2026-10-04).
         let serverPatient = null;
-        if (agent_llm_config?.persona === 'patient' || (!caseAgent && agentTemplate?.agent_type === 'patient')) {
+        let serverDiscussant = null;
+        if (agent_llm_config?.persona === 'discussant' || (!caseAgent && agentTemplate?.agent_type === 'discussant')) {
+            // The debrief discussant, built from the session's case, the
+            // case's discussant (or the platform default) and its knowledge
+            // scope (services/agentSituation.js). Same server-wins rule as the
+            // patient for the template it speaks with.
+            serverDiscussant = await buildSessionDiscussantPrompt({
+                sessionId: session_id, tenant: tenantId(req), opening: req.body?.discussion_opening === true,
+            });
+            if (!serverDiscussant) return res.status(404).json({ error: 'Session not found' });
+            if (!serverDiscussant.discussant) return res.status(404).json({ error: 'No discussant is configured for this case', code: 'no_discussant' });
+            const resolvedId = serverDiscussant.discussant.templateId;
+            if (resolvedId !== agentTemplateId) {
+                agentTemplateId = resolvedId;
+                agentTemplate = await dbAdapter.get(
+                    `SELECT agent_type, llm_provider, llm_model, llm_api_key, llm_endpoint, llm_temperature, llm_max_tokens
+                       FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+                    [resolvedId, tenantId(req)]
+                );
+            }
+            agentType = 'discussant';
+        } else if (agent_llm_config?.persona === 'patient' || (!caseAgent && agentTemplate?.agent_type === 'patient')) {
             serverPatient = await buildSessionPatientPrompt({ sessionId: session_id, tenant: tenantId(req) });
             if (!serverPatient) return res.status(404).json({ error: 'Session not found' });
             const resolvedId = serverPatient.template?.templateId ?? null;
@@ -435,6 +463,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 );
             }
             agentType = 'patient';
+        }
+        if (!caseAgent && !serverPatient && !serverDiscussant) {
+            // A team template named by id alone (no case_agent_id) was the last
+            // way to have the client's own system_prompt answered verbatim. A
+            // team agent speaks from its case attachment, so name that.
+            return res.status(400).json({ error: 'name a team agent by its case_agent_id', code: 'persona_required' });
         }
         // Every llm_request_log row after this point carries the tenant and
         // the agent the request spoke as (NULLs for a non-agent request).
@@ -467,7 +501,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 agent_type: agentType,
                 agent_template_id: agentTemplateId,
                 case_agent_id: caseAgent?.caseAgentId ?? null,
-                persona: (caseAgent || serverPatient) ? 'server' : 'client',
+                persona: 'server',
             });
         }
 
@@ -805,6 +839,19 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 room_active: needsRoomProbe ? roomActive : null,
                 answer_terms: specialistAnswerTerms.length,
             });
+        } else if (caseAgent && agentKnowledge && !serverBuildsSituation(agentKnowledge.scope)) {
+            // `summary`, `history`, `chart`: the situation is built here from
+            // the session's case, vitals and team log (services/agentSituation.js)
+            // instead of taken from the browser, which had to hold the whole
+            // case to build it (Phase 2, 2026-10-04).
+            if (typeof system_prompt === 'string' && system_prompt.trim()) {
+                (req.log || routesLlmLog).info('client situation dropped for team agent', {
+                    session_id, agent_type: caseAgent.agentType, knowledge_scope: agentKnowledge.scope, chars: system_prompt.length,
+                });
+            }
+            situation = await buildTeamAgentSituation({
+                sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType, knowledge: agentKnowledge,
+            });
         } else if (caseAgent && serverBuildsSituation(agentKnowledge?.scope)) {
             // `none` and `handover`: the same move the specialist branch makes
             // above, for the same reason. The browser assembles its situation
@@ -845,12 +892,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // A server-resolved case agent speaks from its authored prompt; what
         // the client sent is only the situation it reported (none, for a
         // specialist — see above).
-        if (serverPatient && typeof system_prompt === 'string' && system_prompt.trim()) {
-            (req.log || routesLlmLog).info('client patient prompt dropped', { session_id, chars: system_prompt.length });
+        if ((serverPatient || serverDiscussant) && typeof system_prompt === 'string' && system_prompt.trim()) {
+            (req.log || routesLlmLog).info('client persona prompt dropped', { session_id, persona: agentType, chars: system_prompt.length });
         }
         const casePrompt = serverPatient
             ? serverPatient.prompt
-            : (caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt);
+            : serverDiscussant
+                ? serverDiscussant.prompt
+                : (caseAgent ? buildAgentPersonaPrompt(caseAgent, situation, serverBrief) : system_prompt);
         // The patient speaks the CASE's language (pinned at creation); the
         // body's case_language is used only for a legacy case without one.
         const promptLanguage = serverPatient && isKnownLanguage(serverPatient.patientCase.config?.case_language)

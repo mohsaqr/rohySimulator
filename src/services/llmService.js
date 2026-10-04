@@ -145,7 +145,7 @@ export const LLMService = {
      * Caller-initiated abort (the `signal` option) still resolves with '' —
      * that is a cancellation, not a failure.
      */
-    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persona = null, persistInteractions = true, caseLanguage = null, studentAffect = null, source = null } = {}) {
+    async streamMessage(sessionId, messages, systemPrompt, sessionMode, { onDelta, signal, silent = false, agentTemplateId = null, persona = null, discussionOpening = false, persistInteractions = true, caseLanguage = null, studentAffect = null, source = null } = {}) {
         const lastMsg = messages[messages.length - 1];
         // `silent` lets callers (e.g. the discussion opening turn) suppress
         // the user-side /interactions write so meta-prompts and sentinels
@@ -210,6 +210,9 @@ export const LLMService = {
             // 5-tier resolver taught us what that costs.
             if (persona) {
                 body.agent_llm_config = { persona };
+                // The debrief's first turn: the server appends its opening
+                // directive to the discussant prompt it builds.
+                if (discussionOpening) body.discussion_opening = true;
             } else if (agentTemplateId) {
                 body.agent_llm_config = { agent_template_id: agentTemplateId };
             }

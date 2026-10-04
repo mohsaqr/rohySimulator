@@ -166,20 +166,19 @@ describe('GET /agents/templates as a student', () => {
         expect(JSON.stringify(templates)).not.toContain('sk-secret-key');
     });
 
-    it('still carries what the patient chat and the debrief actually read', async () => {
-        // Withholding these would mute the patient persona and the debrief
-        // tutor on every case with no per-case agent attached — which is every
-        // case on a fresh install.
+    // Regression lock: the patient and discussant prompts were sent to learners because the browser assembled those personas; the server builds both now, so a learner gets the presentation (voice, unlock) and no prompt (Phase 2, 2026-10-04)
+    it('carries what the patient chat and the debrief still read, and no prompt', async () => {
         const res = await asUser(studentToken)('/api/agents/templates');
         const { templates } = await res.json();
 
         const patient = templates.find((t) => t.agent_type === 'patient');
-        expect(patient.system_prompt).toBe(PATIENT_PROMPT);
+        expect(Object.hasOwn(patient, 'system_prompt')).toBe(false);
         expect(patient.config.voice.gender).toBe('male');
         expect(patient.is_default).toBe(true);
 
         const discussant = templates.find((t) => t.agent_type === 'discussant');
-        expect(discussant.system_prompt).toBe(DISCUSSANT_PROMPT);
+        expect(Object.hasOwn(discussant, 'system_prompt')).toBe(false);
+        expect(JSON.stringify(templates)).not.toContain(DISCUSSANT_PROMPT);
         expect(discussant.config.show_encounter_record).toBe(true);
     });
 });
@@ -216,7 +215,8 @@ describe('GET /agents/templates/:id', () => {
         const res = await asUser(studentToken)(`/api/agents/templates/${patientId}`);
         expect(res.status).toBe(200);
         const body = await res.json();
-        expect(body.system_prompt).toBe(PATIENT_PROMPT);
+        expect(Object.hasOwn(body, 'system_prompt')).toBe(false);
+        expect(body.config.voice.gender).toBe('male');
         for (const field of FORBIDDEN_FOR_LEARNERS) {
             expect(Object.hasOwn(body, field), `leaked ${field}`).toBe(false);
         }

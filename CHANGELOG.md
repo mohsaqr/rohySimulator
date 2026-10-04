@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.14] — 2026-10-04
+
+- **The debrief discussant is built on the server.** Its prompt — persona, the case context its
+  knowledge scope allows (diagnosis only with `answerKey`), and the opening-turn directive — was
+  assembled in the browser from its copy of the whole case and used verbatim. The proxy now builds it
+  from the session's case and the case's discussant (or the platform default), and ignores any prompt
+  the client sends. The debrief names the persona (`agent_llm_config: {persona: 'discussant'}`, with
+  `discussion_opening: true` for the first turn). A tenant with no discussant answers 404 `no_discussant`.
+- **Team agents at `summary`, `history` and `chart` get a server-built situation.** The browser used to
+  build it — case context, vitals, team log — and the proxy passed it through, so a `history` nurse was
+  as well informed as the browser chose to make it. The server now assembles it from the session's case,
+  its latest vitals (chart only) and the team log (chart: everyone; below: the family and the agent's own
+  type). Every case-agent request is now built entirely server-side.
+- **No more client-built prompts.** A request with a session that names no persona is 400
+  `persona_required`, and so is a team template named by id without its `case_agent_id` — the last two
+  ways to have the client's own system prompt answered.
+- **Learners receive no agent prompt.** `/agents/templates`, `/cases/:id/agents` and
+  `/sessions/:id/agents` no longer send any authored prompt to a learner — the patient's and the
+  discussant's included — and trim agent config to the presentation keys the runtime reads (`voice`,
+  `gender`, `unlock_trigger`, `show_encounter_record`). Knowledge scopes, disclosure rules and dos/donts
+  stay with educators.
+
 ## [3.0.0-rc.13] — 2026-10-04
 
 - **The patient is built on the server.** The patient's system prompt used to be assembled in the
