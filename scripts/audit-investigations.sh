@@ -27,9 +27,13 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 USER_NAME="${ROHY_AUDIT_USER:-admin}"
-PASS_WORD="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+PASS_WORD="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-investigations-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
@@ -419,7 +423,7 @@ else
     STUDENT_OUT="$OUT/student.json"
     STUDENT_TOK=$(curl -s -X POST "$API/api/auth/login" \
         -H 'Content-Type: application/json' \
-        -d "{\"username\":\"${ROHY_STUDENT_USER:-student}\",\"password\":\"${ROHY_STUDENT_PASS:-student123}\"}" \
+        -d "{\"username\":\"${ROHY_STUDENT_USER:-student}\",\"password\":\"${ROHY_STUDENT_PASS:?set ROHY_STUDENT_PASS (no default)}\"}" \
         | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
     if [ -n "$STUDENT_TOK" ]; then
         DENY_OUT="$OUT/view_deny.json"

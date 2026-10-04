@@ -26,9 +26,13 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 USER_NAME="${ROHY_AUDIT_USER:-admin}"
-PASS_WORD="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+PASS_WORD="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-audit-XXXXXX")
 # Set ROHY_AUDIT_KEEP=1 to inspect the captured WAV/stream files after a run.
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT

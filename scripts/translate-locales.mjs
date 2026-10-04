@@ -18,7 +18,8 @@
 //                                                     # (never `locked` ones — those need i18n:lock --unlock)
 // Env:
 //   ROHY_BASE_URL (default http://localhost:3000)
-//   ROHY_TOKEN, or ROHY_USERNAME + ROHY_PASSWORD
+//   ROHY_TOKEN, or ROHY_USERNAME + ROHY_PASSWORD (an ADMIN account: the proxy's
+//   localization persona is admin-only)
 //
 // The change-tracking sidecar (src/locales/.en-hashes.json) records the en
 // value each translation was made from; when the en string changes, the key
@@ -175,7 +176,9 @@ async function translateBatch(token, lang, entries, attempt = 0) {
             headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
             body: JSON.stringify({
                 messages: [{ role: 'user', content: translationPrompt(lang, entries) }],
-                system_prompt: 'You are a precise software localization engine. You output only valid JSON.'
+                // Admin-only, sessionless; the server owns the system prompt
+                // (proxy-routes, LOCALIZATION_SYSTEM_PROMPT).
+                agent_llm_config: { persona: 'localization' }
             })
         });
     } catch (err) {

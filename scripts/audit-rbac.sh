@@ -8,11 +8,16 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 STUDENT_USER="${ROHY_STUDENT_USER:-student}"
-STUDENT_PASS="${ROHY_STUDENT_PASS:-student123}"
+audit_require ROHY_STUDENT_PASS
+STUDENT_PASS="$ROHY_STUDENT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-rbac-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
@@ -109,7 +114,7 @@ assert_code() {
 }
 
 RUN_TAG="rbac-$$-$(date +%s)"
-PASSWORD="AuditPass123!"
+PASSWORD="$(audit_random_password)"
 
 section "Login seeded users"
 ADMIN_LOGIN="$OUT/admin-login-payload.json"

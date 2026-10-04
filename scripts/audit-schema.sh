@@ -9,9 +9,13 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 API="${ROHY_API:-http://localhost:3000}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 DB_PATH="${ROHY_DB:-$(cd "$(dirname "$0")/.." && pwd)/server/database.sqlite}"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-schema-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
@@ -244,7 +248,7 @@ fi
 section "users delete cleans user-owned rows"
 AUDIT_USER="schema-user-$RUN_MARKER"
 AUDIT_EMAIL="$AUDIT_USER@example.invalid"
-AUDIT_PASS="AuditPass123!"
+AUDIT_PASS="$(audit_random_password)"
 CREATE_USER_PAYLOAD="$OUT/user-create.json"
 python3 - "$CREATE_USER_PAYLOAD" "$AUDIT_USER" "$AUDIT_EMAIL" "$AUDIT_PASS" <<'PYEOF'
 import json, sys

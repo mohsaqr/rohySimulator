@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.17] — 2026-10-04
+
+- **No hardcoded credentials in the audit scripts (CWE-798).** The `audit-*.sh` scripts fell back to
+  `admin123`/`student123` and created users with fixed passwords; they now take credentials only from the
+  environment (`scripts/_audit-lib.sh`) and generate random passwords for the users they create. CI
+  provisions its audit server with per-run, masked, random admin and student passwords and JWT secret
+  instead of the seeded development accounts.
+- **The locale pipeline works again.** `scripts/translate-locales.mjs` names the admin-only
+  `localization` persona on `/proxy/llm` (the proxy refused sessionless requests since rc.12); the
+  server supplies its system prompt.
+
 ## [3.0.0-rc.16] — 2026-10-04
 
 - **The default STEMI case, v2.** John Martinez (55, anterior STEMI, Killip I) is rebuilt to use what

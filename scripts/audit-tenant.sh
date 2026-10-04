@@ -8,11 +8,15 @@
 
 set -eo pipefail
 
+# Credentials come from the environment, never from this file (CWE-798).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_audit-lib.sh"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API="${ROHY_API:-http://localhost:3000}"
 DB_PATH="${ROHY_DB:-$ROOT/server/database.sqlite}"
 ADMIN_USER="${ROHY_AUDIT_USER:-admin}"
-ADMIN_PASS="${ROHY_AUDIT_PASS:-admin123}"
+audit_require ROHY_AUDIT_PASS
+ADMIN_PASS="$ROHY_AUDIT_PASS"
 OUT=$(mktemp -d "${TMPDIR:-/tmp}/rohy-tenant-audit-XXXXXX")
 trap '[ -n "${ROHY_AUDIT_KEEP:-}" ] || rm -rf "$OUT"' EXIT
 
@@ -135,7 +139,7 @@ if [ "$SESSION_TENANT_INFO" = "1:1" ]; then pass "sessions.tenant_id is NOT NULL
 
 section "Tenant and user setup"
 RUN_TAG="tenant-$$-$(date +%s)"
-PASSWORD="TenantPass123!"
+PASSWORD="$(audit_random_password)"
 ADMIN_TOK=$(login "$ADMIN_USER" "$ADMIN_PASS" "$OUT/admin-login-payload.json" "$OUT/admin-login.json")
 [ -n "$ADMIN_TOK" ] || { fail "seeded admin login failed"; exit 1; }
 ADMIN_AUTH=( -H "Authorization: Bearer $ADMIN_TOK" )
