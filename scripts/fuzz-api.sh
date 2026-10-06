@@ -164,6 +164,7 @@ echo "[fuzz] booting an isolated server on :$PORT"
     ROHY_DB="$OUT/fuzz.sqlite" \
     JWT_SECRET=fuzz-only-secret-do-not-reuse-anywhere \
     NODE_ENV=production \
+    ROHY_PROVA_URL=off \
     FRONTEND_URL="$API" \
     ALLOW_DEFAULT_USERS=1 \
     ROHY_DISABLE_AUTH_RATE_LIMIT=1 \
