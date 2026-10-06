@@ -387,6 +387,7 @@ jobs:
           ROHY_DB=/tmp/rohy-audit/audit.sqlite \
           JWT_SECRET="$AUDIT_JWT_SECRET" \
           NODE_ENV=production \
+          ROHY_PROVA_URL=off \
           FRONTEND_URL=http://localhost:3000 \
           ROHY_ADMIN_USERNAME="$ROHY_AUDIT_USER" \
           ROHY_ADMIN_PASSWORD="$ROHY_AUDIT_PASS" \
