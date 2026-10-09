@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.24] — 2026-10-09
+
+- Prevent a new student from inheriting another account's emotion-capture consent through shared browser storage. The welcome checkbox always starts unchecked and records only an explicit opt-in to its displayed camera contract.
+- Add direct browser/API regressions for retained lab history in running and completed sessions, diagnosis-bearing authoring labels across learner views and APIs, and fresh/shared-browser student consent. Add exact automated Prova cases for these three release blockers while preserving the broader manual checks.
+- Verification: seven targeted browser checks and 38 affected component/API tests pass. The shared-browser consent regression failed against the previous implementation and passes with this fix.
+
 ## [3.0.0-rc.23] — 2026-10-09
 
 - Protect user purge by role rank, revoke other sessions on password changes, and refuse sign-in when a revocable session cannot be recorded.
