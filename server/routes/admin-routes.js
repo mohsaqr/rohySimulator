@@ -1681,6 +1681,10 @@ router.get('/platform-settings/monitor', async (req, res) => {
 router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const validKeys = Object.keys(DEFAULT_MONITOR_SETTINGS);
+        const invalidKey = validKeys.find(key => req.body[key] !== undefined && typeof req.body[key] !== 'boolean');
+        if (invalidKey) {
+            return res.status(400).json({ error: `${invalidKey} must be a boolean`, code: 'invalid_monitor_setting', field: invalidKey });
+        }
 
         for (const [key, value] of Object.entries(req.body)) {
             if (validKeys.includes(key)) {

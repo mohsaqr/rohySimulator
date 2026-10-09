@@ -39,6 +39,7 @@ import {
 // `new Date()` on it parses as LOCAL time, which is the same trap that made a
 // 15 s session read as 3 h (RPS-1 §17, migrations 0050-0052).
 import { SQL_NOW } from '../shared/time.js';
+import { REDACTED } from '../redaction.js';
 
 const radiologyLog = logger('radiology');
 const routesAuthLog = logger('routes-auth-users-tenants');
@@ -244,6 +245,9 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
         );
         const byUsername = new Map(existingUsers.map(u => [String(u.username).toLowerCase(), u]));
         const byEmail = new Map(existingUsers.map(u => [String(u.email).toLowerCase(), u]));
+        const importCohorts = await dbAdapter.all(
+            'SELECT id, name, join_code FROM cohorts WHERE tenant_id = ? AND deleted_at IS NULL', [tid]
+        );
         const seenInFile = new Set();
 
         let topCohort = null;
@@ -277,15 +281,21 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
 
             let cohort = topCohort;
             if (className) {
-                cohort = await dbAdapter.get(
-                    `SELECT id, name FROM cohorts WHERE (name = ? OR join_code = ?) AND tenant_id = ? AND deleted_at IS NULL
-                      ORDER BY (name = ?) DESC LIMIT 1`,
-                    [className, className, tid, className]
-                );
+                // Match the wizard's case folding, including non-ASCII class
+                // names (SQLite NOCASE only folds ASCII). Prefer a name match.
+                const classKey = className.toLowerCase();
+                cohort = importCohorts.find(c => String(c.name).toLowerCase() === classKey)
+                    || importCohorts.find(c => String(c.join_code || '').toLowerCase() === classKey);
                 if (!cohort) { fail(`Unknown class "${className}"`); continue; }
             }
 
-            const existing = byUsername.get(uKey) || byEmail.get(eKey);
+            const usernameMatch = byUsername.get(uKey);
+            const emailMatch = byEmail.get(eKey);
+            if (usernameMatch && emailMatch && usernameMatch.id !== emailMatch.id) {
+                fail('Username and email refer to different existing users');
+                continue;
+            }
+            const existing = usernameMatch || emailMatch;
             if (existing) {
                 if (!cohort) { results.skipped.push({ row: rowNo, username, email, reason: 'already exists (no class to enrol into)' }); continue; }
                 if (dryRun) { results.enrolled.push({ row: rowNo, username: existing.username, class: cohort.name, existing: true }); continue; }
@@ -439,6 +449,18 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
             try { return JSON.parse(stored || '{}') || {}; } catch { return {}; }
         };
 
+        // GET redacts this secret. Saving the returned settings unchanged must
+        // retain the stored credential rather than replace it with the marker.
+        // Empty string/null remain explicit ways to remove a personal key.
+        const llmSettings = default_llm_settings && typeof default_llm_settings === 'object'
+            ? { ...default_llm_settings }
+            : default_llm_settings;
+        if (llmSettings?.apiKey === REDACTED) {
+            const storedKey = parseStored(oldPrefs?.default_llm_settings).apiKey;
+            if (storedKey) llmSettings.apiKey = storedKey;
+            else delete llmSettings.apiKey;
+        }
+
         const merged = {
             theme: theme !== undefined ? (theme || 'dark') : (oldPrefs?.theme || 'dark'),
             // NULL, never a fabricated 'en': a first-ever PUT that only carries
@@ -447,7 +469,7 @@ router.put('/users/preferences', authenticateToken, (req, res) => {
             language: language !== undefined ? (language || null) : (oldPrefs?.language ?? null),
             notification_settings: keepOrJson(notification_settings, oldPrefs?.notification_settings),
             dashboard_layout: keepOrJson(dashboard_layout, oldPrefs?.dashboard_layout),
-            default_llm_settings: keepOrJson(default_llm_settings, oldPrefs?.default_llm_settings),
+            default_llm_settings: keepOrJson(llmSettings, oldPrefs?.default_llm_settings),
             default_monitor_settings: keepOrJson(default_monitor_settings, oldPrefs?.default_monitor_settings),
             accessibility_settings: keepOrJson(accessibility_settings, oldPrefs?.accessibility_settings),
             // Onboarding keys are SHALLOW-MERGED, not replaced: the first-run
@@ -717,13 +739,20 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         let result;
         try {
             if (password_hash) {
-                result = await dbAdapter.run(
-                    `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
+                result = await dbAdapter.transaction(async () => {
+                    const updated = await dbAdapter.run(
+                        `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
                             department=?, institution=?, address=?, phone=?, alternative_email=?, education=?, grade=?,
                             password_hash=?, updated_at=CURRENT_TIMESTAMP
                        WHERE id=? AND tenant_id=?`,
-                    [...cols, password_hash, targetUserId, tenantId(req)]
-                );
+                        [...cols, password_hash, targetUserId, tenantId(req)]
+                    );
+                    await dbAdapter.run(
+                        'UPDATE active_sessions SET is_active = 0 WHERE user_id = ? AND tenant_id = ?',
+                        [targetUserId, tenantId(req)]
+                    );
+                    return updated;
+                });
             } else {
                 result = await dbAdapter.run(
                     `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
@@ -781,6 +810,9 @@ router.post('/users/:id/purge', authenticateToken, requireAdmin, async (req, res
         );
         if (!targetUser) {
             return res.status(404).json({ error: 'User not found' });
+        }
+        if (getRoleRank(targetUser.role) >= getRoleRank(req.user.role)) {
+            return res.status(403).json({ error: 'Cannot modify a user at or above your role' });
         }
 
         const { plan, authoredCaseIds } = await buildUserPurgePlan(userId, tenantId(req));
@@ -1096,15 +1128,22 @@ router.put('/user/profile', authenticateToken, (req, res) => {
     dbAdapter.run(
         `UPDATE users SET
             name = COALESCE(?, name),
-            institution = ?,
-            address = ?,
-            phone = ?,
-            alternative_email = ?,
-            education = ?,
-            grade = ?,
+            institution = CASE WHEN ? THEN ? ELSE institution END,
+            address = CASE WHEN ? THEN ? ELSE address END,
+            phone = CASE WHEN ? THEN ? ELSE phone END,
+            alternative_email = CASE WHEN ? THEN ? ELSE alternative_email END,
+            education = CASE WHEN ? THEN ? ELSE education END,
+            grade = CASE WHEN ? THEN ? ELSE grade END,
             updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND deleted_at IS NULL`,
-        [name, institution, address, phone, alternative_email, education, grade, req.user.id],
+        [name,
+            institution !== undefined, institution,
+            address !== undefined, address,
+            phone !== undefined, phone,
+            alternative_email !== undefined, alternative_email,
+            education !== undefined, education,
+            grade !== undefined, grade,
+            req.user.id],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
@@ -1160,26 +1199,27 @@ router.put('/user/password', authenticateToken, async (req, res) => {
         // Hash new password
         const newHash = await bcrypt.hash(new_password, 10);
 
-        // Update password
-        dbAdapter.run(
-            'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [newHash, req.user.id],
-            function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                // Stage-7 audit: log every password change. Other sensitive
-                // mutations (case edits, agent edits, session ends) all call
-                // logAudit() — password changes were the gap. Don't log the
-                // password itself, only the action + user identity.
-                logAudit({
-                    userId: req.user.id,
-                    username: req.user.username,
-                    action: 'change_password_self',
-                    targetType: 'user',
-                    targetId: req.user.id
-                });
-                res.json({ message: 'Password changed successfully' });
-            }
-        );
+        // Keep the initiating session so the profile UI stays usable; revoke
+        // every other device in the same commit as the credential change.
+        await dbAdapter.transaction(async () => {
+            await dbAdapter.run(
+                'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+                [newHash, req.user.id, tenantId(req)]
+            );
+            await dbAdapter.run(
+                'UPDATE active_sessions SET is_active = 0 WHERE user_id = ? AND tenant_id = ? AND token_hash <> ?',
+                [req.user.id, tenantId(req), req.tokenHash]
+            );
+        });
+        // Audit the action and user identity, never the password.
+        logAudit({
+            userId: req.user.id,
+            username: req.user.username,
+            action: 'change_password_self',
+            targetType: 'user',
+            targetId: req.user.id
+        });
+        res.json({ message: 'Password changed successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

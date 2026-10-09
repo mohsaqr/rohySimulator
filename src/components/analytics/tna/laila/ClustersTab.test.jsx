@@ -18,6 +18,7 @@ vi.mock('dynajs', async (importOriginal) => {
 });
 
 const { ClustersTab } = await import('./ClustersTab.jsx');
+const { clusterData: realClusterData } = await vi.importActual('dynajs');
 
 const props = {
     sequences: [['a', 'b', 'a'], ['b', 'a', 'b']],
@@ -68,5 +69,41 @@ describe('ClustersTab failure handling', () => {
 
         expect(screen.queryByText('Clusters error')).toBeNull();
         expect(screen.getByText('Clusters found')).toBeTruthy();
+    });
+});
+
+
+describe('ClustersTab available sequence count', () => {
+    it.each([{ sequences: [] }, { sequences: [['a', 'b', 'a']] }])('shows a minimum-data message for $sequences', async ({ sequences }) => {
+        render(<ClustersTab {...props} sequences={sequences} k={3} />);
+        await settle();
+        expect(screen.getByText('At least two sequences are needed for clustering.')).toBeTruthy();
+        expect(screen.queryByText('Computing clusters')).toBeNull();
+        expect(screen.queryByText('Clusters error')).toBeNull();
+        expect(clusterDataMock).not.toHaveBeenCalled();
+    });
+
+    it.each([2, 3, 8])('clusters two real sequences with requested k=%s and keeps the count control valid', async (requestedK) => {
+        clusterDataMock.mockImplementation(realClusterData);
+        render(<ClustersTab {...props} k={requestedK} />);
+        await settle();
+        expect(clusterDataMock).toHaveBeenCalledWith(props.sequences, 2, expect.any(Object));
+        expect(screen.getByText('Clusters found')).toBeTruthy();
+        expect(screen.queryByText('Clusters error')).toBeNull();
+        const count = screen.getByRole('spinbutton');
+        expect(count.value).toBe('2');
+        expect(count.max).toBe('2');
+    });
+
+    it('recovers when a narrow filter gains enough sequences', async () => {
+        clusterDataMock.mockImplementation(realClusterData);
+        const { rerender } = render(<ClustersTab {...props} sequences={props.sequences.slice(0, 1)} k={3} />);
+        await settle();
+        expect(screen.getByText('At least two sequences are needed for clustering.')).toBeTruthy();
+        rerender(<ClustersTab {...props} k={3} />);
+        await settle();
+        expect(screen.queryByText('At least two sequences are needed for clustering.')).toBeNull();
+        expect(screen.getByText('Clusters found')).toBeTruthy();
+        expect(screen.getByRole('spinbutton').value).toBe('2');
     });
 });

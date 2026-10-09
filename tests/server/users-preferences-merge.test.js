@@ -126,6 +126,43 @@ describe('PUT /api/users/preferences — merge, not replace', () => {
         expect(prefs.language).toBe('it');
         expect(prefs.theme).toBe('light');
     });
+
+    it('preserves a personal API key when redacted settings are saved again', async () => {
+        await putPrefs({ default_llm_settings: { provider: 'openai', model: 'old-model', apiKey: 'sk-synthetic-personal-key' } });
+        const prefs = await getPrefs();
+        const settings = JSON.parse(prefs.default_llm_settings);
+        expect(settings.apiKey).toBe('[redacted]');
+        settings.model = 'new-model';
+        expect((await putPrefs({ default_llm_settings: settings })).status).toBe(200);
+        const row = await new Promise((resolve, reject) => db.get(
+            'SELECT default_llm_settings FROM user_preferences',
+            (err, result) => err ? reject(err) : resolve(result)
+        ));
+        expect(JSON.parse(row.default_llm_settings)).toMatchObject({
+            model: 'new-model', apiKey: 'sk-synthetic-personal-key',
+        });
+    });
+
+    it('allows replacing and deliberately removing a personal API key', async () => {
+        for (const apiKey of ['sk-synthetic-replacement', '', null]) {
+            expect((await putPrefs({ default_llm_settings: { provider: 'openai', apiKey } })).status).toBe(200);
+            const row = await new Promise((resolve, reject) => db.get(
+                'SELECT default_llm_settings FROM user_preferences',
+                (err, result) => err ? reject(err) : resolve(result)
+            ));
+            expect(JSON.parse(row.default_llm_settings).apiKey).toBe(apiKey);
+        }
+    });
+
+    it('does not store a redaction marker as a key when no key exists', async () => {
+        await putPrefs({ default_llm_settings: null });
+        expect((await putPrefs({ default_llm_settings: { provider: 'openai', apiKey: '[redacted]' } })).status).toBe(200);
+        const row = await new Promise((resolve, reject) => db.get(
+            'SELECT default_llm_settings FROM user_preferences',
+            (err, result) => err ? reject(err) : resolve(result)
+        ));
+        expect(JSON.parse(row.default_llm_settings).apiKey).toBeUndefined();
+    });
 });
 
 // "No preference stored" must never be fabricated into language 'en'

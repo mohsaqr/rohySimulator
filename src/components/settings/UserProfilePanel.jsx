@@ -166,9 +166,9 @@ export default function UserProfilePanel({ _onClose }) {
                     provider: aiSettings.provider || undefined,
                     model: aiSettings.model || undefined,
                     baseUrl: aiSettings.baseUrl || undefined,
-                    apiKey: aiSettings.apiKey || undefined,
+                    apiKey: aiSettings.apiKey || null,
                     maxOutputTokens: aiSettings.maxOutputTokens || undefined,
-                    temperature: aiSettings.temperature || undefined
+                    temperature: aiSettings.temperature === '' ? undefined : aiSettings.temperature
                 }
             });
             toast.success(t('ai_settings_saved'));

@@ -849,3 +849,95 @@ describe('PatientMonitor — scenario.alternatives (ISSUE-0012)', () => {
         expect(utils.queryByText('Deteriorates into shock')).toBeNull();
     });
 });
+
+
+describe('PatientMonitor — manual condition controls preserve edits through timeline completion', () => {
+    it.each([
+        ['PVCs (Ectopics)', 'pvc', true],
+        ['Wide QRS', 'wideQRS', true],
+        ['ST Deviation', 'stElev', 2],
+        ['Signal Noise', 'noise', 7],
+    ])('%s survives a later frame explicitly setting the opposite value', async (label, _key, value) => {
+        const startedAt = Date.now();
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+        try {
+            const testCase = {
+                ...baseCase,
+                scenario: {
+                    autoStart: true,
+                    timeline: [0, 5].map(time => ({ time, params: { hr: 88 }, rhythm: 'NSR', conditions: { pvc: false, wideQRS: false, stElev: 0, noise: 0 } })),
+                },
+            };
+            const rendered = mount({ caseData: testCase });
+            await waitFor(() => expect(rendered.container.textContent).toContain('88'));
+            fireEvent.click(rendered.getByTitle('Monitor Settings'));
+            const control = typeof value === 'boolean'
+                ? rendered.getByRole('button', { name: label, exact: true })
+                : rendered.getByRole('slider', { name: label, exact: true });
+            if (typeof value === 'boolean') fireEvent.click(control);
+            else fireEvent.change(control, { target: { value: String(value) } });
+            // Advance the wall clock together with the interval callbacks. The
+            // scenario anchor uses Date.now(), rather than an incrementing tick.
+            await [1000, 4000, 6000, 8000].reduce(async (previous, elapsed) => {
+                await previous;
+                clock.mockReturnValue(startedAt + elapsed);
+                await act(async () => { vi.advanceTimersByTime(1000); });
+            }, Promise.resolve());
+            if (typeof value === 'boolean') expect(control).toHaveAttribute('aria-pressed', 'true');
+            else expect(control).toHaveValue(String(value));
+            fireEvent.click(rendered.getByRole('tab', { name: /^scenarios$/i }));
+            await waitFor(() => expect(rendered.getByRole('button', { name: 'Resume scenario', exact: true })).toBeVisible());
+        } finally {
+            clock.mockRestore();
+        }
+    });
+});
+
+
+describe('PatientMonitor — ECG presets preserve manual HR and conditions through scenarios', () => {
+    it.each([
+        ['normal', 75, 0, false, false],
+        ['stemi', 95, 2, false, false],
+        ['nstemi', 88, -1, false, false],
+        ['angina', 92, -0.5, false, false],
+        ['hyperkalemia', 70, 0, false, true],
+        ['hypokalemia', 82, -0.5, false, false],
+        ['pericarditis', 88, 1, false, false],
+        ['lbbb', 78, 0, false, true],
+        ['pvcs', 85, 0, true, false],
+        ['vtach', 160, 0, false, true],
+        ['afib', 110, 0, false, false],
+    ])('%s survives explicit competing frames', async (pattern, hr, stElev, pvc, wideQRS) => {
+        const startedAt = Date.now();
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+        try {
+            const rendered = mount({ caseData: {
+                ...baseCase,
+                scenario: {
+                    autoStart: true,
+                    timeline: [0, 5].map(time => ({ time, params: { hr: 130 }, rhythm: 'NSR', conditions: { pvc: !pvc, wideQRS: !wideQRS, stElev: 3, noise: 8, tInv: false } })),
+                },
+            } });
+            await waitFor(() => expect(rendered.container.textContent).toContain('88'));
+            fireEvent.click(rendered.getByTitle('Monitor Settings'));
+            fireEvent.change(rendered.getByRole('combobox', { name: 'ECG Pattern Presets', exact: true }), { target: { value: pattern } });
+            await [1000, 4000, 6000, 8000].reduce(async (previous, elapsed) => {
+                await previous;
+                clock.mockReturnValue(startedAt + elapsed);
+                await act(async () => { vi.advanceTimersByTime(1000); });
+            }, Promise.resolve());
+            expect(rendered.getByRole('button', { name: 'PVCs (Ectopics)', exact: true })).toHaveAttribute('aria-pressed', String(pvc));
+            expect(rendered.getByRole('button', { name: 'Wide QRS', exact: true })).toHaveAttribute('aria-pressed', String(wideQRS));
+            expect(rendered.getByRole('slider', { name: 'ST Deviation', exact: true })).toHaveValue(String(stElev));
+            expect(rendered.getByRole('slider', { name: 'Signal Noise', exact: true })).toHaveValue('0');
+            const expectedRhythm = pattern === 'afib' ? 'Atrial Fibrillation' : pattern === 'vtach' ? 'Ventricular Tachycardia' : 'Normal Sinus Rhythm';
+            expect(rendered.getByRole('button', { name: expectedRhythm, exact: true })).toHaveClass('bg-blue-600');
+            fireEvent.click(rendered.getByRole('tab', { name: /^vitals$/i }));
+            expect(rendered.container.querySelector('input[type="range"][min="20"][max="250"]')).toHaveValue(String(hr));
+            fireEvent.click(rendered.getByRole('tab', { name: /^scenarios$/i }));
+            await waitFor(() => expect(rendered.getByRole('button', { name: 'Resume scenario', exact: true })).toBeVisible());
+        } finally {
+            clock.mockRestore();
+        }
+    });
+});
