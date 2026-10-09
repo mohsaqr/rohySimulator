@@ -57,10 +57,9 @@ export default function StudentFirstRun({ onDone }) {
     // box (QA 2026-10-04, PRV-22). It used to default ON once the tenant opted
     // in, so pressing Start recorded consent nobody gave — and the next screen
     // told a brand-new user "You previously agreed". A pre-ticked box is not
-    // consent. Only an explicit 'yes' already given in this browser pre-fills.
-    const [oyonConsent, setOyonConsent] = useState(() => {
-        try { return localStorage.getItem(OYON_CONSENT_LS_KEY) === '1'; } catch { return false; }
-    });
+    // consent. Browser storage may hold another account's grant on a shared
+    // device, so it must never pre-fill this new account's welcome screen.
+    const [oyonConsent, setOyonConsent] = useState(false);
     const [micStatus, setMicStatus] = useState(null); // null | 'ok' | 'blocked'
     const [casesFailed, setCasesFailed] = useState(false);
     const [saving, setSaving] = useState(false);

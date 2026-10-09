@@ -1955,3 +1955,56 @@
         core rooms, Bedside and Pathology (PACS may join once imaging is ordered).
       covers:
         - "rohy:monkey::../monkey/walker.spec.js › monkey walk › a random walk through the bedside-pathology case breaks nothing"
+
+# Exact automated acceptance checks for the three historic release blockers.
+# These supplement the broader manual cases without recording human verdicts.
+- feature: REGRESSION.BLOCKERS
+  title: Release blocker regressions
+  products: [rohy]
+  tier: core
+  cases:
+    - id: REGRESSION.BLOCKERS.01
+      title: Saving authored labs preserves running and completed learner history
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Assign a case with one authored lab and the default laboratory catalogue enabled.
+        2. As a learner, order the authored lab and an unconfigured catalogue lab in a session, then end it.
+        3. Repeat the orders in a new running session.
+        4. As an educator, bulk-save the authored lab twice, then remove it from the authoring list.
+      expected: |-
+        Both sessions retain both orders and their original ready results, identifiers, values and
+        timestamps. Saving or removing an authored investigation never deletes learner history.
+      covers:
+        - "rohy:chromium::lab-save-history.spec.js › case lab saves preserve learner history › repeated saves and removing labs keep configured and unconfigured orders in running and ended sessions"
+    - id: REGRESSION.BLOCKERS.02
+      title: Learner views and APIs omit diagnosis-bearing authoring labels
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Assign a synthetic case with unique diagnosis-bearing authoring title and summary.
+        2. As a learner, inspect the selector, core rooms, ECG and PACS headers, debrief and case summary.
+        3. Read the learner case, session and session analytics API responses.
+      expected: |-
+        Authoring title and summary are absent from every inspected learner surface and response.
+        Patient identity and presenting complaint remain visible where appropriate.
+      covers:
+        - "rohy:chromium::learner-case-labels.spec.js › learner case labels (PRV-21) › *"
+    - id: REGRESSION.BLOCKERS.03
+      title: Student welcome records emotion consent only after an explicit opt-in
+      kind: automated
+      platforms: [any]
+      severity_if_failed: blocker
+      steps: |-
+        1. Enable tenant emotion capture and sign in as a new student.
+        2. Inspect the welcome checkbox with clean storage and with a previous browser user's consent flag.
+        3. Continue without checking the box; inspect saved preferences and reload.
+        4. As another new student, explicitly check the box and continue.
+      expected: |-
+        The checkbox starts unchecked regardless of another user's browser flag. Continuing without
+        opt-in saves false and no consent contract. Explicit opt-in saves true for the camera-only
+        contract displayed on the welcome screen; it does not grant other signal collection.
+      covers:
+        - "rohy:chromium::oyon-student-consent.spec.js › *"

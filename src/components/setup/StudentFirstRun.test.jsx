@@ -46,6 +46,7 @@ function routeFetches({ cases = { cases: [CASE] }, casesRejects = null, oyon = {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -89,6 +90,22 @@ describe('StudentFirstRun — first case card', () => {
 // camera-only v1 — never the tenant's advertised version (v3 here, the worst
 // case: typing, interaction, discourse and microphone).
 describe('StudentFirstRun — emotion-capture consent', () => {
+    it('does not inherit another account’s camera consent from a shared browser', async () => {
+        localStorage.setItem('oyon.defaultConsent', '1');
+        localStorage.setItem('oyon.consentVersion', 'oyon-consent-v3');
+        routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
+        render(<StudentFirstRun onDone={() => {}} />);
+
+        expect(await screen.findByLabelText(/Allow camera-based emotion capture/i)).not.toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: /Start/i }));
+
+        await waitFor(() => expect(apiPut).toHaveBeenCalled());
+        const [, body] = apiPut.mock.calls.find(([path]) => path === '/users/preferences');
+        expect(body.onboarding_settings.oyon_consent).toBe(false);
+        expect(body.onboarding_settings.oyon_consent_version).toBeNull();
+        await waitFor(() => expect(localStorage.getItem('oyon.defaultConsent')).toBe('0'));
+    });
+
     it('starts unticked, and Start without ticking records no consent', async () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
