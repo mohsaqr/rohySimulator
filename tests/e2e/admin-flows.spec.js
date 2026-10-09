@@ -39,11 +39,9 @@ import { loginAs } from './fixtures/auth.js';
 
 // Shared admin context (avoid /api/auth/login rate limit: 10/15min/IP).
 let _adminCtx;
-let _adminToken;
 async function _getAdminCtx(baseURL) {
     if (!_adminCtx) {
         const { token } = await loginAs(baseURL, 'admin');
-        _adminToken = token;
         _adminCtx = await pwRequest.newContext({
             baseURL,
             extraHTTPHeaders: { Authorization: `Bearer ${token}` },
@@ -66,15 +64,6 @@ async function _releaseAdminCtx() {
     _adminCtx = null;
     await ctx.dispose();
 }
-async function _authedGoto(page, baseURL, path = '/') {
-    if (!_adminToken) await _getAdminCtx(baseURL);
-    await page.context().addInitScript((t) => {
-        try { window.localStorage.setItem('token', t); } catch { /* noop */ }
-    }, _adminToken);
-    await page.goto(path);
-}
-
-
 // One run-id per spec invocation keeps every created row uniquely named
 // even if e2e-admin-flows.spec.js is re-run while another test left
 // stragglers in the DB.
@@ -87,42 +76,15 @@ const tmplName = (label) => `e2e-tmpl-${label}-${RUN_ID}`;
 const createdCaseIds = [];
 const createdTemplateIds = [];
 
-// IMPORTANT — auth rate limiting.
-//
-// server/server.js mounts a strict 5-attempts-per-15-minutes rate limiter
-// on /api/auth/login. Calling `apiAsAdmin(baseURL)` from inside every
-// test logs in fresh and trips that limiter (429 "Too many authentication
-// attempts"). We mint ONE admin APIRequestContext in beforeAll and reuse
-// it across the suite. The fixture `page` still does its own login
-// for the canonical UI test (one extra login total), which we accept.
+// Refresh the context before each test because template tests dispose it.
+// loginAs reuses globalSetup tokens, so this adds no authentication requests.
 let api;
 
 test.describe('admin flows', () => {
-    test.beforeAll(async ({ baseURL }) => {
+    test.beforeEach(async ({ baseURL }) => {
         api = await _getAdminCtx(baseURL);
     });
 
-    test.afterAll(async ({ baseURL }) => {
-        // Best-effort cleanup. Failures here don't fail the suite. Cases
-        // are soft-deleted; custom (non-default) templates are hard-
-        // deleted by the route.
-        //
-        // Re-acquire rather than reusing the `api` captured in beforeAll:
-        // tests release the shared context in their own `finally`, so the
-        // module-level handle is stale by the time cleanup runs.
-        api = await _getAdminCtx(baseURL);
-        try {
-            for (const id of createdCaseIds) {
-                try { await api.delete(`/api/cases/${id}`); } catch { /* ignore */ }
-            }
-            for (const id of createdTemplateIds) {
-                try { await api.delete(`/api/agents/templates/${id}`); } catch { /* ignore */ }
-            }
-        } finally {
-            await _releaseAdminCtx();
-            api = null;
-        }
-    });
     // 1. CREATE CASE — the canonical UI flow.
     //
     // ConfigPanel's "New Case" wizard is multi-step (scenario picker ->
@@ -133,39 +95,13 @@ test.describe('admin flows', () => {
     // that, then complete the create through the REST API the wizard
     // would have called anyway. This locks both the UI surface and the
     // server contract without coupling to wizard-step ordering.
-    test.skip('SKIP (e2e UI/shape brittle): create case — admin reaches New Case CTA, POST /api/cases succeeds', async ({ page, baseURL }) => {
-        await _authedGoto(page, baseURL, '/');
-
-        // Header chrome must hydrate first or the settings button isn't
-        // mounted yet. canary.spec waits on the same admin badge.
-        await expect(page.getByText('admin', { exact: false }).first()).toBeVisible({
-            timeout: 10_000,
+    test('SKIP (e2e UI/shape brittle): create case — admin reaches New Case CTA, POST /api/cases succeeds', async ({ adminPage }) => {
+        await adminPage.addInitScript(() => {
+            localStorage.setItem('rohy_view', JSON.stringify({ view: 'settings' }));
         });
-
-        // Open the full-page settings panel. There are two settings icons
-        // historically (header + simulator widget) — the header one is
-        // the one ConfigPanel relies on. Use the first matching button
-        // with an aria-label containing "settings"; if that doesn't
-        // exist, fall back to the gear icon button class. We bracket the
-        // open with a load-state wait so the lazy ConfigPanel chunk
-        // arrives before we look for "New Case".
-        const settingsBtn = page.getByRole('button', { name: /settings/i }).first();
-        if (await settingsBtn.isVisible().catch(() => false)) {
-            await settingsBtn.click();
-        } else {
-            // Some builds render the icon-only gear without an
-            // accessible name. Try a generic locator that ConfigPanel's
-            // own component test uses.
-            await page.locator('button[aria-label*="ettings" i], button:has(svg.lucide-settings)').first().click();
-        }
-
-        // The "New Case" CTA in ConfigPanel.jsx (line ~385 + ~694) is the
-        // entry point we promised to lock. Either render is fine — we
-        // accept the first visible match. We don't drive the wizard
-        // because case-lifecycle.spec owns that flow.
-        await expect(
-            page.getByRole('button', { name: /new case/i }).first()
-        ).toBeVisible({ timeout: 15_000 });
+        await adminPage.goto('/');
+        await adminPage.locator('.rohy-admin-sidebar').getByRole('button', { name: 'Cases', exact: true }).click();
+        await expect(adminPage.getByRole('button', { name: /new case/i }).first()).toBeVisible({ timeout: 15_000 });
 
         // Now create the case via the API the wizard ultimately POSTs to.
         // This is the assertion the brief actually cares about
@@ -182,7 +118,7 @@ test.describe('admin flows', () => {
                 config: {
                     demographics: { name: 'Test Patient', gender: 'male', age: 40 },
                     chiefComplaint: 'chest pain',
-                    difficulty_level: 'medium',
+                    difficulty_level: 'intermediate',
                 },
                 scenario: null,
             },
@@ -206,7 +142,7 @@ test.describe('admin flows', () => {
     // We seed a fresh case so this spec is independent of test #1's
     // ordering (Playwright workers=1 today, but ordering shouldn't
     // matter for the assertion either way).
-    test.skip('SKIP (e2e UI/shape brittle): edit case — PUT /api/cases/:id returns 200 and writes update_case audit row', async () => {
+    test('SKIP (e2e UI/shape brittle): edit case — PUT /api/cases/:id returns 200 and writes update_case audit row', async () => {
         const name = caseName('edit');
         const created = await api.post('/api/cases', {
             data: {
@@ -297,7 +233,7 @@ test.describe('admin flows', () => {
     });
 
     // 4. RESET TEMPLATE TO DEFAULT — repopulates from DEFAULT_AGENTS.
-    test.skip('SKIP (e2e UI/shape brittle): reset agent template — POST /reset-to-default repopulates the row from DEFAULT_AGENTS', async ({ baseURL }) => {
+    test('SKIP (e2e UI/shape brittle): reset agent template — POST /reset-to-default repopulates the row from DEFAULT_AGENTS', async ({ baseURL }) => {
         const api = await _getAdminCtx(baseURL);
         try {
             const list = await api.get('/api/agents/templates');
@@ -369,7 +305,7 @@ test.describe('admin flows', () => {
     });
 
     // 6. DELETE TEMPLATE — custom deletes succeed, standards return 403.
-    test.skip('SKIP (e2e UI/shape brittle): delete agent template — custom row deletes; default returns 403', async ({ baseURL }) => {
+    test('SKIP (e2e UI/shape brittle): delete agent template — custom row deletes; default returns 403', async ({ baseURL }) => {
         const api = await _getAdminCtx(baseURL);
         try {
             // Need a custom row to delete. Duplicate one fresh so this
@@ -414,7 +350,7 @@ test.describe('admin flows', () => {
     // — this is a contract test ("audit-log endpoint surfaces these
     // actions"), not a per-row content test. old_value / new_value
     // population for one update_case row was already locked in test #2.
-    test.skip('SKIP (e2e UI/shape brittle): audit log — surfaces case + agent_template actions with populated old/new values', async ({ baseURL }) => {
+    test('SKIP (e2e UI/shape brittle): audit log — surfaces case + agent_template actions with populated old/new values', async ({ baseURL }) => {
         const api = await _getAdminCtx(baseURL);
         try {
             const res = await api.get('/api/admin/audit-log?limit=500');
@@ -485,7 +421,7 @@ test.describe('admin flows', () => {
     // see the route's WHERE clause at server/routes.js:1307–1308).
     // That's the observable signal of the soft delete from the API
     // perimeter — no direct DB access required.
-    test.skip('SKIP (e2e UI/shape brittle): soft-delete case — DELETE marks deleted_at; row is filtered from list and GET 404s', async ({ baseURL }) => {
+    test('SKIP (e2e UI/shape brittle): soft-delete case — DELETE marks deleted_at; row is filtered from list and GET 404s', async ({ baseURL }) => {
         const api = await _getAdminCtx(baseURL);
         try {
             const name = caseName('soft-delete');

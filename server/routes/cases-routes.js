@@ -213,7 +213,15 @@ function normaliseCaseForStorage(req, res, body) {
     // description and show the patient name as the chief complaint (bug #2).
     const { patientName, patientAge } = derivePatientColumns(safeConfig);
     const chiefComplaint = safeConfig?.structuredHistory?.chiefComplaint || safeConfig?.chiefComplaint || null;
-    const difficultyLevel = safeConfig?.difficulty_level || null;
+    const rawDifficulty = safeConfig?.difficulty_level;
+    const difficultyLevel = rawDifficulty == null || rawDifficulty === '' ? null : rawDifficulty;
+    if (difficultyLevel !== null && !['beginner', 'intermediate', 'advanced'].includes(difficultyLevel)) {
+        res.status(400).json({
+            error: 'difficulty_level must be beginner, intermediate, or advanced',
+            code: 'invalid_difficulty_level',
+        });
+        return null;
+    }
 
     return {
         safeConfig,

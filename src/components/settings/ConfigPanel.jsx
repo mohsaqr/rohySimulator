@@ -821,7 +821,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
         <div className={`rohy-admin-light flex flex-col h-full ${fullPage ? '' : 'rounded-xl'} overflow-hidden`}>
 
             {/* Header */}
-            <div className="rohy-admin-header flex items-center justify-between px-6 py-4 border-b border-neutral-800 relative">
+            <div className={`rohy-admin-header ${fullPage ? 'rohy-admin-header--fullpage' : ''} flex items-center justify-between px-6 py-4 border-b border-neutral-800 relative`}>
                 <div className="flex items-center gap-3">
                     {/* The gear doubles as a "home" button — clicking it returns
                         to the simulation (same as ✕ / the Simulation nav item).
@@ -1880,8 +1880,8 @@ function validateLlmConfig(cfg, t) {
         }
     }
     if (cfg.temperature && cfg.temperature.trim()) {
-        const t = parseFloat(cfg.temperature);
-        if (!Number.isFinite(t) || t < 0 || t > 2) {
+        const temperature = parseFloat(cfg.temperature);
+        if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
             errs.push({ field: 'temperature', message: t('err_temperature') });
         }
     }
@@ -2257,6 +2257,9 @@ function LLMConfiguration() {
                                 placeholder={t('llm_provider_default_placeholder')}
                                 className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-white focus:border-cyan-500 outline-none"
                             />
+                            {fieldError('temperature') && (
+                                <p className="text-xs text-red-400 mt-1">{fieldError('temperature').message}</p>
+                            )}
                             <p className="text-xs text-neutral-500 mt-1">{t('llm_empty_provider_default_range')}</p>
                         </div>
                     </div>
@@ -2664,24 +2667,28 @@ function MonitorConfiguration() {
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         {settingsConfig.map(({ key, label, description }) => (
-                            <div
+                            <button
                                 key={key}
+                                type="button"
+                                aria-label={label}
+                                aria-pressed={monitorSettings[key]}
+                                aria-describedby={`monitor-${key}-help`}
                                 onClick={() => handleToggle(key)}
-                                className={`p-4 rounded-lg border cursor-pointer transition-all ${monitorSettings[key]
+                                className={`w-full text-left p-4 rounded-lg border cursor-pointer transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${monitorSettings[key]
                                     ? 'bg-cyan-900/30 border-cyan-600/50'
                                     : 'bg-neutral-900/50 border-neutral-700 hover:border-neutral-600'
                                     }`}
                             >
-                                <div className="flex items-center justify-between mb-1">
+                                <span className="flex items-center justify-between mb-1">
                                     <span className="font-medium text-white">{label}</span>
-                                    <div className={`w-10 h-5 rounded-full transition-colors ${monitorSettings[key] ? 'bg-cyan-600' : 'bg-neutral-600'
+                                    <span aria-hidden="true" className={`block w-10 h-5 rounded-full transition-colors ${monitorSettings[key] ? 'bg-cyan-600' : 'bg-neutral-600'
                                         }`}>
-                                        <div className={`w-4 h-4 rounded-full bg-white m-0.5 transition-transform ${monitorSettings[key] ? 'translate-x-5' : 'translate-x-0'
+                                        <span className={`block w-4 h-4 rounded-full bg-white m-0.5 transition-transform ${monitorSettings[key] ? 'translate-x-5' : 'translate-x-0'
                                             }`} />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-neutral-400">{description}</p>
-                            </div>
+                                    </span>
+                                </span>
+                                <span id={`monitor-${key}-help`} className="block text-xs text-neutral-400">{description}</span>
+                            </button>
                         ))}
                     </div>
 

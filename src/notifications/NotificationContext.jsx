@@ -23,14 +23,20 @@ export function NotificationProvider({ children }) {
 
     // --- Prefs (synchronous from localStorage, then merged from server async).
     const [prefs, setPrefsState] = useState(() => loadPrefsSync(userId));
+    const editedPrefKeys = useRef(new Set());
 
     useEffect(() => {
         let cancelled = false;
         loadPrefsRemote().then(remote => {
             if (cancelled || !remote) return;
             setPrefsState(prev => {
-                const merged = { ...prev, ...remote };
+                // Initial account loading may finish after a settings toggle.
+                // Keep those explicit local choices and hydrate untouched keys.
+                const untouched = Object.fromEntries(Object.entries(remote)
+                    .filter(([key]) => !editedPrefKeys.current.has(key)));
+                const merged = { ...prev, ...untouched };
                 savePrefsSync(merged, userId);
+                if (editedPrefKeys.current.size) savePrefsRemote(merged);
                 return merged;
             });
         });
@@ -40,6 +46,10 @@ export function NotificationProvider({ children }) {
     const setPrefs = useCallback((patch) => {
         setPrefsState(prev => {
             const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
+            const keys = typeof patch === 'function'
+                ? Object.keys(next).filter(key => next[key] !== prev[key])
+                : Object.keys(patch);
+            keys.forEach(key => editedPrefKeys.current.add(key));
             savePrefsSync(next, userId);
             // Fire-and-forget remote save; failure leaves localStorage as source of truth.
             savePrefsRemote(next);

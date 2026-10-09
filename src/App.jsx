@@ -844,10 +844,13 @@ function MainApp() {
       const root = document.documentElement;
       if (!el) {
          root.style.removeProperty('--oyon-pill-w');
+         root.style.removeProperty('--oyon-pill-h');
          return undefined;
       }
       const publish = () => {
-         root.style.setProperty('--oyon-pill-w', `${Math.ceil(el.getBoundingClientRect().width)}px`);
+         const bounds = el.getBoundingClientRect();
+         root.style.setProperty('--oyon-pill-w', `${Math.ceil(bounds.width)}px`);
+         root.style.setProperty('--oyon-pill-h', `${Math.ceil(bounds.height)}px`);
       };
       const observer = new ResizeObserver(publish);
       observer.observe(el);
@@ -855,6 +858,7 @@ function MainApp() {
       return () => {
          observer.disconnect();
          root.style.removeProperty('--oyon-pill-w');
+         root.style.removeProperty('--oyon-pill-h');
       };
    }, [user]);
    // Mirror ConfigPanel's canSeeOyonAnalytics gate: the pill's analytics
@@ -876,7 +880,7 @@ function MainApp() {
    // than a plugin id, so the host still knows nothing about which plugins
    // exist and an uninstalled one takes nothing with it.
    const oyonPlacement = oyonPillPlacement({
-      overOverlayRoom: overlayPlugin !== null,
+      overOverlayRoom: overlayPlugin !== null && !showFullPageSettings,
       dockedOverMonitor: oyonDockedOverMonitor,
    });
    // Re-consent prompt for a widened Oyon contract. Rendered beside the capture
@@ -914,6 +918,7 @@ function MainApp() {
    const renderOyonPill = (companion = null) => (user ? (
       <div
          ref={oyonPillRef}
+         data-testid="oyon-capture-dock"
          className={`fixed z-[80] ${oyonPlacement.centred ? '-translate-x-1/2' : ''} ${companion ? 'flex items-center gap-2' : ''}`}
          style={oyonPlacement.style}
       >

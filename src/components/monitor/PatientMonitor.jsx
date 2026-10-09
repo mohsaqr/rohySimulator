@@ -923,6 +923,18 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
       }
    };
 
+   // Manual ECG condition edits must participate in the same override guard
+   // as vital/rhythm edits; otherwise the next timeline tick erases them.
+   const updateConditionsWithOverride = (updates) => {
+      setConditions(prev => ({ ...prev, ...updates }));
+      if (caseBaseline && trackOverrides) {
+         setOverriddenVitals(prev => new Set([...prev, ...Object.keys(updates)]));
+      }
+   };
+   const updateConditionWithOverride = (key, value) => {
+      updateConditionsWithOverride({ [key]: value });
+   };
+
    // Reset all vitals to case baseline
    const resetToCaseDefaults = () => {
       if (caseBaseline) {
@@ -2004,62 +2016,63 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                      <div className="space-y-2">
                         <label className="text-xs font-bold text-neutral-500 uppercase">{t('ecg_pattern_presets')}</label>
                         <select
+                           aria-label={t('ecg_pattern_presets')}
                            onChange={(e) => {
                               const pattern = e.target.value;
                               switch(pattern) {
                                  case 'normal':
-                                    setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 75 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 75);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'stemi':
-                                    setConditions({ pvc: false, stElev: 2, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 95 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 2, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 95);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'nstemi':
-                                    setConditions({ pvc: false, stElev: -1, tInv: true, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 88 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: -1, tInv: true, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 88);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'angina':
-                                    setConditions({ pvc: false, stElev: -0.5, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 92 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: -0.5, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 92);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'hyperkalemia':
-                                    setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 70 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
+                                    updateVitalWithOverride('hr', 70);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'hypokalemia':
-                                    setConditions({ pvc: false, stElev: -0.5, tInv: true, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 82 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: -0.5, tInv: true, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 82);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'pericarditis':
-                                    setConditions({ pvc: false, stElev: 1, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 88 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 1, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 88);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'lbbb':
-                                    setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 78 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
+                                    updateVitalWithOverride('hr', 78);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'pvcs':
-                                    setConditions({ pvc: true, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 85 }));
+                                    updateConditionsWithOverride({ pvc: true, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 85);
                                     updateRhythmWithOverride('NSR');
                                     break;
                                  case 'vtach':
-                                    setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 160 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 0, tInv: false, wideQRS: true, noise: 0 });
+                                    updateVitalWithOverride('hr', 160);
                                     updateRhythmWithOverride('VTach');
                                     break;
                                  case 'afib':
-                                    setConditions({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
-                                    setParams(p => ({ ...p, hr: 110 }));
+                                    updateConditionsWithOverride({ pvc: false, stElev: 0, tInv: false, wideQRS: false, noise: 0 });
+                                    updateVitalWithOverride('hr', 110);
                                     updateRhythmWithOverride('AFib');
                                     break;
                               }
@@ -2104,7 +2117,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                            <div className="flex items-center justify-between">
                               <span className="text-sm text-neutral-300">{t('pvcs_ectopics')}</span>
                               <button
-                                 onClick={() => setConditions(c => ({ ...c, pvc: !c.pvc }))}
+                                 aria-label={t('pvcs_ectopics')}
+                                 aria-pressed={conditions.pvc}
+                                 onClick={() => updateConditionWithOverride('pvc', !conditions.pvc)}
                                  className={`w-12 h-6 rounded-full relative transition-colors ${conditions.pvc ? 'bg-green-600' : 'bg-neutral-700'}`}
                               >
                                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${conditions.pvc ? 'left-7' : 'left-1'}`} />
@@ -2114,7 +2129,9 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                            <div className="flex items-center justify-between">
                               <span className="text-sm text-neutral-300">{t('wide_qrs')}</span>
                               <button
-                                 onClick={() => setConditions(c => ({ ...c, wideQRS: !c.wideQRS }))}
+                                 aria-label={t('wide_qrs')}
+                                 aria-pressed={conditions.wideQRS}
+                                 onClick={() => updateConditionWithOverride('wideQRS', !conditions.wideQRS)}
                                  className={`w-12 h-6 rounded-full relative transition-colors ${conditions.wideQRS ? 'bg-green-600' : 'bg-neutral-700'}`}
                               >
                                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${conditions.wideQRS ? 'left-7' : 'left-1'}`} />
@@ -2132,7 +2149,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               <input
                                  type="range" min="-3" max="3" step="0.25"
                                  value={conditions.stElev}
-                                 onChange={(e) => setConditions(c => ({ ...c, stElev: parseFloat(e.target.value) }))}
+                                 aria-label={t('st_deviation')}
+                                 onChange={(e) => updateConditionWithOverride('stElev', parseFloat(e.target.value))}
                                  className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer"
                               />
                               <div className="text-[10px] text-neutral-600">
@@ -2148,7 +2166,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                               <input
                                  type="range" min="0" max="10" step="1"
                                  value={conditions.noise}
-                                 onChange={(e) => setConditions(c => ({ ...c, noise: parseInt(e.target.value) }))}
+                                 aria-label={t('signal_noise')}
+                                 onChange={(e) => updateConditionWithOverride('noise', parseInt(e.target.value))}
                                  className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer"
                               />
                            </div>

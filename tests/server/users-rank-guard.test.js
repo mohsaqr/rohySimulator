@@ -71,6 +71,7 @@ describe('user-management target-rank guards', () => {
             ids.adminB = await seedUser(db, 'rg-admin-b', 'admin');
             ids.educator = await seedUser(db, 'rg-educator', 'educator');
             ids.student = await seedUser(db, 'rg-student', 'student');
+            ids.passwordStudent = await seedUser(db, 'rg-password-student', 'student');
         } finally {
             await closeDb(db);
         }
@@ -111,12 +112,97 @@ describe('user-management target-rank guards', () => {
         expect((await login(server.baseUrl, 'rg-admin-b')).status).toBe(200);
     });
 
+    it('refuses both preview and execution of a PEER admin purge', async () => {
+        for (const suffix of ['?dry-run=true', '']) {
+            const res = await adminA(`/api/users/${ids.adminB}/purge${suffix}`, { method: 'POST' });
+            expect(res.status).toBe(403);
+            expect((await res.json()).error).toMatch(/at or above your role/);
+        }
+        // A rejected purge must leave the account usable, not merely return
+        // a forbidden response after erasing its credentials or profile.
+        expect((await login(server.baseUrl, 'rg-admin-b')).status).toBe(200);
+    });
+
+    it('still allows a purge preview for a user below the actor rank', async () => {
+        const res = await adminA(`/api/users/${ids.educator}/purge?dry-run=true`, { method: 'POST' });
+        expect(res.status).toBe(200);
+        expect((await res.json()).target_user_id).toBe(ids.educator);
+        expect((await login(server.baseUrl, 'rg-educator')).status).toBe(200);
+    });
+
+    it('self password change revokes other devices and keeps the initiating session', async () => {
+        const first = (await login(server.baseUrl, 'rg-password-student')).body.token;
+        const second = (await login(server.baseUrl, 'rg-password-student')).body.token;
+        const firstFetch = authed(server.baseUrl, first);
+        const changed = await firstFetch('/api/user/password', {
+            method: 'PUT', body: JSON.stringify({ current_password: PASSWORD, new_password: NEW_PASSWORD }),
+        });
+        expect(changed.status).toBe(200);
+        expect((await firstFetch('/api/auth/verify')).status).toBe(200);
+        expect((await authed(server.baseUrl, second)('/api/auth/verify')).status).toBe(401);
+        expect((await login(server.baseUrl, 'rg-password-student')).status).toBe(401);
+        expect((await login(server.baseUrl, 'rg-password-student', NEW_PASSWORD)).status).toBe(200);
+    });
+
+    it('admin password reset revokes every target session', async () => {
+        const first = (await login(server.baseUrl, 'rg-password-student', NEW_PASSWORD)).body.token;
+        const second = (await login(server.baseUrl, 'rg-password-student', NEW_PASSWORD)).body.token;
+        const reset = await adminA(`/api/users/${ids.passwordStudent}`, {
+            method: 'PUT', body: JSON.stringify({ password: PASSWORD }),
+        });
+        expect(reset.status).toBe(200);
+        expect((await authed(server.baseUrl, first)('/api/auth/verify')).status).toBe(401);
+        expect((await authed(server.baseUrl, second)('/api/auth/verify')).status).toBe(401);
+        expect((await login(server.baseUrl, 'rg-password-student', NEW_PASSWORD)).status).toBe(401);
+        expect((await login(server.baseUrl, 'rg-password-student')).status).toBe(200);
+    });
+
+    it('rolls back the password update if session revocation fails', async () => {
+        const current = (await login(server.baseUrl, 'rg-password-student')).body.token;
+        const other = (await login(server.baseUrl, 'rg-password-student')).body.token;
+        const db = await openDb(server.dbPath);
+        try {
+            await pRun(db,
+                `CREATE TRIGGER reject_test_revocation BEFORE UPDATE OF is_active ON active_sessions
+                 WHEN OLD.user_id = ${ids.passwordStudent} AND NEW.is_active = 0
+                 BEGIN SELECT RAISE(ABORT, 'synthetic revocation failure'); END`
+            );
+            const changed = await authed(server.baseUrl, current)('/api/user/password', {
+                method: 'PUT', body: JSON.stringify({ current_password: PASSWORD, new_password: NEW_PASSWORD }),
+            });
+            expect(changed.status).toBe(500);
+            expect((await authed(server.baseUrl, other)('/api/auth/verify')).status).toBe(200);
+            expect((await login(server.baseUrl, 'rg-password-student')).status).toBe(200);
+            expect((await login(server.baseUrl, 'rg-password-student', NEW_PASSWORD)).status).toBe(401);
+        } finally {
+            await pRun(db, 'DROP TRIGGER IF EXISTS reject_test_revocation');
+            await closeDb(db);
+        }
+    });
+
     it('still lets an admin edit THEMSELVES', async () => {
         const res = await adminA(`/api/users/${ids.adminA}`, {
             method: 'PUT',
             body: JSON.stringify({ name: 'Admin A (self-renamed)' }),
         });
         expect(res.status).toBe(200);
+    });
+
+    it('a partial self-profile save keeps optional fields and allows explicit clearing', async () => {
+        const original = {
+            institution: 'Synthetic University', address: 'Synthetic address', phone: '+000123',
+            alternative_email: 'alternative@example.com', education: 'Synthetic degree', grade: 'Synthetic grade',
+        };
+        const save = body => adminA('/api/user/profile', { method: 'PUT', body: JSON.stringify(body) });
+        expect((await save(original)).status).toBe(200);
+        const partial = await save({ name: 'Partial profile name' });
+        expect(partial.status).toBe(200);
+        expect((await partial.json()).user).toMatchObject({ ...original, name: 'Partial profile name' });
+        const cleared = await save({ phone: null, institution: '' });
+        expect(cleared.status).toBe(200);
+        expect((await cleared.json()).user).toMatchObject({
+            ...original, phone: null, institution: '', name: 'Partial profile name',
+        });
     });
 
     it('still lets an admin edit and delete users below their rank', async () => {

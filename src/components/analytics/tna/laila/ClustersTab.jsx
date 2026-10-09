@@ -21,6 +21,9 @@ const ClustersTab = ({
   clusterMethod = "pam"
 }) => {
   const { t } = useTranslation(["admin"]);
+  const sequenceCount = sequences?.length || 0;
+  const maxClusters = Math.min(10, sequenceCount);
+  const effectiveK = Math.min(Math.max(2, k), maxClusters);
   const colorMap = useMemo(() => createColorMap(labels, palette), [labels, palette]);
   const [result, setResult] = useState(null);
   // A failed clustering run used to set `result` back to null, which is also
@@ -29,7 +32,7 @@ const ClustersTab = ({
   const [error, setError] = useState(null);
   const computeIdRef = useRef(0);
   useEffect(() => {
-    if (!sequences?.length) {
+    if (sequenceCount < 2) {
       setResult(null);
       setError(null);
       return;
@@ -47,7 +50,7 @@ const ClustersTab = ({
           seqsForClustering = [];
           for (let i = 0; i < MAX; i++) seqsForClustering.push(sequences[Math.floor(i * step)]);
         }
-        const clusters = clusterData(seqsForClustering, k, { dissimilarity, method: clusterMethod });
+        const clusters = clusterData(seqsForClustering, effectiveK, { dissimilarity, method: clusterMethod });
         const totalSeqs = clusters.assignments.length;
         const details = clusters.sizes.map((size, cIdx) => {
           const clusterNum = cIdx + 1;
@@ -85,7 +88,10 @@ const ClustersTab = ({
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, [sequences, labels, k, clusterPruneThreshold, dissimilarity, clusterMethod]);
+  }, [sequences, labels, k, sequenceCount, effectiveK, clusterPruneThreshold, dissimilarity, clusterMethod]);
+  if (sequenceCount < 2) {
+    return <div className="py-16 text-center text-gray-500 text-sm">{t("clusters_insufficient_data")}</div>;
+  }
   if (error) {
     return <div className="py-16">
         <div className="mx-auto max-w-lg rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300">
@@ -121,11 +127,11 @@ const ClustersTab = ({
           <input
     type="number"
     min={2}
-    max={10}
-    value={k}
+    max={maxClusters}
+    value={effectiveK}
     onChange={(e) => {
-      const val = parseInt(e.target.value);
-      if (val >= 2 && val <= 10) onKChange(val);
+      const val = parseInt(e.target.value, 10);
+      if (val >= 2 && val <= maxClusters) onKChange(val);
     }}
     className="w-16 px-2 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-center"
   />

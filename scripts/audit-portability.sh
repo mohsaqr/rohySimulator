@@ -29,7 +29,15 @@ count_rg() {
     pattern="$1"
     shift
     set +e
-    grep -rEni "$pattern" "$@" > "$OUT/rg-count.txt" 2>/dev/null
+    # Inventory source only. Recursing through server/data also reads model,
+    # audio and database binaries, making this audit stall on local installs.
+    if command -v rg >/dev/null 2>&1; then
+        rg -ni --glob '*.js' --glob '*.mjs' --glob '*.sql' --glob '*.sh' \
+            --glob '!**/node_modules/**' "$pattern" "$@" > "$OUT/rg-count.txt" 2>/dev/null
+    else
+        grep -rEni --include='*.js' --include='*.mjs' --include='*.sql' \
+            --include='*.sh' --exclude-dir=node_modules "$pattern" "$@" > "$OUT/rg-count.txt" 2>/dev/null
+    fi
     status=$?
     set -e
     # grep returns 1 when no matches found — treat as 0 lines, not an error.

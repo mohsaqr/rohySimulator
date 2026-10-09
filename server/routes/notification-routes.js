@@ -13,7 +13,8 @@ import {
 import { logger } from '../logger.js';
 import {
     auditSuccess,
-    parseAuditJson
+    parseAuditJson,
+    tenantId
 } from './_helpers.js';
 
 const radiologyLog = logger('radiology');
@@ -37,8 +38,8 @@ const router = express.Router();
 router.get('/notification-prefs', authenticateToken, (req, res) => {
     const userId = req.user.id;
     dbAdapter.get(
-        `SELECT notification_settings FROM user_preferences WHERE user_id = ?`,
-        [userId],
+        `SELECT notification_settings FROM user_preferences WHERE user_id = ? AND tenant_id = ?`,
+        [userId, tenantId(req)],
         (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             let prefs = {};
@@ -56,7 +57,7 @@ router.get('/notification-prefs', authenticateToken, (req, res) => {
 // stuffing the column with arbitrary blobs.
 const ALLOWED_PREF_KEYS = new Set([
     'dnd', 'pausedUntil', 'minSeverity',
-    'mutedSources', 'audioMuted', 'bannerMuted', 'consoleMuted',
+    'mutedSources', 'audioMuted', 'bannerMuted', 'consoleMuted', 'avatarAlarmSpeechEnabled',
     'snoozeDuration',
     'toastDedupeWindowMs', 'toastMaxVisible',
     'telemetryBatchSize', 'telemetryFlushIntervalMs',
@@ -84,16 +85,17 @@ router.put('/notification-prefs', authenticateToken, (req, res) => {
         });
     }
 
-    dbAdapter.get(`SELECT notification_settings FROM user_preferences WHERE user_id = ?`, [userId], (readErr, oldPrefs) => {
+    dbAdapter.get(`SELECT notification_settings FROM user_preferences WHERE user_id = ? AND tenant_id = ?`, [userId, tenantId(req)], (readErr, oldPrefs) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         // Upsert. user_preferences has UNIQUE(user_id) so ON CONFLICT works.
         dbAdapter.run(
-            `INSERT INTO user_preferences (user_id, notification_settings, updated_at)
-             VALUES (?, ?, CURRENT_TIMESTAMP)
+            `INSERT INTO user_preferences (user_id, notification_settings, tenant_id, updated_at)
+             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(user_id) DO UPDATE SET
                  notification_settings = excluded.notification_settings,
+                 tenant_id = excluded.tenant_id,
                  updated_at = CURRENT_TIMESTAMP`,
-            [userId, json],
+            [userId, json, tenantId(req)],
             (err) => {
                 if (err) return res.status(500).json({ error: err.message });
                 auditSuccess(req, {

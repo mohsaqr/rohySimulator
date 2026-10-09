@@ -2048,7 +2048,7 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
         `, [tenant, ...f.params, ...(sessionId && has('session_id') ? [sessionId] : []), limit]);
     });
 
-    // 4. tts_usage → every TTS playback.
+    // 4. tts_usage → daily usage by provider (no per-playback voice field).
     queries.push(async () => {
         if (!await tableExists('tts_usage')) return [];
         const f = dateFilter('tu.created_at');
@@ -2058,8 +2058,8 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
                    NULL AS case_id, NULL AS case_name,
                    NULL AS session_id,
                    'tts' AS source,
-                   tu.voice AS role,
-                   tu.provider || COALESCE(' / ' || tu.voice, '') AS content,
+                   tu.provider AS role,
+                   tu.provider AS content,
                    NULL AS tokens_in, NULL AS tokens_out,
                    NULL AS latency_ms,
                    tu.provider AS model,
@@ -2152,7 +2152,7 @@ const EXPORT_SOURCES = {
     admin: {
         table: 'system_audit_log',
         dateCol: 'timestamp',
-        tenant: false, // system_audit_log isn't tenant-scoped today
+        tenant: true,
     },
     config: {
         table: 'settings_logs',
@@ -2191,7 +2191,7 @@ const EXPORT_SOURCES = {
     },
     emotion: {
         table: 'emotion_logs',
-        dateCol: 'created_at',
+        dateCol: 'timestamp',
         tenant: true,
     },
     oyon: {
@@ -2201,17 +2201,17 @@ const EXPORT_SOURCES = {
     },
     vitals: {
         table: 'session_vitals',
-        dateCol: 'recorded_at',
-        tenant: false,
+        dateCol: 'timestamp',
+        tenant: true,
     },
     scenario: {
         table: 'scenario_events',
-        dateCol: 'created_at',
-        tenant: false,
+        dateCol: 'triggered_at',
+        tenant: true,
     },
     client: {
         table: 'client_logs',
-        dateCol: 'created_at',
+        dateCol: 'ts',
         tenant: true,
     },
 };
@@ -2378,9 +2378,9 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
                    sal.resource_type AS ref_type, sal.resource_id AS ref_id,
                    sal.status AS status
             FROM system_audit_log sal
-            WHERE 1=1 ${f.clause}
+            WHERE sal.tenant_id = ? ${f.clause}
             ORDER BY sal.ts_utc DESC LIMIT ?
-        `, [...f.params, perSource]);
+        `, [tenant, ...f.params, perSource]);
     });
 
     // 2. ALL learning_events → 'learning' (verb tells you what)
@@ -2407,18 +2407,18 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
 
     // 3. ALL client_logs → 'client' (every level, not just error/warn)
     queries.push(async () => {
-        const f = dateFilter('cl.created_at');
+        const f = dateFilter('cl.ts');
         return allP(`
-            SELECT cl.created_at AS ts, cl.user_id, u.username,
+            SELECT cl.ts AS ts, cl.user_id, u.username,
                    'client' AS component, cl.level AS event,
-                   cl.message AS description,
+                   cl.msg AS description,
                    'web' AS origin, NULL AS ip,
-                   cl.context AS ref_type, NULL AS ref_id,
+                   cl.component AS ref_type, NULL AS ref_id,
                    cl.level AS status
             FROM client_logs cl
             LEFT JOIN users u ON cl.user_id = u.id
             WHERE cl.tenant_id = ? ${f.clause}
-            ORDER BY cl.created_at DESC LIMIT ?
+            ORDER BY cl.ts DESC LIMIT ?
         `, [tenant, ...f.params, perSource]);
     });
 
@@ -2521,9 +2521,9 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
         return allP(`
             SELECT tu.created_at AS ts, tu.user_id, u.username,
                    'tts' AS component, tu.provider AS event,
-                   tu.provider || COALESCE(' / ' || tu.voice, '') AS description,
+                   tu.provider AS description,
                    'api' AS origin, NULL AS ip,
-                   'voice' AS ref_type, tu.voice AS ref_id,
+                   'provider' AS ref_type, tu.provider AS ref_id,
                    'success' AS status
             FROM tts_usage tu
             LEFT JOIN users u ON tu.user_id = u.id
@@ -2558,8 +2558,8 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
         return allP(`
             SELECT oer.window_start AS ts, oer.user_id, u.username,
                    'oyon' AS component,
-                   COALESCE(oer.dominant, 'sample') AS event,
-                   COALESCE(oer.dominant, 'unknown') ||
+                   COALESCE(oer.dominant_emotion, 'sample') AS event,
+                   COALESCE(oer.dominant_emotion, 'unknown') ||
                    COALESCE(' (' || ROUND(oer.confidence, 2) || ')', '') AS description,
                    'web' AS origin, NULL AS ip,
                    'session' AS ref_type, CAST(oer.session_id AS TEXT) AS ref_id,
@@ -2574,9 +2574,9 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
     // 12. session_vitals → 'vitals' (every monitor sample)
     queries.push(async () => {
         if (!await tableExists('session_vitals')) return [];
-        const f = dateFilter('sv.recorded_at');
+        const f = dateFilter('sv.timestamp');
         return allP(`
-            SELECT sv.recorded_at AS ts, s.user_id, u.username,
+            SELECT sv.timestamp AS ts, s.user_id, u.username,
                    'vitals' AS component, 'sample' AS event,
                    'HR ' || COALESCE(CAST(sv.hr AS TEXT), '?') ||
                    ' SpO2 ' || COALESCE(CAST(sv.spo2 AS TEXT), '?') AS description,
@@ -2586,27 +2586,28 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
             FROM session_vitals sv
             LEFT JOIN sessions s ON sv.session_id = s.id
             LEFT JOIN users u ON s.user_id = u.id
-            WHERE 1=1 ${f.clause}
-            ORDER BY sv.recorded_at DESC LIMIT ?
-        `, [...f.params, perSource]);
+            WHERE sv.tenant_id = ? ${f.clause}
+            ORDER BY sv.timestamp DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
     });
 
     // 13. scenario_events → 'scenario'
     queries.push(async () => {
         if (!await tableExists('scenario_events')) return [];
-        const f = dateFilter('se.created_at');
+        const f = dateFilter('se.triggered_at');
         return allP(`
-            SELECT se.created_at AS ts, NULL AS user_id, NULL AS username,
+            SELECT se.triggered_at AS ts, NULL AS user_id, NULL AS username,
                    'scenario' AS component,
                    COALESCE(se.event_type, 'event') AS event,
-                   COALESCE(se.description, se.event_type) AS description,
+                   COALESCE(se.message, se.event_name, se.event_type) AS description,
                    'engine' AS origin, NULL AS ip,
-                   'scenario' AS ref_type, CAST(se.scenario_id AS TEXT) AS ref_id,
+                   'scenario' AS ref_type, CAST(se.case_id AS TEXT) AS ref_id,
                    'info' AS status
             FROM scenario_events se
-            WHERE 1=1 ${f.clause}
-            ORDER BY se.created_at DESC LIMIT ?
-        `, [...f.params, perSource]);
+            WHERE se.tenant_id = ? AND se.is_triggered = 1
+                  AND se.triggered_at IS NOT NULL ${f.clause}
+            ORDER BY se.triggered_at DESC LIMIT ?
+        `, [tenant, ...f.params, perSource]);
     });
 
     // 14. plugin_jobs → 'plugin' (RPS-1 §11b server slot)

@@ -25,6 +25,7 @@
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -718,6 +719,68 @@ describe('ConfigPanel', () => {
         const ids = Array.from(document.querySelectorAll('datalist option')).map((o) => o.value);
         expect(ids).toContain('claude-opus-4-8');
         expect(ids).toContain('claude-sonnet-5');
+    });
+
+    it.each(['3', 'nonsense'])('shows a validation error and blocks an invalid temperature %s', async (temperature) => {
+        let saves = 0;
+        server.use(
+            http.get('*/api/platform-settings/llm', () => HttpResponse.json({
+                provider: 'openai', model: 'synthetic-model', baseUrl: 'https://api.openai.com/v1',
+                apiKey: 'sk-synthetic', enabled: true, maxOutputTokens: '', temperature,
+                systemPromptTemplate: '',
+            })),
+            http.put('*/api/platform-settings/llm', () => {
+                saves += 1;
+                return HttpResponse.json({ message: 'Saved' });
+            }),
+        );
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        const input = await screen.findByDisplayValue(temperature);
+        fireEvent.click(screen.getByRole('button', { name: /^Save settings$/i }));
+        expect(await screen.findByText('Temperature must be a number between 0 and 2.')).toBeInTheDocument();
+        expect(saves).toBe(0);
+        fireEvent.change(input, { target: { value: '0.7' } });
+        fireEvent.click(screen.getByRole('button', { name: /^Save settings$/i }));
+        await waitFor(() => expect(saves).toBe(1));
+    });
+
+    it('operates monitor visibility toggles and saves all nine settings using the keyboard', async () => {
+        const loaded = {
+            showTimer: true, showECG: false, showSpO2: true, showBP: true,
+            showRR: true, showTemp: true, showCO2: true, showPleth: true, showNumerics: true,
+        };
+        let saved;
+        server.use(
+            http.get('*/api/platform-settings/monitor', () => HttpResponse.json(loaded)),
+            http.put('*/api/platform-settings/monitor', async ({ request }) => {
+                saved = await request.json();
+                return HttpResponse.json({ message: 'Saved' });
+            }),
+        );
+        const user = userEvent.setup();
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        await user.click(screen.getByRole('button', { name: /^Monitor$/i }));
+        await screen.findByRole('button', { name: /^ECG Waveform$/i });
+        expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(8);
+        expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(1);
+        await user.tab();
+        const timer = screen.getByRole('button', { name: /timer/i, pressed: true });
+        expect(timer).toHaveFocus();
+        await user.keyboard(' ');
+        expect(timer).toHaveAttribute('aria-pressed', 'false');
+        await user.tab();
+        const ecg = screen.getByRole('button', { name: /^ECG Waveform$/i, pressed: false });
+        expect(ecg).toHaveFocus();
+        await user.keyboard('{Enter}');
+        expect(ecg).toHaveAttribute('aria-pressed', 'true');
+        // Continue through the remaining seven toggles to the native Save.
+        await user.keyboard('{Tab}{Tab}{Tab}{Tab}{Tab}{Tab}{Tab}{Tab}');
+        expect(screen.getByRole('button', { name: /^Save Monitor Settings$/i })).toHaveFocus();
+        await user.keyboard('{Enter}');
+        await waitFor(() => expect(saved).toEqual({ ...loaded, showTimer: false, showECG: true }));
     });
 
     // CONTRACT: for a keyless local provider (LM Studio / Ollama) the model

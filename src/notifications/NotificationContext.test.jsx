@@ -40,7 +40,7 @@
 
 import React, { useEffect } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -439,6 +439,33 @@ describe('NotificationProvider — mute hierarchy', () => {
 });
 
 describe('NotificationProvider — persistence', () => {
+    it('keeps settings edited during initial remote loading and hydrates untouched settings', async () => {
+        let finishLoad;
+        const loaded = new Promise(resolve => { finishLoad = resolve; });
+        let loadStarted = false;
+        const saved = [];
+        server.use(
+            http.get('*/api/notification-prefs', async () => {
+                loadStarted = true;
+                await loaded;
+                return HttpResponse.json({ prefs: { dnd: false, audioVolume: 0.17 } });
+            }),
+            http.put('*/api/notification-prefs', async ({ request }) => {
+                saved.push((await request.json()).prefs);
+                return HttpResponse.json({ ok: true });
+            }),
+        );
+        const ref = mountCenter();
+        await waitFor(() => expect(loadStarted).toBe(true));
+        act(() => { ref.current.setPrefs({ dnd: true }); });
+        await act(async () => { finishLoad(); });
+        await waitFor(() => expect(ref.current.prefs.audioVolume).toBe(0.17));
+        expect(ref.current.prefs.dnd).toBe(true);
+        const local = JSON.parse(localStorage.getItem('rohy_notification_prefs:anon'));
+        expect(local).toMatchObject({ dnd: true, audioVolume: 0.17 });
+        await waitFor(() => expect(saved).toContainEqual(expect.objectContaining({ dnd: true, audioVolume: 0.17 })));
+    });
+
     it('setPrefs writes the merged prefs to localStorage under the per-user key', () => {
         const ref = mountCenter();
         act(() => { ref.current.setPrefs({ minSeverity: SEVERITY.WARNING, audioMuted: true }); });

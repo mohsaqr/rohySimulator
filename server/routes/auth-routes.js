@@ -361,25 +361,6 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             const ipAddress = req.ip || req.connection?.remoteAddress;
             const userAgent = req.headers['user-agent'];
 
-            // F-004: previously register issued a JWT but never recorded
-            // an active_sessions row or set the auth/CSRF cookies. The
-            // legacy compat at middleware/auth.js L144 ("missing row =
-            // allow through") meant the token worked, but logout /
-            // admin-revoke couldn't touch it. Now we mirror login's
-            // session-issuance path so register-issued sessions are
-            // first-class: revocable, cookie-aware, CSRF-paired. Failure
-            // is non-fatal — the JSON token in the response body is
-            // still valid; the user just isn't server-revocable.
-            try {
-                await recordActiveSession(token, user, { ipAddress, userAgent });
-            } catch (e) {
-                (req.log || authLog).warn('register active session record failed', {
-                    user_id: user.id,
-                    tenant_id: defaultTenantId,
-                    error: e.message
-                });
-            }
-
             // Auto-enrol into the tenant's auto-enrol classes (the default
             // course — cohorts.is_default = 1, seeded as "Basic course" but
             // renameable — and any other cohorts.auto_enroll = 1) so the new
@@ -403,9 +384,6 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 await recordInviteUse(invite.id, user.id, ipAddress);
             }
 
-            res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
-            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
-
             logAudit({
                 userId: user.id,
                 username,
@@ -421,6 +399,23 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 ipAddress,
                 userAgent
             });
+
+            // The account and invite redemption are complete even if signing
+            // in is unavailable. Never expose a newly minted, unrevocable JWT.
+            try {
+                await recordActiveSession(token, user, { ipAddress, userAgent });
+            } catch (e) {
+                (req.log || authLog).error('register active session record failed', {
+                    user_id: user.id, tenant_id: defaultTenantId, error: e.message
+                });
+                return res.status(503).json({
+                    error: 'Account created, but sign-in is unavailable. Please try logging in again.',
+                    code: 'session_unavailable'
+                });
+            }
+
+            res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
+            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
             res.status(201).json({
                 message: 'User registered successfully',
@@ -557,16 +552,17 @@ router.post('/auth/login', authLimiter, (req, res) => {
 
             // Track active session via the centralised helper so the row
             // shape stays in lockstep with authenticateToken's revocation
-            // check. Failure here is non-fatal — login still succeeds, the
-            // user just won't be server-revocable on this token.
+            // check. A new login must have a revocable session before its JWT
+            // reaches either the response body or an auth cookie.
             try {
                 await recordActiveSession(token, user, { ipAddress, userAgent });
             } catch (e) {
-                (req.log || authLog).warn('active session record failed', {
+                (req.log || authLog).error('active session record failed', {
                     user_id: user.id,
                     tenant_id: user.tenant_id || 1,
                     error: e.message
                 });
+                return res.status(503).json({ error: 'Sign-in is temporarily unavailable. Please try again.', code: 'session_unavailable' });
             }
 
             // Ensure the returning user is enrolled in the default course and

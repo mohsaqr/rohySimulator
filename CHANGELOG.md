@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.23] — 2026-10-09
+
+- Protect user purge by role rank, revoke other sessions on password changes, and refuse sign-in when a revocable session cannot be recorded.
+- Preserve redacted personal API keys, numeric temperature zero, and omitted profile fields. Fix notification preference persistence, tenant ownership, and edits made during initial loading; align class matching and reject conflicting import identities.
+- Keep manual ECG controls and presets through scenario updates, make monitor settings keyboard accessible, and reject invalid monitor flags and case difficulty values.
+- Repair Analytics feed/export schema mismatches and tenant isolation, including audit records. Handle insufficient clustering data and bound group counts to available sequences.
+- Prevent the Oyon dock from overlapping tablet settings headers. Restore 14 disabled browser tests and add complete desktop/tablet settings traversal, profile persistence, and schema/isolation regressions. Bound the portability audit to source files.
+- Verification: 5,902 tests passed with coverage floors met; 188 main browser tests and 13 affected follow-up checks passed without retries; 18 API audits, 26,856 API fuzz cases, and both monkey walks passed. Live Google voice tests failed because billing is disabled; the release owner accepted those nine failures as an exception.
+
 ## [3.0.0-rc.22] — 2026-10-04
 
 - **Test fix:** the learner case-title test exercised the Oyon route only where the developer's shell

@@ -17,19 +17,10 @@
 //      authoritative; tab A may keep stale state. We do NOT hard-block
 //      either tab.
 //
-// Why two BrowserContexts and not two pages in one context?
-//   `storage` events only fire across pages that share a localStorage,
-//   which is per-origin AND per-context (each Playwright context has its
-//   own storage). Two contexts means two independent localStorages —
-//   firing storage events between them would not work. We instead
-//   simulate the "second tab same origin" case by giving both contexts
-//   the same auth (so they hit the same backend / same user) and then
-//   physically replicating the localStorage write that the SPA in tab B
-//   would make. This is a faithful proxy because the production code
-//   path is identical: tab A's listener trips on a `storage` event
-//   keyed `rohy_active_session`, regardless of which physical tab wrote
-//   it. Where the real browser cross-tab storage event is needed (test
-//   2 below), we use the SAME context with two pages.
+// Tab B shares tab A's browser context and writes from a same-origin API
+// document. It has no mounted SPA, so restore effects cannot write a session
+// before the operation under test. The browser still delivers genuine storage
+// events to tab A. The session preload is page-scoped for the same reason.
 //
 // Storage key under test: `rohy_active_session`
 //
@@ -63,7 +54,7 @@ test.beforeAll(async ({ baseURL, request }) => {
  * Pick the first seeded case via the API. We don't care which case as
  * long as it's a valid id we can pass to POST /api/sessions.
  */
-async function pickCase(request, baseURL, token) {
+async function pickCase(request, baseURL, token, excludeCaseId = null) {
     const res = await request.get(`${baseURL}/api/cases`, {
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -72,8 +63,9 @@ async function pickCase(request, baseURL, token) {
     }
     const json = await res.json();
     const cases = json.cases || [];
-    if (cases.length < 1) throw new Error('No cases available — seed did not run?');
-    return cases[0];
+    const selected = cases.find(candidate => candidate.id !== excludeCaseId);
+    if (!selected) throw new Error('No distinct seeded case available for a session — seed did not run?');
+    return selected;
 }
 
 /**
@@ -113,11 +105,11 @@ async function newAdminContext(browser, baseURL) {
 /**
  * Seed the active-session localStorage entry directly. Mirrors what
  * src/App.jsx writes when a session is restored or starts. We do this
- * via addInitScript so the value is in place BEFORE the SPA mounts —
+ * via page-scoped addInitScript so only tab A writes the value is in place BEFORE the SPA mounts —
  * App.jsx's mount-time useEffect picks it up and hydrates state.
  */
-async function seedActiveSession(context, payload) {
-    await context.addInitScript(({ key, value }) => {
+async function seedActiveSession(page, payload) {
+    await page.addInitScript(({ key, value }) => {
         try { window.localStorage.setItem(key, value); } catch { /* ignore */ }
     }, { key: STORAGE_KEY, value: JSON.stringify(payload) });
 }
@@ -131,7 +123,7 @@ test.describe('multi-tab session handling', () => {
             const seedCase = SHARED_CASE;
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
-            await seedActiveSession(a.context, {
+            await seedActiveSession(a.page, {
                 caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
@@ -152,7 +144,7 @@ test.describe('multi-tab session handling', () => {
             // way to exercise the production listener path end-to-end.
             const tabB = await a.context.newPage();
             try {
-                await tabB.goto('/');
+                await tabB.goto('/api/ready');
                 // Have tab B write a fresh active-session blob to
                 // localStorage. The browser will deliver a storage event
                 // to tab A, which is the trigger we're locking.
@@ -184,7 +176,7 @@ test.describe('multi-tab session handling', () => {
             const seedCase = SHARED_CASE;
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
-            await seedActiveSession(a.context, {
+            await seedActiveSession(a.page, {
                 caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
@@ -194,7 +186,7 @@ test.describe('multi-tab session handling', () => {
 
             const tabB = await a.context.newPage();
             try {
-                await tabB.goto('/');
+                await tabB.goto('/api/ready');
                 const startedAt = Date.now();
                 await tabB.evaluate(({ key, value }) => {
                     window.localStorage.setItem(key, value);
@@ -228,7 +220,7 @@ test.describe('multi-tab session handling', () => {
             const seedCase = SHARED_CASE;
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
-            await seedActiveSession(a.context, {
+            await seedActiveSession(a.page, {
                 caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
@@ -238,7 +230,7 @@ test.describe('multi-tab session handling', () => {
 
             const tabB = await a.context.newPage();
             try {
-                await tabB.goto('/');
+                await tabB.goto('/api/ready');
                 await tabB.evaluate(({ key, value }) => {
                     window.localStorage.setItem(key, value);
                 }, {
@@ -276,12 +268,7 @@ test.describe('multi-tab session handling', () => {
         }
     });
 
-    // CONTRACT: this last-write-wins test depends on storage event timing
-    // that is brittle in headless Chromium (the listener observes the
-    // localStorage write on the SAME page in jsdom but not always in real
-    // chromium under fast e2e). The core multi-tab banner contract is
-    // covered by the 3 preceding tests; this is a follow-on edge case.
-    test.skip('last-write-wins: tab B mutates localStorage; tab A may show stale, both are still alive', async ({ browser, baseURL, request }) => {
+    test('last-write-wins: tab B mutates localStorage; tab A may show stale, both are still alive', async ({ browser, baseURL, request }) => {
         // This test locks the documented "last-write-wins" behaviour
         // (App.jsx:486 banner copy: "Last-write-wins applies"). Tab B's
         // write to localStorage is authoritative for whatever reads it
@@ -295,7 +282,7 @@ test.describe('multi-tab session handling', () => {
             const seedCase = SHARED_CASE;
             const sidA = await startSession(request, baseURL, token, seedCase.id);
 
-            await seedActiveSession(a.context, {
+            await seedActiveSession(a.page, {
                 caseId: seedCase.id,
                 sessionId: sidA,
                 timestamp: Date.now(),
@@ -305,12 +292,12 @@ test.describe('multi-tab session handling', () => {
 
             const tabB = await a.context.newPage();
             try {
-                await tabB.goto('/');
-                // Mint a different real session id and write it from tab
-                // B. From the DB's perspective both sessions exist; from
-                // localStorage's perspective tab B's id is the new
-                // authoritative active session.
-                const sidB = await startSession(request, baseURL, token, seedCase.id);
+                await tabB.goto('/api/ready');
+                // Same-user/same-case starts deliberately reuse a recent active
+                // session. Use another seeded case to create an independent
+                // real session while preserving tab A's running session.
+                const takeoverCase = await pickCase(request, baseURL, token, seedCase.id);
+                const sidB = await startSession(request, baseURL, token, takeoverCase.id);
                 expect(sidB).not.toBe(sidA);
 
                 await tabB.evaluate(({ key, value }) => {
@@ -318,7 +305,7 @@ test.describe('multi-tab session handling', () => {
                 }, {
                     key: STORAGE_KEY,
                     value: JSON.stringify({
-                        caseId: seedCase.id,
+                        caseId: takeoverCase.id,
                         sessionId: sidB,
                         timestamp: Date.now(),
                     }),
@@ -334,6 +321,7 @@ test.describe('multi-tab session handling', () => {
                 const fromB = await tabB.evaluate((k) => window.localStorage.getItem(k), STORAGE_KEY);
                 expect(fromA).toBe(fromB);
                 expect(JSON.parse(fromA).sessionId).toBe(sidB);
+                expect(JSON.parse(fromA).caseId).toBe(takeoverCase.id);
 
                 // Tab A's auth should still be intact. We do NOT assert
                 // that React state caught up — the documented behaviour
@@ -353,6 +341,14 @@ test.describe('multi-tab session handling', () => {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 expect(verify.ok()).toBeTruthy();
+                const takeover = (await verify.json()).session;
+                expect(takeover.id).toBe(sidB);
+                expect(takeover.case_id).toBe(takeoverCase.id);
+                const original = await request.get(`${baseURL}/api/sessions/${sidA}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                expect(original.ok()).toBeTruthy();
+                expect((await original.json()).session.end_time).toBeNull();
             } finally {
                 await tabB.close();
             }
@@ -361,12 +357,7 @@ test.describe('multi-tab session handling', () => {
         }
     });
 
-    // CONTRACT: negative control for the storage-event filter. Same
-    // brittleness as the test above — the cross-tab storage event timing
-    // is not reliable in this Playwright + Vite + jsdom-style chromium
-    // setup. The positive case (banner DOES fire on the right key) is
-    // already locked by the 3 preceding tests.
-    test.skip('a write to a DIFFERENT storage key in tab B does NOT raise the banner in tab A', async ({ browser, baseURL, request }) => {
+    test('a write to a DIFFERENT storage key in tab B does NOT raise the banner in tab A', async ({ browser, baseURL, request }) => {
         // Negative control: the listener filters on
         // `e.key !== 'rohy_active_session'`. Writing under any other
         // key from tab B must be a no-op for the banner. We use a
@@ -380,7 +371,7 @@ test.describe('multi-tab session handling', () => {
             const seedCase = SHARED_CASE;
             const sid = await startSession(request, baseURL, token, seedCase.id);
 
-            await seedActiveSession(a.context, {
+            await seedActiveSession(a.page, {
                 caseId: seedCase.id,
                 sessionId: sid,
                 timestamp: Date.now(),
@@ -390,14 +381,18 @@ test.describe('multi-tab session handling', () => {
 
             const tabB = await a.context.newPage();
             try {
-                await tabB.goto('/');
+                await tabB.goto('/api/ready');
+                await a.page.evaluate(() => {
+                    window.addEventListener('storage', event => {
+                        if (event.key === 'rohy_unrelated_key') window.__unrelatedStorageReceived = true;
+                    });
+                });
                 await tabB.evaluate(() => {
                     window.localStorage.setItem('rohy_unrelated_key', JSON.stringify({ noise: true }));
                 });
-                // Give the storage event a generous chance to fire — if
-                // the banner ever shows up here, the listener is too
-                // permissive.
-                await a.page.waitForTimeout(800);
+                // Observe delivery of this real cross-tab event before checking
+                // the negative control; an arbitrary sleep could pass too early.
+                await expect.poll(() => a.page.evaluate(() => window.__unrelatedStorageReceived)).toBe(true);
                 await expect(a.page.getByText(BANNER_RE)).toHaveCount(0);
             } finally {
                 await tabB.close();

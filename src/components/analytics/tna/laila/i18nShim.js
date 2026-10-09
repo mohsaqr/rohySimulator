@@ -47,6 +47,7 @@ const OVERRIDES = {
     my_sessions: 'My sessions',
     avg_per_user: 'Avg / user',
     no_data: 'No data',
+    clusters_insufficient_data: 'At least two sequences are needed for clustering.',
     patterns_found: 'patterns',
     pattern_lengths: 'Lengths',
     computing_patterns: 'Computing patterns…',

@@ -70,6 +70,47 @@ afterEach(() => {
 });
 
 describe('UserProfilePanel apiFetch migration', () => {
+    it('preserves a stored zero temperature when saving personal AI settings', async () => {
+        fetchSpy.mockImplementation((url, init) => {
+            if (url.endsWith('/api/user/profile')) return Promise.resolve(jsonResponse({ user: { username: 'learner', name: 'Learner One' } }));
+            if (url.endsWith('/api/users/preferences') && init?.method === 'GET') {
+                return Promise.resolve(jsonResponse({ default_llm_settings: JSON.stringify({ provider: 'openai', temperature: 0 }) }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+        renderWithProviders(<UserProfilePanel />, { withAuth: false, withNotifications: false, withToast: false });
+        await screen.findByText('Learner One');
+        fireEvent.click(screen.getByRole('button', { name: /ai settings/i }));
+        expect(await screen.findByDisplayValue('0')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /save ai settings/i }));
+        await waitFor(() => expect(profileCalls().some(([, init]) => init?.method === 'PUT')).toBe(true));
+        const [, init] = profileCalls().find(([, callInit]) => callInit?.method === 'PUT');
+        expect(JSON.parse(init.body).default_llm_settings.temperature).toBe(0);
+    });
+
+    it('sends an explicit null when the user clears a saved personal API key', async () => {
+        const defaultFetch = fetchSpy.getMockImplementation();
+        fetchSpy.mockImplementation((url, init) => {
+            if (typeof url === 'string' && url.endsWith('/api/users/preferences') && (!init?.method || init.method === 'GET')) {
+                return Promise.resolve(jsonResponse({ default_llm_settings: { provider: 'openai', apiKey: '[redacted]' } }));
+            }
+            return defaultFetch(url, init);
+        });
+        renderWithProviders(
+            <UserProfilePanel />,
+            { withAuth: false, withNotifications: false, withToast: false }
+        );
+        await screen.findByText('Learner One');
+        fireEvent.click(screen.getByRole('button', { name: /ai settings/i }));
+        fireEvent.change(await screen.findByDisplayValue('[redacted]'), { target: { value: '' } });
+        fireEvent.click(screen.getByRole('button', { name: /save ai settings/i }));
+        await waitFor(() => {
+            const call = profileCalls().find(([url, init]) => url.endsWith('/api/users/preferences') && init?.method === 'PUT');
+            expect(call).toBeDefined();
+            expect(JSON.parse(call[1].body).default_llm_settings.apiKey).toBeNull();
+        });
+    });
+
     it('loads the user profile with bearer auth and the correct path', async () => {
         renderWithProviders(
             <UserProfilePanel />,
