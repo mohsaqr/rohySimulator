@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.26] — 2026-10-10
+
+- **Case packages (server):** export a whole case as one `.rohycase` file and import it on another Rohy server as a new case. **Off by default** (platform setting `case_packages_enabled`) and admin-only. Until it is switched on, every new route answers 403 `case_packages_disabled`.
+  - **What is carried:** the case row, its agents, its labs and imaging, its treatment rubric, uploaded media, and managed-library pathology slides (tiles, preview and calibration; never the scanner original).
+  - **Content Rohy ships** is referenced by path and SHA-256, not copied. The import compares it with the receiving server's content and reports anything missing or different.
+  - **Pathology content from a deployment's own origin** is fetched and placed in the receiving server's slide library. PACS content is referenced only.
+- **Import is checked before anything is written.**
+  - Only allowlisted entry names are read, every file must be declared in the manifest and verified against its SHA-256, and uploads must be real media.
+  - Library paths must match a fixed pattern, and `.dzi` files are capped.
+  - Disk space is reserved and checked per filesystem.
+  - A slide is reused only for the same tenant with the same files and calibration, and never overwritten.
+  - The database write runs in its own transaction (`isolatedTransaction`). Placed files are removed if it fails.
+  - Uploads arrive in 16 MB chunks, which stays under proxy body caps and the route timeout.
+- Personas are matched by type, name **and prompt**. A same-named persona with a different prompt gets an "(imported)" copy. Template LLM routing and keys are never exported.
+- Existing code: an `export` keyword is added to five functions, with their bodies unchanged. The existing case routes and the JSON Export/Import are untouched.
+- The regenerated API/config reference also picks up earlier line-number drift in auth, admin, users, analytics, notification and cases.
+- Verification: 32 package integration tests across two and three real servers, 3 unit tests. Every guard has a regression lock confirmed to fail without its fix. A two-server browser round trip on the seeded STEMI case was run.
+
 ## [3.0.0-rc.25] — 2026-10-10
 
 - Add `dbAdapter.isolatedTransaction(work)`: a write transaction on a connection of its own. A transaction on the shared connection takes in any other request's write issued while it is open, so a rollback could undo a write that request had already reported as saved. Additive; the existing `transaction()` and its callers are unchanged.

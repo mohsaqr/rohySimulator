@@ -9,5 +9,5 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:37` |
-| `PUT` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:67` |
+| `GET` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:38` |
+| `PUT` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:68` |

@@ -151,7 +151,7 @@ function stampCaseCode(caseCode, caseId, tenant, cb) {
  * `case_language` is NOT set here — it depends on the stored row (immutable
  * after creation), see `pinCaseLanguage`.
  */
-function normaliseCaseForStorage(req, res, body) {
+export function normaliseCaseForStorage(req, res, body) {
     const { config, scenario, scenario_template, scenario_from_repository, scenario_duration } = body;
     const gender = resolvePatientGenderOr400(res, config, body.patient_gender);
     if (!gender) return null;
@@ -238,7 +238,7 @@ function normaliseCaseForStorage(req, res, body) {
  * (create passes null → normalise the author's pick to a concrete code).
  * Malformed legacy JSON falls through to normalising the incoming config.
  */
-function pinCaseLanguage(safeConfig, storedConfigJson) {
+export function pinCaseLanguage(safeConfig, storedConfigJson) {
     let storedConfig = null;
     try {
         storedConfig = storedConfigJson ? JSON.parse(storedConfigJson) : null;
