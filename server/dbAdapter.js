@@ -1,4 +1,5 @@
-import db from './db.js';
+import sqlite3 from 'sqlite3';
+import db, { dbPath } from './db.js';
 import { timeDbAdapterQuery } from './observability.js';
 import { logger } from './logger.js';
 
@@ -25,8 +26,8 @@ function isTclStatement(sql) {
  * Stage E8 database portability adapter.
  *
  * This module is the future drop-in surface for a Postgres-backed adapter:
- * `get`, `all`, `run`, `serialize`, `transaction`, `prepare`, `now`, and
- * `upsert`. It deliberately reuses the existing sqlite3 handle exported by
+ * `get`, `all`, `run`, `serialize`, `transaction`, `isolatedTransaction`,
+ * `prepare`, `now`, and `upsert`. It deliberately reuses the existing sqlite3 handle exported by
  * `server/db.js` and does not open another connection. Existing route code
  * still calls the legacy sqlite3 callback API directly; migrating routes to
  * this Promise-returning adapter is out of scope for E8 and deferred. Actual
@@ -183,6 +184,56 @@ export async function transaction(work) {
     });
 }
 
+/**
+ * A write transaction on a connection of its OWN.
+ *
+ * `transaction()` above runs on the one shared handle, and `serialize` does not
+ * span `await`s: another request's write issued while `work` awaits runs INSIDE
+ * the open transaction, and a ROLLBACK undoes it after that request already
+ * answered "saved". Work that can fail part-way and must not take anyone
+ * else's writes with it uses this instead. BEGIN IMMEDIATE takes the database
+ * write lock (WAL); other writers wait it out on their busy timeout, and the
+ * BUSY retry in `run()`. Keep `work` to a short burst of writes — do lookups
+ * before calling.
+ *
+ * Statements go through the same slow-query instrumentation as the rest of
+ * the adapter.
+ *
+ * @param {(tx: {run: Function, get: Function, all: Function}) => Promise<T>} work
+ *        `tx.run(sql, params)` → `{lastID, changes}`; `get`/`all` as above
+ * @returns {Promise<T>}
+ * @template T
+ */
+export async function isolatedTransaction(work) {
+    const handle = await new Promise((resolve, reject) => {
+        const conn = new sqlite3.Database(dbPath, (err) => (err ? reject(err) : resolve(conn)));
+    });
+    const call = (method, label, sql, params, map) => timeDbAdapterQuery(label, sql, () => new Promise((resolve, reject) => {
+        handle[method](sql, normalizeParams(params), function done(err, result) {
+            err ? reject(err) : resolve(map(this, result));
+        });
+    }));
+    const tx = {
+        run: (sql, params = []) => call('run', 'adapter.isolated.run', sql, params, (stmt) => ({ lastID: stmt.lastID, changes: stmt.changes })),
+        get: (sql, params = []) => call('get', 'adapter.isolated.get', sql, params, (_stmt, row) => row || null),
+        all: (sql, params = []) => call('all', 'adapter.isolated.all', sql, params, (_stmt, rows) => rows || []),
+    };
+    try {
+        await tx.run('PRAGMA busy_timeout = 5000');
+        await tx.run('BEGIN IMMEDIATE');
+        try {
+            const result = await work(tx);
+            await tx.run('COMMIT');
+            return result;
+        } catch (err) {
+            await tx.run('ROLLBACK').catch(() => {});
+            throw err;
+        }
+    } finally {
+        await new Promise((resolve) => handle.close(() => resolve()));
+    }
+}
+
 export function prepare(sql) {
     const stmt = db.prepare(sql);
     return {
@@ -269,6 +320,7 @@ export default {
     run,
     serialize,
     transaction,
+    isolatedTransaction,
     prepare,
     now,
     upsert
