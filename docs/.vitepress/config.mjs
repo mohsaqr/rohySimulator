@@ -128,6 +128,7 @@ export default defineConfig({
             { text: 'Classes (cohorts) & join codes', link: '/educator/cohorts' },
             { text: 'Assigning cases', link: '/educator/assigning-cases' },
             { text: 'Authoring a case (wizard)', link: '/educator/case-wizard' },
+            { text: 'Course materials & questionnaires', link: '/educator/course-and-questionnaires' },
             { text: 'Agent personas', link: '/educator/agents' },
             { text: 'Scenario timelines', link: '/educator/scenarios' },
             { text: 'Languages & multilingual cases', link: '/educator/languages' },

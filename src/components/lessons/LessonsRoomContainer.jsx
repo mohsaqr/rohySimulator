@@ -3,7 +3,7 @@
 // from the black "Course" card in the room nav; returns to the simulation.
 // Fetches the course's published lessons + attached surveys + the caller's
 // completion state and hands them to the vendored LessonsRoom.
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, GraduationCap } from 'lucide-react';
 import { LessonsQueryProvider } from './LessonsQueryProvider';
@@ -13,12 +13,13 @@ import { surveysApi } from './api/surveys';
 import { apiFetch } from '../../services/apiClient';
 import EventLogger, { VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 import AoiRegion from '../oyon/AoiRegion';
+import CaseCoursePanel from '../course/CaseCoursePanel';
 
 // The chatbot block is deferred, so no lesson jumps to a tutor; a no-op keeps
 // the vendored LessonRoomView happy if a legacy chatbot section ever appears.
 const noop = () => {};
 
-function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
+function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation }) {
   const { t } = useTranslation('authoring_lessons');
   const [lessons, setLessons] = useState([]);
   const [surveys, setSurveys] = useState([]);
@@ -34,8 +35,9 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
     // ?include=sections batches the lesson bodies server-side (one query).
     // Fallback: if a lesson still arrives without sections (older server),
     // hydrate it individually so the room never opens an empty lesson.
+    // A locked lesson has no sections by design — asking for it is refused.
     const full = await Promise.all(
-      ls.map((l) => (Array.isArray(l.sections)
+      ls.map((l) => (l.locked || Array.isArray(l.sections)
         ? l
         : coursesApi.getLectureById(l.id).catch(() => l)))
     );
@@ -45,6 +47,18 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
   }, [cohortId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // A lesson locked behind the case's course gate arrives as a title only
+  // (server/routes/lessons-routes.js); the case panel lists it, the vendored
+  // room gets the open ones. When the gate opens, fetch the lessons again so
+  // their content arrives.
+  const openLessons = lessons.filter((l) => !l.locked);
+  const lockedLessons = lessons.filter((l) => l.locked);
+  const lastGate = useRef(null);
+  const onGateChange = useCallback((unlocked) => {
+    if (lastGate.current === false && unlocked) load();
+    lastGate.current = unlocked;
+  }, [load]);
 
   // One OPENED/CLOSED pair per course visit, matching how other rooms bracket
   // their surfaces in learning_events (the 'lessons' room tag is stamped by
@@ -95,6 +109,16 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
           chat_panel/patient_face so eye-tracking windows captured in the
           lessons room map fixations onto course content. */}
       <AoiRegion id="lesson_content" className="min-h-0 flex-1 overflow-auto">
+        {caseId != null && (
+          <div className="mx-auto max-w-5xl px-6 pt-6 lg:px-8">
+            <CaseCoursePanel
+              caseId={caseId}
+              sessionId={sessionId}
+              lockedLessons={lockedLessons}
+              onGateChange={onGateChange}
+            />
+          </div>
+        )}
         {cohortId == null ? (
           <div className="rounded-2xl px-6 py-16 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 ring-1 ring-slate-200">
@@ -109,7 +133,7 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
           </div>
         ) : (
           <LessonsRoom
-            lessons={lessons}
+            lessons={openLessons}
             surveys={surveys}
             classroomId={cohortId}
             classMeta={{ name: cohortName }}
@@ -124,10 +148,18 @@ function RoomInner({ cohortId, cohortName, onBackToSimulation }) {
   );
 }
 
-export default function LessonsRoomContainer({ cohortId = null, cohortName = null, onBackToSimulation = () => {} }) {
+export default function LessonsRoomContainer({
+  cohortId = null, cohortName = null, caseId = null, sessionId = null, onBackToSimulation = () => {},
+}) {
   return (
     <LessonsQueryProvider>
-      <RoomInner cohortId={cohortId} cohortName={cohortName} onBackToSimulation={onBackToSimulation} />
+      <RoomInner
+        cohortId={cohortId}
+        cohortName={cohortName}
+        caseId={caseId}
+        sessionId={sessionId}
+        onBackToSimulation={onBackToSimulation}
+      />
     </LessonsQueryProvider>
   );
 }

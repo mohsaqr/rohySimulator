@@ -987,6 +987,8 @@ function MainApp() {
                <LessonsRoomContainer
                   cohortId={courseCohortId.cohortId}
                   cohortName={courseCohortId.cohortName}
+                  caseId={activeCase?.id ?? null}
+                  sessionId={sessionId}
                   onBackToSimulation={() => {
                      setShowLessonsRoom(false);
                      EventLogger.roomChanged(currentRoom);

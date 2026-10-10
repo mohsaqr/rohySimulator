@@ -12,10 +12,11 @@
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, requireEducator } from '../middleware/auth.js';
-import { tenantId } from './_helpers.js';
+import { tenantId, auditSuccess } from './_helpers.js';
 import { logger } from '../logger.js';
 import { resolveManageableCohort, isLiveCohortMember, isAdminReq } from '../lib/cohortAccess.js';
 import { sanitizeLessonHtml } from '../lib/lessonSanitize.js';
+import { courseGateStates } from '../services/courseGate.js';
 
 const router = express.Router();
 const log = logger('routes-lessons');
@@ -41,12 +42,56 @@ function mapLesson(row, sections) {
         isFree: !!row.is_free,
         availableFrom: row.available_from,
         availableUntil: row.available_until,
+        unlockCaseId: row.unlock_case_id ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
     if (sections) out.sections = sections.map(mapSection);
     return out;
 }
+
+// What a learner gets of a lesson still locked behind its case's course gate:
+// the title, its place in the list and how far the gate is — never the
+// description, the body, the video or the sections, which is the material the
+// gate exists to hold back (it usually explains the case's answer).
+function mapLockedLesson(row, state) {
+    return {
+        id: row.id,
+        classroomId: row.cohort_id,
+        cohortId: row.cohort_id,
+        title: row.title,
+        orderIndex: row.order_index,
+        isPublished: true,
+        unlockCaseId: row.unlock_case_id,
+        locked: true,
+        lock: lockSummary(state),
+    };
+}
+
+function lockSummary(state) {
+    return {
+        afterMinutes: state.afterMinutes,
+        allSlidesOpened: state.allSlidesOpened,
+        startedAt: state.startedAt,
+        unlockAt: state.unlockAt,
+        remainingSeconds: state.remainingSeconds,
+        slidesTotal: state.slides.length,
+        slidesOpened: state.slides.filter((slide) => slide.opened).length,
+    };
+}
+
+// The gate state a non-staff reader of this lesson is held by, or null when
+// the lesson is open to them (no lock, or the case's gate is met).
+async function lockFor(lesson, req) {
+    if (!lesson.unlock_case_id) return null;
+    const states = await courseGateStates({
+        tenantId: tenantId(req), userId: req.user.id, caseIds: [lesson.unlock_case_id],
+    });
+    const state = states.get(lesson.unlock_case_id);
+    return state.unlocked ? null : state;
+}
+
+const lockedReply = (res) => res.status(403).json({ success: false, error: 'This lesson opens after the case', code: 'lesson_locked' });
 
 function mapSection(row) {
     return {
@@ -82,14 +127,15 @@ async function lessonForManage(lessonId, req) {
 }
 
 // Lesson row if the caller may READ it: staff (manage) OR published + live
-// member of the cohort. Returns { lesson, staff } or null.
+// member of the cohort. Returns { lesson, staff, locked } or null; `locked` is
+// the gate state holding a learner back, null when the lesson is open to them.
 async function lessonForRead(lessonId, req) {
     const lesson = await loadLesson(lessonId, req);
     if (!lesson) return null;
     const cohort = await resolveManageableCohort(lesson.cohort_id, req);
-    if (cohort) return { lesson, staff: true };
+    if (cohort) return { lesson, staff: true, locked: null };
     if (lesson.is_published && (await isLiveCohortMember(lesson.cohort_id, req.user.id))) {
-        return { lesson, staff: false };
+        return { lesson, staff: false, locked: await lockFor(lesson, req) };
     }
     return null;
 }
@@ -124,11 +170,24 @@ router.get('/courses/modules/:moduleId/lectures', authenticateToken, async (req,
               ORDER BY order_index ASC, id ASC`,
             [cohortId, tenantId(req)]
         );
+        // A learner's lessons locked behind a case's course gate come back as
+        // title + progress only, and their sections are never fetched.
+        const states = staff ? new Map() : await courseGateStates({
+            tenantId: tenantId(req),
+            userId: req.user.id,
+            caseIds: rows.map((r) => r.unlock_case_id).filter(Boolean),
+        });
+        const lockOf = (row) => {
+            const state = row.unlock_case_id ? states.get(row.unlock_case_id) : null;
+            return state && !state.unlocked ? state : null;
+        };
+        const open = rows.filter((r) => !lockOf(r));
+        const shape = (r, sections) => (lockOf(r) ? mapLockedLesson(r, lockOf(r)) : mapLesson(r, sections));
         // ?include=sections — batch-fetch every lesson's sections in ONE query
         // (the client would otherwise N+1 per lesson) and attach them in the
         // same shape as the single-lesson detail endpoint.
-        if (req.query.include === 'sections' && rows.length) {
-            const ids = rows.map((r) => r.id);
+        if (req.query.include === 'sections' && open.length) {
+            const ids = open.map((r) => r.id);
             const sections = await dbAdapter.all(
                 `SELECT * FROM lesson_sections
                   WHERE lesson_id IN (${ids.map(() => '?').join(',')}) AND deleted_at IS NULL
@@ -137,9 +196,9 @@ router.get('/courses/modules/:moduleId/lectures', authenticateToken, async (req,
             );
             const byLesson = new Map(ids.map((id) => [id, []]));
             sections.forEach((s) => byLesson.get(s.lesson_id)?.push(s));
-            return ok(res, rows.map((r) => mapLesson(r, byLesson.get(r.id))));
+            return ok(res, rows.map((r) => shape(r, byLesson.get(r.id))));
         }
-        return ok(res, rows.map((r) => mapLesson(r)));
+        return ok(res, rows.map((r) => shape(r)));
     } catch (err) {
         log.error('list lectures failed', { error: err.message });
         return fail(res, 500, 'Failed to list lessons');
@@ -392,6 +451,7 @@ router.get('/courses/lectures/:id', authenticateToken, async (req, res) => {
         if (!Number.isInteger(lessonId)) return fail(res, 400, 'Invalid lesson id');
         const access = await lessonForRead(lessonId, req);
         if (!access) return fail(res, 404, 'Lesson not found');
+        if (access.locked) return lockedReply(res);
         const sections = await sectionsFor(lessonId);
         return ok(res, mapLesson(access.lesson, sections));
     } catch (err) {
@@ -508,6 +568,7 @@ router.post('/courses/lectures/:id/complete', authenticateToken, async (req, res
         const lessonId = Number(req.params.id);
         const access = await lessonForRead(lessonId, req);
         if (!access) return fail(res, 404, 'Lesson not found');
+        if (access.locked) return lockedReply(res);
         // Upsert progress keyed by (user, lesson).
         const existing = await dbAdapter.get(
             `SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ?`,
@@ -544,6 +605,7 @@ router.get('/courses/lectures/:lectureId/sections', authenticateToken, async (re
         const lessonId = Number(req.params.lectureId);
         const access = await lessonForRead(lessonId, req);
         if (!access) return fail(res, 404, 'Lesson not found');
+        if (access.locked) return lockedReply(res);
         const rows = await sectionsFor(lessonId);
         return ok(res, rows.map(mapSection));
     } catch (err) {
@@ -679,6 +741,113 @@ router.put('/courses/lectures/:lectureId/sections/reorder', authenticateToken, r
     } catch (err) {
         log.error('reorder sections failed', { error: err.message });
         return fail(res, 500, 'Failed to reorder sections');
+    }
+});
+
+// ===========================================================================
+// Lessons locked behind a case (lessons.unlock_case_id)
+// ===========================================================================
+
+// The course a case belongs to, when the caller may manage it: the lowest
+// live link, the same tiebreaker as GET /courses/case-assignments.
+async function manageableCourseOfCase(caseId, req) {
+    const caseRow = await dbAdapter.get(
+        `SELECT id FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+        [caseId, tenantId(req)]
+    );
+    if (!caseRow) return { problem: [404, 'Case not found'] };
+    const link = await dbAdapter.get(
+        `SELECT MIN(cc.cohort_id) AS cohort_id FROM cohort_cases cc
+           JOIN cohorts co ON co.id = cc.cohort_id
+          WHERE cc.case_id = ? AND cc.deleted_at IS NULL AND co.deleted_at IS NULL AND co.tenant_id = ?`,
+        [caseId, tenantId(req)]
+    );
+    if (!link?.cohort_id) return { cohort: null };
+    const cohort = await resolveManageableCohort(link.cohort_id, req);
+    if (!cohort) return { problem: [403, 'This case belongs to a course you do not manage'] };
+    return { cohort };
+}
+
+// GET /cases/:caseId/course-lessons — the lessons of the case's course and
+// which of them wait for this case. Educator+; feeds the case editor.
+router.get('/cases/:caseId/course-lessons', authenticateToken, requireEducator, async (req, res) => {
+    try {
+        const caseId = Number(req.params.caseId);
+        if (!Number.isInteger(caseId)) return fail(res, 400, 'Invalid case id');
+        const { cohort, problem } = await manageableCourseOfCase(caseId, req);
+        if (problem) return fail(res, ...problem);
+        if (!cohort) return ok(res, { cohortId: null, cohortName: null, lessons: [] });
+        const rows = await dbAdapter.all(
+            `SELECT id, title, is_published, unlock_case_id FROM lessons
+              WHERE cohort_id = ? AND tenant_id = ? AND deleted_at IS NULL
+              ORDER BY order_index ASC, id ASC`,
+            [cohort.id, tenantId(req)]
+        );
+        return ok(res, {
+            cohortId: cohort.id,
+            cohortName: cohort.name,
+            lessons: rows.map((r) => ({
+                id: r.id,
+                title: r.title,
+                isPublished: !!r.is_published,
+                locked: r.unlock_case_id === caseId,
+                lockedByCaseId: r.unlock_case_id && r.unlock_case_id !== caseId ? r.unlock_case_id : null,
+            })),
+        });
+    } catch (err) {
+        log.error('case course lessons failed', { error: err.message });
+        return fail(res, 500, 'Failed to load course lessons');
+    }
+});
+
+// PUT /cases/:caseId/course-locks — body { lessonIds: [int] }: exactly these
+// lessons of the case's course wait for this case's course gate; any other
+// lesson of that course that waited for this case is opened. A lesson waiting
+// for a DIFFERENT case is moved to this one only when listed.
+router.put('/cases/:caseId/course-locks', authenticateToken, requireEducator, async (req, res) => {
+    try {
+        const caseId = Number(req.params.caseId);
+        if (!Number.isInteger(caseId)) return fail(res, 400, 'Invalid case id');
+        const lessonIds = req.body?.lessonIds;
+        if (!Array.isArray(lessonIds) || !lessonIds.every(Number.isInteger) || new Set(lessonIds).size !== lessonIds.length) {
+            return fail(res, 400, 'lessonIds must be a list of different lesson ids');
+        }
+        const { cohort, problem } = await manageableCourseOfCase(caseId, req);
+        if (problem) return fail(res, ...problem);
+        if (!cohort) return fail(res, 409, 'Link the case to a course first');
+        const inCourse = await dbAdapter.all(
+            `SELECT id FROM lessons WHERE cohort_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+            [cohort.id, tenantId(req)]
+        );
+        const known = new Set(inCourse.map((r) => r.id));
+        const stray = lessonIds.find((id) => !known.has(id));
+        if (stray !== undefined) return fail(res, 404, `Lesson ${stray} is not in this case's course`);
+
+        await dbAdapter.isolatedTransaction(async (tx) => {
+            await tx.run(
+                `UPDATE lessons SET unlock_case_id = NULL, updated_at = CURRENT_TIMESTAMP
+                  WHERE cohort_id = ? AND tenant_id = ? AND unlock_case_id = ? AND deleted_at IS NULL`,
+                [cohort.id, tenantId(req), caseId]
+            );
+            for (const id of lessonIds) {
+                await tx.run(
+                    `UPDATE lessons SET unlock_case_id = ?, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ? AND cohort_id = ? AND tenant_id = ?`,
+                    [caseId, id, cohort.id, tenantId(req)]
+                );
+            }
+        });
+        auditSuccess(req, {
+            action: 'update_course_locks',
+            resourceType: 'case',
+            resourceId: String(caseId),
+            metadata: { cohortId: cohort.id, lessonIds },
+        });
+        req.log.info('course locks set', { case_id: caseId, cohort_id: cohort.id, locked: lessonIds.length });
+        return ok(res, { caseId, cohortId: cohort.id, lessonIds });
+    } catch (err) {
+        log.error('set course locks failed', { error: err.message });
+        return fail(res, 500, 'Failed to save locked lessons');
     }
 });
 

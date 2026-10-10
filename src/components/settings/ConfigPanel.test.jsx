@@ -370,12 +370,22 @@ describe('ConfigPanel', () => {
         window.localStorage.setItem('rohy_editing_case', JSON.stringify({
             id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
         }));
-        // 13 = Rooms, appended after Plugins (WIZARD_STEP_KEYS).
+        // 14 = Course, appended after Rooms (WIZARD_STEP_KEYS).
+        mount({ initialTab: 'cases', initialWizardStep: 14 });
+        await waitForAdmin();
+        expect(await screen.findByTestId('case-course-step')).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /Save & Finish/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Next$/i })).not.toBeInTheDocument();
+    });
+
+    it('offers Next on Rooms now that Course follows it', async () => {
+        window.localStorage.setItem('rohy_editing_case', JSON.stringify({
+            id: 7, name: 'Resumed', description: 'd', config: { pages: [] },
+        }));
         mount({ initialTab: 'cases', initialWizardStep: 13 });
         await waitForAdmin();
         expect(await screen.findByTestId('case-rooms-step')).toBeInTheDocument();
-        expect(await screen.findByRole('button', { name: /Save & Finish/i })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /^Next$/i })).not.toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /^Next$/i })).toBeInTheDocument();
     });
 
     it('still offers Next on the step before the last', async () => {

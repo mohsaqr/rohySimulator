@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**98 tables.**
+**99 tables.**
 
 ## `active_sessions`
 
@@ -258,6 +258,29 @@ Stores case investigations records.
 | `max_value` | REAL | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
 | `deleted_at` | DATETIME | — | `0005_retention.sql` |
+
+## `case_questionnaire_responses`
+
+Stores case questionnaire responses records.
+
+**Introduced by:** migration `0067_course_gate_questionnaires.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (created_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `case_id` | INTEGER | NOT NULL REFERENCES cases(id) | — |
+| `questionnaire_id` | TEXT | NOT NULL | — |
+| `attempt` | TEXT | NOT NULL CHECK (attempt IN ('single', 'pre', 'post')) | — |
+| `user_id` | INTEGER | NOT NULL REFERENCES users(id) | — |
+| `session_id` | INTEGER | REFERENCES sessions(id) | — |
+| `answers` | TEXT | NOT NULL | — |
+| `questionnaire` | TEXT | NOT NULL | — |
+| `score` | INTEGER | — | — |
+| `max_score` | INTEGER | — | — |
+| `created_at` | TEXT | NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) | — |
 
 ## `case_treatments`
 
@@ -1004,6 +1027,7 @@ Stores lessons records.
 | `created_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `updated_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
 | `deleted_at` | DATETIME | — | — |
+| `unlock_case_id` | INTEGER | REFERENCES cases(id) | `0067_course_gate_questionnaires.sql` |
 
 ## `llm_model_pricing`
 

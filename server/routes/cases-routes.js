@@ -25,6 +25,7 @@ import { projectCaseForRole } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { normaliseCaseRooms } from '../shared/caseRooms.js';
+import { normaliseCourseGate, normaliseQuestionnaires } from '../shared/caseCourse.js';
 import {
     missingField,
     auditSuccess,
@@ -199,6 +200,25 @@ export function normaliseCaseForStorage(req, res, body) {
     }
     if (roomsCheck.rooms) safeConfig.rooms = roomsCheck.rooms;
     else delete safeConfig.rooms;
+
+    // When the course materials open, and the questionnaires the case asks
+    // (shared/caseCourse.js). Refused rather than stored half-read: a gate the
+    // server cannot evaluate would open every locked lesson, and a malformed
+    // questionnaire could not be scored.
+    const gateCheck = normaliseCourseGate(safeConfig.courseGate);
+    if (gateCheck.problem) {
+        res.status(400).json({ error: gateCheck.problem, code: 'invalid_course_gate' });
+        return null;
+    }
+    if (gateCheck.gate) safeConfig.courseGate = gateCheck.gate;
+    else delete safeConfig.courseGate;
+    const questionnaireCheck = normaliseQuestionnaires(safeConfig.questionnaires);
+    if (questionnaireCheck.problem) {
+        res.status(400).json({ error: questionnaireCheck.problem, code: 'invalid_questionnaires' });
+        return null;
+    }
+    if (questionnaireCheck.questionnaires) safeConfig.questionnaires = questionnaireCheck.questionnaires;
+    else delete safeConfig.questionnaires;
 
     logVocabularyWarnings(req, 'case', warnings);
     // After the vocabulary log: these are dropped, not "kept verbatim".

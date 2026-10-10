@@ -16,6 +16,7 @@ author cases, design scenarios, and read how your students performed.
 | [Classes & join codes](/educator/cohorts) | Create/manage cohorts, member roles, join-code rotation |
 | [Assigning cases](/educator/assigning-cases) | Attaching cases to a class |
 | [Authoring a case (wizard)](/educator/case-wizard) | The case authoring wizard, step by step |
+| [Course materials and questionnaires](/educator/course-and-questionnaires) | Lessons that open after the case, pre/post tests and other case questionnaires |
 | [Agent personas](/educator/agents) | Patient/consultant agents, prompts, voice |
 | [Scenario timelines](/educator/scenarios) | Keyframed vitals progression |
 | [Reporting & analytics](/educator/reporting) | Roster, grid, feed, export |

@@ -39,6 +39,9 @@ The wizard has up to thirteen steps. They are, in order:
     PACS. The step appears only when an installed plugin has an editor.
 13. **Rooms**: which rooms learners get on this case. See
     [Choosing the rooms](#choosing-the-rooms).
+14. **Course**: when the course materials open, which lessons wait for the
+    case, and the case's questionnaires. See
+    [Course materials and questionnaires](/educator/course-and-questionnaires).
 
 ::: tip
 You do not have to fill every step before saving. Author the demographics,

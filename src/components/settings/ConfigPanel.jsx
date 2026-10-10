@@ -5,6 +5,7 @@ import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, 
 import { useAuth } from '../../contexts/AuthContext';
 import { CasePluginsStep } from './CasePluginsStep.jsx';
 import { CaseRoomsStep } from './CaseRoomsStep.jsx';
+import { CaseCourseStep } from './CaseCourseStep.jsx';
 import { PluginAuthorSurface } from './PluginAuthorSurface.jsx';
 import { registry } from '../../plugins/registry.js';
 import { useToast } from '../../contexts/ToastContext';
@@ -119,7 +120,7 @@ const WIZARD_STEP_KEYS = [
     'radiology', 'exam', 'records', 'treatments', 'agents', 'plugins',
     // Appended, never inserted: a key placed earlier would renumber every
     // step after it and break existing deep links (see above).
-    'rooms',
+    'rooms', 'course',
 ];
 const wizardStepNumber = (key) => WIZARD_STEP_KEYS.indexOf(key) + 1;
 
@@ -4018,6 +4019,7 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
         agents:       { title: t('wstep_agents'),       icon: '🤖' },
         plugins:      { title: t('wstep_plugins'),      icon: '🧩' },
         rooms:        { title: t('wstep_rooms'),        icon: '🚪' },
+        course:       { title: t('wstep_course'),       icon: '🎓' },
     };
     const WIZARD_STEPS = WIZARD_STEP_KEYS.map((key, i) => ({ num: i + 1, key, ...WIZARD_STEP_META[key] }));
 
@@ -5510,6 +5512,10 @@ PERSONALITY: You are anxious but cooperative. You're worried this might be a hea
                 {/* STEP 12: PLUGINS — a card per plugin that ships an editor */}
                 {step === wizardStepNumber('rooms') && (
                     <CaseRoomsStep caseData={caseData} setCaseData={setCaseData} />
+                )}
+
+                {step === wizardStepNumber('course') && (
+                    <CaseCourseStep caseData={caseData} setCaseData={setCaseData} />
                 )}
 
                 {step === wizardStepNumber('plugins') && (
