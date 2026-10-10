@@ -9,6 +9,10 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.30] — 2026-10-10
+
+- **CI fix:** the case-packages integration test wrote a fixture into `public/uploads` without creating it. That folder is gitignored, so a fresh checkout has none, and every CI run since rc.26 failed in Vitest with `ENOENT`. The test now creates the folder, and its cleanup no longer throws when setup failed before that. Reproduced and verified in a clean worktree: 26 of 26 tests pass, where before 7 passed and 19 were skipped.
+
 ## [3.0.0-rc.29] — 2026-10-10
 
 - **Course materials that open after the case.** A case can hold its course lessons back until a learner has worked on it. The conditions are minutes since the learner first started the case, and every pathology slide opened (`config.courseGate`). A lesson waits for a case through the new `lessons.unlock_case_id` (migration 0067). Until the conditions are met, the server sends the learner the lesson's title and their progress, never its description, body, video or sections. Asking for them directly answers 403 `lesson_locked`. Once opened, a lesson stays open.
