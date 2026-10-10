@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.25] — 2026-10-10
+
+- Add `dbAdapter.isolatedTransaction(work)`: a write transaction on a connection of its own. A transaction on the shared connection takes in any other request's write issued while it is open, so a rollback could undo a write that request had already reported as saved. Additive; the existing `transaction()` and its callers are unchanged.
+- Add `server/lib/tarStream.js`, a strict streaming tar writer and reader with no dependency, as the container for case packages. The reader accepts regular files only (links, directories and devices are refused). It also refuses truncation, forged headers and data after the end marker, and releases an open entry when an archive is cut off. The writer rejects instead of hanging when its output fails between writes.
+- Verification: 14 tar tests, including interop with the system `tar` in both directions; isolation tests that fail on the shared connection and pass on the isolated one.
+
 ## [3.0.0-rc.24] — 2026-10-09
 
 - Prevent a new student from inheriting another account's emotion-capture consent through shared browser storage. The welcome checkbox always starts unchecked and records only an explicit opt-in to its displayed camera contract.
