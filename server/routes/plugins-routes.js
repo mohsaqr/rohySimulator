@@ -422,7 +422,33 @@ async function managedAssets(pluginId, tenant) {
  * the plugin's own /assets instead.
  */
 function managedCatalogEntries(rows) {
-    return rows.map((row) => ({
+    return rows.map((row) => managedCatalogEntry(row));
+}
+
+/**
+ * Optics in the shape the pathology package's catalog validator requires
+ * (assetCatalog.js verifiedOptics): `downsample` is the archive's factor from
+ * level 0 — native objective over the objective it was tiled at — and the
+ * slide dimensions are LEVEL-0 pixels, the archive's times that factor.
+ * Without `downsample` the editor refused every imported slide ("optics
+ * .downsample must be a finite positive number"). `tiledObjective` stays for
+ * anything already reading it.
+ */
+function managedOptics(row) {
+    const downsample = row.tiled_objective ? row.native_objective / row.tiled_objective : 1;
+    return {
+        nativeObjective: row.native_objective,
+        nativeMpp: row.native_mpp_x,
+        tiledObjective: row.tiled_objective,
+        downsample,
+        ...(row.width && row.height
+            ? { slideWidthPx: Math.round(row.width * downsample), slideHeightPx: Math.round(row.height * downsample) }
+            : {}),
+    };
+}
+
+function managedCatalogEntry(row) {
+    return {
         id: row.id,
         label: row.label,
         status: 'ready',
@@ -433,15 +459,11 @@ function managedCatalogEntries(rows) {
             id: 'managed',
             status: 'ready',
             derivatives: { dzi: { url: `remote:library/${row.id}/slide.dzi` } },
-            optics: {
-                nativeObjective: row.native_objective,
-                nativeMpp: row.native_mpp_x,
-                tiledObjective: row.tiled_objective,
-            },
+            optics: managedOptics(row),
             widthPx: row.width,
             heightPx: row.height,
         }],
-    }));
+    };
 }
 
 router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async (req, res) => {

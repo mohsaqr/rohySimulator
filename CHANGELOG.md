@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.28] — 2026-10-10
+
+- **Slide import no longer floods the database.** A plugin job wrote its progress on every network chunk — tens of thousands of writes per slide — so the server stalled and a download crawled (28 MB in 6 minutes). Progress is now written only when the whole percentage changes, at most 101 times per job.
+- **A lost progress write no longer crashes the server.** A `SQLITE_BUSY` on a progress update became an unhandled rejection, which the TTS library's `unhandledRejection` handler rethrows, taking Rohy down mid-import. The write is now logged and the job carries on.
+- **Imported slides can be added to a case.** Managed slide-library entries now carry the optics the case editor requires (`downsample`, native and tiled objective, and the level-0 slide size), so a slide imported from a link passes the editor's check.
+- Verification: three regression tests (41 writes for 20,000 progress reports; a busy progress write resolves; a managed entry passes the editor's catalog check), each shown to fail without its fix.
+
 ## [3.0.0-rc.27] — 2026-10-10
 
 - **Case packages (UI):** a **Case packages** switch in Settings → Platform → General, off by default.

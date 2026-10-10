@@ -110,6 +110,19 @@ describe('the managed library', () => {
         expect(JSON.stringify(body).includes('127.0.0.1')).toBe(false);
     });
 
+    it('describes a managed slide in the optics the case editor accepts', async () => {
+        // Regression lock: managed entries carried no `downsample`, so the pathology package's catalog validator refused every imported slide and none could be added to a case (found building the colorectal case, 2026-10-10)
+        const { validateCatalogAsset } = await import('../../src/components/pathology/assetCatalog.js');
+        const { catalogAssetToCaseAsset } = await import('../../src/components/pathology/caseStudioModel.js');
+        const body = await (await admin('/api/plugins/pathology/catalog')).json();
+        const managed = body.catalog.assets.find((a) => a.id === 'asset-imported01');
+        expect(() => validateCatalogAsset(managed)).not.toThrow();
+        // Tiled at 10x from a 40x scan: archive pixels are 4 level-0 pixels.
+        expect(catalogAssetToCaseAsset(managed).metadata).toEqual({
+            widthPx: 111360, heightPx: 82944, nativeObjective: 40, nativeMpp: 0.25, downsample: 4,
+        });
+    });
+
     it('declares /library so the proxy will serve it', async () => {
         const health = await (await fetch(`${server.baseUrl}/api/health/plugins`)).json();
         expect(health.plugins.pathology.declared_paths).toEqual(['/tiles', '/gross', '/library']);
