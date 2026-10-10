@@ -70,27 +70,51 @@ function buildHeader(name, size, mtimeSeconds) {
  * Watch a writable for errors for its whole life. An error emitted while
  * write() returned true would otherwise reach nobody: a later write waits for
  * a 'drain' a destroyed stream never emits, and whatever awaits the writer —
- * a job queue — waits forever.
+ * a job queue — waits forever. A stream closed WITHOUT an error (destroyed by
+ * its owner, a socket gone) is the same hang with no 'error' to wake it, so a
+ * close before the archive finished is a failure too.
  */
 function guard(writable) {
     let failure = null;
     let fail;
     const failed = new Promise((_, reject) => { fail = reject; });
     failed.catch(() => {});
-    writable.on('error', (err) => {
+    const record = (err) => {
         failure = failure ?? err;
         fail(failure);
+    };
+    writable.on('error', record);
+    writable.on('close', () => {
+        if (!writable.writableFinished) record(outputClosed());
     });
     return {
-        check() { if (failure) throw failure; },
+        check() {
+            if (failure) throw failure;
+            // Destroyed or ended before this writer got here: write() would
+            // return false and no 'drain' would ever come.
+            if (writable.destroyed || writable.writableEnded) throw outputClosed();
+        },
         race(promise) { return Promise.race([promise, failed]); },
     };
 }
+
+const outputClosed = () => new TarError('the tar output closed before the archive was finished', 'tar_output_closed');
 
 async function writeChunk(writable, chunk, watch) {
     watch.check();
     if (!writable.write(chunk)) await watch.race(once(writable, 'drain'));
     watch.check();
+}
+
+/**
+ * The exact size of a tar holding entries of these sizes: a header per entry,
+ * its data padded to a block, and the two-block end marker. Lets a caller
+ * hold the whole archive to a limit before writing a byte of it.
+ *
+ * @param {number[]} entrySizes
+ */
+export function tarArchiveBytes(entrySizes) {
+    return entrySizes.reduce((sum, size) => sum + BLOCK + Math.ceil(size / BLOCK) * BLOCK, BLOCK * 2);
 }
 
 /**
@@ -138,9 +162,16 @@ export function createTarWriter(writable, { mtime = new Date(0) } = {}) {
             writable.end();
             await watch.race(finished);
         },
-        /** Stop writing and release the stream after a failure. */
-        abort(err) {
+        /**
+         * Stop writing and release the stream after a failure. Resolves once
+         * the stream has closed — its descriptor released — so a caller that
+         * then removes the file frees its disk, not just its name.
+         */
+        async abort(err) {
+            if (writable.closed) return;
+            const closed = new Promise((resolve) => writable.once('close', resolve));
             writable.destroy(err);
+            await closed;
         },
     };
 }

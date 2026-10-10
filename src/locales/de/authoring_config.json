@@ -225,6 +225,7 @@
   "course_gate_title": "Wann die Kursmaterialien freigegeben werden",
   "course_gate_trust_note": "Geöffnete Schnitte meldet der Browser der lernenden Person: ausreichend für Lehrmaterial, aber keine Prüfungssperre. Die Zeit misst der Server.",
   "course_group_unassigned": "Nicht zugewiesene Fälle",
+  "course_locks_deleted_case": "(wartet auf einen gelöschten Fall: Speichern öffnet sie, wenn sie nicht angekreuzt ist)",
   "course_locks_draft": "(Entwurf)",
   "course_locks_help": "Lektionen im Kurs „{course}“. Eine angehakte Lektion wird erst freigegeben, wenn die obigen Bedingungen erfüllt sind.",
   "course_locks_load_failed": "Die Lektionen des Kurses konnten nicht geladen werden.",

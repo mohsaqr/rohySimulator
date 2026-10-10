@@ -225,6 +225,7 @@
   "course_gate_title": "När kursmaterialet öppnas",
   "course_gate_trust_note": "Öppnade snitt rapporteras av studentens webbläsare: tillräckligt för undervisningsmaterial, inte som spärr vid examination. Tiden mäts av servern.",
   "course_group_unassigned": "Otilldelade fall",
+  "course_locks_deleted_case": "(väntar på ett borttaget fall: när du sparar öppnas den om den inte är markerad)",
   "course_locks_draft": "(utkast)",
   "course_locks_help": "Lektioner i kursen ”{course}”. En markerad lektion öppnas först när villkoren ovan är uppfyllda.",
   "course_locks_load_failed": "Kunde inte ladda kursens lektioner.",

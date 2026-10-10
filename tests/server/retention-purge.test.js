@@ -84,6 +84,14 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             `INSERT INTO alarm_config (user_id, vital_sign, low_threshold, high_threshold, enabled, tenant_id)
              VALUES (?, 'hr', 50, 120, 1, 1)`, [targetUserId]);
 
+        // A case questionnaire answer (0067) — the learner's own words.
+        const answeredCase = await dbRun(db,
+            `INSERT INTO cases (name, config, tenant_id) VALUES ('Purge questionnaire case', '{}', 1)`);
+        await dbRun(db,
+            `INSERT INTO case_questionnaire_responses (tenant_id, case_id, questionnaire_id, attempt, user_id, answers, questionnaire)
+             VALUES (1, ?, 'reflect', 'single', ?, '{"hard":"my own words"}', '{}')`,
+            [answeredCase.lastID, targetUserId]);
+
         // Anonymised tables: log row tagged with the target's user_id.
         // event_log has no user_id column directly; the executeUserPurge SQL
         // sets user_id = NULL on it but the column may not exist in the
@@ -151,6 +159,9 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
         expect(sessions).toEqual([]);
         const alarms = await dbAll(db, 'SELECT * FROM alarm_config WHERE user_id = ?', [targetUserId]);
         expect(alarms).toEqual([]);
+        // Regression lock: case questionnaire answers (0067) were left out of the purge and outlived the learner
+        const answers = await dbAll(db, 'SELECT * FROM case_questionnaire_responses WHERE user_id = ?', [targetUserId]);
+        expect(answers).toEqual([]);
 
         // Anonymised log tables: rows retained but user_id is NULL.
         const audits = await dbAll(db, 'SELECT user_id FROM system_audit_log WHERE action = ?', ['self_test']);

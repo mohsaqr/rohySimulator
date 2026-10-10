@@ -9,6 +9,37 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.32] — 2026-10-10
+
+Fixes from an adversarial review of rc.25–30 (course gate, questionnaires, case packages).
+
+- **A locked lesson no longer sends its title.** A learner gets its place in the list and the gate
+  progress only. A title such as "Colorectal adenocarcinoma" names the answer on its own. The course
+  panel shows how many lessons are waiting instead of listing them.
+- **A questionnaire that is not open yet sends no content.** Before it opens, and until answered, a
+  learner receives only its id, timing and whether it is graded: no title, instructions or questions.
+  Before, only the answer key and feedback were removed, so a question written for after the
+  materials could name the diagnosis.
+- **Deleting a case no longer releases the lessons locked behind it.** They stay locked for learners.
+  The case editor marks them "waits for a deleted case", and saving the locked lessons of any other
+  case in the course opens them unless they are ticked.
+- **Questionnaire answers are erased with the learner.** `case_questionnaire_responses` was missing
+  from the user purge and the hard user delete.
+- **The answers CSV is safe to open in a spreadsheet.** A free-text answer that starts with `=`, `+`,
+  `-` or `@` is written with a leading apostrophe, as the other CSV exports already do.
+- **`__proto__`, `constructor` and `prototype` are refused as question and questionnaire ids.** An
+  answer stored under one was dropped, and scored 0.
+- **Case package export holds the whole archive to the import limit.** Before, export counted only the
+  media, so a package near the limit could be refused on import.
+- **Two package uploads at once can no longer both take the last free space.** The free-space check
+  and the reservation are now one step.
+- **A failed export closes its output file** before the job removes it, so its disk space is released.
+- **The tar writer no longer hangs on an output that closes without an error.** It fails with
+  `tar_output_closed`.
+- Verification: a regression-lock test for each fix, each failing without its fix. Full suite 6,078
+  passed, 15 skipped; one load-flaky file (`treatments-library`) failed in the full run and passed
+  22/22 alone.
+
 ## [3.0.0-rc.31] — 2026-10-10
 
 Release candidate 31 of Rohy 3.0, "Version 3 RC 31", released as the tag `v3.0.RC31` (package

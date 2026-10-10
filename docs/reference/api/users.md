@@ -9,14 +9,14 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/admin/active-sessions` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1061` |
-| `DELETE` | `/api/admin/active-sessions/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1077` |
-| `GET` | `/api/admin/audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1035` |
-| `GET` | `/api/admin/audit/verify` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1040` |
-| `GET` | `/api/system-audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1055` |
-| `PUT` | `/api/user/password` | `authenticateToken` | `server/routes/users-routes.js:1167` |
-| `GET` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1109` |
-| `PUT` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1124` |
+| `GET` | `/api/admin/active-sessions` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1062` |
+| `DELETE` | `/api/admin/active-sessions/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1078` |
+| `GET` | `/api/admin/audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1036` |
+| `GET` | `/api/admin/audit/verify` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1041` |
+| `GET` | `/api/system-audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1056` |
+| `PUT` | `/api/user/password` | `authenticateToken` | `server/routes/users-routes.js:1168` |
+| `GET` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1110` |
+| `PUT` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1125` |
 | `GET` | `/api/users` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:357` |
 | `DELETE` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:884` |
 | `GET` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:531` |

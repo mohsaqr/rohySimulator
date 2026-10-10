@@ -37,6 +37,10 @@ export const COURSE_LIMITS = Object.freeze({
 });
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// Answers are an object keyed by question id; these names are an object's own
+// machinery, so an answer stored under one is silently dropped.
+const RESERVED_IDS = new Set(['__proto__', 'constructor', 'prototype']);
+const validId = (id) => typeof id === 'string' && ID_RE.test(id) && !RESERVED_IDS.has(id);
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -77,7 +81,7 @@ export function normaliseCourseGate(raw) {
 
 function normaliseQuestion(raw, where) {
     if (!isPlainObject(raw)) return { problem: `${where} must be an object` };
-    if (typeof raw.id !== 'string' || !ID_RE.test(raw.id)) return { problem: `${where}.id must be 1–64 letters, digits, - or _` };
+    if (!validId(raw.id)) return { problem: `${where}.id must be 1–64 letters, digits, - or _, and not __proto__, constructor or prototype` };
     if (!QUESTION_TYPES.includes(raw.type)) return { problem: `${where}.type must be one of ${QUESTION_TYPES.join(', ')}` };
     const prompt = text(raw.text, COURSE_LIMITS.textChars, `${where}.text`, { required: true });
     if (prompt.problem) return prompt;
@@ -115,7 +119,7 @@ function normaliseQuestion(raw, where) {
 
 function normaliseQuestionnaire(raw, where) {
     if (!isPlainObject(raw)) return { problem: `${where} must be an object` };
-    if (typeof raw.id !== 'string' || !ID_RE.test(raw.id)) return { problem: `${where}.id must be 1–64 letters, digits, - or _` };
+    if (!validId(raw.id)) return { problem: `${where}.id must be 1–64 letters, digits, - or _, and not __proto__, constructor or prototype` };
     const title = text(raw.title, COURSE_LIMITS.titleChars, `${where}.title`, { required: true });
     if (title.problem) return title;
     const instructions = text(raw.instructions, COURSE_LIMITS.textChars, `${where}.instructions`);

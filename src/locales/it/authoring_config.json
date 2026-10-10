@@ -225,6 +225,7 @@
   "course_gate_title": "Quando si sbloccano i materiali del corso",
   "course_gate_trust_note": "I vetrini aperti vengono segnalati dal browser dello studente: basta per il materiale didattico, non per bloccare un esame. Il tempo è misurato dal server.",
   "course_group_unassigned": "Casi non assegnati",
+  "course_locks_deleted_case": "(attende un caso eliminato: salvando si apre se non è spuntata)",
   "course_locks_draft": "(bozza)",
   "course_locks_help": "Lezioni del corso «{course}». Una lezione selezionata si sblocca solo quando sono soddisfatte le condizioni sopra.",
   "course_locks_load_failed": "Impossibile caricare le lezioni del corso.",

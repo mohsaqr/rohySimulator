@@ -48,8 +48,8 @@ function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation
 
   useEffect(() => { load(); }, [load]);
 
-  // A lesson locked behind the case's course gate arrives as a title only
-  // (server/routes/lessons-routes.js); the case panel lists it, the vendored
+  // A lesson locked behind the case's course gate arrives without its title
+  // (server/routes/lessons-routes.js); the case panel counts it, the vendored
   // room gets the open ones. When the gate opens, fetch the lessons again so
   // their content arrives.
   const openLessons = lessons.filter((l) => !l.locked);

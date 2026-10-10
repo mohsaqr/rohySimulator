@@ -51,15 +51,15 @@ function mapLesson(row, sections) {
 }
 
 // What a learner gets of a lesson still locked behind its case's course gate:
-// the title, its place in the list and how far the gate is — never the
-// description, the body, the video or the sections, which is the material the
-// gate exists to hold back (it usually explains the case's answer).
+// its place in the list and how far the gate is — never the title, the
+// description, the body, the video or the sections. That is the material the
+// gate exists to hold back (it usually explains the case's answer), and a
+// title such as "Adenocarcinoma of the colon" is the answer on its own.
 function mapLockedLesson(row, state) {
     return {
         id: row.id,
         classroomId: row.cohort_id,
         cohortId: row.cohort_id,
-        title: row.title,
         orderIndex: row.order_index,
         isPublished: true,
         unlockCaseId: row.unlock_case_id,
@@ -77,6 +77,7 @@ function lockSummary(state) {
         remainingSeconds: state.remainingSeconds,
         slidesTotal: state.slides.length,
         slidesOpened: state.slides.filter((slide) => slide.opened).length,
+        ...(state.caseGone ? { caseGone: true } : {}),
     };
 }
 
@@ -171,7 +172,8 @@ router.get('/courses/modules/:moduleId/lectures', authenticateToken, async (req,
             [cohortId, tenantId(req)]
         );
         // A learner's lessons locked behind a case's course gate come back as
-        // title + progress only, and their sections are never fetched.
+        // their place and the gate progress only (no title), and their sections
+        // are never fetched.
         const states = staff ? new Map() : await courseGateStates({
             tenantId: tenantId(req),
             userId: req.user.id,
@@ -778,9 +780,12 @@ router.get('/cases/:caseId/course-lessons', authenticateToken, requireEducator, 
         if (problem) return fail(res, ...problem);
         if (!cohort) return ok(res, { cohortId: null, cohortName: null, lessons: [] });
         const rows = await dbAdapter.all(
-            `SELECT id, title, is_published, unlock_case_id FROM lessons
-              WHERE cohort_id = ? AND tenant_id = ? AND deleted_at IS NULL
-              ORDER BY order_index ASC, id ASC`,
+            `SELECT l.id, l.title, l.is_published, l.unlock_case_id,
+                    (l.unlock_case_id IS NOT NULL AND c.id IS NULL) AS case_gone
+               FROM lessons l
+               LEFT JOIN cases c ON c.id = l.unlock_case_id AND c.tenant_id = l.tenant_id AND c.deleted_at IS NULL
+              WHERE l.cohort_id = ? AND l.tenant_id = ? AND l.deleted_at IS NULL
+              ORDER BY l.order_index ASC, l.id ASC`,
             [cohort.id, tenantId(req)]
         );
         return ok(res, {
@@ -792,6 +797,7 @@ router.get('/cases/:caseId/course-lessons', authenticateToken, requireEducator, 
                 isPublished: !!r.is_published,
                 locked: r.unlock_case_id === caseId,
                 lockedByCaseId: r.unlock_case_id && r.unlock_case_id !== caseId ? r.unlock_case_id : null,
+                lockedByDeletedCase: !!r.case_gone,
             })),
         });
     } catch (err) {
@@ -803,7 +809,9 @@ router.get('/cases/:caseId/course-lessons', authenticateToken, requireEducator, 
 // PUT /cases/:caseId/course-locks — body { lessonIds: [int] }: exactly these
 // lessons of the case's course wait for this case's course gate; any other
 // lesson of that course that waited for this case is opened. A lesson waiting
-// for a DIFFERENT case is moved to this one only when listed.
+// for a DIFFERENT case is moved to this one only when listed, except one
+// waiting for a case that has been deleted: that lock is held for learners
+// (services/courseGate.js) and is cleared here unless the lesson is listed.
 router.put('/cases/:caseId/course-locks', authenticateToken, requireEducator, async (req, res) => {
     try {
         const caseId = Number(req.params.caseId);
@@ -826,8 +834,10 @@ router.put('/cases/:caseId/course-locks', authenticateToken, requireEducator, as
         await dbAdapter.isolatedTransaction(async (tx) => {
             await tx.run(
                 `UPDATE lessons SET unlock_case_id = NULL, updated_at = CURRENT_TIMESTAMP
-                  WHERE cohort_id = ? AND tenant_id = ? AND unlock_case_id = ? AND deleted_at IS NULL`,
-                [cohort.id, tenantId(req), caseId]
+                  WHERE cohort_id = ? AND tenant_id = ? AND deleted_at IS NULL
+                    AND ( unlock_case_id = ?
+                          OR unlock_case_id NOT IN (SELECT id FROM cases WHERE tenant_id = ? AND deleted_at IS NULL) )`,
+                [cohort.id, tenantId(req), caseId, tenantId(req)]
             );
             for (const id of lessonIds) {
                 await tx.run(

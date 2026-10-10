@@ -225,6 +225,7 @@
   "course_gate_title": "Quand les supports de cours s'ouvrent",
   "course_gate_trust_note": "Les lames ouvertes sont signalées par le navigateur de l'apprenant : suffisant pour du matériel pédagogique, pas pour verrouiller un examen. Le temps est mesuré par le serveur.",
   "course_group_unassigned": "Cas non assignés",
+  "course_locks_deleted_case": "(attend un cas supprimé : l'enregistrement l'ouvre si elle n'est pas cochée)",
   "course_locks_draft": "(brouillon)",
   "course_locks_help": "Leçons du cours « {course} ». Une leçon cochée ne s'ouvre que lorsque les conditions ci-dessus sont remplies.",
   "course_locks_load_failed": "Impossible de charger les leçons du cours.",

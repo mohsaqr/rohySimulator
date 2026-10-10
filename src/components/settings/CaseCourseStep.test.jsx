@@ -91,6 +91,16 @@ describe('CaseCourseStep', () => {
         await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/cases/10/course-locks', { lessonIds: [11] }));
     });
 
+    it('says when a lesson waits for a deleted case', async () => {
+        apiGet.mockResolvedValue({ data: { cohortId: 3, cohortName: 'Patologia', lessons: [
+            { id: 11, title: 'Kasvaimet', isPublished: true, locked: false, lockedByCaseId: 7, lockedByDeletedCase: true },
+            { id: 12, title: 'Johdanto', isPublished: true, locked: false, lockedByCaseId: 8, lockedByDeletedCase: false },
+        ] } });
+        render(<Harness id={10} initialConfig={{}} />);
+        expect(await screen.findByText('(waits for a deleted case: saving opens it unless ticked)')).toBeInTheDocument();
+        expect(screen.getByText('(waits for case 8)')).toBeInTheDocument();
+    });
+
     it('asks to save the case before choosing locked lessons', () => {
         render(<Harness initialConfig={{}} />);
         expect(screen.getByText('Save the case first, then choose its locked lessons.')).toBeInTheDocument();
@@ -112,5 +122,19 @@ describe('responsesToCsv', () => {
         expect(csv[0]).toBe('"username","questionnaire_id","attempt","submitted_at","score","max_score","question_id","question","answer"');
         expect(csv[1]).toBe('"anna","q","post","2026-10-10T10:00:00.000Z","1","1","a","Origin?","Colon"');
         expect(csv[2]).toBe('"anna","q","post","2026-10-10T10:00:00.000Z","1","1","b","Why?","koska ""CDX2"""');
+    });
+
+    it('writes an answer that starts like a formula as text', () => {
+        // Regression lock: a learner's free-text answer such as =HYPERLINK(...) reached the educator's spreadsheet as a live formula
+        const answerCell = (answer) => responsesToCsv({ responses: [{
+            username: 'anna', questionnaireId: 'q', attempt: 'single', submittedAt: 't', score: null, maxScore: null,
+            answers: { b: answer },
+            questionnaire: { questions: [{ id: 'b', type: 'text', text: 'Why?' }] },
+        }] }).split('\n')[1].split(',"Why?",')[1];
+        expect(answerCell('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
+        expect(answerCell('+1')).toBe('"\'+1"');
+        expect(answerCell('-1')).toBe('"\'-1"');
+        expect(answerCell('@SUM(A1)')).toBe('"\'@SUM(A1)"');
+        expect(answerCell('koska CDX2')).toBe('"koska CDX2"');
     });
 });

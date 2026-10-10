@@ -1,6 +1,14 @@
 // The case questionnaire answers as CSV, for the educator's download.
 
-const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Every cell quoted. A cell that starts like a formula (=, +, -, @, tab, CR)
+// gets a leading apostrophe, so a learner's free-text answer such as
+// =HYPERLINK(...) is shown as text, not run by the spreadsheet — the guard
+// the other CSV exports use (components/analytics/csvExport.js).
+const csvCell = (value) => {
+    let s = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+};
 
 /** One row per answer (long format): the shape a spreadsheet or R reads directly. */
 export function responsesToCsv({ responses }) {

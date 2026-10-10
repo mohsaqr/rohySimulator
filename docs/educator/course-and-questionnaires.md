@@ -22,10 +22,11 @@ The **Course** step has two conditions:
   opened at least once. A case without slides meets this condition at once.
 
 A locked lesson opens for a learner when every condition you set is met. Until
-then the learner sees its title and how far they are, with the time left and
-the slides opened. The server does not send the lesson's text, sections or
-video to the learner before then, and asking for them directly is refused.
-Once a lesson has opened, it stays open.
+then the learner sees how many lessons are waiting and how far they are, with
+the time left and the slides opened. The server does not send a locked
+lesson's title, text, sections or video to the learner, because a title alone
+can name the answer, and asking for them directly is refused. Once a lesson has
+opened, it stays open.
 
 To choose which lessons wait:
 
@@ -35,6 +36,11 @@ To choose which lessons wait:
    select **Save locked lessons**.
 
 The locked lessons save at once. The conditions save with the case.
+
+If you delete a case, the lessons that waited for it stay locked. Deleting a
+case does not publish its answer. To open them, select **Save locked lessons**
+in the **Course** step of any other case in the same course: a lesson that
+waited for a deleted case opens unless you tick it for that case.
 
 ::: warning Opened slides are reported by the learner's browser
 The time condition is measured by the server and cannot be faked. The slide
@@ -57,6 +63,11 @@ is answered at one of three times:
 A pre-test closes when the materials open. A learner who did not take it can
 still take the post-test.
 
+A questionnaire that is not open to the learner yet, such as one answered after
+the materials open, shows only when it opens. Its title, instructions and
+questions stay on the server until then, so a question that names the answer
+does not give it away early.
+
 **Graded** questionnaires have correct answers. Mark the correct option on each
 choice question, and add feedback if you like. Each choice question with a
 correct answer is worth one point. A multiple-choice question scores only when
@@ -70,7 +81,8 @@ see both scores and the feedback.
 
 The questionnaires are part of the case, so they move with it when you export
 it or send it as a case package. The answers stay on the server where they
-were given.
+were given, and they are deleted with the rest of a learner's data when that
+learner's data is erased.
 
 ## Reading the answers
 

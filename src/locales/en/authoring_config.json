@@ -225,6 +225,7 @@
   "course_gate_title": "When the course materials open",
   "course_gate_trust_note": "Opened slides are reported by the learner's browser: enough for teaching material, not an exam lock. The time is measured by the server.",
   "course_group_unassigned": "Unassigned cases",
+  "course_locks_deleted_case": "(waits for a deleted case: saving opens it unless ticked)",
   "course_locks_draft": "(draft)",
   "course_locks_help": "Lessons in the course “{course}”. A ticked lesson opens only when the conditions above are met.",
   "course_locks_load_failed": "Could not load the course lessons.",

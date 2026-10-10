@@ -82,17 +82,12 @@ function GateCard({ gate, now, lockedLessons }) {
                             )}
                         </ul>
                     )}
+                    {/* A count, not a list: locked lessons arrive without their
+                        titles, which can name the case's answer. */}
                     {!gate.unlocked && lockedLessons.length > 0 && (
-                        <div className="mt-3">
-                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('gate_waiting_lessons')}</p>
-                            <ul className="mt-1 space-y-1">
-                                {lockedLessons.map((lesson) => (
-                                    <li key={lesson.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Lock className="h-3.5 w-3.5" aria-hidden="true" /> {lesson.title}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground" data-testid="gate-waiting-count">
+                            <Lock className="h-3.5 w-3.5" aria-hidden="true" /> {t('gate_waiting_count', { count: lockedLessons.length })}
+                        </p>
                     )}
                 </div>
             </div>
@@ -249,7 +244,7 @@ function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
             <div className="flex items-start gap-3">
                 <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-semibold text-foreground">{questionnaire.title}</h2>
+                    <h2 className="text-sm font-semibold text-foreground">{questionnaire.closed ? t('questionnaire_closed_title') : questionnaire.title}</h2>
                     <p className="mt-0.5 text-xs text-muted-foreground">{timingNote(t, questionnaire)}</p>
                     {questionnaire.instructions && <p className="mt-2 whitespace-pre-line text-sm text-foreground">{questionnaire.instructions}</p>}
 
@@ -300,7 +295,7 @@ function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
 }
 
 /**
- * @param {{caseId: number, sessionId?: number|null, lockedLessons?: {id: number, title: string}[],
+ * @param {{caseId: number, sessionId?: number|null, lockedLessons?: {id: number}[],
  *          onGateChange?: (unlocked: boolean) => void}} props
  */
 export default function CaseCoursePanel({ caseId, sessionId = null, lockedLessons = [], onGateChange = () => {} }) {

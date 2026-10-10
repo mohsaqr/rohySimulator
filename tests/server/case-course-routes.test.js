@@ -173,12 +173,15 @@ describe('course gate + case questionnaires', () => {
     });
 
     describe('a locked lesson, before the gate', () => {
-        it('reaches the learner as a title and progress only', async () => {
+        it('reaches the learner as its place and progress only, without its title', async () => {
             // Regression lock: the course materials explain the case's answer; a locked lesson must carry none of its content to the learner
             const list = await lessons(student);
             const locked = list.find((l) => l.id === lockedLessonId);
-            expect(locked).toMatchObject({ title: 'Paksusuolen kasvaimet', locked: true, lock: { afterMinutes: 15, slidesTotal: 2, slidesOpened: 0 } });
+            expect(locked).toMatchObject({ locked: true, lock: { afterMinutes: 15, slidesTotal: 2, slidesOpened: 0 } });
             expect(JSON.stringify(locked)).not.toContain(SECRET_BODY);
+            // Regression lock: a locked lesson's title ("Adenocarcinoma of the colon") names the answer on its own
+            expect(locked).not.toHaveProperty('title');
+            expect(JSON.stringify(locked)).not.toContain('Paksusuolen kasvaimet');
             expect(locked).not.toHaveProperty('description');
             expect(locked).not.toHaveProperty('sections');
             expect(list.find((l) => l.id === openLessonId).sections).toEqual([]);
@@ -236,6 +239,15 @@ describe('course gate + case questionnaires', () => {
             expect(text).not.toContain('correct');
             expect(text).not.toContain('CDX2 tukee');
             expect(body.questionnaires.map((q) => [q.id, q.openAttempt])).toEqual([['prepost', 'pre'], ['reflect', 'single'], ['after', null]]);
+        });
+
+        it('send a questionnaire that is not open yet as its id and timing only', async () => {
+            // Regression lock: a closed "after" questionnaire went out with its title, instructions and questions, and a question can name the answer
+            const body = await (await student(`/api/cases/${caseId}/course-state`)).json();
+            const after = body.questionnaires.find((q) => q.id === 'after');
+            expect(after).toEqual({ id: 'after', timing: 'after', graded: true, closed: true, openAttempt: null, attempts: [] });
+            expect(JSON.stringify(body)).not.toContain('Imusolmuke?');
+            expect(JSON.stringify(body)).not.toContain('Jälkikysely');
         });
 
         it('are not in the case a learner reads', async () => {
@@ -352,6 +364,46 @@ describe('course gate + case questionnaires', () => {
         it('stops locking a lesson whose lock is cleared', async () => {
             await teacher(`/api/cases/${caseId}/course-locks`, { method: 'PUT', body: JSON.stringify({ lessonIds: [] }) });
             expect((await lessons(peer)).find((l) => l.id === lockedLessonId).locked).toBeUndefined();
+        });
+    });
+
+    describe('a lesson whose case is deleted', () => {
+        let strandedId;
+        let goneCaseId;
+        beforeAll(async () => {
+            strandedId = (await (await teacher(`/api/courses/modules/${cohortId}/lectures`, {
+                method: 'POST', body: JSON.stringify({ title: 'Maksan etäpesäkkeet', content: `<p>${SECRET_BODY}</p>`, isPublished: true }),
+            })).json()).data.id;
+            await withDb(async (db) => {
+                goneCaseId = (await pRun(db,
+                    `INSERT INTO cases (name, config, tenant_id, is_available) VALUES ('Gone case', ?, 1, 1)`,
+                    [JSON.stringify({ courseGate: { afterMinutes: 15 } })])).lastID;
+                await pRun(db, 'UPDATE lessons SET unlock_case_id = ? WHERE id = ?', [goneCaseId, strandedId]);
+                await pRun(db, 'UPDATE cases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [goneCaseId]);
+            });
+        });
+
+        it('stays locked for the learner', async () => {
+            // Regression lock: deleting the case a lesson waited for released the lesson, answer and all
+            const stranded = (await lessons(student)).find((l) => l.id === strandedId);
+            expect(stranded).toMatchObject({ locked: true, lock: { caseGone: true } });
+            expect(JSON.stringify(stranded)).not.toContain(SECRET_BODY);
+            expect((await student(`/api/courses/lectures/${strandedId}`)).status).toBe(403);
+        });
+
+        it('is flagged in the editor of another case in the course', async () => {
+            const body = (await (await teacher(`/api/cases/${caseId}/course-lessons`)).json()).data;
+            expect(body.lessons.find((l) => l.id === strandedId)).toMatchObject({ locked: false, lockedByCaseId: goneCaseId, lockedByDeletedCase: true });
+            expect(body.lessons.find((l) => l.id === lockedLessonId).lockedByDeletedCase).toBe(false);
+        });
+
+        it('opens when the educator saves the locks of another case without ticking it', async () => {
+            const current = (await (await teacher(`/api/cases/${caseId}/course-lessons`)).json()).data.lessons
+                .filter((l) => l.locked).map((l) => l.id);
+            expect((await teacher(`/api/cases/${caseId}/course-locks`, {
+                method: 'PUT', body: JSON.stringify({ lessonIds: current }),
+            })).status).toBe(200);
+            expect((await student(`/api/courses/lectures/${strandedId}`)).status).toBe(200);
         });
     });
 
