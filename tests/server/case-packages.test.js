@@ -140,6 +140,8 @@ describe('case packages: export from one server, import into another', () => {
 
         uploadBytes = PNG(randomBytes(8).toString('hex'));
         uploadName = `ct-pkg-${randomBytes(6).toString('hex')}.png`;
+        // Regression lock: public/uploads is gitignored, so a fresh checkout (CI) has none — writing into it failed every CI run since rc.26
+        mkdirSync(UPLOADS, { recursive: true });
         writeFileSync(join(UPLOADS, uploadName), uploadBytes);
         createdUploads.push(uploadName);
 
@@ -175,7 +177,7 @@ describe('case packages: export from one server, import into another', () => {
 
     afterAll(async () => {
         await Promise.all([source?.close(), target?.close()]);
-        for (const name of readdirSync(UPLOADS)) {
+        for (const name of existsSync(UPLOADS) ? readdirSync(UPLOADS) : []) {
             if (createdUploads.includes(name) || /^pkg-[0-9a-f]{16}-ct-pkg-/.test(name)) rmSync(join(UPLOADS, name), { force: true });
         }
         if (fx) rmSync(fx, { recursive: true, force: true });
