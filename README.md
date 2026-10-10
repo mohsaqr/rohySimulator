@@ -16,7 +16,11 @@ A case unfolds as a continuous encounter: the learner takes a history, examines 
 | Investigations | Laboratory and imaging catalogues, ordering, turnaround times, worklists, and result interpretation. |
 | Therapeutic interventions | Medications, fluids, oxygen and nursing actions, with configured effects over time. |
 | Clinical interactions | Patient, nurse, consultant and relative roles with distinct personas, plus a separate debrief discussant. |
-| Specialist workspaces | A Bedside view, a twelve-lead ECG workstation, a PACS imaging room, and a pathology slide viewer. Availability follows case content and room configuration. |
+| Cardiology and ECG | Live cardiac rhythm monitoring and a dedicated twelve-lead ECG workstation with calibrated traces, filters, calipers, interval measurements and structured interpretation. |
+| PACS imaging | A DICOM reading workstation with study and series navigation, slice scrolling, cine playback, windowing, measurements and reporting. |
+| Pathology | Whole-slide microscopy and gross specimen photography, with magnification, calibrated measurements, annotations, bookmarked fields and reports. |
+| Bedside interaction | A three-dimensional patient room alongside the conversation and clinical workspaces. |
+| Multimodal and emotion sensing | Optional browser-side facial-expression estimates, valence/arousal and gaze signals, aligned with clinical activity for analysis. |
 | Debrief | Encounter records and a dedicated discussant for reflection after the case. |
 | Learning analytics | Action sequences, transition networks, recurring patterns, clustering, and comparisons across sessions and learners. |
 
@@ -24,7 +28,25 @@ Educators can author cases and scenarios, organize courses, cohorts and lessons,
 
 Conversation can use hosted or local LLM endpoints. Speech supports Kokoro, Piper, Google and OpenAI providers. The interface supports English, Italian, Finnish, Swedish, German, Spanish, French and Kazakh; case language is configured independently of interface language.
 
-Oyon provides optional multimodal capture and analytics. Available signals depend on deployment settings and the consent contract. See [learning analytics](docs/product/analytics.md) and [Oyon governance](docs/security/oyon-ai-act.md) for scope, data handling and interpretation.
+## Cardiology, imaging and pathology
+
+**Cardiology and ECG.** Cardiac scenarios combine evolving vital signs, live rhythm waveforms, alarms and treatment responses with a dedicated **twelve-lead ECG interpretation workstation**. Learners can examine calibrated recordings, adjust paper speed and gain, select filters, focus individual leads, and use calipers to measure intervals, amplitudes and rate. The workstation supports systematic interpretation, lead-linked notes and corrected QT calculations. Educators can supply generated signals, uploaded recordings or scanned ECG sheets; the tools available follow the recording format. Measurements and interpretations remain part of the encounter record. See the [ECG guide](docs/trainee/ecg.md).
+
+**PACS and radiology.** Investigation ordering and report review connect to a **picture archiving and communication system (PACS) reading workstation**. Learners explore DICOM studies and series, scroll through image stacks, use cine playback, adjust window width and level, and take distance and region measurements. Findings and impression fields support reporting, while recorded viewing activity preserves which series and images the learner explored. This makes image interpretation part of the clinical workflow, alongside the order, its turnaround and the subsequent decision. See the [PACS guide](docs/trainee/imaging-reading-room.md).
+
+**Pathology.** A dedicated **digital pathology workstation** brings whole-slide microscopy and gross specimen photography into the case. Learners navigate tissue at different magnifications, use calibrated scales and measurements, annotate findings, bookmark fields and prepare a report. Educators select the slides and specimen material that support the clinical problem. See the [pathology guide](docs/trainee/pathology.md).
+
+These workspaces share the case, learner and session context. Their availability follows the authored material and deployment configuration, and their activity contributes to debrief and learning analytics.
+
+## Multimodal interaction, emotion sensing and analytics
+
+Rohy's multimodal environment combines **text, speech, animated patient avatars, clinical waveforms, images and interaction traces**. AI patients and other clinical roles participate in the same encounter, while the learner's actions are recorded with their timing and context.
+
+**Oyon adds optional emotion and gaze sensing.** Camera frames are processed in the learner's browser to estimate facial expressions, expression probabilities, valence, arousal and gaze areas of interest. Capture follows deployment settings and explicit learner consent; the sensing pipeline sends aggregate windows rather than camera frames to Rohy. Confidence and capture-quality indicators accompany the estimates.
+
+**Multimodal learning analytics** connect these signals with room navigation, conversations, investigation review, treatment, alarms and scenario changes. Emotion and gaze heatmaps, valence/arousal timelines, action sequences, recurring patterns, transition networks and learner clusters offer complementary views of an encounter. Educators and researchers can examine, for example, how gaze and expression estimates change around deterioration or how investigation review precedes treatment. The estimates provide contextual evidence for interpretation; they do not establish a learner's inner emotional state.
+
+When enabled, face-position and gaze signals also support avatar eye contact and attention shifts, including glances toward the monitor during alarms. See [learning analytics](docs/product/analytics.md), [Oyon analytics](docs/educator/oyon-analytics.md), the [Oyon project](OyonR/README.md), and [Oyon governance](docs/security/oyon-ai-act.md).
 
 ## A look inside
 
@@ -35,6 +57,26 @@ The patient room brings the conversation, live monitor, treatment controls and s
 ![Laboratory ordering and reports](docs/images/screens/laboratory.jpg)
 
 Investigation workspaces connect ordering and turnaround with reports and the learner's worklist.
+
+![Twelve-lead ECG interpretation workstation](docs/images/screens/ecg-workstation.jpg)
+
+The ECG workstation supports calibrated tracing review, measurements and systematic interpretation.
+
+![PACS imaging workstation](docs/images/screens/radiology-pacs.jpg)
+
+The PACS workspace brings image review and measurement into the patient encounter.
+
+![Digital pathology slide viewer](docs/images/screens/pathology-slide.jpg)
+
+The pathology workspace supports tissue exploration, annotation and reporting.
+
+![Emotion and affect analytics](docs/images/screens/affect-analytics.jpg)
+
+Oyon expression and affect summaries can be reviewed alongside the clinical timeline.
+
+![Gaze analytics](docs/images/screens/gaze-analytics.jpg)
+
+Gaze views connect estimated attention areas to the rooms and screens used during the case.
 
 ![Transition networks and learner clusters](docs/images/screens/tna-clusters.jpg)
 
