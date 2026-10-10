@@ -132,7 +132,11 @@ function LessonLocksSection({ caseId }) {
                             <span>{lesson.title}</span>
                             {!lesson.isPublished && <span className="text-xs text-neutral-500">{t('course_locks_draft')}</span>}
                             {lesson.lockedByCaseId && !locked.has(lesson.id) && (
-                                <span className="text-xs text-amber-400">{t('course_locks_other_case', { caseId: lesson.lockedByCaseId })}</span>
+                                <span className="text-xs text-amber-400">
+                                    {lesson.lockedByDeletedCase
+                                        ? t('course_locks_deleted_case')
+                                        : t('course_locks_other_case', { caseId: lesson.lockedByCaseId })}
+                                </span>
                             )}
                         </label>
                     </li>

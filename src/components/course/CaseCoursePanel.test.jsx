@@ -43,14 +43,26 @@ afterEach(() => {
 });
 
 describe('CaseCoursePanel', () => {
-    it('shows a locked gate with the time left, the slides and the waiting lessons', async () => {
+    it('shows a locked gate with the time left, the slides and how many lessons wait', async () => {
         apiGet.mockResolvedValue({ gate: lockedGate, questionnaires: [] });
-        render(<CaseCoursePanel caseId={10} lockedLessons={[{ id: 1, title: 'Paksusuolen kasvaimet' }]} />);
+        render(<CaseCoursePanel caseId={10} lockedLessons={[{ id: 1, locked: true }, { id: 2, locked: true }]} />);
         expect(await screen.findByText('Course materials are locked')).toBeInTheDocument();
         expect(screen.getByTestId('course-gate-time').textContent).toMatch(/Time left: (9:5\d|10:00)/);
         expect(screen.getByText('Slides opened: 1/2')).toBeInTheDocument();
-        expect(screen.getByText('Paksusuolen kasvaimet')).toBeInTheDocument();
+        expect(screen.getByTestId('gate-waiting-count').textContent).toMatch(/2 lessons open when the conditions above are met/);
         expect(apiGet).toHaveBeenCalledWith('/cases/10/course-state');
+    });
+
+    it('shows a questionnaire that is not open yet under a plain heading, with no form', async () => {
+        // Regression lock: a closed questionnaire arrives without its title or questions; the card must not need them
+        apiGet.mockResolvedValue({ gate: lockedGate, questionnaires: [
+            { id: 'after', timing: 'after', graded: true, closed: true, openAttempt: null, attempts: [] },
+        ] });
+        render(<CaseCoursePanel caseId={10} />);
+        const card = await screen.findByTestId('questionnaire-after');
+        expect(card.textContent).toContain('Questionnaire');
+        expect(card.textContent).toContain('Opens together with the course materials.');
+        expect(screen.queryByTestId('questionnaire-form-after')).toBeNull();
     });
 
     it('renders nothing for a case with no gate and no questionnaires', async () => {

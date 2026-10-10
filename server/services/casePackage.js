@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
 import { dbPath } from '../db.js';
 import { logger } from '../logger.js';
-import { createTarWriter, readTar, TarError } from '../lib/tarStream.js';
+import { createTarWriter, readTar, tarArchiveBytes, TarError } from '../lib/tarStream.js';
 import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { originRequestHeaders } from '../lib/pluginOriginTokens.js';
@@ -142,11 +142,16 @@ export async function casePackagesEnabled() {
 const reservations = new Map();
 const reservedBytes = () => [...reservations.values()].reduce((sum, bytes) => sum + bytes, 0);
 
-/** Refuse when writing `bytes` into `dir` would leave less than the margin free. */
-async function assertFreeSpace(dir, bytes, what) {
+/** The bytes free on `dir`'s filesystem, before any reservation. */
+async function diskFree(dir) {
     await fsp.mkdir(dir, { recursive: true });
     const stats = await fsp.statfs(dir);
-    const free = Number(stats.bavail) * Number(stats.bsize) - reservedBytes();
+    return Number(stats.bavail) * Number(stats.bsize);
+}
+
+/** Synchronous: refuse when `bytes` more, after what is reserved, would leave less than the margin of `diskBytes` free. */
+function checkFreeSpace(diskBytes, bytes, what) {
+    const free = diskBytes - reservedBytes();
     if (free - bytes < freeSpaceMargin()) {
         throw new PackageError(
             `Not enough disk space for ${what}: needs ${Math.ceil(bytes / MIB)} MB plus ${Math.ceil(freeSpaceMargin() / MIB)} MB kept free, ${Math.floor(free / MIB)} MB available`,
@@ -154,6 +159,23 @@ async function assertFreeSpace(dir, bytes, what) {
             507
         );
     }
+}
+
+/** Refuse when writing `bytes` into `dir` would leave less than the margin free. */
+async function assertFreeSpace(dir, bytes, what) {
+    checkFreeSpace(await diskFree(dir), bytes, what);
+}
+
+/**
+ * Check for `bytes` and reserve them under `key` as ONE step. The disk query
+ * is the only await; the check and the reservation run in the same tick
+ * after it, so a concurrent request cannot pass the check before this one's
+ * reservation is counted. The caller must delete `key` on every exit path.
+ */
+async function reserveFreeSpace(dir, key, bytes, what) {
+    const diskBytes = await diskFree(dir);
+    checkFreeSpace(diskBytes, bytes, what);
+    reservations.set(key, bytes);
 }
 
 /**
@@ -488,24 +510,43 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
         onProgress({ phase: 'collecting' });
         const { manifest, sources, notes } = await collectMedia({ doc, tenant, scratch });
         const unique = [...sources.entries()];
-        const mediaBytes = (await Promise.all(unique.map(([, s]) => fsp.stat(s.file)))).reduce((sum, s) => sum + s.size, 0);
-        if (mediaBytes > maxPackageBytes()) {
-            throw new PackageError(`This case's media is ${Math.ceil(mediaBytes / MIB)} MB, above the ${Math.floor(maxPackageBytes() / MIB)} MB package limit`, 'case_package_too_large', 413);
+        // Each file's size is taken ONCE and written into its header; a file
+        // that changes afterwards is a length mismatch the writer refuses,
+        // so the archive is exactly `archiveBytes`.
+        const sizes = (await Promise.all(unique.map(([, s]) => fsp.stat(s.file)))).map((s) => s.size);
+        const caseJson = Buffer.from(JSON.stringify(doc));
+        const manifestJson = Buffer.from(JSON.stringify(manifest));
+        // The limit an upload is held to is the WHOLE archive (createUpload),
+        // so export holds itself to the same: headers, padding and the JSON
+        // count, not only the media — anything exported can be imported.
+        const archiveBytes = tarArchiveBytes([caseJson.length, manifestJson.length, ...sizes]);
+        if (archiveBytes > maxPackageBytes()) {
+            throw new PackageError(`This case's package would be ${Math.ceil(archiveBytes / MIB)} MB, above the ${Math.floor(maxPackageBytes() / MIB)} MB package limit`, 'case_package_too_large', 413);
         }
-        await assertFreeSpace(path.dirname(outFile), mediaBytes, 'the package');
+        await assertFreeSpace(path.dirname(outFile), archiveBytes, 'the package');
 
         const writer = createTarWriter(fs.createWriteStream(outFile));
-        await writer.addBuffer('case.json', Buffer.from(JSON.stringify(doc)));
-        await writer.addBuffer('manifest.json', Buffer.from(JSON.stringify(manifest)));
-        let done = 0;
-        for (const [sha, source] of unique) {
-            const { size } = await fsp.stat(source.file);
-            await writer.addStream(`media/${sha}`, size, fs.createReadStream(source.file));
-            done += 1;
-            onProgress({ phase: 'writing', done, total: unique.length });
+        try {
+            await writer.addBuffer('case.json', caseJson);
+            await writer.addBuffer('manifest.json', manifestJson);
+            let done = 0;
+            for (const [index, [sha, source]] of unique.entries()) {
+                await writer.addStream(`media/${sha}`, sizes[index], fs.createReadStream(source.file));
+                done += 1;
+                onProgress({ phase: 'writing', done, total: unique.length });
+            }
+            await writer.finish();
+        } catch (err) {
+            // A source that vanished, errored or changed length: close the
+            // output before the job unlinks it, or the open descriptor keeps
+            // the half-written package's disk allocated.
+            await writer.abort();
+            throw err;
         }
-        await writer.finish();
         const { size } = await fsp.stat(outFile);
+        if (size !== archiveBytes) {
+            throw new Error(`case package is ${size} bytes, expected ${archiveBytes}`);
+        }
         return {
             name: doc.case.name,
             caseCode: doc.rohy_export.source_case_code ?? null,
@@ -1284,9 +1325,6 @@ export async function createUpload({ bytes, actor }) {
         throw new PackageError(`The package is ${Math.ceil(bytes / MIB)} MB, above the ${Math.floor(maxPackageBytes() / MIB)} MB limit`, 'case_package_too_large', 413);
     }
     const dir = await ensureWorkDir();
-    // The upload, then the unpacked copy beside it — checked against what
-    // other uploads have already been promised, then promised to this one.
-    await assertFreeSpace(dir, bytes * 2, 'the upload');
     const id = randomUUID();
     const upload = {
         id, bytes, received: 0, nextIndex: 0, lastChunkSha: null,
@@ -1297,8 +1335,16 @@ export async function createUpload({ bytes, actor }) {
         // must not both pass the checks before either has appended.
         lock: Promise.resolve(),
     };
-    await fsp.writeFile(upload.file, Buffer.alloc(0), { flag: 'wx' });
-    reservations.set(upload.reservation, bytes * 2);
+    // The upload, then the unpacked copy beside it — checked against what
+    // other uploads have already been promised AND promised to this one in
+    // the same step, so two concurrent uploads cannot both take the last room.
+    await reserveFreeSpace(dir, upload.reservation, bytes * 2, 'the upload');
+    try {
+        await fsp.writeFile(upload.file, Buffer.alloc(0), { flag: 'wx' });
+    } catch (err) {
+        reservations.delete(upload.reservation);
+        throw err;
+    }
     uploads.set(id, upload);
     return { id, chunk_bytes: CHUNK_BYTES };
 }

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { Readable, Writable } from 'node:stream';
-import { createTarWriter, readTar, TarError } from '../../server/lib/tarStream.js';
+import { createTarWriter, readTar, tarArchiveBytes, TarError } from '../../server/lib/tarStream.js';
 
 const hasTar = (() => { try { execFileSync('tar', ['--version']); return true; } catch { return false; } })();
 
@@ -161,6 +161,43 @@ describe('tarStream', () => {
         const hung = new Promise((resolve) => setTimeout(() => resolve('hung'), 1500));
         await expect(Promise.race([next, hung])).rejects.toMatchObject({ code: 'ENOSPC' });
     }, 5000);
+
+    it('rejects instead of hanging when the output was closed without an error', async () => {
+        // Regression lock: a writable destroyed WITHOUT an error never emits 'error' or 'drain', so a write waited forever — on an already-closed output and on one closed mid-wait (review F12, 2026-10-10)
+        const hung = () => new Promise((resolve) => setTimeout(() => resolve('hung'), 1500));
+
+        const gone = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+        gone.destroy();
+        await expect(Promise.race([createTarWriter(gone).addBuffer('case.json', Buffer.from('{}')), hung()]))
+            .rejects.toMatchObject({ code: 'tar_output_closed' });
+
+        // A stalled sink: write() returns false and the writer waits for 'drain'.
+        const stalled = new Writable({ highWaterMark: 16, write() {} });
+        const waiting = createTarWriter(stalled).addBuffer('case.json', Buffer.from('{}'));
+        await new Promise((resolve) => setImmediate(resolve));
+        stalled.destroy();
+        await expect(Promise.race([waiting, hung()])).rejects.toMatchObject({ code: 'tar_output_closed' });
+    }, 5000);
+
+    it('abort() resolves only once the output has closed', async () => {
+        const out = createWriteStream(join(dir, 'aborted.tar'));
+        const writer = createTarWriter(out);
+        await writer.addBuffer('case.json', Buffer.from('{}'));
+        await writer.abort();
+        expect(out.destroyed).toBe(true);
+        expect(out.closed).toBe(true);
+        await writer.abort(); // a second abort on a closed output is a no-op
+    });
+
+    it('tarArchiveBytes predicts the written size exactly', async () => {
+        const sizes = [0, 1, 511, 512, 513, 5000];
+        const file = join(dir, 'sized.tar');
+        const writer = createTarWriter(createWriteStream(file));
+        for (const [i, size] of sizes.entries()) await writer.addBuffer(`e${i}`, Buffer.alloc(size, 7));
+        await writer.finish();
+        expect(readFileSync(file).length).toBe(tarArchiveBytes(sizes));
+        expect(tarArchiveBytes([])).toBe(1024);
+    });
 
     it('releases the open entry when the archive is cut off mid-entry', async () => {
         // Regression lock: a truncated media entry left its file stream open — a descriptor and the disk of an unlinked file held per malformed import (Codex review, 2026-10-10)

@@ -77,6 +77,13 @@ describe('normaliseQuestionnaires', () => {
     ])('refuses %s', (_label, raw) => {
         expect(normaliseQuestionnaires(raw).problem).toEqual(expect.any(String));
     });
+
+    // Regression lock: a question id of __proto__ passed the id pattern, and its answer vanished from the answers object, scoring 0
+    it.each(['__proto__', 'constructor', 'prototype'])('refuses %s as a question or questionnaire id', (id) => {
+        const question = { id, type: 'multiple', text: 't', options: ['a', 'b'], correct: [0] };
+        expect(normaliseQuestionnaires([quiz({ questions: [question] })]).problem).toMatch(/__proto__/);
+        expect(normaliseQuestionnaires([quiz({ id })]).problem).toMatch(/__proto__/);
+    });
 });
 
 describe('learnerQuestionnaire', () => {

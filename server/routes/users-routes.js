@@ -918,6 +918,7 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
                 ['DELETE FROM session_notes WHERE user_id = ?', [userId]],
                 ['DELETE FROM cohort_members WHERE user_id = ?', [userId]],
                 ['DELETE FROM questionnaire_responses WHERE user_id = ?', [userId]],
+                ['DELETE FROM case_questionnaire_responses WHERE user_id = ?', [userId]],
                 ['DELETE FROM alarm_config WHERE user_id = ?', [userId]],
                 ['DELETE FROM clinical_notes WHERE user_id = ?', [userId]],
                 ['DELETE FROM export_records WHERE user_id = ?', [userId]],

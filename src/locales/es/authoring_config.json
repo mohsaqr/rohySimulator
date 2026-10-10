@@ -225,6 +225,7 @@
   "course_gate_title": "Cuándo se abren los materiales del curso",
   "course_gate_trust_note": "Las preparaciones abiertas las comunica el navegador del estudiante: basta para material docente, no para bloquear un examen. El tiempo lo mide el servidor.",
   "course_group_unassigned": "Casos no asignados",
+  "course_locks_deleted_case": "(espera a un caso eliminado: al guardar se abre si no está marcada)",
   "course_locks_draft": "(borrador)",
   "course_locks_help": "Lecciones del curso «{course}». Una lección marcada solo se abre cuando se cumplen las condiciones anteriores.",
   "course_locks_load_failed": "No se pudieron cargar las lecciones del curso.",

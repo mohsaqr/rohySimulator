@@ -68,6 +68,19 @@ async function readableCase(req, caseId) {
     );
 }
 
+// A questionnaire the learner cannot answer yet and has not answered: no
+// title, instructions or questions.
+function closedQuestionnaire(questionnaire) {
+    return {
+        id: questionnaire.id,
+        timing: questionnaire.timing,
+        graded: questionnaire.graded,
+        closed: true,
+        openAttempt: null,
+        attempts: [],
+    };
+}
+
 function questionnairesOf(caseRow) {
     const config = parseJson(caseRow.config, {});
     // Stored questionnaires were checked on save; re-reading them through the
@@ -121,9 +134,14 @@ router.get('/cases/:caseId/course-state', authenticateToken, async (req, res) =>
             questionnaires: questionnaires.map((questionnaire) => {
                 const mine = rows.filter((row) => row.questionnaire_id === questionnaire.id);
                 const postSubmitted = mine.some((row) => row.attempt === 'post');
+                const open = openAttempt(questionnaire, gate.unlocked, mine.map((row) => row.attempt));
+                // Not open and never answered: the learner gets that it exists
+                // and when it opens, nothing of what it asks — a question
+                // written for after the materials may name the answer.
+                if (!open && !mine.length) return closedQuestionnaire(questionnaire);
                 return {
                     ...learnerQuestionnaire(questionnaire),
-                    openAttempt: openAttempt(questionnaire, gate.unlocked, mine.map((row) => row.attempt)),
+                    openAttempt: open,
                     attempts: mine.map((row) => attemptView(row, questionnaire, { postSubmitted })),
                 };
             }),

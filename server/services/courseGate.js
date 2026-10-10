@@ -92,11 +92,26 @@ export async function courseGateState({ tenantId, userId, caseRow, now = Date.no
     };
 }
 
+// The state of a lesson whose case is gone: locked, with nothing left to meet.
+const GONE_CASE_STATE = Object.freeze({
+    configured: true,
+    unlocked: false,
+    caseGone: true,
+    afterMinutes: 0,
+    allSlidesOpened: false,
+    startedAt: null,
+    unlockAt: null,
+    remainingSeconds: null,
+    slides: [],
+});
+
 /**
  * Gate states for several cases at once, keyed by case id — one lookup per
  * case, for a lesson list that may point at the same case many times. A case
- * that is gone (deleted, other tenant) counts as open: a lock must not
- * outlive the case it waits for.
+ * that is gone (deleted, other tenant) keeps its lessons locked: the material
+ * behind a gate usually explains the case, and deleting the case is not a
+ * decision to publish it. An educator opens such a lesson by saving the
+ * course locks of any case in the course (PUT /cases/:caseId/course-locks).
  *
  * @returns {Promise<Map<number, object>>}
  */
@@ -109,7 +124,7 @@ export async function courseGateStates({ tenantId, userId, caseIds, now = Date.n
         );
         states.set(caseId, caseRow
             ? await courseGateState({ tenantId, userId, caseRow, now })
-            : { configured: false, unlocked: true });
+            : GONE_CASE_STATE);
     }
     return states;
 }

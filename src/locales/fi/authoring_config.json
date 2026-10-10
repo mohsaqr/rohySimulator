@@ -225,6 +225,7 @@
   "course_gate_title": "Milloin kurssimateriaalit avautuvat",
   "course_gate_trust_note": "Avatut leikkeet ilmoittaa oppijan selain: se riittää opetusmateriaalille, mutta ei tenttilukoksi. Ajan mittaa palvelin.",
   "course_group_unassigned": "Määrittämättömät tapaukset",
+  "course_locks_deleted_case": "(odottaa poistettua tapausta: tallennus avaa sen, ellei sitä ole valittu)",
   "course_locks_draft": "(luonnos)",
   "course_locks_help": "Kurssin “{course}” oppitunnit. Valittu oppitunti avautuu vasta, kun yllä olevat ehdot täyttyvät.",
   "course_locks_load_failed": "Kurssin oppitunteja ei voitu ladata.",

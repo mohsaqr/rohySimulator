@@ -299,6 +299,9 @@ export const HARD_DELETE_ON_PURGE_TABLES = [
     'alarm_config',
     'session_notes',
     'questionnaire_responses',
+    // Case questionnaire answers (0067): free text in the learner's own words,
+    // deleted like the older questionnaire_responses, not anonymised.
+    'case_questionnaire_responses',
     'export_records',
     'llm_usage',
     'tts_usage'
