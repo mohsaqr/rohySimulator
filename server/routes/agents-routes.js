@@ -92,7 +92,7 @@ function isPlainObject(value) {
  *                                 applicability check (type not yet known)
  * @returns {{error: string, code: string}|null}
  */
-function configOverrideProblem(configOverride, agentType) {
+export function configOverrideProblem(configOverride, agentType) {
     if (configOverride === undefined || configOverride === null) return null;
     if (!isPlainObject(configOverride)) {
         return { error: 'config_override must be an object or null', code: 'invalid_config_override' };

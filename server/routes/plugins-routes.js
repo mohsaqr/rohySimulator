@@ -237,7 +237,7 @@ function starterRoot() {
 
 /** The starter directory for a plugin, or null. Cached: this is on the hot path. */
 const starterDirs = new Map();
-function starterContentDir(pluginId) {
+export function starterContentDir(pluginId) {
     // An operator may refuse the samples outright. Some deployments must show
     // only their own material — a hospital where an unrelated teaching image
     // appearing in a reading room is a governance problem, not a convenience.

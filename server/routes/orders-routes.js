@@ -2512,7 +2512,7 @@ router.get('/sessions/:sessionId/active-effects', authenticateToken, async (req,
 // hidden wins — a hidden treatment is neither expected nor contraindicated;
 // if both expected and contraindicated arrive on a visible treatment, the
 // safety flag (contraindicated) wins.
-function normalizeCaseTreatmentFlags(t) {
+export function normalizeCaseTreatmentFlags(t) {
     const is_available = (t.is_available ?? true) ? 1 : 0;
     let is_expected = t.is_expected ? 1 : 0;
     const is_contraindicated = t.is_contraindicated ? 1 : 0;
