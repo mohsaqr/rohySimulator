@@ -150,6 +150,7 @@ export default defineConfig({
             { text: 'Lab & medication editors', link: '/admin/catalogue-editors' },
             { text: 'Voice / TTS providers', link: '/admin/voice-providers' },
             { text: 'Pathology slides', link: '/admin/pathology-slides' },
+            { text: 'Case packages', link: '/admin/case-packages' },
             { text: 'Multi-tenant operations', link: '/admin/multi-tenant' },
             { text: 'System logs', link: '/admin/system-logs' },
           ],

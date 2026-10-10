@@ -27,6 +27,8 @@ import PhysicalExamEditor from './PhysicalExamEditor';
 import LabTestManager from './LabTestManager';
 import UsersWorkspace from './users/UsersWorkspace';
 import RegistrationPolicySettings from './RegistrationPolicySettings';
+import CasePackageSettings, { CasePackageExportButton, CasePackageImportButton } from './CasePackages.jsx';
+import useCasePackages from './useCasePackages.js';
 import TermsSettings from './TermsSettings';
 import MedicationManager from './MedicationManager';
 import TreatmentsLibraryManager from './TreatmentsLibraryManager';
@@ -441,6 +443,7 @@ function SettingsOverview({ sections, onSelect }) {
 export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, initialTab = 'overview', initialWizardStep = 1, onOpenPersonaEditor, onCaseSaved, onLogout }) {
     const { t } = useTranslation('authoring_config');
     const { isAdmin, user } = useAuth();
+    const casePackagesOn = useCasePackages(isAdmin());
     // Educator+ gate for the Analytics tab (formerly split into an admin-only
     // "Case Analytics" and an educator+ "Emotion & Attention" Oyon tab — the
     // Oyon analysis views now live inside the Analytics dashboard, so
@@ -983,6 +986,14 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     >
                                                         <FileUp className="w-4 h-4" /> {t('btn_import')}
                                                     </button>
+                                                    {casePackagesOn && (
+                                                        <CasePackageImportButton
+                                                            onImported={async () => {
+                                                                const data = await apiFetch('/cases');
+                                                                setCases(data.cases || []);
+                                                            }}
+                                                        />
+                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -1161,6 +1172,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                             <FileDown className="w-4 h-4" />
                                                         </button>
                                                     )}
+                                                    {isAdmin() && casePackagesOn && <CasePackageExportButton caseItem={c} />}
                                                     {isAdmin() && (
                                                         <>
                                                             <button onClick={() => {
@@ -1634,6 +1646,8 @@ function PlatformSettings({ cases, setCases }) {
                             </p>
                         )}
                     </div>
+
+                    <CasePackageSettings />
 
                     {/* Chat Interface Configuration */}
                     <ChatConfiguration />

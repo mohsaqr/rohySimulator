@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.27] — 2026-10-10
+
+- **Case packages (UI):** a **Case packages** switch in Settings → Platform → General, off by default.
+  - When it is on, each case row gets an **Export package** button and the case list gets **Import package**. Both are admin-only and sit beside the existing JSON buttons, which are unchanged. The buttons appear as soon as the switch is saved.
+  - Export downloads the finished package by navigation, so the browser streams it to disk. Import uploads in the server's chunk size, retries a failed chunk, and lists what the receiving server lacks.
+- 28 new strings in all 8 languages. The 7 non-English ones are machine translations, marked so in `src/locales/.status`. The en-XA pseudo-locale is regenerated, which also fills earlier gaps in `auth`.
+- New admin guide page: `docs/admin/case-packages.md`.
+- Verification: 7 client tests. These cover no buttons while the switch is off, the buttons appearing on save through the real settings card, chunk order, the import report, and a failed settings load making exactly one request. Full suite: 463 files, 5,955 tests; Playwright: 195 passed.
+
 ## [3.0.0-rc.26] — 2026-10-10
 
 - **Case packages (server):** export a whole case as one `.rohycase` file and import it on another Rohy server as a new case. **Off by default** (platform setting `case_packages_enabled`) and admin-only. Until it is switched on, every new route answers 403 `case_packages_disabled`.

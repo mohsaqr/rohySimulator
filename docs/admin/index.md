@@ -12,6 +12,7 @@ For the **admin**: full platform configuration and user management.
 | [Lab & medication editors](/admin/catalogue-editors) | Editing the clinical catalogue |
 | [Voice / TTS providers](/admin/voice-providers) | Provider keys, default voices |
 | [Pathology slides](/admin/pathology-slides) | Importing whole-slide images from a link |
+| [Case packages](/admin/case-packages) | Moving a case and its media to another server |
 | [Multi-tenant operations](/admin/multi-tenant) | Tenant isolation, per-tenant config |
 | [System logs](/admin/system-logs) | Activity, chat, API logs and exports |
 
