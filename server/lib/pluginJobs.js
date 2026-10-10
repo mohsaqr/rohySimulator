@@ -197,6 +197,13 @@ async function runOne(job) {
         return;
     }
     const jobLog = logger(`plugin-job:${job.plugin_id}`);
+    // The last progress written. A handler may report progress per network
+    // chunk — pathology's importer does, tens of thousands of times for one
+    // slide — and each report was a write on the one shared sqlite connection,
+    // fire-and-forget: the queue swamped every other request (an import
+    // request timing out, the download itself crawling). The stored value is
+    // a whole percent, so only a change of that percent is a write.
+    let lastProgress = null;
     const api = {
         /** Announce a phase AND take the cancellation checkpoint at the same
          *  point — the two belong together, so a handler cannot advance a phase
@@ -209,9 +216,20 @@ async function runOne(job) {
             }
             await dbAdapter.run('UPDATE plugin_jobs SET phase = ? WHERE id = ?', [phase, job.id]);
         },
+        /** Progress is advisory: a failed write is logged, never thrown. A
+         *  handler may call this fire-and-forget (`void api.setProgress(…)`),
+         *  and an unhandled rejection takes the whole process down — the TTS
+         *  bundle rohy loads rethrows every one. A SQLITE_BUSY on a progress
+         *  update crashed the server mid-import. */
         async setProgress(percent) {
             const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-            await dbAdapter.run('UPDATE plugin_jobs SET progress = ? WHERE id = ?', [clamped, job.id]);
+            if (clamped === lastProgress) return;
+            lastProgress = clamped;
+            try {
+                await dbAdapter.run('UPDATE plugin_jobs SET progress = ? WHERE id = ?', [clamped, job.id]);
+            } catch (err) {
+                jobLog.warn('job progress not recorded', { job_id: job.id, progress: clamped, error: err.message });
+            }
         },
         cancelled: () => cancelRequested(job.id),
         log: jobLog,

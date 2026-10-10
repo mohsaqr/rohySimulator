@@ -82,6 +82,50 @@ describe('the job runner', () => {
         expect(row).toMatchObject({ state: 'done', phase: null });
     });
 
+    it('writes progress only when the whole percent changes, however often a handler reports it', async () => {
+        // Regression lock: pathology's importer reports download progress per network chunk; each report was a fire-and-forget write on the shared sqlite connection, and a 1.4 GB slide's tens of thousands of writes swamped the server — the import request timed out and the download crawled (found building the colorectal case, 2026-10-10)
+        const realRun = dbAdapter.run;
+        let progressWrites = 0;
+        dbAdapter.run = (sql, ...rest) => {
+            if (/^UPDATE plugin_jobs SET progress/.test(sql)) progressWrites += 1;
+            return realRun(sql, ...rest);
+        };
+        try {
+            let seen = null;
+            jobs.registerJobHandler('t:chatty', async (job, api) => {
+                // 20 000 reports across 0–40 %, fire-and-forget as the importer does.
+                Array.from({ length: 20_000 }, (_, i) => (i / 20_000) * 40).forEach((p) => { void api.setProgress(p); });
+                await api.setProgress(40);
+                seen = await dbAdapter.get('SELECT progress FROM plugin_jobs WHERE id = ?', [job.id]);
+            });
+            await settled(await enqueue('t:chatty'));
+            expect(seen).toEqual({ progress: 40 });
+            expect(progressWrites).toBe(41); // 0, 1, …, 40
+        } finally {
+            dbAdapter.run = realRun;
+        }
+    });
+
+    it('never rejects a progress report, so a fire-and-forget caller cannot crash the process', async () => {
+        // Regression lock: a fire-and-forget progress write that stayed SQLITE_BUSY rejected unhandled, and the TTS bundle's unhandledRejection handler rethrew it — the server died mid-import (found building the colorectal case, 2026-10-10)
+        const realRun = dbAdapter.run;
+        dbAdapter.run = (sql, ...rest) => (/^UPDATE plugin_jobs SET progress/.test(sql)
+            ? Promise.reject(Object.assign(new Error('SQLITE_BUSY: database is locked'), { code: 'SQLITE_BUSY' }))
+            : realRun(sql, ...rest));
+        try {
+            let reported;
+            jobs.registerJobHandler('t:busy', async (job, api) => {
+                reported = await api.setProgress(25).then(() => 'resolved', () => 'rejected');
+                return 'finished';
+            });
+            const row = await settled(await enqueue('t:busy'));
+            expect(reported).toBe('resolved');
+            expect(row.state).toBe('done');
+        } finally {
+            dbAdapter.run = realRun;
+        }
+    });
+
     it('runs jobs one at a time — concurrency is a deployment property, not a plugin one', async () => {
         let live = 0; let peak = 0;
         jobs.registerJobHandler('t:slow', async () => {
