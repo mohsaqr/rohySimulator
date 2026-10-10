@@ -9,6 +9,32 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.31] — 2026-10-10
+
+Release candidate 31 of Rohy 3.0, "Version 3 RC 31", released as the tag `v3.0.RC31` (package
+version `3.0.0-rc.31`). No code changes beyond rc.30; it gathers 3.0.0-rc.2–30 since RC01:
+
+- **Course materials behind the case, and case questionnaires.** Lessons can be locked behind a
+  case until the learner has worked it (minutes since the case started, every pathology slide
+  opened). Cases carry questionnaires: graded quizzes, reflections and pre/post tests, with the
+  answer key withheld until the attempt is closed. Wizard step 14 "Course" (rc.29).
+- **Case packages.** Export and import a whole case with its media as one file (rc.26–27).
+- **No answers for learners.** Students receive an allow-list projection of the case: no title,
+  description, diagnosis, rubric or objectives. The patient, discussant and team prompts are built
+  on the server, and the diagnosis stays out of them (rc.8, rc.12–15).
+- **Case version history.** Numbered versions written atomically before the save answers (rc.9, rc.11).
+- **Simulation fixes.** The monitor keeps real vitals, alarms survive a reload, doses apply once,
+  and lab saves keep learner orders (rc.6–7).
+- **Data safety.** Write routes answer only after their COMMIT lands, isolated write
+  transactions, and a strict tar container (rc.4, rc.25).
+- **Report a problem.** Gear menu entry, relayed to Prova intake, with a "My reports" list (rc.2–3).
+- **Pathology.** Starter slides can be added; slide import no longer stalls or crashes (rc.20, rc.28).
+- **Languages and consent.** Plurals and new strings in every language, terms of use in the
+  reader's language, fresh student consent, and Oyon 3.3.3 with an accessible capture pill
+  (rc.5, rc.19, rc.21, rc.24).
+- **Security and analytics.** Fixes to settings, session security and analytics, no credentials
+  in the audit scripts, and learner analytics that carry the case code, not the title (rc.17–18, rc.23).
+
 ## [3.0.0-rc.30] — 2026-10-10
 
 - **CI fix:** the case-packages integration test wrote a fixture into `public/uploads` without creating it. That folder is gitignored, so a fresh checkout has none, and every CI run since rc.26 failed in Vitest with `ENOENT`. The test now creates the folder, and its cleanup no longer throws when setup failed before that. Reproduced and verified in a clean worktree: 26 of 26 tests pass, where before 7 passed and 19 were skipped.
