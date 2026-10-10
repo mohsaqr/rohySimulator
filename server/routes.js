@@ -26,6 +26,7 @@ import reportRoutes from './routes/report-routes.js';
 import termsRoutes from './routes/terms-routes.js';
 import pluginsRoutes, { pluginContentProxy } from './routes/plugins-routes.js';
 import casePackagesRoutes from './routes/case-packages-routes.js';
+import caseCourseRoutes from './routes/case-course-routes.js';
 import { mountPluginServerSlots } from './lib/pluginServerSlot.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
 
@@ -135,6 +136,7 @@ router.use(helpRoutes);
 router.use(reportRoutes);
 router.use(termsRoutes);
 router.use(casePackagesRoutes);
+router.use(caseCourseRoutes);
 router.use(pluginsRoutes);
 
 // RPS-1 1.4 — a plugin's own server module, under /plugins/<id>/.

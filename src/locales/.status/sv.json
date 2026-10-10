@@ -4079,9 +4079,599 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.course_attempt_post": {
+    "src": "21fe0d026229",
+    "tgt": "0ef932e354d6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_attempt_pre": {
+    "src": "698b86f9d5d6",
+    "tgt": "9bd7d501a354",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_attempt_single": {
+    "src": "4ad0a0a6ae56",
+    "tgt": "78ad655057af",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_help": {
+    "src": "4dba07987427",
+    "tgt": "70430b88e961",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_minutes": {
+    "src": "7db5d4856da8",
+    "tgt": "acfcb6d7145f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_no_slides": {
+    "src": "4e79637b07fb",
+    "tgt": "a25b5aa36e82",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_slides": {
+    "src": "6a6d9d0f9f80",
+    "tgt": "8c5bec508284",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_slides_count": {
+    "src": "4e906db858fd",
+    "tgt": "f49bb872394f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_title": {
+    "src": "2d9573e8a46f",
+    "tgt": "d2588e33ba5b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_gate_trust_note": {
+    "src": "bdf98d7105fe",
+    "tgt": "5a4274afb18c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.course_group_unassigned": {
     "src": "c43513ee0ef3",
     "tgt": "c3805e84a99b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_draft": {
+    "src": "243cd1ebb923",
+    "tgt": "0f0b5c499a6f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_help": {
+    "src": "6d904aa8bdda",
+    "tgt": "afc342762388",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_load_failed": {
+    "src": "ae9c54612c63",
+    "tgt": "c2ee596fbb15",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_no_course": {
+    "src": "98ec93f38c0c",
+    "tgt": "e4413458aaa7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_no_lessons": {
+    "src": "5c2741b45e9f",
+    "tgt": "3ce294d13e4d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_other_case": {
+    "src": "1a63e6ee7290",
+    "tgt": "10acf0700db8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_save": {
+    "src": "b7346070b6d0",
+    "tgt": "eacb1467c2d9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_save_case_first": {
+    "src": "d972acea5623",
+    "tgt": "5a7341c0a622",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_save_failed": {
+    "src": "927f8f3994f0",
+    "tgt": "a570c012446a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_saved": {
+    "src": "fca046ccd586",
+    "tgt": "e83df659733f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_locks_title": {
+    "src": "eba4dc0f25aa",
+    "tgt": "5881ef432383",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_move_down": {
+    "src": "40bb50da160c",
+    "tgt": "e050eabc5508",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_move_up": {
+    "src": "c66feb5eb8f2",
+    "tgt": "c3550ceff728",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_option_add": {
+    "src": "ffbcabd155ad",
+    "tgt": "5024e9bdaca6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_option_correct": {
+    "src": "fb019d338b43",
+    "tgt": "680243767748",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_option_placeholder": {
+    "src": "51dc6cb0eabd",
+    "tgt": "6103c8b27ef5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_option_remove": {
+    "src": "bd765df41889",
+    "tgt": "c381c2a210e1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_feedback": {
+    "src": "49bf7b95d5bb",
+    "tgt": "1e252820af18",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_no_correct": {
+    "src": "03ed404d2da5",
+    "tgt": "fe1c1ee5101c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_remove": {
+    "src": "9d22dcacc4b3",
+    "tgt": "102e0c5f7b9e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_required": {
+    "src": "4850b174b713",
+    "tgt": "03da31a8c7d6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_text": {
+    "src": "289aff12b042",
+    "tgt": "74aef90c040c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_question_type": {
+    "src": "efe8656fc7c2",
+    "tgt": "587772f4634b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_add": {
+    "src": "72df0b498176",
+    "tgt": "b4b580c2c374",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_graded": {
+    "src": "f3caaf233e00",
+    "tgt": "e40424c0fafb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_instructions": {
+    "src": "0aed1d3d0187",
+    "tgt": "2fd3907a655b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_remove": {
+    "src": "1f197ab8e079",
+    "tgt": "34281f43fa9f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_timing": {
+    "src": "cf9c7aa24a26",
+    "tgt": "7462921b240c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaire_title": {
+    "src": "14363ebb1180",
+    "tgt": "13d802dd4fff",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaires_help": {
+    "src": "f688ef9e4806",
+    "tgt": "9eecb12b2169",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaires_problem": {
+    "src": "bd9e1aea98a4",
+    "tgt": "33ce05d7b525",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_questionnaires_title": {
+    "src": "2c25d5aa36e0",
+    "tgt": "f626c0f589db",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_attempt": {
+    "src": "c934cc71493d",
+    "tgt": "72b0dcab3e1a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_csv": {
+    "src": "a4023b89022f",
+    "tgt": "07f78fd87b5a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_failed": {
+    "src": "2d69a3f58cc3",
+    "tgt": "ec2594520acb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_none": {
+    "src": "2ce87f7dec2c",
+    "tgt": "d21266871af4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_questionnaire": {
+    "src": "eba9e2c82b45",
+    "tgt": "f626c0f589db",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_score": {
+    "src": "38e5a46cbc5a",
+    "tgt": "2f8ebf16dfb2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_show": {
+    "src": "90438d0b5a0a",
+    "tgt": "0b7ee6e1d8c6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_time": {
+    "src": "c16bc82bf1f0",
+    "tgt": "5d83373beefb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_title": {
+    "src": "4ad0a0a6ae56",
+    "tgt": "78ad655057af",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_user": {
+    "src": "b512d97e7cbf",
+    "tgt": "8ab572522619",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_step_help": {
+    "src": "3452736bceed",
+    "tgt": "077c2b763779",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_timing_after": {
+    "src": "92d27a3eb99d",
+    "tgt": "92d333747377",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_timing_during": {
+    "src": "06d6f2842f21",
+    "tgt": "5b61279ce16c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_timing_pre_post": {
+    "src": "1ecbeadc395d",
+    "tgt": "014045d7e063",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_type_multiple": {
+    "src": "79fefc32357d",
+    "tgt": "c04d58615b84",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_type_single": {
+    "src": "45a76a9d2e7a",
+    "tgt": "e9c1cc1c7bb4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_type_text": {
+    "src": "7851561400c3",
+    "tgt": "b7965576b267",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -10052,6 +10642,16 @@
   "authoring_config.wstep_avatar": {
     "src": "b0906e38fa46",
     "tgt": "3992a143a25a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.wstep_course": {
+    "src": "2096cefba06a",
+    "tgt": "034ea08ab1ba",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -21602,6 +22202,326 @@
   "common.yes": {
     "src": "85a39ab345d6",
     "tgt": "cde9e58a9a4e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.answer_all_required": {
+    "src": "7ba778d4ca32",
+    "tgt": "1820613c4be3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.answer_placeholder": {
+    "src": "d0e869b777a6",
+    "tgt": "0f65fe5a954c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.attempt_post": {
+    "src": "21fe0d026229",
+    "tgt": "0ef932e354d6",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.attempt_pre": {
+    "src": "698b86f9d5d6",
+    "tgt": "9bd7d501a354",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.attempt_single": {
+    "src": "5feb1f08d245",
+    "tgt": "2d63f3899b41",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.attempt_submitted": {
+    "src": "51e3d4350035",
+    "tgt": "7b4998dd63aa",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.correct_answer": {
+    "src": "9eb90b969a0b",
+    "tgt": "257b6b52cf39",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_locked_body": {
+    "src": "2ee61d456329",
+    "tgt": "0c4c4ca371f3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_locked_title": {
+    "src": "eb1f404dd4a8",
+    "tgt": "3156ed9644b0",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_open_body": {
+    "src": "f2d4995bff3b",
+    "tgt": "ce328ce15c5a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_open_title": {
+    "src": "ffb49df80086",
+    "tgt": "41c24a2e8964",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_slides_opened": {
+    "src": "d23e780a218e",
+    "tgt": "90637951c59b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_time_met": {
+    "src": "ff18d1640711",
+    "tgt": "bb0354a50a8c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_time_not_started": {
+    "src": "2ee20ccb42bd",
+    "tgt": "9c1990a0d2e2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_time_remaining": {
+    "src": "e987c911ea99",
+    "tgt": "028591581ef7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.gate_waiting_lessons": {
+    "src": "9f760ab20739",
+    "tgt": "5723ffc583f3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.load_failed": {
+    "src": "5fe930c2355e",
+    "tgt": "893a12b8c18c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.opens_with_materials": {
+    "src": "705c6be8ce24",
+    "tgt": "c8f5375b87b4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.optional": {
+    "src": "0059798b7f70",
+    "tgt": "3b68de1da4dd",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.pick_all_that_apply": {
+    "src": "bef67421d3a8",
+    "tgt": "2e81d843499d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.pre_result_later": {
+    "src": "98b3db40719f",
+    "tgt": "3e4b4cfb53e8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.result_correct": {
+    "src": "aca01a1a3a27",
+    "tgt": "8281428c0568",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.result_wrong": {
+    "src": "a8a57dbc0767",
+    "tgt": "15544af0a255",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.score": {
+    "src": "7ea97a9e3f1a",
+    "tgt": "073d888ced63",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.score_gain": {
+    "src": "6262dfcbfac7",
+    "tgt": "90655d4de35a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.submit": {
+    "src": "8a78567662bf",
+    "tgt": "8554f9f727b1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.submit_failed": {
+    "src": "cfa3f70d45f8",
+    "tgt": "3381abe4fc15",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.submitting": {
+    "src": "b8ed5279e897",
+    "tgt": "9f473f3f6ce3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.timing_after": {
+    "src": "d0432ab2a5bc",
+    "tgt": "cf8515b2bee4",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.timing_during": {
+    "src": "8b0bc0c13e16",
+    "tgt": "d49269e56fa0",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.timing_pre_post": {
+    "src": "9122d2f5014e",
+    "tgt": "55f727b98b7f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.your_answer": {
+    "src": "79b4de7dba67",
+    "tgt": "c4d41bd45237",
     "state": "machine",
     "origin": "machine",
     "locked": false,

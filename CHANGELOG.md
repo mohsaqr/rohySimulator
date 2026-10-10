@@ -9,6 +9,22 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.29] — 2026-10-10
+
+- **Course materials that open after the case.** A case can hold its course lessons back until a learner has worked on it. The conditions are minutes since the learner first started the case, and every pathology slide opened (`config.courseGate`). A lesson waits for a case through the new `lessons.unlock_case_id` (migration 0067). Until the conditions are met, the server sends the learner the lesson's title and their progress, never its description, body, video or sections. Asking for them directly answers 403 `lesson_locked`. Once opened, a lesson stays open.
+  - The slide condition counts the learner's own `OPENED_SLIDE` events. That is fine for teaching material, but not an exam lock. The time condition is measured by the server.
+- **Case questionnaires** (`config.questionnaires`): single-choice, multiple-choice and free-text questions, graded or not. Each questionnaire is answered once during the case, twice as a pre/post test around the materials opening, or once after the materials open.
+  - The server decides which attempt is open and scores the answers.
+  - A learner's copy has no correct answers or feedback. A submitted attempt shows them only when it may: never after a pre-test, and after the post-test together with both scores.
+  - Answers are stored once per learner, case, questionnaire and attempt (`case_questionnaire_responses`), with a snapshot of the questions as they were answered.
+- **New endpoints:** `GET /cases/:caseId/course-state`, `POST /cases/:caseId/questionnaires/:questionnaireId/responses`, `GET /cases/:caseId/questionnaire-responses` (educator), `GET /cases/:caseId/course-lessons` and `PUT /cases/:caseId/course-locks` (educator). A case save refuses a malformed gate or questionnaire (400 `invalid_course_gate` / `invalid_questionnaires`). Both travel with the case in exports and case packages.
+- **UI:**
+  - The Course view opens with the gate's progress (a live countdown, slides opened, the lessons waiting) and the questionnaires.
+  - The case wizard has a 14th step, **Course**, for the conditions, the locked lessons, a questionnaire editor and the answers, with a CSV of one row per answer.
+- 92 new strings in all 8 languages (a new `course` namespace). The 7 non-English ones are machine translations, marked so in `src/locales/.status`.
+- New educator guide page: `docs/educator/course-and-questionnaires.md`.
+- Verification: 71 server tests (rules and endpoints) and 14 client tests. The locks on locked content and on the answer key were each shown to fail when their protection is removed. Full suite green after updating the wizard's last-step test (the last step is now Course).
+
 ## [3.0.0-rc.28] — 2026-10-10
 
 - **Slide import no longer floods the database.** A plugin job wrote its progress on every network chunk — tens of thousands of writes per slide — so the server stalled and a download crawled (28 MB in 6 minutes). Progress is now written only when the whole percentage changes, at most 101 times per job.

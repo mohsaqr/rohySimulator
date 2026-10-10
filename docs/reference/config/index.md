@@ -100,7 +100,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:42`<br>`server/routes/help-routes.js:129` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:43`<br>`server/routes/help-routes.js:129` |
 
 ## Retention
 
@@ -127,7 +127,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_CASE_PACKAGE_DIR` | No | — | Where case packages are staged (default: case-packages/ beside the database). | `server/services/casePackage.js:115`<br>`server/services/casePackage.js:116` |
 | `ROHY_CASE_PACKAGE_MAX_BYTES` | No | — | Largest case package export or import, in bytes (default 4 GiB). | `server/services/casePackage.js:121` |
 | `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:127` |
-| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:95` |
+| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:96` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
 | `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:72` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |

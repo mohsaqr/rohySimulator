@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**98 tables** in the durable data model.
+**99 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **65 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **66 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -93,6 +93,7 @@ Parsed **65 migration files** beyond the base schema (`0001_initial.sql`).
 | `0064_language_cases_diacritics.sql` | additive | Data-only. Restores the accents, umlauts and ß that `server/seedLanguageCases.js` lost (it was written ASCII-folded: "42-jaehriger", "22 anos", "perche"), in the three seeded native cases (German anaphylaxis, Spanish DKA, Italian stroke). Needed because `seedLanguageCases` inserts a missing case and never rewrites an existing one. One `UPDATE` per column (`description`, `system_prompt`, `chief_complaint`, `patient_name`, `config`), each matching that column's FULL old value, so a field an educator edited keeps their text while untouched fields are corrected; the Spanish title is renamed last (the seeder also matches it by `legacy_name`, so no duplicate is inserted). A database without these cases matches nothing; re-running is a no-op. No schema change, no INSERT, no DELETE. |
 | `0065_treatment_rubric_out_of_config.sql` | additive | Data-only. The treatment rubric (expected / contraindicated / points / feedback) stops living in `cases.config.treatments`, which every student received with the case (GET /cases, /cases/:id, the session snapshot); grading always read `case_treatments`. First backfills `case_treatments` from a case's config copy ONLY where the case has no rows (pre-rc.9 the editor never persisted the rubric, PRV-26), using the PUT's flag rules; then `json_remove`s the key from `cases.config` and `sessions.case_snapshot.config`. The server strips the key on every later save and the editor reads `GET /cases/:id/treatments`. No schema change; rows only added where none existed. |
 | `0066_terms_acceptance_language.sql` | additive | Adds a nullable `language` column to `terms_acceptances`: the agreement can now be read in the user's UI language (`platform_settings.terms_translations`, plus shipped machine translations of the default text), and the acceptance snapshot records which language was shown alongside the title and body it already stores. Acceptance stays keyed on `(user_id, version)`, so accepting in any language covers the version. Existing rows keep NULL. No data rewritten. |
+| `0067_course_gate_questionnaires.sql` | additive | Adds a nullable `unlock_case_id` column to `lessons` (a lesson locked behind a case's course gate — `cases.config.courseGate` — whose content the server withholds from a learner until the gate is met; NULL keeps every existing lesson open) and a new `case_questionnaire_responses` table (one row per learner, case, questionnaire and attempt `single`/`pre`/`post`, with the answers, a snapshot of the questions as answered, and the score). The questionnaires themselves live in `cases.config.questionnaires`. No data rewritten. |
 
 ## Tables by concern
 
@@ -154,7 +155,7 @@ Parsed **65 migration files** beyond the base schema (`0001_initial.sql`).
 
 ### Other
 
-`cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`, `terms_acceptances`
+`case_questionnaire_responses`, `cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`, `terms_acceptances`
 
 ---
 
