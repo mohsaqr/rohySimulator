@@ -71,6 +71,8 @@ when:
   A pathology case without its slides is not the case that was exported, so
   nothing is created. Set the library, restart Rohy and import the package
   again.
+- Rohy cannot write to that slide library: the directory is missing and cannot
+  be created, or belongs to another user. The message names the directory.
 
 A file posing as an image (an HTML page renamed `.png`, say) is left out and
 listed in the report. If the database write fails after files were placed, the
@@ -86,6 +88,6 @@ free-space margin. They are listed in the
 [configuration reference](/reference/config/), and the endpoints are in the
 [case-packages API reference](/reference/api/case-packages).
 
-Imported slides land in the slide library. They display only if that library is
-served, which is the same condition as for slides imported from a link. When it
-is not served, the import report says so.
+Imported slides land in the slide library, and Rohy serves them from there.
+A Docker install has a library by default; see
+[Pathology slides](/admin/pathology-slides#what-an-operator-provisions).

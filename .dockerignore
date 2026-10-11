@@ -18,10 +18,13 @@ playwright-report
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite.bak.*
-.env
-.env.local
-.env.development.local
-.env.production.local
+# Every .env, not only the root one: a bare `.env` matches the build-context
+# root alone, so server/.env (JWT_SECRET, local paths) was copied into the
+# image. Configuration reaches a container through compose's environment.
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.production.local
 
 # Server-local state directories
 server/data/piper/venv

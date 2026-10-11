@@ -10694,7 +10694,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:474",
+        "x-rohy-source": "server/routes/plugins-routes.js:476",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10738,7 +10738,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:636",
+        "x-rohy-source": "server/routes/plugins-routes.js:638",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10780,7 +10780,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:665",
+        "x-rohy-source": "server/routes/plugins-routes.js:667",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10832,7 +10832,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/plugins-routes.js:723",
+        "x-rohy-source": "server/routes/plugins-routes.js:725",
         "x-rohy-auth": [
           "authenticateToken",
           "requireStudent"

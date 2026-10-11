@@ -100,19 +100,27 @@ Three things, all outside the application:
    fails with *"'vips' is not installed on this server"*.
 2. **A library directory**, writable by the Rohy service user:
    `ROHY_PLUGIN_LIBRARY_DIRS="pathology=/srv/www/plugin-content/pathology/library"`.
-   Unset means no imports, and the settings page states that. A
+   Rohy writes the imported slides there and serves them from there itself;
+   no content bundle or origin is needed for them to display. Unset means no
+   imports, and the settings page states that. A
    [case package](/admin/case-packages) that carries slides is refused too.
+   **Docker installs have this already**: the image sets it to
+   `/var/lib/rohy-plugin-library/pathology` on the `rohy-plugin-library`
+   volume. Do not point it at a host path such as `/srv/www` in a container;
+   that path does not exist inside it.
 3. **An import allowlist**: `ROHY_PLUGIN_IMPORT_ORIGINS="pathology=https://slides.example.edu"`.
    A malformed value is fatal at boot, so a typo stops the server loudly and
    is visible at once.
 
 Optionally `ROHY_PLUGIN_IMPORT_MAX_BYTES` caps every tenant's limit from above.
 
-### The library shares the bundle's origin, and nothing else
+### A library beside the content bundle
 
-`library/` sits beside `tiles/` and `gross/` on the content origin and is served
-by the same nginx block. It belongs to **Rohy**, and the content bundle leaves
-it alone:
+The library may live anywhere Rohy can write. If you keep it beside `tiles/`
+and `gross/` on a content origin, as the example path above does, Rohy still
+serves the slides from its own copy on disk, and only asks the origin for a
+library file it does not have. The library belongs to **Rohy**, and the content
+bundle leaves it alone:
 
 - the content deploy's `rsync --delete` must **exclude `library/`**, or a
   content update erases every imported slide;
@@ -120,17 +128,22 @@ it alone:
 
 ### Checking it works
 
-`GET /api/health/plugins` reports a `library` block per plugin. It carries
-counts and bytes alone, with no names or source hosts, so a deploy check runs
-without credentials:
+`GET /api/health/plugins` reports every configured library under `libraries`,
+whether or not the plugin has a content origin. It carries whether Rohy can
+write to the directory, and counts and bytes alone, with no names or source
+hosts, so a deploy check runs without credentials:
 
 ```json
-{ "library": { "assets": 12, "ready": 11, "needs_calibration": 1,
-               "failed": 0, "bytes": 1642000000, "queued": 0, "running": 0 } }
+{ "libraries": { "pathology": { "writable": true, "assets": 12, "ready": 11,
+                                "needs_calibration": 1, "failed": 0,
+                                "bytes": 1642000000, "queued": 0, "running": 0 } } }
 ```
 
-A deployment with no library directory reports **no `library` block at all**,
-which keeps "not configured" and "configured and empty" distinguishable.
+`"writable": false` means imports will be refused: the directory is missing
+and cannot be created, or belongs to another user. A deployment with no
+library directory has an empty `libraries`, which keeps "not configured" and
+"configured and empty" distinguishable. A plugin with a content origin also
+carries the same counts as a `library` block under `plugins`.
 
 ## Limits
 

@@ -221,13 +221,22 @@ RUN chmod +x /usr/local/bin/rohy-entrypoint
 # it with the right ownership so the rohy-uploads volume inherits it.
 RUN mkdir -p /opt/rohy/public/uploads && chown -R node:node /opt/rohy/public
 
+# The pathology slide library: slides imported from a link and slides carried
+# by case packages. Rohy writes it and serves it itself, so a container needs
+# no content bundle for imported slides to display. Created node-owned for the
+# same reason as uploads above: a volume over a missing path is root-owned.
+RUN mkdir -p /var/lib/rohy-plugin-library/pathology \
+ && chown -R node:node /var/lib/rohy-plugin-library
+
 # Persistent state lives in volumes so `docker compose down && up` doesn't
-# wipe the DB, force a 330 MB Kokoro re-download, or drop uploaded images.
-VOLUME ["/var/lib/rohy", "/var/cache/rohy-hf", "/opt/rohy/public/uploads"]
+# wipe the DB, force a 330 MB Kokoro re-download, or drop uploaded images
+# and imported slides.
+VOLUME ["/var/lib/rohy", "/var/cache/rohy-hf", "/opt/rohy/public/uploads", "/var/lib/rohy-plugin-library"]
 
 ENV NODE_ENV=production \
     PORT=4000 \
     ROHY_DB=/var/lib/rohy/database.sqlite \
+    ROHY_PLUGIN_LIBRARY_DIRS=pathology=/var/lib/rohy-plugin-library/pathology \
     TRANSFORMERS_CACHE=/var/cache/rohy-hf \
     ROHY_TRUST_PROXY=loopback
 

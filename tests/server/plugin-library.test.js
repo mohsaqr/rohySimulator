@@ -3,7 +3,7 @@
 // /health/plugins reports the library in aggregate.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sqlite3 from 'sqlite3';
@@ -198,6 +198,34 @@ describe('a deployment that imports slides but ships no content bundle', () => {
         // Named, so the editor can say "your imported slides are here, the
         // bundled ones are not" rather than showing a short list as if complete.
         expect(body.bundleUnavailable).toBe('plugin_remote_not_configured');
+    });
+
+    it('serves the imported slide\'s files from the library itself', async () => {
+        // Regression lock: the proxy served library/ only through a content bundle or an origin, so a library-only deployment (every Docker install) listed imported slides it could not show
+        const slide = join(libraryDir, 'asset-only01');
+        await mkdir(join(slide, 'slide_files', '0'), { recursive: true });
+        await writeFile(join(slide, 'slide.dzi'), '<?xml version="1.0"?><Image TileSize="256" Overlap="0" Format="jpeg" xmlns="http://schemas.microsoft.com/deepzoom/2008"><Size Width="256" Height="256"/></Image>');
+        await writeFile(join(slide, 'slide_files', '0', '0_0.jpeg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+        const dzi = await admin('/api/plugins/pathology/library/asset-only01/slide.dzi');
+        expect(dzi.status).toBe(200);
+        expect(dzi.headers.get('content-type')).toMatch(/xml/);
+        expect(await dzi.text()).toContain('deepzoom');
+        const tile = await admin('/api/plugins/pathology/library/asset-only01/slide_files/0/0_0.jpeg');
+        expect(tile.status).toBe(200);
+        expect(Buffer.from(await tile.arrayBuffer())).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+        expect((await admin('/api/plugins/pathology/library/asset-only01/missing.dzi')).status).toBe(404);
+        // Content outside the library is still content this deployment was never given.
+        const bundled = await admin('/api/plugins/pathology/tiles/starter.dzi');
+        expect(bundled.status).toBe(503);
+        expect((await bundled.json()).code).toBe('plugin_remote_not_configured');
+    });
+
+    it('reports the library, and that rohy can write to it, on the public health probe', async () => {
+        const health = await (await fetch(`${server.baseUrl}/api/health/plugins`)).json();
+        expect(health.configured).toBe(0);
+        expect(health.libraries.pathology).toMatchObject({ writable: true, assets: 1, ready: 1 });
     });
 
     it('but reports the operator state when there is nothing at all to show', async () => {
