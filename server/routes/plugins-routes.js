@@ -39,6 +39,7 @@ import { originRequestHeaders } from '../lib/pluginOriginTokens.js';
 import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/pluginSettings.js';
 
 import { importOriginsFor } from '../lib/pluginImportOrigins.js';
+import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { tenantId, auditSuccess, dbGet, dbRun, dbAll } from './_helpers.js';
 import { logger } from '../logger.js';
 import { contentPath, isRecordedContentPath, recordContentRead } from '../services/pluginContentReads.js';
@@ -274,17 +275,18 @@ function readStarterCatalog(dir, shape) {
 }
 
 /**
- * Serve one file from the starter bundle.
+ * Serve one file from a directory on this host: the starter bundle or the
+ * managed library.
  *
  * `built.path` has already been parsed and checked against the manifest's
  * declared prefixes by the caller. This resolves it and checks CONTAINMENT
  * anyway: two independent reasons a traversal cannot succeed is the right
  * number for a route that turns a URL into a file read.
  */
-function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
+function serveLocalFile(res, dir, contentPath, manifest, pluginId) {
     const target = resolve(join(dir, normalize(contentPath).replace(/^[/\\]+/, '')));
     if (target !== dir && !target.startsWith(dir + sep)) {
-        log.warn('starter content path escaped its directory', { pluginId, contentPath });
+        log.warn('local plugin content path escaped its directory', { pluginId, contentPath });
         return res.status(403).json({ error: 'forbidden', code: 'plugin_remote_bad_path' });
     }
     let stat;
@@ -301,7 +303,7 @@ function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
     if (!manifest.remote.contentTypes.includes(type)) {
         // The manifest lists what this plugin's content may BE. A bundle file
         // outside that list is a packaging error, not something to serve.
-        log.warn('starter content type is not declared by the manifest', { pluginId, contentPath, type });
+        log.warn('local plugin content type is not declared by the manifest', { pluginId, contentPath, type });
         return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
     }
 
@@ -321,7 +323,7 @@ function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
         // The bundle can be replaced between stat() and open(). A stream error
         // without a listener is process-fatal; turn that race into one failed
         // request while the atomically staged replacement becomes visible.
-        log.warn('starter content stream failed', { pluginId, contentPath, error: err.message });
+        log.warn('local plugin content stream failed', { pluginId, contentPath, error: err.message });
         if (!res.headersSent) {
             res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
         } else {
@@ -739,19 +741,24 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
 
     const origin = pluginOrigins().get(pluginId);
     const starter = origin ? null : starterContentDir(pluginId);
-    if (!origin && !starter) {
-        return res.status(503).json({
-            // ISSUE-0025: bundled starter content is the ordinary way this
-            // deployment gets imaging (`npm run setup:content`, INSTALL.md);
-            // a remote origin is the alternative. Naming only the alternative
-            // sent operators hunting for a variable they did not need, while
-            // learners saw an empty PACS workstation.
-            error: `Plugin '${pluginId}' has no content on this deployment. `
-                + 'Install the bundled starter content with `npm run setup:content`, '
-                + 'or point the plugin at a remote origin with ROHY_PLUGIN_ORIGINS.',
-            code: 'plugin_remote_not_configured',
-        });
-    }
+    // The managed library is rohy's own: rohy writes it (slide imports, case
+    // packages), so rohy serves it, whether or not this deployment also has a
+    // content bundle or an origin. It used to be reachable only through one of
+    // those, so a deployment with a library and no bundle (every Docker
+    // install) imported slides it could not show.
+    const library = libraryDirs().get(pluginId) ?? null;
+    const noContent = () => res.status(503).json({
+        // ISSUE-0025: bundled starter content is the ordinary way this
+        // deployment gets imaging (`npm run setup:content`, INSTALL.md);
+        // a remote origin is the alternative. Naming only the alternative
+        // sent operators hunting for a variable they did not need, while
+        // learners saw an empty PACS workstation.
+        error: `Plugin '${pluginId}' has no content on this deployment. `
+            + 'Install the bundled starter content with `npm run setup:content`, '
+            + 'or point the plugin at a remote origin with ROHY_PLUGIN_ORIGINS.',
+        code: 'plugin_remote_not_configured',
+    });
+    if (!origin && !starter && !library) return noContent();
 
     const built = buildUpstreamPath(req.params.splat);
     if (!built.ok) {
@@ -779,7 +786,24 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     // its way to a remote origin — parsed and confirmed declared — before
     // anything touches the filesystem. Reversing that order is how a content
     // route becomes a file-read primitive.
-    if (starter) return serveStarterFile(res, starter, built.path, manifest, pluginId);
+    if (library && built.path.startsWith('/library/')) {
+        // Served from disk when the file is here; otherwise the bundle or the
+        // origin answers as before, so a library an origin already serves keeps
+        // working unchanged.
+        const root = resolve(library);
+        const local = built.path.slice('/library'.length);
+        if (existsSync(resolve(join(root, normalize(local).replace(/^[/\\]+/, ''))))) {
+            return serveLocalFile(res, root, local, manifest, pluginId);
+        }
+    }
+    if (starter) return serveLocalFile(res, starter, built.path, manifest, pluginId);
+    if (!origin) {
+        // Only the library is here: a library file it lacks is simply absent,
+        // anything else is content this deployment was never given.
+        return built.path.startsWith('/library/')
+            ? res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' })
+            : noContent();
+    }
 
     const target = `${origin}${built.path}`;
     let upstream;

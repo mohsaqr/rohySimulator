@@ -331,9 +331,14 @@ Compose file: `deploy/docker/compose.yml`. Two services:
 - `rohy`: node 22 + sqlite3, builds from the repo, exposes 4000
 - `caddy`: reverse proxy with `Caddyfile` template
 
-Persistent volumes:
-- `./data:/opt/data/rohy`: SQLite DB lives here
-- `./oyon-cache:/opt/repos/rohy/OyonR/standalone/vendor`: wasm/mjs vendor cache
+Persistent volumes (named volumes, prefixed with the Compose project name):
+- `rohy-db` → `/var/lib/rohy`: the SQLite database
+- `rohy-hf-cache` → `/var/cache/rohy-hf`: downloaded speech and Oyon models
+- `rohy-uploads` → `/opt/rohy/public/uploads`: uploaded images
+- `rohy-plugin-library` → `/var/lib/rohy-plugin-library`: imported pathology
+  slides. The image sets `ROHY_PLUGIN_LIBRARY_DIRS` to it, so slide imports and
+  case packages with slides work with no further setup. Plan its size: a slide
+  package is gigabytes.
 
 `OYON_ENABLED=1` is the compose default. Disable with `OYON_ENABLED=0`
 in `.env`.
@@ -489,7 +494,7 @@ After a `bootstrap.sh` install:
 | `/var/log/journal/` | `root` | NDJSON logs via systemd-journald. `journalctl -u rohy`. |
 
 After Docker:
-- Everything is in `deploy/docker/` plus the volumes `./data` and `./oyon-cache`.
+- Everything is in `deploy/docker/` plus the named volumes listed under [§ Docker](#docker).
 
 ---
 

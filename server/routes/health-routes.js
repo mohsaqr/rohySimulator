@@ -320,5 +320,13 @@ router.get('/health/plugins', async (req, res) => {
         // `configured: 0` and is perfectly healthy; without this the response
         // cannot say so.
         content: starterHealth(),
+        // Every managed library, origin or not. Reported only under `plugins`
+        // it was invisible on a deployment without an origin (every Docker
+        // install), which is where an unwritable library hid. `writable` is the
+        // one fact an operator cannot see from outside the container.
+        libraries: Object.fromEntries(await Promise.all([...libraryDirs()].map(async ([id, dir]) => [id, {
+            writable: await fs.promises.access(dir, fs.constants.W_OK).then(() => true, () => false),
+            ...(await libraryHealth(id)).library,
+        }]))),
     });
 });

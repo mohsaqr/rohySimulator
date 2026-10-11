@@ -9,10 +9,10 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:723` |
-| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:474` |
-| `GET` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:636` |
-| `PUT` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:665` |
+| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:725` |
+| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:476` |
+| `GET` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:638` |
+| `PUT` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:667` |
 | `GET` | `/api/plugins/pathology/assets` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:157` |
 | `DELETE` | `/api/plugins/pathology/assets/:assetId` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:203` |
 | `PUT` | `/api/plugins/pathology/assets/:assetId/calibration` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:230` |

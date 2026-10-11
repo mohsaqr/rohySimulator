@@ -9,6 +9,31 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.39] — 2026-10-11
+
+- **Rohy serves its own slide library.** The content proxy served `library/…` only through a content
+  bundle or a content origin, so the library had to sit inside one of them. A deployment with a library
+  and neither (every Docker install) imported slides it could not show, and the import said only that
+  "this server does not serve its library". The proxy now serves library files from
+  `ROHY_PLUGIN_LIBRARY_DIRS` directly, with the same path checks as before, and asks the bundle or the
+  origin only for a library file it does not have, so existing deployments behave as they did.
+- **Docker installs ship a slide library.** The image creates `/var/lib/rohy-plugin-library/pathology`,
+  owned by the app user, and sets `ROHY_PLUGIN_LIBRARY_DIRS` to it; `compose.yml` mounts the new
+  `rohy-plugin-library` volume there. Slide imports and case packages with slides work with no setup.
+- **An unwritable library is named.** A library Rohy cannot write (a host path such as `/srv/www` that
+  does not exist inside a container, or a root-owned folder) failed a case-package import as "The
+  package job failed" after the upload was unpacked. The import now refuses before placing anything,
+  naming the folder (`case_package_library_unwritable`). `GET /api/health/plugins` reports every
+  library under `libraries`, with `writable`, also when the plugin has no content origin.
+- **`server/.env` is no longer copied into the Docker image.** `.dockerignore` excluded `.env` only at
+  the repository root, so a host's `server/.env` (its JWT secret and local paths) was baked into the
+  image. Every `.env` is now excluded; configuration reaches a container through Compose. The JWT
+  secret was never read from it in a container: the entrypoint sets one first.
+- Docs: the Docker install guides listed volumes Compose does not create (`./data`, `./oyon-cache`);
+  they now list the four named volumes. Pathology slides and Case packages describe the library as
+  Rohy-served. Regression-lock tests for a library-only deployment, an unwritable library, and the
+  health report.
+
 ## [3.0.0-rc.38] — 2026-10-11
 
 - **A case package with slides is refused on a server with no slide library.** The import used to

@@ -99,6 +99,10 @@ services:
       # Uploaded images (body-map silhouettes). Without this they lived in
       # the container layer and vanished on every image redeploy.
       - rohy-uploads:/opt/rohy/public/uploads
+      # Imported pathology slides (ROHY_PLUGIN_LIBRARY_DIRS, set in the image).
+      # Gigabytes per case; on its own volume so it is backed up, or not,
+      # separately from the database.
+      - rohy-plugin-library:/var/lib/rohy-plugin-library
     networks:
       - rohy-net
     # Healthcheck is also defined in the Dockerfile; redeclaring here so
@@ -137,6 +141,7 @@ volumes:
   rohy-db:
   rohy-hf-cache:
   rohy-uploads:
+  rohy-plugin-library:
   caddy-data:
   caddy-config:
 

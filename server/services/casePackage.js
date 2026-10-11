@@ -830,28 +830,6 @@ async function placeFile(from, to) {
     }
 }
 
-/** Is a library directory actually served for this plugin on THIS server? */
-async function libraryServed(pluginId, libDir, probeRel) {
-    const origin = pluginOrigins().get(pluginId);
-    if (origin) {
-        try {
-            const res = await fetch(`${origin}/${probeRel}`, {
-                method: 'HEAD',
-                redirect: 'manual',
-                signal: AbortSignal.timeout(ORIGIN_TIMEOUT_MS),
-                headers: originRequestHeaders(pluginId),
-            });
-            return res.ok;
-        } catch {
-            return false;
-        }
-    }
-    const starter = starterContentDir(pluginId);
-    if (!starter) return false;
-    const real = (p) => fsp.realpath(p).catch(() => path.resolve(p));
-    return (await real(libDir)) === (await real(path.join(starter, 'library')));
-}
-
 /** Slide optics and label as the case document records them for one reference. */
 function slideFacts(pluginDoc, ref) {
     let facts = null;
@@ -914,6 +892,25 @@ async function placeAssetId({ libDir, preferredId, digest, tenant, plugin, row }
         if (sameOwner && digestOf(await hashAssetDir(root)) === digest) return { id, reuse: true };
     }
     return { id: `asset-${randomBytes(12).toString('hex')}`, reuse: false };
+}
+
+/**
+ * Refuse the package, naming the folder, when the slide library cannot be
+ * written. Checked while planning, so a library the server cannot write to
+ * (a path that does not exist inside a container, a root-owned directory)
+ * is reported with its path instead of failing as "The package job failed"
+ * after the upload was unpacked. Creating the directory is the same step the
+ * placement takes, done early.
+ */
+async function assertLibraryWritable(plugin, libDir) {
+    try {
+        await fsp.mkdir(libDir, { recursive: true });
+        await fsp.access(libDir, fs.constants.W_OK);
+    } catch (err) {
+        throw new PackageError(
+            `Rohy cannot write to the ${plugin} slide library ${libDir} (${err.code || err.message}). Check ROHY_PLUGIN_LIBRARY_DIRS and the folder's owner. Nothing was imported.`,
+            'case_package_library_unwritable', 500);
+    }
 }
 
 /**
@@ -994,6 +991,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                 withoutLibrary.push({ plugin, ref: fromRef });
                 return;
             }
+            await assertLibraryWritable(plugin, libDir);
             for (const f of files) {
                 const rel = f.target ?? f.path;
                 if (!libraryFileLooksRight(rel, await readHead(path.join(staging, f.sha256)))) {
@@ -1195,17 +1193,6 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         await attachStandingSpecialists({ caseId: result.caseId }).catch((err) => {
             log.warn('standing specialist attach failed', { caseId: result.caseId, error: err.message });
         });
-
-        for (const asset of assetPlans) {
-            const probe = asset.files.find((f) => f.path === 'slide.dzi') ?? asset.files[0];
-            if (!await libraryServed(asset.plugin, asset.libDir, `library/${asset.id}/${probe.path}`)) {
-                warnings.push({
-                    field: `config.${asset.plugin}`,
-                    received: `remote:library/${asset.id}/`,
-                    hint: 'Imported into the slide library, but this server does not serve its library, so it will not display. The library directory must sit inside the content this plugin serves.',
-                });
-            }
-        }
 
         return {
             case: { id: result.caseId, case_code: result.caseCode, name },

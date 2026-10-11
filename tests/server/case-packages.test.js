@@ -19,7 +19,7 @@
 //   - nothing is left behind by a refused import.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, createWriteStream } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, createWriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
@@ -282,6 +282,46 @@ describe('case packages: export from one server, import into another', () => {
             expect(assets.n).toBe(0);
         } finally {
             await bare.close();
+        }
+    }, 60000);
+
+    it('names an unwritable library; once writable, imports into a library-only server and serves the slide', async () => {
+        // Regression lock: a library rohy could not write (a path missing inside a container) failed as "The package job failed", and a library with no content bundle beside it was never served
+        const parent = join(fx, 'docker-like');
+        const libDir = join(parent, 'pathology');
+        mkdirSync(parent, { recursive: true });
+        const lone = await startTestServer({
+            seed: false,
+            env: { ROHY_PLUGIN_LIBRARY_DIRS: `pathology=${libDir}`, ROHY_STARTER_CONTENT: 'off', ROHY_CASE_PACKAGE_DIR: join(fx, 'lone-work') },
+        });
+        try {
+            const db = await openDb(lone.dbPath);
+            await seedUser(db, { username: 'pkg-admin', role: 'admin' });
+            await closeDb(db);
+            const admin = await asUser(lone.baseUrl, 'pkg-admin');
+            await admin('/api/platform-settings/case-packages', { method: 'PUT', json: { enabled: true } });
+
+            if (process.getuid?.() !== 0) {
+                // Root writes anywhere, so the refusal is only observable as a normal user.
+                chmodSync(parent, 0o500);
+                try {
+                    const { job } = await importPackage(admin, pkg);
+                    expect(job.state).toBe('failed');
+                    expect(job.error.code).toBe('case_package_library_unwritable');
+                    expect(job.error.error).toContain(libDir);
+                } finally {
+                    chmodSync(parent, 0o700);
+                }
+            }
+
+            const { job } = await importPackage(admin, pkg);
+            expect(job.state).toBe('done');
+            expect(job.result.warnings.filter((w) => /library/.test(w.hint))).toEqual([]);
+            const served = await admin(`/api/plugins/pathology/library/${assetId}/slide.dzi`);
+            expect(served.status).toBe(200);
+            expect(Buffer.from(await served.arrayBuffer()).equals(DZI(1024, 768))).toBe(true);
+        } finally {
+            await lone.close();
         }
     }, 60000);
 
