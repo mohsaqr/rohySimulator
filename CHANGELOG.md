@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.35] — 2026-10-11
+
+Pre-release dependency security pass for 3.0.0.
+
+- **Security updates.** `npm audit fix` (no breaking upgrades) plus Tiptap 3.27 → 3.31.4 (the lesson editor;
+  `mergeAttributes()` `__proto__` and Markdown ReDoS advisories). Fixed among others: `proxy-addr`
+  (critical, IP spoofing through Express's trusted-proxy check), `multer` (two DoS), DOMPurify (XSS
+  bypasses), `prosemirror-view` (paste XSS), `qs`, `nanoid`, PostCSS, `ip-address`, `http-cache-semantics`,
+  `brace-expansion`, `fflate`, `source-map-js`. Production advisories went from 55 to 14.
+- **Still open, with reasons.** Seven advisories, including the critical `tar`, sit in `sqlite3`'s
+  install-time build chain (`node-gyp`, `tar`, `cacache`, `make-fetch-happen`), used when the native module
+  is installed and not at run time; their fix is the `sqlite3` 6 major upgrade, left for after 3.0.0. Seven
+  have no upstream fix yet: `sharp`/libvips, and `kokoro-js` → `@huggingface/transformers` →
+  `onnxruntime-node` → `global-agent` → `roarr` → `sprintf-js`.
+- **Lab turnaround test (PRV-7).** The default-catalogue lab test now asserts the exact wait imposed for an
+  override of 5, an override of 0 and no override (3 minutes); it used to accept any span under 4 minutes,
+  which an instant result also met. All three are imposed: PRV-7 does not reproduce.
+
 ## [3.0.0-rc.34] — 2026-10-11
 
 Closes the three course-gate findings left open in rc.32.
