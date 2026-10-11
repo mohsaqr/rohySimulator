@@ -9,6 +9,34 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.34] — 2026-10-11
+
+Closes the three course-gate findings left open in rc.32.
+
+- **The server now decides which slides a learner has opened.** The course gate's "every pathology
+  slide opened" condition used to count OPENED_SLIDE events posted by the learner's browser, so a
+  learner could post them and open the course materials and the post-test without opening a slide.
+  Slides reach a learner only through Rohy's authenticated content proxy, which now records the first
+  time it serves each user a slide descriptor (`.dzi`) in the new `plugin_content_reads` table
+  (migration 0068), and the gate counts those. Descriptors are sent `private, no-cache`, so a second
+  learner on the same browser is recorded too. Only a slide an author linked by a full web address,
+  which never passes through the proxy, still counts the browser's report. The reads are erased with
+  the user.
+- **Files of a locked lesson are held back with the lesson.** `/uploads` is served without a sign-in,
+  so a PDF or picture attached to a locked lesson could be opened by anyone with its address. A file
+  that a locked lesson uses is now served only to a signed-in reader for whom one of those lessons is
+  open (`private, no-store`); everyone else gets 401 or 404. A file no locked lesson uses, or one a
+  published open lesson also shows, is served as before.
+- **Guests are refused the course routes.** `GET /cases/:id/course-state` and questionnaire answers
+  now require a student or above; a guest's Course panel shows nothing instead of an error.
+- **Translations.** A review pass over the course and questionnaire strings in de, es, fi, fr, it, kk
+  and sv corrected 20 strings (meaning, agreement, terms used elsewhere in each language). It was a
+  careful machine review, not a native-speaker review. The editor's note on the gate now says the
+  server measures both conditions, in every language.
+- **Docs.** The educator course page describes the server-measured slides, held-back files and guests.
+  The learner room pages and the operator install page no longer say the PACS, Pathology and ECG rooms
+  need the `advanced` channel: `current` and `advanced` are the same build.
+
 ## [3.0.0-rc.33] — 2026-10-11
 
 - **Docs: Building a pathology case** (`docs/educator/pathology-cases.md`), the educator's

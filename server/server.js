@@ -71,6 +71,7 @@ instrumentSqliteDb(db);
 // CORS Configuration - restrict to allowed origins
 import { buildCorsOptions } from './cors-config.js';
 import { securityHeaders } from './security-headers.js';
+import { lessonFileGuard } from './routes/lessons-routes.js';
 
 app.use(requestIdMiddleware);
 app.use(securityHeaders({ nodeEnv: process.env.NODE_ENV }));
@@ -167,7 +168,9 @@ function serveAppShell(req, res) {
 app.get('/', serveAppShell);
 app.get('/register', serveAppShell);
 
-app.use('/uploads', express.static(path.join(__dirname, "..", "public","uploads")));
+// A file a locked lesson uses is held back like the lesson (lessonFileGuard);
+// every other upload is served as before.
+app.use('/uploads', lessonFileGuard, express.static(path.join(__dirname, "..", "public","uploads")));
 
 // VitePress documentation site (Stage 4 — Help & Support links here).
 // The build emits cleanUrls (trainee/getting-started.html served at

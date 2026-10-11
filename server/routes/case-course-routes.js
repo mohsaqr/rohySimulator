@@ -14,7 +14,7 @@
 
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
-import { authenticateToken, requireEducator } from '../middleware/auth.js';
+import { authenticateToken, requireEducator, requireStudent } from '../middleware/auth.js';
 import {
     tenantId,
     auditSuccess,
@@ -111,8 +111,9 @@ function attemptView(row, questionnaire, { postSubmitted }) {
 
 // GET /cases/:caseId/course-state — the caller's gate state for the case and
 // the case's questionnaires with the attempt open to them now and what they
-// already submitted.
-router.get('/cases/:caseId/course-state', authenticateToken, async (req, res) => {
+// already submitted. Students and up: a guest has no course, and a guest's
+// answers would be stored against an account that is not a learner's.
+router.get('/cases/:caseId/course-state', authenticateToken, requireStudent, async (req, res) => {
     try {
         const caseId = Number(req.params.caseId);
         if (!Number.isInteger(caseId)) return res.status(400).json({ error: 'Invalid case id' });
@@ -155,7 +156,7 @@ router.get('/cases/:caseId/course-state', authenticateToken, async (req, res) =>
 // POST /cases/:caseId/questionnaires/:questionnaireId/responses — body
 // { attempt, answers, sessionId? }. Refused unless `attempt` is the one open
 // to the caller now; written once.
-router.post('/cases/:caseId/questionnaires/:questionnaireId/responses', authenticateToken, async (req, res) => {
+router.post('/cases/:caseId/questionnaires/:questionnaireId/responses', authenticateToken, requireStudent, async (req, res) => {
     try {
         const caseId = Number(req.params.caseId);
         if (!Number.isInteger(caseId)) return res.status(400).json({ error: 'Invalid case id' });

@@ -118,7 +118,7 @@ describe('a fresh deployment with no origin serves the starter bundle', () => {
         expect(assets.every((a) => a.provenance?.redistribution)).toBe(true);
     });
 
-    it('a tile is served from disk, with an immutable cache and the right type', async () => {
+    it('a slide is served from disk: its descriptor fetched on every open, its images cached', async () => {
         const catalog = await (await get('/api/plugins/pathology/catalog')).json();
         const asset = (catalog.catalog?.assets ?? [])[0];
         const dzi = asset.revisions[0].derivatives.dzi.url.replace('remote:', '');
@@ -127,8 +127,15 @@ describe('a fresh deployment with no origin serves the starter bundle', () => {
         const res = await get(`/api/plugins/pathology/${dzi}`);
         expect(res.status).toBe(200);
         expect(await res.text()).toContain('<Image');
+        // The descriptor is re-fetched on every open: the server records each
+        // learner's read of it for the course gate (pluginContentReads.js).
+        expect(res.headers.get('cache-control')).toBe('private, no-cache');
+
         // A tile's bytes are named by a fixed image's level and position.
-        expect(res.headers.get('cache-control')).toMatch(/immutable/);
+        const image = await get('/api/plugins/pathology/tiles/previews/slide-a.jpg');
+        expect(image.status).toBe(200);
+        expect(image.headers.get('content-type')).toBe('image/jpeg');
+        expect(image.headers.get('cache-control')).toMatch(/immutable/);
     });
 
     it('every attribution_only slide carries its notice', async () => {

@@ -7,7 +7,7 @@
   "attempt_submitted": "{attempt} lähetetty {time}",
   "correct_answer": "Oikea vastaus: {answer}",
   "gate_locked_body": "Tämän tapauksen kurssimateriaalit avautuvat, kun olet työstänyt tapausta.",
-  "gate_locked_title": "Kurssimateriaalit ovat lukittuina",
+  "gate_locked_title": "Kurssimateriaalit on lukittu",
   "gate_open_body": "Voit nyt lukea tämän tapauksen kurssimateriaalit.",
   "gate_open_title": "Kurssimateriaalit ovat avoinna",
   "gate_slides_opened": "Avatut leikkeet: {opened}/{total}",

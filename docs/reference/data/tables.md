@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**99 tables.**
+**100 tables.**
 
 ## `active_sessions`
 
@@ -1575,6 +1575,22 @@ Stores plugin assets records.
 | `created_by` | INTEGER | REFERENCES users(id) | — |
 | `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
 | `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
+
+## `plugin_content_reads`
+
+Stores plugin content reads records.
+
+**Introduced by:** migration `0068_plugin_content_reads.sql`
+
+**Cross-cutting:** `tenant-scoped`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `user_id` | INTEGER | NOT NULL REFERENCES users(id) | — |
+| `plugin_id` | TEXT | NOT NULL | — |
+| `path` | TEXT | NOT NULL | — |
+| `first_read_at` | TEXT | NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) | — |
 
 ## `plugin_jobs`
 

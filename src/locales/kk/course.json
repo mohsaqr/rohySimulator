@@ -7,7 +7,7 @@
   "attempt_submitted": "{attempt}: {time} жіберілді",
   "correct_answer": "Дұрыс жауап: {answer}",
   "gate_locked_body": "Бұл кейстің курс материалдары кейспен жұмыс істегеннен кейін ашылады.",
-  "gate_locked_title": "Курс материалдары құлыптаулы",
+  "gate_locked_title": "Курс материалдары құлыпталған",
   "gate_open_body": "Енді бұл кейстің курс материалдарын оқи аласыз.",
   "gate_open_title": "Курс материалдары ашық",
   "gate_slides_opened": "Ашылған препараттар: {opened}/{total}",

@@ -26,19 +26,19 @@ Terms like *snapshot* and *additive migration* are defined in the
 | **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build`: Caddy auto-TLS, persistent volumes |
 | **Air-gapped** (no internet on target) | [§ Air-gap](#air-gapped-target) | One signed tarball, sha256-verified, platform-stamped |
 
-After any path, install [§ Imaging content](#imaging-content) if you are on the
-advanced channel, then go to [§ First boot](#first-boot) and
+After any path, install [§ Imaging content](#imaging-content) if you teach with
+the PACS or Pathology rooms, then go to [§ First boot](#first-boot) and
 [§ Smoke verify](#smoke-verify).
 
 ### Which channel
 
-| tag | what it is |
-|---|---|
-| `current` | the stable, **pre-plugin** build: no PACS, Pathology or ECG rooms |
-| `advanced` | those rooms included; needs imaging content installed (below) |
+There is one: the `current` tag. It includes the PACS, Pathology and 12-lead
+ECG rooms. The `advanced` tag is kept on the same commit for installs that
+already follow it; it is no longer a different build.
 
-Take `current` if you do not teach imaging. There is nothing to install and
-nothing in the imaging section applies to you.
+A room shows only when a case has material for it, and the PACS and Pathology
+rooms need imaging content: install it as described in
+[§ Imaging content](#imaging-content), or point Rohy at your own content origin.
 
 ---
 
@@ -175,7 +175,7 @@ npm run setup:oyon          # idempotent — only fetches missing files
 
 ## Imaging content
 
-**Advanced channel only.** The PACS and Pathology rooms read gigabytes of
+**If you teach with imaging.** The PACS and Pathology rooms read gigabytes of
 pixels: DICOM series and Deep Zoom tile pyramids. These are too large to live
 in the repository or the image. They are published separately and installed
 with one command:
@@ -197,7 +197,7 @@ heart rate, ECG, depth, probe) is left intact because it carries no identity
 and you need it to read the study.
 
 **This step is required.** The default case orders four imaging
-studies, so a learner on the advanced channel reaches the PACS room on the
+studies, so a learner reaches the PACS room on the
 first case they open. Without content that room is empty.
 
 ### Installing from a file: no credentials at all
@@ -240,8 +240,8 @@ ROHY_PLUGIN_ORIGINS=pacs=https://slides.example.edu
 ROHY_PLUGIN_ORIGIN_TOKENS=pacs=...     # if that origin is closed
 ```
 
-A configured origin always wins over installed content. To run the advanced
-channel with **no** imaging at all, set `ROHY_STARTER_CONTENT=off`: the rooms
+A configured origin always wins over installed content. To run with **no**
+imaging at all, set `ROHY_STARTER_CONTENT=off`: the rooms
 then report honestly that no content is configured, which is the right state
 for a deployment that must show only its own material.
 

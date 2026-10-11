@@ -13,10 +13,8 @@ twelve-lead recording that you measure and report on.
 ## When the room appears
 
 Look for **12-lead ECG** with the subtitle **interpretation** in the bottom
-navigation bar. It appears when the platform runs the `advanced` release
-channel (the `current` channel is the pre-plugin build and carries no ECG
-room, see [Install](/operator/install#which-channel) under "Which channel") and when the case you
-are in supplies a readable recording. A case carrying no recording leaves the
+navigation bar. It appears when the case you are in supplies a readable
+recording. A case carrying no recording leaves the
 button out of the bar.
 
 ## What the case gives you
