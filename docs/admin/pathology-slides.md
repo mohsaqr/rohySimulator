@@ -19,6 +19,9 @@ This page covers the managed half.
 Settings → Cases → *a case* → Plugins → **Open editor** → **Add slide from the
 slide library** → **Import from link**.
 
+The whole educator workflow, from the slide file to a finished case, is in
+[Building a pathology case](/educator/pathology-cases).
+
 Paste a URL to a whole-slide image and press Import. The card then moves through:
 
 ```

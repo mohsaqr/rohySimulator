@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.33] — 2026-10-11
+
+- **Docs: Building a pathology case** (`docs/educator/pathology-cases.md`), the educator's
+  walk-through from a scanned slide file to a finished case: what the administrator sets up, importing
+  and labelling slides, calibration, specimen parts and gross photographs, the task and the protected
+  rubric, the learner preview, locking lessons behind the case, and moving it as a case package. A table
+  lists every place a learner can see before answering and the wording that gives the diagnosis away.
+  Linked from the educator sidebar and overview and from the admin Pathology slides page.
+
 ## [3.0.0-rc.32] — 2026-10-10
 
 Fixes from an adversarial review of rc.25–30 (course gate, questionnaires, case packages).
