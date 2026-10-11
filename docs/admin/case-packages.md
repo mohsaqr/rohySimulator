@@ -65,6 +65,12 @@ when:
 - a file does not match its checksum
 - a slide file is not part of a deep-zoom layout
 - the disk would be left with less free space than the configured margin
+- the package carries slides or specimen photographs and this server has no
+  slide library (`ROHY_PLUGIN_LIBRARY_DIRS`, see
+  [Pathology slides](/admin/pathology-slides#what-an-operator-provisions)).
+  A pathology case without its slides is not the case that was exported, so
+  nothing is created. Set the library, restart Rohy and import the package
+  again.
 
 A file posing as an image (an HTML page renamed `.png`, say) is left out and
 listed in the report. If the database write fails after files were placed, the

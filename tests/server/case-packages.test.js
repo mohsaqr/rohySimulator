@@ -260,6 +260,31 @@ describe('case packages: export from one server, import into another', () => {
         expect(served.status).toBe(200);
     });
 
+    it('refuses a package with slides on a server that has no slide library, and creates nothing', async () => {
+        // Regression lock: the import created the case anyway and only warned, leaving a pathology case whose slides point nowhere
+        const bare = await startTestServer({ seed: false, env: { ROHY_CASE_PACKAGE_DIR: join(fx, 'bare-work') } });
+        try {
+            const db = await openDb(bare.dbPath);
+            await seedUser(db, { username: 'pkg-admin', role: 'admin' });
+            await closeDb(db);
+            const admin = await asUser(bare.baseUrl, 'pkg-admin');
+            await admin('/api/platform-settings/case-packages', { method: 'PUT', json: { enabled: true } });
+
+            const { job } = await importPackage(admin, pkg);
+            expect(job.state).toBe('failed');
+            expect(job.error).toMatchObject({ code: 'case_package_no_library', status: 422 });
+            expect(job.error.error).toMatch(/1 slide .*pathology.*ROHY_PLUGIN_LIBRARY_DIRS.*Nothing was imported/);
+            const db2 = await openDb(bare.dbPath);
+            const cases = await get(db2, "SELECT COUNT(*) AS n FROM cases WHERE name = 'PKG Case'", []);
+            const assets = await get(db2, 'SELECT COUNT(*) AS n FROM plugin_assets', []);
+            await closeDb(db2);
+            expect(cases.n).toBe(0);
+            expect(assets.n).toBe(0);
+        } finally {
+            await bare.close();
+        }
+    }, 60000);
+
     it('re-importing the same package reuses the slide and the upload rather than duplicating them', async () => {
         const { job } = await importPackage(tgtAdmin, pkg);
         expect(job.state).toBe('done');
