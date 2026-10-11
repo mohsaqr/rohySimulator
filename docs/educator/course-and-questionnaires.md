@@ -42,12 +42,25 @@ case does not publish its answer. To open them, select **Save locked lessons**
 in the **Course** step of any other case in the same course: a lesson that
 waited for a deleted case opens unless you tick it for that case.
 
-::: warning Opened slides are reported by the learner's browser
-The time condition is measured by the server and cannot be faked. The slide
-condition counts the slide-opened events that the learner's browser reports.
-That is enough to hold back teaching material, but do not use it to lock an
-exam.
-:::
+Both conditions are measured by the server. The time counts from the
+learner's first session on the case. A slide counts as opened when the server
+has sent that learner the slide's image, which happens when they open it in
+the **Pathology** room. The learner's browser cannot claim a slide it did not
+open.
+
+The one exception is a slide whose image an author linked by a full web
+address (`https://…`) instead of taking it from the slide library. Rohy never
+sees that image load, so for such a slide it counts the learner's browser
+reporting that the slide was opened.
+
+Files attached to a locked lesson, such as a PDF in a section or a picture in
+its text, are held back with the lesson. Until the lesson opens for a learner,
+opening the file's address gives them nothing. A file that a published lesson
+without a lock also shows is not held back, because learners can already see
+it there.
+
+Only signed-in students and staff have a course: a guest account sees no
+course materials or questionnaires.
 
 ## Questionnaires
 

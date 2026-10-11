@@ -41,6 +41,7 @@ import { readSettings, mergeSettings, visibleSettingKeys } from '../shared/plugi
 import { importOriginsFor } from '../lib/pluginImportOrigins.js';
 import { tenantId, auditSuccess, dbGet, dbRun, dbAll } from './_helpers.js';
 import { logger } from '../logger.js';
+import { contentPath, isRecordedContentPath, recordContentRead } from '../services/pluginContentReads.js';
 
 const log = logger('plugin-proxy');
 const router = express.Router();
@@ -308,9 +309,13 @@ function serveStarterFile(res, dir, contentPath, manifest, pluginId) {
     res.setHeader('Content-Length', String(stat.size));
     // A tile is immutable by construction — its bytes are named by the pyramid
     // level and position of a fixed image. The catalogue is not.
+    // A slide descriptor is fetched again on every open: the server records the
+    // read (services/pluginContentReads.js), and a cached descriptor would
+    // leave a second learner on the same browser unrecorded.
     res.setHeader('Cache-Control', contentPath.endsWith('.json')
         ? 'no-cache'
-        : 'public, max-age=31536000, immutable');
+        : isRecordedContentPath(contentPath) ? 'private, no-cache'
+            : 'public, max-age=31536000, immutable');
     const stream = createReadStream(target);
     stream.once('error', (err) => {
         // The bundle can be replaced between stat() and open(). A stream error
@@ -759,6 +764,17 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
         });
     }
 
+    // A slide descriptor the user's browser loaded is recorded once it has been
+    // served: the course gate's "every slide opened" counts these reads, which
+    // the browser cannot post for itself.
+    if (isRecordedContentPath(built.path)) {
+        const read = { tenantId: tenantId(req), userId: req.user.id, pluginId, path: contentPath(req.params.splat) };
+        res.on('finish', () => {
+            if (res.statusCode !== 200) return;
+            recordContentRead(read).catch((err) => log.warn('plugin content read not recorded', { pluginId, error: err.message }));
+        });
+    }
+
     // The SAME path has now passed the SAME two gates it would have passed on
     // its way to a remote origin — parsed and confirmed declared — before
     // anything touches the filesystem. Reversing that order is how a content
@@ -839,7 +855,7 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     // must not be held by a shared cache. Tiles are immutable once published,
     // so a long max-age is what keeps a deep-zoom pan off the network entirely
     // — which matters more for load than any limit set above.
-    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Cache-Control', isRecordedContentPath(built.path) ? 'private, no-cache' : 'private, max-age=86400');
     // The upstream is not a trusted source of security policy for rohy's origin.
     res.setHeader('X-Content-Type-Options', 'nosniff');
     return res.send(buffer);

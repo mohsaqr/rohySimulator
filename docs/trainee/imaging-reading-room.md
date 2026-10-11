@@ -12,12 +12,9 @@ boundary a clinician does.
 
 The room sits in the same bottom navigation bar as every other room, one
 place after **Radiology**, labelled **PACS** with the subtitle
-**workstation**. It appears when both of these hold:
-
-- Your institution runs the `advanced` release channel. A `current`-channel
-  install ships without the PACS room.
-- The case has something for you to open: an educator wired imaging into
-  the case, or you have ordered an imaging study in this session.
+**workstation**. It appears when the case has something for you to open: an
+educator wired imaging into the case, or you have ordered an imaging study in
+this session.
 
 ## Pick a study
 

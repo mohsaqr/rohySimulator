@@ -7,8 +7,7 @@ find, and write a report on it.
 ## When the room appears
 
 **Pathology** sits in the bottom navigation bar with the subtitle **slides**,
-after the other rooms. It appears when two conditions hold: your Rohy install
-runs the `advanced` release channel, and the case carries material you can
+after the other rooms. It appears when the case carries material you can
 open, meaning a slide with a loadable source and scanner optics, or a gross
 specimen photograph. For a case with neither, the room stays out of the bar.
 

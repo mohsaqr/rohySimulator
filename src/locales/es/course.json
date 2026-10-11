@@ -4,7 +4,7 @@
   "attempt_post": "Prueba posterior",
   "attempt_pre": "Prueba previa",
   "attempt_single": "Tus respuestas",
-  "attempt_submitted": "{attempt} enviada {time}",
+  "attempt_submitted": "{attempt}: fecha de envío {time}",
   "correct_answer": "Respuesta correcta: {answer}",
   "gate_locked_body": "Los materiales del curso de este caso se abren cuando hayas trabajado en el caso.",
   "gate_locked_title": "Los materiales del curso están bloqueados",

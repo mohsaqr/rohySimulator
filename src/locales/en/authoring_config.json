@@ -223,7 +223,7 @@
   "course_gate_slides": "Every pathology slide opened",
   "course_gate_slides_count": "{count, plural, one {The case has # slide.} other {The case has # slides.}}",
   "course_gate_title": "When the course materials open",
-  "course_gate_trust_note": "Opened slides are reported by the learner's browser: enough for teaching material, not an exam lock. The time is measured by the server.",
+  "course_gate_trust_note": "The server measures both conditions: the time since the learner started the case, and each slide it has shown them. A slide linked by a full web address is the exception: the learner's browser reports it.",
   "course_group_unassigned": "Unassigned cases",
   "course_locks_deleted_case": "(waits for a deleted case: saving opens it unless ticked)",
   "course_locks_draft": "(draft)",

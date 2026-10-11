@@ -4,13 +4,17 @@
 // conditions, both measured from what the server already records:
 // - time: minutes since the learner FIRST started the case (the earliest of
 //   their sessions on it), so leaving and re-entering does not reset it;
-// - slides: every pathology slide of the case opened at least once
-//   (OPENED_SLIDE learning events). Slides are matched against the case as it
-//   is stored now — an author who rebuilds the slide set asks for it again.
+// - slides: every pathology slide of the case opened at least once. Slides are
+//   matched against the case as it is stored now — an author who rebuilds the
+//   slide set asks for it again.
 //
-// The slide condition rests on events the learner's own browser reports. That
-// is enough to open teaching material; it is not an exam lock. The time
-// condition is the server's clock and the server's session row.
+// A slide counts as opened when rohy's content proxy has served this learner
+// the slide's descriptor (plugin_content_reads, services/pluginContentReads.js):
+// the server saw it happen. Only a slide whose image does not pass through the
+// proxy (an absolute address an author typed) falls back to the OPENED_SLIDE
+// events the learner's browser reports, which a learner could post without
+// opening anything. The time condition is the server's clock and the server's
+// session row.
 //
 // A gate, once open, stays open: the first start time only moves back and an
 // opened slide stays opened.
@@ -18,6 +22,7 @@
 import dbAdapter from '../dbAdapter.js';
 import { normaliseCourseGate } from '../shared/caseCourse.js';
 import { timeMs } from '../shared/time.js';
+import { contentReadPaths, isRecordedContentPath, remoteContentPath } from './pluginContentReads.js';
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -39,6 +44,31 @@ export function caseSlides(config) {
     return slides
         .filter((slide) => isPlainObject(slide) && typeof slide.id === 'string')
         .map((slide) => ({ id: slide.id, label: typeof slide.label === 'string' ? slide.label : slide.id }));
+}
+
+/**
+ * The content paths of each slide's descriptor, by slide id: the `.dzi`
+ * renditions of the slide's asset (and a legacy slide's own `dzi`) that are
+ * `remote:` references, so served by the content proxy. A slide with none
+ * maps to an empty list.
+ *
+ * @returns {Map<string, string[]>}
+ */
+export function slideContentPaths(config) {
+    const manifest = parseConfig(config).pathology?.manifest;
+    const slides = Array.isArray(manifest?.slides) ? manifest.slides.filter((slide) => isPlainObject(slide) && typeof slide.id === 'string') : [];
+    const assets = new Map((Array.isArray(manifest?.assets) ? manifest.assets : [])
+        .filter((asset) => isPlainObject(asset) && typeof asset.id === 'string')
+        .map((asset) => [asset.id, asset]));
+    return new Map(slides.map((slide) => {
+        const renditions = assets.get(slide.assetId)?.renditions;
+        const uris = [
+            ...(Array.isArray(renditions) ? renditions.filter(isPlainObject).map((rendition) => rendition.uri) : []),
+            slide.dzi,
+        ];
+        const paths = uris.map(remoteContentPath).filter(isRecordedContentPath);
+        return [slide.id, [...new Set(paths)]];
+    }));
 }
 
 /**
@@ -66,16 +96,26 @@ export async function courseGateState({ tenantId, userId, caseRow, now = Date.no
     const started = Number.isFinite(startedMs);
 
     const slides = gate.allSlidesOpened ? caseSlides(config) : [];
-    let openedIds = new Set();
-    if (slides.length) {
+    const pathsBySlide = slides.length ? slideContentPaths(config) : new Map();
+    const served = (slide) => (pathsBySlide.get(slide.id) ?? []).length > 0;
+    const readPaths = slides.some(served)
+        ? await contentReadPaths({ tenantId, userId, pluginId: 'pathology' })
+        : new Set();
+    let reportedIds = new Set();
+    if (slides.some((slide) => !served(slide))) {
         const rows = await dbAdapter.all(
             `SELECT DISTINCT object_id FROM learning_events
               WHERE tenant_id = ? AND user_id = ? AND case_id = ? AND verb = 'OPENED_SLIDE' AND object_id IS NOT NULL`,
             [tenantId, userId, caseRow.id]
         );
-        openedIds = new Set(rows.map((row) => row.object_id));
+        reportedIds = new Set(rows.map((row) => row.object_id));
     }
-    const slideStates = slides.map((slide) => ({ ...slide, opened: openedIds.has(slide.id) }));
+    const slideStates = slides.map((slide) => ({
+        ...slide,
+        opened: served(slide)
+            ? pathsBySlide.get(slide.id).some((path) => readPaths.has(path))
+            : reportedIds.has(slide.id),
+    }));
 
     const unlockMs = started ? startedMs + gate.afterMinutes * 60_000 : null;
     const timeMet = started && now >= unlockMs;

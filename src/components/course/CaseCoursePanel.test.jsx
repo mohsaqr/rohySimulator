@@ -72,6 +72,19 @@ describe('CaseCoursePanel', () => {
         expect(container.querySelector('[data-testid="case-course-panel"]')).toBeNull();
     });
 
+    it('renders nothing, not an error, when the server refuses (a guest)', async () => {
+        apiGet.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
+        const { container } = render(<CaseCoursePanel caseId={10} />);
+        await waitFor(() => expect(apiGet).toHaveBeenCalled());
+        expect(container.textContent).toBe('');
+    });
+
+    it('says so when the course state fails to load', async () => {
+        apiGet.mockRejectedValue(Object.assign(new Error('Server error'), { status: 500 }));
+        render(<CaseCoursePanel caseId={10} />);
+        expect(await screen.findByText(/could not be loaded|failed/i)).toBeInTheDocument();
+    });
+
     it('refuses to send while a required question is unanswered', async () => {
         apiGet.mockResolvedValue({ gate: lockedGate, questionnaires: [{ ...preTest, openAttempt: 'pre', attempts: [] }] });
         render(<CaseCoursePanel caseId={10} />);

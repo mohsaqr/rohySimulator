@@ -91,6 +91,10 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             `INSERT INTO case_questionnaire_responses (tenant_id, case_id, questionnaire_id, attempt, user_id, answers, questionnaire)
              VALUES (1, ?, 'reflect', 'single', ?, '{"hard":"my own words"}', '{}')`,
             [answeredCase.lastID, targetUserId]);
+        // A slide the learner's browser loaded (0068).
+        await dbRun(db,
+            `INSERT INTO plugin_content_reads (tenant_id, user_id, plugin_id, path) VALUES (1, ?, 'pathology', 'tiles/a.dzi')`,
+            [targetUserId]);
 
         // Anonymised tables: log row tagged with the target's user_id.
         // event_log has no user_id column directly; the executeUserPurge SQL
@@ -162,6 +166,8 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
         // Regression lock: case questionnaire answers (0067) were left out of the purge and outlived the learner
         const answers = await dbAll(db, 'SELECT * FROM case_questionnaire_responses WHERE user_id = ?', [targetUserId]);
         expect(answers).toEqual([]);
+        const reads = await dbAll(db, 'SELECT * FROM plugin_content_reads WHERE user_id = ?', [targetUserId]);
+        expect(reads).toEqual([]);
 
         // Anonymised log tables: rows retained but user_id is NULL.
         const audits = await dbAll(db, 'SELECT user_id FROM system_audit_log WHERE action = ?', ['self_test']);

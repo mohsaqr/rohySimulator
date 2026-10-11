@@ -861,4 +861,67 @@ router.put('/cases/:caseId/course-locks', authenticateToken, requireEducator, as
     }
 });
 
+// ===========================================================================
+// Lesson files under /uploads
+// ===========================================================================
+
+// The live lessons whose body, video or sections refer to `url`.
+function lessonsReferencing(url) {
+    return dbAdapter.all(
+        `SELECT DISTINCT l.id, l.tenant_id, l.unlock_case_id, l.is_published
+           FROM lessons l
+           LEFT JOIN lesson_sections s ON s.lesson_id = l.id AND s.deleted_at IS NULL
+          WHERE l.deleted_at IS NULL
+            AND (l.video_url = ? OR instr(l.content, ?) > 0 OR s.file_url = ? OR instr(s.content, ?) > 0)`,
+        [url, url, url, url]
+    );
+}
+
+// Uploaded files are served from /uploads without a sign-in, so a file
+// attached to a lesson locked behind a case could be opened by anyone who
+// had its address — a classmate's, say — before the case. Mounted in front of
+// the static /uploads, this holds such a file back exactly as the lesson is:
+// it is served only to a signed-in reader for whom one of the lessons that
+// uses it is open. A file no locked lesson uses, or one a published open
+// lesson already shows, is served as before.
+export async function lessonFileGuard(req, res, next) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    let name;
+    try {
+        name = decodeURIComponent(req.path).replace(/^\/+/, '');
+    } catch {
+        return next();
+    }
+    if (!name || name.includes('/') || name.includes('\\')) return next();
+
+    let lessons;
+    try {
+        lessons = await lessonsReferencing(`/uploads/${name}`);
+    } catch (err) {
+        // Fail closed: an error here must not serve a locked lesson's file.
+        log.error('lesson file lookup failed', { error: err.message });
+        return res.status(500).json({ error: 'Failed to load the file' });
+    }
+    const locked = lessons.filter((lesson) => lesson.unlock_case_id);
+    if (!locked.length || lessons.some((lesson) => !lesson.unlock_case_id && lesson.is_published)) return next();
+
+    return authenticateToken(req, res, async () => {
+        try {
+            for (const lesson of locked) {
+                if (lesson.tenant_id !== tenantId(req)) continue;
+                const access = await lessonForRead(lesson.id, req);
+                if (access && !access.locked) {
+                    // Per reader: no shared cache may keep it for the next one.
+                    res.setHeader('Cache-Control', 'private, no-store');
+                    return next();
+                }
+            }
+            return res.status(404).json({ error: 'Not found' });
+        } catch (err) {
+            (req.log || log).error('lesson file check failed', { error: err.message });
+            return res.status(500).json({ error: 'Failed to load the file' });
+        }
+    });
+}
+
 export default router;

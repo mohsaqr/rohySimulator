@@ -172,7 +172,7 @@ npm run setup:oyon          # idempotent — only fetches missing files
 
 ## Imaging content
 
-**Advanced channel only.** The PACS and Pathology rooms read gigabytes of
+**If you teach with imaging.** The PACS and Pathology rooms read gigabytes of
 pixels: DICOM series and Deep Zoom tile pyramids, far too large to
 live in the repository or the image. They are published separately and
 installed with one command:

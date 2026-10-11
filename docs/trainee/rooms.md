@@ -45,10 +45,7 @@ material. A case built around an ECG shows the **12-lead ECG** room; a case
 with no slides leaves **Pathology** out of the bar.
 
 So a missing **PACS**, **Pathology** or **12-lead ECG** button means the
-current case has nothing for that room to show. Those three rooms also ship
-only on the `advanced` release channel, so an install on the stock `current`
-channel shows the Patient, Examination, Laboratory, Radiology and Consultant
-rooms plus Bedside.
+current case has nothing for that room to show.
 
 ::: tip A missing room is a case detail
 A room you saw in one case and miss in the next is a property of the case,

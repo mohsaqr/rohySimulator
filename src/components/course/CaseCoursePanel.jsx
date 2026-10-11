@@ -302,6 +302,8 @@ export default function CaseCoursePanel({ caseId, sessionId = null, lockedLesson
     const { t } = useTranslation('course');
     const [state, setState] = useState(null);
     const [failed, setFailed] = useState(false);
+    // A guest is refused the course state (it has no course): show nothing.
+    const [refused, setRefused] = useState(false);
     const [now, setNow] = useState(() => Date.now());
 
     const load = useCallback(async () => {
@@ -309,8 +311,9 @@ export default function CaseCoursePanel({ caseId, sessionId = null, lockedLesson
             const next = await apiGet(`/cases/${caseId}/course-state`);
             setState(next);
             setFailed(false);
-        } catch {
-            setFailed(true);
+        } catch (err) {
+            if (err?.status === 403) setRefused(true);
+            else setFailed(true);
         }
     }, [caseId]);
 
@@ -333,7 +336,7 @@ export default function CaseCoursePanel({ caseId, sessionId = null, lockedLesson
     useEffect(() => { if (timeReached && !unlocked) load(); }, [timeReached, unlocked, load]);
 
     const questionnaires = useMemo(() => state?.questionnaires ?? [], [state]);
-    if (caseId == null) return null;
+    if (caseId == null || refused) return null;
     if (failed) return <p className="text-sm text-muted-foreground">{t('load_failed')}</p>;
     if (!state || (!state.gate.configured && questionnaires.length === 0)) return null;
 

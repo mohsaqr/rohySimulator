@@ -223,7 +223,7 @@
   "course_gate_slides": "Todas las preparaciones de anatomía patológica abiertas",
   "course_gate_slides_count": "{count, plural, one {El caso tiene # preparación.} other {El caso tiene # preparaciones.}}",
   "course_gate_title": "Cuándo se abren los materiales del curso",
-  "course_gate_trust_note": "Las preparaciones abiertas las comunica el navegador del estudiante: basta para material docente, no para bloquear un examen. El tiempo lo mide el servidor.",
+  "course_gate_trust_note": "El servidor mide las dos condiciones: el tiempo desde que el estudiante inició el caso y cada preparación que le ha mostrado. La excepción es una preparación enlazada con una dirección web completa: la comunica el navegador del estudiante.",
   "course_group_unassigned": "Casos no asignados",
   "course_locks_deleted_case": "(espera a un caso eliminado: al guardar se abre si no está marcada)",
   "course_locks_draft": "(borrador)",

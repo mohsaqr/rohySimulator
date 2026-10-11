@@ -302,6 +302,9 @@ export const HARD_DELETE_ON_PURGE_TABLES = [
     // Case questionnaire answers (0067): free text in the learner's own words,
     // deleted like the older questionnaire_responses, not anonymised.
     'case_questionnaire_responses',
+    // Which slides the user's browser loaded (0068): a trace of one person's
+    // activity, with nothing in it worth keeping anonymised.
+    'plugin_content_reads',
     'export_records',
     'llm_usage',
     'tts_usage'
