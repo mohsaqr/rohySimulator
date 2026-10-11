@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.37] — 2026-10-11
+
+- **The audit chain verifies again.** `node scripts/verify-audit-chain.js` on a copy of the production
+  database reported the chain broken at row 103. It was not tampering: every link was intact, and all 29
+  failing rows (6 treatment orders of 2026-05-07, 23 rejected forged learning events up to 2026-09-14)
+  verify once `resource_id` is read as a number. Their writers passed a numeric `resourceId`, the chain
+  hashed the number, and the TEXT column stored it as text, so the verifier read back something other
+  than what was hashed. The writer now hashes and stores `resource_id` and `resource_name` in their stored
+  text form; the verifier also accepts the one legacy form (an integer id hashed as a number), and a
+  changed row still fails both. With the fix, all 960 production rows verify. Regression-lock tests for
+  a numeric id, a legacy row and a changed legacy row; the old test passed only string ids.
+
 ## [3.0.0-rc.36] — 2026-10-11
 
 - **Lockfile readable by npm 10 again.** rc.35's `package-lock.json` was written by npm 11, which leaves out

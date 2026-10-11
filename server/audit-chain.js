@@ -122,13 +122,18 @@ function serializeJsonish(value) {
     return typeof value === 'string' ? value : stableStringify(value);
 }
 
+// resource_id and resource_name are TEXT columns: SQLite stores the number 12
+// as the text "12" and reads it back as a string. The chain hashes them in that
+// stored form, so what was hashed is what a verifier reads back.
+const asStoredText = (value) => (value == null ? null : String(value));
+
 function normalizeCanonicalInput(row) {
     return {
         userId: row.userId ?? row.user_id ?? null,
         action: row.action ?? null,
         resourceType: row.resourceType ?? row.resource_type ?? null,
-        resourceId: row.resourceId ?? row.resource_id ?? null,
-        resourceName: row.resourceName ?? row.resource_name ?? null,
+        resourceId: asStoredText(row.resourceId ?? row.resource_id),
+        resourceName: asStoredText(row.resourceName ?? row.resource_name),
         oldValue: parseJsonish(row.oldValue ?? row.old_value ?? null),
         newValue: parseJsonish(row.newValue ?? row.new_value ?? null),
         metadata: parseJsonish(row.metadata ?? null),
@@ -140,7 +145,10 @@ function normalizeCanonicalInput(row) {
 }
 
 export function canonicalRow(row) {
-    const normalized = normalizeCanonicalInput(row);
+    return canonicalJsonOf(normalizeCanonicalInput(row));
+}
+
+function canonicalJsonOf(normalized) {
     const sorted = {};
     for (const key of LOGICAL_FIELDS) {
         sorted[key] = stableValue(normalized[key]);
@@ -212,6 +220,19 @@ export async function backfillAuditChain(database) {
     }
 }
 
+/**
+ * The hash a row written before 3.0.0-rc.36 carries when its writer passed a
+ * NUMERIC resourceId: that number was hashed as a number, while the TEXT column
+ * stored it as text. Accepted alongside the canonical hash so those rows verify;
+ * any change to the row's content still fails both. Null when the stored id is
+ * not an integer.
+ */
+function legacyNumericIdHash(prevHash, row) {
+    const id = row.resource_id;
+    if (typeof id !== 'string' || !/^-?\d+$/.test(id) || !Number.isSafeInteger(Number(id))) return null;
+    return computeEntryHash(prevHash, canonicalJsonOf({ ...normalizeCanonicalInput(row), resourceId: Number(id) }));
+}
+
 export async function verifyAuditChain({ tenant_id, database } = {}) {
     const db = database || await defaultDb();
     const rows = await dbAll(
@@ -235,7 +256,7 @@ export async function verifyAuditChain({ tenant_id, database } = {}) {
             };
         }
         const expected = computeEntryHash(prevHash, canonicalRow(row));
-        if (row.entry_hash !== expected) {
+        if (row.entry_hash !== expected && row.entry_hash !== legacyNumericIdHash(prevHash, row)) {
             return {
                 ok: false,
                 brokenAt: row.id,
@@ -329,8 +350,8 @@ async function _appendAuditEntryUnlocked(row, { database } = {}) {
                 row.username ?? null,
                 row.action,
                 row.resourceType ?? row.resource_type ?? null,
-                row.resourceId ?? row.resource_id ?? null,
-                row.resourceName ?? row.resource_name ?? null,
+                asStoredText(row.resourceId ?? row.resource_id),
+                asStoredText(row.resourceName ?? row.resource_name),
                 serializeJsonish(row.oldValue ?? row.old_value ?? null),
                 serializeJsonish(row.newValue ?? row.new_value ?? null),
                 row.ipAddress ?? row.ip_address ?? null,
