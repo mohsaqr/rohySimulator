@@ -70,6 +70,41 @@ describe('audit hash chain', () => {
             .resolves.toEqual({ ok: true, lastVerifiedId: lastId });
     });
 
+    it('verifies a row written with a numeric resource id', async () => {
+        // Regression lock: a numeric resourceId was hashed as a number but stored as text in the TEXT column, so verification failed on every such row (29 rows in production)
+        const ctx = await freshCtx('audit-chain-numeric-id');
+        const first = await appendAuditEntry({ tenantId: 1, action: 'learning_event_rejected', resourceType: 'session', resourceId: 42 }, { database: ctx.db });
+        const second = await appendAuditEntry({ tenantId: 1, action: 'ORDERED_TREATMENT', resourceType: 'treatment_order', resourceId: 7, resourceName: 12 }, { database: ctx.db });
+        const stored = await all(ctx.db, 'SELECT resource_id, resource_name FROM system_audit_log ORDER BY id');
+        expect(stored).toEqual([{ resource_id: '42', resource_name: null }, { resource_id: '7', resource_name: '12' }]);
+        // New rows carry the CANONICAL hash of what is stored, not only one the
+        // verifier's legacy allowance would accept.
+        for (const row of await all(ctx.db, 'SELECT * FROM system_audit_log ORDER BY id')) {
+            expect(row.entry_hash).toBe(computeEntryHash(row.prev_hash, canonicalRow(row)));
+        }
+        await expect(verifyAuditChain({ tenant_id: 1, database: ctx.db }))
+            .resolves.toEqual({ ok: true, lastVerifiedId: second.id });
+        expect(first.id).toBeLessThan(second.id);
+    });
+
+    it('verifies a legacy row hashed with a numeric id, and still catches it being changed', async () => {
+        const ctx = await freshCtx('audit-chain-legacy-numeric');
+        // Written as the pre-fix writer did: hashed with the number, stored as text.
+        const row = { action: 'ORDERED_TREATMENT', resourceType: 'treatment_order', resourceId: 103, tenantId: 1, timestamp: '2026-05-07T18:28:40.264Z' };
+        const legacyHash = computeEntryHash(null, JSON.stringify(JSON.parse(canonicalRow({ ...row, resourceId: '103' })), (key, value) => (key === 'resourceId' ? 103 : value)));
+        await ctx.run(
+            `INSERT INTO system_audit_log (timestamp, action, resource_type, resource_id, status, tenant_id, prev_hash, entry_hash)
+             VALUES (?, ?, ?, ?, 'success', 1, NULL, ?)`,
+            [row.timestamp, row.action, row.resourceType, '103', legacyHash]);
+        const next = await appendAuditEntry({ tenantId: 1, action: 'AFTER', resourceId: '1' }, { database: ctx.db });
+        await expect(verifyAuditChain({ tenant_id: 1, database: ctx.db }))
+            .resolves.toEqual({ ok: true, lastVerifiedId: next.id });
+
+        await ctx.run("UPDATE system_audit_log SET resource_id = '104' WHERE resource_id = '103'");
+        const tampered = await verifyAuditChain({ tenant_id: 1, database: ctx.db });
+        expect(tampered.ok).toBe(false);
+    });
+
     it('reports the first mutated row as brokenAt', async () => {
         const ctx = await freshCtx('audit-chain-mutate');
         const ids = [];
