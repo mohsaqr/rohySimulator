@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.38] — 2026-10-11
+
+- **A case package with slides is refused on a server with no slide library.** The import used to
+  create the case anyway and list each slide as a warning ("This server has no slide library
+  (ROHY_PLUGIN_LIBRARY_DIRS); the slide was not imported"), leaving a pathology case whose slides point
+  nowhere. It now refuses the whole package before writing anything (`case_package_no_library`), saying
+  how many slide or specimen files had nowhere to go; set `ROHY_PLUGIN_LIBRARY_DIRS`, restart and import
+  again. Packages without slides import as before. Regression-lock test; documented in Case packages and
+  Pathology slides.
+
 ## [3.0.0-rc.37] — 2026-10-11
 
 - **The audit chain verifies again.** `node scripts/verify-audit-chain.js` on a copy of the production

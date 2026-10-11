@@ -100,7 +100,8 @@ Three things, all outside the application:
    fails with *"'vips' is not installed on this server"*.
 2. **A library directory**, writable by the Rohy service user:
    `ROHY_PLUGIN_LIBRARY_DIRS="pathology=/srv/www/plugin-content/pathology/library"`.
-   Unset means no imports, and the settings page states that.
+   Unset means no imports, and the settings page states that. A
+   [case package](/admin/case-packages) that carries slides is refused too.
 3. **An import allowlist**: `ROHY_PLUGIN_IMPORT_ORIGINS="pathology=https://slides.example.edu"`.
    A malformed value is fatal at boot, so a typo stops the server loudly and
    is visible at once.

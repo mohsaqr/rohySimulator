@@ -984,10 +984,14 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         // Library assets, from a library or from a content origin.
         const assetPlans = [];
         const plannedIds = new Set();
+        // Carried slides and photos this server has nowhere to put. They
+        // refuse the whole package below: a pathology case without its slides
+        // is not the case that was exported, so it is never created.
+        const withoutLibrary = [];
         const planAsset = async ({ plugin, preferredId, files, row, fromRef, toRefs, label }) => {
             const libDir = libraryDirs().get(plugin);
             if (!libDir) {
-                warnings.push({ field: `config.${plugin}`, received: fromRef, hint: 'This server has no slide library (ROHY_PLUGIN_LIBRARY_DIRS); the slide was not imported.' });
+                withoutLibrary.push({ plugin, ref: fromRef });
                 return;
             }
             for (const f of files) {
@@ -1067,6 +1071,13 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                     label: path.basename(r.path),
                 });
             }
+        }
+
+        if (withoutLibrary.length > 0) {
+            const plugins = [...new Set(withoutLibrary.map((m) => m.plugin))].join(', ');
+            throw new PackageError(
+                `This package carries ${withoutLibrary.length} slide or specimen file(s) for ${plugins}, and this server has no slide library (ROHY_PLUGIN_LIBRARY_DIRS). Nothing was imported.`,
+                'case_package_no_library', 422);
         }
 
         // Rewrite the case to this server's references, then run every check
