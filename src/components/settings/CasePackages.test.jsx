@@ -34,7 +34,7 @@ const server = setupServer(
     http.post('*/api/cases/7/package', () => { calls.push('export'); return HttpResponse.json({ id: 'job-e', state: 'queued' }, { status: 202 }); }),
     http.get('*/api/case-packages/jobs/job-e', () => HttpResponse.json({
         id: 'job-e', kind: 'export', state: 'done',
-        result: { bytes: 2048, counts: { uploads: 1, slides: 2, referenced: 1 }, warnings: [] },
+        result: { bytes: 2048, counts: { uploads: 1, slides: 2, referenced: 1, lessons: 6 }, warnings: [] },
     })),
     http.post('*/api/case-packages/uploads', async ({ request }) => {
         calls.push(['create', (await request.json()).bytes]);
@@ -49,7 +49,8 @@ const server = setupServer(
         id: 'job-i', kind: 'import', state: 'done',
         result: {
             case: { id: 9, case_code: 'EN-0009', name: 'Chest pain' },
-            imported: { agents: 2, investigations: 3, treatments: 1, uploads: 1, slides: 1 },
+            course: { id: 4, name: 'Patologia', lessons: 6, locked: 5 },
+            imported: { agents: 2, investigations: 3, treatments: 1, uploads: 1, slides: 1, lessons: 6 },
             warnings: [{ field: 'config.pacs', received: 'remote:dicom/x/', hint: 'This study is not on this server.' }],
         },
     })),
@@ -102,6 +103,7 @@ describe('CasePackageExportButton', () => {
         expect(anchorClick.mock.contexts[0].getAttribute('href')).toBe('/api/case-packages/jobs/job-e/download');
         expect(await screen.findByText(/Package ready \(2 KB\)/)).toBeInTheDocument();
         expect(screen.getByText(/Carried: 1 media file and 2 slides/)).toBeInTheDocument();
+        expect(screen.getByText(/Course: 6 lessons\./)).toBeInTheDocument();
     });
 });
 
@@ -114,6 +116,7 @@ describe('CasePackageImportButton', () => {
         fireEvent.change(screen.getByLabelText('Choose a .rohycase file'), { target: { files: [file] } });
 
         expect(await screen.findByText(/Imported as a new case: Chest pain \(EN-0009\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Course “Patologia” created with 6 lessons\. Add its learners in Courses\./)).toBeInTheDocument();
         expect(calls).toEqual([
             ['create', 10],
             ['chunk', 0, 4, 'application/octet-stream'],

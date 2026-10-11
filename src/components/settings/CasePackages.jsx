@@ -152,7 +152,11 @@ export function CasePackageExportButton({ caseItem }) {
                 state: 'done',
                 jobId: done.id,
                 result: done.result,
-                summary: `${t('package_export_done', { size: formatBytes(done.result.bytes) })} ${t('package_export_counts', done.result.counts)}`,
+                summary: [
+                    t('package_export_done', { size: formatBytes(done.result.bytes) }),
+                    t('package_export_counts', done.result.counts),
+                    done.result.counts.lessons ? t('package_export_course', { lessons: done.result.counts.lessons }) : null,
+                ].filter(Boolean).join(' '),
             });
         } catch (err) {
             if (alive.current) setDialog({ state: 'failed', error: errorText(err) });
@@ -235,11 +239,15 @@ export function CasePackageImportButton({ onImported }) {
                 setDialog({ state: 'failed', error: done.error?.error });
                 return;
             }
-            const { case: imported, imported: counts } = done.result;
+            const { case: imported, imported: counts, course } = done.result;
             setDialog({
                 state: 'done',
                 result: done.result,
-                summary: `${t('package_import_done', { name: imported.name, code: imported.case_code })} ${t('package_import_counts', counts)}`,
+                summary: [
+                    t('package_import_done', { name: imported.name, code: imported.case_code }),
+                    t('package_import_counts', counts),
+                    course ? t('package_import_course', { name: course.name, lessons: course.lessons }) : null,
+                ].filter(Boolean).join(' '),
             });
             onImported?.();
         } catch (err) {

@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.40] — 2026-10-11
+
+- **A case package carries the case's course.** A case linked to a course used to arrive without it:
+  the lessons, the sections and the locks behind the case's course gate had to be rebuilt by hand on
+  the receiving server. The package now has a `course.json` beside `case.json` (the manifest says so):
+  the course's name and description, every lesson with its sections, order and published state, and
+  which lessons are locked behind the case. Files the lessons use (images, PDFs and other documents
+  under `/uploads`, also inside lesson HTML) travel with the case's media, and a file renamed on import
+  is renamed in the lessons too. The import creates a new course owned by the importer, links the new
+  case, recreates the locks, and adds no learners. Lesson HTML is cleaned as on any lesson write; a
+  lesson link that is neither a carried file nor an http(s) address refuses the package.
+  Not carried, and named in the export notes: a lesson locked behind a different case of the course
+  (it would open on the target), and the platform's default course. A server before rc.40 refuses a
+  package with a course instead of importing the case without it. The export and import dialogs name
+  the course and its lessons in all languages (native review pending). Regression-lock tests: export,
+  import with locks and a renamed file, a case with no course, a missing `course.json`, an unsafe link.
+
 ## [3.0.0-rc.39] — 2026-10-11
 
 - **Rohy serves its own slide library.** The content proxy served `library/…` only through a content

@@ -4,6 +4,8 @@
 // A package is a tar (lib/tarStream.js) of exactly:
 //   case.json      the case document (services/caseTransfer.js)
 //   manifest.json  what media the case uses and where each file belongs
+//   course.json    the case's course and its lessons, when it has one
+//                  (services/caseCourseTransfer.js; the manifest says so)
 //   media/<sha256> each carried file once, named by its own hash
 //
 // What travels, by where the file lives on the source:
@@ -46,6 +48,7 @@ import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { nowIso } from '../shared/time.js';
 import { caseCodeFor } from '../shared/caseCode.js';
 import { attachStandingSpecialists } from './standingSpecialists.js';
+import { buildCourseDocument, courseUploadNames, insertCourse, readCourseDocument, rewriteCourseUploads } from './caseCourseTransfer.js';
 import { auditSuccess, createCaseVersion, logAudit } from '../routes/_helpers.js';
 import { normaliseCaseForStorage, pinCaseLanguage } from '../routes/cases-routes.js';
 import {
@@ -83,6 +86,9 @@ export const UPLOADS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.u
 const UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp',
     '.mp3', '.wav', '.ogg', '.webm', '.m4a',
     '.mp4', '.mov', '.avi', '.ogv', '.mpeg', '.mpg'];
+// The documents POST /api/uploads/file accepts for lessons. They travel with
+// a case's course, and each must start like the document its name says.
+const DOCUMENT_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.csv', '.zip'];
 const UPLOAD_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
 // A reference to THIS server's uploads is a whole string value, relative —
 // `./uploads/x.png` or `/uploads/x.png`. A URL on another host that happens
@@ -398,12 +404,12 @@ async function fetchOriginFile({ pluginId, origin, contentPath, expectedSha, des
  * @returns {Promise<{manifest: object, sources: Map<string, {file: string}>, notes: object[]}>}
  *   `sources` maps a SHA-256 to the local file holding those bytes.
  */
-async function collectMedia({ doc, tenant, scratch }) {
+async function collectMedia({ doc, course, tenant, scratch }) {
     const notes = [];
     const sources = new Map();
 
     const uploads = [];
-    for (const name of uploadNames(doc)) {
+    for (const name of [...new Set([...uploadNames(doc), ...courseUploadNames(course)])].sort()) {
         const file = path.join(UPLOADS_DIR, name);
         const stat = await fsp.stat(file).catch(() => null);
         if (!stat?.isFile()) {
@@ -489,6 +495,7 @@ async function collectMedia({ doc, tenant, scratch }) {
         uploads,
         library,
         remote,
+        ...(course ? { course: { lessons: course.lessons.length } } : {}),
     };
     return { manifest, sources, notes };
 }
@@ -508,7 +515,9 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
     await fsp.mkdir(scratch, { recursive: true });
     try {
         onProgress({ phase: 'collecting' });
-        const { manifest, sources, notes } = await collectMedia({ doc, tenant, scratch });
+        const { course, notes: courseNotes } = await buildCourseDocument({ caseId, tenant });
+        const { manifest, sources, notes: mediaNotes } = await collectMedia({ doc, course, tenant, scratch });
+        const notes = [...courseNotes, ...mediaNotes];
         const unique = [...sources.entries()];
         // Each file's size is taken ONCE and written into its header; a file
         // that changes afterwards is a length mismatch the writer refuses,
@@ -516,10 +525,11 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
         const sizes = (await Promise.all(unique.map(([, s]) => fsp.stat(s.file)))).map((s) => s.size);
         const caseJson = Buffer.from(JSON.stringify(doc));
         const manifestJson = Buffer.from(JSON.stringify(manifest));
+        const courseJson = course ? Buffer.from(JSON.stringify(course)) : null;
         // The limit an upload is held to is the WHOLE archive (createUpload),
         // so export holds itself to the same: headers, padding and the JSON
         // count, not only the media — anything exported can be imported.
-        const archiveBytes = tarArchiveBytes([caseJson.length, manifestJson.length, ...sizes]);
+        const archiveBytes = tarArchiveBytes([caseJson.length, manifestJson.length, ...(courseJson ? [courseJson.length] : []), ...sizes]);
         if (archiveBytes > maxPackageBytes()) {
             throw new PackageError(`This case's package would be ${Math.ceil(archiveBytes / MIB)} MB, above the ${Math.floor(maxPackageBytes() / MIB)} MB package limit`, 'case_package_too_large', 413);
         }
@@ -529,6 +539,7 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
         try {
             await writer.addBuffer('case.json', caseJson);
             await writer.addBuffer('manifest.json', manifestJson);
+            if (courseJson) await writer.addBuffer('course.json', courseJson);
             let done = 0;
             for (const [index, [sha, source]] of unique.entries()) {
                 await writer.addStream(`media/${sha}`, sizes[index], fs.createReadStream(source.file));
@@ -556,6 +567,7 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
                 uploads: manifest.uploads.length,
                 slides: manifest.library.length + manifest.remote.filter((r) => r.carried).length,
                 referenced: manifest.remote.filter((r) => !r.carried).length,
+                lessons: course?.lessons.length ?? 0,
             },
         };
     } finally {
@@ -620,7 +632,10 @@ function readManifest(raw) {
         fileList(r.files ?? [], where);
         return r;
     });
-    return { uploads, library, remote };
+    if (raw.course !== undefined && (!isPlainObject(raw.course) || !Number.isSafeInteger(raw.course.lessons) || raw.course.lessons < 0)) {
+        throw new PackageError('manifest.course is malformed', 'invalid_case_package');
+    }
+    return { uploads, library, remote, course: raw.course ?? null };
 }
 
 /** The bytes the manifest says the package carries: sha256 → size. */
@@ -691,6 +706,7 @@ function fileSink(dest, expectedSha, expectedBytes) {
 async function readPackage(packageFile, staging) {
     let doc = null;
     let manifest = null;
+    let course = null;
     let expected = null;
     const seen = new Set();
     try {
@@ -706,6 +722,10 @@ async function readPackage(packageFile, staging) {
                     expected = expectedMedia(manifest);
                 });
             }
+            if (manifest.course && course === null) {
+                if (name !== 'course.json') throw new PackageError('course.json must follow manifest.json', 'invalid_case_package');
+                return jsonSink(name, (value) => { course = value; });
+            }
             const match = /^media\/([0-9a-f]{64})$/.exec(name);
             if (!match) throw new PackageError(`Unexpected entry in package: ${name}`, 'invalid_case_package');
             const sha = match[1];
@@ -720,9 +740,10 @@ async function readPackage(packageFile, staging) {
         throw err;
     }
     if (!doc || !manifest) throw new PackageError('The package is empty', 'invalid_case_package');
+    if (manifest.course && course === null) throw new PackageError('The package is incomplete: course.json is missing', 'case_package_incomplete');
     const missing = [...expected.keys()].filter((sha) => !seen.has(sha));
     if (missing.length > 0) throw new PackageError(`The package is incomplete: ${missing.length} declared file(s) missing`, 'case_package_incomplete');
-    return { doc, manifest };
+    return { doc, manifest, course };
 }
 
 // Leading bytes per media type. The point is to keep anything a browser would
@@ -746,6 +767,19 @@ function looksLike(ext, head) {
     case '.webm': return head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
     case '.m4a': case '.mp4': case '.mov': return ftyp;
     case '.mpeg': case '.mpg': return head[0] === 0 && head[1] === 0 && head[2] === 1 && (head[3] === 0xba || head[3] === 0xb3);
+    default: return false;
+    }
+}
+
+/** Do these bytes start like the document its extension names? */
+function looksLikeDocument(ext, head) {
+    const at = (text) => head.subarray(0, text.length).toString('latin1') === text;
+    switch (ext) {
+    case '.pdf': return at('%PDF-');
+    case '.docx': case '.pptx': case '.xlsx': case '.zip': return at('PK\x03\x04');
+    case '.doc': case '.ppt': case '.xls': return at('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1');
+    // Plain text: no NUL and not markup, so a browser has nothing to run.
+    case '.txt': case '.csv': return !head.includes(0) && !/^\s*</.test(head.toString('latin1'));
     default: return false;
     }
 }
@@ -932,10 +966,12 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         const { size: packageBytes } = await fsp.stat(packageFile);
         await assertFreeSpace(staging, packageBytes, 'unpacking the package');
         onProgress({ phase: 'reading' });
-        const { doc, manifest } = await readPackage(packageFile, staging);
+        const { doc, manifest, course } = await readPackage(packageFile, staging);
 
         const parsed = readCaseDocument(doc);
         if (parsed.problem) throw new PackageError(parsed.problem.error, parsed.problem.code);
+        const parsedCourse = course ? readCourseDocument(course) : null;
+        if (parsedCourse?.problem) throw new PackageError(parsedCourse.problem, 'invalid_case_package');
 
         onProgress({ phase: 'checking' });
         const warnings = [];
@@ -951,7 +987,11 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         for (const u of manifest.uploads) {
             const ext = path.extname(u.name).toLowerCase();
             const staged = path.join(staging, u.sha256);
-            if (!UPLOAD_EXTENSIONS.includes(ext) || !looksLikeAnyMedia(await readHead(staged))) {
+            const head = await readHead(staged);
+            const accepted = UPLOAD_EXTENSIONS.includes(ext)
+                ? looksLikeAnyMedia(head)
+                : DOCUMENT_EXTENSIONS.includes(ext) && looksLikeDocument(ext, head);
+            if (!accepted) {
                 warnings.push({ field: 'media', received: `/uploads/${u.name}`, hint: 'Not a media type uploads accept; left out.' });
                 continue;
             }
@@ -1081,6 +1121,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         // Rewrite the case to this server's references, then run every check
         // the database write depends on — all BEFORE a single file is placed.
         const rewritten = rewriteRefs({ case: parsed.caseFields, related: parsed.related }, replacements);
+        const courseDoc = parsedCourse ? rewriteCourseUploads(parsedCourse.course, replacements) : null;
         const caseBody = rewritten.case;
         const captured = { status: 200, body: null };
         const shim = { status(code) { captured.status = code; return shim; }, json(body) { captured.body = body; return shim; } };
@@ -1136,6 +1177,9 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             const caseCode = caseCodeFor(safeConfig, caseId);
             await tx.run('UPDATE cases SET case_code = ? WHERE id = ? AND tenant_id = ?', [caseCode, caseId, tenant]);
             const written = await insertCaseRelated({ tx, caseId, tenant, userId: actor.user.id, plan });
+            const createdCourse = courseDoc
+                ? await insertCourse({ tx, course: courseDoc, caseId, tenant, userId: actor.user.id })
+                : null;
             const now = nowIso();
             for (const asset of assetPlans.filter((a) => a.row)) {
                 const state = ['ready', 'needs_calibration'].includes(asset.row.state) ? asset.row.state : 'needs_calibration';
@@ -1153,7 +1197,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                     ]
                 );
             }
-            return { caseId, caseCode, ...written };
+            return { caseId, caseCode, course: createdCourse, ...written };
         });
         placed.files = [];
         placed.dirs = [];
@@ -1177,13 +1221,14 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             ...result.imported,
             uploads: available.uploads,
             slides: available.slides,
+            lessons: result.course?.lessons ?? 0,
         };
         auditSuccess(actor, {
             action: 'import_case_package',
             resourceType: 'case',
             resourceId: String(result.caseId),
             resourceName: name,
-            metadata: { source_case_code: doc.rohy_export?.source_case_code ?? null, counts, created_templates: result.createdTemplates },
+            metadata: { source_case_code: doc.rohy_export?.source_case_code ?? null, counts, created_templates: result.createdTemplates, course_id: result.course?.id ?? null },
         });
         await createCaseVersion(result.caseId, actor.user.id, 'created', 'Imported from a case package', {
             name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenant,
@@ -1196,6 +1241,8 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
 
         return {
             case: { id: result.caseId, case_code: result.caseCode, name },
+            // The course made for the case: a new one, with no learners yet.
+            course: result.course,
             imported: counts,
             created_templates: result.createdTemplates,
             warnings: [...warnings, ...normalised.warnings, ...plan.warnings, ...result.warnings],

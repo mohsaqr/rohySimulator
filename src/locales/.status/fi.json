@@ -6949,6 +6949,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.package_export_course": {
+    "src": "7266dbaf01fe",
+    "tgt": "0cfe7a470a5b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.package_export_done": {
     "src": "3c6aa0c64955",
     "tgt": "0d301d5fb423",
@@ -7002,6 +7012,16 @@
   "authoring_config.package_import_counts": {
     "src": "9b78b93050f1",
     "tgt": "f2805f231fcb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.package_import_course": {
+    "src": "d7252cd2ab7a",
+    "tgt": "84c12e374617",
     "state": "machine",
     "origin": "machine",
     "locked": false,

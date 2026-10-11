@@ -203,7 +203,7 @@ describe('case packages: export from one server, import into another', () => {
         expect(started.status).toBe(202);
         const job = await poll(srcAdmin, (await started.json()).id);
         expect(job.state).toBe('done');
-        expect(job.result.counts).toEqual({ uploads: 1, slides: 1, referenced: 2 });
+        expect(job.result.counts).toEqual({ uploads: 1, slides: 1, referenced: 2, lessons: 0 });
 
         const download = await srcAdmin(`/api/case-packages/jobs/${job.id}/download`);
         expect(download.status).toBe(200);
