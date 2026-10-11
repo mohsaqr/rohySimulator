@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.36] — 2026-10-11
+
+- **Lockfile readable by npm 10 again.** rc.35's `package-lock.json` was written by npm 11, which leaves out
+  the nested react-18 entries npm 10 requires, so `npm ci` failed in CI, in the Docker install and on the
+  server (`EUSAGE`, "Missing: react@18.3.1 from lock file"). Regenerated with npm 10
+  (`npx npm@10 install --package-lock-only`); the dependency versions are rc.35's.
+
 ## [3.0.0-rc.35] — 2026-10-11
 
 Pre-release dependency security pass for 3.0.0.
