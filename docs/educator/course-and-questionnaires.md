@@ -97,6 +97,11 @@ it or send it as a case package. The answers stay on the server where they
 were given, and they are deleted with the rest of a learner's data when that
 learner's data is erased.
 
+A case package also carries the case's course: its lessons and which of them
+are locked behind the case. The receiving server gets a new course with the
+same lessons and locks, and no learners. See
+[Case packages](/admin/case-packages#the-course).
+
 ## Reading the answers
 
 In the **Course** step, **Show answers** lists every answer to the case's

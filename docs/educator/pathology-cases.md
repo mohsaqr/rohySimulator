@@ -217,10 +217,11 @@ open. Both are described in
 
 To move the finished case to another Rohy, export it as a **case package**
 (Settings → **Cases** → **Export as a case package (case and media)**). The
-package carries the case, its agents, its gross photographs and its imported
-slides with their tiles, preview and calibration. It does not carry the
-scanner's original file or the course lessons. Your administrator turns
-packages on and imports them: see [Case packages](/admin/case-packages).
+package carries the case, its agents, its gross photographs, its imported
+slides with their tiles, preview and calibration, and its course with the
+lessons and their locks. It does not carry the scanner's original file or the
+course's learners. Your administrator turns packages on and imports them: see
+[Case packages](/admin/case-packages).
 
 ::: warning Keep your original scans
 Slides are tiled at the magnification your administrator set, 10× by
