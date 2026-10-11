@@ -73,6 +73,11 @@ describe('POST /api/sessions/:id/order-labs — default-lab turnaround (Bug 5)',
         await dbRun(db,
             `INSERT INTO sessions (id, case_id, user_id, student_name, status)
              VALUES (400, 30, 300, 'Lab User', 'active')`);
+        for (const id of [401, 402, 403]) {
+            await dbRun(db,
+                `INSERT INTO sessions (id, case_id, user_id, student_name, status)
+                 VALUES (?, 30, 300, 'Lab User', 'active')`, [id]);
+        }
         await dbClose(db);
         token = await loginAs(server, 'lab_user', 'correctpass');
     }, 90_000);
@@ -107,5 +112,30 @@ describe('POST /api/sessions/:id/order-labs — default-lab turnaround (Bug 5)',
         expect(row.span_min).toBeLessThanOrEqual(DEFAULT_TURNAROUND_MINUTES + 1);
         // Hard ceiling — proves the hardcoded 30 (the bug) is gone.
         expect(row.span_min).toBeLessThan(10);
+    }, 20_000);
+
+    // PRV-7: an override and the default wait must be IMPOSED on a
+    // default-catalogue lab, not only kept under a ceiling — a span of 0
+    // passes the test above.
+    async function orderedSpan(sessionId, extra) {
+        const res = await fetch(`${server.baseUrl}/api/sessions/${sessionId}/order-labs`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+            body: JSON.stringify({ lab_ids: ['default_Hemoglobin'], ...extra }),
+        });
+        expect(res.status).toBe(200);
+        const db = await openDb(server.dbPath);
+        const row = await dbGet(db,
+            `SELECT (julianday(available_at) - julianday(ordered_at)) * 24 * 60 AS span_min
+             FROM investigation_orders WHERE session_id = ? ORDER BY id DESC LIMIT 1`, [sessionId]);
+        await dbClose(db);
+        return row.span_min;
+    }
+
+    it('imposes the wait a default-catalogue lab is ordered with', async () => {
+        // Regression lock: PRV-7 — turnaround_override 5 and 0 gave the same available_at on a default lab
+        expect(await orderedSpan(401, { turnaround_override: 5 })).toBeCloseTo(5, 1);
+        expect(await orderedSpan(402, { turnaround_override: 0 })).toBeCloseTo(0, 1);
+        expect(await orderedSpan(403, {})).toBeCloseTo(DEFAULT_TURNAROUND_MINUTES, 1);
     }, 20_000);
 });
