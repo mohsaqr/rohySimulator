@@ -57,7 +57,10 @@ function phoneLayout(page) {
             const r = el.getBoundingClientRect();
             return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
         };
-        const selector = 'button, a[href], input, select, textarea, canvas, [data-testid^="vital-"], [data-testid="session-clock"], [data-testid="end-session"], [role="switch"]';
+        // What the case names: vital signs, traces, room controls and End &
+        // Debrief. A canvas counts only as a monitor trace — the patient's
+        // avatar portrait is drawn on one too, and is not on that list.
+        const selector = 'button, a[href], input, select, textarea, [data-testid^="monitor-trace-"], [data-testid^="vital-"], [data-testid="session-clock"], [data-testid="end-session"], [role="switch"]';
         // A canvas that fills most of the window is a room's backdrop (the 3D
         // bedside scene), drawn under the room's own controls — not a trace.
         const backdrop = (el, r) => el.tagName === 'CANVAS' && r.width * r.height > 0.5 * innerWidth * innerHeight;

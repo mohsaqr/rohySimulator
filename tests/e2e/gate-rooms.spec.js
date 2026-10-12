@@ -132,6 +132,8 @@ async function expectNothingBehindTheBar(page, key) {
 test.describe('the room bar', () => {
     // NAV.ROOMS.01
     test('every room in the bar opens, and the case is still live afterwards', async ({ page, baseURL }) => {
+        // Every room is opened and measured, the bedside's 3D scene included.
+        test.setTimeout(120_000);
         // A conversation recorded before the case opens, so "the conversation
         // carried on" is checked against turns the thread already held.
         const said = `${RUN_TAG} nav01 the pain started at rest`;

@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.45] — 2026-10-12
+
+- **Two gate tests made fit for CI** (their first CI run, on rc.43): the on-call phone's "covers
+  nothing" check counted the patient's avatar portrait, which CI draws on a canvas, as something the
+  phone must not cover — it now counts what the case names (vital signs, monitor traces, room controls,
+  End & Debrief); and the room-bar tour, which opens and measures every room including the 3D bedside,
+  has a 2-minute budget instead of the default 30 seconds.
+
 ## [3.0.0-rc.44] — 2026-10-12
 
 - **Slides and specimen photos load on an install served under a base path.** A plugin's `remote:`
