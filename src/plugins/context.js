@@ -20,6 +20,7 @@
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 import { localeNamespaceOf } from '../../server/shared/pluginRegistry.js';
 import { createPluginLogger, deprecatedEventLoggerProxy } from './logger.js';
+import { baseUrl } from '../config/api.js';
 
 /**
  * Async key/value store scoped to one plugin, one session.
@@ -114,7 +115,11 @@ export function resolveRemoteRef(uri, pluginId) {
     // Encoded per segment: a filename may legitimately contain a space or a
     // '+', and neither may be allowed to become a path separator.
     const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-    return `/api/plugins/${pluginId}/${encoded}`;
+    // Through baseUrl(): these addresses go straight into <img src> and the
+    // viewers' tile loaders, not through apiFetch, so they must carry the
+    // base path an install is served under. A host at /rohy/ was handed
+    // /api/plugins/... and every slide was a 404 outside the app.
+    return baseUrl(`/api/plugins/${pluginId}/${encoded}`);
 }
 
 /**
@@ -131,8 +136,12 @@ export function resolveRemoteRef(uri, pluginId) {
  * @returns {string} unchanged when it is not this plugin's resolved address
  */
 export function unresolveRemoteRef(uri, pluginId) {
-    const mount = `/api/plugins/${pluginId}/`;
-    if (typeof uri !== 'string' || !uri.startsWith(mount)) return uri;
+    if (typeof uri !== 'string') return uri;
+    // With this install's base path (what resolveRemoteRef hands out) or
+    // without it (a document saved before the base path was applied).
+    const mount = [baseUrl(`/api/plugins/${pluginId}/`), `/api/plugins/${pluginId}/`]
+        .find((m) => uri.startsWith(m));
+    if (!mount) return uri;
     const path = uri.slice(mount.length).split('/').map((seg) => {
         try { return decodeURIComponent(seg); } catch { return seg; }
     }).join('/');
