@@ -52,6 +52,15 @@ try {
 
 const router = express.Router();
 
+// This is exam software: a learner must not be able to tell from any response
+// which tests the author configured or what an order will show before its
+// result is due. The screen never showed it, but the payloads did — readable
+// in DevTools — so the server shapes them for anyone below educator.
+const isLearnerView = (req) => !hasRoleAtLeast(req.user, ROLE_RANKS.educator);
+const labKey = (testName) => String(testName).replace(/[^a-zA-Z0-9]/g, '_');
+// Internal flags on a stored radiology result that say where it came from.
+const RADIOLOGY_PROVENANCE_KEYS = ['hasConfiguredResult', 'isNormalDefault', 'isCustomStudy'];
+
 // Every result value of the case: an authoring view, never a learner's (they
 // receive results through the session order routes, when ordered).
 router.get('/cases/:id/investigations', authenticateToken, requireEducator, (req, res) => {
@@ -187,6 +196,7 @@ router.get('/sessions/:id/orders', authenticateToken, async (req, res) => {
         (req.log || routesOrdersLog).debug('orders rows loaded', { session_id: sessionId, row_count: rows.length });
 
         // Parse JSON result_data and ensure all values are present
+        const learnerView = isLearnerView(req);
         const orders = rows.map(row => {
             const order = {
                 ...row,
@@ -200,6 +210,13 @@ router.get('/sessions/:id/orders', authenticateToken, async (req, res) => {
                 current_value: row.current_value ?? null
             };
             (req.log || routesOrdersLog).debug('order readiness calculated', { test_name: row.test_name, is_ready: order.is_ready, minutes_remaining: row.minutes_remaining, available_at: row.available_at });
+            // A result is the learner's only once it is due.
+            if (learnerView && !order.is_ready) {
+                order.current_value = null;
+                order.is_abnormal = null;
+                order.result_data = null;
+                order.image_url = null;
+            }
             return order;
         });
 
@@ -965,11 +982,42 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req,
                     }
                 });
                 
+                if (isLearnerView(req)) {
+                    // One shape for every test: the order route resolves the
+                    // name to the configured row or the lab database itself.
+                    const learnerLabs = Object.keys(uniqueTests).flatMap((testName) => {
+                        const genderSpecific = labDb.getGenderSpecificTest(testName, patientGender);
+                        if (!genderSpecific) return [];
+                        const configured = configuredMap[testName];
+                        return [{
+                            id: `default_${labKey(testName)}`,
+                            test_name: genderSpecific.test_name,
+                            test_group: genderSpecific.group,
+                            unit: genderSpecific.unit,
+                            effective_turnaround_minutes: configured
+                                ? configured.effective_turnaround_minutes
+                                : effectiveTurnaround(),
+                        }];
+                    });
+                    return res.json({ labs: learnerLabs, defaultLabsEnabled: true });
+                }
                 res.json({ labs: responseLabs, defaultLabsEnabled: true });
             } else {
                 // Only return configured labs (from both DB and config JSON)
                 const allConfiguredLabs = Object.values(configuredMap);
-                res.json({ labs: allConfiguredLabs, defaultLabsEnabled: false });
+                const labs = isLearnerView(req)
+                    ? allConfiguredLabs.map((lab) => ({
+                        id: lab.id,
+                        test_name: lab.test_name,
+                        test_group: lab.test_group,
+                        unit: lab.unit,
+                        // Every test here is configured, so the author's
+                        // per-test wait gives nothing away.
+                        turnaround_minutes: lab.turnaround_minutes,
+                        effective_turnaround_minutes: lab.effective_turnaround_minutes,
+                    }))
+                    : allConfiguredLabs;
+                res.json({ labs, defaultLabsEnabled: false });
             }
         });
     });
@@ -1013,7 +1061,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
         const configuredIds = [...numericIds.map(id => parseInt(id, 10))];
 
         // Get case config (snapshot-preferred) to determine patient gender and find config-based labs
-        dbAdapter.get('SELECT config FROM cases WHERE id = ?', [session.case_id], (err, caseRow) => {
+        dbAdapter.get('SELECT config FROM cases WHERE id = ?', [session.case_id], async (err, caseRow) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -1025,6 +1073,36 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
             // a localized label ('Weiblich') would silently miss the female range.
             const patientGender = resolvePatientGender(caseConfig.demographics?.gender).value || 'Male';
             const configJsonLabs = caseConfig.investigations?.labs || [];
+
+            // A learner's catalogue names every test `default_<name>`, set up
+            // by the author or not (see available-labs). Resolve each name in
+            // that catalogue's own precedence: a case row, then the case
+            // config, then the lab database. Reusing the case row also stops a
+            // repeat order of a database test adding a new row every time.
+            const configLabsFromDefault = [];
+            const databaseDefaultIds = [];
+            if (defaultIds.length > 0) {
+                let caseLabRows;
+                try {
+                    caseLabRows = await dbAdapter.all(
+                        `SELECT id, test_name FROM case_investigations
+                         WHERE case_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
+                         ORDER BY id`,
+                        [session.case_id],
+                    );
+                } catch (rowsErr) {
+                    (req.log || routesOrdersLog).error('case lab rows fetch failed', { error: rowsErr.message });
+                    return res.status(503).json({ error: 'Lab tests could not be ordered. Please try again.', code: 'ORDER_WRITE_FAILED' });
+                }
+                defaultIds.forEach((id) => {
+                    const key = String(id).slice('default_'.length);
+                    const row = caseLabRows.find((r) => labKey(r.test_name) === key);
+                    const configLab = row ? null : configJsonLabs.find((l) => l.test_name && labKey(l.test_name) === key);
+                    if (row) configuredIds.push(row.id);
+                    else if (configLab) configLabsFromDefault.push(configLab);
+                    else databaseDefaultIds.push(id);
+                });
+            }
 
             (req.log || routesOrdersLog).debug('lab order case config loaded', {
                 instant_results: caseConfig.investigations?.instantResults === true,
@@ -1185,20 +1263,22 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
             };
 
             // Process config-based labs (from case editor config JSON)
-            if (configIds.length > 0) {
-                configIds.forEach(configId => {
+            const configLabs = [
+                ...configIds.map(configId => {
                     // Find the lab in config JSON
                     const idStr = String(configId);
                     const testNameFromId = idStr.replace('config_', '').replace('lab_', '').replace(/_/g, ' ');
 
                     // Try to find by ID first, then by test name
-                    let configLab = configJsonLabs.find(l => l.id === configId);
-                    if (!configLab) {
-                        configLab = configJsonLabs.find(l =>
+                    return configJsonLabs.find(l => l.id === configId)
+                        || configJsonLabs.find(l =>
                             l.test_name && l.test_name.toLowerCase().replace(/[^a-z0-9]/g, ' ').includes(testNameFromId.toLowerCase())
                         );
-                    }
-
+                }),
+                ...configLabsFromDefault,
+            ];
+            if (configLabs.length > 0) {
+                configLabs.forEach(configLab => {
                     if (configLab) {
                         pendingOps++;
                         dbAdapter.run(insertLabSql, [
@@ -1236,9 +1316,9 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
             }
 
             // Process default labs (from lab database with normal values)
-            if (defaultIds.length > 0) {
-                (req.log || routesOrdersLog).debug('processing default lab ids', { count: defaultIds.length });
-                const testNames = defaultIds.map(id => String(id).replace('default_', '').replace(/_/g, ' '));
+            if (databaseDefaultIds.length > 0) {
+                (req.log || routesOrdersLog).debug('processing default lab ids', { count: databaseDefaultIds.length });
+                const testNames = databaseDefaultIds.map(id => String(id).replace('default_', '').replace(/_/g, ' '));
 
                 testNames.forEach((testName, idx) => {
                     const genderSpecific = labDb.getGenderSpecificTest(testName, patientGender);
@@ -1280,7 +1360,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                             checkComplete();
                         });
                     } else {
-                        (req.log || routesOrdersLog).warn('default lab not found', { test_name: testName, lab_id: defaultIds[idx] });
+                        (req.log || routesOrdersLog).warn('default lab not found', { test_name: testName, lab_id: databaseDefaultIds[idx] });
                     }
                 });
             }
@@ -1554,7 +1634,25 @@ router.get('/sessions/:sessionId/radiology-orders', authenticateToken, async (re
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-        res.json({ orders: orders || [] });
+        if (!isLearnerView(req)) return res.json({ orders: orders || [] });
+        // A report is the learner's only once it is due, and never says
+        // whether the author wrote it or the catalogue's normal study did.
+        res.json({
+            orders: (orders || []).map((order) => {
+                if (!order.is_ready) return { ...order, result_data: null, image_url: null };
+                let resultData = order.result_data;
+                try {
+                    const parsed = resultData ? JSON.parse(resultData) : null;
+                    if (parsed && typeof parsed === 'object') {
+                        RADIOLOGY_PROVENANCE_KEYS.forEach((k) => delete parsed[k]);
+                        resultData = JSON.stringify(parsed);
+                    }
+                } catch {
+                    // Not JSON: nothing structured to strip; pass it as stored.
+                }
+                return { ...order, result_data: resultData };
+            }),
+        });
     });
 });
 
