@@ -140,13 +140,22 @@ describe('registration invites', () => {
 
         it('never writes the token to the audit log', async () => {
             const { body } = await mintInvite({ role: 'student' });
-            const db = await openDb(server.dbPath);
-            const row = await pGet(
-                db,
-                `SELECT new_value FROM system_audit_log WHERE action = 'registration_invite_created'
-                  ORDER BY id DESC LIMIT 1`
-            );
-            await closeDb(db);
+            // The audit write lands after the response (auditSuccess does not
+            // wait for the chain), so wait for THIS invite's row. Reading the
+            // newest row at once failed under load, or passed on an older
+            // invite's row without checking this token at all.
+            let row;
+            for (let i = 0; i < 50 && !row; i++) {
+                const db = await openDb(server.dbPath);
+                row = await pGet(
+                    db,
+                    `SELECT new_value FROM system_audit_log
+                      WHERE action = 'registration_invite_created' AND resource_id = ?`,
+                    [String(body.invite.id)]
+                );
+                await closeDb(db);
+                if (!row) await new Promise((r) => setTimeout(r, 100));
+            }
             // redaction.js hides any field named `token` — so the audit trail
             // records WHO minted WHAT without storing the credential itself.
             expect(row).toBeTruthy();
