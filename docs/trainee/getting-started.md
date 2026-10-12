@@ -38,27 +38,28 @@ Account** and follow the register form.
 A **case** is one clinical scenario: a patient with a presentation, labs,
 imaging, exam findings and treatments behind it.
 
-- If your instructor set a **default case**, the simulator loads it
-  automatically and you can start talking right away.
-- To choose a different case, open **Settings** (top-left of the patient
-  screen) → **Open Settings**, go to the **Cases** tab, and open the case you
-  want. Loading a case returns you to the patient screen with that patient
-  ready.
+- When you have no case open, the simulator opens the platform's **default
+  case**, already running. **No Case Selected** shows only on a platform that
+  has no default case.
+- To choose a different case, open the menu at the top of the screen (the gear
+  icon with your language's flag) and choose **Cases**. Open the case you want.
+  Loading a case returns you to the patient screen with that patient ready.
 
 The screen header withholds the diagnosis. You work it out.
 
 ## 3. Start the session
 
-There is no separate "Start" button. **Your first message to the patient
-starts the session.** The chat panel is on the lower-left of the screen.
+There is no separate "Start" button. **The session starts when the case
+loads**: the room bar appears along the bottom, the monitor starts running,
+and if the case has an opening line the patient has already spoken. The chat
+panel is on the lower-left of the screen.
 
 1. Type a question in the message box, for example
    `Hello, what brought you in today?`
 2. Press **Enter** or click the send button.
 
-The patient replies, the session begins, and the monitor on the right starts
-running the patient's vitals. From this point everything you do is part of one
-**session**: questions, exams, orders and treatments.
+The patient replies. Everything you do from the moment the case loads is part
+of one **session**: questions, exams, orders and treatments.
 
 ## 4. Work the case
 

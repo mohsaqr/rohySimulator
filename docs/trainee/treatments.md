@@ -37,24 +37,27 @@ a considered decision, and be ready to explain your reasoning in the
 [debrief](/trainee/debrief).
 :::
 
-## Administer and discontinue
+## Give and stop a treatment
 
 An order moves through statuses you act on from the orders list:
 
-- **Ordered**: placed and awaiting administration. Click **Administer** to
-  give it. Administering starts the treatment's effect on the patient.
-- **In progress**: being given; you can **Discontinue** it.
+- **Ordered**: placed and awaiting administration. Click **Give** to give
+  it. Giving it starts the treatment's effect on the patient.
+- **In progress**: being given; click **Stop** to discontinue it.
 
-Watch the [monitor](/trainee/vitals) after you administer. The patient's
-vitals respond to treatment over time, and a manually pinned vital set by
-your instructor is preserved across those changes.
+Watch the [monitor](/trainee/vitals) after you give a treatment. The
+patient's vitals respond over time, and a manually pinned vital set by your
+instructor is preserved across those changes.
 
-## Records and memory
+Under the monitor, the **Active Treatments** panel lists each drug acting on
+the patient with its own change to the vital signs, for example
+`Atropine HR +12`. When more than one is active, the sum is shown underneath.
 
-The same floating strip has **Records** (the patient's existing clinical
-records for this case) and **Memory** (what the patient record has captured
-about your session so far). Use them to check what is already known before
-you treat.
+## Records
+
+The same floating strip has **Records**: the patient's existing clinical
+records for this case. Use it to check what is already known before you
+treat.
 
 ## Next steps
 

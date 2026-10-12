@@ -41,8 +41,12 @@ End the case when you are finished with it.
   same notes you took in the exam and investigations rooms are here.
 - Open the patient/case **summary** to see a consolidated view of the
   encounter.
-- **Back to Cases** returns you to the patient screen. On an ended case the
+- **Back to patient** returns you to the patient screen. On an ended case the
   case stays closed.
+
+If the consultant's reply does not arrive, the room says so and keeps your
+message; send it again. A case with no consultant attached says **No
+discussant configured** and names where an admin adds one.
 
 ## What the debrief is for
 

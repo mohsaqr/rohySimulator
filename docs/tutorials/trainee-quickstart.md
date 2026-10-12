@@ -23,16 +23,17 @@ Open the simulator, enter your **Username** and **Password**, click
 
 ## 2. Pick a case
 
-If your Teacher set a default case it loads automatically. Otherwise open
-**Settings → Open Settings → Cases** and open a case. Full detail:
+With no case open, the platform's default case loads and is already running.
+To run another, open the menu at the top of the screen and choose **Cases**,
+then open a case. Full detail:
 [Getting started → Pick a case](/trainee/getting-started). Not sure which
 case to run? See the
 [acute-cases walkthrough](/tutorials/walkthrough-acute-cases).
 
 ## 3. Take a short history
 
-You start in the **Patient** room. **Your first message starts the
-session** — there is no separate start button.
+You start in the **Patient** room. The session started when the case
+loaded; there is no separate start button.
 
 1. Type `Hello, what brought you in today?` and press **Enter**.
 2. Ask two or three focused follow-ups (onset, character, associated

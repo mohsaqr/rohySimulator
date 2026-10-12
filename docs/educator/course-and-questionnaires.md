@@ -99,8 +99,9 @@ learner's data is erased.
 
 A case package also carries the case's course: its lessons and which of them
 are locked behind the case. The receiving server gets a new course with the
-same lessons and locks, and no learners. See
-[Case packages](/admin/case-packages#the-course).
+same lessons and locks, and no learners. A lesson locked behind a different
+case of the course is not carried, and neither is the platform's default
+course. See [Case packages](/admin/case-packages#the-course).
 
 ## Reading the answers
 

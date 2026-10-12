@@ -1,16 +1,16 @@
 # Pathology slides
 
 Whole-slide images are large: a single scanned slide is gigabytes of pyramid
-tiles. Rohy keeps them outside the application. Slides live on a **content
-origin**, and a case refers to one by name.
+tiles. Rohy keeps them outside the application and its database, and a case
+refers to a slide by name.
 
 There are two halves to a slide library, and they are independent. Either can
 exist without the other.
 
 | Half | Where it comes from | Who changes it |
 |---|---|---|
-| **Bundled** | a content bundle deployed to the origin (`./deploy.sh pathoyoncontent`) | whoever deploys content |
-| **Managed** | imported from a link, downloaded and tiled by Rohy itself | an educator, from the case editor |
+| **Bundled** | the imaging content (`npm run setup:content`, see [Install](/operator/install#imaging-content)) or a content origin | whoever deploys content |
+| **Managed** | imported from a link, downloaded and tiled by Rohy itself into its slide library, and served by Rohy | an educator, from the case editor |
 
 This page covers the managed half.
 
@@ -97,7 +97,10 @@ reason, with **Remove**. Removing deletes the row and the files together.
 Three things, all outside the application:
 
 1. **libvips** on the server: `apt install libvips-tools`. Without it an import
-   fails with *"'vips' is not installed on this server"*.
+   fails with *"'vips' is not installed on this server"*. The Docker image
+   includes it (with OpenSlide) unless it was built with `INCLUDE_VIPS=0`.
+   A [case package](/admin/case-packages) does not need it: its slides arrive
+   already tiled.
 2. **A library directory**, writable by the Rohy service user:
    `ROHY_PLUGIN_LIBRARY_DIRS="pathology=/srv/www/plugin-content/pathology/library"`.
    Rohy writes the imported slides there and serves them from there itself;
@@ -110,7 +113,9 @@ Three things, all outside the application:
    that path does not exist inside it.
 3. **An import allowlist**: `ROHY_PLUGIN_IMPORT_ORIGINS="pathology=https://slides.example.edu"`.
    A malformed value is fatal at boot, so a typo stops the server loudly and
-   is visible at once.
+   is visible at once. In Docker, the container receives only the variables
+   listed under `environment:` in `deploy/docker/compose.yml`; add this one
+   there.
 
 Optionally `ROHY_PLUGIN_IMPORT_MAX_BYTES` caps every tenant's limit from above.
 

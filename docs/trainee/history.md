@@ -12,8 +12,8 @@ way you would ask a real person.
    `Can you describe the pain?`
 3. Press **Enter** or click the send button.
 
-Your **first message starts the session**. There is no separate start
-button. The patient's reply streams in as it is generated.
+The session is already running: it starts when the case loads, and there is
+no separate start button. The patient's reply streams in as it is generated.
 
 ::: tip Ask open questions first
 The patient answers what you ask. Open questions ("Tell me about the pain")

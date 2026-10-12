@@ -143,7 +143,7 @@ docker compose --env-file deploy/docker/.env -p rohy \
   -f deploy/docker/compose.yml up -d --build
 ```
 
-This builds the local `rohy:latest` image. The stack includes Caddy and persistent database, upload and model-cache volumes. Its default TLS configuration uses Caddy's internal certificate authority; public HTTPS configuration is described in the [Caddyfile](deploy/docker/Caddyfile) and [deployment guide](docs/DEPLOY.md). Private Bedside repository access during a Docker build uses the build secret described in the [Dockerfile](deploy/docker/Dockerfile).
+This builds the local `rohy:latest` image. The stack includes Caddy and four named volumes: the database, uploads, the model cache and the pathology slide library. The app is served at `https://<ROHY_HOSTNAME>/rohy/`. The container's configuration comes from Compose (`deploy/docker/.env` and the `environment:` list in `compose.yml`); `server/.env` is not copied into the image. Its default TLS configuration uses Caddy's internal certificate authority; public HTTPS configuration is described in the [Caddyfile](deploy/docker/Caddyfile) and [deployment guide](docs/DEPLOY.md). Private Bedside repository access during a Docker build uses the build secret described in the [Dockerfile](deploy/docker/Dockerfile).
 
 When deploying a published image, pin the release you intend to run and configure the service to use that image. The version in [`package.json`](package.json) describes this checkout; it can differ from a published release or a running deployment. Use the [changelog](CHANGELOG.md) for source changes and `/api/health` for the running instance's version.
 
@@ -170,7 +170,14 @@ npm run build:e2e
 npm run test:e2e
 ```
 
-`build:e2e` uses `/` as its asset base. The production `npm run build` uses `/rohy/` and includes the documentation build; it is intended for the corresponding reverse-proxy configuration. These builds are not interchangeable.
+`build:e2e` uses `/` as its asset base. The production `npm run build` uses `/rohy/` and includes the documentation build; it is intended for the corresponding reverse-proxy configuration. These builds are not interchangeable. To test the app as it is served under `/rohy/`, behind a proxy that strips the prefix:
+
+```bash
+npm run build:basepath
+npm run test:basepath
+```
+
+Client code builds addresses with `apiUrl()`/`baseUrl()` from `src/config/api.js`; ESLint rejects a hand-written root address such as `'/api/…'` or `'/uploads/…'` in `src/`.
 
 Additional checks include the [HTTP audit scripts](scripts/), API fuzzing in [CI](.github/workflows/ci.yml), and [Prova's automated and human test catalogue](prova/README.md). Browser reports and coverage results complement human acceptance checks; they do not record those verdicts.
 

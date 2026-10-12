@@ -1,0 +1,587 @@
+# Rohy — manual battery for the Finnish pathology teaching case FI-0010.
+#
+# Validate:  node prova/validate-catalog.mjs prova/fi-0010-cases.yaml --apply
+# Import:    curl -X POST "$PROVA_URL/api/v1/catalog/import" \
+#              -H "Authorization: Bearer $PROVA_ADMIN_TOKEN" \
+#              -H 'Content-Type: application/yaml' --data-binary @prova/fi-0010-cases.yaml
+#
+# The case: "Pentti, 75 v – vatsakipu ja kuume", a 75-year-old man with abdominal pain and fever.
+# Built as FI-0010 (tmp/build-colorectal-case.mjs, tmp/build-colorectal-course.mjs); on the test
+# server it was imported from a case package and carries the code FI-0017. Steps are in English;
+# Finnish strings the tester must find are quoted exactly.
+#
+# Same rules as prova/rohy-cases.yaml (enforced by Prova, server/lib/catalog.mjs):
+#   - feature id  AREA.NAME, upper case, no underscores (digits allowed: FI0010.GATE)
+#   - case id     <FEATURE>.NN, at least two digits, never moves between features
+#   - kind        manual | automated | both;  tier  core | extended | optional (per FEATURE)
+#   - every feature here is `extended`: FI-0010 is course content, not the release, so its cases
+#     must not hold up rohy's release gate (which counts core cases only)
+#   - block-style YAML only; no flow mappings
+#
+# Tester preconditions, once, for the whole catalogue:
+#   - A disposable instance, never production data. Note its address INCLUDING any base path
+#     (for example https://host/rohy/) — an earlier build of this case broke only under /rohy/.
+#   - A STUDENT account that is a member of the course "Patologia: Pentin tapaus (FI-0010)".
+#     A learner only sees a course case through course membership; staff accounts see every
+#     lesson unlocked, so the gate and the questionnaires can only be tested as a student.
+#   - The course gate, once open, stays open for that learner. Every FI0010.GATE and FI0010.QUIZ
+#     case that checks the LOCKED state needs a student who has never started FI-0017.
+#   - An educator (or admin) account for FI0010.AUTHOR; an admin with case packages switched on
+#     (Settings → Platform → General → Case packages) for the package round trip.
+#   - A native Finnish speaker for FI0010.LANGUAGE; a pathologist or pathology educator for
+#     FI0010.CONTENT.
+
+catalog:
+  name: FI-0010 pathology case (Pentti, 75 v)
+  description: |-
+    Manual checks for the Finnish pathology teaching case FI-0010 ("Pentti, 75 v – vatsakipu ja
+    kuume", imported on the test server as FI-0017) and its course "Patologia: Pentin tapaus
+    (FI-0010)": the patient, the four slides, the gross photograph, the course gate, the pre- and
+    post-test, the on-call pathologist, the debrief, the authoring side and the Finnish text.
+features:
+  - feature: FI0010.LOAD
+    title: The case starts in Finnish
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.LOAD.01
+        title: A course member starts the case and the patient greets in Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Log in as the student who is a member of the course "Patologia: Pentin tapaus (FI-0010)".
+          2. Open the top-bar menu → **Cases** and find the case with code **FI-0017**.
+          3. Start it.
+          4. Look at the room bar along the bottom.
+        expected: |-
+          The case is listed as FI-0017 with the patient "Pentti Laaksonen" (75) and starts at once.
+          The patient's first line is the Finnish greeting "Voi että... vatsaan sattuu ihan
+          hirveästi. Ja kuumetta on ollut eilisestä asti. Tämä on varmaan taas sitä
+          divertikuliittia." The room bar offers Patient, Pathology, Consultant and Course; there is
+          no Examination, Lab, Radiology, ECG or PACS room (the case switches them off).
+      - id: FI0010.LOAD.02
+        title: The interface language does not change the patient's language
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In a running FI-0017 session, switch the interface language to English.
+          2. Ask the patient, in English, "Where does it hurt?".
+          3. Switch the interface language to Finnish (suomi) and ask "Missä kohtaa sattuu?".
+        expected: |-
+          The buttons and menus change language each time; the patient answers in Finnish both
+          times (pain in the left lower abdomen, constant, worse on moving). Changing the
+          interface language does not restart the case or clear the conversation.
+
+  - feature: FI0010.HISTORY
+    title: The history is reached by interview, with no clue to the diagnosis
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.HISTORY.01
+        title: The warning signs come out only when asked about
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Start FI-0017 as a student.
+          2. Ask two open questions only, e.g. "Kertoisitteko, mitä on tapahtunut?" and "Onko
+             muuta?". Note what the patient volunteers.
+          3. Then ask directly about weight, tiredness, bowel habit, blood in the stool,
+             colonoscopy, smoking, alcohol, medicines and who he lives with.
+        expected: |-
+          To open questions he talks about two days of severe abdominal pain, fever since
+          yesterday, his illnesses (blood pressure, gout, knees and back, overweight,
+          diverticulosis, many bowel operations) and his belief that it is "taas sitä
+          divertikuliittia". Only when asked does he tell: six months of tiredness, about 6 kg lost
+          without trying, alternating constipation and loose stools, blood in the toilet twice
+          (he thought haemorrhoids), a skipped last colonoscopy, 40 years of smoking stopped ten
+          years ago, beer at weekends, a blood-pressure and a gout medicine plus paracetamol, and
+          that he lives with his wife Raili.
+      - id: FI0010.HISTORY.02
+        title: The patient never names a diagnosis or gives measured values
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, ask the patient "Onko tämä syöpä?", then "Mikä teillä on?".
+          2. Ask "Paljonko teillä on kuumetta?" and "Mikä on verenpaineenne?".
+        expected: |-
+          He stays Pentti throughout: he does not name or confirm any diagnosis other than his own
+          guess of diverticulitis, and he gives no fever, blood pressure, pulse or laboratory value
+          as a number (he may say he feels hot or feverish).
+      - id: FI0010.HISTORY.03
+        title: Nothing a learner sees before the work names or hints at the diagnosis
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. As a student who has not unlocked the course, read every text visible before any
+             answer is given: the case list entry, the patient card and monitor, the Pathology
+             room (slide list, Gross tab, the **Report** tab's task), the Course view (open lesson
+             "Näin tapaus etenee", the waiting-lesson count, the questionnaires) and the on-call
+             phone's contact list.
+          2. Look for any word such as karsinooma, adenokarsinooma, syöpä, kasvain, tuumori,
+             maligni, etäpesäke, metastaasi, levinneisyys, staging, pT, or a lesson title.
+        expected: |-
+          None appears. The visible texts describe only the presentation, the specimens (sizes,
+          colours, consistency) and the task "Tutki näytteet A–C ja laadi patologinen lausunto."
+          The only diagnosis-like words are the patient's own guess ("divertikuliitti") and the
+          answer options of the pre-test, which list a differential in which "Adenokarsinooma" is
+          one choice among four.
+
+  - feature: FI0010.SLIDES
+    title: The four slides open in the Pathology room
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.SLIDES.01
+        title: All four slides are listed with neutral labels and each one opens
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. In FI-0017, go to the **Pathology** room. If a tab strip shows, choose **Microscopy**.
+          2. Read the slide list on the left.
+          3. Click each slide in turn and wait for the tissue to draw.
+        expected: |-
+          Four slides are listed: "A1 — HE", "A1 — CDX2", "B1 — HE" and "C1 — HE", with the stains
+          "Hematoksyliini–eosiini" (three) and "CDX2 (immunohistokemia)" (one). No label or stain
+          names a diagnosis. Each slide opens to stained tissue (not a blank or black viewer), and
+          no badge reads "no calibration".
+      - id: FI0010.SLIDES.02
+        title: Pan, zoom and magnification work on every slide
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. On each of the four slides: drag to pan, scroll to zoom, press `0` to fit the slide.
+          2. Click the objectives 1x, 2x, 4x and 10x in turn; watch the navigator thumbnail.
+          3. On A1 — HE, press `M` and drag a short line across a gland.
+        expected: |-
+          Panning and zooming are smooth and the tissue stays sharp at each objective the slide was
+          scanned to; the navigator box follows the view. Objectives above the scanned resolution
+          may be greyed out with the tooltip "… is beyond this archive …" — that is expected, not a
+          fault. The ruler reports a length in µm.
+      - id: FI0010.SLIDES.03
+        title: Slide images and the gross photograph load with no missing files under the base path
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Use the instance's full address, including its base path if it has one (e.g. `/rohy/`).
+          2. Open the browser's developer tools → **Network**, and reload the page.
+          3. Go to **Pathology**, open all four slides, zoom in on each, then open the **Gross** tab.
+          4. Filter the network list for failed requests (in Chrome type `status-code:404` in the
+             filter box).
+        expected: |-
+          No slide descriptor (`.dzi`), tile, thumbnail or gross-photograph request answers 404 or
+          another error, and none is requested from the server root instead of under the base
+          path. Every slide draws and the gross photograph shows.
+
+  - feature: FI0010.GROSS
+    title: The gross specimens
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.GROSS.01
+        title: Specimen A has a photograph without a declared scale
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In **Pathology**, choose the **Gross** tab (Finnish interface: "Makro").
+          2. Choose part A "Sigmasuolen resektaatti".
+          3. Read the plate and the panel on the right.
+        expected: |-
+          The tab counts 1 photograph. Part A shows one photograph, enlargeable, with its contact
+          sheet below. Over the plate a notice reads "No scale declared for this plate" (Finnish:
+          "Tälle kuvataululle ei ole ilmoitettu mittakaavaa") and there is no scale bar; the panel
+          shows Scale "—". That is expected: the photograph has no declared width, so it cannot be
+          measured. The panel gives the description starting "Näytteenä on avattu paksusuolen
+          (sigmasuolen) segmentti, pituus 24 cm" and Dimensions "Suolisegmentti 24 cm; muutos
+          4,5 × 3,8 cm".
+      - id: FI0010.GROSS.02
+        title: Specimens B and C say no gross photograph was taken
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. In the **Gross** tab, choose part B "Välikarsinan imusolmukkeet", then part C "Maksan
+             kiilabiopsia".
+        expected: |-
+          Instead of a black viewer, each part says no gross photograph was taken of it ("No gross
+          photograph was taken of Välikarsinan imusolmukkeet." / Finnish "Kohteesta … ei otettu
+          makrokuvaa."), Plates reads 0, and the right-hand panel still shows the part's
+          description and dimensions (B: "1,0–1,8 cm"; C: "2,6 × 2,3 × 0,8 cm").
+
+  - feature: FI0010.GATE
+    title: Course materials open after the case
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.GATE.01
+        title: Before the work, one lesson is readable and five wait
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Log in as a course-member student who has never started FI-0017. Start FI-0017.
+          2. Without entering the Pathology room, open **Course** from the room bar.
+          3. Open the lesson "Näin tapaus etenee".
+        expected: |-
+          The top of the Course view says the course materials are locked ("Course materials are
+          locked" / "Kurssimateriaalit on lukittu"), shows the time condition counting down from
+          15 minutes and "Slides opened: 0/4", and says 5 lessons open when the conditions are met.
+          The lesson "Näin tapaus etenee" opens and reads in full. No title or text of the five
+          waiting lessons is shown anywhere.
+      - id: FI0010.GATE.02
+        title: Time alone does not open the lessons; only opened slides count
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Continue as the GATE.01 student. Go to **Pathology** (the first slide opens by itself),
+             open "A1 — CDX2" and "B1 — HE", then reopen "A1 — HE". Do not open "C1 — HE".
+          2. Open **Course** and note the slide count.
+          3. Reload the page, log out and back in, and open **Course** again.
+          4. Wait until the 15 minutes have passed and check **Course** again.
+        expected: |-
+          The count reads "Slides opened: 3/4" — reopening a slide does not count it twice — and it
+          survives the reload and the new login. The time keeps counting from the first start of
+          the case and is not reset by leaving. After 15 minutes the time condition shows as done
+          but the materials stay locked, because "C1 — HE" has not been opened.
+      - id: FI0010.GATE.03
+        title: Opening the last slide after 15 minutes unlocks the five lessons
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Continue as the GATE.02 student (15 minutes passed, 3 of 4 slides opened).
+          2. Open "C1 — HE" in the Pathology room.
+          3. Open **Course** (wait up to a minute, or reload).
+          4. Open each newly listed lesson.
+        expected: |-
+          The Course view says the course materials are open ("Kurssimateriaalit ovat avoinna").
+          Six lessons are listed and readable: "Näin tapaus etenee", "Paksusuolen adenokarsinooma:
+          makroskopia ja mikroskopia", "CDX2 ja kasvaimen alkuperä", "Välikarsinan imusolmuke:
+          antrakoosi vai etäpesäke?", "Maksan rasvoittuminen vai etäpesäke?" and "Yhteenveto:
+          Pentin tapaus", each with its text (and the table in the lymph-node lesson). They stay
+          open after a reload.
+      - id: FI0010.GATE.04
+        title: A locked lesson cannot be read by its address before the gate opens
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. As a course-member student who has NOT met the gate, open **Course** with the
+             developer tools' **Network** tab open.
+          2. Find the response whose address contains `/lectures`; note the id of a lesson marked
+             locked, and check whether that response contains any locked lesson's title.
+          3. In a new tab of the same browser, open `<instance address>/api/courses/lectures/<id>`
+             and then `<instance address>/api/courses/lectures/<id>/sections`.
+        expected: |-
+          The list response carries the locked lessons' place and gate progress only, with no
+          title, description or sections. Both direct addresses are refused (HTTP 403, body
+          containing "This lesson opens after the case" and `lesson_locked`) and show none of the
+          lesson's content. After the gate opens, the same addresses return the lesson.
+
+  - feature: FI0010.QUIZ
+    title: Pre-test, post-test and reflection questionnaires
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.QUIZ.01
+        title: The pre-test is answered before the materials and shows no score or answers
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. As a course-member student who has not met the gate, start FI-0017 and open **Course**.
+          2. Find "Alku- ja lopputesti", answer its six questions (deliberately get at least one
+             wrong) and submit.
+        expected: |-
+          The questionnaire is marked as answered twice, before and after the materials open, and
+          offers a **Pre-test** form with six questions (five single-choice, one "pick all that
+          apply"). Submitting with a required question empty is refused with a message. After
+          submitting, it shows "Pre-test sent …" and "You will see this score after the
+          post-test." — no score, no correct/incorrect marks, no correct answers and no feedback.
+      - id: FI0010.QUIZ.02
+        title: The reflection is open during the case and the after-course questionnaire is hidden
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Continue as the QUIZ.01 student, gate still locked, in **Course**.
+          2. Find "Pohdinta tapauksen aikana", answer it and submit.
+          3. Look at the third questionnaire.
+        expected: |-
+          "Pohdinta tapauksen aikana" can be answered at any time and has two free-text questions,
+          "Mikä löydös vaikutti eniten diagnoosiisi, ja miksi?" (required) and "Mikä tapauksessa
+          oli vaikeinta?" (marked optional); it is saved without a score. The third questionnaire
+          shows only the heading "Questionnaire" and "Opens together with the course materials." —
+          its title "Kurssimateriaalien jälkeen" and its questions are not shown yet.
+      - id: FI0010.QUIZ.03
+        title: The post-test repeats the questions and then shows both scores and the feedback
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Continue as the QUIZ.01 student; meet the gate (15 minutes and all four slides opened).
+          2. Open **Course**, find "Alku- ja lopputesti" and answer the **Post-test**.
+        expected: |-
+          The pre-test form is gone (it closed when the materials opened) and a Post-test form asks
+          the same six questions. After submitting, the result reads "Pre-test x/6 → post-test
+          y/6", each question is marked correct or incorrect with "Your answer", a wrong one also
+          shows "Correct answer", and each question shows its Finnish feedback. The multiple-choice
+          question scores only when exactly the four warning signs are picked (not "Kihti").
+      - id: FI0010.QUIZ.04
+        title: The after-course questionnaire opens with the materials
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a student whose gate is open, open **Course**.
+          2. Answer "Kurssimateriaalien jälkeen" and submit.
+        expected: |-
+          It now shows its title "Kurssimateriaalien jälkeen", a required single-choice question
+          "Kuinka varma olet nyt diagnoosistasi?" with four options and an optional free-text
+          question "Mitä tekisit toisin, jos tutkisit lasit uudelleen?". It is answered once and
+          saved without a score.
+
+  - feature: FI0010.ONCALL
+    title: The on-call pathologist
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.ONCALL.01
+        title: The pathologist is on the phone for this case and answers
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, open the on-call phone ("Who do you need?").
+          2. Message the pathologist; first ask what they see on the slides.
+          3. Then open a few slides in **Pathology**, and in at least three messages describe what
+             you saw on "A1 — HE" and ask whether it fits.
+        expected: |-
+          A pathologist is listed and answers. At first they ask what you have looked at and teach
+          how to look, rather than listing findings. After you have worked on the slides and
+          described them, they discuss and confirm findings from the material. They say they have
+          not seen the patient when asked about symptoms or history.
+      - id: FI0010.ONCALL.02
+        title: The pathologist never names the diagnosis, even when asked directly
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Continue the conversation with the pathologist.
+          2. Ask outright "Mikä on diagnoosi?" / "What is the diagnosis?", then "Is it cancer?".
+        expected: |-
+          The pathologist does not name or confirm a diagnosis (no "adenocarcinoma", "carcinoma",
+          "cancer", "metastasis" or "diverticulitis" as a verdict); they turn the question back and
+          ask what you think and what supports it.
+
+  - feature: FI0010.DEBRIEF
+    title: Debrief and case summary keep the answer until the end
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.DEBRIEF.01
+        title: The debrief does not run while the case is live
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In a running FI-0017 session, click **Consultant** in the room bar (this leaves the
+             room; it does not end the case).
+          2. Click **Start debrief**.
+          3. Return to the Patient room.
+        expected: |-
+          No debrief conversation starts and nothing on screen names the diagnosis; the
+          consultant's turn is refused (the server answers "The debrief opens when the case ends").
+          The case is still live: the patient answers when you return.
+      - id: FI0010.DEBRIEF.02
+        title: After End & Debrief the consultant debriefs the case
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, click **End & Debrief** and confirm.
+          2. In the Consultant room, click **Start debrief** and discuss your diagnosis.
+          3. Try to send the patient a message.
+        expected: |-
+          The case ends and the Consultant room opens marked ended. The consultant starts a
+          reflective debrief, can now discuss the diagnosis and the findings, and responds to your
+          reasoning. Chat with the patient is locked and the case cannot be reopened.
+      - id: FI0010.DEBRIEF.03
+        title: The case summary shows what was gathered and no diagnosis
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In a running FI-0017 session, go to **Consultant** and open the case summary.
+          2. End the case and open the **Case summary** again.
+        expected: |-
+          Both times the summary's heading is the patient's name "Pentti Laaksonen", not the case
+          title, and it shows the demographics, the chief complaint "Kova vatsakipu ja kuume" and
+          the initial vitals (HR 108, BP 124/72, SpO2 95 %, RR 22, 38.6 °C). It does not show the
+          diagnosis, the learning objectives or any answer key.
+
+  - feature: FI0010.AUTHOR
+    title: Educator and admin side of FI-0010
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.AUTHOR.01
+        title: The case, its pathology material and its course step show in the editor
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Log in as an educator. Settings → **Cases**, open FI-0017 in the wizard.
+          2. **Rooms** step; **Plugins** step → Pathology → **Open editor**; then **Course** step.
+        expected: |-
+          The list shows "Pentti, 75 v – vatsakipu ja kuume" with code FI-0017. Rooms: Patient,
+          Pathology and Consultant on; Examination, Lab, Radiology, ECG and PACS off. The Case
+          Studio shows parts A, B and C, blocks A1, B1 and C1, the four slides, one gross photograph
+          on part A, and an activity with a protected rubric. The Course step shows the course
+          "Patologia: Pentin tapaus (FI-0010)", 15 minutes, "Every pathology slide opened" ticked,
+          five lessons ticked as waiting ("Näin tapaus etenee" not ticked), and three questionnaires.
+      - id: FI0010.AUTHOR.02
+        title: After import the course has no learners and an educator can add them
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As an educator, Settings → **Courses**, open "Patologia: Pentin tapaus (FI-0010)".
+          2. Note its members. In **Manage**, add a student by username and click **Add**.
+          3. Log in as that student and open **Cases**.
+        expected: |-
+          On a freshly imported course the member list is empty, and the course holds six
+          lessons. The added student appears as a member, and FI-0017 appears in their case list
+          (it did not before).
+      - id: FI0010.AUTHOR.03
+        title: A case package carries the case and its course to another server
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As admin, Settings → **Cases** → FI-0017's **Export as a case package (case and
+             media)**. Read the export dialog.
+          2. On another disposable instance (or the same one), Settings → **Cases** →
+             **Import package**, choose the file, and read the import report.
+          3. Open the new case and the new course; add a student and play the new case.
+        expected: |-
+          The export carries the case, its slides with their tiles, the gross photograph and the
+          course. The import creates a NEW case with its own code and a new course of the same name
+          with all six lessons, the same five locked behind the new case, and no learners. The
+          questionnaires come with the case. In the new case the four slides and the photograph
+          open, and the gate and questionnaires behave as on FI-0017.
+
+  - feature: FI0010.CONTENT
+    title: Pathology content judged by a pathologist
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.CONTENT.01
+        title: The slides and the photograph show what the case and its lessons describe
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a pathologist, read the gross description of part A and look at its photograph.
+          2. Screen each slide; on "A1 — CDX2" look for the external control tissue at the edge.
+          3. Compare with the case's diagnosis and the unlocked lessons.
+        expected: |-
+          The photograph is plausible for the described sigmoid resection, the four slides show
+          what the lessons teach (A1 HE an invasive gland-forming tumour into the pericolic fat,
+          A1 CDX2 diffuse nuclear positivity with a control piece, B1 an anthracotic node without
+          tumour, C1 macrovesicular steatosis without tumour), and nothing contradicts the case.
+      - id: FI0010.CONTENT.02
+        title: The clinical referral is shown to the learner
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a student in FI-0017, look in the Pathology room (header, Microscopy, Gross and
+             Report) for the request: accession "PAT-26-0751", the specimen summary and the
+             clinical history starting "75-vuotias mies, jolla verenpainetauti, kihti …".
+        expected: |-
+          The learner can read the referral: accession, specimen summary ("A: sigmasuolen
+          resektaatti · B: välikarsinan imusolmukkeet · C: maksan kiilabiopsia") and the clinical
+          history ending "Pyydetään histologinen diagnoosi." Record where it is shown, or that it
+          is not shown anywhere.
+      - id: FI0010.CONTENT.03
+        title: A submitted report gets a read-feedback summary
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a student, in **Pathology** → **Report**, read the task, click **Add report**, give
+             it a title and a short Finnish diagnosis, and **Submit report**.
+          2. Read **How this slide was read** on two slides: one you screened well at 10x, one you
+             barely looked at.
+        expected: |-
+          The task reads "Tutki näytteet A–C ja laadi patologinen lausunto." with its instruction.
+          The submitted report is locked and marked Submitted. The read feedback reports key and
+          critical findings reached, coverage, highest power and time; the well-read slide scores
+          better, and missed findings are listed with a reason (never on screen, insufficient
+          magnification or insufficient dwell).
+
+  - feature: FI0010.LANGUAGE
+    title: Finnish language quality, judged by a native speaker
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FI0010.LANGUAGE.01
+        title: The patient speaks natural Finnish in character
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a native Finnish speaker, hold a ten-question history interview with the patient,
+             including colloquial questions.
+        expected: |-
+          Every reply is idiomatic Finnish of a terse, gruff 75-year-old retired lorry driver in
+          pain: no English words, no machine-translation phrasing, no change of register or
+          language mid-conversation.
+      - id: FI0010.LANGUAGE.02
+        title: The case texts and questionnaires read as correct medical Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Read the gross descriptions, specimen names, stain names and task, then all three
+             questionnaires, their options and (after the post-test) their feedback.
+        expected: |-
+          Grammar, spelling and inflection are correct, and the terminology is what a Finnish
+          pathologist would write (e.g. "resektaatti", "kiilabiopsia", "Hematoksyliini–eosiini",
+          "makrovesikulaarinen rasvoittuminen"). Note any sentence that reads as translated.
+      - id: FI0010.LANGUAGE.03
+        title: The six lessons read as correct, current Finnish teaching text
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. With the gate open, read all six lessons, including the pigment table in
+             "Välikarsinan imusolmuke: antrakoosi vai etäpesäke?".
+        expected: |-
+          The lessons are grammatical, idiomatic Finnish with correct terminology (e.g. "likainen
+          nekroosi", "desmoplasia", "silmikoituminen", "mismatch repair"), consistent in style, and
+          the "Näin tapaus etenee" instructions match how the case actually works (15 minutes,
+          all four slides, pre-test before the materials).
+      - id: FI0010.LANGUAGE.04
+        title: The Finnish interface reads well in the Pathology room and the Course view
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. Set the interface language to Finnish (suomi).
+          2. Walk the Pathology room (Microscopy, "Makro", the Report tab) and the Course view
+             (gate box, questionnaires, results).
+        expected: |-
+          The interface is Finnish throughout with no English left over, and inserted names read
+          grammatically, e.g. "Kohteesta Välikarsinan imusolmukkeet ei otettu makrokuvaa." and
+          "Kurssimateriaalit on lukittu". Note every string that is untranslated or ungrammatical.

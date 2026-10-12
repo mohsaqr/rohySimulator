@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.51] — 2026-10-12
+
+- **Docker image includes libvips** (with OpenSlide), so importing a pathology slide from a link works in
+  Docker; the build fails if the OpenSlide loader is missing. `INCLUDE_VIPS=0` leaves it out (~70 MB).
+  rc.39's note that slide imports "work with no setup" in Docker was true only for case packages.
+- Operator, admin and trainee docs brought in line with the code (Docker configuration via Compose,
+  `/rohy/` base path, slide library, debrief "Back to patient", the menu's new place for Cases).
+- Prova: `prova/fi-0010-cases.yaml`, a 33-case manual battery for the Finnish pathology case FI-0010
+  (all `extended`, so it does not hold up the release gate).
+
 ## [3.0.0-rc.50] — 2026-10-12
 
 - **A shorter top-bar menu.** The eight languages fold into one "Language" row showing the current one,

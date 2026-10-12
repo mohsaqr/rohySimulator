@@ -143,6 +143,16 @@ Rollback for Docker = pin to the previous tag in `compose.yml` and
 `up -d` again. Image layers for the previous tag are still cached
 locally until you `docker image prune`.
 
+Upgrading a Docker install from before 3.0.0-rc.39 takes two checks:
+
+- Use the release's `deploy/docker/compose.yml`. It mounts the
+  `rohy-plugin-library` volume at `/var/lib/rohy-plugin-library`, where the
+  image keeps imported pathology slides; an older compose file does not name
+  it.
+- The image no longer contains `server/.env`. If a setting reached your
+  container only through that file, move it into `deploy/docker/.env` and the
+  `environment:` list in `compose.yml`.
+
 ---
 
 ## The upgrade procedure (Path A: `bin/rohy-update`)

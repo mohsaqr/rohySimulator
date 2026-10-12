@@ -23,9 +23,16 @@ atrial fibrillation, a ventricular rhythm, or asystole). The ECG waveform is
 drawn from the current heart rate and rhythm.
 
 Vitals are **live**. They follow the case timeline, respond to
-[treatments](/trainee/treatments) you administer, and any vital your
+[treatments](/trainee/treatments) you give, and any vital your
 instructor has manually pinned is held steady even as other effects play
 out.
+
+## Active treatments
+
+While a treatment acts on the patient, the **Active Treatments** panel under
+the monitor names each drug and its own change to HR, BP, SpO2 and RR, for
+example `Atropine HR +12`. With more than one drug active, the sum appears
+underneath. Use it to tell which treatment is moving the monitor.
 
 ## Alarms
 

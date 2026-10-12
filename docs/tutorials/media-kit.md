@@ -84,9 +84,10 @@ real because nothing real should appear.
 1. **Title (0:00–0:05)** — "Rohy: running your first case." On-screen:
    *Training only — the patient is simulated.*
 2. **Sign in (0:05–0:15)** — sign in with a seeded student account.
-3. **Pick a case (0:15–0:25)** — open Settings → Cases, open a case.
-4. **First message (0:25–0:40)** — type the first question; note "your
-   first message starts the session."
+3. **Pick a case (0:15–0:25)** — open the top-bar menu → Cases, open a
+   case.
+4. **First message (0:25–0:40)** — type the first question; note "the
+   session started when the case loaded."
 5. **Order & treat (0:40–1:05)** — order one lab, read it, give one
    treatment, show the monitor respond.
 6. **End & debrief (1:05–1:25)** — End & Debrief, confirm, land in the

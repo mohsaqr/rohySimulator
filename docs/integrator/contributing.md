@@ -74,10 +74,49 @@ npm run lint            # ESLint flat config (eslint.config.js)
 Zero-error policy. There are 7 pre-existing tracked warnings — don't add
 more, and don't "fix" them by widening rule disables.
 
+### Addresses carry the base path
+
+A production build is served under `/rohy/`, so a hand-written root address
+in client code works at `/` and 404s on a real install. ESLint rejects, in
+`src/**/*.{js,jsx}` (tests and `src/config/api.js` excepted), a string or
+template literal that starts with `/api/`, `/uploads/`, `/oyon/`,
+`/standalone/`, `/avatars/` or `/docs/` unless it is passed straight to
+`apiUrl()` or `baseUrl()`. Build addresses with those two helpers from
+`src/config/api.js`, or call `apiFetch`, which does. A relative
+`./uploads/…` resolves under the base and is allowed.
+
+## Browser tests
+
+Playwright needs a build first, and the two suites need different builds:
+
+| Suite | Build | Run | Served at |
+|---|---|---|---|
+| Main e2e (`tests/e2e/`, `playwright.config.js`) | `npm run build:e2e` | `npm run test:e2e` | `/` |
+| Base path (`tests/basepath/`, `playwright.basepath.config.js`) | `npm run build:basepath` | `npm run test:basepath` | `/rohy/`, behind `tests/basepath/proxy.mjs` |
+
+```bash
+npm run test:e2e:install      # once: Chromium for Playwright
+npm run build:e2e && npm run test:e2e
+npm run build:basepath && npm run test:basepath
+```
+
+The base-path run puts a proxy in front of the server that strips `/rohy`
+and answers 404 for every other path, as an install behind Caddy does. A
+learner walks every room of a case with a pathology slide; the slide must
+load from `/rohy/api/plugins/…`, no request may leave `/rohy/`, and no app,
+Oyon or plugin file may fail. CI runs it as the job **Playwright under a base
+path**. Its reporters are `list` and `html`, so it does not post to Prova.
+
+The `tests/e2e/gate-*.spec.js` files (`gate-core`, `gate-screen`,
+`gate-rooms`, `gate-exam`, `gate-alarms`, `gate-debrief`, `gate-oncall`)
+automate core cases of the release gate in Prova. Each test asserts every
+clause of its case's expected text and is listed under that case's `covers:`
+in `prova/rohy-cases.yaml`; see [`prova/README.md`](https://github.com/mohsaqr/rohySimulator/blob/main/prova/README.md).
+
 ## Build sanity
 
 ```bash
-npm run build           # vite build --base=/rohy/ → dist/ → frontend/
+npm run build           # docs site, then vite build --base=/rohy/ → dist/ → frontend/
 ```
 
 `dynajs` (a `file:` sibling dependency) must be built before `npm run build`

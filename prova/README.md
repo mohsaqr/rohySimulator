@@ -19,6 +19,15 @@ not, and must never be.
 automated check keys under `covers:`, which is what makes Prova's coverage matrix show a case as
 covered by a person, by a machine, or by both.
 
+Most automated core cases live in `tests/e2e/gate-*.spec.js` (`gate-core`, `gate-screen`,
+`gate-rooms`, `gate-exam`, `gate-alarms`, `gate-debrief`, `gate-oncall`). A case becomes
+`kind: automated` only when its test asserts every clause of its `expected` text; a case whose text
+names something the app does not show stays manual until the text or the app changes.
+
+The base-path run (`npm run build:basepath`, then `npm run test:basepath`; `tests/basepath/`) is
+not part of the battery: `playwright.basepath.config.js` names only the `list` and `html`
+reporters, so it posts nothing to Prova. CI runs it as its own job.
+
 ## Validate before importing
 
 The import is transactional but it is not a dry run, so check the file first. `validate-catalog.mjs`
@@ -113,4 +122,4 @@ deleted. On a fresh install the seeded accounts are `admin` / `admin123` and `st
 `student123`, and the seeded cases are an English STEMI case plus natively authored German, Spanish
 and Italian ones.
 
-Test the **`advanced`** channel build — that tag, not `main`, is what production serves.
+Test the build production serves: the **`current`** tag (`advanced` sits on the same commit).

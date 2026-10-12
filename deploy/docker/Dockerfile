@@ -32,6 +32,11 @@
 
 ARG NODE_VERSION=22-bookworm-slim
 ARG INCLUDE_PIPER=0
+# libvips (with OpenSlide) for importing pathology slides from a link or an
+# upload: the importer runs `vipsheader` and `vips dzsave`. Without it a case
+# package's slides import fine (they arrive already tiled), but a new slide
+# cannot be tiled. Set INCLUDE_VIPS=0 to leave it out (~70 MB).
+ARG INCLUDE_VIPS=1
 ARG DYNAJS_GIT_URL=https://github.com/mohsaqr/dynajs.git
 ARG DYNAJS_GIT_REF=main
 
@@ -140,6 +145,7 @@ RUN if [ "${INCLUDE_PIPER}" = "1" ]; then \
 # ===========================================================================
 FROM node:${NODE_VERSION} AS runtime
 ARG INCLUDE_PIPER
+ARG INCLUDE_VIPS
 
 LABEL org.opencontainers.image.source="https://github.com/mohsaqr/rohySimulator"
 LABEL org.opencontainers.image.description="rohy — Virtual Patient Simulation Platform"
@@ -152,7 +158,9 @@ RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
         ca-certificates curl sqlite3 tini \
         $(if [ "${INCLUDE_PIPER}" = "1" ]; then echo "python3 python3-venv"; fi) \
+        $(if [ "${INCLUDE_VIPS}" != "0" ]; then echo "libvips-tools"; fi) \
  && rm -rf /var/lib/apt/lists/* \
+ && if [ "${INCLUDE_VIPS}" != "0" ]; then vips -l | grep -q openslideload || { echo "libvips has no OpenSlide loader" >&2; exit 1; }; fi \
  && mkdir -p /opt/rohy /var/lib/rohy /var/cache/rohy-hf \
  && chown -R node:node /opt/rohy /var/lib/rohy /var/cache/rohy-hf
 
