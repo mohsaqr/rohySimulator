@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.52] — 2026-10-12
+
+- Tests only: two server test files did not wait for the database to finish booting, so a fast run could
+  delete it while seeding still wrote — an unhandled `SQLITE_READONLY` that failed rc.51's CI with every
+  test passing. Both now await `dbReady` first.
+
 ## [3.0.0-rc.51] — 2026-10-12
 
 - **Docker image includes libvips** (with OpenSlide), so importing a pathology slide from a link works in
