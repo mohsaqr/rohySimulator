@@ -29,7 +29,7 @@ await new Promise((resolve, reject) => {
 await (await import('../../server/db.js')).dbReady;
 const { __test, createUpload, appendChunk, cancelUpload, buildCasePackage, UPLOADS_DIR } = await import('../../server/services/casePackage.js');
 const { default: dbAdapter } = await import('../../server/dbAdapter.js');
-const { rewriteRefs } = __test;
+const { rewriteRefs, ensureWorkDir } = __test;
 
 const createdUploads = [];
 afterAll(() => {
@@ -206,3 +206,27 @@ describe('export', () => {
         expect(opened[0].closed).toBe(true);
     });
 });
+
+describe('case packages: the work directory sweep', () => {
+    it('makes a second caller wait for the sweep, so nothing it writes is swept away', async () => {
+        // Regression lock: the sweep flag was set before the sweep finished; a second upload wrote into a directory still being removed
+        const { __resetForTests } = await import('../../server/services/casePackage.js');
+        const work = process.env.ROHY_CASE_PACKAGE_DIR;
+        for (let trial = 0; trial < 5; trial++) {
+            __resetForTests();
+            fs.mkdirSync(path.join(work, 'orphan', 'deep'), { recursive: true });
+            for (let i = 0; i < 200; i++) fs.writeFileSync(path.join(work, 'orphan', 'deep', `f${i}`), 'x');
+            const [, kept] = await Promise.all([
+                ensureWorkDir(),
+                ensureWorkDir().then(async (dir) => {
+                    const file = path.join(dir, `kept-${trial}`);
+                    await fs.promises.writeFile(file, 'mine', { flag: 'wx' });
+                    return file;
+                }),
+            ]);
+            expect(fs.existsSync(path.join(work, 'orphan')), 'the orphan is swept').toBe(false);
+            expect(fs.readFileSync(kept, 'utf8'), 'what the second caller wrote is kept').toBe('mine');
+        }
+    });
+});
+

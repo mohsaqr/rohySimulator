@@ -248,41 +248,74 @@ describe('audit hash chain', () => {
         }
     });
 
-    // Regression lock: route-side BEGIN/COMMIT poisoning the connection
-    // must not corrupt audit appends. Pre-fix, this test reproduces the
-    // 2026-05-08 "are you from here" 502 cascade — appendAuditEntry
-    // throws "cannot start a transaction within a transaction" because
-    // the test passes the same handle a route already left mid-BEGIN.
-    // Post-fix, the self-healing ROLLBACK in audit-chain clears the
-    // orphan transaction and the audit append succeeds.
-    it('recovers when the injected handle is stuck in a stale transaction', async () => {
+    // An append does not open, close or roll back transactions: it is one
+    // INSERT that carries its own chain check. On a handle already inside a
+    // transaction it simply takes part in it. It used to ROLLBACK whatever it
+    // found open and retry — discarding the other caller's pending writes —
+    // and held its own BEGIN IMMEDIATE across awaits, which froze the server
+    // under load (stability run, rc.47).
+    it('appends inside a transaction it did not open, and leaves that transaction alone', async () => {
         const ctx = await freshCtx('audit-chain-stuck-tx');
-
-        // Simulate a route that opened BEGIN and never reached COMMIT
-        // (e.g. a fire-and-forget COMMIT that silently failed).
         await run(ctx.db, 'BEGIN');
 
-        // Audit append on the SAME handle would normally throw
-        // SQLITE_ERROR: cannot start a transaction within a transaction.
-        // The self-healing layer should detect that, ROLLBACK, and retry.
         const result = await appendAuditEntry({
             tenantId: 1,
             userId: null,
             action: 'TEST_RECOVERY',
             resourceType: 'case',
             resourceId: '99',
-            metadata: { reason: 'simulated stuck route transaction' },
+            metadata: { reason: 'appended inside a caller\'s transaction' },
         }, { database: ctx.db });
-
         expect(result.id).toBeGreaterThan(0);
 
-        // The audit row should be visible and chain-valid.
+        // The caller's transaction is still open — not rolled back under it.
+        await expect(run(ctx.db, 'BEGIN')).rejects.toThrow(/within a transaction/);
+        await run(ctx.db, 'COMMIT');
+
         const verify = await verifyAuditChain({ tenant_id: 1, database: ctx.db });
         expect(verify.ok).toBe(true);
+    });
 
-        // And the connection should now be in a clean state — no
-        // dangling transaction. A fresh BEGIN/COMMIT must succeed.
-        await run(ctx.db, 'BEGIN');
-        await run(ctx.db, 'COMMIT');
+    it('re-reads the head when another writer appended first, so the chain does not fork', async () => {
+        // Regression lock: the append reads the head without a lock; a row from another process landing before its INSERT must make it read again, not fork the chain
+        const ctx = await freshCtx('audit-chain-race');
+        await appendAuditEntry({ tenantId: 1, action: 'FIRST', resourceType: 'case', resourceId: '1' }, { database: ctx.db });
+
+        // Another process's append lands between this append's head read and its INSERT.
+        let raced = false;
+        let competitorHash = null;
+        const racing = {
+            all: ctx.db.all.bind(ctx.db),
+            run: ctx.db.run.bind(ctx.db),
+            get(sql, params, cb) {
+                ctx.db.get(sql, params, (err, head) => {
+                    if (raced || err || !/ORDER BY id DESC/.test(sql)) return cb(err, head);
+                    raced = true;
+                    const ts = new Date().toISOString();
+                    ctx.db.run(
+                        `INSERT INTO system_audit_log (timestamp, action, resource_type, resource_id, status, tenant_id, prev_hash)
+                         VALUES (?, 'OTHER_PROCESS', 'case', '2', 'success', 1, ?)`,
+                        [ts, head.entry_hash],
+                        function inserted(insertErr) {
+                            if (insertErr) return cb(insertErr);
+                            const id = this.lastID;
+                            ctx.db.get('SELECT * FROM system_audit_log WHERE id = ?', [id], (readErr, row) => {
+                                if (readErr) return cb(readErr);
+                                competitorHash = computeEntryHash(head.entry_hash, canonicalRow(row));
+                                ctx.db.run('UPDATE system_audit_log SET entry_hash = ? WHERE id = ?', [competitorHash, id], (updErr) => cb(updErr, head));
+                            });
+                        },
+                    );
+                });
+            },
+        };
+
+        const appended = await appendAuditEntry({ tenantId: 1, action: 'MINE', resourceType: 'case', resourceId: '3' }, { database: racing });
+        expect(raced).toBe(true);
+        expect(appended.prevHash, 'hashed from the row that got in first, not the stale head').toBe(competitorHash);
+        const verify = await verifyAuditChain({ tenant_id: 1, database: ctx.db });
+        expect(verify.ok).toBe(true);
+        const heads = await all(ctx.db, 'SELECT prev_hash, COUNT(*) AS n FROM system_audit_log WHERE tenant_id = 1 GROUP BY prev_hash HAVING n > 1');
+        expect(heads, 'no two rows share a parent').toEqual([]);
     });
 });

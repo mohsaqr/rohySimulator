@@ -26,6 +26,7 @@ import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
 import { normaliseCaseRooms } from '../shared/caseRooms.js';
 import { normaliseCourseGate, normaliseQuestionnaires } from '../shared/caseCourse.js';
+import { withKeyedLock } from '../lib/keyedLock.js';
 import {
     missingField,
     auditSuccess,
@@ -1274,6 +1275,12 @@ router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req,
     const existsSql = `SELECT id, finding, is_abnormal FROM physical_exam_findings
                        WHERE session_id = ? AND body_region = ? AND exam_type = ?
                        LIMIT 1`;
+    // The check and the insert run under a lock on (session, region, exam),
+    // held until this answer is sent: identical findings posted together all
+    // passed the check and were each counted (stability run, rc.47).
+    withKeyedLock(`exam:${sessionId}:${body_region}:${exam_type}`, () => new Promise((settled) => {
+    res.once('finish', settled);
+    res.once('close', settled);
     dbAdapter.get(existsSql, [sessionId, body_region, exam_type], (existsErr, existing) => {
         if (existsErr) return res.status(500).json({ error: existsErr.message });
 
@@ -1309,6 +1316,7 @@ router.post('/sessions/:sessionId/exam-findings', authenticateToken, async (req,
             res.json({ id: this.lastID, message: 'Exam finding recorded', already_recorded: false });
         });
     });
+    }));
 });
 
 // GET /api/sessions/:sessionId/exam-findings - Get all exam findings for a session

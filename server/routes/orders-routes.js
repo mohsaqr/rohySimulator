@@ -31,6 +31,7 @@ import {
     verifySessionOwnership
 } from './_helpers.js';
 import { doseMultiplierFor } from '../shared/treatmentDose.js';
+import { withKeyedLock } from '../lib/keyedLock.js';
 
 const radiologyLog = logger('radiology');
 const routesOrdersLog = logger('routes-orders-labs-radiology');
@@ -1049,14 +1050,20 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                 // column DEFAULT 1, and GET /orders filters io.tenant_id =
                 // <session tenant>. Omitting it stranded every non-default-
                 // tenant session's results in the void (Bug 6).
+                // The duplicate check is inside the INSERT: one statement, so
+                // two identical requests arriving together cannot both pass
+                // it. A SELECT-then-INSERT pair did, and doubled orders under
+                // load (stability run, rc.47). changes === 0 means already
+                // ordered.
                 const insertSql = `
                     INSERT INTO investigation_orders (session_id, investigation_id, ordered_at, available_at, tenant_id)
-                    VALUES (?, ?, ${SQL_NOW}, ${sqlNowPlus("'+' || ? || ' minutes'")}, ?)
+                    SELECT ?, ?, ${SQL_NOW}, ${sqlNowPlus("'+' || ? || ' minutes'")}, ?
+                    WHERE NOT EXISTS (SELECT 1 FROM investigation_orders WHERE session_id = ? AND investigation_id = ?)
                 `;
-                const existsSql = `SELECT id FROM investigation_orders WHERE session_id = ? AND investigation_id = ? LIMIT 1`;
 
                 let inserted = 0;
                 let skipped = 0;
+                let failed = createFailed;
                 const orderIds = [];
 
                 // Get configured labs
@@ -1074,6 +1081,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                     dbAdapter.all(labsSql, [session.case_id, ...configuredIds], (err, labs) => {
                         if (err) {
                             (req.log || routesOrdersLog).error('labs fetch failed', { error: err.message });
+                            failed = configuredIds.length;
                             return finalizeOrders();
                         }
 
@@ -1085,26 +1093,21 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
 
                         labs.forEach(lab => {
                             const turnaround = getTurnaround(lab.turnaround_minutes);
-                            dbAdapter.get(existsSql, [sessionId, lab.id], (existsErr, existing) => {
-                                if (existing && existing.id) {
+                            (req.log || routesOrdersLog).debug('ordering lab', { test_name: lab.test_name, turnaround_minutes: turnaround });
+                            dbAdapter.run(insertSql, [sessionId, lab.id, turnaround, tenantId(req), sessionId, lab.id], function(insertErr) {
+                                if (insertErr) {
+                                    failed++;
+                                    (req.log || routesOrdersLog).error('lab order insert failed', { error: insertErr.message });
+                                } else if (this.changes === 0) {
                                     skipped++;
-                                    pendingInserts--;
-                                    if (pendingInserts === 0) finalizeOrders();
-                                    return;
+                                } else {
+                                    orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
+                                    inserted++;
                                 }
-                                (req.log || routesOrdersLog).debug('ordering lab', { test_name: lab.test_name, turnaround_minutes: turnaround });
-                                dbAdapter.run(insertSql, [sessionId, lab.id, turnaround, tenantId(req)], function(insertErr) {
-                                    if (!insertErr) {
-                                        orderIds.push({ id: this.lastID, test_name: lab.test_name, turnaround });
-                                        inserted++;
-                                    } else {
-                                        (req.log || routesOrdersLog).error('lab order insert failed', { error: insertErr.message });
-                                    }
-                                    pendingInserts--;
-                                    if (pendingInserts === 0) {
-                                        finalizeOrders();
-                                    }
-                                });
+                                pendingInserts--;
+                                if (pendingInserts === 0) {
+                                    finalizeOrders();
+                                }
                             });
                         });
                     });
@@ -1145,6 +1148,16 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                         }, { tenantId: tenantId(req), source: 'server:orders' }).catch(() => {});
                     });
 
+                    // A failed write is not an order. It used to answer 200
+                    // with the failure only in the log (stability run, rc.47),
+                    // so the learner waited for a result that never came.
+                    // Retrying is safe: what did land is skipped as a duplicate.
+                    if (failed > 0) {
+                        return res.status(503).json({
+                            error: `${failed} lab test(s) could not be ordered. Please try again.`,
+                            code: 'ORDER_WRITE_FAILED',
+                        });
+                    }
                     res.json({
                         message: `${inserted} lab tests ordered`,
                         orders: orderIds,
@@ -1163,6 +1176,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
 
             let pendingOps = 0;
             let completedOps = 0;
+            let createFailed = 0;
 
             const checkComplete = () => {
                 if (completedOps >= pendingOps) {
@@ -1212,6 +1226,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                             if (!err) {
                                 configuredIds.push(this.lastID);
                             } else {
+                                createFailed++;
                                 (req.log || routesOrdersLog).error('config lab create failed', { error: err.message });
                             }
                             checkComplete();
@@ -1259,6 +1274,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                             if (!err) {
                                 configuredIds.push(this.lastID);
                             } else {
+                                createFailed++;
                                 (req.log || routesOrdersLog).error('default lab create failed', { error: err.message });
                             }
                             checkComplete();
@@ -1597,6 +1613,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
 
         let inserted = 0;
         let skipped = 0;
+        let failed = 0;
         let pending = radiology_ids.length;
         const orderIds = [];
         // Parallel to orderIds but carries the study name/modality so the
@@ -1642,6 +1659,14 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
                     }, { tenantId: tenantId(req), source: 'server:orders' }).catch((logErr) => {
                         (req.log || routesOrdersLog).warn('radiology order learning_events failed', { error: logErr.message });
                     });
+                });
+            }
+            // A failed write is not an order (see the lab route): 503, and a
+            // retry skips whatever did land.
+            if (failed > 0) {
+                return res.status(503).json({
+                    error: `${failed} imaging stud(ies) could not be ordered. Please try again.`,
+                    code: 'ORDER_WRITE_FAILED',
                 });
             }
             res.json({
@@ -1703,13 +1728,25 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
             };
 
             // Idempotency: skip if this session already has an order for this
-            // study (matched by test_name). Stage-2 audit fix.
+            // study (matched by test_name). Stage-2 audit fix. The check and the
+            // two inserts run under a lock on (session, study): two identical
+            // requests arriving together both passed the check and doubled the
+            // order under load (stability run, rc.47).
+            withKeyedLock(`radiology:${sessionId}:${testName}`, () => new Promise((settled) => {
+            const done = () => {
+                pending--;
+                settled();
+                if (pending === 0) finalize();
+            };
             dbAdapter.get(existingRadSql, [sessionId, testName], (existsErr, existing) => {
+                if (existsErr) {
+                    failed++;
+                    (req.log || routesOrdersLog).error('radiology order lookup failed', { error: existsErr.message });
+                    return done();
+                }
                 if (existing && existing.id) {
                     skipped++;
-                    pending--;
-                    if (pending === 0) finalize();
-                    return;
+                    return done();
                 }
 
                 // First insert into case_investigations
@@ -1730,10 +1767,9 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
                     tenantId(req)
                 ], function(err) {
                     if (err) {
+                        failed++;
                         (req.log || routesOrdersLog).error('radiology study insert failed', { error: err.message });
-                        pending--;
-                        if (pending === 0) finalize();
-                        return;
+                        return done();
                     }
 
                     const investigationId = this.lastID;
@@ -1745,16 +1781,19 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
                     `;
 
                     dbAdapter.run(orderSql, [sessionId, investigationId, turnaround, tenantId(req)], function(orderErr) {
-                        pending--;
-                        if (!orderErr) {
+                        if (orderErr) {
+                            failed++;
+                            (req.log || routesOrdersLog).error('radiology order insert failed', { error: orderErr.message });
+                        } else {
                             inserted++;
                             orderIds.push(this.lastID);
                             loggableOrders.push({ orderId: this.lastID, testName, modality });
                         }
-                        if (pending === 0) finalize();
+                        done();
                     });
                 });
             });
+            }));
         });
     });
 });
@@ -1987,6 +2026,11 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
 
         // (3) first-award-only: has this exact treatment already been
         // ordered in this session? Then the points were already granted.
+        // The check and the insert run under a lock on (session, treatment):
+        // two identical orders arriving together were both scored as the
+        // first (stability run, rc.47).
+        const isHighAlert = effect?.treatment_name?.match(/epinephrine|norepinephrine|insulin|heparin|morphine|fentanyl|propofol/i) !== null;
+        const { isRepeat, pointsAwarded, orderId } = await withKeyedLock(`treatment:${sessionId}:${treatment_type}:${treatment_name}`, async () => {
         const prior = await dbAdapter.get(
             'SELECT id FROM treatment_orders WHERE session_id = ? AND tenant_id = ? AND treatment_type = ? AND treatment_item = ? LIMIT 1',
             [sessionId, tenantId(req), treatment_type, treatment_name]
@@ -1996,8 +2040,6 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
         if (isRepeat && isExpected) {
             log.info('treatment re-ordered: points already awarded, none added', { session_id: sessionId, treatment_type, treatment_name, first_order_id: prior.id });
         }
-
-        const isHighAlert = effect?.treatment_name?.match(/epinephrine|norepinephrine|insulin|heparin|morphine|fentanyl|propofol/i) !== null;
 
         // Insert the order
         const insertSql = `
@@ -2022,7 +2064,8 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
             duration_minutes || null, urgency, isHighAlert ? 1 : 0,
             notes || null, feedback, pointsAwarded
         ]);
-        const orderId = inserted.lastID;
+        return { isRepeat, pointsAwarded, orderId: inserted.lastID };
+        });
 
         // Log to audit
         logAudit({

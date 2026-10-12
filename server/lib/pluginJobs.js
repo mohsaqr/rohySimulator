@@ -204,6 +204,7 @@ async function runOne(job) {
     // request timing out, the download itself crawling). The stored value is
     // a whole percent, so only a change of that percent is a write.
     let lastProgress = null;
+    let progressWrites = Promise.resolve();
     const api = {
         /** Announce a phase AND take the cancellation checkpoint at the same
          *  point — the two belong together, so a handler cannot advance a phase
@@ -218,18 +219,25 @@ async function runOne(job) {
         },
         /** Progress is advisory: a failed write is logged, never thrown. A
          *  handler may call this fire-and-forget (`void api.setProgress(…)`),
-         *  and an unhandled rejection takes the whole process down — the TTS
-         *  bundle rohy loads rethrows every one. A SQLITE_BUSY on a progress
-         *  update crashed the server mid-import. */
+         *  and an unhandled rejection was fatal while the TTS bundle's
+         *  rethrowing handlers were installed (removed in rc.48). A SQLITE_BUSY
+         *  on a progress update crashed the server mid-import. */
         async setProgress(percent) {
             const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-            if (clamped === lastProgress) return;
+            // Unchanged: no write, but the caller still waits for those queued.
+            if (clamped === lastProgress) return progressWrites;
             lastProgress = clamped;
-            try {
-                await dbAdapter.run('UPDATE plugin_jobs SET progress = ? WHERE id = ?', [clamped, job.id]);
-            } catch (err) {
-                jobLog.warn('job progress not recorded', { job_id: job.id, progress: clamped, error: err.message });
-            }
+            // One write at a time, in order. Fire-and-forget writes ran side
+            // by side, and one retried on SQLITE_BUSY landed after a later
+            // one — 40 % overwritten by 21 % (suite under load, rc.48).
+            progressWrites = progressWrites.then(async () => {
+                try {
+                    await dbAdapter.run('UPDATE plugin_jobs SET progress = ? WHERE id = ?', [clamped, job.id]);
+                } catch (err) {
+                    jobLog.warn('job progress not recorded', { job_id: job.id, progress: clamped, error: err.message });
+                }
+            });
+            return progressWrites;
         },
         cancelled: () => cancelRequested(job.id),
         log: jobLog,

@@ -106,6 +106,32 @@ describe('the job runner', () => {
         }
     });
 
+    it('lands progress writes in order, even when one is held up as a busy retry is', async () => {
+        // Regression lock: side-by-side fire-and-forget writes let a retried 21 % land after 40 % (full suite under load, rc.48)
+        const realRun = dbAdapter.run;
+        let delayed = false;
+        dbAdapter.run = (sql, params, ...rest) => {
+            if (!delayed && /^UPDATE plugin_jobs SET progress/.test(sql) && params?.[0] === 21) {
+                delayed = true;
+                return new Promise((resolve) => setTimeout(resolve, 80)).then(() => realRun(sql, params, ...rest));
+            }
+            return realRun(sql, params, ...rest);
+        };
+        try {
+            let seen = null;
+            jobs.registerJobHandler('t:held', async (job, api) => {
+                [10, 21, 30, 40].forEach((p) => { void api.setProgress(p); });
+                await api.setProgress(40);
+                seen = await dbAdapter.get('SELECT progress FROM plugin_jobs WHERE id = ?', [job.id]);
+            });
+            await settled(await enqueue('t:held'));
+            expect(delayed).toBe(true);
+            expect(seen).toEqual({ progress: 40 });
+        } finally {
+            dbAdapter.run = realRun;
+        }
+    });
+
     it('never rejects a progress report, so a fire-and-forget caller cannot crash the process', async () => {
         // Regression lock: a fire-and-forget progress write that stayed SQLITE_BUSY rejected unhandled, and the TTS bundle's unhandledRejection handler rethrew it — the server died mid-import (found building the colorectal case, 2026-10-10)
         const realRun = dbAdapter.run;

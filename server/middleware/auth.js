@@ -14,6 +14,22 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // JWT_SECRET is required - fail fast if not configured
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// When each session's last_activity_at was last written, by token hash.
+export const ACTIVITY_TOUCH_INTERVAL_MS = 60_000;
+const lastActivityTouch = new Map();
+export function shouldTouchActivity(tokenHash, now = Date.now()) {
+    const last = lastActivityTouch.get(tokenHash);
+    if (last !== undefined && now - last < ACTIVITY_TOUCH_INTERVAL_MS) return false;
+    lastActivityTouch.set(tokenHash, now);
+    // Bounded: forget sessions not seen for ten intervals.
+    if (lastActivityTouch.size > 10_000) {
+        for (const [hash, at] of lastActivityTouch) {
+            if (now - at > 10 * ACTIVITY_TOUCH_INTERVAL_MS) lastActivityTouch.delete(hash);
+        }
+    }
+    return true;
+}
 if (!JWT_SECRET) {
     console.error('FATAL: JWT_SECRET environment variable is not set!');
     console.error('Please set JWT_SECRET in server/.env file');
@@ -159,12 +175,18 @@ export const authenticateToken = (req, res, next) => {
                             return res.status(401).json({ error: 'Session expired' });
                         }
                     }
-                    // Best-effort touch — failure is non-fatal.
-                    dbAdapter.run(
-                        `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
-                        [tokenHash],
-                        () => { /* ignore */ }
-                    );
+                    // Best-effort touch — failure is non-fatal. At most once a
+                    // minute per session: it used to be a write on EVERY
+                    // authenticated request, which under load multiplied the
+                    // write-lock contention (stability run, rc.47). Its one
+                    // reader orders an admin list by it.
+                    if (shouldTouchActivity(tokenHash)) {
+                        dbAdapter.run(
+                            `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
+                            [tokenHash],
+                            () => { /* ignore */ }
+                        );
+                    }
                 }
 
                 dbAdapter.get(

@@ -32,6 +32,25 @@ function isStreamingPath(path) {
     return STREAMING_PATH_PREFIXES.some(p => path.startsWith(p));
 }
 
+// The handler is still running when its 504 goes out, and it answers when it
+// finishes. That answer used to throw "Cannot set headers after they are
+// sent" from inside a database callback — an uncaught exception (83 of them
+// in the stability run, rc.47). After a timeout has answered, the response's
+// writers do nothing; the late answer is logged once.
+function silenceLateResponse(req, res) {
+    let logged = false;
+    const late = () => {
+        if (!logged) {
+            logged = true;
+            log.info('late response dropped after route timeout', { method: req.method, path: req.path, request_id: req.requestId || null });
+        }
+        return res;
+    };
+    for (const method of ['status', 'json', 'send', 'sendStatus', 'set', 'header', 'setHeader', 'type', 'cookie', 'clearCookie', 'redirect', 'end']) {
+        res[method] = late;
+    }
+}
+
 export function routeTimeout(opts = {}) {
     const ms = Number.isFinite(opts.ms) && opts.ms > 0
         ? opts.ms
@@ -58,6 +77,7 @@ export function routeTimeout(opts = {}) {
                 message: `The server took longer than ${ms}ms to respond. Please retry.`,
                 code: 'ROUTE_TIMEOUT',
             });
+            silenceLateResponse(req, res);
         }, ms);
 
         // Don't keep the event loop alive just for this timer.

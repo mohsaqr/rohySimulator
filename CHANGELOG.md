@@ -9,6 +9,51 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.48] — 2026-10-12
+
+Rohy under load. A load test of rc.47 (5–30 learners working through a case at once) crashed the server
+in every run, as early as 26 s in with 5 learners, and lost or doubled work before it did.
+
+- **No more crash on a stray error.** `kokoro-js` pulls in phonemizer, whose Emscripten code, on import,
+  registers process handlers that rethrow every unhandled rejection and uncaught exception — so one failed
+  fire-and-forget write killed the server, whatever `server.js`'s own log-and-continue handlers said.
+  kokoro-js is now loaded on first use and the two handlers it adds are removed straight after. Write
+  failures nobody awaits are logged with their SQL.
+- **One writer.** The audit chain wrote on a connection of its own. In WAL mode each of its commits made
+  every read in flight on the main connection stale, and a write behind such a read is refused at once
+  (`SQLITE_BUSY`, whatever the timeout) — the source of the bursts of failed writes. An audit append is
+  now one INSERT that carries its own chain check (it lands only if the head is still the one it hashed
+  from, and reads again otherwise), on the main connection. Trade-off, documented in `audit-chain.js`:
+  an append that lands inside another route's transaction goes with it if that route rolls back; the
+  chain stays valid.
+- **Fewer writes, retried properly.** `last_activity_at` is written at most once a minute per session
+  instead of on every request. Prepared writes (learning-event ingest) are retried on `SQLITE_BUSY` like
+  every other write; they were not, and lost events.
+- **Identical requests at the same moment make one record.** Lab, imaging and treatment orders and exam
+  findings checked "already there?" and then inserted; parallel identical requests all passed the check —
+  doubled orders, and a repeated expected treatment scored twice. The lab check is now inside the INSERT;
+  imaging, treatment and exam run check and write under a lock on the session and item
+  (`server/lib/keyedLock.js`).
+- **A failed order is not an order.** Lab and imaging orders whose write failed answered 200, so the
+  learner waited for a result that never came. They now answer 503 (`ORDER_WRITE_FAILED`); a retry is
+  safe — whatever did land is skipped as a duplicate.
+- **No raw database errors on screen.** A 5xx carrying sqlite's own text ("SQLITE_BUSY: database is
+  locked", seen in the case editor) answers in plain words; a busy database answers 503 with
+  `retryable: true`.
+- **A late answer after a route timeout is dropped**, not thrown as "Cannot set headers after they are
+  sent".
+- **Shutdown finishes under load.** Answers sent during shutdown close their connection and idle
+  keep-alive sockets are closed, so SIGTERM no longer waits for the hard kill.
+- Plugin job progress writes land in order (a retried 21 % could overwrite 40 %); the case-package work
+  directory sweep is awaited by every caller (two uploads at boot could write into a directory being
+  removed).
+
+Measured with the same load script, 5 → 15 → 30 learners, 2 minutes each: rc.47 crashed in all three
+runs. rc.48 served 96,390 requests with 0 errors, 0 failed session starts, 0 SQLITE_BUSY and 0 unhandled
+rejections, at 419 requests/s with 30 learners (147/s with the audit chain still on its own connection);
+the race test (8 identical requests at once) made no duplicate; afterwards integrity_check was ok and the
+audit chain verified over all 7,210 rows. Every fix has a regression test that fails against the old code.
+
 ## [3.0.0-rc.47] — 2026-10-12
 
 Two safeguards against addresses that ignore the base path, after every slide 404'd on an install served
