@@ -22,7 +22,6 @@
 import { Buffer } from 'node:buffer';
 import os from 'node:os';
 import { env as TRANSFORMERS_ENV } from '@huggingface/transformers';
-import { KokoroTTS, TextSplitterStream } from 'kokoro-js';
 import { buildWavHeader, float32ToInt16Buffer } from './wav.js';
 import { logger } from '../logger.js';
 
@@ -159,6 +158,39 @@ function classifyLoadError(err) {
     return KOKORO_FATAL_PATTERNS.some(rx => rx.test(msg)) ? 'fatal' : 'transient';
 }
 
+// kokoro-js, loaded on first use rather than at boot.
+//
+// Its dependency phonemizer is Emscripten output that, AS IT IS IMPORTED,
+// registers process-wide handlers that rethrow every uncaught exception and
+// unhandled rejection. With them installed, any stray rejection anywhere in
+// the server (a fire-and-forget write that hit SQLITE_BUSY) killed the
+// process, whatever server.js's own log-and-continue handlers said — under
+// load the server crashed within seconds (stability run, rc.47). Loading the
+// library lazily keeps a server that never speaks free of them, and the two
+// handlers the import adds are removed straight after it, so a server that
+// does speak keeps its own error handling too. Measured: the import adds
+// exactly one of each, and a later phonemize() adds none.
+const PROCESS_EVENTS = ['uncaughtException', 'unhandledRejection'];
+let _kokoroLib = null;
+function kokoroLib() {
+    if (!_kokoroLib) {
+        _kokoroLib = (async () => {
+            const before = new Map(PROCESS_EVENTS.map((e) => [e, new Set(process.listeners(e))]));
+            const lib = await import('kokoro-js');
+            for (const event of PROCESS_EVENTS) {
+                for (const listener of process.listeners(event)) {
+                    if (!before.get(event).has(listener)) process.removeListener(event, listener);
+                }
+            }
+            return lib;
+        })().catch((err) => { _kokoroLib = null; throw err; });
+    }
+    return _kokoroLib;
+}
+
+/** Test seam: load the library without loading the model. */
+export const _kokoroLibForTest = () => kokoroLib();
+
 export async function loadKokoro() {
     if (_disabled) {
         const err = new Error(`Kokoro disabled until restart: ${_disabled}`);
@@ -173,6 +205,7 @@ export async function loadKokoro() {
         if (_unloading) await _unloading.catch(() => {});
         const t0 = Date.now();
         try {
+            const { KokoroTTS } = await kokoroLib();
             const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: DTYPE });
             kokoroLog.info('model loaded', {
                 duration_ms: Date.now() - t0,
@@ -291,6 +324,7 @@ export async function* synthesizeKokoroStream({ text, voice, speed }) {
         err.code = 'UNKNOWN_VOICE';
         throw err;
     }
+    const { TextSplitterStream } = await kokoroLib();
     const splitter = new TextSplitterStream();
     splitter.push(text);
     splitter.close();

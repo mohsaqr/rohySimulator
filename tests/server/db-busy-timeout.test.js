@@ -101,6 +101,24 @@ describe('the shared sqlite handle', () => {
         expect(rows.map((r) => r.who)).toEqual(['audit', 'request']);
     });
 
+    it('retries a PREPARED write refused on a stale read snapshot too', async () => {
+        // Regression lock: prepared writes (learning-event ingest) skipped the retry and lost events under load
+        await dbAdapter.run('DELETE FROM busy_probe');
+        await dbAdapter.run(`INSERT INTO busy_probe (who) VALUES ('seed')`);
+        const stmt = dbModule.default.prepare('SELECT * FROM busy_probe');
+        await new Promise((resolve, reject) => stmt.get((err) => (err ? reject(err) : resolve())));
+        await otherRun(`INSERT INTO busy_probe (who) VALUES ('audit')`);
+        const finished = sleep(60).then(() => new Promise((resolve) => stmt.finalize(resolve)));
+        const insert = dbAdapter.prepare(`INSERT INTO busy_probe (who) VALUES (?)`);
+        try {
+            await expect(insert.run(['prepared'])).resolves.toBeTruthy();
+        } finally {
+            await finished;
+        }
+        const rows = await dbAdapter.all(`SELECT who FROM busy_probe WHERE who <> 'seed' ORDER BY id`);
+        expect(rows.map((r) => r.who)).toEqual(['audit', 'prepared']);
+    });
+
     it('gives up after the bounded retries rather than waiting forever', async () => {
         await dbAdapter.run(`INSERT INTO busy_probe (who) VALUES ('seed')`);
         const stmt = dbModule.default.prepare('SELECT * FROM busy_probe');

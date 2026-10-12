@@ -27,9 +27,9 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:58` |
+| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:59` |
 | `NODE_ENV` | No | `development` | Runtime mode; `production` tightens defaults and enables prod-only validation. | `server/logger.js:40`<br>`server/logger.js:41`<br>`server/middleware/csrf.js:71`<br>_+13 more_ |
-| `PORT` | No | — | HTTP listen port. | `server/server.js:50` |
+| `PORT` | No | — | HTTP listen port. | `server/server.js:51` |
 
 ## Auth/security
 
@@ -48,9 +48,9 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_PLUGIN_ORIGIN_TOKENS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;token&gt;` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy's own server-to-server fetch as `Authorization: Bearer &lt;token&gt;` — never returned to a browser, never logged, and never the caller's own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation's access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. **⚠ secret — see security note above.** | `server/lib/pluginOriginTokens.js:84` |
 | `ROHY_PROVA_INSTALLATION_KEY` | No | `'' (empty string)` | An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova's unverified queue until someone trusts the installation. **⚠ secret — see security note above.** | `server/routes/report-routes.js:53` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:121` |
-| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:67` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:59` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:60` |
+| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:68` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:60` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:61` |
 
 ## Database
 
@@ -68,8 +68,8 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOG_LEVEL` | No | `info` | Server log verbosity (Rohy-prefixed alias). | `server/logger.js:27`<br>`server/observability.js:17` |
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
 | `ROHY_PATHOLOGY_CONTENT` | No | — | Path to a built slide content origin, overriding the sibling `../Pathoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:239` |
-| `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:38` |
-| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:444` |
+| `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:57` |
+| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:453` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
 | `VERBOSE` | No | — | Extra console diagnostics when truthy. | `scripts/rocketbox-convert/convert.mjs:135` |
 
@@ -77,8 +77,8 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:81` |
-| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:80` |
+| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:90` |
+| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:89` |
 | `ROHY_PLUGIN_IMPORT_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming the hosts a plugin may DOWNLOAD from (RPS-1 1.4). The operator's outer bound: a tenant admin narrows it through the plugin's own settings and can never widen it, because a tenant admin is not the server operator and naming a host for rohy's server to fetch from is the SSRF shape proxy-routes.js already closed once. A plugin id may repeat and the origins accumulate. Unset means NO plugin may import from anywhere — the correct default for a server nobody has told where content may come from. Malformed is fatal at boot. | `server/lib/pluginImportOrigins.js:86` |
 | `ROHY_PLUGIN_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming where each RPS-1 plugin's remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin: the plugin serves the bundled starter content if any is installed, and otherwise every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request. | `server/lib/pluginRemoteOrigins.js:72` |
 
@@ -93,7 +93,7 @@ The following variables carry credentials or signing material. Never commit them
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |
-| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:244` |
+| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:277` |
 | `ROHY_TEST_FAKE_OPENAI_TTS` | No | — | Test hook: stub OpenAI TTS instead of calling the API. | `server/services/openaiTts.js:74` |
 
 ## Oyon
@@ -129,7 +129,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:133` |
 | `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:96` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
-| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:72` |
+| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:71` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:89` |
 | `ROHY_PACS_CONTENT` | No | — | Path to a built imaging content origin, overriding the sibling `../Radoyon/radoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:238` |

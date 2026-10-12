@@ -151,6 +151,16 @@ export function run(sql, params = [], callback) {
                 hint: 'Pass a callback or await the promise to handle this error in the route.',
             });
         });
+    } else {
+        // A write called with no callback may be awaited, or may be fire-and-
+        // forget (a counter, a log row). Unobserved, its failure was an
+        // unhandled rejection with no SQL in it — and while phonemizer's
+        // handlers were installed, a crash (stability run, rc.47). Observing
+        // it here logs it with its statement; a caller that awaits still gets
+        // the rejection.
+        promise.catch((err) => {
+            adapterLog.warn('write failed', { sql: sql.trim().slice(0, 80), error: err.message });
+        });
     }
     return promise;
 }
@@ -239,7 +249,10 @@ export function prepare(sql) {
     return {
         run(params = [], callback) {
             const args = splitParamsAndCallback(params, callback);
-            return timeDbAdapterQuery('adapter.prepare.run', sql, () => new Promise((resolve, reject) => {
+            // Retried on SQLITE_BUSY like run(): prepared writes (learning-event
+            // ingest) skipped the retry, and under load lost events outright
+            // (stability run, rc.47).
+            return retryingBusy(sql, () => timeDbAdapterQuery('adapter.prepare.run', sql, () => new Promise((resolve, reject) => {
                 stmt.run(normalizeParams(args.params), function onPreparedRun(err) {
                     err ? reject(err) : resolve({
                         lastID: this.lastID,
@@ -247,7 +260,7 @@ export function prepare(sql) {
                         statement: this
                     });
                 });
-            })).then((result) => {
+            }))).then((result) => {
                 if (args.callback) args.callback.call(result.statement, null);
                 return result;
             }, (err) => {

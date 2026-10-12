@@ -27,6 +27,7 @@ import { loadKokoro, kokoroIdleUnloadMs } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
 import requestIdMiddleware from './middleware/requestId.js';
+import { dbErrorShield } from './middleware/dbErrorShield.js';
 import requestLoggerMiddleware from './middleware/requestLogger.js';
 import errorHandler from './middleware/errorHandler.js';
 import { logger } from './logger.js';
@@ -74,6 +75,14 @@ import { securityHeaders } from './security-headers.js';
 import { lessonFileGuard } from './routes/lessons-routes.js';
 
 app.use(requestIdMiddleware);
+app.use(dbErrorShield);
+// During shutdown every answer closes its connection, so a keep-alive client
+// cannot hold the listener open until the hard kill (stability run, rc.47:
+// under load SIGTERM never finished).
+app.use((req, res, next) => {
+    if (shuttingDown) res.setHeader('Connection', 'close');
+    next();
+});
 app.use(securityHeaders({ nodeEnv: process.env.NODE_ENV }));
 app.use(cors(buildCorsOptions({
     nodeEnv: process.env.NODE_ENV,
@@ -458,7 +467,14 @@ function installGracefulShutdown(servers) {
         // Stop accepting new HTTP/HTTPS connections; in-flight requests
         // continue. server.close fires its callback only after the last
         // active socket finishes.
-        Promise.all(servers.map(s => new Promise(resolve => s.close(resolve)))).then(async () => {
+        // Idle keep-alive sockets are closed now, and again every 250 ms, so
+        // one that goes idle after its in-flight answer does not wait out
+        // the client's keep-alive.
+        const sweepIdle = () => servers.forEach((s) => s.closeIdleConnections?.());
+        const idleSweeper = setInterval(sweepIdle, 250);
+        idleSweeper.unref();
+        Promise.all(servers.map(s => new Promise(resolve => { s.close(resolve); sweepIdle(); }))).then(async () => {
+            clearInterval(idleSweeper);
             bootLog.info('http listeners closed');
             // Let the current plugin job reach a phase boundary before the DB
             // closes under it. A job killed mid-write leaves a partial pyramid

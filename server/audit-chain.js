@@ -1,8 +1,4 @@
 import crypto from 'node:crypto';
-import sqlite3 from 'sqlite3';
-import { logger } from './logger.js';
-
-const auditLog = logger('audit-chain');
 
 const LOGICAL_FIELDS = [
     'action',
@@ -39,57 +35,29 @@ function dbRun(database, sql, params = []) {
     });
 }
 
-// Audit-chain uses a DEDICATED sqlite connection, not the shared `db.js`
-// default. Why: routes like bulk_replace_case_labs run their own
-// `BEGIN`/`COMMIT` on the shared connection (often fire-and-forget). If
-// any of those COMMITs fails silently, the shared connection is stuck in
-// a pending transaction. Audit's `BEGIN IMMEDIATE` then throws
-// "cannot start a transaction within a transaction" and the connection
-// stays poisoned — every subsequent op blocks on the writer lock until
-// the event loop is starved enough that nginx returns 502.
+// Audit appends go through the SHARED connection (db.js), like every other
+// write. Until rc.48 they had a dedicated connection of their own, to keep a
+// route's half-finished transaction on the shared handle from blocking them.
+// The cost of that second writer showed under load (stability run, rc.47):
+// in WAL mode each audit commit made every read in flight on the shared
+// handle stale, and a write issued behind such a read is refused at once —
+// SQLITE_BUSY whatever the timeout — so ordinary writes failed in bursts and
+// lost learning events, orders and findings. An append is now one INSERT that
+// carries its own chain check (see _appendAuditEntryUnlocked), so it needs no
+// transaction of its own.
 //
-// With our own connection, route transaction state CAN'T affect audit
-// transaction state. SQLite's per-connection transaction tracking means
-// each handle has its own BEGIN/COMMIT bookkeeping; the file lock layer
-// already handles cross-connection serialization.
+// The trade-off, accepted: an append that lands while a route has a
+// transaction open on the shared handle joins that transaction, and if the
+// route rolls back, the row goes with it — the same as any other request's
+// write at that moment. The chain stays valid: everything appended in that
+// window is undone together, and the next append reads the head that is left.
 //
-// Tests can inject their own handle via `appendAuditEntry(row, { database })`
-// to keep fixtures isolated.
-let dedicatedDb = null;
-let dedicatedDbPromise = null;
-
+// Tests inject their own handle via `appendAuditEntry(row, { database })`.
 async function defaultDb() {
-    if (dedicatedDb) return dedicatedDb;
-    if (dedicatedDbPromise) return dedicatedDbPromise;
-    dedicatedDbPromise = (async () => {
-        // Wait for the primary connection to finish bootstrap (migrations,
-        // seeds) so system_audit_log is guaranteed to exist before we
-        // open our own handle on it.
-        const mod = await import('./db.js');
-        try { await mod.dbReady; } catch { /* primary boot failure surfaces elsewhere */ }
-        const handle = await new Promise((resolve, reject) => {
-            const conn = new sqlite3.Database(mod.dbPath, (err) => {
-                err ? reject(err) : resolve(conn);
-            });
-        });
-        // Match the WAL/timeout posture of the primary connection so we
-        // don't trip BUSY when reading mid-write.
-        await new Promise((resolve) => handle.run('PRAGMA journal_mode=WAL', () => resolve()));
-        await new Promise((resolve) => handle.run('PRAGMA busy_timeout=5000', () => resolve()));
-        dedicatedDb = handle;
-        auditLog.info('audit-chain dedicated connection opened', { db_path: mod.dbPath });
-        return handle;
-    })();
-    return dedicatedDbPromise;
-}
-
-// Test-only — release the cached dedicated handle so the next call
-// re-opens. Safe to call repeatedly. Not exported in production builds
-// because there's no use case outside tests.
-export function __resetDedicatedAuditDbForTests() {
-    if (dedicatedDb) { try { dedicatedDb.close(); } catch { /* best effort */ } }
-    dedicatedDb = null;
-    dedicatedDbPromise = null;
+    const mod = await import('./db.js');
+    // Migrations create system_audit_log; wait for them before the first append.
+    try { await mod.dbReady; } catch { /* primary boot failure surfaces elsewhere */ }
+    return mod.default;
 }
 
 function parseJsonish(value) {
@@ -272,17 +240,13 @@ export async function verifyAuditChain({ tenant_id, database } = {}) {
 
 // In-process append mutex.
 //
-// Each audit append wraps a BEGIN IMMEDIATE / INSERT / COMMIT cycle. The
-// sqlite3 npm driver is serialized at the statement level, BUT awaiting a
-// dbGet() in the middle of our transaction yields the event loop, which
-// lets a concurrent appendAuditEntry start its own BEGIN — sqlite then
-// throws "cannot start a transaction within a transaction" on the second
-// caller. Voice-settings saves hit this hard: 4 settings × fire-and-forget
-// `void appendAuditEntry()` from logAudit → 3 collisions guaranteed.
+// One append at a time in this process. Each append reads the chain head
+// and then writes the row hashed from it; two interleaved appends would read
+// the same head, and the second would have to read it again. Serialising them
+// here means that only happens across processes.
 //
-// The fix: a tiny FIFO promise-chain so only one append runs at a time.
-// Inserts are cheap (microseconds) so the queue never grows; the chain
-// just gives the event loop a single owner of the BEGIN/COMMIT pair.
+// A tiny FIFO promise-chain so only one append runs at a time.
+// Inserts are cheap (microseconds) so the queue never grows.
 let appendChain = Promise.resolve();
 function withAppendLock(fn) {
     const next = appendChain.then(() => fn(), () => fn());
@@ -295,80 +259,67 @@ export async function appendAuditEntry(row, options = {}) {
     return withAppendLock(() => _appendAuditEntryUnlocked(row, options));
 }
 
+// How many times an append re-reads the head after another writer got in
+// first. In one process the append lock above means this never loops; it is
+// for a second process (scripts/retention-sweep.js) appending at the same
+// moment.
+const APPEND_ATTEMPTS = 10;
+
 async function _appendAuditEntryUnlocked(row, { database } = {}) {
     const db = database || await defaultDb();
     await ensureAuditChainColumns(db);
-    // Defense-in-depth: if the dedicated-connection invariant is ever
-    // broken (e.g., a test passes the shared handle in via `database`),
-    // the connection might already be in a transaction from a sibling
-    // route. Catch that one specific signature and clear it before
-    // proceeding. Loud log so we notice if it ever fires in prod.
-    try {
-        await dbRun(db, 'BEGIN IMMEDIATE');
-    } catch (err) {
-        if (err && /cannot start a transaction within a transaction/i.test(err.message)) {
-            auditLog.warn('audit handle was inside a stale transaction; rolling back and retrying', {
-                error: err.message,
-            });
-            await dbRun(db, 'ROLLBACK').catch(() => {});
-            await dbRun(db, 'BEGIN IMMEDIATE');
-        } else {
-            throw err;
-        }
-    }
-    try {
-        const tenantId = row.tenantId ?? row.tenant_id ?? 1;
-        const previous = await dbGet(
-            db,
-            `SELECT entry_hash
-             FROM system_audit_log
-             WHERE tenant_id = ? AND entry_hash IS NOT NULL
-             ORDER BY id DESC
-             LIMIT 1`,
-            [tenantId]
-        );
-        const timestamp = row.ts ?? row.timestamp ?? new Date().toISOString();
-        const auditRow = {
-            ...row,
-            tenantId,
-            tenant_id: tenantId,
-            timestamp,
-            ts: timestamp,
-        };
+    const tenantId = row.tenantId ?? row.tenant_id ?? 1;
+    const timestamp = row.ts ?? row.timestamp ?? new Date().toISOString();
+    const auditRow = { ...row, tenantId, tenant_id: tenantId, timestamp, ts: timestamp };
+    const values = [
+        timestamp,
+        row.userId ?? row.user_id ?? null,
+        row.username ?? null,
+        row.action,
+        row.resourceType ?? row.resource_type ?? null,
+        asStoredText(row.resourceId ?? row.resource_id),
+        asStoredText(row.resourceName ?? row.resource_name),
+        serializeJsonish(row.oldValue ?? row.old_value ?? null),
+        serializeJsonish(row.newValue ?? row.new_value ?? null),
+        row.ipAddress ?? row.ip_address ?? null,
+        row.userAgent ?? row.user_agent ?? null,
+        row.sessionId ?? row.session_id ?? null,
+        row.status ?? 'success',
+        row.errorMessage ?? row.error_message ?? null,
+        serializeJsonish(row.metadata ?? null),
+        tenantId,
+    ];
+    // One statement, no transaction. This used to be BEGIN IMMEDIATE / read
+    // the head / INSERT / COMMIT with an await between each step, so the
+    // database write lock was held across event-loop turns. Under load every
+    // other writer then waited on it, and the main connection's busy waits
+    // froze the event loop for seconds at a time (stability run, rc.47: 40 s
+    // stalls, SQLITE_BUSY 500s, lost writes). Now the head is read without a
+    // lock and the INSERT carries its own check — it lands only if the head
+    // is still the one the hash was computed from — so the lock is held for
+    // one statement, and a writer that got in first makes this read again
+    // instead of forking the chain.
+    for (let attempt = 0; attempt < APPEND_ATTEMPTS; attempt++) {
+        const previous = await dbGet(db, HEAD_SQL, [tenantId]);
         const prevHash = previous?.entry_hash ?? null;
         const entryHash = computeEntryHash(prevHash, canonicalRow(auditRow));
-        const result = await dbRun(
-            db,
-            `INSERT INTO system_audit_log
-             (timestamp, user_id, username, action, resource_type, resource_id, resource_name,
-              old_value, new_value, ip_address, user_agent, session_id, status, error_message,
-              metadata, tenant_id, prev_hash, entry_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                timestamp,
-                row.userId ?? row.user_id ?? null,
-                row.username ?? null,
-                row.action,
-                row.resourceType ?? row.resource_type ?? null,
-                asStoredText(row.resourceId ?? row.resource_id),
-                asStoredText(row.resourceName ?? row.resource_name),
-                serializeJsonish(row.oldValue ?? row.old_value ?? null),
-                serializeJsonish(row.newValue ?? row.new_value ?? null),
-                row.ipAddress ?? row.ip_address ?? null,
-                row.userAgent ?? row.user_agent ?? null,
-                row.sessionId ?? row.session_id ?? null,
-                row.status ?? 'success',
-                row.errorMessage ?? row.error_message ?? null,
-                serializeJsonish(row.metadata ?? null),
-                tenantId,
-                prevHash,
-                entryHash,
-            ]
-        );
-        await dbRun(db, 'COMMIT');
-        return { id: result.lastID, prevHash, entryHash };
-    } catch (err) {
-        await dbRun(db, 'ROLLBACK').catch(() => {});
-        throw err;
+        const result = await dbRun(db, APPEND_IF_HEAD_SQL, [...values, prevHash, entryHash, tenantId, prevHash]);
+        if (result.changes === 1) return { id: result.lastID, prevHash, entryHash };
     }
+    throw new Error(`audit append for tenant ${tenantId} lost the race ${APPEND_ATTEMPTS} times`);
 }
+
+const HEAD_SQL = `SELECT entry_hash
+     FROM system_audit_log
+     WHERE tenant_id = ? AND entry_hash IS NOT NULL
+     ORDER BY id DESC
+     LIMIT 1`;
+
+const APPEND_IF_HEAD_SQL = `INSERT INTO system_audit_log
+     (timestamp, user_id, username, action, resource_type, resource_id, resource_name,
+      old_value, new_value, ip_address, user_agent, session_id, status, error_message,
+      metadata, tenant_id, prev_hash, entry_hash)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+     WHERE (SELECT entry_hash FROM system_audit_log
+            WHERE tenant_id = ? AND entry_hash IS NOT NULL
+            ORDER BY id DESC LIMIT 1) IS ?`;

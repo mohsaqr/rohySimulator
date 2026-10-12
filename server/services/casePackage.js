@@ -203,14 +203,19 @@ async function assertFreeSpaceFor(writes, what) {
     for (const { dir, bytes } of byDevice.values()) await assertFreeSpace(dir, bytes, what);
 }
 
-let workDirSwept = false;
-/** The work directory, emptied once per process: jobs live in memory, so anything left by a previous process is an orphan. */
+let workDirSweep = null;
+/**
+ * The work directory, emptied once per process: jobs live in memory, so
+ * anything left by a previous process is an orphan. The sweep is a promise
+ * every caller awaits: a flag set before the sweep finished let a second
+ * upload starting at the same moment write into the directory while it was
+ * still being removed (EINVAL on open — the first two concurrent uploads
+ * after a boot).
+ */
 async function ensureWorkDir() {
     const dir = workDir();
-    if (!workDirSwept) {
-        workDirSwept = true;
-        await fsp.rm(dir, { recursive: true, force: true });
-    }
+    workDirSweep ??= fsp.rm(dir, { recursive: true, force: true });
+    await workDirSweep;
     await fsp.mkdir(dir, { recursive: true });
     return dir;
 }
@@ -1478,12 +1483,12 @@ export async function cancelUpload({ id, actor }) {
 
 // Exported for tests: a guarantee easiest to break without an integration
 // test noticing.
-export const __test = { rewriteRefs };
+export const __test = { rewriteRefs, ensureWorkDir };
 
 /** Test hook: forget every job and upload. */
 export function __resetForTests() {
     jobs.clear();
     uploads.clear();
     reservations.clear();
-    workDirSwept = false;
+    workDirSweep = null;
 }
