@@ -18,6 +18,10 @@ let dbAdapter;
 beforeAll(async () => {
     testDb = await createTestDb({ seed: true, label: 'plugin-jobs' });
     process.env.ROHY_DB = testDb.dbPath;
+    // Wait for db.js to finish booting (migrations + seeds): a fast file used
+    // to finish and delete the database while seeding still wrote to it —
+    // an unhandled SQLITE_READONLY that failed CI (rc.51).
+    await (await import('../../server/db.js')).dbReady;
     dbAdapter = (await import('../../server/dbAdapter.js')).default;
     jobs = await import('../../server/lib/pluginJobs.js');
 }, 60_000);

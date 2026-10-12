@@ -27,6 +27,7 @@ beforeAll(async () => {
     await new Promise((r) => testDb.db.close(() => r()));
     process.env.ROHY_DB = testDb.dbPath;
     ingest = await import('../../server/lib/learningEventIngest.js');
+    await (await import('../../server/db.js')).dbReady; // boot must finish before teardown can delete the file
     db = (await import('../../server/dbAdapter.js')).default;
 }, 60_000);
 afterAll(async () => { await testDb?.cleanup?.(); });
