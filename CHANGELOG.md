@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.46] — 2026-10-12
+
+- **The room-bar tour (NAV.ROOMS.01) made robust on CI.** On CI's headless Chromium it failed at the 3D
+  bedside although the bedside had rendered (CI screenshot): the room's text was read through
+  `innerText` on the `display: contents` room-view wrapper, which is now read from its children, and
+  the room buttons are pressed at their centre as a learner presses them (as the on-call phone spec
+  already does) rather than with an actionability-checked click.
+
 ## [3.0.0-rc.45] — 2026-10-12
 
 - **Two gate tests made fit for CI** (their first CI run, on rc.43): the on-call phone's "covers

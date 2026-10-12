@@ -132,8 +132,9 @@ async function expectNothingBehindTheBar(page, key) {
 test.describe('the room bar', () => {
     // NAV.ROOMS.01
     test('every room in the bar opens, and the case is still live afterwards', async ({ page, baseURL }) => {
-        // Every room is opened and measured, the bedside's 3D scene included.
-        test.setTimeout(120_000);
+        // Every room is opened and measured, the bedside's 3D scene included —
+        // which, on CI's software renderer, takes a while to draw.
+        test.setTimeout(180_000);
         // A conversation recorded before the case opens, so "the conversation
         // carried on" is checked against turns the thread already held.
         const said = `${RUN_TAG} nav01 the pain started at rest`;
@@ -157,7 +158,11 @@ test.describe('the room bar', () => {
         for (const key of keys) {
             const btn = room(page, key);
             await expect(btn, `${key} is offered in the bar`).toBeVisible();
-            await btn.click();
+            // A real pointer press at the button's centre: the bedside's
+            // full-screen layer can still be settling over the page while the
+            // bar (drawn above it) is what the learner presses.
+            const box = await btn.boundingBox();
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
             // The active room is marked, which is how a learner knows where
             // they are — aria-pressed is that mark.
             await expect(btn, `${key} is marked active once opened`).toHaveAttribute('aria-pressed', 'true');
@@ -165,8 +170,12 @@ test.describe('the room bar', () => {
             // in it — a button that only changed its own state would pass the
             // check above.
             await expect(page.getByTestId('room-view'), `${key} is the room showing`).toHaveAttribute('data-room', key);
-            await expect.poll(async () => page.getByTestId('room-view').evaluate((el) => el.innerText.trim().length),
-                { message: `${key} shows content`, timeout: 10_000 }).toBeGreaterThan(0);
+            // Read from the wrapper's children: room-view is display:contents
+            // (no box of its own), and innerText on a box-less element is not
+            // something every browser build answers the same way.
+            await expect.poll(async () => page.getByTestId('room-view').evaluate(
+                (el) => [...el.children].map((c) => c.innerText || '').join('').trim().length),
+                { message: `${key} shows content`, timeout: 60_000 }).toBeGreaterThan(0);
             await expectNothingBehindTheBar(page, key);
         }
 
