@@ -70,6 +70,7 @@ export default function PatientSummaryCard({ activeCase, headManifest, platformA
 
             <button
                 type="button"
+                data-testid="view-case-summary"
                 onClick={onViewSummary}
                 className="mt-auto rounded-xl bg-indigo-700/40 hover:bg-indigo-700/60 border border-indigo-600/50 text-indigo-100 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors"
             >

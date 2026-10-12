@@ -1625,7 +1625,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
 
     if (!activeCase) {
         return (
-            <div className="flex items-center justify-center h-full text-neutral-500 bg-neutral-900 border-t border-neutral-800">
+            <div data-testid="chat-no-case" className="flex items-center justify-center h-full text-neutral-500 bg-neutral-900 border-t border-neutral-800">
                 <div className="text-center">
                     <p>{t('no_case_selected')}</p>
                     <p className="text-xs">{t('load_case_from_settings')}</p>
@@ -1913,7 +1913,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         </div>
                     </div>
                 ) : (
-                    <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div key={i} data-testid="chat-turn" data-role={msg.role} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {/* Assistant avatar and name */}
                         {msg.role === 'assistant' && (
                             <div className="flex flex-col items-center gap-1 shrink-0">

@@ -107,7 +107,7 @@ function PendingRow({ order }) {
     const { t } = useTranslation('investigations');
     const remaining = pendingLabel(t, order);
     return (
-        <div className="p-2.5 rounded-lg border-l-[3px] border-l-amber-500 border border-amber-700/30 bg-amber-900/15">
+        <div data-testid="worklist-row" data-status="pending" data-order-id={order.id} data-minutes-remaining={order.minutes_remaining ?? ''} className="p-2.5 rounded-lg border-l-[3px] border-l-amber-500 border border-amber-700/30 bg-amber-900/15">
             <div className="text-sm font-medium text-white truncate">{order.test_name}</div>
             <div className="text-[11px] text-amber-300 mt-0.5 flex items-center gap-1.5 font-mono">
                 <Clock className="w-3 h-3" />
@@ -124,6 +124,7 @@ function ReadyRow({ order, selected, theme, onSelect }) {
         : 'border-l-[3px] border-l-emerald-500 border border-emerald-700/40 bg-emerald-900/15 hover:bg-emerald-900/25';
     return (
         <button
+            data-testid="worklist-row" data-status="ready" data-order-id={order.id}
             onClick={onSelect}
             className={`w-full text-left p-2.5 rounded-lg transition-all flex items-center gap-2 ${baseClass}`}
         >
@@ -145,6 +146,7 @@ function ViewedRow({ order, selected, onSelect }) {
         : 'border border-transparent hover:bg-slate-800/60';
     return (
         <button
+            data-testid="worklist-row" data-status="viewed" data-order-id={order.id}
             onClick={onSelect}
             className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors text-sm ${baseClass}`}
         >

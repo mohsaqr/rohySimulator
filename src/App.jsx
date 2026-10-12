@@ -1139,7 +1139,9 @@ function MainApp() {
          caseId={activeCase?.id}
          patientInfo={patientInfo}
       >
-         <>
+         {/* display: contents — a hook for tests ("which room is showing"),
+             with no box of its own, so the layout is exactly as before. */}
+         <div data-testid="room-view" data-room={currentRoom} className="contents">
          {showExamination ? (
             <PhysicalExamScreen
                topBarControls={topBarControls}
@@ -1475,7 +1477,7 @@ function MainApp() {
                onConfirm={handleEndSession}
             />
          )}
-         </>
+         </div>
       </PatientRecordProvider>
       </>
    );

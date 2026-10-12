@@ -71,13 +71,9 @@ async function logCount(page) {
 test.describe('the body map', () => {
     // CASE.EXAM.03
     //
-    // The case's second step — switching the figure between the male and
-    // female silhouette — is NOT asserted as a toggle, because inside a case
-    // there is no toggle: ManikinPanel renders a locked indicator once the
-    // patient has a sex, and switching the figure away from the patient in
-    // front of you would be the bug, not the feature. What is asserted is that
-    // the figure is shown, and locked. The case text still describes the
-    // pre-case behaviour and wants amending.
+    // Inside a case the figure is the patient's and there is no male/female
+    // toggle (ManikinPanel shows a locked indicator); the case text says so.
+    // What is asserted is that the figure is shown, and locked.
     test('each aspect and each shortcut redraws a map that can still be worked', async ({ page, baseURL }) => {
         await enterExamRoom(page, baseURL, 'bodymap');
 
@@ -116,6 +112,9 @@ test.describe('the body map', () => {
         await expect
             .poll(async () => regionIds(page))
             .toEqual(anteriorIds);
+        // And the redrawn anterior map can be worked too.
+        await regions(page).first().click();
+        expect(await techniques(page).count(), 'an anterior region opens its techniques').toBeGreaterThan(0);
 
         // The figure is the patient's, and it is not the learner's to change.
         const figure = page.getByTestId('exam-figure');
@@ -131,6 +130,36 @@ test.describe('the body map', () => {
             await expect(page.getByTestId(`exam-shortcut-${shortcut}`)).toHaveAttribute('aria-pressed', 'true');
             expect(await techniques(page).count(), `${shortcut} offers techniques`).toBeGreaterThan(0);
         }
+    });
+});
+
+test.describe('examining a region', () => {
+    // CASE.EXAM.01
+    test('auscultating the chest shows a badged finding and logs the region and technique', async ({ page, baseURL }) => {
+        await enterExamRoom(page, baseURL, 'chest');
+        expect(await logCount(page), 'the log starts empty').toBe(0);
+
+        await page.getByTestId('bodymap-region-chest').click();
+        await page.getByTestId('exam-technique-auscultation').click();
+
+        // A finding for that region and technique, badged Normal or Abnormal.
+        const finding = page.getByTestId('exam-finding').first();
+        await expect(finding).toBeVisible({ timeout: 10_000 });
+        await expect.poll(async () => (await finding.innerText()).trim().length).toBeGreaterThan(0);
+        const verdict = page.getByTestId('exam-verdict');
+        await expect(verdict, 'the finding carries a Normal or Abnormal badge').toBeVisible();
+        const abnormal = (await verdict.getAttribute('data-abnormal')) === 'true';
+        await expect(verdict).toHaveText(abnormal ? /Abnormal/ : /Normal/);
+
+        // A log row naming the region and technique, and the counters moved.
+        await expect.poll(async () => logCount(page), { timeout: 10_000 }).toBe(1);
+        const row = logRows(page).first();
+        await expect(row).toHaveAttribute('data-region', 'chest');
+        await expect(row).toHaveAttribute('data-exam-type', 'auscultation');
+        await expect(row, 'the row names the region and the technique').toContainText(/chest/i);
+        await expect(row).toContainText(/auscultation/i);
+        const counter = page.getByTestId(abnormal ? 'exam-log-abnormal' : 'exam-log-normal');
+        await expect(counter, 'the matching counter is 1').toHaveAttribute('data-count', '1');
     });
 });
 

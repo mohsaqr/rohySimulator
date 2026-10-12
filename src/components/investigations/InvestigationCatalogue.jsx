@@ -249,6 +249,7 @@ function CatalogueRow({ item, kind, theme, isSelected, alreadyOrdered, onToggle 
             : 'bg-slate-800/50 hover:bg-slate-800';
     return (
         <label
+            data-testid="catalogue-item"
             className={`flex items-start gap-3 pl-2.5 pr-3 py-2.5 rounded-lg border border-slate-700/70 border-l-[3px] ${railClass} ${bgClass} cursor-pointer transition-all`}
         >
             <input

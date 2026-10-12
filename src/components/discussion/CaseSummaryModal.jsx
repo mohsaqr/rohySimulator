@@ -227,7 +227,7 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
                                             {o.feedback && <div className="text-slate-300">{o.feedback}</div>}
                                         </li>
                                     )} empty={t('no_treatments_administered')} />
-                                    <div className="pt-2 border-t border-slate-700">
+                                    <div className="pt-2 border-t border-slate-700" data-testid="debrief-missed" data-pending={data.debrief.pending ? 'true' : 'false'}>
                                         <div className="text-xs uppercase font-semibold text-slate-400 mb-1">{t('debrief_missed_heading')}</div>
                                         {data.debrief.pending ? (
                                             <div className="text-sm text-slate-400 italic">{t('debrief_missed_pending')}</div>

@@ -98,7 +98,7 @@ export default function UserFormModal({ user, cohorts = [], myRank, onClose, onS
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-            <div className="rohy-card rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+            <div role="dialog" aria-modal="true" aria-label={isEdit ? t('btn_update_user') : t('form_create_title')} data-testid="user-form" className="rohy-card rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
                 {/* Identity header */}
                 <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-neutral-200">
                     {isEdit ? (

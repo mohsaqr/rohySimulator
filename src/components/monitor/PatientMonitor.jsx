@@ -1527,6 +1527,8 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
                <button
                   onClick={() => handleControlsOpen('alarms')}
+                  data-testid="monitor-alarm-bell"
+                  data-active-count={alarmSystem.activeAlarms.length}
                   className={`p-2 rounded-full transition-colors relative ${alarmSystem.activeAlarms.length > 0 ? 'bg-red-900/40 text-red-500 animate-pulse' : 'bg-neutral-800 text-neutral-400'}`}
                   title={t('alarms')}
                >
@@ -1583,7 +1585,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="absolute top-2 left-3 z-10 font-mono text-sm font-bold text-green-500 select-none">
                      II <span className="text-xs font-normal opacity-70 ml-1">1mV</span>
                   </div>
-                  <canvas ref={ecgCanvasRef} className="w-full h-full block" />
+                  <canvas ref={ecgCanvasRef} data-testid="monitor-trace-ecg" className="w-full h-full block" />
                   <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black via-transparent to-transparent pointer-events-none" />
                </AoiRegion>
 
@@ -1592,7 +1594,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="absolute top-2 left-3 z-10 font-mono text-sm font-bold text-sky-500 select-none">
                      PLETH
                   </div>
-                  <canvas ref={plethCanvasRef} className="w-full h-full block" />
+                  <canvas ref={plethCanvasRef} data-testid="monitor-trace-pleth" className="w-full h-full block" />
                </div>
 
                {/* Channel 3: RESP */}
@@ -1600,7 +1602,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="absolute top-2 left-3 z-10 font-mono text-sm font-bold text-amber-500 select-none">
                      RESP <span className="text-xs font-normal opacity-70 ml-1">Imp</span>
                   </div>
-                  <canvas ref={respCanvasRef} className="w-full h-full block" />
+                  <canvas ref={respCanvasRef} data-testid="monitor-trace-resp" className="w-full h-full block" />
                </div>
 
                {/* Active clinical alarms — render directly below RESP. Each
@@ -1638,7 +1640,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
             <AoiRegion id="vitals_values" className="w-64 bg-neutral-900/50 backdrop-blur-sm border-l border-neutral-800 flex flex-col shrink-0 overflow-y-auto">
 
                {/* HR Box */}
-               <div className="h-24 shrink-0 border-b border-neutral-800 p-3 flex flex-col justify-center relative overflow-hidden">
+               <div data-testid="vital-hr" data-value={displayVitals.hr} className="h-24 shrink-0 border-b border-neutral-800 p-3 flex flex-col justify-center relative overflow-hidden">
                   <div className="absolute top-1.5 left-3 text-green-500 font-bold text-xs flex items-center gap-1">
                      <Heart className="w-3 h-3" /> HR
                   </div>
@@ -1651,7 +1653,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
 
                {/* SpO2 Box */}
-               <div className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
+               <div data-testid="vital-spo2" data-value={displayVitals.spo2} className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
                   <div className="absolute top-2 left-3 text-sky-500 font-bold text-sm">SpO2</div>
                   <div className="text-right">
                      <div className="text-5xl font-mono font-bold tracking-tighter text-sky-500">
@@ -1665,14 +1667,14 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
 
                {/* NIBP Box */}
-               <div className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
+               <div data-testid="vital-nibp" data-value={`${displayVitals.bpSys}/${displayVitals.bpDia}`} className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
                   <div className="absolute top-2 left-3 text-red-500 font-bold text-sm">NIBP</div>
                   <div className="text-right mt-2">
                      <div className="text-4xl font-mono font-bold tracking-tighter text-red-100 leading-none">
                         {displayVitals.bpSys}/{displayVitals.bpDia}
                      </div>
                      <div className="text-red-400 text-sm mt-1 font-mono">
-                        ({Math.round((displayVitals.bpSys + 2 * displayVitals.bpDia) / 3)})
+                        ({Math.round((displayVitals.bpSys + 2 * displayVitals.bpDia) / 3)}) <span className="text-neutral-500 text-[10px] font-sans">mmHg</span>
                      </div>
                   </div>
                   <div className="absolute bottom-2 left-3 text-[10px] text-neutral-500">
@@ -1691,7 +1693,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
 
                {/* RESP Box */}
-               <div className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
+               <div data-testid="vital-rr" data-value={displayVitals.rr} className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
                   <div className="absolute top-2 left-3 text-amber-500 font-bold text-sm">RESP</div>
                   <div className="text-right">
                      <div className="text-5xl font-mono font-bold tracking-tighter text-amber-500">
@@ -1702,7 +1704,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
 
                {/* Temperature Box */}
-               <div className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
+               <div data-testid="vital-temp" data-value={displayVitals.temp} className="h-32 max-lg:h-24 max-lg:p-3 shrink-0 border-b border-neutral-800 p-4 flex flex-col justify-center relative">
                   <div className="absolute top-2 left-3 text-orange-500 font-bold text-sm">TEMP</div>
                   <div className="text-right">
                      <div className="text-4xl font-mono font-bold tracking-tighter text-orange-100">
@@ -1716,7 +1718,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                </div>
 
                {/* EtCO2 Box */}
-               <div className="h-24 shrink-0 border-b border-neutral-800 p-3 flex flex-col justify-center relative">
+               <div data-testid="vital-etco2" data-value={displayVitals.etco2 || 38} className="h-24 shrink-0 border-b border-neutral-800 p-3 flex flex-col justify-center relative">
                   <div className="absolute top-1.5 left-3 text-yellow-500 font-bold text-xs">EtCO<sub className="text-[9px]">2</sub></div>
                   <div className="text-right">
                      <div className="text-4xl font-mono font-bold tracking-tighter leading-none text-yellow-500">
@@ -2742,6 +2744,9 @@ function InlineClinicalAlarms() {
          {alarms.map(n => (
             <div
                key={n.id}
+               data-testid="clinical-alarm-row"
+               data-alarm-key={n.key}
+               data-severity={n.severity}
                // max-lg:pl-40: stacked below `lg`, the App-level order buttons
                // (OrdersDrawer) float over this band's left edge; the row
                // starts after them so the message, Snooze and Acknowledge

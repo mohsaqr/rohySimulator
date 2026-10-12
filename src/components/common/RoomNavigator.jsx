@@ -266,6 +266,7 @@ function RoomButton({ room, active, badge, onClick }) {
                 }`} />
                 {showBadge && (
                     <span
+                        data-testid={`room-badge-${room.key}`}
                         className={`absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold leading-4 text-center ring-2 ring-slate-950 ${room.badgeAccent}`}
                     >
                         {badge > 9 ? '9+' : badge}

@@ -64,14 +64,9 @@ test.afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe('orders honour what the learner asked for', () => {
-    // CASE.LABS.03 ("Order instantly skips the wait") is NOT automated here,
-    // deliberately. Measured on this build: ordering the same default-catalogue
-    // lab with `turnaround_override: 0` and with `turnaround_override: 5`
-    // produces an IDENTICAL `available_at`, and the catalogue advertises
-    // `turnaround_minutes: 1` for a test it makes available immediately. With
-    // every default lab already instant there is nothing for "instantly" to
-    // skip, so any assertion here would pass without testing the case. Filed as
-    // a defect; the case stays manual until the override is honoured.
+    // CASE.LABS.03 ("Order instantly skips the wait") is automated in the
+    // browser, in gate-screen.spec.js: an ordinary order waits its turnaround
+    // and an instant one lands as Ready at once (PRV-7 did not reproduce).
 
     // CASE.TREAT.03 — "A treatment can be stopped"
     test('a treatment can be discontinued, and the order says so afterwards', async ({ baseURL }) => {

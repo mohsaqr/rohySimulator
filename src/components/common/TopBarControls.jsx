@@ -134,6 +134,7 @@ export default function TopBarControls({
                ref={menuBtnRef}
                type="button"
                onClick={toggleMenu}
+               data-testid="topbar-menu"
                aria-expanded={showMenu}
                aria-controls="app-main-menu"
                aria-label={t('settings_menu_aria')}
