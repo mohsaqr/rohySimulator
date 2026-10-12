@@ -55,14 +55,15 @@ export async function disposeLearnerApi() {
  * touching the default case every other spec plays.
  *
  * @param {string} baseURL
- * @param {{ name: string, config: object }} spec
+ * @param {{ name: string, config: object, scenario?: object }} spec
  * @returns {Promise<object>} the created case row, as POST /cases returns it
  */
-export async function createAssignedCase(baseURL, { name, config }) {
+export async function createAssignedCase(baseURL, { name, config, scenario }) {
     const admin = await apiAsAdmin(baseURL);
     try {
         const created = await admin.post('/api/cases', { data: {
             name, description: 'e2e case', system_prompt: 'You are a patient.', config,
+            ...(scenario ? { scenario } : {}),
         } });
         expect(created.ok(), await created.text()).toBeTruthy();
         const theCase = await created.json();
@@ -92,13 +93,39 @@ export async function pickCase(baseURL) {
 }
 
 /**
- * A learner, in a running case, on the patient room. Returns the session id.
+ * A NEW session on the case, never a reused one.
+ *
+ * POST /sessions hands back the learner's open session on the same case when
+ * it started under 30 seconds ago (a dedup for React's double-fired effects).
+ * Two tests on the same case inside that window would therefore share one
+ * session, and the second would see the first one's chat, findings and
+ * orders. A reused session is ended and a new one made in its place.
  */
-export async function enterLiveCase(page, baseURL, tag, theCase) {
+async function freshSession(ctx, caseId, tag) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await ctx.post('/api/sessions', { data: { case_id: caseId, student_name: tag } });
+        expect(res.ok(), await res.text()).toBeTruthy();
+        const body = await res.json();
+        if (!/reused/i.test(body.message || '')) return body.id;
+        const ended = await ctx.put(`/api/sessions/${body.id}/end`);
+        expect(ended.ok(), await ended.text()).toBeTruthy();
+    }
+    throw new Error('could not start a fresh session');
+}
+
+/**
+ * A learner, in a running case, on the patient room. Returns the session id.
+ *
+ * `beforeOpen(sessionId, ctx)` runs after the session exists and before the
+ * page opens it — the place to record conversation turns. ChatInterface reads
+ * the thread once, on load (localStorage first, then GET /interactions), so
+ * turns written after that are invisible to it, and a test that writes them
+ * later passes or fails on a race rather than on what it checks.
+ */
+export async function enterLiveCase(page, baseURL, tag, theCase, { beforeOpen } = {}) {
     const ctx = await learnerApi(baseURL);
-    const res = await ctx.post('/api/sessions', { data: { case_id: theCase.id, student_name: tag } });
-    expect(res.ok(), await res.text()).toBeTruthy();
-    const sessionId = (await res.json()).id;
+    const sessionId = await freshSession(ctx, theCase.id, tag);
+    if (beforeOpen) await beforeOpen(sessionId, ctx);
 
     const full = await (await ctx.get(`/api/cases/${theCase.id}`)).json();
     const activeCase = full.case || full;

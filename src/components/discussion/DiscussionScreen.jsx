@@ -245,7 +245,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                 tutor speech); the engine now rejects and exposes it — say so
                 honestly instead of leaving a silent gap in the conversation. */}
             {error && (
-                <div role="alert" className="mx-6 mt-3 px-4 py-2 rounded-lg bg-red-900/40 border border-red-700 text-red-200 text-sm">
+                <div role="alert" data-testid="debrief-reply-failed" className="mx-6 mt-3 px-4 py-2 rounded-lg bg-red-900/40 border border-red-700 text-red-200 text-sm">
                     {t('tutor_reply_failed')}
                     {error.message ? <span className="opacity-75"> — {error.message}</span> : null}
                 </div>
@@ -303,7 +303,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
 
                     <div className="w-full flex flex-col items-center gap-3 mt-6">
                         {!discussant && !loading ? (
-                            <div className="text-sm text-slate-400 italic text-center max-w-md">
+                            <div data-testid="debrief-no-discussant" className="text-sm text-slate-400 italic text-center max-w-md">
                                 {t('no_discussant')}
                             </div>
                         ) : !started ? (

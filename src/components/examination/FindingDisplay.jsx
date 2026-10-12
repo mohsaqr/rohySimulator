@@ -118,12 +118,12 @@ export default function FindingDisplay({
                     <span className="text-sm text-cyan-400">{examType && techniqueLabel(t, selectedExamType, examType.name)}</span>
                 </div>
                 {isAbnormal ? (
-                    <span className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
+                    <span data-testid="exam-verdict" data-abnormal="true" className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
                         <AlertTriangle className="w-3 h-3" />
                         {t('abnormal')}
                     </span>
                 ) : normalLabel ? (
-                    <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
+                    <span data-testid="exam-verdict" data-abnormal="false" className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
                         {t('normal')}
                     </span>

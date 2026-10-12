@@ -88,22 +88,22 @@
   cases:
     - id: SESSION.START.01
       title: Loading a case puts the learner in a live consultation
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
-        1. Log in as `student`.
-        2. Note what the patient pane says before any case is chosen.
-        3. Open the top-bar menu and choose Settings; it opens on the **Select Case** tab.
-        4. Choose the English chest-pain (STEMI) case.
+        1. Log in as a `student` who has no case open.
+        2. Note where the app lands.
+        3. Open the top-bar menu and choose **Cases**; choose the English chest-pain (STEMI) case.
       expected: |-
-        Before the case the pane reads "No Case Selected."; after choosing it the consultation is
-        already running with no separate Start button — the room bar appears along the bottom, the
-        monitor is tracing, and if the case has a greeting the patient has already spoken.
-      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 1. load case*"]
+        A learner with no saved case lands in the platform's default case, already running ("No Case Selected." shows only
+        on a platform with no default case). Choosing a case from the list starts it at once with no separate
+        Start button — the room bar appears along the bottom, the monitor is tracing, and if the case has a
+        greeting the patient has already spoken.
+      covers: ["rohy:chromium::gate-screen.spec.js › starting a case › choosing a case from the case list puts the learner straight into a live consultation"]
     - id: SESSION.START.02
       title: A reloaded page comes back to the same moment, not the beginning
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -114,8 +114,7 @@
         The learner lands back in the Examination room (not the patient room), the session clock
         continues from where it was rather than restarting at 0:00, and the earlier conversation and
         the examination log are still there.
-      covers:
-        - "rohy:chromium::gate-rooms.spec.js › coming back to a case › a reload comes back to the same room, with the clock carrying on"
+      covers: ["rohy:chromium::gate-rooms.spec.js › coming back to a case › a reload comes back to the same room, with the clock carrying on"]
 
 - feature: NAV.ROOMS
   title: The room navigator
@@ -124,7 +123,7 @@
   cases:
     - id: NAV.ROOMS.01
       title: Every room in the bar opens and the case stays live
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -135,12 +134,11 @@
         Every button opens its room, the active one is visibly marked, nothing is hidden behind the
         bar or off the bottom of the screen, and back in the patient room the conversation and the
         session clock have carried on rather than restarting.
-      covers:
-        - "rohy:chromium::gate-rooms.spec.js › the room bar › every room in the bar opens, and the case is still live afterwards"
+      covers: ["rohy:chromium::gate-rooms.spec.js › the room bar › every room in the bar opens, and the case is still live afterwards"]
 
     - id: NAV.ROOMS.02
       title: Ready results are advertised on the Laboratory and Radiology buttons
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -150,6 +148,7 @@
       expected: |-
         A green count badge appears on the Laboratory button while the result is unread and
         disappears once it has been opened. No badge ever appears on a room that has no results.
+      covers: ["rohy:chromium::gate-screen.spec.js › the laboratory worklist › a ready result is advertised on the Laboratory button until it is opened, and nowhere else"]
     - id: NAV.ROOMS.03
       title: Visiting the Consultant mid-case does not end the case
       kind: automated
@@ -205,19 +204,19 @@
         told — without naming the underlying diagnosis or quoting the case's teaching material.
     - id: CASE.INTERVIEW.04
       title: A second question while the patient is mid-answer is refused clearly
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
         1. Send a question to the patient.
         2. While the reply is still being composed, try to send a second message.
       expected: |-
-        The composer is disabled and shows a waiting state while the patient answers; attempting a
-        second send produces a plain message saying the patient is still answering, and the first
-        answer still arrives normally.
+        The composer and its send button are disabled and show a waiting state while the patient answers, so a
+        second message cannot be sent; the first answer still arrives normally and the composer reopens.
+      covers: ["rohy:chromium::gate-debrief.spec.js › talking to the patient › while the patient answers, the composer waits and takes no second message, then the answer arrives"]
     - id: CASE.INTERVIEW.05
       title: A failed reply is reported honestly, not swallowed
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -227,6 +226,7 @@
         The chat shows a visible error for that turn saying the reply could not be obtained. The
         message is not silently dropped, no fabricated patient answer appears, and the app stays
         usable.
+      covers: ["rohy:chromium::gate-debrief.spec.js › talking to the patient › a reply that cannot be obtained is shown as an error, with no invented answer, and the chat stays usable"]
 
 - feature: CASE.EXAM
   title: Physical examination
@@ -235,7 +235,7 @@
   cases:
     - id: CASE.EXAM.01
       title: Examining a region returns a finding and records it in the log
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -246,7 +246,7 @@
         A finding appears for that region and technique, badged either Normal or Abnormal, and a row
         naming the region and the technique is added to the Examination Log with the counters
         updated.
-      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 5. exam findings*"]
+      covers: ["rohy:chromium::gate-exam.spec.js › examining a region › auscultating the chest shows a badged finding and logs the region and technique"]
     - id: CASE.EXAM.02
       title: Repeating the same examination does not duplicate the log
       kind: automated
@@ -264,18 +264,18 @@
 
     - id: CASE.EXAM.03
       title: The body map offers both aspects and both figures
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
         1. In the Examination room, switch between Anterior and Posterior.
-        2. Switch the figure between the male and female silhouette.
+        2. Look at the figure: inside a case it is the patient's and cannot be switched.
         3. Use the **General** and **Neuro** shortcuts.
       expected: |-
-        Each toggle redraws the body map with regions that are clickable in the new view, and the
-        shortcuts open their grouped examinations. No control leaves the pane blank.
-      covers:
-        - "rohy:chromium::gate-exam.spec.js › the body map › each aspect and each shortcut redraws a map that can still be worked"
+        Each toggle redraws the body map with regions that are clickable in the new view, the figure is the
+        patient's and offers no male/female switch, and the shortcuts open their grouped examinations. No
+        control leaves the pane blank.
+      covers: ["rohy:chromium::gate-exam.spec.js › the body map › each aspect and each shortcut redraws a map that can still be worked"]
 
 - feature: CASE.LABS
   title: Ordering laboratory tests
@@ -284,7 +284,7 @@
   cases:
     - id: CASE.LABS.01
       title: A lab order waits its turnaround and then produces a report
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -295,10 +295,10 @@
       expected: |-
         The order appears under Pending with a visibly decreasing countdown, moves to Ready by itself,
         and clicking it opens a readable report in the centre column which then counts as Viewed.
-      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 4. labs ordered*"]
+      covers: ["rohy:chromium::gate-screen.spec.js › the laboratory worklist › an ordered test counts down under Pending, turns Ready by itself, and opens as a report"]
     - id: CASE.LABS.02
       title: The catalogue offers the full list, not only what the case expects
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -307,11 +307,10 @@
       expected: |-
         The irrelevant tests are all present and orderable. The catalogue is not narrowed to the
         case's expected work-up — narrowing it would tell the learner the answer.
-      covers:
-        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the laboratory catalogue stays full, whatever the case expects"
+      covers: ["rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the laboratory catalogue stays full, whatever the case expects", "rohy:chromium::gate-screen.spec.js › the catalogues › a learner on the chest-pain case finds and can order tests unrelated to chest pain"]
     - id: CASE.LABS.03
       title: Order instantly skips the wait
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -320,6 +319,7 @@
       expected: |-
         The result is in the worklist as Ready straight away with no countdown, and the confirmation
         says the order was instant.
+      covers: ["rohy:chromium::gate-screen.spec.js › the laboratory worklist › Order instantly lands the result as Ready at once, and says it was instant"]
 
 - feature: CASE.IMAGING
   title: Ordering imaging
@@ -328,15 +328,17 @@
   cases:
     - id: CASE.IMAGING.01
       title: A radiology order produces a report with findings and an impression
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
         1. Open the Radiology room and order a chest X-ray.
         2. Open it from the worklist when ready.
       expected: |-
-        A structured report opens showing at least the clinical indication, findings and an
-        impression, laid out as a report rather than as raw data.
+        A structured report opens showing at least the technique, findings and an impression, laid out as a
+        report rather than as raw data. (The clinical indication is deliberately not printed: it came from the
+        catalogue, not the case, and contradicted it — PRV-37.)
+      covers: ["rohy:chromium::gate-screen.spec.js › the catalogues › a chest X-ray order opens as a structured report with technique, findings and impression"]
     - id: CASE.IMAGING.02
       title: Ordering imaging opens the PACS room
       kind: both
@@ -373,7 +375,7 @@
         that panel claims.
     - id: CASE.TREAT.02
       title: A contraindicated order is challenged rather than accepted silently
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -381,6 +383,7 @@
       expected: |-
         The order is accepted but a clearly visible warning explains the contraindication in clinical
         terms. It is not refused without explanation, and it is not accepted with no comment at all.
+      covers: ["rohy:chromium::gate-debrief.spec.js › ordering a treatment › a contraindicated order is accepted with a visible warning that explains why"]
     - id: CASE.TREAT.03
       title: A treatment can be stopped
       kind: automated
@@ -403,7 +406,7 @@
   cases:
     - id: MONITOR.VITALS.01
       title: The monitor reads as a monitor
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -412,7 +415,7 @@
         Three traces scroll steadily right to left (ECG, plethysmograph and respiration), the numeric
         boxes carry sensible clinical values with their units, and the digits drift slightly rather
         than standing perfectly still.
-      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 3. vitals tick*"]
+      covers: ["rohy:chromium::gate-screen.spec.js › the monitor › three traces scroll right to left, and the numbers carry units and drift"]
     - id: MONITOR.VITALS.02
       title: The session clock is the real elapsed time
       kind: automated
@@ -476,7 +479,7 @@
   cases:
     - id: ALARM.BREACH.01
       title: A vital out of range raises an alarm the learner cannot miss
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -485,10 +488,10 @@
       expected: |-
         Within a few seconds an alarm appears on the monitor naming the vital and its severity, and
         the alarm button in the monitor header shows it is active.
-      covers: ["rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › breach + log*"]
+      covers: ["rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › breach + log*", "rohy:chromium::gate-alarms.spec.js › a vital out of range › the scenario moves the vitals on its own, and the breach raises a named alarm the learner cannot miss"]
     - id: ALARM.BREACH.02
       title: An alarm stays until it is acknowledged
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -498,6 +501,7 @@
       expected: |-
         The alarm remains listed after the vital recovers — a transient breach is not erased — and it
         clears only once acknowledged.
+      covers: ["rohy:chromium::gate-alarms.spec.js › a vital out of range › an alarm stays listed after the vital recovers, and clears only when acknowledged"]
     - id: ALARM.BREACH.03
       title: Acknowledging one alarm does not pre-silence the next
       kind: automated
@@ -512,7 +516,7 @@
       covers: ["rohy:chromium::alarms.spec.js › alarms + notifications (Phase 5) › ack on one case does not pre-ack*"]
     - id: ALARM.BREACH.04
       title: Ending the case does not carry an alarm into the debrief
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -520,6 +524,7 @@
         2. End the case with **End & Debrief**.
       expected: |-
         The debrief opens quietly; no alarm tone or alarm strip follows the learner out of the case.
+      covers: ["rohy:chromium::gate-alarms.spec.js › a vital out of range › ending the case with an alarm sounding brings no alarm into the debrief"]
 
 - feature: SCENARIO.TIME
   title: The case evolving on its own
@@ -528,17 +533,17 @@
   cases:
     - id: SCENARIO.TIME.01
       title: The patient deteriorates without the learner doing anything
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
-        1. Start a case whose scenario begins automatically (the STEMI case).
+        1. Start a case whose scenario begins automatically.
         2. Write down the vital signs.
-        3. Wait two minutes without interacting, then read them again.
+        3. Wait without interacting, then read them again.
       expected: |-
         The vital signs have moved along a clinical trajectory rather than drifting randomly, and any
         threshold crossed on the way has raised its alarm.
-      covers: ["rohy:chromium::scenario-engine.spec.js › scenario engine › *"]
+      covers: ["rohy:chromium::gate-alarms.spec.js › a vital out of range › the scenario moves the vitals on its own, and the breach raises a named alarm the learner cannot miss"]
     - id: SCENARIO.TIME.02
       title: Time passes even while the learner is in another room
       kind: automated
@@ -579,7 +584,7 @@
   cases:
     - id: SESSION.END.01
       title: Ending the case closes it and opens the debrief
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -588,7 +593,7 @@
       expected: |-
         The debrief opens; back in the patient room the case is plainly over — the clock is frozen and
         marked as ended, the composer no longer accepts messages, and the end button is gone.
-      covers: ["rohy:chromium::case-lifecycle.spec.js › case lifecycle › 6. end session*"]
+      covers: ["rohy:chromium::gate-screen.spec.js › ending a case › End & Debrief opens the debrief, and the patient room is plainly over afterwards"]
     - id: SESSION.END.02
       title: Ending is deliberate
       kind: automated
@@ -623,7 +628,7 @@
 
     - id: DEBRIEF.REVIEW.02
       title: The answer key is not shown until the case is over
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
@@ -634,8 +639,7 @@
       expected: |-
         Mid-case the missed-treatment section is withheld or marked pending; only after the case has
         ended does it list what was expected and missed.
-      covers:
-        - "rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the answer key is withheld while the case is live and released when it ends"
+      covers: ["rohy:chromium::clinical-guardrails.spec.js › clinical guardrails › the answer key is withheld while the case is live and released when it ends", "rohy:chromium::gate-debrief.spec.js › the debrief › the missed treatments are withheld while the case runs and listed once it has ended"]
 
 - feature: DEBRIEF.DISCUSS
   title: The discussant conversation
@@ -666,7 +670,7 @@
         whole case solution unprompted or letting a clear error pass unchallenged.
     - id: DEBRIEF.DISCUSS.03
       title: A failed debrief turn says so and keeps the learner's words
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -674,9 +678,10 @@
       expected: |-
         A visible message says the reply did not arrive and that the learner's message was not lost;
         the transcript keeps what they said and the debrief can be retried.
+      covers: ["rohy:chromium::gate-debrief.spec.js › the debrief › a failed debrief turn says so, keeps the learner's words, and can be retried"]
     - id: DEBRIEF.DISCUSS.04
       title: A case with no discussant says so plainly
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -684,8 +689,7 @@
       expected: |-
         A plain message explains that no discussant is configured and where an admin would add one.
         The room does not sit on an empty loading state or crash.
-      covers:
-        - "rohy:chromium::gate-core.spec.js › the debrief tells the truth about the session › a case with no discussant resolves to none rather than hanging"
+      covers: ["rohy:chromium::gate-core.spec.js › the debrief tells the truth about the session › a case with no discussant resolves to none rather than hanging", "rohy:chromium::gate-debrief.spec.js › the debrief › a case with no discussant says so plainly and where to add one"]
 
 - feature: DEBRIEF.RECORD
   title: The encounter record
@@ -914,7 +918,7 @@
   cases:
     - id: AUTH.PASSWORD.01
       title: A password the form accepts is a password the server accepts
-      kind: both
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -925,8 +929,7 @@
       expected: |-
         The form states the rule and refuses the first two before submitting; the third is accepted
         and the new user can log in with it. The form never accepts something the save then rejects.
-      covers:
-        - "rohy:chromium::gate-core.spec.js › the password the form accepts is the password the server accepts › the client mirror predicts the server, password by password"
+      covers: ["rohy:chromium::gate-core.spec.js › the password the form accepts is the password the server accepts › the client mirror predicts the server, password by password", "rohy:chromium::gate-screen.spec.js › the admin's create-user form › states the password rule, refuses weak passwords before submitting, and the accepted one logs in"]
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Language
@@ -1821,7 +1824,7 @@
         - "rohy:chromium::oncall-phone.spec.js › the on-call phone › reaches the lab and radiology on a case nobody set up"
     - id: ONCALL.PHONE.03
       title: The phone button covers nothing
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -1831,9 +1834,10 @@
       expected: |-
         The button sits in each room's own top bar — beside Logout, or beside the Ready pill over the
         bedside — and covers no vital sign, trace, room control or End & Debrief, at either width.
+      covers: ["rohy:chromium::gate-oncall.spec.js › where the phone sits › in every room the phone sits in the top bar and covers nothing, at desktop and tablet width"]
     - id: ONCALL.PHONE.04
       title: A case with slides or an ECG has its specialist on call
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: major
       steps: |-
@@ -1847,6 +1851,7 @@
         (disable is still offered). The learner's phone lists the pathologist beside the laboratory
         and radiology. The ECG case lists the cardiologist the same way. A case without slides or an
         ECG lists neither.
+      covers: ["rohy:chromium::gate-oncall.spec.js › who is on call › a case with slides has its pathologist, a case with an ECG its cardiologist, a plain case neither"]
 - feature: CASE.ROOMS
   title: Per-case rooms
   products: [rohy]
@@ -1895,7 +1900,7 @@
         - "rohy:chromium::case-rooms.spec.js › per-case rooms › End & Debrief without a debrief room ends on the case summary"
     - id: CASE.ROOMS.04
       title: The Rooms step keeps material and explains the effects
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: minor
       steps: |-
@@ -1907,6 +1912,7 @@
         material is kept and names the laboratory among the specialists who will not answer; with
         Consultant off, it says End & Debrief ends on the case summary. The switches survive the
         save. Switching both back on restores the lab results unchanged.
+      covers: ["rohy:chromium::gate-screen.spec.js › the case editor's Rooms step › switching rooms off keeps their material, explains the effects, survives a save, and switches back unchanged"]
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Robustness — the seeded monkey walker (tests/monkey/walker.spec.js)

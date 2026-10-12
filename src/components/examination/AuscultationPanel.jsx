@@ -407,12 +407,12 @@ export default function AuscultationPanel({
                     (normalLabel={false}): naming the verdict does the
                     learner's interpretation for them. */}
                 {isAbnormal ? (
-                    <span className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
+                    <span data-testid="exam-verdict" data-abnormal="true" className="flex items-center gap-1 text-xs px-2 py-1 bg-red-900/50 text-red-400 rounded">
                         <AlertTriangle className="w-3 h-3" />
                         {t('abnormal')}
                     </span>
                 ) : normalLabel ? (
-                    <span className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
+                    <span data-testid="exam-verdict" data-abnormal="false" className="flex items-center gap-1 text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
                         <CheckCircle className="w-3 h-3" />
                         {t('normal')}
                     </span>
@@ -645,14 +645,14 @@ export default function AuscultationPanel({
                             </div>
                         )}
                             {/* Finding text */}
-                        <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
+                        <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`} data-testid="exam-finding">
                             {finding || t('auscultate_prompt')}
                         </div>
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col">
                     {/* Finding text */}
-                    <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`}>
+                    <div className={`flex-1 text-sm leading-relaxed p-3 rounded bg-slate-900/50 mb-3 ${isAbnormal ? 'text-red-200' : 'text-slate-200'}`} data-testid="exam-finding">
                         {finding || t('auscultate_prompt')}
                     </div>
 

@@ -64,25 +64,108 @@ async function sessionRow(baseURL, sessionId) {
     return (await res.json()).session;
 }
 
+/** Record conversation turns, alternating learner and patient. */
+async function recordTurns(ctx, sessionId, texts) {
+    for (const [i, content] of texts.entries()) {
+        const rec = await ctx.post('/api/interactions', {
+            data: { session_id: sessionId, role: i % 2 === 0 ? 'user' : 'assistant', content },
+        });
+        expect(rec.ok(), await rec.text()).toBeTruthy();
+    }
+}
+
+/**
+ * Nothing in the room sits behind the room bar or off the screen.
+ *
+ * Measured on what a learner reads and operates — every control, canvas and
+ * piece of text in the room — as it is actually shown: clipped by any
+ * scrolling container it sits in. A row scrolled out of its list is reachable
+ * by scrolling and is not "hidden"; a control drawn under the bar is. Panel
+ * backgrounds that run to the window's edge are not content and are not
+ * measured. The bar itself must be fully on screen.
+ */
+async function expectNothingBehindTheBar(page, key) {
+    const report = await page.evaluate(() => {
+        const nav = document.querySelector('[data-testid="room-navigator"]').getBoundingClientRect();
+        const view = document.querySelector('[data-testid="room-view"]');
+        const interactive = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'CANVAS', 'VIDEO', 'IMG']);
+        const shownRect = (el) => {
+            let r = el.getBoundingClientRect();
+            let top = r.top; let bottom = r.bottom; let left = r.left; let right = r.right;
+            for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                const st = getComputedStyle(p);
+                if (st.position === 'fixed') return null;          // an overlay, not the room
+                if (/(auto|scroll|hidden|clip)/.test(st.overflow + st.overflowY + st.overflowX)) {
+                    const c = p.getBoundingClientRect();
+                    top = Math.max(top, c.top); bottom = Math.min(bottom, c.bottom);
+                    left = Math.max(left, c.left); right = Math.min(right, c.right);
+                }
+            }
+            if (bottom - top < 1 || right - left < 1) return null;   // scrolled away or empty
+            return { top, bottom, right };
+        };
+        const offending = [];
+        let measured = 0;
+        for (const el of view.querySelectorAll('*')) {
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || st.position === 'fixed') continue;
+            if (el.closest('[data-testid="room-navigator"]')) continue;   // the bar itself
+            const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+            if (!interactive.has(el.tagName) && !hasText) continue;
+            const r = shownRect(el);
+            if (!r) continue;
+            measured++;
+            if (r.bottom > nav.top + 1 || r.right > innerWidth + 1) {
+                offending.push(`${el.tagName} "${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 30)}" bottom=${Math.round(r.bottom)}`);
+            }
+        }
+        return { navTop: nav.top, navBottom: nav.bottom, navRight: nav.right, innerHeight, innerWidth, measured, offending };
+    });
+    expect(report.navBottom, 'the room bar ends inside the window').toBeLessThanOrEqual(report.innerHeight + 1);
+    expect(report.navRight, 'the room bar fits the width').toBeLessThanOrEqual(report.innerWidth + 1);
+    expect(report.measured, `${key} shows controls or text`).toBeGreaterThan(0);
+    expect(report.offending, `${key}: content behind the room bar (top ${report.navTop}) or off screen`).toEqual([]);
+}
+
 // ---------------------------------------------------------------------------
 
 test.describe('the room bar', () => {
     // NAV.ROOMS.01
     test('every room in the bar opens, and the case is still live afterwards', async ({ page, baseURL }) => {
-        const sessionId = await enter(page, baseURL, 'nav01');
+        // A conversation recorded before the case opens, so "the conversation
+        // carried on" is checked against turns the thread already held.
+        const said = `${RUN_TAG} nav01 the pain started at rest`;
+        const answered = `${RUN_TAG} nav01 does it spread anywhere`;
+        const sessionId = await enterLiveCase(page, baseURL, `${RUN_TAG}-nav01`, theCase, {
+            beforeOpen: (id, ctx) => recordTurns(ctx, id, [said, answered]),
+        });
         const { start_time: startTime } = await sessionRow(baseURL, sessionId);
+        await expectInThread(page, said, 'the learner\'s turn');
         // Aged BEFORE the tour: the monitor remounts on the way back to the
         // patient room, and a clock that restarted there is only tellable from
         // one that survived if the case was already measurably old.
         await ageSession(page, startTime);
 
-        for (const key of ['chat', 'examination', 'lab', 'radiology', 'consultant']) {
+        // Every room the bar offers, read from the bar itself, left to right:
+        // a case with slides or an ECG adds rooms, and a hard-coded list would
+        // skip exactly the ones this case added.
+        const keys = await page.locator('[data-testid^="room-button-"]').evaluateAll(
+            (els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
+        expect(keys.length, 'the bar offers rooms').toBeGreaterThanOrEqual(5);
+        for (const key of keys) {
             const btn = room(page, key);
             await expect(btn, `${key} is offered in the bar`).toBeVisible();
             await btn.click();
             // The active room is marked, which is how a learner knows where
             // they are — aria-pressed is that mark.
             await expect(btn, `${key} is marked active once opened`).toHaveAttribute('aria-pressed', 'true');
+            // And it OPENED: the view now showing is this room, with something
+            // in it — a button that only changed its own state would pass the
+            // check above.
+            await expect(page.getByTestId('room-view'), `${key} is the room showing`).toHaveAttribute('data-room', key);
+            await expect.poll(async () => page.getByTestId('room-view').evaluate((el) => el.innerText.trim().length),
+                { message: `${key} shows content`, timeout: 10_000 }).toBeGreaterThan(0);
+            await expectNothingBehindTheBar(page, key);
         }
 
         await room(page, 'chat').click();
@@ -91,6 +174,8 @@ test.describe('the room bar', () => {
         // two readings of the same clock cannot tell a clock that kept running
         // from one that restarted and then ticked past the earlier value.
         await expectClockMatchesSession(page, startTime);
+        await expectInThread(page, said, 'the learner\'s turn after the tour');
+        await expectInThread(page, answered, 'the patient\'s turn after the tour');
         await expect(page.getByTestId('end-session'), 'the case is still endable, so it is still live').toBeVisible();
     });
 
@@ -186,25 +271,32 @@ test.describe('ending the case', () => {
 
 test.describe('coming back to a case', () => {
     // SESSION.START.02
-    //
-    // Only the two halves a machine can settle. The case also expects the
-    // examination log to survive the reload; it does not, because ManikinPanel
-    // holds `examLog` in `useState([])` and nothing rehydrates it from
-    // GET /sessions/:id/exam-findings — the server has the findings, the room
-    // just never asks for them again. That is a known defect, filed, and
-    // asserting it here would only make this spec red for something already
-    // tracked. The case therefore stays manual; this covers the room and the
-    // clock, which are the halves that do hold.
     test('a reload comes back to the same room, with the clock carrying on', async ({ page, baseURL }) => {
-        const sessionId = await enter(page, baseURL, 'reload');
+        const said = `${RUN_TAG} reload my left arm feels heavy`;
+        const answered = `${RUN_TAG} reload since when`;
+        const sessionId = await enterLiveCase(page, baseURL, `${RUN_TAG}-reload`, theCase, {
+            beforeOpen: (id, ctx) => recordTurns(ctx, id, [said, answered]),
+        });
         const { start_time: startTime } = await sessionRow(baseURL, sessionId);
+        await expectInThread(page, said, 'the learner\'s turn');
         // Aged before the reload, for the same reason as the room tour: a
         // clock that restarts on the reload is indistinguishable from one that
         // resumed if the case was only a second old when the page went away.
         await ageSession(page, startTime);
 
+        // One examination, so the log has something to lose.
         await room(page, 'examination').click();
         await expect(room(page, 'examination')).toHaveAttribute('aria-pressed', 'true');
+        await page.getByTestId('exam-shortcut-general').click();
+        const technique = page.locator('[data-testid^="exam-technique-"]').first();
+        await technique.click();
+        await expect(page.getByTestId('exam-log')).toHaveAttribute('data-entry-count', '1', { timeout: 10_000 });
+        // The log is rebuilt from the server after a reload, so wait until the
+        // server has the finding (the post is fire-and-forget).
+        const ctx = await learnerApi(baseURL);
+        await expect.poll(async () =>
+            ((await (await ctx.get(`/api/sessions/${sessionId}/exam-findings`)).json()).findings || []).length,
+        { timeout: 10_000 }).toBe(1);
         // The room is persisted by an effect, not by the click — give it the
         // render it needs before pulling the page out from under it.
         await expect
@@ -220,6 +312,10 @@ test.describe('coming back to a case', () => {
         // lands on the patient room has lost their place in the case.
         await expect(room(page, 'examination'), 'the reload returns to the examination room')
             .toHaveAttribute('aria-pressed', 'true');
+        // Regression lock: the examination log emptied on a reload although the server held the finding (PRV-8)
+        await expect(page.getByTestId('exam-log'), 'the examination log survived the reload')
+            .toHaveAttribute('data-entry-count', '1', { timeout: 10_000 });
+        await expect(page.getByTestId('exam-log-row')).toHaveCount(1);
 
         // And the case did not restart. Measured against the session's own
         // start_time, which is the only thing that distinguishes a clock that
@@ -227,6 +323,8 @@ test.describe('coming back to a case', () => {
         // the time since the reload is satisfied by both.
         await room(page, 'chat').click();
         await expectClockMatchesSession(page, startTime);
+        await expectInThread(page, said, 'the learner\'s turn after the reload');
+        await expectInThread(page, answered, 'the patient\'s turn after the reload');
     });
 
     // AUTH.SESSION.03

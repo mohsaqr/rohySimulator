@@ -1133,6 +1133,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                         </button>
                                                     )}
                                                     <button
+                                                        data-testid={`case-load-${c.id}`}
                                                         onClick={() => {
                                                             if (onLoadCase) onLoadCase(c);
                                                             if (onClose) onClose();
@@ -1176,7 +1177,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                     {isAdmin() && casePackagesOn && <CasePackageExportButton caseItem={c} />}
                                                     {isAdmin() && (
                                                         <>
-                                                            <button onClick={() => {
+                                                            <button data-testid={`case-edit-${c.id}`} onClick={() => {
                                                                 // Clear auto-save to ensure fresh load from database
                                                                 localStorage.removeItem('rohy_editing_case');
                                                                 console.log('[ConfigPanel] Editing case:', c.name, 'scenario:', c.scenario ? 'present' : 'null');
@@ -3690,6 +3691,7 @@ function CaseAgentEditor({ caseId, _caseData, setCaseData: _setCaseData, onOpenP
                     {caseAgents.map(agent => (
                         <div
                             key={agent.id}
+                            data-testid={`case-agent-${agent.agent_type}`}
                             className={`p-4 rounded-lg border ${agent.enabled
                                 ? 'bg-neutral-800/50 border-neutral-700'
                                 : 'bg-neutral-900/50 border-neutral-800 opacity-60'

@@ -39,9 +39,9 @@ export default function ExamLog({
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-medium text-slate-400">{t('exam_log')}</h4>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs text-emerald-400">{t('normal_count', { count: normalCount })}</span>
+                    <span data-testid="exam-log-normal" data-count={normalCount} className="text-xs text-emerald-400">{t('normal_count', { count: normalCount })}</span>
                     {abnormalCount > 0 && (
-                        <span className="text-xs text-red-400">{t('abnormal_count', { count: abnormalCount })}</span>
+                        <span data-testid="exam-log-abnormal" data-count={abnormalCount} className="text-xs text-red-400">{t('abnormal_count', { count: abnormalCount })}</span>
                     )}
                     {onClearLog && (
                         <button
@@ -65,6 +65,8 @@ export default function ExamLog({
                         <div
                             key={`${entry.regionId}-${entry.examType}-${index}`}
                             data-testid="exam-log-row"
+                            data-region={entry.regionId}
+                            data-exam-type={entry.examType}
                             onClick={() => onSelectExam && onSelectExam(entry)}
                             className={`
                                 flex items-center gap-2 p-2 rounded text-sm cursor-pointer

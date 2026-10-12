@@ -9,6 +9,39 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.42] — 2026-10-12
+
+- **26 core cases are automated end to end.** The 3.0.0 gate asked a person to pass 35 core cases by hand.
+  26 of them check what is on screen, so they are now Playwright tests that assert every clause of the
+  case's expected text, in the browser: starting, reloading and ending a case; the room bar and its
+  ready-result badge; the monitor (three traces measured scrolling right to left, units, drifting
+  values); the lab worklist countdown, Ready, report and Viewed, Order instantly, the full catalogue; a
+  chest auscultation's badged finding and log row; the body map; the radiology report; alarms raised by
+  a scenario, latched until acknowledged and kept out of the debrief; the patient reply that is slow or
+  fails; the debrief's failed turn and retry, the no-discussant message, the answer key withheld until
+  the end; a contraindicated order's warning; the admin's password rule; the Rooms step; where the
+  on-call phone sits at desktop and tablet width, and which specialists a case puts on it. New specs:
+  `gate-screen`, `gate-alarms`, `gate-debrief`, `gate-oncall`; `gate-rooms` and `gate-exam` extended. The
+  model is never called: the tests answer the browser's model request themselves.
+- **Catalogue.** The 26 cases are `kind: automated` with their tests under `covers:` (104 patterns, all
+  matching a real test). The gate now needs a human pass on 9 core cases: the patient interview (3),
+  the debrief discussion (2), the case's language, a rhythm's shape, the PACS link (CI has no PACS
+  content) and the active-treatments panel (CASE.TREAT.01 expects drug names the panel does not show).
+  Four case texts now describe the app as it deliberately is: a learner with no saved case lands in the
+  default case and picks another from Cases (SESSION.START.01); inside a case the body-map figure is the
+  patient's and has no switch (CASE.EXAM.03); the radiology report prints no clinical indication
+  (PRV-37) (CASE.IMAGING.01); the composer is disabled while the patient answers, so a second message
+  cannot be sent (CASE.INTERVIEW.04).
+- **Test hooks** (`data-testid`, no behaviour change): the room view, room badges, chat turns and the
+  no-case pane, the monitor's traces, vital values and alarm bell, alarm rows, the worklist rows, the
+  exam verdict, finding and log, the debrief's failure banner, no-discussant message and missed list,
+  the Rooms step rows and notes, case agent cards, case Load and Edit buttons, the top-bar menu.
+- **Small UI fixes found on the way.** The NIBP box shows its unit (mmHg), as every other vital does. The
+  admin's create-user form is a dialog to assistive technology (`role="dialog"`, labelled).
+- **Test fixture.** `enterLiveCase` always gets a new session: `POST /sessions` reuses a learner's open
+  session on the same case started under 30 seconds ago, so two tests close together shared one session
+  and the second saw the first one's findings.
+
 ## [3.0.0-rc.41] — 2026-10-12
 
 - **Test: an invite's audit row is awaited, not raced.** `registration-invites` › "never writes the token

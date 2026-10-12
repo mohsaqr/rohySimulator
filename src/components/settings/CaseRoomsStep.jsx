@@ -75,6 +75,8 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                     return (
                         <li
                             key={room.key}
+                            data-testid={`room-row-${room.key}`}
+                            data-on={on ? 'true' : 'false'}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${on
                                 ? 'bg-neutral-800/60 border-neutral-700'
                                 : 'bg-neutral-900/60 border-neutral-800 opacity-70'}`}
@@ -82,7 +84,7 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                             {Icon && <Icon className="w-5 h-5 text-neutral-300 shrink-0" aria-hidden="true" />}
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-semibold text-neutral-100">{label}</div>
-                                {note && <div className="text-xs text-neutral-400">{note}</div>}
+                                {note && <div data-testid={`room-note-${room.key}`} className="text-xs text-neutral-400">{note}</div>}
                             </div>
                             {fixed ? (
                                 <span className="flex items-center gap-1 text-xs text-neutral-400">
@@ -118,7 +120,7 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
             {(off.includes('consultant') || silent.length > 0) && (
                 <div className="space-y-2 rounded-lg border border-neutral-700 bg-neutral-800/40 p-3 text-xs text-neutral-300">
                     {off.includes('consultant') && (
-                        <p className="flex items-start gap-2">
+                        <p className="flex items-start gap-2" data-testid="rooms-no-debrief-note">
                             <Info className="w-4 h-4 shrink-0 text-teal-400" aria-hidden="true" />
                             {t('rooms_no_debrief_note')}
                         </p>
