@@ -38,6 +38,8 @@ export default defineConfig([
     'server/lib/prova-relay.js',
     'coverage/**',
     'playwright-report/**',
+    'playwright-report-*/**',
+    'test-results-*/**',
     'test-results/**',
     'node_modules/**',
     '.vitest-cache/**',

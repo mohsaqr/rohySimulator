@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.47] — 2026-10-12
+
+Two safeguards against addresses that ignore the base path, after every slide 404'd on an install served
+at `/rohy/` (fixed in rc.44). The first run of the new e2e found two more of the same bug.
+
+- **Oyon works under a base path.** The `<oyon-app>` element script and the asset base it loads its
+  models and WASM from were root addresses (`/oyon/standalone/…`), so on an install served at `/rohy/`
+  emotion capture could not start. Both are built through `baseUrl()`.
+- **Lessons work under a base path.** A lesson's files and the images in its text are stored as
+  `/uploads/…`; they are shown with the base path (`resolveFileUrl`, and the lesson HTML on display —
+  what is stored is unchanged). The lessons module's direct `fetch` calls, the page-close session end
+  and the survey export also go through `apiUrl()` now.
+- **Lint rule.** A hand-written root address in client code — `'/api/…'`, `'/uploads/…'`, `'/oyon/…'`,
+  `'/standalone/…'`, `'/avatars/…'`, `'/docs/…'`, as a string or a template — is an error unless it is
+  passed to `apiUrl()`/`baseUrl()`. Two deliberate exceptions carry a reason. The rule has its own test.
+- **E2E under a base path** (new CI job "Playwright under a base path"): the app built for `/rohy/`
+  (`npm run build:basepath`) behind a proxy that strips `/rohy` and answers 404 everywhere else, as an
+  install behind Caddy does. A learner walks every room of a case with a pathology slide; the slide's
+  descriptor must load from `/rohy/api/plugins/…`, no request may leave `/rohy/`, and no app, Oyon or
+  plugin file may fail. With the rc.44 fix reverted it fails. `npm run test:basepath` runs it locally.
+
 ## [3.0.0-rc.46] — 2026-10-12
 
 - **The room-bar tour (NAV.ROOMS.01) made robust on CI.** On CI's headless Chromium it failed at the 3D
