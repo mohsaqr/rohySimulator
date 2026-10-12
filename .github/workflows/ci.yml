@@ -290,6 +290,48 @@ jobs:
   # route with its reason, and says why only the no-server-error and
   # response-time checks run (the reference carries no response schemas).
   # Pinned: the version the exclusions and flags were measured against.
+  # The app served under a base path (/rohy/), as `npm run build` builds it
+  # and as an install behind a path-stripping proxy serves it. The e2e job
+  # runs at '/', where a hand-written '/api/…' address happens to work; this
+  # is where it 404s — every pathology slide did, until rc.44. A learner walks
+  # every room, the slide included, and no request may leave /rohy/.
+  e2e-basepath:
+    name: Playwright under a base path
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - name: Clone dynajs sibling
+        run: |
+          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
+      - name: Clone 3D patient room sibling
+        env:
+          ROOM3D_GIT_TOKEN: ${{ secrets.ROOM3D_GIT_TOKEN }}
+        run: bash scripts/clone-room3d.sh ../3D
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npm run test:e2e:install
+      - name: Build the SPA for /rohy/
+        run: npm run build:basepath
+      - name: Run Playwright under /rohy/
+        run: npm run test:basepath
+      - name: Upload base-path report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-basepath-${{ matrix.node-version }}
+          path: playwright-report-basepath/
+          if-no-files-found: ignore
+
   fuzz:
     name: API fuzzing (schemathesis)
     runs-on: ubuntu-latest

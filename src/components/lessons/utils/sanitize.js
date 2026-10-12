@@ -1,11 +1,22 @@
 import DOMPurify from 'dompurify';
+import { baseUrl } from '../../../config/api';
+
+/**
+ * Point this server's files at the base path the app is served under. A
+ * lesson stores its images and attachments as `/uploads/…` (server-absolute),
+ * which is right at '/' and a 404 on an install served at '/rohy/'. Only an
+ * attribute value that STARTS with `/uploads/` or `/api/` is rewritten; a link
+ * to another host is left alone. Display only — what is stored is unchanged.
+ */
+export const withBasePath = (html) => (typeof html === 'string'
+  ? html.replace(/(\s(?:src|href)=["'])\/(uploads|api)\//g, (match, attr, kind) => `${attr}${baseUrl(`/${kind}/`)}`)
+  : html);
 
 /**
  * Sanitize HTML content to prevent XSS attacks.
  * Uses DOMPurify with a safe default configuration.
  */
-export const sanitizeHtml = (dirty) => {
-  return DOMPurify.sanitize(dirty, {
+export const sanitizeHtml = (dirty) => withBasePath(DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: [
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'p', 'br', 'hr',
@@ -26,8 +37,7 @@ export const sanitizeHtml = (dirty) => {
     ADD_ATTR: ['target'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'form', 'input', 'object', 'embed'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
-  });
-};
+  }));
 
 /**
  * Detect whether a string is HTML content (from RichTextEditor / Tiptap).

@@ -4,12 +4,18 @@
 // resolving to `{ data }`, and rejecting with an Error that carries
 // `err.response.data` so callers reading `err.response.data.message` work.
 import { apiFetch } from '../../../services/apiClient';
+import { baseUrl } from '../../../config/api';
 
 /**
  * Resolve a file URL. rohy serves /uploads/* and /api paths from the same
- * origin, so relative paths pass through unchanged (identity passthrough).
+ * origin, but under the install's base path: a stored `/uploads/x.pdf` is
+ * `/rohy/uploads/x.pdf` on an install served at '/rohy/'. Other addresses
+ * (relative, or on another host) pass through unchanged.
  */
-export const resolveFileUrl = (fileUrl) => fileUrl || '';
+export const resolveFileUrl = (fileUrl) => {
+  if (!fileUrl) return '';
+  return /^\/(uploads|api)\//.test(fileUrl) ? baseUrl(fileUrl) : fileUrl;
+};
 
 function withErrorShape(promise) {
   return promise.catch((err) => {

@@ -15,8 +15,11 @@
 // WASM file loads same-origin, which is what keeps air-gapped deploys
 // working (the bundles arrive via OyonR/scripts/download-models.sh).
 import { OYON_WINDOW_BATCH_SCHEMA_VERSION } from 'oyon/version';
+import { baseUrl } from '../../config/api';
 
-export const OYON_ASSET_BASE = '/oyon/standalone';
+// Through baseUrl(): the element loads its models and WASM from here, and an
+// install served at /rohy/ has them at /rohy/oyon/standalone.
+export const OYON_ASSET_BASE = baseUrl('/oyon/standalone');
 
 // Map the tenant runtime config (server field names, see DEFAULT_RUNTIME in
 // server/routes/oyon-routes.js) onto the element's EditableSettings keys
