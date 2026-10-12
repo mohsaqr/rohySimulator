@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.44] — 2026-10-12
+
+- **Slides and specimen photos load on an install served under a base path.** A plugin's `remote:`
+  references (slides, gross photographs, PACS series) are turned into addresses the browser loads
+  directly — tile sources and `<img src>` — and they were built as `/api/plugins/…`, ignoring the base
+  path. On an install served at `/rohy/` every slide failed ("HTTP 404 attempting to load TileSource").
+  They are now built with the base path, as every API call already was; an address saved without it
+  still reads back. Regression-lock test. An install served at the root is unchanged.
+
 ## [3.0.0-rc.43] — 2026-10-12
 
 - **The active-treatments panel names the drugs.** Under the monitor it showed only "N Active Treatments"
