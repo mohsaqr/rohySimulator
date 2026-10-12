@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.41] — 2026-10-12
+
+- **Test: an invite's audit row is awaited, not raced.** `registration-invites` › "never writes the token
+  to the audit log" read the newest audit row right after minting, but the audit write lands after the
+  response. Under a loaded full run it failed (no row yet), and otherwise it could pass on an older
+  invite's row without checking this token. It now waits for this invite's own row. Found by the
+  pre-release battery: full vitest twice (with coverage: 472/472 files, 6104 tests), Playwright 195/195
+  plus monkey, schemathesis as educator and student (no server errors), all 18 audit scripts, and the
+  deployed smoke on vprohy (rc.40) and production (rc.37).
+
 ## [3.0.0-rc.40] — 2026-10-11
 
 - **A case package carries the case's course.** A case linked to a course used to arrive without it:
