@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.49] — 2026-10-12
+
+- **The monitor's numbers move again while a scenario runs** (MONITOR.VITALS.01). The scenario engine
+  ticks every second and handed React a new parameters object each tick, even on a plateau where no
+  value moved. That re-ran the monitor's sync effect, which resets the display to the un-jittered
+  values, so the 2-second bedside jitter showed for under 100 ms in every 2 s and the digits looked
+  frozen. Found by the gate e2e under repetition (it failed 2 runs in 8). A tick that changes nothing
+  now keeps the same object (`mergeIfChanged`), so React skips it.
+
 ## [3.0.0-rc.48] — 2026-10-12
 
 Rohy under load. A load test of rc.47 (5–30 learners working through a case at once) crashed the server

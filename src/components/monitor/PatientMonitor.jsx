@@ -32,7 +32,7 @@ import {
    pausedMs,
    togglePauseAnchor,
 } from '../../utils/sessionAnchors';
-import { withTreatmentEffects } from './treatmentVitals.js';
+import { mergeIfChanged, withTreatmentEffects } from './treatmentVitals.js';
 import { RHYTHM_IDS, RHYTHM_LABEL_KEYS, resolveRhythm } from '../../services/rhythms';
 // Waveform physiology lives in one module, shared with the 3D room.
 import { GenerateECGRaw } from '../../services/ecgWaveform';
@@ -1021,7 +1021,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                });
 
                if (Object.keys(interpolatedParams).length > 0) {
-                  setParams(prev => ({ ...prev, ...interpolatedParams }));
+                  setParams(prev => mergeIfChanged(prev, interpolatedParams));
                }
 
                // Interpolate Conditions (Float values like stElev)
@@ -1050,7 +1050,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                }
 
                if (Object.keys(interpolatedConds).length > 0) {
-                  setConditions(prev => ({ ...prev, ...interpolatedConds }));
+                  setConditions(prev => mergeIfChanged(prev, interpolatedConds));
                }
             } else if (toFrame && nextTime >= toFrame.time) {
                // We are sitting at or past the last frame — ensure final state
