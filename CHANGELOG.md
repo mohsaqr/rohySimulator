@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.43] — 2026-10-12
+
+- **The active-treatments panel names the drugs.** Under the monitor it showed only "N Active Treatments"
+  and the summed change to the vital signs, so a learner could not tell which drug was moving the
+  monitor. It now lists each drug acting on the patient with its own effect ("Atropine HR +12"), and
+  the sum underneath when more than one is active. The per-drug figures were already computed by the
+  effects engine; the panel read only the total.
+- **CASE.TREAT.01 is automated**: a browser test orders atropine IV, gives it, and checks that the order
+  leaves "Ordered", that the panel lists atropine with a heart-rate rise, and that the monitor's heart
+  rate rises past where it started. The case's step names the button as it reads, **Give**. The 3.0.0
+  gate now needs a human pass on 8 core cases.
+
 ## [3.0.0-rc.42] — 2026-10-12
 
 - **26 core cases are automated end to end.** The 3.0.0 gate asked a person to pass 35 core cases by hand.

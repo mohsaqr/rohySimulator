@@ -16,6 +16,7 @@ const CONTRAINDICATION = 'Metoprolol is contraindicated here: a beta-blocker wou
 let theCase;      // the seeded default case, with its patient and discussant
 let rubricCase;   // a case with an expected and a contraindicated treatment
 let bareCase;     // a case with no discussant
+let steadyCase;   // steady vitals and no scenario, so a drug's effect is the only change
 
 /** A short silent WAV, so speech resolves at once. */
 function silentWav(ms = 200) {
@@ -79,6 +80,10 @@ test.beforeAll(async ({ baseURL }) => {
     }
 
     bareCase = await createAssignedCase(baseURL, { name: `${RUN_TAG} no discussant`, config: {} });
+    steadyCase = await createAssignedCase(baseURL, { name: `${RUN_TAG} steady`, config: {
+        patient_name: 'Steady Patient', demographics: { age: 60, gender: 'Male' },
+        initialVitals: { hr: 70, spo2: 98, rr: 14, bpSys: 125, bpDia: 80, rhythm: 'NSR', conditions: { pvc: false, stElev: 0 } },
+    } });
 });
 
 test.afterAll(disposeLearnerApi);
@@ -232,4 +237,42 @@ test.describe('ordering a treatment', () => {
         await expect(page.getByRole('button', { name: /Give/ })).toBeVisible();
         await expect(page.getByText('Ordered', { exact: true })).toBeVisible();
     });
+
+    // CASE.TREAT.01
+    test('an administered drug is listed with its effect, and the monitor moves the way the panel says', async ({ page, baseURL }) => {
+        test.setTimeout(300_000);
+        await stubModel(page, () => ({ reply: 'unused' }));
+        await enterLiveCase(page, baseURL, `${RUN_TAG}-give`, steadyCase);
+        const hr = async () => Number(await page.getByTestId('vital-hr').getAttribute('data-value'));
+        // The heart rate before, as a band: it drifts a little by itself.
+        const before = [];
+        for (let i = 0; i < 5; i++) { before.push(await hr()); await page.waitForTimeout(500); }
+        const baseline = Math.max(...before);
+
+        await page.getByRole('button', { name: 'Treatments', exact: true }).first().click();
+        await page.getByLabel('Search treatments').fill('Atropine');
+        await page.getByRole('button', { name: /Atropine/ }).first().click();
+        await page.getByLabel('Dose', { exact: true }).fill('0.5');
+        await page.getByLabel('Route').selectOption('IV');
+        await page.getByRole('button', { name: /^Order Atropine/ }).click();
+        await page.getByRole('button', { name: /Give/ }).first().click();
+
+        // The order moves to an administered state.
+        await expect(page.getByText('Ordered', { exact: true }), 'no longer merely ordered').toHaveCount(0, { timeout: 15_000 });
+        await expect(page.getByText(/^(In progress|Administered|Completed)$/).first()).toBeVisible();
+        await page.keyboard.press('Escape');
+
+        // The panel lists the drug, with its effect on the heart rate.
+        const drug = page.getByTestId('active-treatment').filter({ hasText: 'Atropine' }).first();
+        await expect(drug, 'the active-treatments panel lists the drug').toBeVisible({ timeout: 30_000 });
+        const hrEffect = drug.locator('[data-testid="effect-delta"][data-vital="HR"]');
+        await expect(hrEffect, 'with its effect on the heart rate').toBeVisible({ timeout: 150_000 });
+        const claimed = Number(await hrEffect.getAttribute('data-value'));
+        expect(claimed, 'atropine speeds the heart').toBeGreaterThan(0);
+
+        // And the monitor moves in the direction the panel claims.
+        await expect.poll(hr, { message: `heart rate from ${baseline} up with atropine`, timeout: 150_000, intervals: [2_000] })
+            .toBeGreaterThan(baseline + 5);
+    });
 });
+

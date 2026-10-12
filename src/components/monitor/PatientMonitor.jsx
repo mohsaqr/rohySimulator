@@ -2689,39 +2689,67 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
 
 // The active-treatment effect summary (PRV-36: rendered in the waveform
 // column at lg+, in the scrollable vitals column below it).
+// One signed vital-sign change ("HR +25"), coloured by direction; nothing
+// for a change of zero.
+function EffectDelta({ label, value, unit = '' }) {
+   if (!value) return null;
+   return (
+      <span
+         data-testid="effect-delta"
+         data-vital={label}
+         data-value={value}
+         className={value > 0 ? 'text-green-400' : 'text-red-400'}
+      >
+         {label} {value > 0 ? '+' : ''}{value}{unit}
+      </span>
+   );
+}
+
+function EffectDeltas({ effects }) {
+   return (
+      <>
+         <EffectDelta label="HR" value={effects.hr} />
+         <EffectDelta label="BP" value={effects.bp_sys} />
+         <EffectDelta label="SpO2" value={effects.spo2} unit="%" />
+         <EffectDelta label="RR" value={effects.rr} />
+      </>
+   );
+}
+
+// The active-treatments panel: each drug acting on the patient now, with
+// what it is doing to the vital signs, and their sum. It used to show only
+// the count and the sum, so a learner could not tell which drug moved the
+// monitor (CASE.TREAT.01).
 function TreatmentEffectsSummary({ effects }) {
    const { t } = useTranslation('monitor');
    if (!effects?.count) return null;
    return (
-      <div className="p-3 bg-pink-900/20 border-t border-pink-800/50">
+      <div data-testid="active-treatments" className="p-3 bg-pink-900/20 border-t border-pink-800/50">
          <div className="flex items-center gap-2 mb-2">
             <Pill className="w-4 h-4 text-pink-400" />
             <span className="text-xs font-bold text-pink-300">
                {t('active_treatments', { count: effects.count })}
             </span>
          </div>
-         <div className="grid grid-cols-3 gap-1 text-xs">
-            {effects.aggregate.hr !== 0 && (
-               <div className={`${effects.aggregate.hr > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  HR {effects.aggregate.hr > 0 ? '+' : ''}{effects.aggregate.hr}
-               </div>
-            )}
-            {effects.aggregate.bp_sys !== 0 && (
-               <div className={`${effects.aggregate.bp_sys > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  BP {effects.aggregate.bp_sys > 0 ? '+' : ''}{effects.aggregate.bp_sys}
-               </div>
-            )}
-            {effects.aggregate.spo2 !== 0 && (
-               <div className={`${effects.aggregate.spo2 > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  SpO2 {effects.aggregate.spo2 > 0 ? '+' : ''}{effects.aggregate.spo2}%
-               </div>
-            )}
-            {effects.aggregate.rr !== 0 && (
-               <div className={`${effects.aggregate.rr > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  RR {effects.aggregate.rr > 0 ? '+' : ''}{effects.aggregate.rr}
-               </div>
-            )}
-         </div>
+         <ul className="space-y-1 text-xs">
+            {/* useTreatmentEffects exposes the per-drug list as `effects`. */}
+            {(effects.effects || []).map((tr) => (
+               <li
+                  key={tr.id ?? tr.treatment_order_id ?? tr.treatment_name}
+                  data-testid="active-treatment"
+                  data-name={tr.treatment_name}
+                  className="flex flex-wrap items-baseline gap-x-2"
+               >
+                  <span className="font-semibold text-pink-100">{tr.treatment_name}</span>
+                  <EffectDeltas effects={tr.effects || {}} />
+               </li>
+            ))}
+         </ul>
+         {effects.count > 1 && (
+            <div data-testid="active-treatments-total" className="mt-2 pt-2 border-t border-pink-800/40 flex flex-wrap gap-x-2 text-xs">
+               <EffectDeltas effects={effects.aggregate} />
+            </div>
+         )}
       </div>
    );
 }
