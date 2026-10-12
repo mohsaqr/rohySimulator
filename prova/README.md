@@ -100,11 +100,11 @@ Current shape:
 | | |
 |---|---|
 | Features | 59 (25 core, 29 extended, 5 optional) |
-| Cases | 121 (43 manual, 10 both, 68 automated) |
-| Cases needing a human pass | 53 |
-| …of those, gate-blocking (core) | 9 |
-| Coverage patterns | 104, all verified to match a real test |
-| Automated checks mapped to a case | 182 of 219 |
+| Cases | 121 (42 manual, 10 both, 69 automated) |
+| Cases needing a human pass | 52 |
+| …of those, gate-blocking (core) | 8 |
+| Coverage patterns | 105, all verified to match a real test |
+| Automated checks mapped to a case | 183 of 220 |
 
 ## Running the battery
 

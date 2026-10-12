@@ -361,18 +361,19 @@
   cases:
     - id: CASE.TREAT.01
       title: An administered drug visibly changes the patient
-      kind: manual
+      kind: automated
       platforms: [any]
       severity_if_failed: blocker
       steps: |-
         1. Open the orders drawer from the patient room and choose **Treatments**.
         2. Order a medication with a dose and an IV route.
-        3. Press **Administer** on the resulting order.
+        3. Press **Give** on the resulting order.
         4. Watch the vitals column for the next two to three minutes.
       expected: |-
         The order moves to an administered state, an "Active treatments" panel appears listing the
         drug with its effect on the vital signs, and the numbers on the monitor move in the direction
         that panel claims.
+      covers: ["rohy:chromium::gate-debrief.spec.js › ordering a treatment › an administered drug is listed with its effect, and the monitor moves the way the panel says"]
     - id: CASE.TREAT.02
       title: A contraindicated order is challenged rather than accepted silently
       kind: automated
