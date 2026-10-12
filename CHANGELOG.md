@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.50] — 2026-10-12
+
+- **A shorter top-bar menu.** The eight languages fold into one "Language" row showing the current one,
+  and Emotion Analytics, Oyon Dashboard, Case Analytics and Platform setup fold into "Analytics & admin"
+  (educators and admins only). Both start closed each time the menu opens; every item keeps its test id
+  and visibility rule. New key `app.menu_tools` in all languages.
+
 ## [3.0.0-rc.49] — 2026-10-12
 
 - **The monitor's numbers move again while a scenario runs** (MONITOR.VITALS.01). The scenario engine

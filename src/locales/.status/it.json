@@ -209,6 +209,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "app.menu_tools": {
+    "src": "1f754fd41a6f",
+    "tgt": "34e5fd835daf",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "app.multi_tab_heads_up": {
     "src": "edf0c1a56db5",
     "tgt": "7f6dbf82bbfb",

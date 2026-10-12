@@ -6,6 +6,7 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import TopBarControls from './TopBarControls';
+import { LANGUAGES } from '../../i18n/languages';
 
 // i18n is stubbed to echo keys so assertions don't depend on translations.
 vi.mock('react-i18next', () => ({
@@ -26,6 +27,9 @@ function setup(props = {}) {
 }
 
 const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'settings_menu_aria' }));
+// The two folds inside the panel (language list, educator/admin tools).
+const openLanguages = () => fireEvent.click(screen.getByTestId('menu-language'));
+const openTools = () => fireEvent.click(screen.getByTestId('menu-tools'));
 
 describe('TopBarControls (consolidated menu)', () => {
     it('exposes a single menu trigger, not two', () => {
@@ -57,8 +61,10 @@ describe('TopBarControls (consolidated menu)', () => {
         expect(within(menu).getByText('menu_cases')).toBeInTheDocument();
         expect(within(menu).getByText('open_settings')).toBeInTheDocument();
         expect(within(menu).getByText('my_profile')).toBeInTheDocument();
-        // language section: label + one radio per language, current one checked
+        // language: one row naming the current language; unfolded, one radio
+        // per language with the current one checked
         expect(within(menu).getByText('menu_language')).toBeInTheDocument();
+        openLanguages();
         const langItems = within(menu).getAllByRole('menuitemradio');
         expect(langItems.length).toBeGreaterThanOrEqual(4);
         expect(langItems.some((el) => el.getAttribute('aria-checked') === 'true')).toBe(true);
@@ -74,6 +80,7 @@ describe('TopBarControls (consolidated menu)', () => {
     it('switches language from within the same menu', () => {
         const h = setup();
         openMenu();
+        openLanguages();
         // pick a non-current language (German) by its native label
         fireEvent.click(screen.getByText(/Deutsch/));
         expect(h.onSetLanguage).toHaveBeenCalledWith('de');
@@ -92,6 +99,7 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
     it('renders the Oyon dashboard entry alongside Emotion Analytics for educator+', () => {
         setup({ canSeeOyonAnalytics: true });
         openMenu();
+        openTools();
         const menu = screen.getByRole('menu');
         // Regression lock: the pre-existing entry must survive the addition.
         expect(within(menu).getByText('emotion_analytics')).toBeInTheDocument();
@@ -103,6 +111,7 @@ describe('TopBarControls — named Oyon dashboard entry', () => {
         const onOpenEmotionAnalytics = vi.fn();
         setup({ canSeeOyonAnalytics: true, onOpenOyonDashboard, onOpenEmotionAnalytics });
         openMenu();
+        openTools();
         fireEvent.click(screen.getByText('oyon:dashboard'));
         expect(onOpenOyonDashboard).toHaveBeenCalledTimes(1);
         expect(onOpenEmotionAnalytics).not.toHaveBeenCalled();
@@ -208,5 +217,141 @@ describe('TopBarControls — Report a problem', () => {
         expect(screen.queryByTestId('report-news-dot')).toBeNull();
         openMenu();
         expect(screen.queryByTestId('my-reports-new')).toBeNull();
+    });
+});
+
+// --- Compact menu (2026-10-12): the panel ran off a laptop screen with all
+// eight languages and the four educator/admin tools listed inline. Each now
+// sits behind ONE row that unfolds in place.
+
+describe('TopBarControls — language row', () => {
+    it('names the current language and keeps the list folded until asked', () => {
+        setup({ uiLanguage: 'de' });
+        openMenu();
+        const row = screen.getByTestId('menu-language');
+        expect(row).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByTestId('menu-language-current').textContent).toBe('🇩🇪 Deutsch');
+        expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    });
+
+    it('unfolds every language in place, the current one checked, and folds back', () => {
+        setup({ uiLanguage: 'fi' });
+        openMenu();
+        openLanguages();
+        const row = screen.getByTestId('menu-language');
+        expect(row).toHaveAttribute('aria-expanded', 'true');
+        const group = document.getElementById(row.getAttribute('aria-controls'));
+        expect(group).not.toBeNull();
+        const radios = within(group).getAllByRole('menuitemradio');
+        expect(radios).toHaveLength(Object.keys(LANGUAGES).length);
+        expect(radios.filter((r) => r.getAttribute('aria-checked') === 'true').map((r) => r.textContent))
+            .toEqual([expect.stringContaining('Suomi')]);
+        // the menu itself stays open while the fold opens
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        openLanguages();
+        expect(row).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    });
+
+    it('choosing a language calls the handler with its code and closes the menu', () => {
+        const h = setup();
+        openMenu();
+        openLanguages();
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /Svenska/ }));
+        expect(h.onSetLanguage).toHaveBeenCalledExactlyOnceWith('sv');
+        expect(screen.queryByRole('menu')).toBeNull();
+    });
+
+    it('falls back to English for an unknown language code', () => {
+        setup({ uiLanguage: 'xx' });
+        openMenu();
+        expect(screen.getByTestId('menu-language-current').textContent).toBe('🇬🇧 English');
+    });
+
+    it('starts folded again every time the menu opens', () => {
+        setup();
+        openMenu();
+        openLanguages();
+        expect(screen.getAllByRole('menuitemradio').length).toBeGreaterThan(0);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        openMenu();
+        expect(screen.getByTestId('menu-language')).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    });
+});
+
+describe('TopBarControls — educator/admin tools fold', () => {
+    const TOOL_IDS = ['menu-emotion-analytics', 'menu-oyon-dashboard', 'menu-case-analytics', 'menu-setup'];
+
+    it('is folded by default and unfolds the tools in place, each with its test id', () => {
+        const onOpenSetup = vi.fn();
+        const onOpenCaseAnalytics = vi.fn();
+        setup({ isAdminUser: true, canSeeOyonAnalytics: true, onOpenSetup, onOpenCaseAnalytics });
+        openMenu();
+        const row = screen.getByTestId('menu-tools');
+        expect(row).toHaveAttribute('aria-expanded', 'false');
+        expect(row.textContent).toBe('menu_tools');
+        TOOL_IDS.forEach((id) => expect(screen.queryByTestId(id)).toBeNull());
+
+        openTools();
+        expect(row).toHaveAttribute('aria-expanded', 'true');
+        const group = document.getElementById(row.getAttribute('aria-controls'));
+        TOOL_IDS.forEach((id) => expect(within(group).getByTestId(id)).toHaveAttribute('role', 'menuitem'));
+
+        fireEvent.click(screen.getByTestId('menu-case-analytics'));
+        expect(onOpenCaseAnalytics).toHaveBeenCalledOnce();
+        expect(screen.queryByRole('menu')).toBeNull();
+    });
+
+    it('keeps the visibility rules: educator sees the Oyon pair, not the admin pair', () => {
+        setup({ isAdminUser: false, canSeeOyonAnalytics: true, onOpenSetup: vi.fn() });
+        openMenu();
+        openTools();
+        expect(screen.getByTestId('menu-emotion-analytics')).toBeInTheDocument();
+        expect(screen.getByTestId('menu-oyon-dashboard')).toBeInTheDocument();
+        expect(screen.queryByTestId('menu-case-analytics')).toBeNull();
+        expect(screen.queryByTestId('menu-setup')).toBeNull();
+    });
+
+    it('admin without Oyon access sees the admin pair only', () => {
+        setup({ isAdminUser: true, canSeeOyonAnalytics: false, onOpenSetup: vi.fn() });
+        openMenu();
+        openTools();
+        expect(screen.getByTestId('menu-case-analytics')).toBeInTheDocument();
+        expect(screen.getByTestId('menu-setup')).toBeInTheDocument();
+        expect(screen.queryByTestId('menu-emotion-analytics')).toBeNull();
+    });
+
+    it('is absent altogether for a student', () => {
+        setup();
+        openMenu();
+        expect(screen.queryByTestId('menu-tools')).toBeNull();
+    });
+
+    it('Escape still closes the whole menu from inside an open fold and returns focus', () => {
+        setup({ isAdminUser: true });
+        const trigger = screen.getByRole('button', { name: 'settings_menu_aria' });
+        fireEvent.click(trigger);
+        openTools();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(screen.queryByRole('menu')).toBeNull();
+        expect(document.activeElement).toBe(trigger);
+    });
+});
+
+describe('TopBarControls — every item keeps its test id', () => {
+    it('folded: everyday items and both fold rows; unfolded: the tools too', () => {
+        setup({
+            isAdminUser: true, canSeeOyonAnalytics: true, onOpenLessons: vi.fn(), onOpenSetup: vi.fn(),
+            reportProblem: { available: true, news: 0, onReport: vi.fn(), onMine: vi.fn() },
+        });
+        openMenu();
+        const menu = screen.getByRole('menu');
+        ['menu-cases', 'menu-profile', 'menu-settings', 'menu-help', 'menu-report-problem', 'menu-my-reports',
+            'menu-lessons', 'menu-language', 'menu-tools', 'logout']
+            .forEach((id) => expect(within(menu).getByTestId(id)).toBeInTheDocument());
+        openTools();
+        ['menu-emotion-analytics', 'menu-oyon-dashboard', 'menu-case-analytics', 'menu-setup']
+            .forEach((id) => expect(within(menu).getByTestId(id)).toBeInTheDocument());
     });
 });
