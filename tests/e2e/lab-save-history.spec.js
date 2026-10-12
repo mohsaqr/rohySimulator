@@ -43,8 +43,10 @@ test.describe('case lab saves preserve learner history', () => {
                 }));
                 sessions.push(session.id);
                 const catalog = await json(await learner.get(`/api/sessions/${session.id}/available-labs`));
-                const configured = catalog.labs.find(lab => lab.test_name === authoredLab.test_name && typeof lab.id === 'number');
-                const unconfigured = catalog.labs.find(lab => lab.source === 'default' && String(lab.id).startsWith('default_'));
+                // A learner's catalogue does not say which tests the author
+                // configured (one id shape, no source): pick them by name.
+                const configured = catalog.labs.find(lab => lab.test_name === authoredLab.test_name);
+                const unconfigured = catalog.labs.find(lab => lab.test_name !== authoredLab.test_name);
                 expect(configured, 'the authored lab exists').toBeTruthy();
                 expect(unconfigured, 'a catalogue lab absent from the author list exists').toBeTruthy();
                 const ordered = await json(await learner.post(`/api/sessions/${session.id}/order-labs`, {

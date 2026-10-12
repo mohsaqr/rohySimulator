@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.53] — 2026-10-12
+
+- **Learners can no longer read the answer key from the order API.** The screen never showed it, but the
+  responses did, readable in the browser's developer tools:
+  - The lab catalogue sent every configured lab's value and abnormal flag before anything was ordered.
+    A `source` field and the id prefix also marked which tests the author had set up.
+  - The lab and radiology worklists sent results while the turnaround was still running.
+  - Radiology reports said whether the author wrote them or the catalogue's normal study did.
+
+  A learner now gets test names only, with one id shape for every test. Results arrive when they are due,
+  and reports carry no provenance flags. Educators and admins keep the full payloads.
+- Ordering a lab-database test again (in any session) reuses the case's row instead of adding a new one.
+
 ## [3.0.0-rc.52] — 2026-10-12
 
 - Tests only: two server test files did not wait for the database to finish booting, so a fast run could
