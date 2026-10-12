@@ -44,6 +44,8 @@ services:
         # Set INCLUDE_PIPER=1 if you want Piper TTS bundled. Adds ~150 MB
         # to the image. Kokoro/Google/OpenAI work without it.
         INCLUDE_PIPER: "${INCLUDE_PIPER:-0}"
+        # libvips for tiling new pathology slides; 0 leaves it out.
+        INCLUDE_VIPS: "${INCLUDE_VIPS:-1}"
         # Pin a dynajs commit for reproducible builds. Default is main.
         DYNAJS_GIT_REF: "${DYNAJS_GIT_REF:-main}"
     image: rohy:latest

@@ -27,8 +27,8 @@ dismiss the banner once you have closed the extra tab.
 
 ### How do I switch to a different case?
 
-Open **Settings** (top-left of the patient screen) → **Open Settings** →
-**Cases** tab, and open the case you want. Loading a new case ends the
+Open the menu at the top of the screen (the gear icon with your language's
+flag) → **Cases**, and open the case you want. Loading a new case ends the
 current session and clears its chat. Finish or **End & Debrief** first if you
 want it kept cleanly.
 

@@ -140,10 +140,20 @@ Reload after edits: `sudo nginx -t && sudo systemctl reload nginx`.
 
 ### Caddy
 
-`deploy/docker/compose.yml` ships with Caddy. Auto-TLS via Let's
-Encrypt requires no cert renewal cron. The Caddyfile template:
+`deploy/docker/compose.yml` ships with Caddy and `deploy/docker/Caddyfile`.
+The site block answers `{$ROHY_HOSTNAME:localhost}` and uses `tls internal`
+(Caddy's own certificate authority, which browsers warn about until you trust
+it). To use Let's Encrypt, follow the instructions at the foot of the
+Caddyfile. The routing it carries:
 
+```text
+handle_path /rohy/* { reverse_proxy rohy:4000 }   # strips /rohy
+handle /            { redir /rohy/ 302 }
 ```
+
+plus explicit handlers for `/rohy/api/tts*` (streamed audio, not buffered),
+the health probes, and the Oyon paths `/oyon/*`, `/standalone/*` and
+`/api/addons/oyon*`.
 {$CADDY_DOMAIN} {
     reverse_proxy rohy:4000
     encode gzip
@@ -156,11 +166,19 @@ For a non-Docker Caddy, the principle is identical: `reverse_proxy
 
 ### Path-prefix vs root
 
-`bootstrap.sh --frontend-url=https://your-host/rohy` builds the SPA
-with `--base=/rohy/`. For root-mount (`https://your-host/`), pass
-`--frontend-url=https://your-host` (no trailing path) and the build
-runs with `--base=/`. **Do not mix**: a SPA built with `/rohy/` base
-served at `/` will 404 every asset.
+`npm run build` builds the app for `/rohy/` (`vite build --base=/rohy/`).
+`bootstrap.sh`, `local-install.sh`, `rohy-update` and the Docker image all run
+it, so every supported install is served at `https://your-host/rohy/`, behind
+a proxy that strips `/rohy` before the request reaches Rohy: the nginx
+`location /rohy/` block above, or Caddy's `handle_path /rohy/*`. Every address
+the app loads (API calls, uploads, slides, Oyon, lessons) carries that prefix.
+`--frontend-url` sets only `FRONTEND_URL`, the allowed origin; it does not
+change the build.
+
+To serve at the root instead, build with `npx vite build --base=/` and copy
+`dist/` to `frontend/`. `rohy-update` runs `npm run build` again on every
+update, so a root-served install must be rebuilt by hand after each one.
+**Do not mix**: an app built for `/rohy/` and served at `/` 404s every asset.
 
 ---
 
@@ -196,7 +214,9 @@ against a self-signed host, pass `ROHY_INSECURE=1` to `tech-test.sh`.
 
 ## Environment reference
 
-Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose):
+Set in `/etc/rohy/env` (systemd) or `deploy/docker/.env` (compose). Compose
+passes the container only the variables listed under `environment:` in
+`deploy/docker/compose.yml`; add any other variable there:
 
 ### Required
 

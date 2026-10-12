@@ -94,10 +94,12 @@ when:
   slide library (`ROHY_PLUGIN_LIBRARY_DIRS`, see
   [Pathology slides](/admin/pathology-slides#what-an-operator-provisions)).
   A pathology case without its slides is not the case that was exported, so
-  nothing is created. Set the library, restart Rohy and import the package
-  again.
+  nothing is created (`case_package_no_library`). Set the library, restart
+  Rohy and import the package again.
 - Rohy cannot write to that slide library: the directory is missing and cannot
-  be created, or belongs to another user. The message names the directory.
+  be created, or belongs to another user (`case_package_library_unwritable`).
+  The message names the directory. `GET /api/health/plugins` shows the same as
+  `"writable": false`.
 - the course has a lesson whose link is not a file of the package or a web
   address (`https://…`)
 

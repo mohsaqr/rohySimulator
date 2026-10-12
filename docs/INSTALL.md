@@ -16,7 +16,7 @@ hardening (TLS, reverse proxy, env, security checklist) and
 | **Local dev** (your laptop) | [§ Local development](#local-development) | `npm run dev`: Vite + Express, hot reload, default seeded users |
 | **Single machine** (lab / classroom) | [§ Local install](#single-machine-local-install) | `bash deploy/local-install.sh`: runs as your user, no root needed |
 | **Linux + systemd** (multi-user prod) | [§ Linux + systemd](#linux--systemd-bootstrap) | `sudo deploy/bootstrap.sh`: systemd unit, nginx vhost, env file |
-| **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build`: Caddy auto-TLS, persistent volumes |
+| **Docker (build from source)** | [§ Docker](#docker) | `docker compose -f deploy/docker/compose.yml up -d --build`: Caddy TLS, named volumes |
 | **Air-gapped** (no internet on target) | [§ Air-gap](#air-gapped-target) | One signed tarball, sha256-verified, platform-stamped |
 
 After any path → [§ Imaging content](#imaging-content),
@@ -104,7 +104,7 @@ Each has a `.sha256` sidecar for integrity verification.
 git clone https://github.com/mohsaqr/rohySimulator.git rohy   # for compose + Caddyfile
 cd rohy
 cp deploy/docker/.env.example deploy/docker/.env
-# edit deploy/docker/.env — at minimum CADDY_DOMAIN and JWT_SECRET
+# edit deploy/docker/.env — at minimum ROHY_HOSTNAME (JWT_SECRET is generated on first boot if unset)
 
 # Pull the published image instead of building
 sed -i.bak 's|build:.*|image: ghcr.io/mohsaqr/rohy:latest|' deploy/docker/compose.yml
@@ -317,13 +317,15 @@ sudo journalctl -u rohy -f             # live logs
 ## Docker
 
 For ad-hoc deploys, ephemeral test environments, or operators who
-prefer to avoid systemd. Caddy reverse-proxies with auto-TLS via Let's
-Encrypt. Persistent volumes hold the SQLite DB and Oyon model bundles.
+prefer to avoid systemd. Caddy reverse-proxies; the shipped Caddyfile uses Caddy's internal
+certificate authority, and its foot explains the switch to Let's Encrypt.
+Named volumes hold the database, the speech and Oyon models, uploads
+and the pathology slide library.
 
 ```bash
 cd deploy/docker
 cp .env.example .env
-# edit .env — at minimum CADDY_DOMAIN and JWT_SECRET
+# edit .env — at minimum ROHY_HOSTNAME (JWT_SECRET is generated on first boot if unset)
 docker compose up -d --build
 ```
 
@@ -336,9 +338,22 @@ Persistent volumes (named volumes, prefixed with the Compose project name):
 - `rohy-hf-cache` → `/var/cache/rohy-hf`: downloaded speech and Oyon models
 - `rohy-uploads` → `/opt/rohy/public/uploads`: uploaded images
 - `rohy-plugin-library` → `/var/lib/rohy-plugin-library`: imported pathology
-  slides. The image sets `ROHY_PLUGIN_LIBRARY_DIRS` to it, so slide imports and
-  case packages with slides work with no further setup. Plan its size: a slide
-  package is gigabytes.
+  slides. The image sets `ROHY_PLUGIN_LIBRARY_DIRS` to it, so case packages
+  with slides import with no further setup. Importing a slide from a link
+  uses the image's libvips (left out when built with `INCLUDE_VIPS=0`) and
+  also needs an import allowlist; see
+  [Pathology slides](admin/pathology-slides.md#what-an-operator-provisions).
+  Plan the volume's size: a slide package is gigabytes.
+
+Configuration reaches the container through Compose only. `server/.env` is
+not copied into the image; the container receives the variables listed under
+`environment:` in `compose.yml`, filled from `deploy/docker/.env`. To pass
+another variable, add it to that list. Without `JWT_SECRET`, the entrypoint
+generates one on first boot and keeps it on the `rohy-db` volume.
+
+The image is built with `npm run build`, so the app is served under `/rohy/`:
+Caddy strips the prefix before the request reaches Rohy and redirects `/` to
+`/rohy/`. Open `https://<ROHY_HOSTNAME>/rohy/`.
 
 `OYON_ENABLED=1` is the compose default. Disable with `OYON_ENABLED=0`
 in `.env`.
