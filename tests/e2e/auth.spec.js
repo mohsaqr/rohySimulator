@@ -207,7 +207,10 @@ test.describe('auth', () => {
             .toBeVisible({ timeout: 15_000 });
 
         // Admin-only chrome: "Case Analytics" is gated behind isAdminUser.
+        // Since 2026-10-12 it sits in the folded "Analytics & admin" group,
+        // which starts collapsed — unfold it first.
         const menu = await openAppMenu(page);
+        await menu.getByTestId('menu-tools').click();
         await expect(menu.getByRole('menuitem', { name: ADMIN_ONLY_MENU_ITEM })).toBeVisible();
 
         // STALENESS FIX 2026-08-30: this used to assert
@@ -240,8 +243,11 @@ test.describe('auth', () => {
         await expect(page.getByRole('button', { name: APP_MENU_TRIGGER }).first())
             .toBeVisible({ timeout: 15_000 });
 
-        // Admin-only menu entry must be absent for a student.
+        // Admin-only menu entry must be absent for a student — and so must
+        // the folded tools group it lives in, so the absence is not just
+        // "still folded".
         const menu = await openAppMenu(page);
+        await expect(menu.getByTestId('menu-tools')).toHaveCount(0);
         await expect(menu.getByRole('menuitem', { name: ADMIN_ONLY_MENU_ITEM })).toHaveCount(0);
     });
 

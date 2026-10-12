@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye, Bug, List } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye, Bug, List, Globe, BarChart3 } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
 // The single persistent top-bar menu: ONE trigger (gear + current-language
@@ -25,6 +25,12 @@ import { LANGUAGES } from '../../i18n/languages';
 // z-indexed inside the header — so a panel rendered in the header flow gets
 // hidden behind the glass. Portalling to <body> with a high z-index escapes
 // every local stacking context and keeps the menu on top everywhere.
+//
+// Two sections fold in place (disclosures, aria-expanded on their row): the
+// language list, whose row shows the current language, and the educator/admin
+// tools. Both start collapsed every time the menu opens. With all eight
+// languages and four tools listed inline the panel ran off a laptop screen
+// (2026-10-12); folded, it is the everyday items plus two rows.
 
 const PANEL_MIN_WIDTH = 240;
 
@@ -63,6 +69,8 @@ export default function TopBarControls({
    const { t } = useTranslation('app');
    const [showMenu, setShowMenu] = useState(false);
    const [menuPos, setMenuPos] = useState(null);
+   const [languagesOpen, setLanguagesOpen] = useState(false);
+   const [toolsOpen, setToolsOpen] = useState(false);
    const menuBtnRef = useRef(null);
 
    const closeAll = useCallback(() => setShowMenu(false), []);
@@ -90,7 +98,12 @@ export default function TopBarControls({
 
    const toggleMenu = () => {
       setShowMenu((v) => {
-         if (!v && menuBtnRef.current) setMenuPos(anchorTo(menuBtnRef.current));
+         if (!v) {
+            // Every open starts folded: the menu's height is the point.
+            setLanguagesOpen(false);
+            setToolsOpen(false);
+            if (menuBtnRef.current) setMenuPos(anchorTo(menuBtnRef.current));
+         }
          return !v;
       });
    };
@@ -98,7 +111,9 @@ export default function TopBarControls({
    const langLabel = (lang) =>
       lang.native === lang.name ? lang.native : `${lang.native} (${lang.name})`;
 
-   const currentFlag = (LANGUAGES[uiLanguage] || LANGUAGES.en).flag;
+   const currentLanguage = LANGUAGES[uiLanguage] || LANGUAGES.en;
+   const currentFlag = currentLanguage.flag;
+   const showTools = canSeeOyonAnalytics || isAdminUser;
 
    // Portalled panel: an invisible full-screen backdrop for click-away plus the
    // fixed-position menu, both above all in-page stacking contexts.
@@ -113,7 +128,12 @@ export default function TopBarControls({
                id={id}
                role="menu"
                className="rohy-menu rohy-topbar-menu-panel"
-               style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: PANEL_MIN_WIDTH }}
+               // Expanded, the folds can still outgrow a short screen: the
+               // panel scrolls rather than running off the bottom edge.
+               style={{
+                  position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: PANEL_MIN_WIDTH,
+                  maxHeight: `calc(100vh - ${pos.top + 8}px)`, overflowY: 'auto',
+               }}
             >
                {children}
             </div>
@@ -126,7 +146,10 @@ export default function TopBarControls({
    // accessible name is translated and the seeded monkey walker
    // (tests/monkey/) must recognise it in any UI language. The language
    // items deliberately carry none: switching language mid-case is part of
-   // what the walker exercises.
+   // what the walker exercises. The two fold rows (`menu-language`,
+   // `menu-tools`) carry one so tests can open them; they leave nothing.
+   // The tools' items render only while their fold is open — a test that
+   // presses one presses `menu-tools` first.
    return (
       <div className="flex items-center gap-2">
          <div className="relative">
@@ -257,33 +280,69 @@ export default function TopBarControls({
                      </button>
                   )}
 
-                  {/* Language section — the old globe menu, folded inline. */}
+                  {/* Language — the old globe menu, as ONE row naming the
+                      current language that unfolds the list in place. */}
                   <div className="rohy-menu-divider" />
-                  <div className="rohy-menu-section-label">{t('menu_language')}</div>
-                  {Object.entries(LANGUAGES).map(([code, lang]) => (
+                  <button
+                     type="button"
+                     onClick={() => setLanguagesOpen((v) => !v)}
+                     data-testid="menu-language"
+                     role="menuitem"
+                     aria-expanded={languagesOpen}
+                     aria-controls="app-main-menu-languages"
+                     className="rohy-topbar-menu-item"
+                  >
+                     <Globe className="w-4 h-4" />
+                     {t('menu_language')}
+                     <span data-testid="menu-language-current" className="ml-auto font-normal text-[var(--rohy-muted)] whitespace-nowrap">
+                        {currentLanguage.flag} {currentLanguage.native}
+                     </span>
+                     <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 text-[var(--rohy-muted)] transition-transform ${languagesOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {languagesOpen && (
+                     <div id="app-main-menu-languages" role="group" aria-label={t('menu_language')}>
+                        {Object.entries(LANGUAGES).map(([code, lang]) => (
+                           <button
+                              key={code}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={uiLanguage === code}
+                              onClick={() => { onSetLanguage?.(code); closeAll(); }}
+                              className="rohy-topbar-menu-item rohy-topbar-menu-subitem"
+                           >
+                              <Check className={`w-4 h-4 ${uiLanguage === code ? 'opacity-100 text-[var(--rohy-accent)]' : 'opacity-0'}`} />
+                              {lang.flag} {langLabel(lang)}
+                           </button>
+                        ))}
+                     </div>
+                  )}
+
+                  {/* Educator/admin tools — one row, folded by default; the
+                      items inside keep their own visibility rules. */}
+                  {showTools && (
                      <button
-                        key={code}
                         type="button"
-                        role="menuitemradio"
-                        aria-checked={uiLanguage === code}
-                        onClick={() => { onSetLanguage?.(code); closeAll(); }}
+                        onClick={() => setToolsOpen((v) => !v)}
+                        data-testid="menu-tools"
+                        role="menuitem"
+                        aria-expanded={toolsOpen}
+                        aria-controls="app-main-menu-tools"
                         className="rohy-topbar-menu-item"
                      >
-                        <Check className={`w-4 h-4 ${uiLanguage === code ? 'opacity-100 text-[var(--rohy-accent)]' : 'opacity-0'}`} />
-                        {lang.flag} {langLabel(lang)}
+                        <BarChart3 className="w-4 h-4" />
+                        {t('menu_tools')}
+                        <ChevronDown aria-hidden="true" className={`ml-auto w-4 h-4 shrink-0 text-[var(--rohy-muted)] transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
                      </button>
-                  ))}
-
-                  {(canSeeOyonAnalytics || isAdminUser) && (
-                     <>
-                        <div className="rohy-menu-divider" />
+                  )}
+                  {showTools && toolsOpen && (
+                     <div id="app-main-menu-tools" role="group" aria-label={t('menu_tools')}>
                         {canSeeOyonAnalytics && (
                            <button
                               type="button"
                               onClick={() => { onOpenEmotionAnalytics?.(); closeAll(); }}
                               data-testid="menu-emotion-analytics"
                               role="menuitem"
-                              className="rohy-topbar-menu-item"
+                              className="rohy-topbar-menu-item rohy-topbar-menu-subitem"
                            >
                               <Activity className="w-4 h-4" />
                               {t('emotion_analytics')}
@@ -299,7 +358,7 @@ export default function TopBarControls({
                               onClick={() => { onOpenOyonDashboard?.(); closeAll(); }}
                               data-testid="menu-oyon-dashboard"
                               role="menuitem"
-                              className="rohy-topbar-menu-item"
+                              className="rohy-topbar-menu-item rohy-topbar-menu-subitem"
                            >
                               <ScanEye className="w-4 h-4" />
                               {t('oyon:dashboard')}
@@ -311,7 +370,7 @@ export default function TopBarControls({
                               onClick={() => { onOpenCaseAnalytics?.(); closeAll(); }}
                               data-testid="menu-case-analytics"
                               role="menuitem"
-                              className="rohy-topbar-menu-item"
+                              className="rohy-topbar-menu-item rohy-topbar-menu-subitem"
                            >
                               <Activity className="w-4 h-4" />
                               {t('case_analytics')}
@@ -325,13 +384,13 @@ export default function TopBarControls({
                               onClick={() => { onOpenSetup(); closeAll(); }}
                               data-testid="menu-setup"
                               role="menuitem"
-                              className="rohy-topbar-menu-item"
+                              className="rohy-topbar-menu-item rohy-topbar-menu-subitem"
                            >
                               <ListChecks className="w-4 h-4" />
                               {t('menu_setup')}
                            </button>
                         )}
-                     </>
+                     </div>
                   )}
 
                   <div className="rohy-menu-divider" />
