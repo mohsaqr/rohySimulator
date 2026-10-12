@@ -170,6 +170,7 @@ export const SectionListEditor = forwardRef((
     if (!file) return;
     setBusy(true); setProgress(0);
     try {
+      // eslint-disable-next-line no-restricted-syntax -- an endpoint name; uploadWithProgress resolves it through apiUrl()
       const url = await upload('/uploads/image', file);
       await createAndAppend({ type: 'text', title: '', content: `<img src="${url}" alt="${file.name}">` });
     } catch (err) { toast.error(err?.message || t('common:error', { defaultValue: 'Something went wrong' })); }
@@ -186,6 +187,7 @@ export const SectionListEditor = forwardRef((
     }
     setBusy(true); setProgress(0);
     try {
+      // eslint-disable-next-line no-restricted-syntax -- an endpoint name; uploadWithProgress resolves it through apiUrl()
       const url = await upload('/uploads/file', file);
       await createAndAppend({ type: 'file', title: '', content: '', fileName: file.name, fileUrl: url, fileType: file.type || file.name.split('.').pop() || '', fileSize: file.size });
     } catch (err) { toast.error(err?.message || t('common:error', { defaultValue: 'Something went wrong' })); }
@@ -201,6 +203,7 @@ export const SectionListEditor = forwardRef((
     if (!file) return;
     setBusy(true); setProgress(0);
     try {
+      // eslint-disable-next-line no-restricted-syntax -- an endpoint name; uploadWithProgress resolves it through apiUrl()
       const url = await upload('/uploads/video', file);
       await createAndAppend({ type: 'text', title: '', content: `<lecture-video data-src="${url}" data-mode="file"></lecture-video>` });
       setVideoOpen(false);

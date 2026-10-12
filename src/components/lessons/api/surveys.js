@@ -2,6 +2,7 @@
 // Contract aliases: courseId/moduleId params carry a chatoyon classroom uuid
 // (string); AI generation dropped (no /surveys/generate endpoint here).
 import apiClient from './client';
+import { apiUrl } from '../../../config/api';
 
 export const surveysApi = {
   // =============================================================================
@@ -115,7 +116,7 @@ export const surveysApi = {
     // carry the same Bearer token rohy's apiFetch sends (cookie-only auth is
     // not guaranteed in every deployment).
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
-    const res = await fetch(`/api/surveys/${surveyId}/export`, {
+    const res = await fetch(apiUrl(`/surveys/${surveyId}/export`), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('Export failed');

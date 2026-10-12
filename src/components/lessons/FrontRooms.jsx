@@ -11,6 +11,7 @@ import RoomNavigator from './rohy/RoomNavigator';
 import { LessonsRoom } from './LessonsRoom';
 import { coursesApi } from './api/courses';
 import { surveysApi } from './api/surveys';
+import { apiUrl } from '../../config/api';
 
 // rohy accents: rose = the conversation room, emerald = the lesson room.
 const AGENT_ACCENT = {
@@ -37,14 +38,14 @@ async function candidateClasses(agentId) {
   const withAgent = [];
   const rest = [];
   const seen = new Set();
-  for (const url of ['/api/classrooms/mine', '/api/classrooms']) {
+  for (const url of [apiUrl('/classrooms/mine'), apiUrl('/classrooms')]) {
     try {
       const d = await fetch(url).then((r) => r.json());
       for (const c of (d.classrooms ?? [])) {
         if (seen.has(c.id)) continue;
         seen.add(c.id);
         // /api/classrooms 403s for learners, so success means "I teach this".
-        c.owned = url === '/api/classrooms';
+        c.owned = url === apiUrl('/classrooms');
         (agentId && c.agents?.some((a) => a.id === agentId) ? withAgent : rest).push(c);
       }
     } catch {
@@ -75,7 +76,7 @@ export function FrontRooms({
       for (const cls of await candidateClasses(agentId)) {
         if (cancelled) return;
         try {
-          const res = await fetch(`/api/courses/modules/${cls.id}/lectures`);
+          const res = await fetch(apiUrl(`/courses/modules/${cls.id}/lectures`));
           if (!res.ok) continue;
           const d = await res.json();
           const rows = d.data ?? [];

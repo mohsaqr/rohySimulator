@@ -176,6 +176,28 @@ export default defineConfig([
       }],
     },
   },
+  // Client addresses carry the base path an install is served under.
+  // A root-relative '/api/…' or '/uploads/…' written out by hand works at '/'
+  // and is a 404 on an install served at '/rohy/' — every slide was, until
+  // rc.44. Build it with apiUrl()/baseUrl() (src/config/api.js), or call
+  // apiFetch, which does. Relative './uploads/…' resolves under the base and
+  // is fine.
+  {
+    files: ['src/**/*.{js,jsx}'],
+    ignores: ['**/*.test.{js,jsx}', 'src/config/api.js'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        {
+          selector: "Literal[value=/^\\/(api|uploads|oyon|standalone|avatars|docs)\\//]:not(CallExpression[callee.name=/^(apiUrl|baseUrl)$/] > Literal)",
+          message: "A hand-written root address ('/api/…', '/uploads/…', '/oyon/…', …) ignores the base path. Use apiUrl()/baseUrl() from src/config/api.js, or apiFetch.",
+        },
+        {
+          selector: "TemplateLiteral[quasis.0.value.raw=/^\\/(api|uploads|oyon|standalone|avatars|docs)\\//]:not(CallExpression[callee.name=/^(apiUrl|baseUrl)$/] > TemplateLiteral)",
+          message: "A hand-written root address ('/api/…', '/uploads/…', '/oyon/…', …) ignores the base path. Use apiUrl()/baseUrl() from src/config/api.js, or apiFetch.",
+        },
+      ],
+    },
+  },
   // Playwright e2e fixtures use the `use` callback pattern from
   // @playwright/test (`async ({ ... }, use) => { ... await use(value) ... }`).
   // The react-hooks plugin misreads `use(...)` as a React Hook call; in

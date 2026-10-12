@@ -9,8 +9,11 @@
 //   3. callers get a promise that RESOLVES when the custom element is
 //      actually defined and REJECTS on load error or timeout — a dead
 //      element is a visible failure, never a silently-empty pill.
+import { baseUrl } from '../../config/api';
 
-export const OYON_ELEMENT_SRC = '/oyon/standalone/app/dist-element/oyon-app.element.js?v=3.3.3';
+// Through baseUrl(): an install served at /rohy/ serves the element at
+// /rohy/oyon/…; a root address left capture dead there.
+export const OYON_ELEMENT_SRC = baseUrl('/oyon/standalone/app/dist-element/oyon-app.element.js?v=3.3.3');
 
 const SCRIPT_MARKER = 'data-oyon-element';
 const LOAD_TIMEOUT_MS = 30000; // generous for a 5 MB module on a slow link

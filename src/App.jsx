@@ -37,6 +37,7 @@ import OyonDashboardRoom from './components/oyon/OyonDashboardRoom';
 import OyonConsentUpdate from './components/oyon/OyonConsentUpdate';
 import DiscussionScreen from './components/discussion/DiscussionScreen';
 import CaseSummaryModal from './components/discussion/CaseSummaryModal';
+import { apiUrl } from './config/api';
 import { disabledRooms } from '../server/shared/caseRooms.js';
 import { CORE_ROOM_KEYS } from '../server/shared/pluginRegistry.js';
 import PhysicalExamScreen from './components/exam/PhysicalExamScreen';
@@ -303,7 +304,7 @@ function MainApp() {
       const handler = () => {
          if (!sessionId) return;
          try {
-            const url = `/api/sessions/${sessionId}/end`;
+            const url = apiUrl(`/sessions/${sessionId}/end`);
             // sendBeacon doesn't carry custom headers; the route accepts
             // unauthenticated end calls for unload paths to avoid losing
             // sessions when the JWT cookie is cleared first.

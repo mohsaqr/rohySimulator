@@ -139,6 +139,7 @@ export function unresolveRemoteRef(uri, pluginId) {
     if (typeof uri !== 'string') return uri;
     // With this install's base path (what resolveRemoteRef hands out) or
     // without it (a document saved before the base path was applied).
+    // eslint-disable-next-line no-restricted-syntax -- matched, never loaded: the base-less form an older document may hold
     const mount = [baseUrl(`/api/plugins/${pluginId}/`), `/api/plugins/${pluginId}/`]
         .find((m) => uri.startsWith(m));
     if (!mount) return uri;

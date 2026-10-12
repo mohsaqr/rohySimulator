@@ -21,6 +21,7 @@ import RoomNavigator from './rohy/RoomNavigator';
 import { LessonsRoom } from './LessonsRoom';
 import { coursesApi } from './api/courses';
 import { surveysApi } from './api/surveys';
+import { apiUrl } from '../../config/api';
 
 // rohy accents: rose = the conversation room, emerald = the lesson room.
 const TUTOR_ACCENT = {
@@ -74,7 +75,7 @@ export function ClassRoom({ classroomId, onNavigate = () => {} }) {
     let cancelled = false;
     void (async () => {
       try {
-        const r = await fetch('/api/classrooms/mine');
+        const r = await fetch(apiUrl('/classrooms/mine'));
         const d = await r.json();
         const cls = (d.classrooms ?? []).find((c) => c.id === classroomId);
         if (cls && !cancelled) setClassMeta({ name: cls.name, teacherName: cls.teacherName, thumbnail: cls.thumbnail });
@@ -87,12 +88,12 @@ export function ClassRoom({ classroomId, onNavigate = () => {} }) {
         // fall through to the owned-class path
       }
       try {
-        const r = await fetch(`/api/classrooms/${classroomId}/agents`);
+        const r = await fetch(apiUrl(`/classrooms/${classroomId}/agents`));
         const d = await r.json();
         const def = (d.agents ?? []).find((a) => a.isDefault) ?? (d.agents ?? [])[0];
         if (def && !cancelled) setTutorId(def.id);
         // Owned-class preview: hero meta from the class detail.
-        const det = await fetch(`/api/classrooms/${classroomId}`).then((res) => res.json());
+        const det = await fetch(apiUrl(`/classrooms/${classroomId}`)).then((res) => res.json());
         if (det?.classroom && !cancelled) {
           setClassMeta({ name: det.classroom.name, thumbnail: det.classroom.thumbnail ?? null });
           setCanEdit(true);
@@ -129,7 +130,7 @@ export function ClassRoom({ classroomId, onNavigate = () => {} }) {
 
   // Entering the class room is itself a recorded event.
   useEffect(() => {
-    void fetch('/api/courses/rooms/event', {
+    void fetch(apiUrl('/courses/rooms/event'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ classroomId, room: 'tutor' }),
@@ -141,7 +142,7 @@ export function ClassRoom({ classroomId, onNavigate = () => {} }) {
     (target) => {
       setCurrentRoom((prev) => {
         if (target === prev) return prev;
-        void fetch('/api/courses/rooms/event', {
+        void fetch(apiUrl('/courses/rooms/event'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ classroomId, room: target }),
