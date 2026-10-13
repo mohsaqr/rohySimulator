@@ -20,7 +20,8 @@ import { extractCompleteSentences } from '../../utils/sentenceSplit';
 import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
-import { SOURCES, SEVERITY } from '../../notifications/types';
+import { SEVERITY } from '../../notifications/types';
+import { alarmSpeechLine } from './alarmSpeechLines';
 import { usePatientConversation } from '../../contexts/PatientConversationContext';
 import { resolvePatientTemplate } from '../../utils/patientTemplate';
 import { getAffectSnapshot } from '../../utils/latestAffect';
@@ -216,38 +217,6 @@ const ALARM_SEVERITY_RANK = {
     [SEVERITY.ERROR]: 2,
     [SEVERITY.CRITICAL]: 3,
 };
-
-function alarmSpeechLine(notification) {
-    if (notification?.source !== SOURCES.CLINICAL) return null;
-    if (!notification.key?.startsWith('alarm:')) return null;
-    if (![SEVERITY.WARNING, SEVERITY.CRITICAL].includes(notification.severity)) return null;
-
-    const data = notification.data || {};
-    const key = notification.key.replace(/^alarm:/, '');
-    const vital = data.vital || key.split('_')[0];
-    const kind = data.thresholdType || key.split('_').slice(1).join('_');
-    const critical = notification.severity === SEVERITY.CRITICAL;
-
-    const lines = {
-        hr_high: critical ? 'My heart is racing and I feel much worse.' : 'My heart feels like it is racing.',
-        hr_low: critical ? 'I feel very weak and lightheaded.' : 'I feel weak and a little lightheaded.',
-        spo2_low: critical ? 'I feel much more short of breath.' : 'I am getting more short of breath.',
-        bpSys_low: critical ? 'I feel like I might pass out.' : 'I feel dizzy and lightheaded.',
-        bpDia_low: critical ? 'I feel like I might pass out.' : 'I feel dizzy and lightheaded.',
-        bpSys_high: critical ? 'My head is pounding and I feel worse.' : 'My head is starting to pound.',
-        bpDia_high: critical ? 'My head is pounding and I feel worse.' : 'My head is starting to pound.',
-        rr_high: critical ? 'I cannot catch my breath.' : 'It is getting harder to breathe.',
-        rr_low: critical ? 'I feel very drowsy and it is hard to breathe.' : 'I feel unusually drowsy.',
-        temp_high: critical ? 'I feel like I am burning up.' : 'I feel hot and unwell.',
-        temp_low: critical ? 'I am shivering and feel very cold.' : 'I feel cold and shaky.',
-        etco2_high: critical ? 'I feel drowsy and short of breath.' : 'I feel more drowsy.',
-        etco2_low: critical ? 'I feel lightheaded and short of breath.' : 'I feel lightheaded.',
-    };
-
-    return lines[`${vital}_${kind}`] || (critical
-        ? 'Something feels really wrong. I feel worse.'
-        : 'I am starting to feel worse.');
-}
 
 function isAvatarAlarmSpeechForceOff() {
     try {
@@ -1378,13 +1347,13 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
         });
         return true;
-    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, caseSnapshot?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, toast, t, setSpeaking, setVisemes]);
+    }, [voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, activeCase?.config?.voice, caseSnapshot?.config?.voice, patientTemplate?.config?.voice, resolveSpeakerVoice, caseLanguage, toast, t, setSpeaking, setVisemes]);
 
     useEffect(() => {
         return subscribe((event) => {
             if (event?.type !== 'notify') return;
             const notification = event.notification;
-            const text = alarmSpeechLine(notification);
+            const text = alarmSpeechLine(notification, caseLanguage);
             if (!text || !voiceMode || activeTab !== 'patient') return;
             if (prefs.avatarAlarmSpeechEnabled === false || isAvatarAlarmSpeechForceOff()) return;
 
@@ -1406,7 +1375,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             }
             speakPatientAlarm(alarmSpeech);
         });
-    }, [subscribe, voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, loading, listening, speaking, speakPatientAlarm]);
+    }, [subscribe, voiceMode, activeTab, prefs.avatarAlarmSpeechEnabled, loading, listening, speaking, speakPatientAlarm, caseLanguage]);
 
     useEffect(() => {
         if (!voiceMode || activeTab !== 'patient') return;

@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.59] — 2026-10-13
+
+- **The patient's alarm lines speak the case language.** They were hardcoded English, so a Finnish
+  patient (FI-0017, 38.6 °C) said "I feel hot and unwell." in English each time the fever alarm fired.
+  The lines now exist for all 8 case languages and follow the case, not the interface; a test fails if a
+  language is added without them. The alarm voice also no longer keeps a previous case's language.
+
 ## [3.0.0-rc.58] — 2026-10-13
 
 - **Faster survey authoring.** Each question has a **Duplicate** button
