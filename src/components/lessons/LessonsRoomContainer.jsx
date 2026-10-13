@@ -48,6 +48,20 @@ function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation
 
   useEffect(() => { load(); }, [load]);
 
+  // No course for this case: ask the server why, so a student who is simply
+  // not enrolled is told that, instead of "not linked to a course yet" — which
+  // is false for them and sent people hunting for a missing link.
+  const [noCourseReason, setNoCourseReason] = useState(null);
+  useEffect(() => {
+    if (cohortId != null || caseId == null) { setNoCourseReason(null); return undefined; }
+    let cancelled = false;
+    apiFetch(`/courses/for-case/${caseId}`)
+      .then((r) => { if (!cancelled) setNoCourseReason(r?.data?.reason ?? null); })
+      .catch(() => { if (!cancelled) setNoCourseReason(null); });
+    return () => { cancelled = true; };
+  }, [cohortId, caseId]);
+  const notEnrolled = noCourseReason === 'not_enrolled';
+
   // A lesson locked behind the case's course gate arrives without its title
   // (server/routes/lessons-routes.js); the case panel counts it, the vendored
   // room gets the open ones. When the gate opens, fetch the lessons again so
@@ -125,10 +139,14 @@ function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation
               <GraduationCap className="h-7 w-7" />
             </span>
             <p className="mt-4 text-base font-semibold text-slate-900">
-              {t('no_course_for_case', { defaultValue: 'No course content here' })}
+              {notEnrolled
+                ? t('not_enrolled_for_case', { defaultValue: "You are not enrolled in this case's course" })
+                : t('no_course_for_case', { defaultValue: 'No course content here' })}
             </p>
             <p className="mt-1 text-sm text-slate-500">
-              {t('no_course_for_case_sub', { defaultValue: 'This case is not linked to a course yet.' })}
+              {notEnrolled
+                ? t('not_enrolled_for_case_sub', { defaultValue: 'Its lessons and surveys appear here once your teacher adds you to the course.' })
+                : t('no_course_for_case_sub', { defaultValue: 'This case is not linked to a course yet.' })}
             </p>
           </div>
         ) : (

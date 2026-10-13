@@ -311,7 +311,11 @@ router.get('/courses/for-case/:caseId', authenticateToken, async (req, res) => {
         if (isAdminReq(req) && rows.length) {
             return ok(res, { cohortId: rows[0].id, cohortName: rows[0].name });
         }
-        return ok(res, { cohortId: null });
+        // Say WHY there is no course for this person. A case in a course they
+        // are not enrolled in used to read as "not linked to a course yet",
+        // which sent people looking for a missing link instead of a missing
+        // enrolment. The course's name is not returned: it is not theirs.
+        return ok(res, { cohortId: null, reason: rows.length ? 'not_enrolled' : 'no_course' });
     } catch (err) {
         log.error('for-case failed', { error: err.message });
         return fail(res, 500, 'Failed to resolve course');
