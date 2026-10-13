@@ -262,6 +262,7 @@
   "path_or_address": "Жол немесе веб-мекенжай",
   "path_or_address_hint": "gross/case42/a-fresh.jpg сияқты жол препараттарыңызбен бірге сақталған фотосуретті көрсетеді — кейс оған сілтейді де, өзі шағын күйінде қалады. Толық https:// мекенжайы жазылған күйінде қолданылады.",
   "pathology_modules": "Патология модульдері",
+  "pathology_request": "Жолдама",
   "pathology_summary_empty": "Патологиялық материал жоқ",
   "pathology_summary_mixed": "{slides, plural, other {# препарат}}, {photographs, plural, other {# фотосурет}}",
   "pathology_summary_photographs": "{count, plural, other {# макроскопиялық сурет}}",

@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.54] — 2026-10-13
+
+- **The pathology room shows the request (PRV-58).** It used to open straight onto the slides, so the
+  learner never saw what the clinician asked for. A request panel (accession, specimen summary, clinical
+  history) now sits open above the Microscopy/Gross switcher. Pathoyon re-vendored at c91646e;
+  `pathology_request` in all 8 plugin catalogues.
+
 ## [3.0.0-rc.53] — 2026-10-12
 
 - **Learners can no longer read the answer key from the order API.** The screen never showed it, but the

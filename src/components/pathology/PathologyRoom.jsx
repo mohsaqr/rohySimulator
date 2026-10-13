@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bookmark, FileText, PenSquare } from 'lucide-react';
 import { SlideCanvas } from './SlideCanvas.jsx';
 import { SpecimenTray } from './SpecimenTray.jsx';
+import { CaseRequest } from './CaseRequest.jsx';
 import { ReportPanel } from './ReportPanel.jsx';
 import { AnnotationCanvas } from './AnnotationCanvas.jsx';
 import { AnnotationPanel } from './AnnotationPanel.jsx';
@@ -49,7 +50,7 @@ import { toLegacyViewerCase } from './caseCore/viewerAdapter.js';
  * injected event logger. Storage and interpretation are Rohy's.
  *
  * @param {object} props
- * @param {object} props.pathologyCase  {id, accession, slides[], specimens[], task}
+ * @param {object} props.pathologyCase  {id, accession, specimen, history, slides[], specimens[], task}
  * @param {object} props.eventLogger    Rohy's eventLogger singleton
  * @param {boolean} [props.examMode]    proctored read: hints and revision off
  * @param {Function} [props.onAnnotationsChange]  (slideId, annotations) => void
@@ -454,6 +455,8 @@ export function PathologyRoom({
 
     return (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <CaseRequest viewerCase={viewerCase} t={t} />
+
             {/* Module switcher. Rendered only when the case actually carries
                 both, so a slides-only case is not given a dead tab. */}
             {/* Shown whenever the case carries both kinds of evidence — counted by

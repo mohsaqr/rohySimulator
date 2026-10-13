@@ -262,6 +262,7 @@
   "path_or_address": "Polku tai verkko-osoite",
   "path_or_address_hint": "Polku, kuten gross/case42/a-fresh.jpg, nimeää valokuvan, jota säilytetään leikkeidesi kanssa — tapaus viittaa siihen ja pysyy pienenä. Täydellistä https://-osoitetta käytetään sellaisenaan.",
   "pathology_modules": "Patologian moduulit",
+  "pathology_request": "Lähete",
   "pathology_summary_empty": "Ei patologista aineistoa",
   "pathology_summary_mixed": "{slides, plural, one {# leike} other {# leikettä}}, {photographs, plural, one {# valokuva} other {# valokuvaa}}",
   "pathology_summary_photographs": "{count, plural, one {# makrokuva} other {# makrokuvaa}}",

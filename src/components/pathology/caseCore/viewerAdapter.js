@@ -115,6 +115,10 @@ export function toLegacyViewerCase(manifest, {
         id: manifest.id,
         accession: manifest.clinical.accession ?? '',
         specimen: manifest.clinical.specimenSummary ?? '',
+        // The requisition's clinical history is public context (the studio
+        // tells the author so); dropping it here left the learner reading
+        // slides with no request in front of them.
+        history: manifest.clinical.history ?? '',
         slides,
         ...(specimens.length > 0 ? { specimens } : {}),
         ...(task ? { task } : {}),

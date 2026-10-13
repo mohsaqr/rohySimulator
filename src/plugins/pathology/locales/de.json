@@ -262,6 +262,7 @@
   "path_or_address": "Pfad oder Webadresse",
   "path_or_address_hint": "Ein Pfad wie gross/case42/a-fresh.jpg benennt eine Aufnahme, die bei Ihren Schnitten liegt — der Fall verweist darauf und bleibt klein. Eine vollständige https://-Adresse wird so verwendet, wie sie angegeben ist.",
   "pathology_modules": "Pathologie-Module",
+  "pathology_request": "Anforderung",
   "pathology_summary_empty": "Noch kein Material",
   "pathology_summary_mixed": "{slides, plural, one {# Schnitt} other {# Schnitte}}, {photographs, plural, one {# Aufnahme} other {# Aufnahmen}}",
   "pathology_summary_photographs": "{count, plural, one {# makroskopische Aufnahme} other {# makroskopische Aufnahmen}}",

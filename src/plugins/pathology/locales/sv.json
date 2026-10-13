@@ -262,6 +262,7 @@
   "path_or_address": "Sökväg eller webbadress",
   "path_or_address_hint": "En sökväg som gross/case42/a-fresh.jpg pekar ut ett fotografi som förvaras tillsammans med dina snitt — fallet pekar på det och förblir litet. En fullständig https://-adress används som den är.",
   "pathology_modules": "Patologimoduler",
+  "pathology_request": "Remiss",
   "pathology_summary_empty": "Inget patologimaterial",
   "pathology_summary_mixed": "{slides, plural, one {# snitt} other {# snitt}}, {photographs, plural, one {# fotografi} other {# fotografier}}",
   "pathology_summary_photographs": "{count, plural, one {# makrofotografi} other {# makrofotografier}}",
