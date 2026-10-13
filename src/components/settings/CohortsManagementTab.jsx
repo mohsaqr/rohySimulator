@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Users, Plus, Trash2, Pencil, ArrowLeft, KeyRound, Copy,
     Check, Loader2, UserPlus, X, ChevronDown, ChevronRight,
     GraduationCap, BookOpen, Save,
     ListChecks, LayoutGrid, BarChart3, Download, Activity,
-    Target, Percent, SlidersHorizontal, Info,
+    Target, Percent, SlidersHorizontal, Info, ShieldCheck,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -16,6 +16,7 @@ import {
     updateCohort, assignCohortCases, unassignCohortCase,
     addCohortTeacher, removeCohortTeacher,
 } from '../../services/cohortsService';
+import { getEnforcementFlag, setEnforcementFlag } from '../../services/userService';
 import CohortReports from './CohortReports';
 import { CasePicker, PeoplePicker } from './CohortPickers';
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
@@ -259,6 +260,8 @@ export default function CohortsManagementTab() {
                 <Stat label={t('stat_enrolled_students')} value={summary.members} />
                 <Stat label={t('stat_active_codes')} value={summary.codes} />
             </div>
+
+            <CourseAccessPolicyCard />
 
             <form onSubmit={handleCreate} className="mb-8 space-y-3">
                 <div className="flex gap-2">
@@ -511,6 +514,77 @@ function Stat({ label, value }) {
     );
 }
 
+// Admin-only master switch for course-scoped case access (platform setting
+// `enforce_cohort_case_access`; an absent setting reads ON). On: a student sees
+// the cases of the courses they are enrolled in, plus the default case if they
+// registered themselves or one of their courses has `default_case_access` on.
+// Off: every student sees every available case and course membership only
+// drives reports. Both
+// routes are requireAdmin, so for an educator the read answers 401/403 and the
+// card does not render at all. Any other read failure is shown, not hidden.
+function CourseAccessPolicyCard() {
+    const { t } = useTranslation('teacher_cohorts');
+    const toast = useToast();
+    // null = loading; 'hidden' = not an admin; 'error' = read failed; else boolean.
+    const [enabled, setEnabled] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const helpId = useId();
+
+    useEffect(() => {
+        let alive = true;
+        getEnforcementFlag()
+            .then((r) => { if (alive) setEnabled(Boolean(r?.enabled)); })
+            .catch((err) => {
+                if (!alive) return;
+                setEnabled(err?.status === 401 || err?.status === 403 ? 'hidden' : 'error');
+            });
+        return () => { alive = false; };
+    }, []);
+
+    const handleChange = async (next) => {
+        setSaving(true);
+        try {
+            const r = await setEnforcementFlag(next);
+            const on = Boolean(r?.enabled);
+            setEnabled(on);
+            toast.success(on ? t('toast_access_enforce_on') : t('toast_access_enforce_off'));
+        } catch (err) {
+            toast.error(errMsg(err, t('toast_access_enforce_failed')));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (enabled === null || enabled === 'hidden') return null;
+
+    return (
+        <div className="mb-6 p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg" data-testid="course-access-policy">
+            <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-bold text-neutral-200">{t('access_policy_title')}</span>
+            </div>
+            {enabled === 'error' ? (
+                <p className="text-xs text-red-400">{t('access_load_failed')}</p>
+            ) : (
+                <>
+                    <label className={`flex items-center gap-3 ${saving ? 'opacity-50' : 'cursor-pointer'}`}>
+                        <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-purple-500"
+                            checked={enabled}
+                            disabled={saving}
+                            aria-describedby={helpId}
+                            onChange={(e) => handleChange(e.target.checked)}
+                        />
+                        <span className="text-sm font-semibold text-neutral-100">{t('access_enforce_label')}</span>
+                    </label>
+                    <p id={helpId} className="text-xs text-neutral-500 mt-1 ml-7">{t('access_enforce_help')}</p>
+                </>
+            )}
+        </div>
+    );
+}
+
 // Roster + join-code + Phase-8 Settings management for a single cohort.
 function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialReportView = 'roster' }) {
     const { t } = useTranslation('teacher_cohorts');
@@ -521,6 +595,9 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
     const [students, setStudents] = useState([]);
     const [teachers, setTeachers] = useState([]);
     const [cases, setCases] = useState([]);
+    // From GET /cohorts/:id. Only an explicit `false` raises the hint below;
+    // an older server that omits the field shows nothing rather than guessing.
+    const [caseAccessEnforced, setCaseAccessEnforced] = useState(null);
     const [loading, setLoading] = useState(true);
     const [identifier, setIdentifier] = useState('');
     const [adding, setAdding] = useState(false);
@@ -538,6 +615,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
             setStudents(studentRows);
             setTeachers(data.teachers || []);
             setCases(data.cases || []);
+            setCaseAccessEnforced(typeof data.case_access_enforced === 'boolean' ? data.case_access_enforced : null);
         } catch (e) {
             toast.error(errMsg(e, t('toast_load_course_failed')));
         } finally {
@@ -755,6 +833,19 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                         </p>
                     </div>
 
+                    {/* Membership does not scope cases while course access is
+                        off — say so where students are added, so nobody expects
+                        enrolment to hide or reveal a case (FI0010.AUTHOR.02). */}
+                    {caseAccessEnforced === false && !cohort.is_default && (
+                        <div
+                            className="flex items-start gap-2 p-3 mb-4 bg-amber-950/30 border border-amber-800/60 rounded-lg text-xs text-amber-200"
+                            data-testid="membership-not-enforced-hint"
+                        >
+                            <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span>{t('hint_membership_not_enforced')}</span>
+                        </div>
+                    )}
+
                     {/* Single-add (unchanged) + bulk-add */}
                     <form onSubmit={handleAdd} className="flex gap-2 mb-4">
                         <input
@@ -929,6 +1020,14 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
     const [requireDebrief, setRequireDebrief] = useState(
         baseSettings.require_debrief === true, // default off
     );
+    // Whether members of this course also get the tenant's default case.
+    // Absent = off, so a course created before the setting existed (and every
+    // new course) keeps its members on its own cases only. Meaningless on the
+    // default course itself, where the control is not rendered.
+    const isDefaultCourse = Boolean(cohort.is_default);
+    const [defaultCaseAccess, setDefaultCaseAccess] = useState(
+        baseSettings.default_case_access === true, // default off
+    );
     const [saving, setSaving] = useState(false);
 
     const [addCaseOpen, setAddCaseOpen] = useState(false);
@@ -977,6 +1076,9 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
             setOrDrop('passing_score', passNum);
             settings.allow_retakes = allowRetakes;
             settings.require_debrief = requireDebrief;
+            // The default course has no such control: whatever its row holds
+            // rides through untouched in baseSettings.
+            if (!isDefaultCourse) settings.default_case_access = defaultCaseAccess;
 
             await updateCohort(cohort.id, {
                 name: trimmed,
@@ -1217,6 +1319,22 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                             </span>
                         </span>
                     </label>
+                    {!isDefaultCourse && (
+                        <label className="flex items-start gap-2.5 text-sm text-neutral-200 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={defaultCaseAccess}
+                                onChange={(e) => setDefaultCaseAccess(e.target.checked)}
+                                className="w-4 h-4 mt-0.5 accent-purple-600"
+                            />
+                            <span>
+                                {t('label_default_case_access')}
+                                <span className="block text-xs text-neutral-500">
+                                    {t('help_default_case_access')}
+                                </span>
+                            </span>
+                        </label>
+                    )}
                     <p className="text-xs text-neutral-500 flex items-start gap-1.5">
                         <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                         {t('help_policy_info')}

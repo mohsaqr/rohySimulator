@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { putInDefaultCourse } from '../utils/defaultCourse.js';
 import {
     omitDocumentPath, omitDocumentWhen, projectPluginDocumentsForRole, projectCaseSnapshotForRole,
     learnerOmitPaths, learnerOmitWhenRules,
@@ -242,6 +243,8 @@ describe('live server: a STUDENT never receives the PACS rubric or an unreleased
         expect(created.status).toBe(200);
         caseId = (await created.json()).id;
         expect((await as.admin(`/api/cases/${caseId}/availability`, { method: 'PUT', body: JSON.stringify({ is_available: true }) })).status).toBe(200);
+        // With course access on by default, a student reaches a case through a course.
+        await putInDefaultCourse(server.dbPath, caseId);
     }, 90_000);
 
     afterAll(async () => { if (server) await server.close(); });

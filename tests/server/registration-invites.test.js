@@ -209,9 +209,34 @@ describe('registration invites', () => {
                 `SELECT user_id FROM registration_invite_uses WHERE invite_id = ?`,
                 [body.invite.id]
             );
+            // Regression lock: an invite into a course is not also a seat in the default course — that, and its default case, are for people who register themselves
+            const defaultSeat = await pGet(
+                db,
+                `SELECT COUNT(*) AS n FROM cohort_members m JOIN cohorts c ON c.id = m.cohort_id
+                  WHERE m.user_id = ? AND c.is_default = 1 AND m.deleted_at IS NULL`,
+                [res.body.user.id]
+            );
+            const defaultCourse = await pGet(db, `SELECT COUNT(*) AS n FROM cohorts WHERE is_default = 1 AND deleted_at IS NULL`);
             await closeDb(db);
             expect(membership?.ok).toBe(1);
             expect(use.user_id).toBe(res.body.user.id);    // the ledger recorded it
+            expect(defaultCourse.n).toBe(1);               // the seeded default course exists…
+            expect(defaultSeat.n).toBe(0);                 // …and the invited redeemer is not in it
+        });
+
+        it('an invite that names no course still lands the redeemer in the default course', async () => {
+            const { body } = await mintInvite({ role: 'student' });
+            const res = await register(server.baseUrl, 'invited-nocourse', { invite: body.invite.token });
+            expect(res.status).toBe(201);
+            const db = await openDb(server.dbPath);
+            const defaultSeat = await pGet(
+                db,
+                `SELECT COUNT(*) AS n FROM cohort_members m JOIN cohorts c ON c.id = m.cohort_id
+                  WHERE m.user_id = ? AND c.is_default = 1 AND m.deleted_at IS NULL`,
+                [res.body.user.id]
+            );
+            await closeDb(db);
+            expect(defaultSeat.n).toBe(1);
         });
 
         // The token gets read off a slide and retyped. If case or hyphens broke

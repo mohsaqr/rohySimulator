@@ -43,6 +43,7 @@ import {
     auditSuccess,
     commitThen,
     dbAll,
+    parseCohortCaseEnforcement,
     redactAuditSetting,
     redactRows,
     REGISTRATION_MODES,
@@ -1171,13 +1172,14 @@ const setAuditedPlatformSetting = async (req, key, value, action = 'update_platf
 };
 
 // --- Cohort-case access enforcement flag ------------------------------------
-// The master switch for class-centric, date-windowed case access (default OFF
-// so existing installs are unaffected until an admin opts in). Reads/writes the
+// The master switch for class-centric, date-windowed case access (ON unless an
+// admin turns it off — an absent setting reads as ON, through the same parser
+// the gate uses, so this screen and the gate cannot disagree). Reads/writes the
 // `enforce_cohort_case_access` platform setting and busts the in-process cache.
 router.get('/platform-settings/cohort-case-enforcement', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const value = await getPlatformSetting('enforce_cohort_case_access');
-        res.json({ enabled: value === 'true' || value === '1' });
+        res.json({ enabled: parseCohortCaseEnforcement(value) });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

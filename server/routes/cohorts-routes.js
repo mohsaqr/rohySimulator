@@ -10,7 +10,7 @@ import {
     ROLE_RANKS,
     hasRoleAtLeast,
 } from '../middleware/auth.js';
-import { auditSuccess, tenantId } from './_helpers.js';
+import { auditSuccess, tenantId, cohortCaseEnforcementOn } from './_helpers.js';
 import { pulseBucket, verbWithAliases, roomLabel, roomLabelKey } from '../shared/eventFacets.js';
 import {
     buildEventFilter,
@@ -353,6 +353,11 @@ router.get('/cohorts/:id', authenticateToken, requireEducator, async (req, res, 
             students,
             teachers,
             cases,
+            // Whether course membership actually scopes what students see
+            // (platform flag `enforce_cohort_case_access`, admin-only to read
+            // or change). Carried here so the course page can tell an educator
+            // honestly when adding a student does NOT change their case list.
+            case_access_enforced: await cohortCaseEnforcementOn(),
         });
     } catch (err) {
         next(err);

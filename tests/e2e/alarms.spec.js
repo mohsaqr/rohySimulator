@@ -43,7 +43,7 @@
 //     specs (case-lifecycle, scenario-engine) don't see leaked thresholds.
 
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin, listCases } from './fixtures/seed.js';
+import { apiAsAdmin } from './fixtures/seed.js';
 import { loginAs } from './fixtures/auth.js';
 import { request as pwRequest } from '@playwright/test';
 
@@ -124,9 +124,13 @@ test.describe('alarms + notifications (Phase 5)', () => {
     test.beforeAll(async ({ baseURL }) => {
         admin = await apiAsAdmin(baseURL);
         student = await apiAsStudent(baseURL);
-        const cases = await listCases(baseURL);
+        // Two cases the STUDENT can play: course access is on, so the admin's
+        // list (every case) includes ones a student is refused.
+        const listed = await student.get('/api/cases');
+        expect(listed.ok(), await listed.text()).toBeTruthy();
+        const cases = (await listed.json()).cases || [];
         if (cases.length < 2) {
-            throw new Error(`Need >=2 seeded cases for cross-case tests; got ${cases.length}`);
+            throw new Error(`Need >=2 cases the student can play for cross-case tests; got ${cases.length}`);
         }
         caseA = cases[0];
         caseB = cases[1];

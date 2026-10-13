@@ -38089,6 +38089,46 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.access_enforce_help": {
+    "src": "4d633dd512aa",
+    "tgt": "2d99a9301c2a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.access_enforce_label": {
+    "src": "735293dc5931",
+    "tgt": "7899e95b07a9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.access_load_failed": {
+    "src": "317405020e44",
+    "tgt": "f7d390cda641",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.access_policy_title": {
+    "src": "478299973307",
+    "tgt": "98f8dc54f656",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.aria_class_settings": {
     "src": "77256bd42e71",
     "tgt": "0cdd0fb8f84b",
@@ -38729,6 +38769,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.help_default_case_access": {
+    "src": "fb521b0e856b",
+    "tgt": "ef4fd62ac383",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.help_directory_fallback": {
     "src": "cbd298b52ac8",
     "tgt": "040af181406c",
@@ -38782,6 +38832,16 @@
   "teacher_cohorts.help_require_debrief": {
     "src": "48093c4e6f7b",
     "tgt": "c5f603c870ff",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.hint_membership_not_enforced": {
+    "src": "2a390219ca43",
+    "tgt": "1c3a6ef5f16e",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -38872,6 +38932,16 @@
   "teacher_cohorts.label_course_workspace": {
     "src": "f11a935af368",
     "tgt": "0ffc63921d41",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.label_default_case_access": {
+    "src": "54bb036b17aa",
+    "tgt": "a1ba33438741",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39312,6 +39382,36 @@
   "teacher_cohorts.title_unassign_case": {
     "src": "21a9019c0fc9",
     "tgt": "413b9a237da8",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.toast_access_enforce_failed": {
+    "src": "ae98078ebf9b",
+    "tgt": "8e016ebd0233",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.toast_access_enforce_off": {
+    "src": "b1b09abe3c6c",
+    "tgt": "fc8dad4b57c7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.toast_access_enforce_on": {
+    "src": "eb144b8a7338",
+    "tgt": "d5a43327a600",
     "state": "machine",
     "origin": "machine",
     "locked": false,

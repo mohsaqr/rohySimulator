@@ -35,7 +35,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin } from './fixtures/seed.js';
+import { apiAsAdmin, offerCaseToStudents } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
 import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
@@ -283,6 +283,7 @@ test.describe('oyon signal analytics', () => {
             expect(created.ok(), await created.text()).toBeTruthy();
             seededCaseId = (await created.json()).id;
         } finally { await admin2.dispose(); }
+        await offerCaseToStudents(baseURL, seededCaseId);
         const theCase = { id: seededCaseId };
         const { token: tokenA } = await loginAs(baseURL, 'student');
         const tokenB = await tokenFor(baseURL, SECOND.username, SECOND.password);
@@ -337,6 +338,7 @@ test.describe('oyon signal analytics', () => {
             expect(created.ok(), await created.text()).toBeTruthy();
             processCaseId = (await created.json()).id;
         } finally { await admin3.dispose(); }
+        await offerCaseToStudents(baseURL, processCaseId);
         const insertedProcess = await seedLearner(baseURL, tokenA, processCaseId, 'Demo Student', (sid) => {
             processWindow = realTypingWindow(sid);
             return [processWindow];

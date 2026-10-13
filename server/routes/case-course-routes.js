@@ -20,9 +20,13 @@ import {
     auditSuccess,
     caseAccessEnforcedFor,
     canReadAcrossUsers,
-    cohortCaseVisibleExists,
+    studentCaseVisibility,
     resolveSessionTrinity,
 } from './_helpers.js';
+
+// What a student may see while course access is enforced (one rule, shared
+// with every other case-visibility site — see studentCaseVisibility).
+const studentCase = studentCaseVisibility('c');
 import { logger } from '../logger.js';
 import { courseGateState } from '../services/courseGate.js';
 import {
@@ -58,8 +62,8 @@ async function readableCase(req, caseId) {
         return dbAdapter.get(
             `SELECT c.id, c.config FROM cases c
               WHERE c.id = ? AND c.tenant_id = ? AND c.is_available = 1 AND c.deleted_at IS NULL
-                AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )`,
-            [caseId, tenantId(req), req.user.id]
+                AND ${studentCase.sql}`,
+            [caseId, tenantId(req), ...studentCase.binds(req.user.id)]
         );
     }
     return dbAdapter.get(

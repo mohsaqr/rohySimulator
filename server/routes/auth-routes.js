@@ -361,16 +361,12 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             const ipAddress = req.ip || req.connection?.remoteAddress;
             const userAgent = req.headers['user-agent'];
 
-            // Auto-enrol into the tenant's auto-enrol classes (the default
-            // course — cohorts.is_default = 1, seeded as "Basic course" but
-            // renameable — and any other cohorts.auto_enroll = 1) so the new
-            // user always has the default case (safety net for enforced
-            // access). Idempotent + never throws.
-            await ensureAutoEnrollMemberships(user.id, defaultTenantId);
-
             // An invite that names a course puts you IN that course. This is the
             // whole reason a teacher shares an invite link rather than telling
-            // people to sign up and hunt for a join code.
+            // people to sign up and hunt for a join code. It runs BEFORE
+            // auto-enrolment, which skips anyone already in a course: the
+            // default course and its default case are for people who register
+            // themselves, not for someone invited into a course.
             if (invite) {
                 if (invite.cohort_id) {
                     try {
@@ -383,6 +379,12 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 }
                 await recordInviteUse(invite.id, user.id, ipAddress);
             }
+
+            // Auto-enrol into the tenant's auto-enrol classes (the default
+            // course — cohorts.is_default = 1, seeded as "Basic course" but
+            // renameable — and any other cohorts.auto_enroll = 1), unless the
+            // invite above already put them in a course. Idempotent + never throws.
+            await ensureAutoEnrollMemberships(user.id, defaultTenantId);
 
             logAudit({
                 userId: user.id,

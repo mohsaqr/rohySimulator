@@ -111,12 +111,11 @@ describe('student case access', () => {
         if (server) await server.close();
     });
 
-    // The flag ships OFF, and an install that never opts in must behave exactly
-    // as it did before cohort-case enforcement existed: any available case is
-    // visible and launchable. Enforcement used to apply to every student
-    // regardless of the flag, which silently locked down all existing installs
-    // and made the admin toggle a no-op.
-    describe('with enforcement OFF (the shipped default)', () => {
+    // With the switch OFF any available case is visible and launchable, as
+    // before course-scoped access existed. (It is ON by default since
+    // 2026-10-13 — an admin turns it off in Settings → Courses; see
+    // default-case-access.test.js for the default.)
+    describe('with enforcement OFF', () => {
         beforeAll(async () => {
             await setEnforcement(false);
         });
@@ -140,6 +139,18 @@ describe('student case access', () => {
             });
             expect(launch.status).toBe(200);
         });
+
+        // The flag itself is admin-only, so the course page learns it from the
+        // course read instead: an educator adding members must be told that
+        // membership does not scope cases while this is off (FI0010.AUTHOR.02).
+        it('the course read tells its educator that membership does not scope cases', async () => {
+            const teacher = authed(server.baseUrl, await login(server.baseUrl, 'sca-teacher'));
+            const flag = await teacher('/api/platform-settings/cohort-case-enforcement');
+            expect(flag.status).toBe(403);
+            const res = await teacher(`/api/cohorts/${ids.cohort}`);
+            expect(res.status).toBe(200);
+            expect((await res.json()).case_access_enforced).toBe(false);
+        });
     });
 
     describe('with enforcement ON', () => {
@@ -151,12 +162,15 @@ describe('student case access', () => {
             await setEnforcement(false);
         });
 
-        it('students see only the default case and cases assigned through active course enrolment', async () => {
+        // This student is in a course that does not give its members the
+        // default case, so they see that course's cases and nothing else — the
+        // default case is for people who registered themselves.
+        it('students see only the cases assigned through active course enrolment', async () => {
             const list = await student('/api/cases');
             expect(list.status).toBe(200);
             const visibleIds = (await list.json()).cases.map(c => c.id);
-            expect(visibleIds).toContain(ids.defaultCase);
             expect(visibleIds).toContain(ids.assignedCase);
+            expect(visibleIds).not.toContain(ids.defaultCase);
             expect(visibleIds).not.toContain(ids.unassignedCase);
         });
 
@@ -177,6 +191,13 @@ describe('student case access', () => {
             expect(list.status).toBe(200);
             const visibleIds = (await list.json()).cases.map(c => c.id);
             expect(visibleIds).toContain(ids.unassignedCase);
+        });
+
+        it('the course read reports that membership now scopes cases', async () => {
+            const teacher = authed(server.baseUrl, await login(server.baseUrl, 'sca-teacher'));
+            const res = await teacher(`/api/cohorts/${ids.cohort}`);
+            expect(res.status).toBe(200);
+            expect((await res.json()).case_access_enforced).toBe(true);
         });
     });
 });

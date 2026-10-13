@@ -67,7 +67,7 @@ beforeEach(() => {
     Object.values(userSvc).forEach((f) => f.mockReset());
     toast.confirm.mockResolvedValue(true);
     svc.listCohorts.mockResolvedValue({ cohorts: [] });
-    userSvc.getEnforcementFlag.mockRejectedValue(new ApiError('forbidden', 403));
+    userSvc.getEnforcementFlag.mockRejectedValue(new ApiError('forbidden', { status: 403 }));
 });
 
 afterEach(() => {
@@ -360,5 +360,187 @@ describe('CohortsManagementTab — roster drill-down', () => {
         fireEvent.click(screen.getByText('Ghost'));
         await waitFor(() =>
             expect(screen.getByText('Course not found.')).toBeTruthy());
+    });
+});
+
+describe('CohortsManagementTab — course access switch', () => {
+    const LABEL = 'Only show cases to enrolled course members';
+
+    // Regression lock: FI0010.AUTHOR.02 — course access switch was only reachable in the first-run wizard
+    it('shows the admin switch with the server state, and turning it on calls setEnforcementFlag(true)', async () => {
+        userSvc.getEnforcementFlag.mockResolvedValue({ enabled: false });
+        userSvc.setEnforcementFlag.mockResolvedValue({ enabled: true });
+        renderWithProviders(<CohortsManagementTab />);
+        const box = await screen.findByLabelText(LABEL);
+        expect(box.checked).toBe(false);
+        expect(screen.getByText(/On \(default\): students see only the cases of their courses, plus the default case if they registered themselves or their course allows it/)).toBeTruthy();
+
+        fireEvent.click(box);
+        await waitFor(() => expect(userSvc.setEnforcementFlag).toHaveBeenCalledWith(true));
+        await waitFor(() => expect(screen.getByLabelText(LABEL).checked).toBe(true));
+        expect(toast.success).toHaveBeenCalledWith(
+            'Course access on: students now see only the cases of their courses.');
+    });
+
+    it('reflects an ON server state and turns it off', async () => {
+        userSvc.getEnforcementFlag.mockResolvedValue({ enabled: true });
+        userSvc.setEnforcementFlag.mockResolvedValue({ enabled: false });
+        renderWithProviders(<CohortsManagementTab />);
+        const box = await screen.findByLabelText(LABEL);
+        expect(box.checked).toBe(true);
+        fireEvent.click(box);
+        await waitFor(() => expect(userSvc.setEnforcementFlag).toHaveBeenCalledWith(false));
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+            'Course access off: students now see every published case.'));
+    });
+
+    it('keeps the old state and reports the failure when saving fails', async () => {
+        userSvc.getEnforcementFlag.mockResolvedValue({ enabled: false });
+        userSvc.setEnforcementFlag.mockRejectedValue(new ApiError('nope', { status: 500 }));
+        renderWithProviders(<CohortsManagementTab />);
+        fireEvent.click(await screen.findByLabelText(LABEL));
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('nope'));
+        expect(screen.getByLabelText(LABEL).checked).toBe(false);
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('is hidden from an educator (the admin-only read answers 403)', async () => {
+        // beforeEach already makes getEnforcementFlag reject with a 403.
+        svc.listCohorts.mockResolvedValue({ cohorts: [{ id: 1, name: 'Cardio', member_count: 0 }] });
+        renderWithProviders(<CohortsManagementTab />);
+        await waitFor(() => expect(screen.getByText('Cardio')).toBeTruthy());
+        await waitFor(() => expect(userSvc.getEnforcementFlag).toHaveBeenCalled());
+        expect(screen.queryByLabelText(LABEL)).toBeNull();
+        expect(screen.queryByTestId('course-access-policy')).toBeNull();
+    });
+
+    it('says so when the setting cannot be read for another reason', async () => {
+        userSvc.getEnforcementFlag.mockRejectedValue(new ApiError('down', { status: 500 }));
+        renderWithProviders(<CohortsManagementTab />);
+        await waitFor(() =>
+            expect(screen.getByText('Could not load the course access setting.')).toBeTruthy());
+        expect(screen.queryByLabelText(LABEL)).toBeNull();
+    });
+});
+
+describe('CohortsManagementTab — membership hint when course access is off', () => {
+    const HINT = /Course membership does not currently limit which cases students see/;
+
+    async function openCourse(cohort, caseAccessEnforced) {
+        svc.listCohorts.mockResolvedValue({ cohorts: [{ ...cohort, member_count: 0 }] });
+        svc.getCohort.mockResolvedValue({ cohort, members: [], case_access_enforced: caseAccessEnforced });
+        renderWithProviders(<CohortsManagementTab />);
+        await waitFor(() => expect(screen.getByText(cohort.name)).toBeTruthy());
+        fireEvent.click(screen.getByText(cohort.name));
+        await waitFor(() => expect(screen.getByText('Back to courses')).toBeTruthy());
+    }
+
+    it('warns on a regular course while enforcement is off', async () => {
+        await openCourse({ id: 2, name: 'Cardio', is_default: 0 }, false);
+        expect(screen.getByText(HINT)).toBeTruthy();
+    });
+
+    it('stays quiet when enforcement is on', async () => {
+        await openCourse({ id: 2, name: 'Cardio', is_default: 0 }, true);
+        expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('stays quiet on the default course, whose case everyone sees anyway', async () => {
+        await openCourse({ id: 1, name: 'Cardiology 101', is_default: 1 }, false);
+        expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('stays quiet when the server does not report the setting', async () => {
+        await openCourse({ id: 2, name: 'Cardio', is_default: 0 }, undefined);
+        expect(screen.queryByText(HINT)).toBeNull();
+    });
+});
+
+describe('CohortsManagementTab — per-course default-case access', () => {
+    const LABEL = /Members also get the default case/;
+
+    async function openSettings(cohort) {
+        svc.listCohorts.mockResolvedValue({ cohorts: [{ id: cohort.id, name: cohort.name, member_count: 0 }] });
+        svc.getCohort.mockResolvedValue({
+            cohort, members: [], students: [], teachers: [], cases: [],
+        });
+        svc.updateCohort.mockResolvedValue({});
+        renderWithProviders(<CohortsManagementTab />);
+        await waitFor(() => expect(screen.getByText(cohort.name)).toBeTruthy());
+        fireEvent.click(screen.getByTitle('Class settings'));
+        await screen.findByText('Classroom policy');
+    }
+
+    const savedSettings = () => svc.updateCohort.mock.calls.at(-1)[1].settings;
+
+    // Regression lock: per-course default-case access is editable in the course settings
+    it('shows the checkbox on a regular course and saves default_case_access: true without dropping other keys', async () => {
+        await openSettings({
+            id: 2, name: 'Cardio', is_default: 0,
+            settings: { allow_retakes: false, require_debrief: true, term: 'Spring', future_key: 'kept' },
+        });
+        const box = screen.getByLabelText(LABEL);
+        expect(box.checked).toBe(false);
+        expect(screen.getByText(/Off: members see only this course's cases/)).toBeTruthy();
+
+        fireEvent.click(box);
+        fireEvent.click(screen.getByRole('button', { name: 'Save class settings' }));
+        await waitFor(() => expect(svc.updateCohort).toHaveBeenCalledTimes(1));
+        expect(svc.updateCohort.mock.calls[0][0]).toBe(2);
+        expect(savedSettings()).toEqual({
+            allow_retakes: false,
+            require_debrief: true,
+            term: 'Spring',
+            future_key: 'kept',
+            default_case_access: true,
+        });
+    });
+
+    it('shows a stored true as checked and keeps it when only another setting changes', async () => {
+        await openSettings({
+            id: 2, name: 'Cardio', is_default: 0,
+            settings: JSON.stringify({ default_case_access: true, allow_retakes: true }),
+        });
+        expect(screen.getByLabelText(LABEL).checked).toBe(true);
+
+        fireEvent.click(screen.getByLabelText(/Require debrief/));
+        fireEvent.click(screen.getByRole('button', { name: 'Save class settings' }));
+        await waitFor(() => expect(svc.updateCohort).toHaveBeenCalledTimes(1));
+        expect(savedSettings()).toEqual({
+            default_case_access: true,
+            allow_retakes: true,
+            require_debrief: true,
+        });
+    });
+
+    it('reads an absent key as off and never turns it on by saving something else', async () => {
+        await openSettings({ id: 2, name: 'Cardio', is_default: 0, settings: { term: 'Fall' } });
+        expect(screen.getByLabelText(LABEL).checked).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: 'Save class settings' }));
+        await waitFor(() => expect(svc.updateCohort).toHaveBeenCalledTimes(1));
+        expect(savedSettings().default_case_access).toBe(false);
+        expect(savedSettings().term).toBe('Fall');
+    });
+
+    it('turns a stored true off when the educator unticks it', async () => {
+        await openSettings({ id: 2, name: 'Cardio', is_default: 0, settings: { default_case_access: true } });
+        fireEvent.click(screen.getByLabelText(LABEL));
+        fireEvent.click(screen.getByRole('button', { name: 'Save class settings' }));
+        await waitFor(() => expect(svc.updateCohort).toHaveBeenCalledTimes(1));
+        expect(savedSettings().default_case_access).toBe(false);
+    });
+
+    it('is hidden on the default course, and saving there leaves the settings untouched', async () => {
+        await openSettings({
+            id: 1, name: 'Cardiology 101', is_default: 1,
+            settings: { allow_retakes: true, require_debrief: false },
+        });
+        expect(screen.queryByLabelText(LABEL)).toBeNull();
+        expect(screen.queryByText(/Off: members see only this course's cases/)).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save class settings' }));
+        await waitFor(() => expect(svc.updateCohort).toHaveBeenCalledTimes(1));
+        expect(savedSettings()).toEqual({ allow_retakes: true, require_debrief: false });
+        expect('default_case_access' in savedSettings()).toBe(false);
     });
 });

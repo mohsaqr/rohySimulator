@@ -29,10 +29,24 @@ export const roleForStorage = (role, fallback = 'student') => normalizeRole(role
 export const tenantId = (req) => resolveTenant(req);
 
 // --- Cohort-case access enforcement (class-centric, date-windowed) ----------
-// Enforcement is OPT-IN via the global platform flag `enforce_cohort_case_access`
-// and only applies to sub-reviewer ranks (students). Reviewer/educator/admin
-// always bypass. When the flag is absent or unreadable we treat it as OFF, so a
-// settings glitch can never lock every student out (fail-safe / non-breaking).
+// Enforcement is ON unless an admin turns it off (Settings → Courses → Course
+// access, stored as the platform flag `enforce_cohort_case_access`). It only
+// applies to sub-reviewer ranks (students); reviewer/educator/admin always
+// bypass. It used to be opt-in, which made course membership look broken: a
+// student added to a course saw nothing new, because every student already saw
+// every case (Prova FI0010.AUTHOR.02). An absent flag now means ON; only an
+// explicit 'false'/'0' turns it off. An unreadable flag also falls back to ON —
+// for an access rule, failing closed is the safe side.
+
+/** What an install that never touched the switch gets. */
+export const COHORT_CASE_ENFORCEMENT_DEFAULT = true;
+
+/** The flag's stored text → on/off, with absent meaning the default. */
+export function parseCohortCaseEnforcement(value) {
+    if (value === 'true' || value === '1') return true;
+    if (value === 'false' || value === '0') return false;
+    return COHORT_CASE_ENFORCEMENT_DEFAULT;
+}
 
 /** True when the caller ranks below reviewer, i.e. enforcement *could* apply. */
 export const isEnforcedStudent = (user) => !canReadAcrossUsers(user);
@@ -40,7 +54,7 @@ export const isEnforcedStudent = (user) => !canReadAcrossUsers(user);
 let _enforceCache = { value: null, at: 0 };
 const ENFORCE_CACHE_MS = 15000;
 
-/** Read the global enforcement flag (cached ~15s, fail-safe OFF). */
+/** Read the global enforcement flag (cached ~15s; absent or unreadable = ON). */
 export async function cohortCaseEnforcementOn() {
     const now = Date.now();
     if (_enforceCache.value !== null && now - _enforceCache.at < ENFORCE_CACHE_MS) {
@@ -50,11 +64,11 @@ export async function cohortCaseEnforcementOn() {
         const row = await dbGet(
             `SELECT setting_value FROM platform_settings WHERE setting_key = 'enforce_cohort_case_access'`
         );
-        const on = row?.setting_value === 'true' || row?.setting_value === '1';
+        const on = parseCohortCaseEnforcement(row?.setting_value);
         _enforceCache = { value: on, at: now };
         return on;
     } catch {
-        return false;
+        return COHORT_CASE_ENFORCEMENT_DEFAULT;
     }
 }
 
@@ -66,7 +80,7 @@ export function resetCohortCaseEnforcementCache() {
 /**
  * The single gate every case-visibility site shares: catalog (GET /cases),
  * direct read (GET /cases/:id) and session launch (POST /sessions). True only
- * when the caller is below reviewer rank AND the admin has opted in. Call this
+ * when the caller is below reviewer rank AND enforcement is on. Call this
  * rather than testing rank and flag separately — the three sites previously
  * tested rank alone, which enforced course scoping on every install whether or
  * not the admin had turned it on.
@@ -186,41 +200,100 @@ function liveUntil(column) {
 }
 
 /**
- * SQL `EXISTS (...)` fragment: true when the given cases-row alias is assigned,
- * in-window, to a live active in-window membership of the bound user. Contains
- * exactly ONE bind placeholder (`?` for the student's user id). All time
- * comparisons wrap both sides in datetime() because cohort windows are stored as
- * ISO strings while CURRENT_TIMESTAMP columns use 'YYYY-MM-DD HH:MM:SS' — the two
- * are not lexically comparable. `caseAlias` is a trusted internal literal.
+ * SQL conditions: `cm` is a live, active, in-window membership of a live,
+ * in-window course `co`. All time comparisons wrap both sides in datetime()
+ * because cohort windows are stored as ISO strings while CURRENT_TIMESTAMP
+ * columns use 'YYYY-MM-DD HH:MM:SS' — the two are not lexically comparable.
  */
-export function cohortCaseVisibleExists(caseAlias = 'c') {
-    return `EXISTS (
-        SELECT 1
-          FROM cohort_cases cc
-          JOIN cohorts co ON co.id = cc.cohort_id
-          JOIN cohort_members cm ON cm.cohort_id = co.id
-         WHERE cc.case_id = ${caseAlias}.id
-           AND cc.deleted_at IS NULL
-           AND co.deleted_at IS NULL
-           AND co.tenant_id = ${caseAlias}.tenant_id
-           AND cm.user_id = ?
+const ACTIVE_MEMBERSHIP = `
+           co.deleted_at IS NULL
            AND cm.deleted_at IS NULL
            AND cm.status = 'active'
            AND (co.starts_at IS NULL OR datetime(co.starts_at) <= datetime('now'))
            AND ${liveUntil('co.ends_at')}
-           AND (cc.available_from IS NULL OR datetime(cc.available_from) <= datetime('now'))
-           AND ${liveUntil('cc.available_until')}
            AND (cm.enrolled_from IS NULL OR datetime(cm.enrolled_from) <= datetime('now'))
-           AND ${liveUntil('cm.enrolled_until')}
+           AND ${liveUntil('cm.enrolled_until')}`;
+
+// A course's own "members also get the default case" setting, read from its
+// settings JSON. CASE guards json_extract: one malformed settings blob must not
+// turn every student's case list into a 500.
+const COURSE_GIVES_DEFAULT_CASE =
+    `(CASE WHEN json_valid(co.settings) THEN json_extract(co.settings, '$.default_case_access') END) = 1`;
+
+/**
+ * Which cases a student may see while course access is enforced — the ONE rule
+ * the catalogue, the direct read, session launch and the case-course routes
+ * share. Returns the SQL condition for the cases-row alias and the binds it
+ * needs, in order (every bind is the student's user id).
+ *
+ *  - Any case assigned (in-window) to a course the student is an active member
+ *    of — except that the default case's own link to the DEFAULT course grants
+ *    nothing on its own (that link exists on every install; see below).
+ *  - The default case (`cases.is_default`), which is for people who registered
+ *    themselves: shown when the student belongs to no course other than the
+ *    default course, or when some course they are active in says
+ *    `settings.default_case_access: true`. A student invited into a course
+ *    does not get it unless that course allows it — and membership of a course
+ *    that does not allow it wins over also being in the default course.
+ *
+ * "Belongs to another course" counts every live membership, active or not and
+ * in its window or not: a student whose course starts next week has still been
+ * invited into it, and is not a self-registered learner in the meantime.
+ *
+ * @param {string} caseAlias  trusted internal literal naming the cases row
+ * @returns {{sql: string, binds: (userId: number) => number[]}}
+ */
+export function studentCaseVisibility(caseAlias = 'c') {
+    const c = caseAlias;
+    const sql = `(
+        EXISTS (
+            SELECT 1
+              FROM cohort_cases cc
+              JOIN cohorts co ON co.id = cc.cohort_id
+              JOIN cohort_members cm ON cm.cohort_id = co.id
+             WHERE cc.case_id = ${c}.id
+               AND cc.deleted_at IS NULL
+               AND co.tenant_id = ${c}.tenant_id
+               AND cm.user_id = ?
+               AND ${ACTIVE_MEMBERSHIP}
+               AND (cc.available_from IS NULL OR datetime(cc.available_from) <= datetime('now'))
+               AND ${liveUntil('cc.available_until')}
+               AND NOT (${c}.is_default = 1 AND co.is_default = 1)
+        )
+        OR ( ${c}.is_default = 1 AND (
+            EXISTS (
+                SELECT 1
+                  FROM cohorts co
+                  JOIN cohort_members cm ON cm.cohort_id = co.id
+                 WHERE co.tenant_id = ${c}.tenant_id
+                   AND co.is_default = 0
+                   AND cm.user_id = ?
+                   AND ${ACTIVE_MEMBERSHIP}
+                   AND ${COURSE_GIVES_DEFAULT_CASE}
+            )
+            OR NOT EXISTS (
+                SELECT 1
+                  FROM cohorts co
+                  JOIN cohort_members cm ON cm.cohort_id = co.id
+                 WHERE co.tenant_id = ${c}.tenant_id
+                   AND co.is_default = 0
+                   AND co.deleted_at IS NULL
+                   AND cm.user_id = ?
+                   AND cm.deleted_at IS NULL
+            )
+        ))
     )`;
+    return { sql, binds: (userId) => [userId, userId, userId] };
 }
 
 /**
  * Idempotently enrol a user into every AUTO-ENROL class in their tenant
- * (`cohorts.auto_enroll = 1`) — the safety net that guarantees every student
- * always has the default class (the "Basic course"), so enforcement can never
- * lock anyone out. One INSERT per matching cohort the user is not already a
- * live member of. No-op if no auto-enrol class exists for the tenant. Never
+ * (`cohorts.auto_enroll = 1`, the default "Basic course") — where people who
+ * register themselves land, so they always have something to open. Skipped for
+ * a user who is already in any other course: an invited student gets their
+ * course, not the default one. Callers that enrol into a specific course must
+ * do that FIRST. One INSERT per matching cohort the user has never been a
+ * member of. No-op if no auto-enrol class exists for the tenant. Never
  * throws (login/register must not fail on this). The seedStemiCourse comment
  * already names this hook `ensureAutoEnrollMemberships`.
  */
@@ -245,8 +318,20 @@ export async function ensureAutoEnrollMemberships(userId, tenant_id) {
                 AND c.deleted_at IS NULL
                 AND NOT EXISTS (
                     SELECT 1 FROM cohort_members m
-                     WHERE m.cohort_id = c.id AND m.user_id = ?)`,
-            [userId, tenant_id, userId]
+                     WHERE m.cohort_id = c.id AND m.user_id = ?)
+                -- The default course is for people who registered themselves.
+                -- Someone already in another course (invited into it, imported
+                -- into a class, added by a teacher) is not swept into it — and
+                -- with it its cases — at their next login.
+                AND NOT EXISTS (
+                    SELECT 1 FROM cohort_members m2
+                      JOIN cohorts c2 ON c2.id = m2.cohort_id
+                     WHERE m2.user_id = ?
+                       AND m2.deleted_at IS NULL
+                       AND c2.tenant_id = ?
+                       AND c2.auto_enroll = 0
+                       AND c2.deleted_at IS NULL)`,
+            [userId, tenant_id, userId, userId, tenant_id]
         );
     } catch (err) {
         routesCasesLog.warn('ensureAutoEnrollMemberships failed', { user_id: userId, tenant_id, error: err.message });

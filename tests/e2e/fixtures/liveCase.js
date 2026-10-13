@@ -72,7 +72,14 @@ export async function createAssignedCase(baseURL, { name, config, scenario }) {
         // for a hidden one.
         const published = await admin.put(`/api/cases/${theCase.id}/availability`, { data: { is_available: true } });
         expect(published.ok(), await published.text()).toBeTruthy();
-        const cohort = await admin.post('/api/cohorts', { data: { name: `${name} course` } });
+        // The default case is for students in no other course; a course takes
+        // it away unless the course says its members keep it. The seeded
+        // student plays the default case in every other spec, so this helper
+        // course keeps it (`default_case_access`) — without it, the first spec
+        // to call this would leave every later default-case spec at a 403.
+        const cohort = await admin.post('/api/cohorts', { data: {
+            name: `${name} course`, settings: { default_case_access: true },
+        } });
         expect(cohort.ok(), await cohort.text()).toBeTruthy();
         const cohortId = (await cohort.json()).cohort.id;
         const member = await admin.post(`/api/cohorts/${cohortId}/members`, { data: { identifier: 'student' } });

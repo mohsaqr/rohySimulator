@@ -323,11 +323,14 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
                     );
                 });
                 results.created.push({ row: rowNo, id: newId, username, email, role: finalRole, class: cohort?.name || null });
-                await ensureAutoEnrollMemberships(newId, tid);
+                // The named class first: auto-enrolment then skips anyone
+                // already in a course, so an imported class member does not
+                // also land in the default course meant for self-registration.
                 if (cohort) {
                     const outcome = await enrollUserInCohort(cohort.id, newId);
                     results.enrolled.push({ row: rowNo, username, class: cohort.name, outcome });
                 }
+                await ensureAutoEnrollMemberships(newId, tid);
                 byUsername.set(uKey, { id: newId, username, email });
                 byEmail.set(eKey, { id: newId, username, email });
             } catch (err) {
