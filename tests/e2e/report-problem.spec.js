@@ -101,6 +101,7 @@ test.describe('Report a problem', () => {
         await trigger.waitFor({ timeout: 30_000 });
         await trigger.click();
         await expect(page.getByTestId('menu-report-problem')).toBeVisible();
+        await expect(page.getByTestId('menu-request-feature')).toBeVisible();
         await expect(page.getByTestId('menu-my-reports')).toBeVisible();
         await page.screenshot({ path: path.join(SHOTS, 'rohy-menu.png') });
         await page.getByTestId('menu-report-problem').click();

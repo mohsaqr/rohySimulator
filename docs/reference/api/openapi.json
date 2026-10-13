@@ -11311,7 +11311,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/report-routes.js:99",
+        "x-rohy-source": "server/routes/report-routes.js:103",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAuth"
@@ -11346,7 +11346,95 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/report-routes.js:117",
+        "x-rohy-source": "server/routes/report-routes.js:121",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reports/{id}/messages": {
+      "get": {
+        "summary": "Get /reports/:id/messages",
+        "tags": [
+          "report"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/report-routes.js:143",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create /reports/:id/messages",
+        "tags": [
+          "report"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/report-routes.js:154",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAuth"

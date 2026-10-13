@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.60] — 2026-10-13
+
+- **Request a feature, several screenshots and a conversation with the team** (Prova report widget 1.4.0,
+  relay 1.3.0, both vendored unchanged):
+  - The user menu has **Request a feature…** after Report a problem…; the dialog switches between a problem
+    and a feature request and keeps what was typed. A feature request sends no recent errors.
+  - Up to five screenshots per report (each at most 2 MB, 6 MB together), by paste, drop or choosing several.
+    `/api/report` takes the relay's own body cap (8.5 MB) instead of 4 MB.
+  - **My reports** shows each report's messages from the team and "A question for you"; a report opens its
+    conversation, with answer buttons for a question and a box to write back. New routes
+    `GET`/`POST /api/reports/:id/messages` (signed in, the same checks as `/api/report`; 16 KiB bodies; 404 while
+    the installation has no key, so nothing registers by accident). The answer reaches whoever asked in Prova.
+
 ## [3.0.0-rc.59] — 2026-10-13
 
 - **The patient's alarm lines speak the case language.** They were hardcoded English, so a Finnish

@@ -954,7 +954,7 @@ function MainApp() {
             EventLogger.log('CLICKED', 'button', { objectId: 'logout', objectName: 'Logout', component: COMPONENTS.APP });
             logout();
          }}
-         reportProblem={{ available: reportProblem.available, news: reportProblem.news, onReport: reportProblem.open, onMine: reportProblem.openMine }}
+         reportProblem={{ available: reportProblem.available, news: reportProblem.news, onReport: reportProblem.open, onFeature: reportProblem.openFeature, onMine: reportProblem.openMine }}
          uiLanguage={uiLanguage}
          onSetLanguage={setUiLanguage}
          trailing={overlayPlugin ? null : onCallButton}

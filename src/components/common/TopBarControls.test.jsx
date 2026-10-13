@@ -180,21 +180,33 @@ describe('TopBarControls — trailing slot', () => {
 });
 
 describe('TopBarControls — Report a problem', () => {
-    const rp = (over = {}) => ({ available: true, news: 0, onReport: vi.fn(), onMine: vi.fn(), ...over });
+    const rp = (over = {}) => ({ available: true, news: 0, onReport: vi.fn(), onFeature: vi.fn(), onMine: vi.fn(), ...over });
 
-    it('offers Report a problem… and My reports under Help & Support when reporting is set up', () => {
+    it('offers Report a problem…, Request a feature… and My reports under Help & Support when reporting is set up', () => {
         const reportProblem = rp();
         setup({ reportProblem });
         openMenu();
         const items = within(screen.getByRole('menu')).getAllByRole('menuitem').map((b) => b.textContent);
         expect(items.indexOf('report_problem')).toBe(items.indexOf('help_support') + 1);
-        expect(items.indexOf('my_reports')).toBe(items.indexOf('help_support') + 2);
+        expect(items.indexOf('request_feature')).toBe(items.indexOf('help_support') + 2);
+        expect(items.indexOf('my_reports')).toBe(items.indexOf('help_support') + 3);
         fireEvent.click(screen.getByTestId('menu-report-problem'));
         expect(reportProblem.onReport).toHaveBeenCalledOnce();
         expect(screen.queryByRole('menu')).toBeNull();
         openMenu();
         fireEvent.click(screen.getByTestId('menu-my-reports'));
         expect(reportProblem.onMine).toHaveBeenCalledOnce();
+        expect(reportProblem.onFeature).not.toHaveBeenCalled();
+    });
+
+    it('Request a feature… opens the feature request (not a problem report) and closes the menu', () => {
+        const reportProblem = rp();
+        setup({ reportProblem });
+        openMenu();
+        fireEvent.click(screen.getByTestId('menu-request-feature'));
+        expect(reportProblem.onFeature).toHaveBeenCalledOnce();
+        expect(reportProblem.onReport).not.toHaveBeenCalled();
+        expect(screen.queryByRole('menu')).toBeNull();
     });
 
     it('shows nothing of it when reporting is not set up', () => {
@@ -202,6 +214,7 @@ describe('TopBarControls — Report a problem', () => {
         expect(screen.queryByTestId('report-news-dot')).toBeNull();
         openMenu();
         expect(screen.queryByTestId('menu-report-problem')).toBeNull();
+        expect(screen.queryByTestId('menu-request-feature')).toBeNull();
         expect(screen.queryByTestId('menu-my-reports')).toBeNull();
     });
 
