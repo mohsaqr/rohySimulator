@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.57] — 2026-10-13
+
+- **The course room tells staff what students can't see.** Unpublished lessons and surveys carry a
+  "Not published" badge (only staff are ever sent them).
+- **A student outside the case's course is told so.** `GET /courses/for-case/:caseId` returns
+  `reason: 'not_enrolled' | 'no_course'` (course name withheld), and the room says "You are not enrolled
+  in this case's course" instead of "not linked to a course yet".
+
 ## [3.0.0-rc.56] — 2026-10-13
 
 - **Course access is on by default, and the default case is for self-registered students.**

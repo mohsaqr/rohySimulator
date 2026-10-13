@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import {
   BookOpen, ArrowLeft, Clock, Layers, Check, ListChecks,
-  LayoutGrid, List, Pencil, Plus, ChevronRight, Settings2, GraduationCap,
+  LayoutGrid, List, Pencil, Plus, ChevronRight, Settings2, GraduationCap, EyeOff,
 } from 'lucide-react';
 import { LessonRoomView } from './LessonRoomView';
 import { SurveyEmbed } from './components/survey';
@@ -52,6 +52,22 @@ function Tile({ children }) {
   return (
     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
       {children}
+    </span>
+  );
+}
+
+// Shown on an item students cannot see yet. Students are never sent an
+// unpublished lesson or survey, so only staff ever meet this badge — which is
+// the point: a teacher looking at the course from the case saw a survey their
+// students did not, with nothing to say why.
+function NotPublished() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800"
+      title="Not published — students can't see this yet"
+    >
+      <EyeOff className="h-3 w-3" aria-hidden="true" /> Not published
+      <span className="sr-only"> — students can't see this yet</span>
     </span>
   );
 }
@@ -197,6 +213,7 @@ export function LessonsRoom({
                       <div className="flex items-center gap-2">
                         <h3 className="truncate font-semibold text-foreground">{l.title}</h3>
                         {done && <Check className="h-4 w-4 shrink-0 text-primary" aria-label="Completed" />}
+                        {l.isPublished === false && <NotPublished />}
                       </div>
                       {l.description && (
                         <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{l.description}</p>
@@ -241,6 +258,7 @@ export function LessonsRoom({
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           Survey
                         </span>
+                        {cs.survey.isPublished === false && <NotPublished />}
                       </div>
                       {cs.survey.description && (
                         <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{cs.survey.description}</p>
@@ -280,6 +298,7 @@ export function LessonsRoom({
                       <span className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">{l.title}</span>
                         {done && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Completed" />}
+                        {l.isPublished === false && <NotPublished />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {sections} section{sections === 1 ? '' : 's'}{l.duration ? ` · ${l.duration} min` : ''}
@@ -313,6 +332,7 @@ export function LessonsRoom({
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           Survey
                         </span>
+                        {cs.survey.isPublished === false && <NotPublished />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {q} question{q === 1 ? '' : 's'}

@@ -307,6 +307,26 @@ describe('lessons + surveys routes', () => {
         expect(resolved.data.cohortId).toBe(cohortMem); // enrolled beats owned/min(id)
     });
 
+    // Regression lock: a student outside the case's course got the same empty answer as for a case with no course, so the Course room told them "not linked to a course yet"
+    it('for-case tells a non-member why there is no course, without naming it', async () => {
+        const other = await json(await teacherA('/api/cohorts', {
+            method: 'POST', body: JSON.stringify({ name: 'For-case — not yours' }),
+        }));
+        const db = await openDb(server.dbPath);
+        let inCourse; let inNone;
+        try {
+            inCourse = (await pRun(db, `INSERT INTO cases (name, tenant_id) VALUES ('For-case in a course', 1)`)).lastID;
+            inNone = (await pRun(db, `INSERT INTO cases (name, tenant_id) VALUES ('For-case in no course', 1)`)).lastID;
+            await pRun(db, `INSERT INTO cohort_cases (cohort_id, case_id) VALUES (?, ?)`, [other.cohort.id, inCourse]);
+        } finally {
+            await closeDb(db);
+        }
+        const notEnrolled = await json(await student(`/api/courses/for-case/${inCourse}`));
+        expect(notEnrolled.data).toEqual({ cohortId: null, reason: 'not_enrolled' });
+        const noCourse = await json(await student(`/api/courses/for-case/${inNone}`));
+        expect(noCourse.data).toEqual({ cohortId: null, reason: 'no_course' });
+    });
+
     it('instructor sees aggregated responses and CSV export', async () => {
         const resp = await json(await teacherA(`/api/surveys/${surveyId}/responses?moduleId=${cohortId}`));
         expect(resp.data.totalResponses).toBe(1);
