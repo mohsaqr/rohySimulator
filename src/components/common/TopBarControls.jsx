@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye, Bug, List, Globe, BarChart3 } from 'lucide-react';
+import { Settings, ChevronDown, User, LogOut, Activity, HelpCircle, Check, BookOpen, Stethoscope, ListChecks, ScanEye, Bug, Lightbulb, List, Globe, BarChart3 } from 'lucide-react';
 import { LANGUAGES } from '../../i18n/languages';
 
 // The single persistent top-bar menu: ONE trigger (gear + current-language
@@ -56,8 +56,9 @@ export default function TopBarControls({
    onOpenCaseAnalytics,
    onOpenSetup,
    onLogout,
-   // Report a problem (hooks/useReportProblem.js): { available, news, onReport, onMine }. The two rows sit
-   // under Help & Support; an amber dot on the trigger and "· N new" on My reports when a report has news.
+   // Report a problem (hooks/useReportProblem.js): { available, news, onReport, onFeature, onMine }. The three
+   // rows (Report a problem…, Request a feature…, My reports) sit under Help & Support; an amber dot on the
+   // trigger and "· N new" on My reports when a report has news.
    reportProblem = null,
    uiLanguage,
    onSetLanguage,
@@ -249,6 +250,16 @@ export default function TopBarControls({
                         >
                            <Bug className="w-4 h-4" />
                            {t('report_problem')}
+                        </button>
+                        <button
+                           type="button"
+                           onClick={() => { closeAll(); reportProblem.onFeature?.(); }}
+                           data-testid="menu-request-feature"
+                           role="menuitem"
+                           className="rohy-topbar-menu-item"
+                        >
+                           <Lightbulb className="w-4 h-4" />
+                           {t('request_feature')}
                         </button>
                         <button
                            type="button"

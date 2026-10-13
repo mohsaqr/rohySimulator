@@ -73,6 +73,7 @@ instrumentSqliteDb(db);
 import { buildCorsOptions } from './cors-config.js';
 import { securityHeaders } from './security-headers.js';
 import { lessonFileGuard } from './routes/lessons-routes.js';
+import { MAX_BODY as REPORT_MAX_BODY, MESSAGE_BODY_MAX as REPORT_MESSAGE_BODY_MAX } from './lib/prova-relay.js';
 
 app.use(requestIdMiddleware);
 app.use(dbErrorShield);
@@ -97,9 +98,12 @@ app.use(requestLoggerMiddleware());
 // global limit and overriding per-route where genuinely needed. The
 // upload routes use multer (multipart), not express.json, so they are
 // unaffected by this cap.
-// Report a problem (routes/report-routes.js) carries one screenshot of at most 2 MB, base64 in JSON: that one
-// path gets a larger cap. It parses first, so the general parser below sees the body as already read.
-app.use('/api/report', express.json({ limit: '4mb' }));
+// Report a problem (routes/report-routes.js) carries up to five screenshots (each ≤ 2 MB, 6 MB together),
+// base64 in JSON: that one path gets the vendored relay's own cap (MAX_BODY, 8.5 MB), so the relay and this
+// parser can never disagree. It parses first, so the general parser below sees the body as already read.
+app.use('/api/report', express.json({ limit: REPORT_MAX_BODY }));
+// Writing back on one's own report (relay 1.3.0): a short message, so the relay's MESSAGE_BODY_MAX (16 KiB).
+app.post('/api/reports/:id/messages', express.json({ limit: REPORT_MESSAGE_BODY_MAX }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request

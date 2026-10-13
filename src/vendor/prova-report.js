@@ -9,17 +9,34 @@
 //   const ring = createErrorRing(); ring.install(window);
 //   const reporter = createReporter({
 //     reportUrl: '/api/report', mineUrl: '/api/reports/mine', headers: () => ({ 'X-CSRF-Token': token }),
+//     subjectsUrl: '/api/report/subjects',   // 1.1.0: "This is about" (the app, or one of the owner's R packages);
+//                                            // 1.2.0: two steps — the app or "An R package", then "Which package"
+//     chunks: async () => [{ label: '#3 · plot-results', engine: 'r', code, output }],   // 1.1.0, optional
 //     user: 'beyza', app: { name: 'Beatrina SE', version: '1.5.18', host: location.host },
 //     team: 'the Beatrina developers', page: () => document.title, errors: () => ring.list(),
 //     stylesheet: '/report.css',   // only where the page's CSP forbids an inline <style>
 //   });
 //   reporter.bindMenu({ reportRow, mineRow, avatar });   // rows the app's own user menu already has
+//   // 1.3.0: a third, optional row opens the dialog as a feature request; the dialog itself switches between
+//   // "Problem" and "Feature request", and takes up to five screenshots (each ≤ 2 MB, 6 MB together).
+//   reporter.bindMenu({ reportRow, featureRow, mineRow, avatar });  ·  reporter.open({ kind: 'feature' })
+//   // A feature request sends no recent errors and no chunk; it lands on Prova's Requests list, not in Issues.
+//   // 1.4.0: each report in My reports opens its conversation — what the team wrote to this person (a
+//   // message, or a question with answer buttons) and a box to write back. The relay mounts
+//   // GET/POST <app>/api/reports/:id/messages (relay.messages / relay.reply); `messagesUrl` names it.
 //
-// Nothing here sets innerHTML: every value is text. Document content is never collected.
+// Nothing here sets innerHTML: every value is text. Document content is never collected on its own: the one
+// exception is a chunk the HOST APP offers through `chunks` AND the person picks AND ticks "Include this
+// chunk's code and error" for (unticked by default); "Sent with it" then shows exactly the text that goes.
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.4.0';
+export const MESSAGE_MAX = 4000;
 export const SCREENSHOT_MAX = 2 * 1024 * 1024;
+export const SCREENSHOTS_MAX = 5;
+export const SCREENSHOTS_TOTAL = 6 * 1024 * 1024;
+export const KINDS = ['problem', 'feature'];
 export const MIN_TEXT = 10;
+export const CHUNK_MAX = { label: 200, engine: 20, code: 20000, output: 20000 };
 
 export const CSS = `
 .prova-rp{--pr-font:Figtree,Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--pr-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--pr-panel:#fff;--pr-line:#e6e8e4;--pr-line-soft:#eef0ec;
@@ -34,6 +51,7 @@ export const CSS = `
 .prova-rp{position:fixed;inset:0;z-index:2147483000;background:var(--pr-scrim);display:flex;justify-content:flex-end;align-items:flex-start;
 padding:64px 20px 20px;font:14px/1.45 var(--pr-font);color:var(--pr-text);box-sizing:border-box}
 .prova-rp *,.prova-rp *::before,.prova-rp *::after{box-sizing:border-box}
+.prova-rp [hidden]{display:none!important}
 .prova-rp.prova-center{justify-content:center;align-items:center;padding:20px}
 .prova-dlg{width:440px;max-width:100%;max-height:calc(100vh - 84px);display:flex;flex-direction:column;background:var(--pr-panel);border-radius:12px;
 box-shadow:var(--pr-shadow);overflow:hidden;outline:none}
@@ -84,15 +102,54 @@ margin-right:6px;animation:prova-spin .8s linear infinite}
 .prova-mine{padding:8px 14px 14px;overflow:auto}
 .prova-item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-bottom:1px solid var(--pr-line-soft)}
 .prova-item:last-child{border:0}.prova-t{font-weight:600;color:var(--pr-text)}.prova-m{font-size:12px;color:var(--pr-muted)}
+.prova-res{margin:3px 0 2px;font-size:13px;line-height:1.4;color:var(--pr-text);white-space:pre-line}
 .prova-item .prova-id{font-weight:400;font-size:12px;color:var(--pr-faint)}
 .prova-pill{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
 .prova-p-received{background:var(--pr-idle-bg);color:var(--pr-idle-text)}.prova-p-working{background:var(--pr-blue-bg);color:var(--pr-blue-text)}
 .prova-p-fixed{background:var(--pr-soft);color:var(--pr-soft-text)}.prova-p-closed{background:var(--pr-line-soft);color:var(--pr-muted)}
 .prova-empty{padding:18px 6px;color:var(--pr-muted);text-align:center}
 .prova-new{margin-left:auto;height:28px}.prova-new+.prova-x{margin-left:0}
+.prova-rp select{font:inherit;font-weight:400;color:var(--pr-text);border:1px solid var(--pr-control);border-radius:7px;padding:6px 8px;background:var(--pr-panel);width:100%;margin:0}
+.prova-rp select:focus,.prova-rp input[type=checkbox]:focus-visible{outline:2px solid var(--pr-accent);outline-offset:1px}
+.prova-rp label.prova-check{display:flex;align-items:flex-start;gap:7px;font-size:13px;font-weight:600;color:var(--pr-text)}
+.prova-rp label.prova-check input{margin:2px 0 0;flex:none;accent-color:var(--pr-accent)}
+.prova-chunk{border:1px solid var(--pr-line);border-radius:8px;padding:8px 10px;display:grid;gap:6px}
+.prova-pre{margin:0;max-height:140px;overflow:auto;font:12px/1.45 var(--pr-mono);color:var(--pr-text);background:var(--pr-foot);border:1px solid var(--pr-line-soft);
+border-radius:6px;padding:6px 8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.prova-pre.prova-out{color:var(--pr-muted)}
+.prova-sent-chunk{padding:0 10px 9px;display:grid;gap:6px}
+.prova-chunk-row{display:grid;gap:6px}
+.prova-about{display:grid;gap:10px}
 .prova-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .prova-dot{position:absolute;right:-2px;top:-2px;width:9px;height:9px;border-radius:50%;background:#d97706;border:2px solid #fff;pointer-events:none}
 .prova-n{margin-left:auto;font-size:11px;font-weight:700;background:#fdecc8;color:#8a4a12;border-radius:999px;padding:1px 7px}
+.prova-kind{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--pr-control);border-radius:8px;overflow:hidden}
+.prova-kind button{border:0;background:var(--pr-panel);color:var(--pr-muted);font:inherit;font-weight:600;padding:7px 8px;cursor:pointer;margin:0}
+.prova-kind button+button{border-left:1px solid var(--pr-control)}
+.prova-kind button[aria-checked=true]{background:var(--pr-soft);color:var(--pr-soft-text)}
+.prova-kind button:focus-visible{outline:2px solid var(--pr-accent);outline-offset:-2px}
+.prova-drop{flex-wrap:wrap}
+.prova-shots{display:flex;flex-wrap:wrap;gap:10px}
+.prova-shot{position:relative;display:grid;gap:2px;width:84px;font-size:11px;color:var(--pr-muted)}
+.prova-shot span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prova-rm{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:1px solid var(--pr-control);background:var(--pr-panel);
+color:var(--pr-text);font:inherit;font-size:13px;line-height:1;cursor:pointer;padding:0;display:grid;place-items:center}
+.prova-rm:hover{border-color:var(--pr-accent)}
+.prova-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--pr-blue-text);background:var(--pr-blue-bg);border-radius:4px;
+padding:1px 5px;margin-right:6px;vertical-align:1px}
+.prova-talk{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+.prova-q-pill{font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;background:#fdecc8;color:#8a4a12}
+.prova-thread{list-style:none;margin:0;padding:10px 14px;display:grid;gap:10px;overflow:auto}
+.prova-msg{max-width:88%;border:1px solid var(--pr-line);border-radius:10px;padding:8px 10px;background:var(--pr-panel)}
+.prova-msg.prova-you{justify-self:end;background:var(--pr-soft);border-color:var(--pr-soft)}
+.prova-msg.prova-q{border-color:var(--pr-warn-line);background:var(--pr-warn-bg)}
+.prova-msg .prova-who{font-size:12px;font-weight:700;color:var(--pr-text)}.prova-msg .prova-when{font-size:11px;color:var(--pr-faint);margin-left:6px;font-weight:400}
+.prova-msg p{margin:3px 0 0;white-space:pre-line;overflow-wrap:anywhere;color:var(--pr-text)}
+.prova-msg textarea{margin-top:6px}
+.prova-choices{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.prova-choices .prova-btn{height:28px;padding:0 10px}
+.prova-compose{border-top:1px solid var(--pr-line-soft);padding:10px 14px;display:grid;gap:6px;margin:0}
+.prova-about-thread{padding:8px 14px 0;margin:0;font-size:12px;color:var(--pr-muted)}
 @media (max-width:520px){.prova-rp{padding:12px;justify-content:center}.prova-dlg{width:100%}.prova-kv{grid-template-columns:90px 1fr}}
 `;
 
@@ -238,7 +295,87 @@ async function fitScreenshot(file) {
   return new File([blob], (file.name || 'screenshot').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
 }
 
-const STATUS_WORD = { received: 'Received', working: 'Being worked on', fixed: 'Fixed', closed: 'Closed' };
+const STATUS_WORD = { received: 'Received', working: 'Being worked on', fixed: 'Resolved', closed: 'Closed' };
+
+// The words of each kind of report: the dialog's title, its two text fields, its Send button.
+const KIND_TEXT = {
+  problem: { title: 'Report a problem', choice: 'Problem', what: 'What happened', expected: 'What you expected', send: 'Send', sent: 'Report' },
+  feature: { title: 'Request a feature', choice: 'Feature request', what: 'What would you like', expected: 'Why would it help', send: 'Send request', sent: 'Request' },
+};
+
+// Which screenshots fit: at most SCREENSHOTS_MAX, together at most SCREENSHOTS_TOTAL. `files` are already
+// scaled (fitScreenshot); returns the ones to keep and a note for each refused one.
+export function addScreenshots(current, files) {
+  return files.reduce(({ shots, notes }, file) => {
+    if (shots.length >= SCREENSHOTS_MAX) return { shots, notes: [...notes, `At most ${SCREENSHOTS_MAX} screenshots can be sent.`] };
+    const total = shots.reduce((sum, shot) => sum + shot.size, 0);
+    if (total + file.size > SCREENSHOTS_TOTAL) return { shots, notes: [...notes, `${file.name || 'A screenshot'} does not fit: the screenshots together may be at most ${SCREENSHOTS_TOTAL / 1048576} MB.`] };
+    return { shots: [...shots, file], notes };
+  }, { shots: [...current], notes: [] });
+}
+
+// ---- a mentioned chunk -------------------------------------------------------------------------------
+
+const flat = (text) => String(text ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+
+// The chunks the host app offers, as plain text fields; anything else in an entry is ignored.
+export function normaliseChunks(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((c) => c && typeof c === 'object').slice(0, 500).map((c, i) => ({
+    label: flat(c.label) || `Chunk ${i + 1}`,
+    engine: flat(c.engine) || 'text',
+    code: typeof c.code === 'string' ? c.code : String(c.code ?? ''),
+    output: typeof c.output === 'string' ? c.output : String(c.output ?? ''),
+  }));
+}
+
+// Exactly what is sent for a chunk the person ticked: each field cut to Prova's cap — code keeps its start,
+// output its end (where an error usually is) — so "Sent with it" and the request carry the same text.
+export function chunkToSend(chunk) {
+  const head = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+  const tail = (text, max) => (text.length > max ? `…${text.slice(text.length - max + 1)}` : text);
+  return {
+    label: head(flat(chunk.label), CHUNK_MAX.label),
+    engine: head(flat(chunk.engine), CHUNK_MAX.engine),
+    code: head(chunk.code, CHUNK_MAX.code),
+    output: tail(chunk.output, CHUNK_MAX.output),
+  };
+}
+
+const wasCut = (chunk) => chunk.code.length > CHUNK_MAX.code || chunk.output.length > CHUNK_MAX.output;
+
+// ---- what a report is about: two steps ----------------------------------------------------------------
+
+// The words for a kind of subject that is chosen in two steps ("An R package", then "Which package"). Kind
+// `app` is never grouped: the app itself and any other app are chosen directly in the first select.
+const KIND_WORDS = {
+  'r-package': { option: 'An R package', which: 'Which package', choose: 'Choose a package', noun: 'package', suffix: /\s*\(R package\)\s*$/i },
+};
+export const kindWords = (kind) => KIND_WORDS[kind] ?? { option: `Another ${kind}`, which: `Which ${kind}`, choose: `Choose a ${kind}`, noun: kind, suffix: null };
+const GROUP = 'kind:';
+
+// The two selects from the relay's flat list (`[{ id, label, kind }]`, the app's own product first):
+// `choices` fill "This is about" — the app, other apps, then one entry per other kind; `groups` fill the
+// second select of such a kind, sorted by name, each label without its "(R package)" ending.
+export function aboutChoices(subjects) {
+  const list = Array.isArray(subjects) ? subjects.filter((x) => x && typeof x.id === 'string' && typeof x.label === 'string') : [];
+  if (!list.length) return { own: null, choices: [], groups: new Map() };
+  const [own, ...rest] = list;
+  const groups = new Map();
+  rest.filter((x) => x.kind !== 'app').forEach((x) => {
+    const kind = typeof x.kind === 'string' && x.kind ? x.kind : 'other';
+    const words = kindWords(kind);
+    const name = (words.suffix ? x.label.replace(words.suffix, '') : x.label) || x.label;
+    groups.set(kind, [...(groups.get(kind) ?? []), { id: x.id, label: x.label, name }]);
+  });
+  groups.forEach((items) => items.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id)));
+  const choices = [
+    { value: own.id, label: own.label },
+    ...rest.filter((x) => x.kind === 'app').map((x) => ({ value: x.id, label: x.label })),
+    ...[...groups.keys()].map((kind) => ({ value: `${GROUP}${kind}`, label: kindWords(kind).option, kind })),
+  ];
+  return { own: own.id, choices, groups };
+}
 
 // ---- the reporter ------------------------------------------------------------------------------------
 
@@ -252,6 +389,10 @@ export function createReporter(options) {
     team: 'the developers',
     page: () => globalThis.document?.title ?? '',
     errors: () => [],
+    subjectsUrl: '/api/report/subjects',
+    // 1.4.0: one report's conversation; "{id}" is replaced by the report's id (AR-12).
+    messagesUrl: '/api/reports/{id}/messages',
+    chunks: null,
     anchor: 'top-right',
     theme: 'light',
     fetch: (...args) => globalThis.fetch(...args),
@@ -259,7 +400,13 @@ export function createReporter(options) {
     ...options,
   };
   const listeners = new Set();
-  const draft = { what: '', expected: '', steps: '', shot: null };
+  // `about` is the first select's value (an app's id or "kind:<kind>"); `subject` the second select's choice.
+  const draft = { kind: 'problem', what: '', expected: '', steps: '', shots: [], about: null, subject: null, chunk: null, includeChunk: false };
+  // One object URL per screenshot shown, released when the screenshot is removed or sent.
+  const thumbs = new WeakMap();
+  const thumbOf = (file) => { if (!thumbs.has(file)) thumbs.set(file, URL.createObjectURL(file)); return thumbs.get(file); };
+  const dropThumb = (file) => { if (thumbs.has(file)) { URL.revokeObjectURL(thumbs.get(file)); thumbs.delete(file); } };
+  let subjectList = null;
   let news = 0;
   let overlay = null;
   let returnFocus = null;
@@ -321,7 +468,7 @@ export function createReporter(options) {
     if (!overlay) return;
     if (event.key === 'Escape' && !overlay.hasAttribute('data-busy')) { event.stopPropagation(); close(); return; }
     if (event.key !== 'Tab') return;
-    const focusable = [...overlay.querySelectorAll('button, textarea, summary, a[href], input:not([type=file])')].filter((n) => !n.disabled && n.offsetParent !== null);
+    const focusable = [...overlay.querySelectorAll('button, textarea, select, summary, a[href], input:not([type=file])')].filter((n) => !n.disabled && n.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -350,9 +497,9 @@ export function createReporter(options) {
   };
 
   const draftText = () => [
-    `What happened:\n${draft.what}`,
-    draft.expected ? `What you expected:\n${draft.expected}` : null,
-    draft.steps ? `Steps:\n${draft.steps}` : null,
+    `${KIND_TEXT[draft.kind].what}:\n${draft.what}`,
+    draft.expected ? `${KIND_TEXT[draft.kind].expected}:\n${draft.expected}` : null,
+    draft.steps && draft.kind === 'problem' ? `Steps:\n${draft.steps}` : null,
   ].filter(Boolean).join('\n\n');
 
   const copyText = async (button) => {
@@ -364,16 +511,17 @@ export function createReporter(options) {
     }
   };
 
-  function openReport({ banner = null } = {}) {
+  function openReport({ banner = null, kind = null } = {}) {
     clearTimeout(retryTimer);
-    const dlg = frame('Report a problem');
+    if (KINDS.includes(kind)) draft.kind = kind;
+    const dlg = frame(KIND_TEXT[draft.kind].title);
     const what = el('textarea', { name: 'what_happened', required: true, 'aria-required': 'true', maxlength: '4000' });
     const expected = el('textarea', { name: 'expected', class: 'prova-small', maxlength: '2000' });
     const steps = el('textarea', { name: 'steps', class: 'prova-small', maxlength: '4000' });
     what.value = draft.what; expected.value = draft.expected; steps.value = draft.steps;
-    const fileInput = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true, 'data-prova-file': '' });
+    const fileInput = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', multiple: true, hidden: true, 'data-prova-file': '' });
     const drop = el('div', { class: 'prova-drop', 'data-prova-drop': '' });
-    const shotNote = el('p', { class: 'prova-m prova-err', role: 'status', hidden: true });
+    const shotNote = el('p', { class: 'prova-m prova-err', role: 'status', hidden: true, 'data-prova-shot-note': '' });
     const tech = technical();
 
     const send = el('button', { type: 'button', class: 'prova-btn prova-primary', 'data-prova-send': '' }, 'Send');
@@ -383,9 +531,11 @@ export function createReporter(options) {
     const bannerBox = el('div', { class: 'prova-banner', role: 'alert', hidden: true, 'data-prova-banner': '' });
     const note = el('span', { class: 'prova-note', text: `Goes to ${opts.team}` });
 
+    // Set once the subjects arrive: true while a kind is chosen in "This is about" but none of its subjects.
+    let needsPick = () => false;
     const sync = () => {
       draft.what = what.value; draft.expected = expected.value; draft.steps = steps.value;
-      if (!dlg.hasAttribute('data-limited')) send.disabled = what.value.trim().length < MIN_TEXT;
+      if (!dlg.hasAttribute('data-limited')) send.disabled = what.value.trim().length < MIN_TEXT || needsPick();
     };
     [what, expected, steps].forEach((field) => field.addEventListener('input', sync));
 
@@ -397,62 +547,248 @@ export function createReporter(options) {
       note.textContent = '';
     };
 
+    // Up to five screenshots, each with its own Remove; "choose" goes once five are attached.
     const renderDrop = () => {
       drop.replaceChildren();
-      if (draft.shot) {
-        const url = URL.createObjectURL(draft.shot);
-        drop.append(el('img', { class: 'prova-thumb', src: url, alt: 'Screenshot to send' }),
-          el('span', {}, `${draft.shot.name || 'screenshot'} · ${kb(draft.shot.size)}`, el('br'),
-            el('button', { type: 'button', class: 'prova-link', 'data-prova-remove': '', onclick: () => { draft.shot = null; renderDrop(); } }, 'Remove')));
+      if (draft.shots.length) {
+        drop.append(el('div', { class: 'prova-shots', 'data-prova-shots': String(draft.shots.length) }, ...draft.shots.map((shot, i) => el('div', { class: 'prova-shot', 'data-prova-shot': String(i) },
+          el('img', { class: 'prova-thumb', src: thumbOf(shot), alt: `Screenshot ${i + 1} to send` }),
+          el('span', { text: `${shot.name || 'screenshot'} · ${kb(shot.size)}`, title: shot.name || 'screenshot' }),
+          el('button', {
+            type: 'button', class: 'prova-rm', 'aria-label': `Remove screenshot ${i + 1}`, 'data-prova-remove': String(i),
+            onclick: () => { dropThumb(shot); draft.shots = draft.shots.filter((x) => x !== shot); shotNote.hidden = true; renderDrop(); },
+          }, '×')))));
       } else {
-        drop.append(el('span', { class: 'prova-thumb', 'aria-hidden': 'true' }), el('span', { text: 'Screenshot (optional)' }));
+        drop.append(el('span', { class: 'prova-thumb', 'aria-hidden': 'true' }), el('span', { text: `Screenshots (optional, up to ${SCREENSHOTS_MAX})` }));
       }
-      drop.append(el('span', { class: 'prova-pick' }, 'Paste, drop or ',
-        el('button', { type: 'button', class: 'prova-link', 'data-prova-choose': '', onclick: () => fileInput.click() }, 'choose')));
+      drop.append(draft.shots.length < SCREENSHOTS_MAX
+        ? el('span', { class: 'prova-pick' }, 'Paste, drop or ', el('button', { type: 'button', class: 'prova-link', 'data-prova-choose': '', onclick: () => fileInput.click() }, 'choose'))
+        : el('span', { class: 'prova-pick prova-m', 'data-prova-full': '', text: `${SCREENSHOTS_MAX} attached, the most that can be sent` }));
     };
-    const takeFile = async (file) => {
+    const takeFiles = async (list) => {
       shotNote.hidden = true;
-      if (!file || !file.type.startsWith('image/')) { shotNote.textContent = 'Only an image can be attached.'; shotNote.hidden = false; return; }
-      const fitted = await fitScreenshot(file).catch((err) => { console.warn('prova report: the screenshot could not be scaled', err); return null; });
-      if (!fitted) { shotNote.textContent = `The screenshot is ${kb(file.size)}; one image of at most 2 MB can be attached.`; shotNote.hidden = false; return; }
-      draft.shot = fitted;
+      const files = [...(list ?? [])].filter(Boolean);
+      const notes = files.some((file) => !file.type.startsWith('image/')) ? ['Only images can be attached.'] : [];
+      const fitted = await Promise.all(files.filter((file) => file.type.startsWith('image/')).map(async (file) => {
+        const fit = await fitScreenshot(file).catch((err) => { console.warn('prova report: the screenshot could not be scaled', err); return null; });
+        if (!fit) notes.push(`${file.name || 'The screenshot'} is ${kb(file.size)}; each screenshot may be at most 2 MB.`);
+        return fit;
+      }));
+      if (!dlg.isConnected) return;
+      const added = addScreenshots(draft.shots, fitted.filter(Boolean));
+      draft.shots = added.shots;
+      const said = [...new Set([...notes, ...added.notes])];
+      if (said.length) { shotNote.textContent = said.join(' '); shotNote.hidden = false; }
       renderDrop();
     };
-    fileInput.addEventListener('change', () => takeFile(fileInput.files[0]));
+    fileInput.addEventListener('change', () => { takeFiles(fileInput.files); fileInput.value = ''; });
     drop.addEventListener('dragover', (event) => { event.preventDefault(); drop.classList.add('prova-over'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('prova-over'));
-    drop.addEventListener('drop', (event) => { event.preventDefault(); drop.classList.remove('prova-over'); takeFile(event.dataTransfer.files[0]); });
+    drop.addEventListener('drop', (event) => { event.preventDefault(); drop.classList.remove('prova-over'); takeFiles(event.dataTransfer.files); });
     dlg.addEventListener('paste', (event) => {
-      const item = [...(event.clipboardData?.items ?? [])].find((i) => i.kind === 'file' && i.type.startsWith('image/'));
-      if (item) { event.preventDefault(); takeFile(item.getAsFile()); }
+      const items = [...(event.clipboardData?.items ?? [])].filter((i) => i.kind === 'file' && i.type.startsWith('image/'));
+      if (items.length) { event.preventDefault(); takeFiles(items.map((i) => i.getAsFile())); }
     });
     renderDrop();
 
-    const errorsLine = tech.errors.length
-      ? el('dd', { class: 'prova-err', 'data-prova-errors': '' }, tech.errors.slice(-3).join(' · '), tech.errors.length > 3 ? ` (+${tech.errors.length - 3} more)` : '')
-      : el('dd', { 'data-prova-errors': '', text: 'none' });
+    // "This is about" in two steps, filled from the relay's subjects: the app (the default), other apps, "An R
+    // package"; choosing a kind shows "Which package" (sorted by name). Hidden while there is only the app itself.
+    const aboutSelect = el('select', { name: 'about', 'data-prova-about': '' });
+    const subjectSelect = el('select', { name: 'subject', 'data-prova-subject': '', 'aria-describedby': 'prova-subject-note', 'aria-required': 'true' });
+    const subjectWhich = el('span', { 'data-prova-subject-label': '', text: 'Which package' });
+    const subjectNote = el('p', { id: 'prova-subject-note', class: 'prova-m prova-err', 'data-prova-subject-note': '', 'aria-live': 'polite', hidden: true });
+    const subjectRow = el('div', { class: 'prova-chunk-row', 'data-prova-subject-row': '', hidden: true },
+      el('label', {}, subjectWhich, subjectSelect), subjectNote);
+    const aboutRow = el('div', { class: 'prova-about', 'data-prova-about-row': '', hidden: true },
+      el('label', {}, el('span', { text: 'This is about' }), aboutSelect), subjectRow);
+    let about = aboutChoices([]);
+    // "Mention a chunk": only when the host app offers chunks; nothing of a chunk is sent unless ticked.
+    const chunkSelect = el('select', { 'data-prova-chunk': '' });
+    const include = el('input', { type: 'checkbox', 'data-prova-chunk-include': '' });
+    const chunkPreview = el('div', { class: 'prova-chunk', 'data-prova-chunk-preview': '', hidden: true });
+    const chunkRow = el('div', { class: 'prova-chunk-row', 'data-prova-chunk-row': '', hidden: true },
+      el('label', {}, el('span', { text: 'Mention a chunk (optional)' }), chunkSelect), chunkPreview);
+    let chunkList = [];
+    const chosenChunk = () => chunkList.find((c) => c.label === draft.chunk) ?? null;
+    const chosenKind = () => (draft.about?.startsWith(GROUP) ? draft.about.slice(GROUP.length) : null);
+    // The subject the report is about: the app or another app chosen directly, or the chosen member of a kind.
+    const chosenSubject = () => (chosenKind() === null ? draft.about : draft.subject);
+    needsPick = () => !aboutRow.hidden && chosenKind() !== null && !draft.subject;
+    const subjectLabel = () => {
+      const kind = chosenKind();
+      if (kind === null) return about.choices.find((c) => c.value === draft.about)?.label ?? null;
+      const item = about.groups.get(kind)?.find((x) => x.id === draft.subject);
+      return item ? item.label : `${kindWords(kind).option} — none chosen yet`;
+    };
+
+    const errorsLine = el('dd', { 'data-prova-errors': '' });
+    // A feature request sends no recent errors: they belong to a problem.
+    const renderErrors = () => {
+      errorsLine.className = draft.kind === 'problem' && tech.errors.length ? 'prova-err' : '';
+      errorsLine.replaceChildren(...(draft.kind === 'feature' ? ['not sent with a feature request']
+        : tech.errors.length ? [tech.errors.slice(-3).join(' · '), tech.errors.length > 3 ? ` (+${tech.errors.length - 3} more)` : ''] : ['none']));
+    };
+    const aboutDt = el('dt', { text: 'About', hidden: true });
+    const aboutDd = el('dd', { 'data-prova-sent-about': '', hidden: true });
+    const chunkDt = el('dt', { text: 'Chunk', hidden: true });
+    const chunkDd = el('dd', { 'data-prova-sent-chunk': '', hidden: true });
     const kv = el('dl', { class: 'prova-kv' },
       el('dt', { text: 'You' }), el('dd', { text: opts.user ?? `user of ${opts.app.name}` }),
       el('dt', { text: 'App' }), el('dd', { text: [`${opts.app.name} ${opts.app.version}`.trim(), opts.app.host].filter(Boolean).join(' · ') }),
+      aboutDt, aboutDd,
       el('dt', { text: 'Page' }), el('dd', { text: tech.page || '—' }),
       el('dt', { text: 'Browser' }), el('dd', { text: `${tech.browser} · ${tech.os}` }),
-      el('dt', { text: 'Recent errors' }), errorsLine);
+      el('dt', { text: 'Recent errors' }), errorsLine,
+      chunkDt, chunkDd);
+    const sentChunk = el('div', { class: 'prova-sent-chunk', 'data-prova-sent-chunk-text': '', hidden: true });
+    const contentNote = el('span', { 'data-prova-content-note': '', text: 'no document content' });
     const details = el('details', { class: 'prova-tech', 'data-prova-sent-with': '' },
-      el('summary', {}, 'Sent with it', el('span', { text: 'no document content' })), kv);
+      el('summary', {}, 'Sent with it', contentNote), kv, sentChunk);
+
+    // "Sent with it" lists exactly what goes: the subject when one is chosen, and the chunk's text only when ticked.
+    const renderSentWith = () => {
+      const about = aboutRow.hidden ? null : subjectLabel();
+      aboutDt.hidden = about === null; aboutDd.hidden = about === null;
+      aboutDd.textContent = about ?? '';
+      renderErrors();
+      const chunk = draft.kind === 'problem' ? chosenChunk() : null;
+      const sending = chunk && draft.includeChunk ? chunkToSend(chunk) : null;
+      chunkDt.hidden = chunk === null; chunkDd.hidden = chunk === null;
+      chunkDd.textContent = chunk === null ? '' : sending
+        ? `${sending.label} · ${sending.engine} — its code and output, below${wasCut(chunk) ? ' (cut to 20,000 characters each)' : ''}`
+        : `${chunk.label} — not sent (tick "Include this chunk's code and error" to send it)`;
+      sentChunk.replaceChildren(...(sending ? [
+        el('pre', { class: 'prova-pre', 'data-prova-sent-code': '', text: sending.code || '(no code)' }),
+        el('pre', { class: 'prova-pre prova-out', 'data-prova-sent-output': '', text: sending.output || '(no output)' }),
+      ] : []));
+      sentChunk.hidden = !sending;
+      contentNote.textContent = sending ? 'includes the chunk you ticked' : 'no document content';
+    };
+
+    const renderChunk = () => {
+      const chunk = chosenChunk();
+      include.checked = Boolean(chunk && draft.includeChunk);
+      chunkPreview.hidden = chunk === null;
+      chunkPreview.replaceChildren(...(chunk ? [
+        el('span', { class: 'prova-m', text: `${chunk.label} · ${chunk.engine}` }),
+        el('pre', { class: 'prova-pre', 'data-prova-chunk-code': '', text: chunk.code || '(no code)' }),
+        el('pre', { class: 'prova-pre prova-out', 'data-prova-chunk-output': '', text: chunk.output || '(no output)' }),
+        el('label', { class: 'prova-check' }, include, el('span', { text: "Include this chunk's code and error" })),
+      ] : []));
+      renderSentWith();
+    };
+    chunkSelect.addEventListener('change', () => {
+      draft.chunk = chunkSelect.value || null;
+      draft.includeChunk = false; // a tick was for the chunk shown when it was given
+      renderChunk();
+    });
+    include.addEventListener('change', () => { draft.includeChunk = include.checked; renderSentWith(); });
+    // The second step: shown only for a kind, with a placeholder; Send waits (with a note) until one is chosen.
+    const renderAbout = () => {
+      const kind = chosenKind();
+      const items = kind === null ? [] : about.groups.get(kind) ?? [];
+      const words = kindWords(kind ?? 'r-package');
+      if (!items.some((x) => x.id === draft.subject)) draft.subject = null;
+      subjectWhich.textContent = words.which;
+      subjectSelect.replaceChildren(el('option', { value: '', text: words.choose, disabled: true }),
+        ...items.map((x) => el('option', { value: x.id, text: x.name })));
+      subjectSelect.value = draft.subject ?? '';
+      subjectRow.hidden = kind === null;
+      subjectNote.textContent = needsPick() ? `${words.choose} — the report is sent once one is chosen.` : '';
+      subjectNote.hidden = !needsPick();
+      sync();
+      renderSentWith();
+    };
+    aboutSelect.addEventListener('change', () => {
+      draft.about = aboutSelect.value;
+      renderAbout();
+      if (chosenKind() !== null) subjectSelect.focus();
+    });
+    subjectSelect.addEventListener('change', () => { draft.subject = subjectSelect.value || null; renderAbout(); });
+
+    const fillSubjects = (list) => {
+      subjectList = Array.isArray(list) ? list.filter((x) => x && typeof x.id === 'string' && typeof x.label === 'string') : [];
+      about = aboutChoices(subjectList);
+      aboutSelect.replaceChildren(...about.choices.map((c) => el('option', { value: c.value, text: c.label })));
+      if (!about.choices.some((c) => c.value === draft.about)) draft.about = about.own;
+      if (draft.about) aboutSelect.value = draft.about;
+      aboutRow.hidden = subjectList.length < 2;
+      renderAbout();
+    };
+    const loadSubjects = async () => {
+      if (subjectList) fillSubjects(subjectList);
+      if (!opts.subjectsUrl) return;
+      try {
+        const answer = await call('GET', opts.subjectsUrl);
+        if (answer.ok && dlg.isConnected) fillSubjects(answer.json?.subjects);
+      } catch (err) {
+        console.warn('prova report: the list of subjects could not be loaded; the report is about the app', err);
+      }
+    };
+    const loadChunks = async () => {
+      if (typeof opts.chunks !== 'function') return;
+      try {
+        chunkList = normaliseChunks(await opts.chunks());
+      } catch (err) {
+        console.warn('prova report: the app could not list its chunks', err);
+        chunkList = [];
+      }
+      if (!dlg.isConnected) return;
+      if (!chunkList.some((c) => c.label === draft.chunk)) { draft.chunk = null; draft.includeChunk = false; }
+      chunkSelect.replaceChildren(el('option', { value: '', text: 'None' }), ...chunkList.map((c) => el('option', { value: c.label, text: c.label })));
+      chunkSelect.value = draft.chunk ?? '';
+      chunkRow.hidden = chunkList.length === 0 || draft.kind === 'feature';
+      renderChunk();
+    };
 
     const field = (text, input, required = false) => el('label', {}, el('span', { class: required ? 'prova-req' : null, text }), input);
-    dlg.append(header('Report a problem'),
-      el('div', { class: 'prova-rows' }, bannerBox,
-        field('What happened', what, true), field('What you expected', expected), field('Steps', steps),
-        drop, shotNote, fileInput, details),
+    const whatField = field(KIND_TEXT[draft.kind].what, what, true);
+    const expectedField = field(KIND_TEXT[draft.kind].expected, expected);
+    const stepsField = field('Steps', steps);
+    // Problem or Feature request: one switch, the typed text kept; a request has no steps, chunk or errors.
+    const choices = KINDS.map((kind) => el('button', {
+      type: 'button', role: 'radio', 'data-prova-kind-choice': kind, text: KIND_TEXT[kind].choice, onclick: () => setKind(kind),
+    }));
+    const kindSwitch = el('div', { class: 'prova-kind', role: 'radiogroup', 'aria-label': 'What are you sending', 'data-prova-kind': '' }, ...choices);
+    kindSwitch.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault();
+      setKind(draft.kind === 'problem' ? 'feature' : 'problem');
+      choices.find((b) => b.dataset.provaKindChoice === draft.kind).focus();
+    });
+    const title = header(KIND_TEXT[draft.kind].title);
+    function setKind(kind) {
+      draft.kind = kind;
+      const words = KIND_TEXT[kind];
+      title.querySelector('h3').textContent = words.title;
+      dlg.setAttribute('aria-label', words.title);
+      dlg.dataset.provaKindNow = kind;
+      choices.forEach((b) => {
+        const on = b.dataset.provaKindChoice === kind;
+        b.setAttribute('aria-checked', String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      whatField.firstChild.textContent = words.what;
+      expectedField.firstChild.textContent = words.expected;
+      stepsField.hidden = kind === 'feature';
+      chunkRow.hidden = chunkList.length === 0 || kind === 'feature';
+      if (!busy) send.textContent = dlg.hasAttribute('data-failed') ? 'Send again' : words.send;
+      renderSentWith();
+    }
+    dlg.append(title,
+      el('div', { class: 'prova-rows' }, bannerBox, kindSwitch,
+        aboutRow, whatField, expectedField, stepsField,
+        chunkRow, drop, shotNote, fileInput, details),
       el('footer', {}, note, copy, cancel, send));
 
-    const setBusy = (busy) => {
-      overlay.toggleAttribute('data-busy', busy);
-      [what, expected, steps, cancel].forEach((n) => { n.disabled = busy; });
-      drop.querySelectorAll('button').forEach((n) => { n.disabled = busy; });
-      send.disabled = busy;
-      send.replaceChildren(...(busy ? [el('span', { class: 'prova-spin', 'aria-hidden': 'true' }), 'Sending'] : [dlg.hasAttribute('data-failed') ? 'Send again' : 'Send']));
+    let busy = false;
+    const setBusy = (on) => {
+      busy = on;
+      overlay.toggleAttribute('data-busy', on);
+      [what, expected, steps, cancel, aboutSelect, subjectSelect, chunkSelect, include, ...choices].forEach((n) => { n.disabled = on; });
+      drop.querySelectorAll('button').forEach((n) => { n.disabled = on; });
+      send.disabled = on;
+      send.replaceChildren(...(on ? [el('span', { class: 'prova-spin', 'aria-hidden': 'true' }), 'Sending'] : [dlg.hasAttribute('data-failed') ? 'Send again' : KIND_TEXT[draft.kind].send]));
     };
 
     const limited = (text, retryAfter) => {
@@ -467,16 +803,25 @@ export function createReporter(options) {
     send.addEventListener('click', async () => {
       sync();
       if (draft.what.trim().length < MIN_TEXT) return;
+      if (needsPick()) { renderAbout(); subjectSelect.focus(); return; }
       bannerBox.hidden = true;
       setBusy(true);
       let answer;
+      const kind = draft.kind;
+      const problem = kind === 'problem';
       try {
         const body = {
+          ...(problem ? {} : { kind }),
           what_happened: draft.what.trim(),
           ...(draft.expected.trim() ? { expected: draft.expected.trim() } : {}),
-          ...(draft.steps.trim() ? { steps: draft.steps.trim() } : {}),
-          technical: technical(),
-          ...(draft.shot ? { screenshot: { media_type: draft.shot.type, name: draft.shot.name || 'screenshot', data: await readAsBase64(draft.shot) } } : {}),
+          ...(problem && draft.steps.trim() ? { steps: draft.steps.trim() } : {}),
+          technical: problem ? technical() : { ...technical(), errors: [] },
+          ...(draft.shots.length ? {
+            screenshots: await Promise.all(draft.shots.map(async (shot) => ({ media_type: shot.type, name: shot.name || 'screenshot', data: await readAsBase64(shot) }))),
+          } : {}),
+          // The app itself needs no subject; another one is named. A chunk goes only with a problem, when ticked.
+          ...(!aboutRow.hidden && chosenSubject() && chosenSubject() !== about.own ? { subject: chosenSubject() } : {}),
+          ...(problem && chosenChunk() && draft.includeChunk ? { chunk: chunkToSend(chosenChunk()) } : {}),
         };
         answer = await call('POST', opts.reportUrl, body);
       } catch (err) {
@@ -486,8 +831,11 @@ export function createReporter(options) {
       setBusy(false);
       if (answer?.ok && answer.json?.id) {
         const id = answer.json.id;
-        draft.what = ''; draft.expected = ''; draft.steps = ''; draft.shot = null;
-        showSent(id);
+        draft.shots.forEach(dropThumb);
+        draft.what = ''; draft.expected = ''; draft.steps = ''; draft.shots = [];
+        draft.about = null; draft.subject = null; draft.chunk = null; draft.includeChunk = false;
+        draft.kind = 'problem';
+        showSent(id, kind);
         refresh();
         return;
       }
@@ -502,34 +850,51 @@ export function createReporter(options) {
     });
 
     if (banner) showBanner(banner.kind, banner.text);
+    setKind(draft.kind);
     sync();
+    loadSubjects();
+    loadChunks();
     what.focus();
     return dlg;
   }
 
-  function showSent(id) {
-    const dlg = frame('Report a problem', { label: 'Report sent' });
+  function showSent(id, kind = 'problem') {
+    const words = KIND_TEXT[kind] ?? KIND_TEXT.problem;
+    const dlg = frame(words.title, { label: `${words.sent} sent` });
     const mineLink = el('button', { type: 'button', class: 'prova-link', 'data-prova-open-mine': '', onclick: () => openMine() }, 'My reports');
     const done = el('button', { type: 'button', class: 'prova-btn prova-primary', 'data-prova-done': '', onclick: close }, 'Done');
     dlg.append(el('div', { class: 'prova-done', role: 'status', 'data-prova-sent': id },
       el('div', { class: 'prova-tick', 'aria-hidden': 'true', text: '✓' }),
       el('h4', { text: 'Sent — thank you' }),
-      el('p', {}, 'Report ', el('code', { text: id }), '. Follow it in ', mineLink, '.')),
+      el('p', {}, `${words.sent} `, el('code', { text: id }), '. Follow it in ', mineLink, '.')),
     el('footer', {}, el('span', { class: 'prova-note' }), done));
     done.focus();
   }
 
+  // A feature request reads in its own words (Planned, Done in 1.6.24, Declined) from Prova's status_label.
   function itemOf(report) {
     const status = STATUS_WORD[report.status] ? report.status : 'received';
+    const feature = report.kind === 'feature';
+    const label = feature && typeof report.status_label === 'string' && report.status_label ? report.status_label : STATUS_WORD[status];
     const meta = [];
-    if (status === 'fixed' && report.fixed_in) meta.push(`Fixed in ${report.fixed_in}`);
+    if (status === 'fixed' && report.fixed_in) meta.push(`${feature ? 'Done' : 'Resolved'} in ${report.fixed_in}`);
     if (status === 'closed' && report.reason) meta.push(report.reason);
-    const ids = report.issue ? `${report.id} → ${report.issue}` : report.id;
-    return el('div', { class: 'prova-item', 'data-prova-item': report.id, 'data-status': status },
-      el('span', { class: `prova-pill prova-p-${status}`, text: STATUS_WORD[status] }),
-      el('div', {}, el('div', { class: 'prova-t', text: report.title }),
+    const linked = report.issue ?? report.request ?? null;
+    const ids = linked ? `${report.id} → ${linked}` : report.id;
+    const unread = Number(report.unread) || 0;
+    const questions = Number(report.questions) || 0;
+    const count = Number(report.messages) || 0;
+    const talk = el('div', { class: 'prova-talk' },
+      el('button', { type: 'button', class: 'prova-link', 'data-prova-open-thread': report.id, onclick: () => openThread(report) },
+        count ? `${count} message${count === 1 ? '' : 's'} from the team` : 'Write to the team'),
+      questions ? el('span', { class: 'prova-q-pill', 'data-prova-question': '', text: questions === 1 ? 'A question for you' : `${questions} questions for you` }) : null,
+      unread && !questions ? el('span', { class: 'prova-n', 'data-prova-unread': String(unread), text: `${unread} new` }) : null);
+    return el('div', { class: 'prova-item', 'data-prova-item': report.id, 'data-status': status, 'data-kind': feature ? 'feature' : 'problem' },
+      el('span', { class: `prova-pill prova-p-${status}`, text: feature && status === 'fixed' ? 'Done' : label }),
+      el('div', {}, el('div', { class: 'prova-t' }, feature ? el('span', { class: 'prova-tag', text: 'Request' }) : null, report.title),
+        status === 'fixed' && report.resolution ? el('p', { class: 'prova-res', 'data-prova-resolution': '', text: report.resolution }) : null,
         el('div', { class: 'prova-m' }, meta.length ? `${meta.join(' · ')} · ` : '', el('span', { class: 'prova-id', text: ids }),
-          report.count > 1 ? ` · seen ${report.count} times` : '')),
+          report.count > 1 ? ` · seen ${report.count} times` : ''), talk),
       el('span', { class: 'prova-m', text: when(report.reported_at) }));
   }
 
@@ -557,6 +922,82 @@ export function createReporter(options) {
     setNews(0);
   }
 
+  // 1.4.0: one report's conversation. The team's messages and questions, the person's own answers; a question
+  // offers its answer buttons; one box writes back. Opening it marks the team's messages read (seen=1).
+  const threadUrl = (id) => opts.messagesUrl.replace('{id}', encodeURIComponent(id));
+  async function openThread(report) {
+    clearTimeout(retryTimer);
+    const back = el('button', { type: 'button', class: 'prova-btn prova-new', 'data-prova-back': '', onclick: () => openMine() }, 'My reports');
+    const dlg = frame('Conversation', { label: `Conversation about ${report.id}`, mine: true });
+    dlg.setAttribute('data-prova-dialog', 'thread');
+    const list = el('ol', { class: 'prova-thread', 'data-prova-thread': report.id, 'aria-live': 'polite' }, el('li', { class: 'prova-empty', text: 'Loading…' }));
+    dlg.append(header('Conversation', back),
+      el('p', { class: 'prova-about-thread' }, el('span', { class: 'prova-t', text: report.title }), ' · ', el('span', { class: 'prova-id', text: report.id })), list);
+    dlg.focus();
+    let answer = null;
+    try {
+      answer = await call('GET', `${threadUrl(report.id)}?seen=1`);
+    } catch (err) {
+      answer = null;
+    }
+    if (!overlay || !list.isConnected) return;
+    if (!answer?.ok) {
+      list.replaceChildren(el('li', { class: 'prova-banner prova-bad', role: 'alert' }, 'Could not load the conversation. ',
+        el('button', { type: 'button', class: 'prova-link', onclick: () => openThread(report) }, 'Try again')));
+      return;
+    }
+    const messages = Array.isArray(answer.json?.messages) ? answer.json.messages : [];
+    const canReply = answer.json?.can_reply === true;
+    const send = async (body, replyTo, button, note) => {
+      button.disabled = true;
+      note.hidden = true;
+      let posted = null;
+      try {
+        posted = await call('POST', threadUrl(report.id), { body, ...(replyTo ? { reply_to: replyTo } : {}) });
+      } catch (err) {
+        posted = null;
+      }
+      if (!overlay) return;
+      if (posted?.ok) { openThread({ ...report, unread: 0 }); refresh(); return; }
+      button.disabled = false;
+      note.textContent = posted?.json?.error ?? 'Could not send. Your text is kept; try again.';
+      note.hidden = false;
+    };
+    const item = (m) => {
+      const you = m.from === 'you';
+      const node = el('li', { class: `prova-msg${you ? ' prova-you' : ''}${m.kind === 'question' ? ' prova-q' : ''}`, 'data-prova-msg': String(m.id), 'data-from': m.from, 'data-kind': m.kind },
+        el('div', {}, el('span', { class: 'prova-who', text: you ? 'You' : `${m.author}${m.agent ? ' (agent)' : ''}${m.kind === 'question' ? ' asks' : ''}` }),
+          el('span', { class: 'prova-when', text: when(m.at) })),
+        el('p', { text: m.body }));
+      if (m.kind === 'question' && !m.open) node.append(el('p', { class: 'prova-m', text: 'Answered' }));
+      if (m.kind === 'question' && m.open && canReply) {
+        const note = el('p', { class: 'prova-m prova-err', role: 'status', hidden: true });
+        const choices = (Array.isArray(m.options) ? m.options : []).map((option) => el('button', {
+          type: 'button', class: 'prova-btn', 'data-prova-choice': option, text: option,
+          onclick: (event) => send(option, m.id, event.currentTarget, note),
+        }));
+        const box = el('textarea', { class: 'prova-small', 'aria-label': 'Your answer', maxlength: String(MESSAGE_MAX), 'data-prova-answer': String(m.id) });
+        const go = el('button', { type: 'button', class: 'prova-btn prova-primary', 'data-prova-send-answer': String(m.id), text: 'Answer' });
+        go.addEventListener('click', () => { if (box.value.trim()) send(box.value.trim(), m.id, go, note); });
+        node.append(...(choices.length ? [el('div', { class: 'prova-choices' }, ...choices)] : []), box, el('div', { class: 'prova-choices' }, go), note);
+      }
+      return node;
+    };
+    list.replaceChildren(...(messages.length ? messages.map(item)
+      : [el('li', { class: 'prova-empty', 'data-prova-no-messages': '', text: 'Nothing written yet. The team writes here when they need something from you.' })]));
+    if (canReply) {
+      const box = el('textarea', { class: 'prova-small', 'aria-label': 'Write to the team', placeholder: 'Write to the team…', maxlength: String(MESSAGE_MAX), 'data-prova-reply': '' });
+      const go = el('button', { type: 'button', class: 'prova-btn prova-primary', 'data-prova-send-reply': '', text: 'Send', disabled: true });
+      const note = el('p', { class: 'prova-m prova-err', role: 'status', hidden: true });
+      box.addEventListener('input', () => { go.disabled = box.value.trim().length === 0; });
+      go.addEventListener('click', () => { if (box.value.trim()) send(box.value.trim(), null, go, note); });
+      dlg.append(el('div', { class: 'prova-compose', 'data-prova-compose': '' }, box, el('div', { class: 'prova-choices' }, go), note));
+    } else {
+      dlg.append(el('p', { class: 'prova-compose prova-m', 'data-prova-cannot-reply': '', text: 'You can write here once the team has received your report.' }));
+    }
+    refresh();
+  }
+
   // { news, ok, status, code }: an app hides its rows when the relay says reporting is not set up (404).
   async function refresh() {
     try {
@@ -580,19 +1021,24 @@ export function createReporter(options) {
 
   // No stylesheet is loaded until something is shown (a dot, a badge, a dialog): an app where reporting is
   // off makes no extra request at all.
-  function bindMenu({ reportRow = null, mineRow = null, avatar = null, onOpen = null } = {}) {
+  function bindMenu({ reportRow = null, featureRow = null, mineRow = null, avatar = null, onOpen = null } = {}) {
     unbind();
     const handle = (fn) => (event) => { event.preventDefault(); onOpen?.(); returnFocus = avatar ?? event.currentTarget; fn(); };
-    const listeners = [[reportRow, handle(() => openReport())], [mineRow, handle(() => openMine())]].filter(([node]) => node);
+    const listeners = [
+      [reportRow, handle(() => openReport({ kind: 'problem' }))],
+      [featureRow, handle(() => openReport({ kind: 'feature' }))],
+      [mineRow, handle(() => openMine())],
+    ].filter(([node]) => node);
     listeners.forEach(([node, fn]) => node.addEventListener('click', fn));
-    bound = { reportRow, mineRow, avatar, listeners };
+    bound = { reportRow, featureRow, mineRow, avatar, listeners };
     setNews(news);
     return refresh();
   }
 
   return {
-    open: () => openReport(),
+    open: ({ kind = null } = {}) => openReport({ kind }),
     openMine,
+    openThread,
     refresh,
     close,
     bindMenu,
