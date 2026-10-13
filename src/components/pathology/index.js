@@ -25,6 +25,7 @@ export { CaseStudio } from './CaseStudio.jsx';             // controlled authori
 export { SlideAssetCard } from './SlideAssetCard.jsx';     // catalog preview/add card
 export { SlideCanvas } from './SlideCanvas.jsx';
 export { SpecimenTray } from './SpecimenTray.jsx';
+export { CaseRequest } from './CaseRequest.jsx';
 export { AnnotationCanvas } from './AnnotationCanvas.jsx';
 export { AnnotationPanel } from './AnnotationPanel.jsx';
 export { ReportPanel } from './ReportPanel.jsx';
@@ -59,6 +60,7 @@ export * from './remoteRef.js';
 export * from './readRecorder.js';
 export * from './viewportEvents.js';
 export * from './report.js';
+export * from './requisition.js';
 export * from './slideGeometry.js';
 export * from './slideSource.js';
 export * from './specimenNaming.js';

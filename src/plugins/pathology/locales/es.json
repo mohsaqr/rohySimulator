@@ -262,6 +262,7 @@
   "path_or_address": "Ruta o dirección web",
   "path_or_address_hint": "Una ruta como gross/case42/a-fresh.jpg designa una fotografía guardada junto a sus preparaciones — el caso apunta a ella y no crece de tamaño. Una dirección https:// completa se usa tal cual.",
   "pathology_modules": "Módulos de anatomía patológica",
+  "pathology_request": "Solicitud",
   "pathology_summary_empty": "Sin material de anatomía patológica",
   "pathology_summary_mixed": "{slides, plural, one {# preparación} other {# preparaciones}}, {photographs, plural, one {# fotografía} other {# fotografías}}",
   "pathology_summary_photographs": "{count, plural, one {# fotografía macroscópica} other {# fotografías macroscópicas}}",

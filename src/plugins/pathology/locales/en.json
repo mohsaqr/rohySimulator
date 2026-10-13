@@ -262,6 +262,7 @@
   "path_or_address": "Path or web address",
   "path_or_address_hint": "A path such as gross/case42/a-fresh.jpg names a photograph kept with your slides — the case points at it and stays small. A full https:// address is used as written.",
   "pathology_modules": "Pathology modules",
+  "pathology_request": "Request",
   "pathology_summary_empty": "No pathology material",
   "pathology_summary_mixed": "{slides, plural, one {# slide} other {# slides}}, {photographs, plural, one {# photograph} other {# photographs}}",
   "pathology_summary_photographs": "{count, plural, one {# gross photograph} other {# gross photographs}}",

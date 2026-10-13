@@ -262,6 +262,7 @@
   "path_or_address": "Percorso o indirizzo web",
   "path_or_address_hint": "Un percorso come gross/case42/a-fresh.jpg indica una fotografia conservata insieme ai tuoi vetrini — il caso vi punta e resta leggero. Un indirizzo https:// completo viene usato così com'è.",
   "pathology_modules": "Moduli di anatomia patologica",
+  "pathology_request": "Richiesta",
   "pathology_summary_empty": "Nessun materiale di anatomia patologica",
   "pathology_summary_mixed": "{slides, plural, one {# vetrino} other {# vetrini}}, {photographs, plural, one {# fotografia} other {# fotografie}}",
   "pathology_summary_photographs": "{count, plural, one {# fotografia macroscopica} other {# fotografie macroscopiche}}",

@@ -262,6 +262,7 @@
   "path_or_address": "Chemin ou adresse web",
   "path_or_address_hint": "Un chemin tel que gross/case42/a-fresh.jpg désigne une photographie conservée avec vos lames — le cas pointe vers elle et reste léger. Une adresse https:// complète est utilisée telle quelle.",
   "pathology_modules": "Modules d’anatomopathologie",
+  "pathology_request": "Demande",
   "pathology_summary_empty": "Aucun matériel d’anatomopathologie",
   "pathology_summary_mixed": "{slides, plural, one {# lame} other {# lames}}, {photographs, plural, one {# photographie} other {# photographies}}",
   "pathology_summary_photographs": "{count, plural, one {# photographie macroscopique} other {# photographies macroscopiques}}",
