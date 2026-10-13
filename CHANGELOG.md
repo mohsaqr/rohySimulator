@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.55] — 2026-10-13
+
+- **A case package dropped on the JSON Import button gets a clear message (PRV-60).** A 3 GB package
+  failed with Chrome's raw `NotReadableError`. The JSON import now recognises a package (or an unreadable
+  file) before reading it and says to use Case packages instead, or that Case packages is switched off.
+  New `caseImportFile.js`, used by ConfigPanel and CasePackages; 3 new strings in 9 catalogues.
+
 ## [3.0.0-rc.54] — 2026-10-13
 
 - **The pathology room shows the request (PRV-58).** It used to open straight onto the slides, so the

@@ -17,6 +17,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { apiFetch, apiPost, apiPut, ApiError } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
 import { CASE_PACKAGES_CHANGED } from './useCasePackages.js';
+import { CaseFileError, readFileChunk } from './caseImportFile.js';
 
 const POLL_MS = 1000;
 const CHUNK_RETRIES = 3;
@@ -29,6 +30,11 @@ function formatBytes(bytes) {
 }
 
 const errorText = (err) => (err instanceof ApiError ? err.message : String(err?.message || err));
+
+/** The import's failure in words — never a browser's raw DOMException text (FI0010.AUTHOR.03). */
+const importErrorText = (t, err) => (
+    err instanceof CaseFileError && err.code === 'case_file_unreadable' ? t('import_file_unreadable') : errorText(err)
+);
 
 /** Poll a package job until it finishes. Resolves with the final job; stops when `alive()` turns false. */
 async function waitForJob(jobId, onUpdate, alive) {
@@ -204,12 +210,12 @@ export function CasePackageImportButton({ onImported }) {
     }, []);
     useEffect(() => () => { alive.current = false; }, []);
 
-    const putChunk = async (id, index, blob) => {
+    const putChunk = async (id, index, bytes) => {
         for (let attempt = 1; ; attempt++) {
             try {
                 return await apiFetch(`/case-packages/uploads/${id}/chunks/${index}`, {
                     method: 'PUT',
-                    body: blob,
+                    body: bytes,
                     headers: { 'Content-Type': 'application/octet-stream' },
                 });
             } catch (err) {
@@ -228,7 +234,11 @@ export function CasePackageImportButton({ onImported }) {
             const chunk = created.chunk_bytes;
             for (let offset = 0, index = 0; offset < file.size; offset += chunk, index++) {
                 if (!alive.current) return;
-                await putChunk(created.id, index, file.slice(offset, offset + chunk));
+                // Read first, then send: a chunk the browser cannot read is
+                // the file's fault, not the network's — no retry, and the
+                // dialog says so (see readFileChunk).
+                const bytes = await readFileChunk(file, offset, offset + chunk);
+                await putChunk(created.id, index, bytes);
                 setDialog({ state: 'working', phase: 'uploading', percent: Math.round((Math.min(offset + chunk, file.size) / file.size) * 100) });
             }
             const job = await apiPost(`/case-packages/uploads/${created.id}/complete`, {});
@@ -251,7 +261,7 @@ export function CasePackageImportButton({ onImported }) {
             });
             onImported?.();
         } catch (err) {
-            if (alive.current) setDialog({ state: 'failed', error: errorText(err) });
+            if (alive.current) setDialog({ state: 'failed', error: importErrorText(t, err) });
         }
     };
 

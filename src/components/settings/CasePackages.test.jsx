@@ -13,6 +13,9 @@ import { renderWithProviders } from '../../../tests/utils/renderWithProviders.js
 import CasePackageSettings, { CasePackageExportButton, CasePackageImportButton } from './CasePackages.jsx';
 import useCasePackages, { CASE_PACKAGES_CHANGED } from './useCasePackages.js';
 
+// One stable toast, so a test can read what the JSON import reported.
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }));
+vi.mock('../../contexts/ToastContext', async (importActual) => ({ ...(await importActual()), useToast: () => toast }));
 vi.mock('./AgentTemplateManager.jsx', () => ({ default: () => <div /> }));
 vi.mock('./AvatarsSettingsTab.jsx', () => ({ default: () => <div /> }));
 vi.mock('./VoiceSettingsTab.jsx', () => ({ default: () => <div /> }));
@@ -62,6 +65,7 @@ afterAll(() => server.close());
 beforeEach(() => {
     calls.length = 0;
     enabled = false;
+    Object.values(toast).forEach((fn) => fn.mockClear());
     window.localStorage.setItem('token', 'test-token');
 });
 
@@ -90,6 +94,76 @@ describe('ConfigPanel case list with case packages', () => {
         expect(screen.getByTitle('Export as a case package (case and media)')).toBeInTheDocument();
         // The JSON buttons are still there, unchanged.
         expect(screen.getByTitle('Export to JSON')).toBeInTheDocument();
+    });
+});
+
+// Chrome's own NotReadableError text, verbatim from the Prova report.
+const CHROME_TEXT = 'The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.';
+
+/** Make FileReader's `method` fail the way Chrome does for a file it cannot read. */
+function failRead(method) {
+    return vi.spyOn(FileReader.prototype, method).mockImplementation(function fail() {
+        Object.defineProperty(this, 'error', { value: new DOMException(CHROME_TEXT, 'NotReadableError') });
+        this.onerror?.();
+    });
+}
+
+/** Click the JSON "Import" button and pick `file` in the input it opens. */
+async function pickJsonImport(file) {
+    let input;
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function capture() { input = this; });
+    fireEvent.click(await screen.findByTitle('Import Case from JSON'));
+    expect(input?.accept).toBe('.json');
+    Object.defineProperty(input, 'files', { value: [file] });
+    await act(async () => { await input.onchange({ target: input }); });
+}
+
+describe('ConfigPanel JSON case import', () => {
+    it('shows plain words, not Chrome\'s raw text, when the file cannot be read', async () => {
+        // Regression lock: FI0010.AUTHOR.03 raw NotReadableError shown on case import
+        failRead('readAsText');
+        renderWithProviders(<ConfigPanel onClose={() => {}} initialTab="cases" />);
+        await screen.findByText('Chest pain');
+        await pickJsonImport(new File(['{"name":"x","description":"y"}'], 'case-x.json'));
+        await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+        const [shown] = toast.error.mock.calls[0];
+        expect(shown).toMatch(/^Failed to import case: The file could not be read\. If it is in OneDrive or Dropbox/);
+        expect(shown).not.toMatch(/permission problems/);
+    });
+
+    it('sends a case package to Import package — and says how to turn packages on when they are off', async () => {
+        // FI0010.AUTHOR.03: the 2.98 GB FI-0017 package was picked in the JSON
+        // importer, which read it whole as text — what Chrome refused.
+        const posted = vi.fn();
+        server.use(http.post('*/api/cases', () => { posted(); return HttpResponse.json({}); }));
+        renderWithProviders(<ConfigPanel onClose={() => {}} initialTab="cases" />);
+        await screen.findByText('Chest pain');
+        await pickJsonImport(new File(['not read'], 'case-FI-0017.rohycase'));
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+            'Failed to import case: This is a case package (.rohycase). Turn on Allow case packages in Settings → Platform → General, then import it with Import package.',
+        ));
+        expect(posted).not.toHaveBeenCalled();
+    });
+
+    it('with packages on, points at the Import package button', async () => {
+        enabled = true;
+        renderWithProviders(<ConfigPanel onClose={() => {}} initialTab="cases" />);
+        await screen.findByText('Import package');
+        await pickJsonImport(new File(['not read'], 'case-FI-0017.rohycase'));
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+            'Failed to import case: This is a case package (.rohycase). Import it with Import package.',
+        ));
+    });
+
+    it('still imports an ordinary JSON case', async () => {
+        const bodies = [];
+        server.use(http.post('*/api/cases', async ({ request }) => { bodies.push(await request.json()); return HttpResponse.json({ id: 8 }); }));
+        renderWithProviders(<ConfigPanel onClose={() => {}} initialTab="cases" />);
+        await screen.findByText('Chest pain');
+        await pickJsonImport(new File([JSON.stringify({ name: 'Imported', description: 'd', config: { pages: [] } })], 'case-imported.json'));
+        await waitFor(() => expect(bodies).toEqual([{ name: 'Imported', description: 'd', config: { pages: [] } }]));
+        await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+        expect(toast.error).not.toHaveBeenCalled();
     });
 });
 
@@ -127,6 +201,20 @@ describe('CasePackageImportButton', () => {
         expect(screen.getByText('1 note')).toBeInTheDocument();
         expect(screen.getByText('remote:dicom/x/')).toBeInTheDocument();
         expect(onImported).toHaveBeenCalledTimes(1);
+    });
+
+    it('says the file could not be read — not "Failed to fetch", and without retrying — when a chunk read fails', async () => {
+        // Regression lock: FI0010.AUTHOR.03 raw NotReadableError shown on case import
+        // (here it surfaced as a network error, retried three times, because the
+        // unreadable Blob went straight into fetch's body).
+        failRead('readAsArrayBuffer');
+        renderWithProviders(<CasePackageImportButton onImported={() => {}} />);
+        fireEvent.click(screen.getByText('Import package'));
+        fireEvent.change(screen.getByLabelText('Choose a .rohycase file'), { target: { files: [new File(['0123456789'], 'case.rohycase')] } });
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/^Failed: The file could not be read\. If it is in OneDrive or Dropbox/);
+        expect(screen.getByRole('alert')).not.toHaveTextContent(/permission problems/);
+        expect(calls).toEqual([['create', 10]]);
     });
 });
 

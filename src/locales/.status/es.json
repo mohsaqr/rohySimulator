@@ -5709,6 +5709,36 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.import_file_is_package": {
+    "src": "135af971bb99",
+    "tgt": "310c88042a87",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.import_file_is_package_off": {
+    "src": "9f5f62ca9a32",
+    "tgt": "951fb78316d9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.import_file_unreadable": {
+    "src": "ab2b5695ff58",
+    "tgt": "161a062d5ab2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.import_title": {
     "src": "6b1f0cfc2ed2",
     "tgt": "d6d370bd6a69",
