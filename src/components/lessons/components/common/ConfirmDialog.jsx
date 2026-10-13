@@ -58,7 +58,7 @@ export const ConfirmDialog = ({
         <p className="mt-2 text-slate-600">{message}</p>
         {showFinal && (
           <p className="mt-2 text-sm font-semibold text-red-600">
-            {t('confirm_permanent_warning')}
+            {t('confirm_permanent_warning', { defaultValue: 'This is permanent and cannot be undone.' })}
           </p>
         )}
         <div className="mt-6 flex gap-3 justify-center">
@@ -70,7 +70,7 @@ export const ConfirmDialog = ({
             onClick={handleConfirm}
             loading={loading}
           >
-            {showFinal ? t('confirm_final_delete') : confirmText || t('confirm')}
+            {showFinal ? t('confirm_final_delete', { defaultValue: 'Yes, delete permanently' }) : confirmText || t('confirm')}
           </Button>
         </div>
       </div>

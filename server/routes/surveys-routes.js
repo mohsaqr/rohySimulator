@@ -9,7 +9,7 @@
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, requireEducator } from '../middleware/auth.js';
-import { tenantId } from './_helpers.js';
+import { tenantId, auditSuccess } from './_helpers.js';
 import { logger } from '../logger.js';
 import { isAdminReq, resolveManageableCohort, isLiveCohortMember } from '../lib/cohortAccess.js';
 import { stripHtmlToText } from '../lib/lessonSanitize.js';
@@ -368,6 +368,58 @@ router.delete('/surveys/:id/questions/:questionId', authenticateToken, requireEd
     } catch (err) {
         log.error('delete question failed', { error: err.message });
         return fail(res, 500, 'Failed to delete question');
+    }
+});
+
+// POST /surveys/:id/questions/:questionId/duplicate — copy a question (text,
+// type, options, required flag) and place the copy directly after the
+// original. The whole survey is renumbered 0..n in one transaction rather than
+// shifting `order_index > original`: rows can share an order_index (an
+// explicit `orderIndex` on add, a poll's `orderIndex: 0`), and ordering then
+// falls back to id, so a plain shift could land the copy after a tied sibling.
+// Like add/edit/delete question, a published survey or one with responses may
+// still be edited — the copy is an ordinary new question.
+router.post('/surveys/:id/questions/:questionId/duplicate', authenticateToken, requireEducator, async (req, res) => {
+    try {
+        const surveyId = Number(req.params.id);
+        const questionId = Number(req.params.questionId);
+        const survey = await surveyForManage(surveyId, req);
+        if (!survey) return fail(res, 404, 'Survey not found');
+        const source = await dbAdapter.get(
+            `SELECT * FROM survey_questions WHERE id = ? AND survey_id = ? AND deleted_at IS NULL`,
+            [questionId, surveyId]
+        );
+        if (!source) return fail(res, 404, 'Question not found');
+        const newId = await dbAdapter.transaction(async () => {
+            const ordered = await questionsFor(surveyId);
+            const { lastID } = await dbAdapter.run(
+                `INSERT INTO survey_questions
+                   (survey_id, question_text, question_type, options, is_required, order_index)
+                 VALUES (?,?,?,?,?,?)`,
+                [surveyId, source.question_text, source.question_type, source.options,
+                 source.is_required, source.order_index + 1]
+            );
+            const sequence = ordered.flatMap((q) => (q.id === source.id ? [q.id, lastID] : [q.id]));
+            for (const [index, id] of sequence.entries()) {
+                await dbAdapter.run(
+                    `UPDATE survey_questions SET order_index = ? WHERE id = ? AND survey_id = ?`,
+                    [index, id, surveyId]
+                );
+            }
+            return lastID;
+        });
+        auditSuccess(req, {
+            action: 'duplicate_survey_question',
+            resourceType: 'survey_question',
+            resourceId: String(newId),
+            metadata: { surveyId, sourceQuestionId: questionId },
+        });
+        req.log.info('survey question duplicated', { survey_id: surveyId, source_id: questionId, question_id: newId });
+        const row = await dbAdapter.get(`SELECT * FROM survey_questions WHERE id = ?`, [newId]);
+        return ok(res, mapQuestion(row), 201);
+    } catch (err) {
+        log.error('duplicate question failed', { error: err.message });
+        return fail(res, 500, 'Failed to duplicate question');
     }
 });
 

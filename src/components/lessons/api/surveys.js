@@ -71,6 +71,14 @@ export const surveysApi = {
     return response.data;
   },
 
+  // rohy addition: copy a question and place it right after the original.
+  duplicateQuestion: async (surveyId, questionId) => {
+    const response = await apiClient.post(
+      `/surveys/${surveyId}/questions/${questionId}/duplicate`
+    );
+    return response.data.data;
+  },
+
   reorderQuestions: async (surveyId, questionIds) => {
     const response = await apiClient.post(
       `/surveys/${surveyId}/questions/reorder`,

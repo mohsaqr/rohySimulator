@@ -182,7 +182,7 @@ export const SectionListEditor = forwardRef((
     if (!file) return;
     const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB — must match the server multer limit
     if (file.size > MAX_FILE_SIZE) {
-      toast.error(t('file_too_large', { name: file.name, limit: '50 MB' }));
+      toast.error(t('file_too_large', { defaultValue: '{name} is too large. The maximum file size is {limit}.', name: file.name, limit: '50 MB' }));
       return;
     }
     setBusy(true); setProgress(0);
