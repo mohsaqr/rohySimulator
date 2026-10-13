@@ -8,6 +8,7 @@
 // is pinned to) carries the document for free.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startTestServer } from '../utils/startTestServer.js';
+import { putInDefaultCourse } from '../utils/defaultCourse.js';
 import { DEFAULT_DOCUMENT_MAX_BYTES } from '../../server/shared/pluginDocument.js';
 
 async function login(baseUrl, username, password) {
@@ -223,6 +224,8 @@ describe('cases: config[pluginId] — the learner projection (document.learnerOm
         caseId = (await created.json()).id;
         // Students see available cases only.
         expect((await admin(`/api/cases/${caseId}/availability`, { method: 'PUT', body: JSON.stringify({ is_available: true }) })).status).toBe(200);
+        // …and, with course access on by default, only through a course.
+        await putInDefaultCourse(server.dbPath, caseId);
     }, 90_000);
 
     afterAll(async () => { if (server) await server.close(); });

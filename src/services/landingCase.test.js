@@ -1,5 +1,6 @@
 // Landing-case selection contract: a student opens the app on the case that
-// speaks their interface language, falling back to the tenant default.
+// speaks their interface language, falling back to the tenant default, then to
+// the first case they can see.
 import { describe, it, expect } from 'vitest';
 import { pickLandingCase } from './landingCase';
 
@@ -41,9 +42,10 @@ describe('pickLandingCase', () => {
         expect(pickLandingCase(undefined, 'de')).toBeNull();
     });
 
-    it('returns null when nothing matches and there is no default', () => {
-        const noDefault = [{ id: 5, is_default: false, config: { case_language: 'it' } }];
-        expect(pickLandingCase(noDefault, 'de')).toBeNull();
+    // Regression lock: a student invited into a course does not get the default case, and landed on nothing when their course's case did not match the UI language
+    it('lands on the first visible case when nothing matches and there is no default', () => {
+        const invitedIntoFinnishCourse = [{ id: 17, is_default: false, config: { case_language: 'fi' } }];
+        expect(pickLandingCase(invitedIntoFinnishCourse, 'en')).toEqual(invitedIntoFinnishCourse[0]);
     });
 
     it('prefers the language match even when a different case is the default', () => {

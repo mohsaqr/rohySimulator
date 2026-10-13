@@ -20,11 +20,15 @@ import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import {
     canReadAcrossUsers,
     caseAccessEnforcedFor,
-    cohortCaseVisibleExists,
+    studentCaseVisibility,
     redactRow,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+
+// What a student may see while course access is enforced (one rule, shared
+// with every other case-visibility site — see studentCaseVisibility).
+const studentCase = studentCaseVisibility('c');
 
 const radiologyLog = logger('radiology');
 const routesCasesLog = logger('routes-cases-sessions');
@@ -145,15 +149,15 @@ router.post('/sessions', authenticateToken, async (req, res) => {
     }
 
     // Launch gate: a direct case id must not bypass catalog filtering. Mirrors
-    // GET /cases/:id: the default case or an in-window course assignment is
-    // required for students.
+    // GET /cases/:id: students need what studentCaseVisibility grants — an
+    // in-window course assignment, or the default case on its own terms.
     if (enforceLaunchAccess) {
         const allowed = await new Promise((resolve, reject) => {
             dbAdapter.get(
                 `SELECT 1 FROM cases c
                   WHERE c.id = ? AND c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
-                    AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} ) LIMIT 1`,
-                [case_id, tenantId(req), user_id],
+                    AND ${studentCase.sql} LIMIT 1`,
+                [case_id, tenantId(req), ...studentCase.binds(user_id)],
                 (err, row) => { if (err) reject(err); else resolve(row); }
             );
         });

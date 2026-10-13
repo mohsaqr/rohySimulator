@@ -62,6 +62,29 @@ export async function listCases(baseURL) {
 }
 
 /**
+ * Offer a case a spec created to every student the way an educator would:
+ * make it available, and put it in the tenant's default course — where
+ * students who are in no other course get their cases. Course access is on,
+ * so a case outside every course (or unpublished) is refused to students.
+ */
+export async function offerCaseToStudents(baseURL, caseId) {
+    const ctx = await apiAsAdmin(baseURL);
+    try {
+        const available = await ctx.put(`/api/cases/${caseId}/availability`, { data: { is_available: true } });
+        if (!available.ok()) throw new Error(`PUT availability failed (${available.status()}): ${await available.text()}`);
+        const listed = await ctx.get('/api/cohorts');
+        if (!listed.ok()) throw new Error(`GET /api/cohorts failed (${listed.status()}): ${await listed.text()}`);
+        const body = await listed.json();
+        const course = (body.cohorts || body.data || []).find((c) => c.is_default);
+        if (!course) throw new Error('no default course to put the case in');
+        const put = await ctx.put(`/api/cases/${caseId}/course`, { data: { cohortId: course.id } });
+        if (!put.ok()) throw new Error(`PUT /api/cases/${caseId}/course failed (${put.status()}): ${await put.text()}`);
+    } finally {
+        await ctx.dispose();
+    }
+}
+
+/**
  * Find the first case matching a predicate or name. Returns null if not
  * found — caller decides whether that's fatal.
  */

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { putInDefaultCourse } from '../utils/defaultCourse.js';
 import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generated.js';
 import {
     projectCaseForRole, projectCaseConfigForRole, projectCaseSnapshotForRole, projectScenarioForRole,
@@ -103,6 +104,8 @@ beforeAll(async () => {
         await pRun(db, `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, tenant_id) VALUES (?, 'lab', 'Troponin', ?, 1)`,
             [caseId, JSON.stringify({ value: INVESTIGATION_VALUE })]);
     } finally { await new Promise((r) => db.close(r)); }
+    // With course access on by default, a student reaches a case through a course.
+    await putInDefaultCourse(server.dbPath, caseId);
     const login = async (username) => (await (await fetch(`${server.baseUrl}/api/auth/login`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password: PASSWORD }),
     })).json()).token;

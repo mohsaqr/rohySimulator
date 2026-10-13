@@ -6,6 +6,7 @@ import sqlite3 from 'sqlite3';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestDb } from '../utils/seedDb.js';
 import { startTestServer } from '../utils/startTestServer.js';
+import { putInDefaultCourse } from '../utils/defaultCourse.js';
 
 const MIGRATION = fs.readFileSync(path.resolve(__dirname, '../../migrations/0065_treatment_rubric_out_of_config.sql'), 'utf8');
 const RUBRIC = [
@@ -72,6 +73,9 @@ describe('the rubric stays out of what students receive', () => {
         const created = await (await admin('/api/cases', { method: 'POST', body: JSON.stringify({ name: 'rubric', system_prompt: 'p', config: { patient_name: 'P', treatments: RUBRIC } }) })).json();
         caseId = created.id;
         await admin(`/api/cases/${caseId}/treatments`, { method: 'PUT', body: JSON.stringify({ treatments: RUBRIC }) });
+        // With course access on by default, a student reaches an AVAILABLE case through a course.
+        expect((await admin(`/api/cases/${caseId}/availability`, { method: 'PUT', body: JSON.stringify({ is_available: true }) })).status).toBe(200);
+        await putInDefaultCourse(server.dbPath, caseId);
     }, 90_000);
     afterAll(async () => { await server?.close(); });
 

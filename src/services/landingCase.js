@@ -6,7 +6,11 @@
 //
 // Policy, in order:
 //   1. the case whose case_language matches the student's UI language, else
-//   2. the tenant default case (is_default), which is always present + visible.
+//   2. the tenant default case (is_default), when the student can see it, else
+//   3. the first case they can see. The default case is for people who
+//      registered themselves; a student invited into a course may not have it
+//      (studentCaseVisibility on the server), and should land on their course's
+//      case rather than on nothing.
 // Returns null only when the case list is empty.
 //
 // `cases` are the objects returned by GET /api/cases (config already parsed to
@@ -15,5 +19,5 @@ export function pickLandingCase(cases, uiLanguage) {
     if (!Array.isArray(cases) || cases.length === 0) return null;
     const byLanguage = cases.find((c) => c?.config?.case_language === uiLanguage);
     if (byLanguage) return byLanguage;
-    return cases.find((c) => c?.is_default) || null;
+    return cases.find((c) => c?.is_default) || cases[0];
 }

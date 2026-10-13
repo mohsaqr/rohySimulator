@@ -9,24 +9,24 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/admin/active-sessions` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1063` |
-| `DELETE` | `/api/admin/active-sessions/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1079` |
-| `GET` | `/api/admin/audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1037` |
-| `GET` | `/api/admin/audit/verify` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1042` |
-| `GET` | `/api/system-audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1057` |
-| `PUT` | `/api/user/password` | `authenticateToken` | `server/routes/users-routes.js:1169` |
-| `GET` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1111` |
-| `PUT` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1126` |
-| `GET` | `/api/users` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:357` |
-| `DELETE` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:884` |
-| `GET` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:531` |
-| `PUT` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:674` |
-| `GET` | `/api/users/:id/detail` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:551` |
-| `POST` | `/api/users/:id/purge` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:794` |
-| `PATCH` | `/api/users/:id/status` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:594` |
+| `GET` | `/api/admin/active-sessions` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1066` |
+| `DELETE` | `/api/admin/active-sessions/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1082` |
+| `GET` | `/api/admin/audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1040` |
+| `GET` | `/api/admin/audit/verify` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1045` |
+| `GET` | `/api/system-audit-log` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:1060` |
+| `PUT` | `/api/user/password` | `authenticateToken` | `server/routes/users-routes.js:1172` |
+| `GET` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1114` |
+| `PUT` | `/api/user/profile` | `authenticateToken` | `server/routes/users-routes.js:1129` |
+| `GET` | `/api/users` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:360` |
+| `DELETE` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:887` |
+| `GET` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:534` |
+| `PUT` | `/api/users/:id` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:677` |
+| `GET` | `/api/users/:id/detail` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:554` |
+| `POST` | `/api/users/:id/purge` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:797` |
+| `PATCH` | `/api/users/:id/status` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:597` |
 | `POST` | `/api/users/batch` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:119` |
-| `POST` | `/api/users/bulk-action` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:626` |
+| `POST` | `/api/users/bulk-action` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:629` |
 | `POST` | `/api/users/create` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:65` |
 | `POST` | `/api/users/import` | `authenticateToken, requireAdmin` | `server/routes/users-routes.js:234` |
-| `GET` | `/api/users/preferences` | `authenticateToken` | `server/routes/users-routes.js:404` |
-| `PUT` | `/api/users/preferences` | `authenticateToken` | `server/routes/users-routes.js:434` |
+| `GET` | `/api/users/preferences` | `authenticateToken` | `server/routes/users-routes.js:407` |
+| `PUT` | `/api/users/preferences` | `authenticateToken` | `server/routes/users-routes.js:437` |

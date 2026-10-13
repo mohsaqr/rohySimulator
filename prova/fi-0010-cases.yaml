@@ -275,12 +275,17 @@ features:
         platforms: [any]
         severity_if_failed: blocker
         steps: |-
-          1. As a course-member student who has NOT met the gate, open **Course** with the
-             developer tools' **Network** tab open.
-          2. Find the response whose address contains `/lectures`; note the id of a lesson marked
-             locked, and check whether that response contains any locked lesson's title.
+          1. Use a course-member student who has NEVER started FI-0017. The student used for
+             FI0010.GATE.03 has already opened the gate and cannot be used — create a new one and
+             add them to the course. Open **Course** and confirm five lessons show a lock; if
+             none do, this student has met the gate: stop and use another.
+          2. With the developer tools' **Network** tab open, reload **Course**. Find the response
+             whose address contains `/lectures`; in it, find an entry with `"locked": true` and
+             note its `"id"`. Check whether that response contains any locked lesson's title.
           3. In a new tab of the same browser, open `<instance address>/api/courses/lectures/<id>`
              and then `<instance address>/api/courses/lectures/<id>/sections`.
+          4. Meet the gate as in FI0010.GATE.03 (15 minutes in the case, every slide opened),
+             then open the same two addresses again.
         expected: |-
           The list response carries the locked lessons' place and gate progress only, with no
           title, description or sections. Both direct addresses are refused (HTTP 403, body
@@ -455,9 +460,14 @@ features:
         platforms: [any]
         severity_if_failed: major
         steps: |-
-          1. As an educator, Settings → **Courses**, open "Patologia: Pentin tapaus (FI-0010)".
-          2. Note its members. In **Manage**, add a student by username and click **Add**.
-          3. Log in as that student and open **Cases**.
+          1. As an admin, Settings → **Courses** → **Course access**: switch on "Only show cases to
+             enrolled course members". (With it off — the default — every student sees every shown
+             case whatever their courses, and an educator's course page says so above Add student.)
+          2. As an educator, Settings → **Courses**, open "Patologia: Pentin tapaus (FI-0010)".
+          3. Note its members. Log in as a student who is NOT a member and open **Cases**: FI-0017
+             is not listed.
+          4. As the educator, in **Manage**, add that student by username and click **Add**.
+          5. Log in as that student and open **Cases**.
         expected: |-
           On a freshly imported course the member list is empty, and the course holds six
           lessons. The added student appears as a member, and FI-0017 appears in their case list
@@ -470,8 +480,11 @@ features:
         steps: |-
           1. As admin, Settings → **Cases** → FI-0017's **Export as a case package (case and
              media)**. Read the export dialog.
-          2. On another disposable instance (or the same one), Settings → **Cases** →
-             **Import package**, choose the file, and read the import report.
+          2. On another disposable instance (or the same one), as admin, switch on Settings →
+             **Platform** → **General** → **Case packages** if it is off (without it there is no
+             **Import package** button). Then Settings → **Cases** → **Import package** — not the
+             plain **Import** button, which takes a JSON case only — choose the file (about 3 GB,
+             so keep it in a local folder, not OneDrive), and read the import report.
           3. Open the new case and the new course; add a student and play the new case.
         expected: |-
           The export carries the case, its slides with their tiles, the gross photograph and the

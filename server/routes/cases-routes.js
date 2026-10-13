@@ -34,7 +34,7 @@ import {
     canReadAcrossUsers,
     caseAccessEnforcedFor,
     clampInitialVitals,
-    cohortCaseVisibleExists,
+    studentCaseVisibility,
     createCaseVersion,
     logAudit,
     mergeScenarioSource,
@@ -45,6 +45,10 @@ import {
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+
+// What a student may see while course access is enforced (one rule, shared
+// with every other case-visibility site — see studentCaseVisibility).
+const studentCase = studentCaseVisibility('c');
 
 const radiologyLog = logger('radiology');
 const routesCasesLog = logger('routes-cases-sessions');
@@ -271,10 +275,10 @@ router.get('/cases', authenticateToken, async (req, res) => {
     const canReview = canReadAcrossUsers(req.user);
     const enforced = await caseAccessEnforcedFor(req.user);
 
-    // Reviewer+ inspect all cases. Students see available cases; when cohort-case
-    // enforcement is ON they additionally must be assigned the case (in-window)
-    // via a class they belong to — the tenant default case is always visible so
-    // "Basic course" members are never locked out. Flag OFF = legacy behaviour.
+    // Reviewer+ inspect all cases. Students see available cases; with course
+    // access enforced (the default) only those of their courses, plus the
+    // default case when they registered themselves or a course of theirs allows
+    // it (studentCaseVisibility). Enforcement off = every available case.
     //
     // Every tier also carries the case's course (course_id/course_name/
     // course_is_default) so the case browser can group by course and translate
@@ -297,9 +301,9 @@ router.get('/cases', authenticateToken, async (req, res) => {
     } else if (enforced) {
         sql = `SELECT c.*, co.id AS course_id, co.name AS course_name, co.is_default AS course_is_default FROM cases c ${courseJoin}
                WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
-                 AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )
+                 AND ${studentCase.sql}
                ORDER BY c.is_default DESC, c.created_at DESC`;
-        params = [tenantId(req), req.user.id];
+        params = [tenantId(req), ...studentCase.binds(req.user.id)];
     } else {
         sql = `SELECT c.*, co.id AS course_id, co.name AS course_name, co.is_default AS course_is_default FROM cases c ${courseJoin}
                WHERE c.tenant_id = ? AND c.deleted_at IS NULL AND c.is_available = 1
@@ -357,8 +361,8 @@ router.get('/cases/:id', authenticateToken, async (req, res) => {
         // existence leak — "not assigned" is indistinguishable from "not found").
         sql = `SELECT c.* FROM cases c
                WHERE c.id = ? AND c.tenant_id = ? AND c.is_available = 1 AND c.deleted_at IS NULL
-                 AND ( c.is_default = 1 OR ${cohortCaseVisibleExists('c')} )`;
-        params = [req.params.id, tenantId(req), req.user.id];
+                 AND ${studentCase.sql}`;
+        params = [req.params.id, tenantId(req), ...studentCase.binds(req.user.id)];
     } else {
         sql = `SELECT * FROM cases WHERE id = ? AND tenant_id = ? AND is_available = 1 AND deleted_at IS NULL`;
         params = [req.params.id, tenantId(req)];

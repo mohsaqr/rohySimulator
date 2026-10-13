@@ -14,6 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { startTestServer } from '../utils/startTestServer.js';
+import { putInDefaultCourse } from '../utils/defaultCourse.js';
 
 const PASSWORD = 'SlideReads1!';
 const DZI = '<?xml version="1.0"?>\n<Image TileSize="512" Overlap="1" Format="jpeg" xmlns="http://schemas.microsoft.com/deepzoom/2008"><Size Width="1024" Height="768"/></Image>';
@@ -110,6 +111,9 @@ describe('course gate: slides opened, as the server saw it', () => {
                     [onCase, studentId, started]);
             }
         });
+        // With course access on by default, a student reaches a case through a course.
+        await putInDefaultCourse(server.dbPath, caseId);
+        await putInDefaultCourse(server.dbPath, externalCaseId);
         student = authedFetch(server.baseUrl, await login(server.baseUrl, 'sr-student'));
         peer = authedFetch(server.baseUrl, await login(server.baseUrl, 'sr-peer'));
         guest = authedFetch(server.baseUrl, await login(server.baseUrl, 'sr-guest'));

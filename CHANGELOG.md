@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.56] — 2026-10-13
+
+- **Course access is on by default, and the default case is for self-registered students.**
+  - Unset, `enforce_cohort_case_access` now means ON: a student sees the cases of their courses.
+  - The default case goes to students who are in no other course: someone who registered on their own.
+    A student invited into a course gets that course's cases, not the default case, unless the course
+    turns on the new setting "Members also get the default case" (`settings.default_case_access`).
+  - Invites and CSV imports enrol into the named course before auto-enrolment, so an invited student
+    is never put in the default course as well.
+  - `studentCaseVisibility()` in `_helpers.js` is the one rule for the case list, case read, session
+    launch and case-course reads.
+- **The course-access switch is back in Settings → Courses (PRV-59).** It was only reachable in the
+  first-run wizard. Admins get a Course access card; `GET /cohorts/:id` reports `case_access_enforced`.
+- A landing page with no visible default case opens the first case the student can see.
+- Prova FI-0010 catalogue: GATE.04 needs a fresh student; AUTHOR.02/AUTHOR.03 steps follow the new
+  Settings and import paths.
+
 ## [3.0.0-rc.55] — 2026-10-13
 
 - **A case package dropped on the JSON Import button gets a clear message (PRV-60).** A 3 GB package
