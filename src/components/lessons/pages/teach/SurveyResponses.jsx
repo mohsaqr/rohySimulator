@@ -100,7 +100,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
             className="text-xl sm:text-2xl font-bold"
             style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}
           >
-            {data.survey.title} - {t('responses')}
+            {data.survey.title} - {t('responses', { defaultValue: 'Responses' })}
           </h1>
           <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2">
             <span
@@ -108,11 +108,11 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
               style={{ color: isDark ? '#94a3b8' : '#64748b' }}
             >
               <Users className="w-4 h-4" />
-              {t('responses_stat', { count: data.totalResponses })}
+              {t('responses_stat', { defaultValue: '{count, plural, one {# response} other {# responses}}', count: data.totalResponses })}
             </span>
             {data.survey.isAnonymous && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
-                {t('anonymous_badge')}
+                {t('anonymous_badge', { defaultValue: 'Anonymous' })}
               </span>
             )}
           </div>
@@ -132,7 +132,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                   : 'bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
-              {t('summary_view')}
+              {t('summary_view', { defaultValue: 'Summary' })}
             </button>
             <button
               onClick={() => setViewMode('individual')}
@@ -144,12 +144,12 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                   : 'bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
-              {t('individual_view')}
+              {t('individual_view', { defaultValue: 'Individual responses' })}
             </button>
           </div>
           <Button onClick={handleExport} loading={exporting} variant="outline">
             <Download className="w-4 h-4 mr-2" />
-            {t('export_csv')}
+            {t('export_csv', { defaultValue: 'Export CSV' })}
           </Button>
         </div>
       </div>
@@ -162,7 +162,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
               className="text-lg"
               style={{ color: isDark ? '#94a3b8' : '#64748b' }}
             >
-              {t('no_responses_yet')}
+              {t('no_responses_yet', { defaultValue: 'No responses yet' })}
             </p>
           </CardBody>
         </Card>
@@ -177,7 +177,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                       className="text-sm font-medium"
                       style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                     >
-                      {t('question_number', { number: index + 1 })}
+                      {t('question_number', { defaultValue: 'Question {number}', number: index + 1 })}
                     </span>
                     <h3
                       className="font-semibold mt-1"
@@ -190,7 +190,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                     className="text-sm"
                     style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                   >
-                    {t('responses_stat', { count: stat.totalResponses })}
+                    {t('responses_stat', { defaultValue: '{count, plural, one {# response} other {# responses}}', count: stat.totalResponses })}
                   </span>
                 </div>
               </CardHeader>

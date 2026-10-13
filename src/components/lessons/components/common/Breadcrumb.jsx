@@ -27,7 +27,7 @@ export const Breadcrumb = ({ items, className = '', homeHref = '/dashboard', sho
               href={homeHref}
               className="transition-colors"
               style={{ color: colors.homeLink }}
-              title={t('dashboard')}
+              title={t('dashboard', { defaultValue: 'Home' })}
             >
               <Home className="w-4 h-4" />
             </a>

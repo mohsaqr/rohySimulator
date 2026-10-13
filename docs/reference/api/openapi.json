@@ -13530,7 +13530,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:660",
+        "x-rohy-source": "server/routes/surveys-routes.js:712",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13572,7 +13572,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:702",
+        "x-rohy-source": "server/routes/surveys-routes.js:754",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13625,7 +13625,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:740",
+        "x-rohy-source": "server/routes/surveys-routes.js:792",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13800,7 +13800,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:616",
+        "x-rohy-source": "server/routes/surveys-routes.js:668",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13845,7 +13845,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:490",
+        "x-rohy-source": "server/routes/surveys-routes.js:542",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13979,7 +13979,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:375",
+        "x-rohy-source": "server/routes/surveys-routes.js:427",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14098,6 +14098,59 @@
         ]
       }
     },
+    "/api/surveys/{id}/questions/{questionId}/duplicate": {
+      "post": {
+        "summary": "Create /surveys/:id/questions/:questionId/duplicate",
+        "tags": [
+          "surveys"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "questionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/surveys-routes.js:382",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/surveys/{id}/responses": {
       "get": {
         "summary": "Get /surveys/:id/responses",
@@ -14128,7 +14181,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:527",
+        "x-rohy-source": "server/routes/surveys-routes.js:579",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14173,7 +14226,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:405",
+        "x-rohy-source": "server/routes/surveys-routes.js:457",
         "x-rohy-auth": [
           "authenticateToken"
         ],

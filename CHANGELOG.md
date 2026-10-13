@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.58] — 2026-10-13
+
+- **Faster survey authoring.** Each question has a **Duplicate** button
+  (`POST /api/surveys/:id/questions/:questionId/duplicate`: one transaction, copy placed after the original,
+  audited). Option presets fill a question in one click (Agreement 5 and 7, Frequency 5, Quality 5,
+  Yes/No), asking first before replacing typed options. Pasting a list makes one option per line, and
+  "Same options as previous question" copies them over.
+- **Survey screens no longer show raw text keys (PRV-54).** 45 `t()` calls across the lessons survey
+  and editor screens had no English default; each now carries one, and a test keeps it that way.
+
 ## [3.0.0-rc.57] — 2026-10-13
 
 - **The course room tells staff what students can't see.** Unpublished lessons and surveys carry a

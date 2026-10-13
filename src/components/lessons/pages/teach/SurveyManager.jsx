@@ -2,12 +2,13 @@
 // Page seams adapted: react-router params → an optional classroomId prop; the
 // course breadcrumb query dropped; the AI SurveyGenerator modal not copied
 // (it rides LAILA's llmService — chatoyon can wire its own provider later).
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   BarChart3,
   ChevronDown,
   ChevronUp,
+  Copy,
   Edit2,
   Eye,
   EyeOff,
@@ -26,6 +27,14 @@ import { DataTable } from '../../components/common/DataTable';
 import { RowMenu } from '../../components/common/RowMenu';
 import { useTheme } from '../../hooks/useTheme';
 import activityLogger from '../../services/activityLogger';
+import {
+  optionPresets,
+  splitPastedLines,
+  insertPastedOptions,
+  hasTypedOptions,
+  sameOptions,
+  previousChoiceOptions,
+} from './surveyOptionTools';
 
 export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
   const { t } = useTranslation(['teaching', 'common', 'navigation']);
@@ -58,6 +67,12 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
     isRequired: true,
   });
   const [submitting, setSubmitting] = useState(false);
+  // Options waiting for "Replace the options you typed?" — set when a preset
+  // or "same as previous" would overwrite options the educator typed.
+  const [pendingOptions, setPendingOptions] = useState(null);
+  const [duplicatingId, setDuplicatingId] = useState(null);
+  const presets = useMemo(() => optionPresets(t), [t]);
+  const fillLabelId = useId();
 
   useEffect(() => {
     activityLogger.logSurveyManagerViewed(courseId);
@@ -269,6 +284,48 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
     }
   };
 
+  const handleDuplicateQuestion = async (survey, question) => {
+    setDuplicatingId(question.id);
+    try {
+      await surveysApi.duplicateQuestion(survey.id, question.id);
+      // The server renumbers the whole survey, so reload it rather than
+      // splicing the copy in locally.
+      const fresh = await surveysApi.getSurveyById(survey.id);
+      setSurveys(prev =>
+        prev.map(s =>
+          s.id === survey.id
+            ? { ...s, ...fresh, _count: { ...s._count, questions: fresh.questions?.length ?? 0 } }
+            : s
+        )
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to duplicate question');
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  // Fill the option list from a preset or an earlier question. Options the
+  // educator already typed are only replaced after they confirm.
+  const fillOptions = (options) => {
+    if (!hasTypedOptions(questionForm.options) || sameOptions(questionForm.options, options)) {
+      setQuestionForm(prev => ({ ...prev, options: [...options] }));
+      setPendingOptions(null);
+    } else {
+      setPendingOptions([...options]);
+    }
+  };
+
+  const handleOptionPaste = (index, e) => {
+    const lines = splitPastedLines(e.clipboardData?.getData('text'));
+    if (lines.length < 2) return; // a single value pastes normally
+    e.preventDefault();
+    setQuestionForm(prev => ({
+      ...prev,
+      options: insertPastedOptions(prev.options || [''], index, lines),
+    }));
+  };
+
   const openEditModal = (survey) => {
     setSelectedSurvey(survey);
     setSurveyForm({
@@ -286,7 +343,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       setQuestionForm({
         questionText: question.questionText,
         questionType: question.questionType,
-        options: question.options || [''],
+        options: question.options?.length ? question.options : [''],
         isRequired: question.isRequired,
       });
     } else {
@@ -298,6 +355,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         isRequired: true,
       });
     }
+    setPendingOptions(null);
     setShowQuestionModal(true);
   };
 
@@ -328,6 +386,13 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
     );
   }
 
+  // Options of the choice question before the one being edited (or the last
+  // one, when adding) — offered as "Same options as previous question".
+  const previousOptions = previousChoiceOptions(
+    surveys.find(s => s.id === selectedSurvey?.id)?.questions,
+    editingQuestion?.id
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <div className="mb-6">
@@ -353,7 +418,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
             onClick={() => setError(null)}
             className="ml-2 underline"
           >
-            {t('common:dismiss')}
+            {t('common:dismiss', { defaultValue: 'Dismiss' })}
           </button>
         </div>
       )}
@@ -468,15 +533,30 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => openQuestionModal(survey, question)}
+                                aria-label={t('edit_question_n', { defaultValue: 'Edit question {n}', n: index + 1 })}
+                                title={t('edit_question', { defaultValue: 'Edit question' })}
                               >
-                                <Edit2 className="w-3 h-3" />
+                                <Edit2 className="w-3 h-3" aria-hidden="true" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDuplicateQuestion(survey, question)}
+                                loading={duplicatingId === question.id}
+                                disabled={duplicatingId != null}
+                                aria-label={t('duplicate_question_n', { defaultValue: 'Duplicate question {n}', n: index + 1 })}
+                                title={t('duplicate_question', { defaultValue: 'Duplicate question' })}
+                              >
+                                <Copy className="w-3 h-3" aria-hidden="true" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDeleteQuestion(survey, question.id)}
+                                aria-label={t('delete_question_n', { defaultValue: 'Delete question {n}', n: index + 1 })}
+                                title={t('delete_question', { defaultValue: 'Delete question' })}
                               >
-                                <Trash2 className="w-3 h-3 text-red-500" />
+                                <Trash2 className="w-3 h-3 text-red-500" aria-hidden="true" />
                               </Button>
                             </div>
                           </div>
@@ -489,7 +569,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                     className="text-sm text-center py-4"
                     style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                   >
-                    {t('no_questions_yet')}
+                    {t('no_questions_yet', { defaultValue: 'No questions yet.' })}
                   </p>
                 )}
                 <Button
@@ -499,7 +579,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                   onClick={() => openQuestionModal(survey)}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  {t('add_question')}
+                  {t('add_question', { defaultValue: 'Add question' })}
                 </Button>
               </div>
             </Card>
@@ -511,12 +591,12 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title={t('create_survey')}
+        title={t('create_survey', { defaultValue: 'Create survey' })}
         size="md"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">{t('title_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('title_label', { defaultValue: 'Title' })}</label>
             <input
               type="text"
               value={surveyForm.title}
@@ -527,11 +607,11 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                 borderColor: isDark ? '#334155' : '#cbd5e1',
                 color: isDark ? '#f1f5f9' : '#0f172a',
               }}
-              placeholder={t('survey_title_placeholder')}
+              placeholder={t('survey_title_placeholder', { defaultValue: 'Survey title' })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{t('description_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('description_label', { defaultValue: 'Description' })}</label>
             <textarea
               value={surveyForm.description}
               onChange={e => setSurveyForm(prev => ({ ...prev, description: e.target.value }))}
@@ -542,7 +622,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                 color: isDark ? '#f1f5f9' : '#0f172a',
               }}
               rows={3}
-              placeholder={t('optional_description')}
+              placeholder={t('optional_description', { defaultValue: 'Optional description' })}
             />
           </div>
           <label className="flex items-center gap-2">
@@ -552,14 +632,14 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
               onChange={e => setSurveyForm(prev => ({ ...prev, isAnonymous: e.target.checked }))}
               className="w-4 h-4 rounded"
             />
-            <span className="text-sm">{t('anonymous_responses_desc')}</span>
+            <span className="text-sm">{t('anonymous_responses_desc', { defaultValue: 'Collect responses anonymously' })}</span>
           </label>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
               {t('common:cancel')}
             </Button>
             <Button onClick={handleCreateSurvey} loading={submitting}>
-              {t('common:create')}
+              {t('common:create', { defaultValue: 'Create' })}
             </Button>
           </div>
         </div>
@@ -569,12 +649,12 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title={t('edit_survey')}
+        title={t('edit_survey', { defaultValue: 'Edit survey' })}
         size="md"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">{t('title_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('title_label', { defaultValue: 'Title' })}</label>
             <input
               type="text"
               value={surveyForm.title}
@@ -588,7 +668,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{t('description_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('description_label', { defaultValue: 'Description' })}</label>
             <textarea
               value={surveyForm.description}
               onChange={e => setSurveyForm(prev => ({ ...prev, description: e.target.value }))}
@@ -608,7 +688,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
               onChange={e => setSurveyForm(prev => ({ ...prev, isAnonymous: e.target.checked }))}
               className="w-4 h-4 rounded"
             />
-            <span className="text-sm">{t('anonymous_responses')}</span>
+            <span className="text-sm">{t('anonymous_responses', { defaultValue: 'Anonymous responses' })}</span>
           </label>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setShowEditModal(false)}>
@@ -625,18 +705,18 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       <Modal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        title={t('delete_survey')}
+        title={t('delete_survey', { defaultValue: 'Delete survey' })}
         size="sm"
       >
         <p className="mb-4">
-          {t('delete_survey_confirm', { title: selectedSurvey?.title })}
+          {t('delete_survey_confirm', { defaultValue: 'Delete the survey "{title}"? This cannot be undone.', title: selectedSurvey?.title })}
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setShowDeleteModal(false)}>
             {t('common:cancel')}
           </Button>
           <Button variant="danger" onClick={handleDeleteSurvey} loading={submitting}>
-            {t('common:delete')}
+            {t('common:delete', { defaultValue: 'Delete' })}
           </Button>
         </div>
       </Modal>
@@ -648,12 +728,12 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
           setShowQuestionModal(false);
           setEditingQuestion(null);
         }}
-        title={editingQuestion ? t('edit_question') : t('add_question')}
+        title={editingQuestion ? t('edit_question', { defaultValue: 'Edit question' }) : t('add_question', { defaultValue: 'Add question' })}
         size="md"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">{t('question_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('question_label', { defaultValue: 'Question' })}</label>
             <input
               type="text"
               value={questionForm.questionText}
@@ -666,11 +746,11 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                 borderColor: isDark ? '#334155' : '#cbd5e1',
                 color: isDark ? '#f1f5f9' : '#0f172a',
               }}
-              placeholder={t('enter_question_placeholder')}
+              placeholder={t('enter_question_placeholder', { defaultValue: 'Enter your question' })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{t('question_type_label')}</label>
+            <label className="block text-sm font-medium mb-1">{t('question_type_label', { defaultValue: 'Question type' })}</label>
             <select
               value={questionForm.questionType}
               onChange={e =>
@@ -686,15 +766,74 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                 color: isDark ? '#f1f5f9' : '#0f172a',
               }}
             >
-              <option value="single_choice">{t('single_choice_radio')}</option>
-              <option value="multiple_choice">{t('multiple_choice_checkbox')}</option>
-              <option value="free_text">{t('free_text')}</option>
+              <option value="single_choice">{t('single_choice_radio', { defaultValue: 'Single choice' })}</option>
+              <option value="multiple_choice">{t('multiple_choice_checkbox', { defaultValue: 'Multiple choice' })}</option>
+              <option value="free_text">{t('free_text', { defaultValue: 'Free text' })}</option>
             </select>
           </div>
 
           {questionForm.questionType !== 'free_text' && (
             <div>
-              <label className="block text-sm font-medium mb-1">{t('options_label')}</label>
+              <label className="block text-sm font-medium mb-1">{t('options_label', { defaultValue: 'Options' })}</label>
+              <div
+                role="group"
+                aria-labelledby={fillLabelId}
+                className="flex flex-wrap items-center gap-1.5 mb-2"
+              >
+                <span
+                  id={fillLabelId}
+                  className="text-xs"
+                  style={{ color: isDark ? '#94a3b8' : '#64748b' }}
+                >
+                  {t('fill_options_with', { defaultValue: 'Fill with:' })}
+                </span>
+                {presets.map(preset => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => fillOptions(preset.options)}
+                    title={preset.options.join(' / ')}
+                    className="text-xs px-2 py-1 rounded-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                {previousOptions && (
+                  <button
+                    type="button"
+                    onClick={() => fillOptions(previousOptions)}
+                    title={previousOptions.join(' / ')}
+                    className="text-xs px-2 py-1 rounded-full border border-teal-500 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {t('same_options_as_previous', { defaultValue: 'Same options as previous question' })}
+                  </button>
+                )}
+              </div>
+              {pendingOptions && (
+                <div
+                  role="alert"
+                  className="mb-2 p-2 rounded-lg text-sm flex flex-wrap items-center gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300"
+                >
+                  <span className="flex-1">
+                    {t('replace_typed_options', {
+                      defaultValue: 'Replace the options you typed with: {list}?',
+                      list: pendingOptions.join(' / '),
+                    })}
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setQuestionForm(prev => ({ ...prev, options: pendingOptions }));
+                      setPendingOptions(null);
+                    }}
+                  >
+                    {t('replace_options', { defaultValue: 'Replace' })}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPendingOptions(null)}>
+                    {t('keep_my_options', { defaultValue: 'Keep mine' })}
+                  </Button>
+                </div>
+              )}
               <div className="space-y-2">
                 {questionForm.options?.map((option, index) => (
                   <div key={index} className="flex gap-2">
@@ -706,13 +845,15 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                         newOptions[index] = e.target.value;
                         setQuestionForm(prev => ({ ...prev, options: newOptions }));
                       }}
+                      onPaste={e => handleOptionPaste(index, e)}
+                      aria-label={t('option_placeholder', { defaultValue: 'Option {number}', number: index + 1 })}
                       className="flex-1 px-3 py-2 rounded-lg border focus:ring-2 focus:ring-teal-500"
                       style={{
                         backgroundColor: isDark ? '#1e293b' : '#ffffff',
                         borderColor: isDark ? '#334155' : '#cbd5e1',
                         color: isDark ? '#f1f5f9' : '#0f172a',
                       }}
-                      placeholder={t('option_placeholder', { number: index + 1 })}
+                      placeholder={t('option_placeholder', { defaultValue: 'Option {number}', number: index + 1 })}
                     />
                     {(questionForm.options?.length || 0) > 1 && (
                       <Button
@@ -722,8 +863,9 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                           const newOptions = questionForm.options?.filter((_, i) => i !== index);
                           setQuestionForm(prev => ({ ...prev, options: newOptions }));
                         }}
+                        aria-label={t('remove_option_n', { defaultValue: 'Remove option {number}', number: index + 1 })}
                       >
-                        <Trash2 className="w-4 h-4 text-red-500" />
+                        <Trash2 className="w-4 h-4 text-red-500" aria-hidden="true" />
                       </Button>
                     )}
                   </div>
@@ -739,8 +881,11 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
                   }
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  {t('add_option')}
+                  {t('add_option', { defaultValue: 'Add option' })}
                 </Button>
+                <p className="text-xs" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                  {t('paste_options_hint', { defaultValue: 'Tip: paste a list, one option per line, into any option box to add them all at once.' })}
+                </p>
               </div>
             </div>
           )}
@@ -754,7 +899,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
               }
               className="w-4 h-4 rounded"
             />
-            <span className="text-sm">{t('required_question')}</span>
+            <span className="text-sm">{t('required_question', { defaultValue: 'Required question' })}</span>
           </label>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -771,7 +916,7 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
               onClick={editingQuestion ? handleUpdateQuestion : handleAddQuestion}
               loading={submitting}
             >
-              {editingQuestion ? t('common:save') : t('common:add')}
+              {editingQuestion ? t('common:save') : t('common:add', { defaultValue: 'Add' })}
             </Button>
           </div>
         </div>
@@ -868,14 +1013,14 @@ const SurveysTable = ({
         predicate: (s, q) => s.title.toLowerCase().includes(q.toLowerCase()),
       }}
       createCta={{
-        label: t('create_survey'),
+        label: t('create_survey', { defaultValue: 'Create survey' }),
         icon: <Plus className="w-4 h-4" />,
         onClick: onCreate,
       }}
       empty={
         <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500 dark:text-slate-400">
           <ListChecks className="w-4 h-4" />
-          <span>{t('teaching:no_surveys_yet')}</span>
+          <span>{t('teaching:no_surveys_yet', { defaultValue: 'No surveys yet' })}</span>
         </div>
       }
       rowActions={s => {
