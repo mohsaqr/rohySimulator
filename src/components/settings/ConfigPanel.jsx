@@ -30,6 +30,7 @@ import UsersWorkspace from './users/UsersWorkspace';
 import RegistrationPolicySettings from './RegistrationPolicySettings';
 import CasePackageSettings, { CasePackageExportButton, CasePackageImportButton } from './CasePackages.jsx';
 import useCasePackages from './useCasePackages.js';
+import { CaseFileError, readCaseJsonFile } from './caseImportFile.js';
 import TermsSettings from './TermsSettings';
 import MedicationManager from './MedicationManager';
 import TreatmentsLibraryManager from './TreatmentsLibraryManager';
@@ -445,6 +446,18 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     const { t } = useTranslation('authoring_config');
     const { isAdmin, user } = useAuth();
     const casePackagesOn = useCasePackages(isAdmin());
+    // Words for a picked case file the JSON import cannot use (caseImportFile.js).
+    // Never the browser's own text: FI0010.AUTHOR.03 showed Chrome's raw
+    // NotReadableError, which blames "permission problems" for a file that
+    // was simply a 3 GB case package.
+    const caseFileErrorText = (err) => {
+        if (!(err instanceof CaseFileError)) return err.message;
+        if (err.code === 'case_file_unreadable') return t('import_file_unreadable');
+        if (err.code === 'case_file_is_package') {
+            return casePackagesOn ? t('import_file_is_package') : t('import_file_is_package_off');
+        }
+        return t('err_invalid_case_file');
+    };
     // Educator+ gate for the Analytics tab (formerly split into an admin-only
     // "Case Analytics" and an educator+ "Emotion & Attention" Oyon tab — the
     // Oyon analysis views now live inside the Analytics dashboard, so
@@ -964,20 +977,13 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 if (!file) return;
 
                                                                 try {
-                                                                    const text = await file.text();
-                                                                    const caseData = JSON.parse(text);
-
-                                                                    // Validate
-                                                                    if (!caseData.name || !caseData.description) {
-                                                                        throw new Error(t('err_invalid_case_file'));
-                                                                    }
-
+                                                                    const caseData = await readCaseJsonFile(file);
                                                                     await apiPost('/cases', caseData);
                                                                     toast.success(t('toast_case_imported'));
                                                                     const data = await apiFetch('/cases');
                                                                     setCases(data.cases || []);
                                                                 } catch (err) {
-                                                                    toast.error(t('toast_import_failed', { error: err.message }));
+                                                                    toast.error(t('toast_import_failed', { error: caseFileErrorText(err) }));
                                                                 }
                                                             };
                                                             input.click();
