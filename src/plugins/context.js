@@ -21,17 +21,23 @@ import { PLUGIN_MANIFESTS } from '../../server/shared/plugins/manifests.generate
 import { localeNamespaceOf } from '../../server/shared/pluginRegistry.js';
 import { createPluginLogger, deprecatedEventLoggerProxy } from './logger.js';
 import { baseUrl } from '../config/api.js';
+import { createSyncedStore } from './sessionStore.js';
 
 /**
  * Async key/value store scoped to one plugin, one session.
  *
- * localStorage-backed today. Every method is already async and this is the
- * only module that touches the backing store, so swapping the bodies for
- * apiFetch('/api/plugins/...') needs no change at any call site — the same
- * design the upstream workstation used for core/store.js.
+ * With a session, the learner's work lives on the SERVER (sessionStore.js,
+ * migration 0069) and localStorage is only its offline draft cache — so a
+ * report survives a change of device, a second tab cannot silently overwrite
+ * the first, and the educator can read what was submitted. Without a session
+ * (an author previewing, a test harness) there is nothing to sync to and the
+ * store is the browser alone, as it always was.
  */
 function createStore({ pluginId, sessionId }) {
-    const key = (name) => `rohy_plugin:${pluginId}:${sessionId ?? 'nosession'}:${name}`;
+    if (sessionId !== null && sessionId !== undefined && sessionId !== '') {
+        return createSyncedStore({ pluginId, sessionId });
+    }
+    const key = (name) => `rohy_plugin:${pluginId}:nosession:${name}`;
     return {
         async get(name, fallback = null) {
             try {

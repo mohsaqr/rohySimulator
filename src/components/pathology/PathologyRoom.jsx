@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, FileText, PenSquare } from 'lucide-react';
+import { Bookmark, FileText, Layers, PenSquare, X } from 'lucide-react';
 import { SlideCanvas } from './SlideCanvas.jsx';
 import { SpecimenTray } from './SpecimenTray.jsx';
 import { CaseRequest } from './CaseRequest.jsx';
@@ -21,6 +21,10 @@ import { hasOpticalProfile } from './slideGeometry.js';
 import { isTypingTarget, resolveCommand } from './keymap.js';
 import { captureField, download } from './snapshot.js';
 import { toLegacyViewerCase } from './caseCore/viewerAdapter.js';
+import { packReadSamples, readFeedbackSummary } from './readFeedback.js';
+
+/** How many times a learner may ask again for feedback that failed to arrive. */
+export const MAX_FEEDBACK_RETRIES = 3;
 
 /**
  * The Pathology room — a sixth peer alongside Patient, Examination,
@@ -57,6 +61,14 @@ import { toLegacyViewerCase } from './caseCore/viewerAdapter.js';
  * @param {object} [props.initialAnnotations]     {[slideId]: annotation[]}
  * @param {Function} [props.onReportsChange]      (reports) => void
  * @param {Array<object>} [props.initialReports]  reports to restore
+ * @param {Function} [props.assessRead]  SERVER-SIDE ASSESSMENT SEAM. A host that
+ *   keeps the rubric away from the learner (as it must — the rubric is the
+ *   answer key) passes `({reportId, activityId, read}) => Promise<feedback|null>`.
+ *   The room then records the read WITHOUT a rubric and, when a report is
+ *   submitted, hands the host the packed read (readFeedback.js
+ *   `packReadSamples`); the host scores it where the rubric lives
+ *   (`assessPackedRead`) and resolves with `readFeedbackSummary()` output,
+ *   which the report panel shows. Ignored when a rubric is passed directly.
  */
 export function PathologyRoom({
     pathologyCase,
@@ -67,6 +79,7 @@ export function PathologyRoom({
     initialAnnotations,
     onReportsChange,
     initialReports,
+    assessRead = null,
     // How this host turns a `remote:` reference into a loadable address. Some
     // hosts resolve references before the case ever reaches this component; a
     // host that does not passes the rule in here instead.
@@ -86,7 +99,14 @@ export function PathologyRoom({
             : undefined);
     }, [pathologyCase, resolveRef]);
     const [activeSlideId, setActiveSlideId] = useState(viewerCase?.slides?.[0]?.id ?? null);
+    // The feedback shown after submission, always in readFeedbackSummary()
+    // shape whether it was scored here or by the host.
     const [readResult, setReadResult] = useState(null);
+    // Host-scored feedback is asynchronous: {status: 'pending'|'failed'|'unavailable', reportId, attempts}.
+    const [readState, setReadState] = useState(null);
+    // Narrow screens: the slide list and the marks/report panel become drawers
+    // over the canvas instead of fixed columns beside it (see the layout below).
+    const [drawer, setDrawer] = useState(null);
     // Microscopy and gross are peer modules within the room, mirroring the
     // standalone workstation. A case may carry either, both, or neither — so the
     // room opens on whichever it has. A gross-only case used to open on
@@ -141,10 +161,13 @@ export function PathologyRoom({
     const annotationsRef = useRef(null);
 
     const assessment = rubric ?? answerKey;
-    const { accept, finish, startedAt } = useReadRecorder(assessment, logger, {
+    // No rubric here, but a host that scores elsewhere: record, do not score.
+    const hostAssessed = !assessment && typeof assessRead === 'function';
+    const { accept, finish, startedAt, samples } = useReadRecorder(assessment, logger, {
         slide,
         activityId: task?.id,
-        enabled: !!assessment,
+        enabled: !!assessment || hostAssessed,
+        recordWithoutRubric: hostAssessed,
     });
 
     const annotations = useAnnotations({
@@ -370,7 +393,12 @@ export function PathologyRoom({
 
     // --- reporting ---------------------------------------------------------
 
-    const openSlide = useCallback((next) => setActiveSlideId(next.id), []);
+    // Choosing a slide from the narrow-screen drawer also closes it: the
+    // learner picked a slide to LOOK at, and the drawer is covering it.
+    const openSlide = useCallback((next) => {
+        setActiveSlideId(next.id);
+        setDrawer(null);
+    }, []);
 
     // --- reports ----------------------------------------------------------
 
@@ -412,16 +440,61 @@ export function PathologyRoom({
         if (report) logger.reportSaved(report);
     }, [reports, logger]);
 
+    // Ask the host to score the read it could not score here. Retried only by
+    // the learner, and at most MAX_FEEDBACK_RETRIES times: the host keeps the
+    // first assessment of a task, so asking again returns the same feedback
+    // rather than re-scoring a different read.
+    const requestHostFeedback = useCallback((reportId, attempts = 0) => {
+        if (!hostAssessed) return;
+        setReadState({ status: 'pending', reportId, attempts });
+        let read;
+        try {
+            read = packReadSamples(samples());
+        } catch {
+            // A sample without a slide id is the recorder's bug, not the
+            // learner's; there is nothing a retry would change.
+            setReadState({ status: 'unavailable', reportId, attempts });
+            return;
+        }
+        Promise.resolve()
+            .then(() => assessRead({ reportId, activityId: task?.id ?? null, read }))
+            .then((feedback) => {
+                if (!feedback) {
+                    setReadState({ status: 'unavailable', reportId, attempts });
+                    return;
+                }
+                setReadResult(feedback);
+                setReadState(null);
+                // Kept on the report, so the feedback is still there after a
+                // reload — the room's own state is not persisted, the report is.
+                setReports((current) => {
+                    const next = current.map((r) => (r.id === reportId ? { ...r, readFeedback: feedback } : r));
+                    onReportsChange?.(next);
+                    return next;
+                });
+                if (task) logger.feedbackReceived(task, feedback);
+            })
+            .catch(() => setReadState({ status: 'failed', reportId, attempts }));
+    }, [hostAssessed, samples, assessRead, task, onReportsChange, logger]);
+
+    const retryHostFeedback = useCallback(() => {
+        if (!readState || readState.attempts >= MAX_FEEDBACK_RETRIES) return;
+        requestHostFeedback(readState.reportId, readState.attempts + 1);
+    }, [readState, requestHostFeedback]);
+
     const submitActiveReport = useCallback((id) => {
         const report = reports.find((r) => r.id === id);
         if (!report) return;
         // Close the read FIRST, so the score that is shown and the score that
         // is logged are the same object rather than two separate calculations.
         const scored = finish();
-        setReadResult(scored);
+        const feedback = scored ? readFeedbackSummary(scored, { slideId: slideRef.current?.id ?? null }) : null;
+        setReadResult(feedback);
 
         const submitted = submitReport(report, Date.now());
-        emitReports(reports.map((r) => (r.id === id ? submitted : r)));
+        emitReports(reports.map((r) => (r.id === id
+            ? (feedback ? { ...submitted, readFeedback: feedback } : submitted)
+            : r)));
         logger.reportSubmitted(submitted, {
             elapsedMs: scored?.totalTimeMs ?? null,
             readScore: scored?.readScore ?? null,
@@ -434,7 +507,21 @@ export function PathologyRoom({
             logger.taskCompleted(task, scored ?? {});
             if (scored) logger.feedbackReceived(task, scored);
         }
-    }, [reports, finish, logger, emitReports, task]);
+        // No rubric here: the host scores the read and the panel waits for it.
+        if (!scored && hostAssessed) requestHostFeedback(id);
+    }, [reports, finish, logger, emitReports, task, hostAssessed, requestHostFeedback]);
+
+    // A drawer is a modal layer on a narrow screen: Escape closes it, unless
+    // the learner is typing (Escape in the report must not throw them out).
+    useEffect(() => {
+        if (!drawer) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape' || isTypingTarget(event.target)) return;
+            setDrawer(null);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [drawer]);
 
     if (!viewerCase) {
         return (
@@ -521,8 +608,59 @@ export function PathologyRoom({
                         annotationCount={annotations.annotations.length}
                     />
 
-                    <div className="flex min-h-0 flex-1 overflow-hidden">
-                        <nav aria-label={t('slides', 'Slides')} className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3">
+                    {/* NARROW SCREENS (below lg). Two fixed columns — 224 px of
+                        slide list and 288-320 px of marks/report — left a phone
+                        no width at all for the microscope. Below lg both become
+                        drawers over the canvas, opened from this bar, and the
+                        slide stays the main viewport. Desktop is unchanged:
+                        every max-lg: class below is inert at lg and up. */}
+                    <div className="flex shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/60 px-3 py-1.5 lg:hidden">
+                        <button
+                            type="button"
+                            aria-expanded={drawer === 'slides'}
+                            aria-controls="pathology-slides-drawer"
+                            onClick={() => setDrawer((open) => (open === 'slides' ? null : 'slides'))}
+                            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 transition-colors ${
+                                drawer === 'slides' ? 'bg-fuchsia-500/15 text-fuchsia-200 ring-fuchsia-500/30'
+                                    : 'text-slate-300 ring-slate-700 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+                            {t('slides', 'Slides')}
+                            <span className="tabular-nums text-slate-500">{slides.length}</span>
+                        </button>
+                        <span className="min-w-0 flex-1 truncate text-[11px] text-slate-400">{slide?.label}</span>
+                        <button
+                            type="button"
+                            aria-expanded={drawer === 'panel'}
+                            aria-controls="pathology-side-drawer"
+                            onClick={() => setDrawer((open) => (open === 'panel' ? null : 'panel'))}
+                            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 transition-colors ${
+                                drawer === 'panel' ? 'bg-fuchsia-500/15 text-fuchsia-200 ring-fuchsia-500/30'
+                                    : 'text-slate-300 ring-slate-700 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                            {t('marks_and_report', 'Marks & report')}
+                        </button>
+                    </div>
+
+                    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+                        {drawer && (
+                            <button
+                                type="button"
+                                aria-label={t('close_panel', 'Close panel')}
+                                onClick={() => setDrawer(null)}
+                                className="absolute inset-0 z-20 bg-slate-950/60 lg:hidden"
+                            />
+                        )}
+                        <nav
+                            id="pathology-slides-drawer"
+                            aria-label={t('slides', 'Slides')}
+                            className={`flex w-56 shrink-0 flex-col overflow-y-auto border-r border-slate-800/80 bg-slate-950/40 p-3 max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[min(18rem,85%)] max-lg:bg-slate-950 max-lg:shadow-2xl ${
+                                drawer === 'slides' ? '' : 'max-lg:hidden'
+                            }`}
+                        >
                             <div className="flex flex-col gap-1.5">
                                 {slides.map((s) => {
                                     const active = s.id === activeSlideId;
@@ -607,8 +745,13 @@ export function PathologyRoom({
                             )}
                         </main>
 
-                        <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-l border-slate-800/80 bg-slate-950/40 max-xl:w-72">
-                            <div role="tablist" aria-label={t('side_panel', 'Side panel')} className="flex shrink-0 gap-1 border-b border-slate-800/80 px-2 py-1.5">
+                        <aside
+                            id="pathology-side-drawer"
+                            className={`flex w-80 shrink-0 flex-col overflow-hidden border-l border-slate-800/80 bg-slate-950/40 max-xl:w-72 max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(22rem,100%)] max-lg:bg-slate-950 max-lg:shadow-2xl ${
+                                drawer === 'panel' ? '' : 'max-lg:hidden'
+                            }`}
+                        >
+                            <div role="tablist" aria-label={t('side_panel', 'Side panel')} className="flex shrink-0 items-center gap-1 border-b border-slate-800/80 px-2 py-1.5">
                                 {[['annotations', t('marks', 'Marks'), PenSquare], ['report', t('report', 'Report'), FileText]].map(([key, label, Icon]) => (
                                         <button
                                             key={key}
@@ -625,6 +768,14 @@ export function PathologyRoom({
                                         {label}
                                     </button>
                                 ))}
+                                <button
+                                    type="button"
+                                    aria-label={t('close_panel', 'Close panel')}
+                                    onClick={() => setDrawer(null)}
+                                    className="ml-auto rounded-lg p-1 text-slate-400 hover:bg-slate-800/50 lg:hidden"
+                                >
+                                    <X className="h-4 w-4" aria-hidden="true" />
+                                </button>
                             </div>
 
                             {importError && (
@@ -659,6 +810,10 @@ export function PathologyRoom({
                                     task={examMode && task ? { ...task, hints: [] } : task}
                                     logger={logger}
                                     readResult={readResult}
+                                    readState={readState}
+                                    onRetryFeedback={readState?.status === 'failed' && readState.attempts < MAX_FEEDBACK_RETRIES
+                                        ? retryHostFeedback : undefined}
+                                    slides={slides}
                                     examMode={examMode}
                                 />
                             )}

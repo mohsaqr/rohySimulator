@@ -133,6 +133,56 @@ export function createReadRecorder(answerKey, options = {}) {
 }
 
 /**
+ * Record a read with NO rubric — the browser half of server-side assessment.
+ *
+ * Same sampling policy as the scoring recorders (one throttle, settled
+ * objective endpoints always kept, per-slide objective changes), so a read
+ * recorded here and scored elsewhere is the read the live recorder would have
+ * scored. It never reaches an ROI — it does not know where any are — and
+ * `finish()` returns null: the score belongs to whoever holds the rubric
+ * (see readFeedback.js).
+ *
+ * @param {object} [options] {sampleIntervalMs, objectiveEpsilon}
+ * @returns {{accept:Function,result:Function,samples:Function,finish:Function}}
+ */
+export function createSampleRecorder(options = {}) {
+    const sampleIntervalMs = options.sampleIntervalMs ?? DEFAULT_SAMPLE_INTERVAL_MS;
+    const objectiveEpsilon = options.objectiveEpsilon ?? DEFAULT_OBJECTIVE_EPSILON;
+    if (!Number.isFinite(sampleIntervalMs) || sampleIntervalMs < 0) {
+        throw new TypeError('createSampleRecorder(): sampleIntervalMs must be finite and non-negative');
+    }
+    if (!Number.isFinite(objectiveEpsilon) || objectiveEpsilon < 0) {
+        throw new TypeError('createSampleRecorder(): objectiveEpsilon must be finite and non-negative');
+    }
+    const state = { samples: [], lastSampleAt: null, lastSettledObjectiveBySlide: new Map() };
+    return {
+        accept(sample, observation = {}) {
+            if (!sample || typeof sample.slideId !== 'string' || sample.slideId.length === 0) {
+                throw new TypeError('createSampleRecorder().accept(): sample needs a non-empty slideId');
+            }
+            if (observation.settled !== undefined && typeof observation.settled !== 'boolean') {
+                throw new TypeError('createSampleRecorder().accept(): observation.settled must be boolean');
+            }
+            const settled = observation.settled ?? true;
+            const previous = state.lastSettledObjectiveBySlide.get(sample.slideId);
+            const objectiveChanged = settled && previous !== undefined
+                && Math.abs(sample.objective - previous) > objectiveEpsilon
+                ? { from: previous, to: sample.objective, slideId: sample.slideId }
+                : null;
+            if (settled) state.lastSettledObjectiveBySlide.set(sample.slideId, sample.objective);
+            const tooSoon = state.lastSampleAt !== null && sample.t - state.lastSampleAt < sampleIntervalMs;
+            if (tooSoon && !objectiveChanged) return { recorded: false, roiReached: [], objectiveChanged: null };
+            state.samples.push({ ...sample, settled });
+            state.lastSampleAt = sample.t;
+            return { recorded: true, roiReached: [], objectiveChanged };
+        },
+        result: () => null,
+        samples() { return state.samples.map((sample) => ({ ...sample })); },
+        finish: () => null,
+    };
+}
+
+/**
  * Record and score a multi-slide read against a protected v1 rubric.
  *
  * The ordinary recorder intentionally remains unchanged for legacy hosts.

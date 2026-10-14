@@ -19669,6 +19669,36 @@
     "reviewer": null,
     "risk": "low"
   },
+  "common.plugin_state_conflict": {
+    "src": "6842b93f98ee",
+    "tgt": "9c77f810cf5b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.plugin_state_offline": {
+    "src": "eeff65ed518e",
+    "tgt": "58e8b2792faf",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "common.plugin_state_save_failed": {
+    "src": "8a25cf7a185b",
+    "tgt": "3c3664466875",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "common.q_decision_process": {
     "src": "d63a099d5d70",
     "tgt": "f7a156548571",

@@ -74,6 +74,7 @@ import { buildCorsOptions } from './cors-config.js';
 import { securityHeaders } from './security-headers.js';
 import { lessonFileGuard } from './routes/lessons-routes.js';
 import { MAX_BODY as REPORT_MAX_BODY, MESSAGE_BODY_MAX as REPORT_MESSAGE_BODY_MAX } from './lib/prova-relay.js';
+import { PATHOLOGY_READ_MAX_BODY } from './routes/pathology-read-routes.js';
 
 app.use(requestIdMiddleware);
 app.use(dbErrorShield);
@@ -104,6 +105,10 @@ app.use(requestLoggerMiddleware());
 app.use('/api/report', express.json({ limit: REPORT_MAX_BODY }));
 // Writing back on one's own report (relay 1.3.0): a short message, so the relay's MESSAGE_BODY_MAX (16 KiB).
 app.post('/api/reports/:id/messages', express.json({ limit: REPORT_MESSAGE_BODY_MAX }));
+// A pathology read submitted for scoring (routes/pathology-read-routes.js): the
+// packed viewport track of a whole read, which outgrows 256 KB on a long one.
+// The package caps the sample count itself (MAX_READ_SAMPLES).
+app.post('/api/sessions/:sessionId/pathology-reads', express.json({ limit: PATHOLOGY_READ_MAX_BODY }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request

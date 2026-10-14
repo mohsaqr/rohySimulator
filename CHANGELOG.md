@@ -9,6 +9,27 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.65] — 2026-10-14
+
+Pathology room (pathoyon 0.3.0 @ 88c4d47, re-vendored) and the host around it:
+
+- **"How this slide was read" feedback works, scored on the server.** The learner never had the rubric (right)
+  but nothing scored the read either, so the promised feedback never appeared. The browser now records the
+  viewport without the rubric; on report submission rohy scores it server-side against the protected rubric
+  (`POST /api/sessions/:id/pathology-reads`, owner only, once per activity so missed findings cannot be
+  probed) and returns only the summary. Educators can list the full results.
+- **Reports and annotations are saved on the server.** They lived only in the browser (lost across devices,
+  last tab wins). Plugin session documents are now stored per session with a revision; a stale write is refused
+  and the room reloads the server copy and says so; localStorage is only an offline draft. The session CSV
+  export lists submitted reports.
+- **The room works at phone width.** Slide list, marks/report and specimen panels become drawers over the
+  slide below the `lg` breakpoint.
+- **A slide or photograph that fails to load says so**, names it, and offers Retry.
+- **Specimens keep the size they were created with** (B and C lost theirs).
+- Finnish wording: "Näytteestä ”{part}” ei otettu makrokuvaa.", "Tälle makrokuvalle ei ole ilmoitettu
+  mittakaavaa.", "Makrokuvat"; the "plate" wording became "photograph" in sv, de, es, it and fr.
+- Migrations 0069 `plugin_session_documents`, 0070 `pathology_read_assessments` (additive).
+
 ## [3.0.0-rc.64] — 2026-10-14
 
 - **No patient chat after the case has ended.** The server still admitted a learner's patient request on an

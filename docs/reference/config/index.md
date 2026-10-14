@@ -69,7 +69,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
 | `ROHY_PATHOLOGY_CONTENT` | No | — | Path to a built slide content origin, overriding the sibling `../Pathoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:239` |
 | `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:57` |
-| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:457` |
+| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:462` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
 | `VERBOSE` | No | — | Extra console diagnostics when truthy. | `scripts/rocketbox-convert/convert.mjs:135` |
 
@@ -77,8 +77,8 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:91` |
-| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:90` |
+| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:92` |
+| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:91` |
 | `ROHY_PLUGIN_IMPORT_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming the hosts a plugin may DOWNLOAD from (RPS-1 1.4). The operator's outer bound: a tenant admin narrows it through the plugin's own settings and can never widen it, because a tenant admin is not the server operator and naming a host for rohy's server to fetch from is the SSRF shape proxy-routes.js already closed once. A plugin id may repeat and the origins accumulate. Unset means NO plugin may import from anywhere — the correct default for a server nobody has told where content may come from. Malformed is fatal at boot. | `server/lib/pluginImportOrigins.js:86` |
 | `ROHY_PLUGIN_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming where each RPS-1 plugin's remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin: the plugin serves the bundled starter content if any is installed, and otherwise every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request. | `server/lib/pluginRemoteOrigins.js:72` |
 
@@ -100,7 +100,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:43`<br>`server/routes/help-routes.js:129` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:45`<br>`server/routes/help-routes.js:129` |
 
 ## Retention
 
@@ -127,7 +127,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_CASE_PACKAGE_DIR` | No | — | Where case packages are staged (default: case-packages/ beside the database). | `server/services/casePackage.js:121`<br>`server/services/casePackage.js:122` |
 | `ROHY_CASE_PACKAGE_MAX_BYTES` | No | — | Largest case package export or import, in bytes (default 4 GiB). | `server/services/casePackage.js:127` |
 | `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:133` |
-| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:96` |
+| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:98` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
 | `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:71` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |

@@ -3,7 +3,15 @@ import OpenSeadragon from 'openseadragon';
 import { hasOpticalProfile, viewportSample, scaleBar } from './slideGeometry.js';
 import { fieldOfViewAreaMm2, formatObjective } from './magnification.js';
 import { formatArea } from './annotationModel.js';
+import { plural } from './i18n.js';
 import { slideNetworkOptions, tileSourceForSlide } from './slideSource.js';
+
+/**
+ * How many times a learner may ask to reload a slide that failed to open.
+ * Bounded so a slide that is genuinely gone ends in a clear message rather
+ * than a button that can be pressed forever.
+ */
+export const MAX_SLIDE_RETRIES = 2;
 
 /**
  * The slide viewport. Owns the OpenSeadragon instance and nothing else.
@@ -46,9 +54,22 @@ export function SlideCanvas({
     const hostRef = useRef(null);
     const viewerRef = useRef(null);
     const [hud, setHud] = useState(null);
+    // Retries are counted PER SLIDE: switching slide starts the count again.
+    const [retry, setRetry] = useState({ slideId: null, count: 0 });
+    const attempt = retry.slideId === (slide?.id ?? null) ? retry.count : 0;
+    // Load status for THIS slide and attempt. Keyed rather than reset in an
+    // effect: a status left over from another slide or attempt reads as
+    // 'loading', which is what it is.
+    const loadKey = `${slide?.id ?? ''}#${attempt}`;
+    const [status, setStatus] = useState({ key: null, state: 'loading', tileErrors: 0 });
     const slideRef = useRef(slide);
     useEffect(() => { slideRef.current = slide; }, [slide]);
     const tileSource = tileSourceForSlide(slide);
+    // A slide with no source at all can never load: that is a failure, not
+    // an endless "loading".
+    const load = !tileSource
+        ? { key: loadKey, state: 'failed', tileErrors: 0 }
+        : (status.key === loadKey ? status : { key: loadKey, state: 'loading', tileErrors: 0 });
     const osdPrefixUrl = slide?.osdPrefixUrl ?? '/openseadragon/images/';
 
     // Held in refs so a fresh callback identity at the call site cannot make
@@ -153,7 +174,22 @@ export function SlideCanvas({
             viewer.addHandler('open', () => {
                 viewerRef.current = viewer;
                 onViewerRef.current?.(viewer);
+                setStatus({ key: loadKey, state: 'ready', tileErrors: 0 });
                 sample(true);
+            });
+            // The descriptor itself could not be fetched or parsed: nothing
+            // will ever draw. OSD's own response is an English message inside
+            // the canvas; the learner gets a named, translated one instead.
+            viewer.addHandler('open-failed', () => {
+                setStatus({ key: loadKey, state: 'failed', tileErrors: 0 });
+            });
+            // Individual tiles failing leave holes in the tissue that look
+            // like tissue. Counted, so the learner is told the view is
+            // incomplete rather than left to read a hole as a finding.
+            viewer.addHandler('tile-load-failed', () => {
+                setStatus((current) => (current.key === loadKey
+                    ? { ...current, tileErrors: current.tileErrors + 1 }
+                    : { key: loadKey, state: 'ready', tileErrors: 1 }));
             });
             viewer.addHandler('animation', () => sample(false));
             viewer.addHandler('animation-finish', () => sample(true));
@@ -173,7 +209,7 @@ export function SlideCanvas({
             // slide switch leaks a WebGL context.
             if (viewer) viewer.destroy();
         };
-    }, [slide?.id, tileSource, osdPrefixUrl]);
+    }, [slide?.id, tileSource, osdPrefixUrl, loadKey]);
 
     // The navigator is a DOM element OSD owns. Toggling its display avoids
     // rebuilding the whole viewer — and losing the reader's position — just to
@@ -205,6 +241,14 @@ export function SlideCanvas({
             <div ref={hostRef} className="absolute inset-0" style={{ filter }} />
 
             {children}
+
+            <SlideLoadStatus
+                load={load}
+                label={slide?.label || slide?.id || ''}
+                canRetry={Boolean(tileSource) && attempt < MAX_SLIDE_RETRIES}
+                onRetry={() => setRetry({ slideId: slide?.id ?? null, count: attempt + 1 })}
+                t={t}
+            />
 
             <div
                 className="pointer-events-none absolute left-3 top-3 flex flex-wrap items-center gap-2"
@@ -249,4 +293,58 @@ export function SlideCanvas({
             </div>
         </div>
     );
+}
+
+/**
+ * Loading, failed, and incomplete — said in words, naming the slide.
+ *
+ * Without this a slide that never opened was a black rectangle (or OSD's own
+ * untranslated error), indistinguishable from a slow network, and a slide with
+ * missing tiles looked like tissue with holes in it.
+ */
+function SlideLoadStatus({ load, label, canRetry, onRetry, t }) {
+    if (load.state === 'loading') {
+        return (
+            <p role="status" className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-md bg-slate-950/80 px-2.5 py-1 text-[11px] text-slate-300 ring-1 ring-slate-700/60">
+                {plural(t, 'slide_loading', 'Loading slide “{label}”…', { label })}
+            </p>
+        );
+    }
+    if (load.state === 'failed') {
+        return (
+            <div role="alert" className="absolute inset-0 z-10 flex items-center justify-center p-6">
+                <div className="max-w-sm space-y-2 rounded-lg bg-slate-900/95 p-4 text-center ring-1 ring-rose-500/30">
+                    <p className="text-sm font-semibold text-rose-200">
+                        {plural(t, 'slide_load_failed', 'The slide “{label}” could not be loaded.', { label })}
+                    </p>
+                    {canRetry ? (
+                        <button
+                            type="button"
+                            onClick={onRetry}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-100 ring-1 ring-slate-600 hover:bg-slate-800"
+                        >
+                            {t('retry', 'Try again')}
+                        </button>
+                    ) : (
+                        <p className="text-xs text-slate-400">
+                            {t('slide_load_gave_up', 'It still could not be loaded. Tell your instructor which slide it was.')}
+                        </p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+    if (load.tileErrors > 0) {
+        return (
+            <div role="alert" className="absolute inset-x-0 bottom-3 z-10 mx-auto flex w-fit items-center gap-2 rounded-md bg-amber-500/15 px-2.5 py-1 text-[11px] text-amber-200 ring-1 ring-amber-500/30">
+                <span>{plural(t, 'slide_tiles_failed', 'Parts of “{label}” did not load — what you see may be incomplete.', { label })}</span>
+                {canRetry && (
+                    <button type="button" onClick={onRetry} className="rounded px-1.5 font-semibold ring-1 ring-amber-500/40 hover:bg-amber-500/15">
+                        {t('retry', 'Try again')}
+                    </button>
+                )}
+            </div>
+        );
+    }
+    return null;
 }

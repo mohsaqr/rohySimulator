@@ -17,6 +17,9 @@
   "error_boundary_body": "Қосымшаның қалған бөлігі зардап шеккен жоқ. Қайталап көріңіз, бөлмені ауыстырыңыз немесе мәселе шешілмесе бетті қайта жүктеңіз.",
   "error_boundary_retry": "Қайталап көріңіз",
   "error_boundary_title": "Бұл көріністе бір нәрсе дұрыс болмады",
+  "gender_female": "Әйел",
+  "gender_male": "Ер",
+  "gender_other": "Басқа",
   "level_value": "Деңгей {value}",
   "loading": "Жүктелуде…",
   "next": "Келесі",
@@ -29,6 +32,9 @@
   "pathology_summary_mixed": "{count, plural, other {# препарат пен фотосурет}}",
   "pathology_summary_photographs": "{count, plural, other {# макроскопиялық сурет}}",
   "pathology_summary_slides": "{count, plural, other {# препарат}}",
+  "plugin_state_conflict": "Бұл бөлме басқа қойындыда немесе құрылғыда сақталды. Енді соңғы сақталған нұсқасы көрсетіледі.",
+  "plugin_state_offline": "Осы бөлмедегі жұмысыңыз тек осы құрылғыда сақталған. Байланыс қалпына келгенде ол серверге сақталады.",
+  "plugin_state_save_failed": "Осы бөлмедегі жұмысыңызды серверге сақтау мүмкін болмады. Ол осы құрылғыда сақталады; қойындыны жаппай, қайталап көріңіз.",
   "q_decision_process": "Шешімді негізінен қалай қабылдадыңыз",
   "q_diagnosis": "Бұл кейс бойынша диагнозыңыз қандай",
   "q_diagnosis_confidence": "Диагнозыңызға сенімділік деңгейіңіз қандай",
@@ -298,8 +304,5 @@
   "voice_engine_unavailable": "қолжетімсіз",
   "voice_group_other": "Басқа",
   "voice_unplayable_note": "Бапталған {requested} дауысы {provider} провайдерінде ойнатылмайды — бұл түзетілмейінше ештеңе айтылмайды.",
-  "yes": "Иә",
-  "gender_male": "Ер",
-  "gender_female": "Әйел",
-  "gender_other": "Басқа"
+  "yes": "Иә"
 }

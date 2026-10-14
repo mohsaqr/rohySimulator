@@ -36,6 +36,7 @@ import { reconcileSession, RECORD_VERB_EXPECTATIONS } from '../lib/sessionReconc
 
 
 import { logger } from '../logger.js';
+import { submittedPluginReports } from '../services/pluginSessionDocuments.js';
 import { SQL_NOW, toIsoZ, timeMs } from '../shared/time.js';
 import {
     missingField,
@@ -460,13 +461,24 @@ router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) 
             dbAdapter.all(
                 'SELECT role, content, timestamp FROM interactions WHERE session_id = ? ORDER BY timestamp ASC',
                 [sessionId],
-                (err, interactions) => {
+                async (err, interactions) => {
                     if (err) return res.status(500).json({ error: err.message });
+
+                    // Reports the learner submitted in a plugin room (pathology,
+                    // PACS, ECG) — the server copy of their room work (0069),
+                    // which is how an educator reviewing the session reads them.
+                    let reports;
+                    try {
+                        reports = await submittedPluginReports(tenantId(req), sessionId);
+                    } catch (reportErr) {
+                        return res.status(500).json({ error: reportErr.message });
+                    }
 
                     // Combine data
                     const completeData = redactRow({
                         ...sessionData,
-                        interactions
+                        interactions,
+                        reports
                     }, { pii: hasRoleAtLeast(req.user, ROLE_RANKS.educator) ? 'allow' : 'redact' });
 
                     // Convert to CSV format
@@ -505,12 +517,16 @@ function convertToCSV(data) {
 
 // Helper function to convert complete session to CSV
 function convertCompleteSessionToCSV(data) {
-    const { interactions, ...sessionInfo } = data;
+    const { interactions, reports, ...sessionInfo } = data;
     
     let csv = '=== SESSION INFORMATION ===\n';
     csv += convertToCSV([sessionInfo]) + '\n\n';
     csv += '=== CHAT LOG ===\n';
     csv += convertToCSV(interactions);
+    if (reports && reports.length > 0) {
+        csv += '\n\n=== SUBMITTED REPORTS ===\n';
+        csv += convertToCSV(reports);
+    }
     
     return csv;
 }

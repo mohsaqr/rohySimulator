@@ -31,6 +31,7 @@ export function PathologyScreen({
     initialAnnotations,
     onReportsChange,
     initialReports,
+    assessRead = null,
     examMode = false,
     topBarControls = null,
     roomNav,
@@ -69,6 +70,7 @@ export function PathologyScreen({
                 initialAnnotations={initialAnnotations}
                 onReportsChange={onReportsChange}
                 initialReports={initialReports}
+                assessRead={assessRead}
                 examMode={examMode}
             />
 

@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**100 tables** in the durable data model.
+**102 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **67 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **69 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -95,6 +95,8 @@ Parsed **67 migration files** beyond the base schema (`0001_initial.sql`).
 | `0066_terms_acceptance_language.sql` | additive | Adds a nullable `language` column to `terms_acceptances`: the agreement can now be read in the user's UI language (`platform_settings.terms_translations`, plus shipped machine translations of the default text), and the acceptance snapshot records which language was shown alongside the title and body it already stores. Acceptance stays keyed on `(user_id, version)`, so accepting in any language covers the version. Existing rows keep NULL. No data rewritten. |
 | `0067_course_gate_questionnaires.sql` | additive | Adds a nullable `unlock_case_id` column to `lessons` (a lesson locked behind a case's course gate — `cases.config.courseGate` — whose content the server withholds from a learner until the gate is met; NULL keeps every existing lesson open) and a new `case_questionnaire_responses` table (one row per learner, case, questionnaire and attempt `single`/`pre`/`post`, with the answers, a snapshot of the questions as answered, and the score). The questionnaires themselves live in `cases.config.questionnaires`. No data rewritten. |
 | `0068_plugin_content_reads.sql` | additive | Adds a new `plugin_content_reads` table (tenant, user, plugin, content path, first read time; one row per user and path). The plugin content proxy records the first time it serves a user a slide descriptor (`.dzi`), and the course gate's "every slide opened" condition counts those rows instead of the OPENED_SLIDE learning events the learner's browser posts, which a learner could forge. Erased with the user. No data rewritten. |
+| `0069_plugin_session_documents.sql` | additive | Adds a new `plugin_session_documents` table (tenant, session, owner, plugin, name, opaque JSON document, revision, timestamps; one row per session, plugin and name). A plugin room's learner work (pathology reports and annotations, PACS/ECG drafts) used to live only in the browser's localStorage — lost across devices, last-writer-wins across tabs, invisible to educators. `ctx.store` now saves it here with a revision check (409 on a stale write) and keeps localStorage as an offline draft cache. Erased with the user. No data rewritten; existing local drafts are pushed up by the client on first load. |
+| `0070_pathology_read_assessments.sql` | additive | Adds a new `pathology_read_assessments` table (tenant, session, learner, case, activity, report, sample count, read score, full scored result, learner-safe feedback; one row per session and activity). The pathology room's "How this slide was read" feedback needs the rubric, which never reaches a learner, so the browser records the read rubric-free and the server scores it on report submission (`POST /sessions/:sessionId/pathology-reads`) against the session's case snapshot, keeping the full result here and returning only the summary. The first submitted read of a task is the one kept. Erased with the user. No data rewritten. |
 
 ## Tables by concern
 
@@ -156,7 +158,7 @@ Parsed **67 migration files** beyond the base schema (`0001_initial.sql`).
 
 ### Other
 
-`case_questionnaire_responses`, `cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `plugin_assets`, `plugin_content_reads`, `plugin_jobs`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`, `terms_acceptances`
+`case_questionnaire_responses`, `cohort_surveys`, `learning_events_rejected`, `lesson_progress`, `lesson_sections`, `lessons`, `pathology_read_assessments`, `plugin_assets`, `plugin_content_reads`, `plugin_jobs`, `plugin_session_documents`, `plugin_settings`, `registration_invite_uses`, `registration_invites`, `registration_requests`, `survey_answers`, `survey_questions`, `survey_responses`, `surveys`, `terms_acceptances`
 
 ---
 

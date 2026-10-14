@@ -299,14 +299,37 @@ export function healStudioSpecimenNames(document) {
     return nextDocument(document, { ...document.manifest, specimens });
 }
 
+/**
+ * Optional free-text specimen fields the case format carries (schema:
+ * `specimens[].dimensions`, `specimens[].weight`). They were once dropped on
+ * creation — only a later update kept them — so a builder that passed a
+ * part's size up front shipped a case whose gross panel said "not recorded"
+ * beside a description that quoted the size.
+ */
+const OPTIONAL_SPECIMEN_TEXT = ['dimensions', 'weight'];
+
 export function addStudioSpecimen(document, fields = {}, idFactory = createId) {
     requireDocument(document, 'addStudioSpecimen()');
+    if (!objectLike(fields)) throw new TypeError('addStudioSpecimen(): fields must be an object.');
     const part = fields.part ?? nextSpecimenPart(document.manifest.specimens);
+    // Validated here rather than left to the publication check: a number or an
+    // object in a text field would otherwise be stored and fail far from the
+    // call that put it there. Blank text is "not recorded", so it is omitted.
+    const optional = Object.fromEntries(OPTIONAL_SPECIMEN_TEXT
+        .filter((key) => fields[key] !== undefined && fields[key] !== null)
+        .map((key) => {
+            if (typeof fields[key] !== 'string') {
+                throw new TypeError(`addStudioSpecimen(): ${key} must be text, received ${typeof fields[key]}.`);
+            }
+            return [key, fields[key].trim()];
+        })
+        .filter(([, value]) => value !== ''));
     const specimen = {
         id: idFrom(idFactory, 'specimen'),
         part,
         label: fields.label ?? `Part ${part}`,
         description: fields.description ?? '',
+        ...optional,
         grossImageAssetIds: [],
     };
     return nextDocument(document, {

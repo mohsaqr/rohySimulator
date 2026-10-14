@@ -17,6 +17,9 @@
   "error_boundary_body": "Le reste de l’application n’est pas affecté. Vous pouvez réessayer, changer de salle ou recharger la page si le problème persiste.",
   "error_boundary_retry": "Réessayer",
   "error_boundary_title": "Un problème est survenu dans cette vue",
+  "gender_female": "Femme",
+  "gender_male": "Homme",
+  "gender_other": "Autre",
   "level_value": "Niveau {value}",
   "loading": "Chargement…",
   "next": "Suivant",
@@ -29,6 +32,9 @@
   "pathology_summary_mixed": "{count, plural, one {# lame ou photographie} other {# lames et photographies}}",
   "pathology_summary_photographs": "{count, plural, one {# photographie macroscopique} other {# photographies macroscopiques}}",
   "pathology_summary_slides": "{count, plural, one {# lame} other {# lames}}",
+  "plugin_state_conflict": "Cette salle a été enregistrée depuis un autre onglet ou un autre appareil. La dernière version enregistrée est maintenant affichée.",
+  "plugin_state_offline": "Votre travail dans cette salle est enregistré uniquement sur cet appareil. Il sera enregistré sur le serveur dès le retour de la connexion.",
+  "plugin_state_save_failed": "Votre travail dans cette salle n'a pas pu être enregistré sur le serveur. Il est conservé sur cet appareil ; gardez cet onglet ouvert et réessayez.",
   "q_decision_process": "Comment avez-vous principalement pris votre décision",
   "q_diagnosis": "Quel est votre diagnostic pour ce cas",
   "q_diagnosis_confidence": "Quel est votre niveau de confiance dans votre diagnostic",
@@ -298,8 +304,5 @@
   "voice_engine_unavailable": "indisponible",
   "voice_group_other": "Autre",
   "voice_unplayable_note": "La voix configurée {requested} ne peut pas être lue sur {provider} — rien ne sera prononcé tant que ce problème n’est pas corrigé.",
-  "yes": "Oui",
-  "gender_male": "Homme",
-  "gender_female": "Femme",
-  "gender_other": "Autre"
+  "yes": "Oui"
 }
