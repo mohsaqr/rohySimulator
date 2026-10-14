@@ -3,9 +3,13 @@
 // from the black "Course" card in the room nav; returns to the simulation.
 // Fetches the course's published lessons + attached surveys + the caller's
 // completion state and hands them to the vendored LessonsRoom.
+//
+// A failed request is never shown as an empty course (FI-0010 F18): loading,
+// failure (with Retry) and "this course has nothing yet" are three different
+// screens. A refresh that fails keeps the content already on screen.
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, GraduationCap } from 'lucide-react';
+import { ChevronLeft, GraduationCap, AlertTriangle, RotateCw } from 'lucide-react';
 import { LessonsQueryProvider } from './LessonsQueryProvider';
 import { LessonsRoom } from './LessonsRoom';
 import { coursesApi } from './api/courses';
@@ -19,48 +23,129 @@ import CaseCoursePanel from '../course/CaseCoursePanel';
 // the vendored LessonRoomView happy if a legacy chatbot section ever appears.
 const noop = () => {};
 
-function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation }) {
+// What went wrong, in words a learner can act on. Permission and "offline" are
+// told apart only when the request itself says so.
+function loadErrorMessage(t, err) {
+  const status = err?.status;
+  if (status === 0) {
+    return t('course_load_offline', { defaultValue: 'The course could not be loaded because the server could not be reached. Check your connection and try again.' });
+  }
+  if (status === 401 || status === 403 || status === 404) {
+    return t('course_load_forbidden', { defaultValue: 'This course’s content is not available to you. If you think it should be, ask your teacher.' });
+  }
+  return t('course_load_failed', { defaultValue: 'The course could not be loaded. Try again.' });
+}
+
+function LoadFailed({ message, onRetry, compact = false }) {
+  const { t } = useTranslation('authoring_lessons');
+  return (
+    <div
+      role="alert"
+      className={compact
+        ? 'mx-auto mt-4 flex max-w-5xl items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'
+        : 'mx-auto max-w-xl rounded-2xl px-6 py-16 text-center'}
+      data-testid="course-load-error"
+    >
+      {!compact && (
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+          <AlertTriangle className="h-7 w-7" />
+        </span>
+      )}
+      <p className={compact ? 'flex-1' : 'mt-4 text-base font-semibold text-slate-900'}>{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className={`inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 ${compact ? '' : 'mt-4'}`}
+      >
+        <RotateCw className="h-4 w-4" /> {t('course_load_retry', { defaultValue: 'Try again' })}
+      </button>
+    </div>
+  );
+}
+
+function RoomInner({ cohortId: cohortIdProp, cohortName: cohortNameProp, caseId, sessionId, onBackToSimulation }) {
   const { t } = useTranslation('authoring_lessons');
   const [lessons, setLessons] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [completedIds, setCompletedIds] = useState(new Set());
 
+  // The case → course lookup. The host passes a course when it has one; when
+  // it does not (none, or its own lookup failed), ask the server here — for
+  // the course itself, or for why there is none, so a student who is simply
+  // not enrolled is told that, instead of "not linked to a course yet".
+  // Starts as 'loading' when a lookup is due, so "no course" never flashes
+  // before the server has answered.
+  const [lookup, setLookup] = useState(() => ({
+    status: cohortIdProp == null && caseId != null ? 'loading' : 'idle',
+    cohortId: null, cohortName: null, reason: null, error: null,
+  }));
+  const lookupSeq = useRef(0);
+  const resolveCourse = useCallback(() => {
+    if (cohortIdProp != null || caseId == null) {
+      setLookup({ status: 'idle', cohortId: null, cohortName: null, reason: null, error: null });
+      return;
+    }
+    const seq = ++lookupSeq.current;
+    setLookup((prev) => ({ ...prev, status: 'loading', error: null }));
+    apiFetch(`/courses/for-case/${caseId}`)
+      .then((r) => {
+        if (seq !== lookupSeq.current) return;
+        setLookup({
+          status: 'ready',
+          cohortId: r?.data?.cohortId ?? null,
+          cohortName: r?.data?.cohortName ?? null,
+          reason: r?.data?.reason ?? null,
+          error: null,
+        });
+      })
+      .catch((err) => {
+        if (seq !== lookupSeq.current) return;
+        console.error('[LessonsRoomContainer] course lookup failed', err);
+        setLookup({ status: 'error', cohortId: null, cohortName: null, reason: null, error: err });
+      });
+  }, [cohortIdProp, caseId]);
+  useEffect(() => { resolveCourse(); }, [resolveCourse]);
+
+  const cohortId = cohortIdProp ?? lookup.cohortId;
+  const cohortName = cohortNameProp ?? lookup.cohortName;
+  const notEnrolled = lookup.reason === 'not_enrolled';
+
+  // The course content. `loaded` says whether what is on screen came from the
+  // server, so a failed refresh keeps it and a failed first load says so.
+  const [content, setContent] = useState({ status: 'idle', error: null, loaded: false });
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
     if (cohortId == null) return;
-    const [ls, svs, prog] = await Promise.all([
-      coursesApi.getLectures(cohortId, { includeSections: true }).catch(() => []),
-      surveysApi.getModuleSurveys(cohortId).catch(() => []),
-      apiFetch(`/courses/modules/${cohortId}/progress`).then((r) => r?.data || []).catch(() => []),
-    ]);
-    // ?include=sections batches the lesson bodies server-side (one query).
-    // Fallback: if a lesson still arrives without sections (older server),
-    // hydrate it individually so the room never opens an empty lesson.
-    // A locked lesson has no sections by design — asking for it is refused.
-    const full = await Promise.all(
-      ls.map((l) => (l.locked || Array.isArray(l.sections)
-        ? l
-        : coursesApi.getLectureById(l.id).catch(() => l)))
-    );
-    setLessons(full);
-    setSurveys(svs);
-    setCompletedIds(new Set(prog));
+    const seq = ++loadSeq.current;
+    setContent((prev) => ({ ...prev, status: 'loading', error: null }));
+    try {
+      const [ls, svs, prog] = await Promise.all([
+        coursesApi.getLectures(cohortId, { includeSections: true }),
+        surveysApi.getModuleSurveys(cohortId),
+        apiFetch(`/courses/modules/${cohortId}/progress`).then((r) => r?.data || []),
+      ]);
+      // ?include=sections batches the lesson bodies server-side (one query).
+      // Fallback: if a lesson still arrives without sections (older server),
+      // hydrate it individually so the room never opens an empty lesson.
+      // A locked lesson has no sections by design — asking for it is refused.
+      const full = await Promise.all(
+        ls.map((l) => (l.locked || Array.isArray(l.sections)
+          ? l
+          : coursesApi.getLectureById(l.id)))
+      );
+      if (seq !== loadSeq.current) return;
+      setLessons(full);
+      setSurveys(svs);
+      setCompletedIds(new Set(prog));
+      setContent({ status: 'ready', error: null, loaded: true });
+    } catch (err) {
+      if (seq !== loadSeq.current) return;
+      console.error('[LessonsRoomContainer] course content failed to load', err);
+      setContent((prev) => ({ ...prev, status: 'error', error: err }));
+    }
   }, [cohortId]);
 
   useEffect(() => { load(); }, [load]);
-
-  // No course for this case: ask the server why, so a student who is simply
-  // not enrolled is told that, instead of "not linked to a course yet" — which
-  // is false for them and sent people hunting for a missing link.
-  const [noCourseReason, setNoCourseReason] = useState(null);
-  useEffect(() => {
-    if (cohortId != null || caseId == null) { setNoCourseReason(null); return undefined; }
-    let cancelled = false;
-    apiFetch(`/courses/for-case/${caseId}`)
-      .then((r) => { if (!cancelled) setNoCourseReason(r?.data?.reason ?? null); })
-      .catch(() => { if (!cancelled) setNoCourseReason(null); });
-    return () => { cancelled = true; };
-  }, [cohortId, caseId]);
-  const notEnrolled = noCourseReason === 'not_enrolled';
 
   // A lesson locked behind the case's course gate arrives without its title
   // (server/routes/lessons-routes.js); the case panel counts it, the vendored
@@ -133,7 +218,13 @@ function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation
             />
           </div>
         )}
-        {cohortId == null ? (
+        {cohortId == null && lookup.status === 'error' ? (
+          <LoadFailed message={loadErrorMessage(t, lookup.error)} onRetry={resolveCourse} />
+        ) : cohortId == null && lookup.status === 'loading' ? (
+          <div className="px-6 py-16 text-center text-sm text-slate-500" role="status">
+            {t('course_loading', { defaultValue: 'Loading the course…' })}
+          </div>
+        ) : cohortId == null ? (
           <div className="rounded-2xl px-6 py-16 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 ring-1 ring-slate-200">
               <GraduationCap className="h-7 w-7" />
@@ -149,17 +240,30 @@ function RoomInner({ cohortId, cohortName, caseId, sessionId, onBackToSimulation
                 : t('no_course_for_case_sub', { defaultValue: 'This case is not linked to a course yet.' })}
             </p>
           </div>
+        ) : !content.loaded && content.status === 'error' ? (
+          <LoadFailed message={loadErrorMessage(t, content.error)} onRetry={load} />
+        ) : !content.loaded ? (
+          <div className="px-6 py-16 text-center text-sm text-slate-500" role="status">
+            {t('course_loading', { defaultValue: 'Loading the course…' })}
+          </div>
         ) : (
-          <LessonsRoom
-            lessons={openLessons}
-            surveys={surveys}
-            classroomId={cohortId}
-            classMeta={{ name: cohortName }}
-            onOpenTutor={noop}
-            completedIds={completedIds}
-            onMarkComplete={onMarkComplete}
-            canEdit={false}
-          />
+          <>
+            {content.status === 'error' && (
+              <div className="px-6 lg:px-8">
+                <LoadFailed compact message={loadErrorMessage(t, content.error)} onRetry={load} />
+              </div>
+            )}
+            <LessonsRoom
+              lessons={openLessons}
+              surveys={surveys}
+              classroomId={cohortId}
+              classMeta={{ name: cohortName }}
+              onOpenTutor={noop}
+              completedIds={completedIds}
+              onMarkComplete={onMarkComplete}
+              canEdit={false}
+            />
+          </>
         )}
       </AoiRegion>
     </div>

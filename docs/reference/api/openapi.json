@@ -3117,7 +3117,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:779",
+        "x-rohy-source": "server/routes/lessons-routes.js:785",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -3162,7 +3162,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:819",
+        "x-rohy-source": "server/routes/lessons-routes.js:825",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -6608,7 +6608,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:572",
+        "x-rohy-source": "server/routes/lessons-routes.js:578",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6697,7 +6697,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:609",
+        "x-rohy-source": "server/routes/lessons-routes.js:615",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -6739,7 +6739,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:637",
+        "x-rohy-source": "server/routes/lessons-routes.js:643",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -6784,7 +6784,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:724",
+        "x-rohy-source": "server/routes/lessons-routes.js:730",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7005,7 +7005,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:708",
+        "x-rohy-source": "server/routes/lessons-routes.js:714",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -7048,7 +7048,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/lessons-routes.js:675",
+        "x-rohy-source": "server/routes/lessons-routes.js:681",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13541,7 +13541,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:112",
+        "x-rohy-source": "server/routes/surveys-routes.js:117",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13573,7 +13573,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:165",
+        "x-rohy-source": "server/routes/surveys-routes.js:170",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13618,7 +13618,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:712",
+        "x-rohy-source": "server/routes/surveys-routes.js:706",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13660,7 +13660,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:754",
+        "x-rohy-source": "server/routes/surveys-routes.js:748",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13713,7 +13713,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:792",
+        "x-rohy-source": "server/routes/surveys-routes.js:786",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13758,7 +13758,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:237",
+        "x-rohy-source": "server/routes/surveys-routes.js:242",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13801,7 +13801,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:185",
+        "x-rohy-source": "server/routes/surveys-routes.js:190",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13843,7 +13843,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:207",
+        "x-rohy-source": "server/routes/surveys-routes.js:212",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13888,7 +13888,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:668",
+        "x-rohy-source": "server/routes/surveys-routes.js:662",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -13933,7 +13933,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:542",
+        "x-rohy-source": "server/routes/surveys-routes.js:536",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13977,7 +13977,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:251",
+        "x-rohy-source": "server/routes/surveys-routes.js:256",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14022,7 +14022,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:286",
+        "x-rohy-source": "server/routes/surveys-routes.js:291",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14067,7 +14067,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:427",
+        "x-rohy-source": "server/routes/surveys-routes.js:432",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14120,7 +14120,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:355",
+        "x-rohy-source": "server/routes/surveys-routes.js:360",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14171,7 +14171,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:317",
+        "x-rohy-source": "server/routes/surveys-routes.js:322",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14224,7 +14224,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:382",
+        "x-rohy-source": "server/routes/surveys-routes.js:387",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14269,7 +14269,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:579",
+        "x-rohy-source": "server/routes/surveys-routes.js:573",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -14314,7 +14314,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/surveys-routes.js:457",
+        "x-rohy-source": "server/routes/surveys-routes.js:462",
         "x-rohy-auth": [
           "authenticateToken"
         ],

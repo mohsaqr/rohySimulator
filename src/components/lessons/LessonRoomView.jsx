@@ -10,6 +10,7 @@
 //     (camera/gaze cannot double-init) and the Conversation === session spine.
 //   • TrackedContent (LAILA's analytics wrapper) is not copied; lesson-open/
 //     complete/room-hop events are recorded server-side instead.
+import { useTranslation } from 'react-i18next';
 import { Upload, Bot, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { marked } from 'marked';
 import { resolveFileUrl } from './api/client';
@@ -24,6 +25,7 @@ const renderMarkdown = (content) => {
 };
 
 export function LessonRoomView({ lecture, onOpenTutor, completed, onMarkComplete }) {
+  const { t } = useTranslation(['teaching', 'common']);
   const renderSection = (section) => {
     switch (section.type) {
       case 'text':
@@ -77,7 +79,9 @@ export function LessonRoomView({ lecture, onOpenTutor, completed, onMarkComplete
           return (
             <div key={section.id} className="mb-8 rounded-xl border border-border bg-muted/40 p-6 text-center">
               <Upload className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
-              <p className="text-sm text-muted-foreground">No file uploaded</p>
+              <p className="text-sm text-muted-foreground">
+                {t('lesson_no_file_uploaded', { defaultValue: 'No file uploaded' })}
+              </p>
             </div>
           );
         }
@@ -89,7 +93,7 @@ export function LessonRoomView({ lecture, onOpenTutor, completed, onMarkComplete
               </h2>
             )}
             <FileCard
-              fileName={section.fileName || 'file'}
+              fileName={section.fileName || t('lesson_file_fallback_name', { defaultValue: 'file' })}
               fileType={section.fileType}
               url={resolveFileUrl(section.fileUrl)}
               fileSize={section.fileSize}
@@ -117,10 +121,10 @@ export function LessonRoomView({ lecture, onOpenTutor, completed, onMarkComplete
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-foreground">
-                  {section.chatbotTitle || 'AI Tutor'}
+                  {section.chatbotTitle || t('lesson_ai_tutor', { defaultValue: 'AI tutor' })}
                 </span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {section.chatbotIntro || 'Open the tutor room to chat.'}
+                  {section.chatbotIntro || t('lesson_open_tutor_hint', { defaultValue: 'Open the tutor room to chat.' })}
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
@@ -156,7 +160,9 @@ export function LessonRoomView({ lecture, onOpenTutor, completed, onMarkComplete
             }`}
           >
             <CheckCircle2 className="h-4 w-4" />
-            {completed ? 'Completed' : 'Mark complete'}
+            {completed
+              ? t('lesson_completed', { defaultValue: 'Completed' })
+              : t('lesson_mark_complete', { defaultValue: 'Mark complete' })}
           </button>
         )}
       </div>

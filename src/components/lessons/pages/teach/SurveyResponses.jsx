@@ -14,10 +14,14 @@ import { Breadcrumb } from '../../components/common/Breadcrumb';
 import { useTheme } from '../../hooks/useTheme';
 import activityLogger from '../../services/activityLogger';
 
-// TODO(mount): onBack (was router.back) is injected by the mounting layer to
-// perform real navigation.
+// Navigation is the mounting surface's: `onBack` returns to the survey list
+// (LessonAuthoring). rohy has no /classes routes, and a plain <a href="/…">
+// would also escape an install served under a base path such as /rohy/.
 export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = () => {} }) => {
-  const { t } = useTranslation(['teaching', 'common', 'navigation']);
+  const { t, i18n } = useTranslation(['teaching', 'common', 'navigation']);
+  // Dates and percentages follow the UI language, not the browser's locale.
+  const locale = i18n.resolvedLanguage || i18n.language || undefined;
+  const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
   const surveyId = String(surveyIdProp);
   const courseId = classroomId;
   const moduleId = classroomId;
@@ -36,13 +40,17 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
     }
   }, [surveyId, courseId]);
 
-  const error = queryError ? (queryError.response?.data?.message || 'Failed to load responses') : null;
+  const error = queryError
+    ? t('responses_error_load_failed', { defaultValue: 'The responses could not be loaded. Try again.' })
+    : null;
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
   const [viewMode, setViewMode] = useState('summary');
 
   const handleExport = async () => {
     if (!surveyId) return;
     setExporting(true);
+    setExportError(null);
     try {
       const blob = await surveysApi.exportResponses(parseInt(surveyId));
       const url = window.URL.createObjectURL(blob);
@@ -55,6 +63,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
       document.body.removeChild(a);
     } catch (err) {
       console.error('Failed to export responses:', err.response?.data?.message || err.message);
+      setExportError(t('responses_export_failed', { defaultValue: 'The CSV file could not be created. Try again.' }));
     } finally {
       setExporting(false);
     }
@@ -73,7 +82,9 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         <Card>
           <CardBody className="text-center py-12">
-            <p className="text-red-600 dark:text-red-400 mb-4">{error || 'No data found'}</p>
+            <p className="text-red-600 dark:text-red-400 mb-4">
+              {error || t('responses_no_data', { defaultValue: 'No responses were found for this survey.' })}
+            </p>
             <Button onClick={() => onBack()}>{t('common:go_back', { defaultValue: 'Go back' })}</Button>
           </CardBody>
         </Card>
@@ -85,10 +96,9 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <div className="mb-6">
         <Breadcrumb
-          homeHref="/"
+          showHome={false}
           items={[
-            { label: t('navigation:courses', { defaultValue: 'Classes' }), href: '/classes' },
-            ...(courseId ? [{ label: 'Class', href: `/classes/${courseId}` }] : []),
+            { label: t('course_surveys_heading', { defaultValue: 'Course surveys' }), onClick: () => onBack() },
             { label: data.survey.title },
           ]}
         />
@@ -153,6 +163,9 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
           </Button>
         </div>
       </div>
+      {exportError && (
+        <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">{exportError}</p>
+      )}
 
       {data.totalResponses === 0 ? (
         <Card>
@@ -230,7 +243,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                                 className="text-sm"
                                 style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                               >
-                                {count} ({percentage}%)
+                                {count} ({percent.format(percentage / 100)})
                               </span>
                             </div>
                             <div
@@ -264,7 +277,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                       className="text-sm font-medium"
                       style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                     >
-                      Response #{index + 1}
+                      {t('response_number', { defaultValue: 'Response {number}', number: index + 1 })}
                     </span>
                     {!data.survey.isAnonymous && response.user && (
                       <p
@@ -285,7 +298,7 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                     className="text-sm"
                     style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                   >
-                    {new Date(response.completedAt).toLocaleString()}
+                    {new Date(response.completedAt).toLocaleString(locale)}
                   </span>
                 </div>
               </CardHeader>
@@ -297,7 +310,8 @@ export const SurveyResponses = ({ surveyId: surveyIdProp, classroomId, onBack = 
                         className="text-sm font-medium mb-1"
                         style={{ color: isDark ? '#94a3b8' : '#64748b' }}
                       >
-                        {answer.question?.questionText || `Question ${answerIndex + 1}`}
+                        {answer.question?.questionText
+                          || t('question_number', { defaultValue: 'Question {number}', number: answerIndex + 1 })}
                       </p>
                       <p style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>
                         {Array.isArray(answer.answerValue)

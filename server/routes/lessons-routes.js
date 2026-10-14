@@ -534,17 +534,23 @@ router.post('/courses/lectures/:id/duplicate', authenticateToken, requireEducato
             [lesson.cohort_id]
         );
         const newId = await dbAdapter.transaction(async () => {
+            // Every access-gating column travels with the copy: the
+            // availability window AND the case lock. Dropping `unlock_case_id`
+            // made a copy of a locked lesson, once published, readable by a
+            // learner who never started the case — the diagnosis in its title
+            // and sections included (FI-0010 review F01).
             const { lastID } = await dbAdapter.run(
                 `INSERT INTO lessons
                    (cohort_id, tenant_id, title, description, content, content_type,
                     video_url, duration, order_index, is_published, is_free,
-                    available_from, available_until)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                    available_from, available_until, unlock_case_id)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [
                     lesson.cohort_id, lesson.tenant_id, `${lesson.title} (copy)`,
                     lesson.description, lesson.content, lesson.content_type,
                     lesson.video_url, lesson.duration, maxRow.mx + 1,
                     0, lesson.is_free, lesson.available_from, lesson.available_until,
+                    lesson.unlock_case_id ?? null,
                 ]
             );
             for (const s of sections) {

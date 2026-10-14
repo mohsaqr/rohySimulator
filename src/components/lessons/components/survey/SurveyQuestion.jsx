@@ -1,4 +1,8 @@
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
+
+/** Longest free-text answer the server stores (server/lib/surveyAnswers.js). */
+export const SURVEY_ANSWER_MAX_CHARS = 4000;
 
 export const SurveyQuestion = ({
   question,
@@ -7,6 +11,7 @@ export const SurveyQuestion = ({
   error,
   questionNumber,
 }) => {
+  const { t } = useTranslation(['teaching', 'common']);
   const { isDark } = useTheme();
 
   const handleSingleChoiceChange = (option) => {
@@ -94,7 +99,8 @@ export const SurveyQuestion = ({
         <textarea
           value={typeof value === 'string' ? value : ''}
           onChange={e => handleFreeTextChange(e.target.value)}
-          placeholder="Enter your response..."
+          placeholder={t('survey_response_placeholder', { defaultValue: 'Write your answer…' })}
+          maxLength={SURVEY_ANSWER_MAX_CHARS}
           rows={4}
           className="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors resize-none"
           style={{

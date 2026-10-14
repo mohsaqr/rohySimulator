@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { surveysApi } from '../../api/surveys';
 import { SurveyRenderer } from './SurveyRenderer';
 import { SurveyCompletedCard } from './SurveyCompletedCard';
@@ -25,6 +26,7 @@ export const SurveyEmbed = ({
   compact = false,
   showTitle = true,
 }) => {
+  const { t } = useTranslation(['teaching', 'common']);
   const { isDark } = useTheme();
   const { user } = useAuthStore();
   const [survey, setSurvey] = useState(null);
@@ -55,7 +57,8 @@ export const SurveyEmbed = ({
           setCheckingCompletion(false);
         }
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load survey');
+        console.error('[SurveyEmbed] survey failed to load', err);
+        setError(t('survey_error_load_failed', { defaultValue: 'The survey could not be loaded. Try again.' }));
       } finally {
         setLoading(false);
       }

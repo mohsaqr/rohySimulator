@@ -205,6 +205,37 @@ describe('course gate + case questionnaires', () => {
             expect((await teacher(`/api/courses/lectures/${lockedLessonId}`)).status).toBe(200);
         });
 
+        it('stays locked in a copy, even once the copy is published', async () => {
+            // Regression lock: duplicating a locked lesson dropped unlock_case_id, so a published copy handed a never-started learner the diagnosis (FI-0010 F01)
+            const dup = await teacher(`/api/courses/lectures/${lockedLessonId}/duplicate`, { method: 'POST' });
+            expect(dup.status).toBe(201);
+            const copy = (await dup.json()).data;
+            expect(copy.unlockCaseId).toBe(caseId);
+            try {
+                const pub = await teacher(`/api/courses/lectures/${copy.id}`, {
+                    method: 'PUT', body: JSON.stringify({ isPublished: true }),
+                });
+                expect(pub.status).toBe(200);
+
+                const listed = (await lessons(student)).find((l) => l.id === copy.id);
+                expect(listed).toMatchObject({ locked: true });
+                expect(listed).not.toHaveProperty('title');
+                expect(listed).not.toHaveProperty('sections');
+                expect(JSON.stringify(listed)).not.toContain('Paksusuolen kasvaimet');
+                expect(JSON.stringify(listed)).not.toContain(SECRET_BODY);
+
+                for (const path of [`/api/courses/lectures/${copy.id}`, `/api/courses/lectures/${copy.id}/sections`]) {
+                    const res = await student(path);
+                    expect(res.status, path).toBe(403);
+                    const body = await res.json();
+                    expect(body.code).toBe('lesson_locked');
+                    expect(JSON.stringify(body)).not.toContain(SECRET_BODY);
+                }
+            } finally {
+                await teacher(`/api/courses/lectures/${copy.id}`, { method: 'DELETE' });
+            }
+        });
+
         it('stays locked when the time is met but a slide is unopened', async () => {
             await startSession(studentId, minutesAgo(20));
             await openSlide(studentId, 'slide-a1');

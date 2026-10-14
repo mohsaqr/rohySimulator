@@ -3,7 +3,12 @@
 // restrained teal), so it's theme-aware and enterprise-plain rather than a
 // rainbow of gradients. Lesson and survey CARDS share one contents list; a
 // survey is just another item. Card and list views; teachers edit in place.
+//
+// Strings go through the module's own i18n (namespace `teaching`, inline
+// English defaultValue, catalogues in ./locales — see ./locales/index.js).
+// Counts are ICU plurals: Finnish and Swedish do not pluralise like English.
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BookOpen, ArrowLeft, Clock, Layers, Check, ListChecks,
   LayoutGrid, List, Pencil, Plus, ChevronRight, Settings2, GraduationCap, EyeOff,
@@ -15,13 +20,18 @@ import { resolveFileUrl } from './api/client';
 function Hero({
   classMeta, lessonCount, surveyCount, done,
 }) {
+  const { t } = useTranslation(['teaching', 'common']);
   const img = classMeta?.thumbnail ? resolveFileUrl(classMeta.thumbnail) : null;
   const meta = [
     classMeta?.teacherName ? classMeta.teacherName : null,
-    `${lessonCount} lesson${lessonCount === 1 ? '' : 's'}`,
-    surveyCount > 0 ? `${surveyCount} survey${surveyCount === 1 ? '' : 's'}` : null,
-    done > 0 ? `${done} completed` : null,
+    t('room_lessons_count', { defaultValue: '{count, plural, one {# lesson} other {# lessons}}', count: lessonCount }),
+    surveyCount > 0
+      ? t('room_surveys_count', { defaultValue: '{count, plural, one {# survey} other {# surveys}}', count: surveyCount })
+      : null,
+    done > 0 ? t('room_completed_count', { defaultValue: '{count} completed', count: done }) : null,
   ].filter(Boolean).join('  ·  ');
+  const eyebrow = t('room_course_eyebrow', { defaultValue: 'Course' });
+  const title = classMeta?.name ?? t('room_lessons_fallback_title', { defaultValue: 'Lessons' });
 
   if (img) {
     return (
@@ -29,8 +39,8 @@ function Hero({
         <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/40 to-black/15" />
         <div className="relative mx-auto max-w-5xl px-6 pb-10 pt-16 lg:px-8">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/70">Course</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">{classMeta?.name ?? 'Lessons'}</h1>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/70">{eyebrow}</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">{title}</h1>
           <p className="mt-2 text-sm text-white/80">{meta}</p>
         </div>
       </div>
@@ -39,8 +49,8 @@ function Hero({
   return (
     <div className="border-b border-border bg-gradient-to-b from-muted/50 to-background">
       <div className="mx-auto max-w-5xl px-6 pb-10 pt-14 lg:px-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Course</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{classMeta?.name ?? 'Lessons'}</h1>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{meta}</p>
       </div>
     </div>
@@ -61,13 +71,16 @@ function Tile({ children }) {
 // the point: a teacher looking at the course from the case saw a survey their
 // students did not, with nothing to say why.
 function NotPublished() {
+  const { t } = useTranslation(['teaching', 'common']);
+  const label = t('room_not_published', { defaultValue: 'Not published' });
+  const hint = t('room_not_published_hint', { defaultValue: 'students can’t see this yet' });
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800"
-      title="Not published — students can't see this yet"
+      title={`${label} – ${hint}`}
     >
-      <EyeOff className="h-3 w-3" aria-hidden="true" /> Not published
-      <span className="sr-only"> — students can't see this yet</span>
+      <EyeOff className="h-3 w-3" aria-hidden="true" /> {label}
+      <span className="sr-only"> – {hint}</span>
     </span>
   );
 }
@@ -89,8 +102,22 @@ export function LessonsRoom({
   lessons, surveys = [], classroomId = null, classMeta,
   onOpenTutor, completedIds, onMarkComplete, canEdit = false,
 }) {
+  const { t } = useTranslation(['teaching', 'common']);
   const [open, setOpen] = useState(null);
   const [view, setView] = useState('cards');
+  const viewLabel = {
+    cards: t('room_view_cards', { defaultValue: 'Cards' }),
+    list: t('room_view_list', { defaultValue: 'List' }),
+  };
+  const completedLabel = t('room_completed', { defaultValue: 'Completed' });
+  const editLessonLabel = t('room_edit_lesson', { defaultValue: 'Edit lesson' });
+  const editSurveyLabel = t('room_edit_survey', { defaultValue: 'Edit survey' });
+  // A course survey is not a case questionnaire (pre/post-test, reflection):
+  // those belong to the case and are answered in the case's course panel.
+  const surveyBadge = t('room_course_survey_badge', { defaultValue: 'Course survey' });
+  const sectionsLabel = (n) => t('room_sections_count', { defaultValue: '{count, plural, one {# section} other {# sections}}', count: n });
+  const questionsLabel = (n) => t('room_questions_count', { defaultValue: '{count, plural, one {# question} other {# questions}}', count: n });
+  const minutesLabel = (n) => t('room_duration_minutes', { defaultValue: '{count} min', count: n });
 
   const itemCount = lessons.length + surveys.length;
 
@@ -105,7 +132,7 @@ export function LessonsRoom({
       onClick={() => setOpen(null)}
       className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
-      <ArrowLeft className="h-3.5 w-3.5" /> All contents
+      <ArrowLeft className="h-3.5 w-3.5" /> {t('room_all_contents', { defaultValue: 'All contents' })}
     </button>
   );
 
@@ -156,11 +183,11 @@ export function LessonsRoom({
                   type="button"
                   onClick={() => setView(v)}
                   aria-pressed={active}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                     active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Icon className="h-3.5 w-3.5" /> {v}
+                  <Icon className="h-3.5 w-3.5" /> {viewLabel[v]}
                 </button>
               );
             })}
@@ -171,13 +198,13 @@ export function LessonsRoom({
                 href={`/classes/${classroomId}/lessons/new`}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
               >
-                <Plus className="h-3.5 w-3.5" /> New lesson
+                <Plus className="h-3.5 w-3.5" /> {t('room_new_lesson', { defaultValue: 'New lesson' })}
               </a>
               <a
                 href={`/classes/${classroomId}`}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
-                <Settings2 className="h-3.5 w-3.5" /> Manage class
+                <Settings2 className="h-3.5 w-3.5" /> {t('room_manage_course', { defaultValue: 'Manage course' })}
               </a>
             </div>
           )}
@@ -188,8 +215,12 @@ export function LessonsRoom({
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-muted text-muted-foreground">
               <GraduationCap className="h-7 w-7" />
             </span>
-            <p className="mt-4 text-base font-semibold text-foreground">No course content here</p>
-            <p className="mt-1 text-sm text-muted-foreground">This course doesn&apos;t have any lessons or surveys yet.</p>
+            <p className="mt-4 text-base font-semibold text-foreground">
+              {t('room_empty_title', { defaultValue: 'No course content yet' })}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('room_empty_sub', { defaultValue: 'This course does not have any lessons or surveys yet.' })}
+            </p>
           </div>
         ) : view === 'cards' ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -212,7 +243,7 @@ export function LessonsRoom({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="truncate font-semibold text-foreground">{l.title}</h3>
-                        {done && <Check className="h-4 w-4 shrink-0 text-primary" aria-label="Completed" />}
+                        {done && <Check className="h-4 w-4 shrink-0 text-primary" aria-label={completedLabel} />}
                         {l.isPublished === false && <NotPublished />}
                       </div>
                       {l.description && (
@@ -220,17 +251,17 @@ export function LessonsRoom({
                       )}
                       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
-                          <Layers className="h-3.5 w-3.5" /> {sections} section{sections === 1 ? '' : 's'}
+                          <Layers className="h-3.5 w-3.5" /> {sectionsLabel(sections)}
                         </span>
                         {l.duration ? (
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> {l.duration} min
+                            <Clock className="h-3.5 w-3.5" /> {minutesLabel(l.duration)}
                           </span>
                         ) : null}
                       </div>
                     </div>
                     {canEdit && classroomId && (
-                      <EditLink href={`/classes/${classroomId}/lessons/${l.id}/edit`} label="Edit lesson" />
+                      <EditLink href={`/classes/${classroomId}/lessons/${l.id}/edit`} label={editLessonLabel} />
                     )}
                   </div>
                 </div>
@@ -256,7 +287,7 @@ export function LessonsRoom({
                       <div className="flex items-center gap-2">
                         <h3 className="truncate font-semibold text-foreground">{cs.survey.title}</h3>
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Survey
+                          {surveyBadge}
                         </span>
                         {cs.survey.isPublished === false && <NotPublished />}
                       </div>
@@ -265,12 +296,12 @@ export function LessonsRoom({
                       )}
                       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
-                          <ListChecks className="h-3.5 w-3.5" /> {q} question{q === 1 ? '' : 's'}
+                          <ListChecks className="h-3.5 w-3.5" /> {questionsLabel(q)}
                         </span>
                       </div>
                     </div>
                     {canEdit && classroomId && (
-                      <EditLink href={`/surveys/manage?classroomId=${classroomId}`} label="Edit survey" />
+                      <EditLink href={`/surveys/manage?classroomId=${classroomId}`} label={editSurveyLabel} />
                     )}
                   </div>
                 </div>
@@ -297,15 +328,15 @@ export function LessonsRoom({
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">{l.title}</span>
-                        {done && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Completed" />}
+                        {done && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-label={completedLabel} />}
                         {l.isPublished === false && <NotPublished />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {sections} section{sections === 1 ? '' : 's'}{l.duration ? ` · ${l.duration} min` : ''}
+                        {sectionsLabel(sections)}{l.duration ? ` · ${minutesLabel(l.duration)}` : ''}
                       </span>
                     </span>
                     {canEdit && classroomId && (
-                      <EditLink href={`/classes/${classroomId}/lessons/${l.id}/edit`} label="Edit lesson" />
+                      <EditLink href={`/classes/${classroomId}/lessons/${l.id}/edit`} label={editLessonLabel} />
                     )}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                   </div>
@@ -330,16 +361,16 @@ export function LessonsRoom({
                       <span className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">{cs.survey.title}</span>
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                          Survey
+                          {surveyBadge}
                         </span>
                         {cs.survey.isPublished === false && <NotPublished />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {q} question{q === 1 ? '' : 's'}
+                        {questionsLabel(q)}
                       </span>
                     </span>
                     {canEdit && classroomId && (
-                      <EditLink href={`/surveys/manage?classroomId=${classroomId}`} label="Edit survey" />
+                      <EditLink href={`/surveys/manage?classroomId=${classroomId}`} label={editSurveyLabel} />
                     )}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                   </div>

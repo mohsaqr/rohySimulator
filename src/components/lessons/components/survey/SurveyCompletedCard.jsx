@@ -1,11 +1,15 @@
+import { useTranslation } from 'react-i18next';
 import { CheckCircle } from 'lucide-react';
 import { Card, CardBody } from '../common/Card';
 
 export const SurveyCompletedCard = ({
-  title = 'Survey Completed',
-  message = 'Thank you for your feedback!',
+  title: titleProp,
+  message: messageProp,
   compact = false,
 }) => {
+  const { t } = useTranslation(['teaching', 'common']);
+  const title = titleProp ?? t('survey_completed_title', { defaultValue: 'Survey completed' });
+  const message = messageProp ?? t('survey_completed_message', { defaultValue: 'Thank you for your feedback!' });
   if (compact) {
     return (
       <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">

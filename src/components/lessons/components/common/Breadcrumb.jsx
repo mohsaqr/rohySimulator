@@ -1,5 +1,6 @@
-// TODO(mount): react-router removed during vendoring; breadcrumb links use
-// plain <a href>. Wire real client-side navigation when the router is mounted.
+// react-router was removed during vendoring. rohy has no URL routes for these
+// pages, so a crumb that goes somewhere takes `onClick` (the mounting
+// surface's own navigation); `href` remains only for a real, base-aware URL.
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Home } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
@@ -18,7 +19,7 @@ export const Breadcrumb = ({ items, className = '', homeHref = '/dashboard', sho
   };
 
   return (
-    <nav className={`flex items-center text-sm ${className}`} aria-label="Breadcrumb">
+    <nav className={`flex items-center text-sm ${className}`} aria-label={t('breadcrumb_label', { defaultValue: 'Breadcrumb' })}>
       <ol className="flex items-center gap-1 overflow-hidden">
         {/* Home link */}
         {showHome && (
@@ -40,7 +41,17 @@ export const Breadcrumb = ({ items, className = '', homeHref = '/dashboard', sho
           return (
             <li key={index} className="flex items-center">
               <ChevronRight className="w-4 h-4 mx-1 flex-shrink-0" style={{ color: colors.separator }} />
-              {isLast || !item.href ? (
+              {!isLast && typeof item.onClick === 'function' ? (
+                <button
+                  type="button"
+                  onClick={item.onClick}
+                  className="flex items-center gap-1.5 transition-colors truncate max-w-[300px] hover:underline"
+                  style={{ color: colors.linkText }}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              ) : isLast || !item.href ? (
                 <span
                   className="flex items-center gap-1.5 font-medium truncate max-w-[300px]"
                   style={{ color: colors.activeText }}

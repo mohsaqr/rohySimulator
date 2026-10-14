@@ -111,7 +111,7 @@ export const SectionBodyEditor = ({ sectionId, initialContent, registerFlush }) 
 
   if (!editor) return null;
 
-  const addLink = () => { const url = window.prompt('URL'); if (url) editor.chain().focus().setLink({ href: url }).run(); };
+  const addLink = () => { const url = window.prompt(t('editor_link_prompt', { defaultValue: 'Link address (URL)' })); if (url) editor.chain().focus().setLink({ href: url }).run(); };
 
   const Btn = ({ onClick, isActive, title, children }) => (
     <span className="relative group/tbtn">
@@ -131,20 +131,20 @@ export const SectionBodyEditor = ({ sectionId, initialContent, registerFlush }) 
   return (
     <div className="rounded-lg border overflow-hidden" style={{ borderColor: colors.border, backgroundColor: colors.bgInput }}>
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b flex-wrap" style={{ borderColor: colors.border, backgroundColor: colors.toolbarBg }}>
-        <Btn onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title="Bold"><Bold size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="Italic"><Italic size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="Underline"><UnderlineIcon size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title={t('editor_bold', { defaultValue: 'Bold' })}><Bold size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title={t('editor_italic', { defaultValue: 'Italic' })}><Italic size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title={t('editor_underline', { defaultValue: 'Underline' })}><UnderlineIcon size={16} /></Btn>
         <div className="shrink-0 w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title="Heading"><Heading2 size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} title="Bullet List"><List size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="Numbered List"><ListOrdered size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title="Code Block"><Code size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title={t('editor_heading', { defaultValue: 'Heading' })}><Heading2 size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} title={t('editor_bullet_list', { defaultValue: 'Bulleted list' })}><List size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title={t('editor_numbered_list', { defaultValue: 'Numbered list' })}><ListOrdered size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title={t('editor_code_block', { defaultValue: 'Code block' })}><Code size={16} /></Btn>
         <div className="shrink-0 w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-        <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })} title="Align Left"><AlignLeft size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })} title="Align Center"><AlignCenter size={16} /></Btn>
-        <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })} title="Align Right"><AlignRight size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })} title={t('editor_align_left', { defaultValue: 'Align left' })}><AlignLeft size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })} title={t('editor_align_center', { defaultValue: 'Align centre' })}><AlignCenter size={16} /></Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })} title={t('editor_align_right', { defaultValue: 'Align right' })}><AlignRight size={16} /></Btn>
         <div className="shrink-0 w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1" />
-        <Btn onClick={addLink} isActive={editor.isActive('link')} title="Add Link"><LinkIcon size={16} /></Btn>
+        <Btn onClick={addLink} isActive={editor.isActive('link')} title={t('editor_add_link', { defaultValue: 'Add link' })}><LinkIcon size={16} /></Btn>
         <div className="ml-auto flex items-center pr-2 text-xs" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
           {saveState === 'saving' && (<span className="inline-flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin" />{t('saving', { defaultValue: 'Saving…' })}</span>)}
           {saveState === 'saved' && (<span className="inline-flex items-center gap-1" style={{ color: isDark ? '#5eead4' : '#0f766e' }}><Check className="w-3.5 h-3.5" />{t('saved', { defaultValue: 'Saved' })}</span>)}
