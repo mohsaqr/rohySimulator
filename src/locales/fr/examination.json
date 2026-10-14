@@ -285,5 +285,6 @@
   "vital_per_min": "{value}/min",
   "vital_rr": "FR",
   "vital_spo2": "SpO₂",
-  "vital_temp": "Temp"
+  "vital_temp": "Temp",
+  "vital_temperature_c": "{value, number, ::.0} °C"
 }

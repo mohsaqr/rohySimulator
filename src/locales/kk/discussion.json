@@ -73,6 +73,7 @@
   "vital_rr": "ТЖЖ",
   "vital_spo2": "SpO₂",
   "vital_temp": "Темп",
+  "vital_temperature_c": "{value, number, ::.0} °C",
   "voice_not_supported": "Бұл браузерде дауыстық енгізу қолдау таппайды. Төмендегі жазу түймесін қолданыңыз.",
   "your_actions": "Сіздің әрекеттеріңіз",
   "composer_replying_to": "Тәлімгердің сұрағы"

@@ -293,6 +293,22 @@ describe('PatientMonitor — vitals rendering', () => {
         });
     });
 
+    it('shows the temperature with the UI language\'s decimal comma, and keeps the number in data-value', async () => {
+        // Regression lock: the TEMP box used toFixed(1) and showed "37.4" in a Finnish interface (FI-0010 review F16)
+        const i18n = (await import('../../i18n/index.js')).default;
+        const before = i18n.language;
+        await act(async () => { await i18n.changeLanguage('fi'); });
+        try {
+            const { getByTestId } = mount();
+            const box = getByTestId('vital-temp');
+            await waitFor(() => expect(box.textContent).toContain('37,4'));
+            expect(box.textContent).not.toContain('37.4');
+            expect(box.getAttribute('data-value')).toBe('37.4');
+        } finally {
+            await act(async () => { await i18n.changeLanguage(before); });
+        }
+    });
+
     it('renders the labelled vital headers (HR, SpO2, NIBP, RESP, TEMP)', async () => {
         // CONTRACT: header labels are part of the monitor's clinical
         // affordance — losing them turns the panel into nameless numbers.

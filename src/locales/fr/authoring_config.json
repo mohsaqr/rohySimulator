@@ -261,6 +261,7 @@
   "course_responses_attempt": "Tentative",
   "course_responses_csv": "Télécharger le CSV",
   "course_responses_failed": "Impossible de charger les réponses.",
+  "course_responses_late": "en retard : après l'ouverture des supports",
   "course_responses_none": "Aucune réponse pour l'instant.",
   "course_responses_questionnaire": "Questionnaire",
   "course_responses_score": "Score",

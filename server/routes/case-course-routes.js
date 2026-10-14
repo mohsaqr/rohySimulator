@@ -11,6 +11,11 @@
 // Answers are written once per learner, case, questionnaire and attempt
 // (unique index, 0067). Which attempt is open is decided here from the
 // learner's gate state, never taken from the client.
+//
+// A pre-test answered after the gate opened is stored with `late: true` in
+// its questionnaire snapshot (the JSON column that records the questionnaire
+// as it was answered) and reported as `late` to the learner and the educator,
+// so a late baseline is never read as a clean before/after pair.
 
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
@@ -33,6 +38,7 @@ import {
     normaliseQuestionnaires,
     learnerQuestionnaire,
     openAttempt,
+    isLateAttempt,
     releasesFeedback,
     checkAnswers,
     scoreAnswers,
@@ -85,6 +91,14 @@ function closedQuestionnaire(questionnaire) {
     };
 }
 
+// The stored snapshot and whether it was answered late (see the header).
+function answeredSnapshot(row) {
+    const parsed = parseJson(row.questionnaire, null);
+    if (!isPlainObject(parsed)) return { snapshot: null, late: false };
+    const { late, ...snapshot } = parsed;
+    return { snapshot, late: late === true };
+}
+
 function questionnairesOf(caseRow) {
     const config = parseJson(caseRow.config, {});
     // Stored questionnaires were checked on save; re-reading them through the
@@ -99,8 +113,10 @@ function questionnairesOf(caseRow) {
  * post-test is in, and never its per-question key.
  */
 function attemptView(row, questionnaire, { postSubmitted }) {
+    const { snapshot, late } = answeredSnapshot(row);
     const view = { attempt: row.attempt, submittedAt: row.created_at, answers: parseJson(row.answers, {}) };
-    const answered = parseJson(row.questionnaire, null) ?? questionnaire;
+    if (late) view.late = true;
+    const answered = snapshot ?? questionnaire;
     if (releasesFeedback(answered, row.attempt)) {
         const scored = scoreAnswers(answered, view.answers);
         if (scored) Object.assign(view, { score: scored.score, maxScore: scored.maxScore, results: scored.results });
@@ -147,6 +163,9 @@ router.get('/cases/:caseId/course-state', authenticateToken, requireStudent, asy
                 return {
                     ...learnerQuestionnaire(questionnaire),
                     openAttempt: open,
+                    // The pre-test offered after the materials opened: the
+                    // learner is told it will be recorded as late.
+                    ...(isLateAttempt(questionnaire, gate.unlocked, open) ? { openAttemptLate: true } : {}),
                     attempts: mine.map((row) => attemptView(row, questionnaire, { postSubmitted })),
                 };
             }),
@@ -199,13 +218,15 @@ router.post('/cases/:caseId/questionnaires/:questionnaireId/responses', authenti
         }
 
         const scored = scoreAnswers(questionnaire, answers);
+        const late = isLateAttempt(questionnaire, gate.unlocked, attempt);
+        const snapshot = late ? { ...questionnaire, late: true } : questionnaire;
         try {
             await dbAdapter.run(
                 `INSERT INTO case_questionnaire_responses
                     (tenant_id, case_id, questionnaire_id, attempt, user_id, session_id, answers, questionnaire, score, max_score)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [tenantId(req), caseId, questionnaire.id, attempt, req.user.id, session,
-                    JSON.stringify(answers), JSON.stringify(questionnaire), scored?.score ?? null, scored?.maxScore ?? null]
+                    JSON.stringify(answers), JSON.stringify(snapshot), scored?.score ?? null, scored?.maxScore ?? null]
             );
         } catch (err) {
             // Two tabs submitting at once: the unique index lets one through.
@@ -219,9 +240,9 @@ router.post('/cases/:caseId/questionnaires/:questionnaireId/responses', authenti
             action: 'submit_questionnaire',
             resourceType: 'case',
             resourceId: String(caseId),
-            metadata: { questionnaireId: questionnaire.id, attempt, score: scored?.score ?? null, maxScore: scored?.maxScore ?? null },
+            metadata: { questionnaireId: questionnaire.id, attempt, late, score: scored?.score ?? null, maxScore: scored?.maxScore ?? null },
         });
-        req.log.info('questionnaire submitted', { case_id: caseId, questionnaire_id: questionnaire.id, attempt });
+        req.log.info('questionnaire submitted', { case_id: caseId, questionnaire_id: questionnaire.id, attempt, late });
 
         const row = await dbAdapter.get(
             `SELECT attempt, answers, questionnaire, score, max_score, created_at FROM case_questionnaire_responses
@@ -258,19 +279,24 @@ router.get('/cases/:caseId/questionnaire-responses', authenticateToken, requireE
         );
         res.json({
             questionnaires: questionnairesOf(caseRow),
-            responses: rows.map((row) => ({
-                id: row.id,
-                questionnaireId: row.questionnaire_id,
-                attempt: row.attempt,
-                userId: row.user_id,
-                username: row.username,
-                sessionId: row.session_id,
-                answers: parseJson(row.answers, {}),
-                questionnaire: parseJson(row.questionnaire, null),
-                score: row.score,
-                maxScore: row.max_score,
-                submittedAt: row.created_at,
-            })),
+            responses: rows.map((row) => {
+                const { snapshot, late } = answeredSnapshot(row);
+                return {
+                    id: row.id,
+                    questionnaireId: row.questionnaire_id,
+                    attempt: row.attempt,
+                    userId: row.user_id,
+                    username: row.username,
+                    sessionId: row.session_id,
+                    answers: parseJson(row.answers, {}),
+                    questionnaire: snapshot,
+                    // A pre-test answered after the materials opened: no clean baseline.
+                    late,
+                    score: row.score,
+                    maxScore: row.max_score,
+                    submittedAt: row.created_at,
+                };
+            }),
         });
     } catch (err) {
         (req.log || log).error('questionnaire responses failed', { error: err.message });

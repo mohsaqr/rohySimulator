@@ -261,6 +261,7 @@
   "course_responses_attempt": "Försök",
   "course_responses_csv": "Ladda ner CSV",
   "course_responses_failed": "Kunde inte ladda svaren.",
+  "course_responses_late": "sent: efter att materialet öppnades",
   "course_responses_none": "Inga svar ännu.",
   "course_responses_questionnaire": "Frågeformulär",
   "course_responses_score": "Poäng",

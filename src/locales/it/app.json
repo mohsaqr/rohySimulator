@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "La timeline del paziente smette di avanzare.",
   "end_session_confirm_title": "Terminare questa sessione?",
   "end_session_confirm_transcript": "Potrai rivedere la trascrizione nella stanza di debriefing, ma non potrai riaprire il caso.",
+  "end_session_failed": "Non è stato possibile terminare il caso, che è ancora in corso. Controlla la connessione e riprova.",
+  "end_session_retry": "Riprova",
   "help_support": "Aiuto e supporto",
   "language_menu_aria": "Cambia lingua",
   "lessons": "Lezioni",

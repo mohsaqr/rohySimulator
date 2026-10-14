@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "The patient timeline stops advancing.",
   "end_session_confirm_title": "End this session?",
   "end_session_confirm_transcript": "You can review the transcript in the debrief room but cannot reopen the case.",
+  "end_session_failed": "The case could not be ended and is still running. Check your connection and try again.",
+  "end_session_retry": "Try again",
   "help_support": "Help & Support",
   "language_menu_aria": "Change language",
   "lessons": "Lessons",

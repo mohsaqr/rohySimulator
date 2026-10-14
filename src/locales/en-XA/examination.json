@@ -285,5 +285,6 @@
   "vital_per_min": "[{value}/ɱíñ·]",
   "vital_rr": "[ŔŔ·]",
   "vital_spo2": "[ŠþÓ₂·]",
-  "vital_temp": "[Ţéɱþ·]"
+  "vital_temp": "[Ţéɱþ·]",
+  "vital_temperature_c": "[{value, number, ::.0} °Ç·]"
 }

@@ -18,7 +18,8 @@ import { apiFetch, apiPost } from '../../services/apiClient';
 import { usePatientRecord } from '../../services/PatientRecord';
 import AoiRegion from '../oyon/AoiRegion';
 import { requestAvatarGlance } from '../oyon/studentPresence';
-import { formatDate, formatTime, formatDateTime } from '../../utils/formatters';
+import { formatDate, formatTime, formatDateTime, formatNumber } from '../../utils/formatters';
+
 // Wall-clock anchoring for the session clock + scenario timeline — see
 // src/utils/sessionAnchors.js for why ticks recompute instead of increment.
 import {
@@ -36,6 +37,9 @@ import { mergeIfChanged, withTreatmentEffects } from './treatmentVitals.js';
 import { RHYTHM_IDS, RHYTHM_LABEL_KEYS, resolveRhythm } from '../../services/rhythms';
 // Waveform physiology lives in one module, shared with the 3D room.
 import { GenerateECGRaw } from '../../services/ecgWaveform';
+
+// Temperatures show one decimal in the UI language's own form (38,6 in fi/sv/de/…).
+const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 
 /**
  * ECG GENERATION
@@ -1708,7 +1712,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                   <div className="absolute top-2 left-3 text-orange-500 font-bold text-sm">TEMP</div>
                   <div className="text-right">
                      <div className="text-4xl font-mono font-bold tracking-tighter text-orange-100">
-                        {displayVitals.temp?.toFixed(1) || '37.0'}
+                        {formatNumber(displayVitals.temp, ONE_DECIMAL) || formatNumber(37, ONE_DECIMAL)}
                      </div>
                      <div className="text-neutral-500 text-xs">°C</div>
                   </div>
@@ -2333,7 +2337,7 @@ export default function PatientMonitor({ _caseParams, caseData, sessionId, isAdm
                                  {t('temperature')}
                                  {trackOverrides && overriddenVitals.has('temp') && <Pencil className="w-3 h-3 text-orange-400" />}
                               </label>
-                              <span className="text-lg font-mono text-purple-400 font-bold">{params.temp?.toFixed(1)}°C</span>
+                              <span className="text-lg font-mono text-purple-400 font-bold">{formatNumber(params.temp, ONE_DECIMAL)} °C</span>
                            </div>
                            <input
                               type="range" min="32" max="42" step="0.1"

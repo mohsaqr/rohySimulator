@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiDelete, apiFetch, apiGet, apiPatch, apiPost, apiPut } from './apiClient.js';
+import { announceIdentity, resetTabIdentityForTests, watchIdentity } from './tabIdentity.js';
 
 function jsonResponse(body, init = {}) {
     return new Response(JSON.stringify(body), {
@@ -403,5 +404,50 @@ describe('apiClient', () => {
             const [, init] = fetchSpy.mock.calls[0];
             expect(init.signal).toBe(ctrl.signal);
         });
+    });
+});
+
+// Regression lock: rc.61 stopped a stale tab's telemetry, but every other request still went out with the cookie of whoever signed in in another tab (FI-0010 review, two tabs); apiClient now refuses them all without touching the network
+describe('apiClient in a stale tab', () => {
+    let fetchSpy;
+    let stop = () => {};
+    const otherTabSignsInAs = (userId, username) => {
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rohy_tab_identity', newValue: JSON.stringify({ userId, username }) }));
+    };
+
+    beforeEach(() => {
+        localStorage.clear();
+        resetTabIdentityForTests();
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })));
+        stop = watchIdentity(3, () => {});
+    });
+    afterEach(() => {
+        stop();
+        fetchSpy.mockRestore();
+        resetTabIdentityForTests();
+    });
+
+    it('refuses every method with ApiError code tab_stale and never calls fetch', async () => {
+        otherTabSignsInAs(4, 'someone-else');
+        for (const send of [() => apiGet('/cases'), () => apiPost('/sessions/1/vitals', { hr: 80 }), () => apiPut('/sessions/1/end'),
+            () => apiPatch('/x', {}), () => apiDelete('/x'), () => apiFetch('/auth/logout', { method: 'POST', auth: false })]) {
+            const err = await send().catch((e) => e);
+            expect(err).toBeInstanceOf(ApiError);
+            expect(err.code).toBe('tab_stale');
+            expect(err.status).toBe(0);
+        }
+        expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('sends again once the tab is whole: the same person signed back in elsewhere, or this tab signed in itself', async () => {
+        otherTabSignsInAs(4, 'someone-else');
+        otherTabSignsInAs(3, 'me');
+        await apiGet('/cases');
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+        otherTabSignsInAs(4, 'someone-else');
+        announceIdentity({ id: 4, username: 'someone-else' });
+        await apiGet('/cases');
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 });

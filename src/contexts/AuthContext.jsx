@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
 import { apiPost } from '../services/apiClient';
-import { announceIdentity, watchIdentity } from '../services/tabIdentity';
+import { announceIdentity, isTabStale, watchIdentity } from '../services/tabIdentity';
 
 const AuthContext = createContext(null);
 
@@ -12,6 +12,10 @@ export const useAuth = () => {
     }
     return context;
 };
+
+// The auth state when there is a provider, null outside one — for components
+// that only key local data by the signed-in user and render fine without it.
+export const useOptionalAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -86,6 +90,14 @@ export const AuthProvider = ({ children }) => {
 
         const tick = async () => {
             if (cancelled || refreshing) return;
+            // A stale tab's cookie belongs to whoever signed in elsewhere:
+            // refreshing (or a failed refresh's logout) would act on them.
+            // Wait for the reload; check again in a minute.
+            if (isTabStale()) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(tick, 60 * 1000);
+                return;
+            }
             refreshing = true;
             lastAttemptMs = Date.now();
             if (timer) { clearTimeout(timer); timer = null; }
@@ -182,6 +194,14 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
+        // A stale tab (another tab signed in as someone else) holds THAT
+        // person's cookie, token and shared localStorage: revoking the
+        // session, wiping the keys or announcing "signed out" here would sign
+        // them out, not this tab's user. It only lets go of its own user.
+        if (isTabStale()) {
+            setUser(null);
+            return;
+        }
         // Always hit /auth/logout — the server needs to revoke the
         // active_sessions row and clear the HttpOnly rohy_auth cookie.
         // Cookie-only users have no localStorage token, so a token-gated

@@ -73,6 +73,7 @@
   "vital_rr": "HT",
   "vital_spo2": "SpO₂",
   "vital_temp": "Lämpö",
+  "vital_temperature_c": "{value, number, ::.0} °C",
   "voice_not_supported": "Selain ei tue äänisyötettä. Käytä alla olevaa kirjoituspainiketta.",
   "your_actions": "Omat toimesi",
   "composer_replying_to": "Ohjaajan kysymys"

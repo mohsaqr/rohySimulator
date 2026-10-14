@@ -74,6 +74,7 @@
   "vital_rr": "[ŔŔ·]",
   "vital_spo2": "[ŠþÓ₂·]",
   "vital_temp": "[Ţéɱþ·]",
+  "vital_temperature_c": "[{value, number, ::.0} °Ç·]",
   "voice_not_supported": "[Ṽóíçé íñþúţ íšñ'ţ šúþþóŕţéð íñ ţĥíš ƀŕóŵšéŕ. Úšé ţĥé ţýþé ƀúţţóñ ƀéĺóŵ.············]",
   "your_actions": "[Ýóúŕ áçţíóñš···]"
 }

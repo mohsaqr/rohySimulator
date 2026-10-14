@@ -261,6 +261,7 @@
   "course_responses_attempt": "Durchgang",
   "course_responses_csv": "CSV herunterladen",
   "course_responses_failed": "Die Antworten konnten nicht geladen werden.",
+  "course_responses_late": "verspätet: nach Freigabe der Materialien",
   "course_responses_none": "Noch keine Antworten.",
   "course_responses_questionnaire": "Fragebogen",
   "course_responses_score": "Punkte",

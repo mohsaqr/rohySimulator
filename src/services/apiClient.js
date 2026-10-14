@@ -23,6 +23,7 @@
  */
 
 import { apiUrl } from '../config/api.js';
+import { isTabStale } from './tabIdentity.js';
 
 export class ApiError extends Error {
     constructor(message, { status = 0, code = null, body = null, url = null } = {}) {
@@ -193,6 +194,21 @@ export async function apiFetch(path, options = {}) {
     } = options;
 
     const url = resolveUrl(path);
+
+    // Another tab of this browser signed in as someone else (or signed out):
+    // the cookie every request here would carry is no longer this tab's user
+    // (services/tabIdentity.js). rc.61 stopped the telemetry batches; any
+    // other request — vitals, chat, orders, a logout — went out as the other
+    // person. Refuse them all without touching the network; the
+    // SignedInElsewhere overlay offers the reload that makes the tab whole.
+    if (isTabStale()) {
+        throw new ApiError('This tab is signed in as someone else in another tab. Reload the page.', {
+            status: 0,
+            code: 'tab_stale',
+            url,
+        });
+    }
+
     const headers = {};
     const clientRequestId = generateClientRequestId();
     headers[REQUEST_ID_HEADER] = clientRequestId;

@@ -51,7 +51,7 @@ import {
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
-import { buildSessionPatientPrompt } from '../services/patientPersona.js';
+import { buildSessionPatientPrompt, isSessionEnded } from '../services/patientPersona.js';
 import { buildSessionDiscussantPrompt, buildTeamAgentSituation } from '../services/agentSituation.js';
 import { isKnownLanguage } from '../shared/languages.js';
 import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
@@ -467,6 +467,15 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
             agentType = 'discussant';
         } else if (agent_llm_config?.persona === 'patient' || (!caseAgent && agentTemplate?.agent_type === 'patient')) {
+            // An ended case has no patient to talk to. The learner's client
+            // locks the chat box, but nothing stopped a request that skipped
+            // it from reaching the provider (FI-0010 review F09). Refused
+            // before anything upstream is built; the debrief discussant keeps
+            // its own gate below and speaks after the end.
+            if (await isSessionEnded({ sessionId: session_id, tenant: tenantId(req) })) {
+                (req.log || routesLlmLog).info('patient refused after the session ended', { session_id });
+                return res.status(409).json({ error: 'This session has ended; the patient no longer answers', code: 'session_ended' });
+            }
             serverPatient = await buildSessionPatientPrompt({ sessionId: session_id, tenant: tenantId(req) });
             if (!serverPatient) return res.status(404).json({ error: 'Session not found' });
             const resolvedId = serverPatient.template?.templateId ?? null;

@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "Patientens tidslinje slutar gå framåt.",
   "end_session_confirm_title": "Avsluta den här sessionen?",
   "end_session_confirm_transcript": "Du kan granska transkriptet i debriefingrummet men kan inte öppna fallet igen.",
+  "end_session_failed": "Fallet kunde inte avslutas och pågår fortfarande. Kontrollera anslutningen och försök igen.",
+  "end_session_retry": "Försök igen",
   "help_support": "Hjälp & support",
   "language_menu_aria": "Byt språk",
   "lessons": "Lektioner",

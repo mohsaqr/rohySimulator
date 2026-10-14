@@ -13,6 +13,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { useCaseLanguageSync } from './hooks/useCaseLanguageSync';
 import TopBarControls from './components/common/TopBarControls';
 import SignedInElsewhere from './components/common/SignedInElsewhere';
+import EndSessionConfirm from './components/common/EndSessionConfirm';
 import { useReportProblem } from './hooks/useReportProblem';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
@@ -29,9 +30,12 @@ import OnCallPhone from './components/oncall/OnCallPhone';
 import { useOnCall } from './components/oncall/useOnCall';
 import { PatientRecordProvider } from './services/PatientRecord';
 import EventLogger, { COMPONENTS, registerWindowLifecycleLogging } from './services/eventLogger';
-import { ApiError, apiFetch, apiPut } from './services/apiClient';
+import { ApiError, apiFetch } from './services/apiClient';
+import { endSessionOnServer } from './services/sessionEnd';
+import { isTabStale } from './services/tabIdentity';
+import { useEndSession } from './hooks/useEndSession';
 import { pickLandingCase } from './services/landingCase';
-import { X, StopCircle, AlertTriangle, ClipboardList } from 'lucide-react';
+import { X, StopCircle, ClipboardList } from 'lucide-react';
 import BodyMapDebug from './components/examination/BodyMapDebug';
 import TnaDashboard from './components/analytics/tna/TnaDashboardV2';
 import OyonDashboardRoom from './components/oyon/OyonDashboardRoom';
@@ -283,19 +287,9 @@ function MainApp() {
       }
    };
 
-   // Fire-and-forget POST to /sessions/:id/end. Used both for explicit end
-   // (user clicks End) and orphan cleanup (case reload, expiry detection)
-   // so server rows don't accumulate with end_time = NULL. Server-side this
-   // endpoint is idempotent — calling it twice is safe. Declared early so
-   // the validate-on-mount effect can call it during expiry cleanup.
-   const endSessionOnServer = async (sid) => {
-      if (!sid) return;
-      try {
-         await apiPut(`/sessions/${sid}/end`);
-      } catch (err) {
-         console.error('[Session] Failed to end session on server:', err);
-      }
-   };
+   // PUT /sessions/:id/end lives in services/sessionEnd.js and resolves to
+   // whether the server accepted it. Orphan cleanup (case reload) fires it and
+   // forgets; the explicit End waits for it (useEndSession below).
 
    // Auto-end on tab close. Uses sendBeacon (queued by the UA past
    // unload) — without this every browser-close left a session "active"
@@ -303,7 +297,9 @@ function MainApp() {
    // duplicate call from an explicit End click is harmless.
    useEffect(() => {
       const handler = () => {
-         if (!sessionId) return;
+         // A stale tab (another tab signed in as someone else) holds that
+         // person's cookie: it must not end anything on their behalf.
+         if (!sessionId || isTabStale()) return;
          try {
             const url = apiUrl(`/sessions/${sessionId}/end`);
             // sendBeacon doesn't carry custom headers; the route accepts
@@ -696,26 +692,19 @@ function MainApp() {
       EventLogger.roomChanged('lessons');
    }, [activeCase]);
 
-   // Explicit "End & Debrief": stops the server-side session, sets the
-   // sticky caseEnded flag so the patient-room chrome reflects it, and
-   // routes the user straight into the debrief room. Idempotent on the
-   // server (see sessions-routes.js:211), so a stray double-click is safe.
-   const handleEndSession = async () => {
-      if (!sessionId) return;
-      EventLogger.log('CLICKED', 'button', {
-         objectId: 'end-session',
-         objectName: 'End & Debrief',
-         component: COMPONENTS.APP,
-      });
+   // Explicit "End & Debrief": stops the server-side session and, only once
+   // the server has accepted that, sets the sticky caseEnded flag so the
+   // patient-room chrome reflects it and routes the user straight into the
+   // debrief room. A failed end keeps the case running and the confirm dialog
+   // open with a retry (FI-0010 review F10: it used to flip to "ended" anyway,
+   // and the debrief tutor then refused — it speaks only once the server has
+   // the session's end_time). Idempotent on the server, so a retry is safe.
+   const commitEndedState = () => {
       // The session ENDING is its own row — ENDED_SESSION had no producer at
       // all until here, so BackendSurface's flush-on-end branch was dead code
-      // and no analytics could see where a session stopped.
+      // and no analytics could see where a session stopped. Logged only once
+      // the server agrees the session ended.
       EventLogger.sessionEnded(sessionStartedAtRef.current ? Date.now() - sessionStartedAtRef.current : null, 'explicit');
-      // Awaited: the debrief tutor speaks only once the server has the
-      // session's end_time (proxy-routes, discussant_locked), and its opening
-      // turn fires as soon as the debrief room mounts. endSessionOnServer
-      // never throws.
-      await endSessionOnServer(sessionId);
       // Bug 7 (16.5.2026): clinical alarms latch until acked, and the
       // AudioSurface keeps beeping any active alarm. Ending the case is an
       // explicit "I'm done with the patient" — acknowledge outstanding
@@ -730,6 +719,21 @@ function MainApp() {
       // A case with the debrief room switched off ends on the case summary.
       if (enabledRooms.includes('consultant')) navigateToRoom('consultant');
       else setShowEndSummary(true);
+   };
+   const { ending: endingSession, failed: endSessionFailed, endSession, reset: resetEndSession } = useEndSession({
+      sessionId,
+      onEnded: commitEndedState,
+   });
+
+   const handleEndSession = async () => {
+      if (!sessionId) return;
+      EventLogger.log('CLICKED', 'button', {
+         objectId: 'end-session',
+         objectName: 'End & Debrief',
+         component: COMPONENTS.APP,
+         ...(endSessionFailed ? { context: { retry: true } } : {}),
+      });
+      await endSession();
    };
 
    const handleLoadCase = (caseData) => {
@@ -1479,69 +1483,15 @@ function MainApp() {
          )}
          {showEndConfirm && (
             <EndSessionConfirm
-               onCancel={() => setShowEndConfirm(false)}
+               onCancel={() => { setShowEndConfirm(false); resetEndSession(); }}
                onConfirm={handleEndSession}
+               busy={endingSession}
+               failed={endSessionFailed}
             />
          )}
          </div>
       </PatientRecordProvider>
       </>
-   );
-}
-
-// role=dialog + Escape-to-cancel, and focus starts on Cancel — the safe
-// choice for an irreversible action (QA 2026-10-04, PRV-31: the confirm was
-// an unlabelled div that a keyboard user could not dismiss).
-function EndSessionConfirm({ onCancel, onConfirm }) {
-   const { t } = useTranslation('app');
-   useEffect(() => {
-      const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
-      window.addEventListener('keydown', onKey);
-      return () => window.removeEventListener('keydown', onKey);
-   }, [onCancel]);
-   return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-         <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="end-session-confirm-title"
-            aria-describedby="end-session-confirm-body"
-            className="bg-neutral-900 border border-red-800/70 rounded-lg shadow-2xl w-full max-w-md"
-         >
-            <div className="px-6 py-5 border-b border-neutral-800 flex items-center gap-3">
-               <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" aria-hidden="true" />
-               <h2 id="end-session-confirm-title" className="text-base font-semibold text-white">{t('end_session_confirm_title')}</h2>
-            </div>
-            <div id="end-session-confirm-body" className="px-6 py-5 text-sm text-neutral-300 space-y-2">
-               <p>{t('end_session_confirm_intro')}</p>
-               <ul className="list-disc list-inside text-neutral-400 space-y-1 ml-1">
-                  <li>{t('end_session_confirm_timeline')}</li>
-                  <li>{t('end_session_confirm_locked')}</li>
-                  <li>{t('end_session_confirm_transcript')}</li>
-               </ul>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-neutral-800">
-               <button
-                  type="button"
-                  data-testid="end-session-cancel"
-                  autoFocus
-                  onClick={onCancel}
-                  className="px-4 py-2 text-sm rounded border border-neutral-700 text-neutral-300 hover:text-white"
-               >
-                  {t('cancel')}
-               </button>
-               <button
-                  type="button"
-                  data-testid="end-session-confirm"
-                  onClick={onConfirm}
-                  className="px-4 py-2 text-sm rounded text-white font-semibold bg-red-700 hover:bg-red-600 flex items-center gap-2"
-               >
-                  <StopCircle className="w-4 h-4" />
-                  {t('end_debrief')}
-               </button>
-            </div>
-         </div>
-      </div>
    );
 }
 

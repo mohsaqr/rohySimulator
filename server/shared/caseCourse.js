@@ -21,7 +21,10 @@ export const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'text']);
  * When a questionnaire is answered, relative to the course gate:
  * - `during`   once, at any time in the case
  * - `pre_post` twice, the same questions: `pre` while the materials are
- *              locked, `post` once they open — the difference is the gain
+ *              locked, `post` once they open — the difference is the gain.
+ *              A learner who let the gate open without the pre-test is still
+ *              offered it first (stored as late, see isLateAttempt), and the
+ *              post-test opens after it.
  * - `after`    once, after the materials open
  */
 export const QUESTIONNAIRE_TIMINGS = Object.freeze(['during', 'pre_post', 'after']);
@@ -182,6 +185,13 @@ export function learnerQuestionnaire(questionnaire) {
 /**
  * The attempt a learner may submit now, or null when none is open.
  *
+ * A pre/post questionnaire always asks the pre-test first. Before, the gate
+ * opening moved a learner who had not answered it straight to the post-test,
+ * and the baseline was lost without a trace (FI-0010 review F14). A pre-test
+ * answered once the gate is open is still taken — and recorded as late — so
+ * the pair is never silently read as a clean before/after. Once the post-test
+ * is in, nothing more opens (old data may hold a post-test with no pre-test).
+ *
  * @param {object} questionnaire
  * @param {boolean} unlocked     the case's course gate is open for this learner
  * @param {Iterable<string>} submitted  attempts this learner already submitted
@@ -191,8 +201,22 @@ export function openAttempt(questionnaire, unlocked, submitted) {
     const done = new Set(submitted);
     if (questionnaire.timing === 'during') return done.has('single') ? null : 'single';
     if (questionnaire.timing === 'after') return unlocked && !done.has('single') ? 'single' : null;
-    if (!unlocked) return done.has('pre') ? null : 'pre';
-    return done.has('post') ? null : 'post';
+    if (done.has('post')) return null;
+    if (!done.has('pre')) return 'pre';
+    return unlocked ? 'post' : null;
+}
+
+/**
+ * Whether an attempt submitted now is late: a pre-test answered after the
+ * course materials opened, so it is no clean baseline.
+ *
+ * @param {object} questionnaire
+ * @param {boolean} unlocked
+ * @param {string|null} attempt  the attempt being submitted (openAttempt's)
+ * @returns {boolean}
+ */
+export function isLateAttempt(questionnaire, unlocked, attempt) {
+    return questionnaire.timing === 'pre_post' && attempt === 'pre' && unlocked === true;
 }
 
 /**

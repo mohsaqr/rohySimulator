@@ -129,6 +129,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "app.end_session_failed": {
+    "src": "8eb7da4dcd79",
+    "tgt": "04e3df6089ed",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.end_session_retry": {
+    "src": "d8b8392e2c54",
+    "tgt": "3c2b3d01dfbd",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "app.help_support": {
     "src": "1f8ecc2426e4",
     "tgt": "2afe251dbf7a",
@@ -4612,6 +4632,16 @@
   "authoring_config.course_responses_failed": {
     "src": "2d69a3f58cc3",
     "tgt": "ec2594520acb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.course_responses_late": {
+    "src": "7daf95e636f2",
+    "tgt": "50e5510c52a9",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -22359,6 +22389,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "course.attempt_late": {
+    "src": "72a77b933a42",
+    "tgt": "201015e5d04c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "course.attempt_post": {
     "src": "21fe0d026229",
     "tgt": "0ef932e354d6",
@@ -22402,6 +22442,26 @@
   "course.correct_answer": {
     "src": "9eb90b969a0b",
     "tgt": "257b6b52cf39",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.error_already_submitted": {
+    "src": "8060d45977d7",
+    "tgt": "642b59b89bf9",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.error_attempt_closed": {
+    "src": "dee099ccc2b0",
+    "tgt": "4708c89ac61e",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -22542,6 +22602,16 @@
   "course.pick_all_that_apply": {
     "src": "bef67421d3a8",
     "tgt": "2e81d843499d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "course.pre_late_note": {
+    "src": "c716593ffc9a",
+    "tgt": "2a25466f0742",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -23422,6 +23492,16 @@
   "discussion.vital_temp": {
     "src": "d62f436b9e1b",
     "tgt": "d62f436b9e1b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "discussion.vital_temperature_c": {
+    "src": "5e72af017e16",
+    "tgt": "5e72af017e16",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -26312,6 +26392,16 @@
   "examination.vital_temp": {
     "src": "d62f436b9e1b",
     "tgt": "d62f436b9e1b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "examination.vital_temperature_c": {
+    "src": "5e72af017e16",
+    "tgt": "5e72af017e16",
     "state": "machine",
     "origin": "machine",
     "locked": false,
