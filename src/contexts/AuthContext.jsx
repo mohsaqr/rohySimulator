@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
 import { apiPost } from '../services/apiClient';
+import { announceIdentity, watchIdentity } from '../services/tabIdentity';
 
 const AuthContext = createContext(null);
 
@@ -15,6 +16,9 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Set when another tab of this browser signed in as someone else (or signed out): this tab's
+    // requests now carry that person's cookie, so it must stop and be reloaded (services/tabIdentity).
+    const [signedInElsewhere, setSignedInElsewhere] = useState(null);
 
     useEffect(() => {
         // Check if user is already logged in on mount
@@ -22,6 +26,7 @@ export const AuthProvider = ({ children }) => {
             try {
                 const userData = await AuthService.verifyToken();
                 setUser(userData);
+                if (userData) announceIdentity(userData);
             } catch (error) {
                 console.error('Token verification failed:', error);
                 setUser(null);
@@ -160,6 +165,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (username, password) => {
         const data = await AuthService.login(username, password);
         setUser(data.user);
+        announceIdentity(data.user);
         return data;
     };
 
@@ -168,7 +174,10 @@ export const AuthProvider = ({ children }) => {
     // setUser(undefined) there would log the caller into a ghost session.
     const register = async (username, email, password, extra = {}) => {
         const data = await AuthService.register(username, email, password, extra);
-        if (data?.user) setUser(data.user);
+        if (data?.user) {
+            setUser(data.user);
+            announceIdentity(data.user);
+        }
         return data;
     };
 
@@ -207,14 +216,21 @@ export const AuthProvider = ({ children }) => {
 
         AuthService.logout();
         setUser(null);
+        announceIdentity(null);
     };
 
     const isAdmin = () => {
         return user?.role === 'admin';
     };
 
+    useEffect(() => {
+        if (!user?.id) return undefined;
+        return watchIdentity(user.id, setSignedInElsewhere);
+    }, [user?.id]);
+
     const value = {
         user,
+        signedInElsewhere,
         loading,
         login,
         register,

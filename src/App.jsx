@@ -12,6 +12,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { useCaseLanguageSync } from './hooks/useCaseLanguageSync';
 import TopBarControls from './components/common/TopBarControls';
+import SignedInElsewhere from './components/common/SignedInElsewhere';
 import { useReportProblem } from './hooks/useReportProblem';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 // Lazy so the TipTap/react-query lessons bundle stays out of the main chunk,
@@ -1657,7 +1658,7 @@ function NotificationApiBridge() {
 
 function AuthenticatedApp() {
    const { t } = useTranslation('app');
-   const { user, loading } = useAuth();
+   const { user, loading, signedInElsewhere } = useAuth();
 
    // Show loading spinner while checking authentication
    if (loading) {
@@ -1682,10 +1683,13 @@ function AuthenticatedApp() {
    // an admin has made acceptance required) and then the first-run gate (admin
    // setup wizard / student first-run screen, each shown until completed).
    return (
-      <TermsGate>
-         <FirstRunGate>
-            <MainApp />
-         </FirstRunGate>
-      </TermsGate>
+      <>
+         <TermsGate>
+            <FirstRunGate>
+               <MainApp />
+            </FirstRunGate>
+         </TermsGate>
+         {signedInElsewhere && <SignedInElsewhere other={signedInElsewhere} />}
+      </>
    );
 }

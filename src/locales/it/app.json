@@ -31,5 +31,10 @@
   "report_problem": "Segnala un problema…",
   "request_feature": "Richiedi una funzionalità…",
   "settings": "Impostazioni",
-  "settings_menu_aria": "Menu impostazioni e profilo"
+  "settings_menu_aria": "Menu impostazioni e profilo",
+  "signed_in_elsewhere_title": "Accesso effettuato come un'altra persona",
+  "signed_in_elsewhere_text": "Questo browser ha ora effettuato l'accesso come {name} in un'altra scheda. Questa scheda non può più lavorare come la persona che mostra. Ricarica per continuare come {name}.",
+  "signed_out_elsewhere_title": "Disconnesso in un'altra scheda",
+  "signed_out_elsewhere_text": "Questo browser è stato disconnesso in un'altra scheda. Ricarica per accedere di nuovo.",
+  "signed_in_elsewhere_reload": "Ricarica"
 }

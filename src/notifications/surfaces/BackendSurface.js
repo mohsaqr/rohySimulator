@@ -3,6 +3,7 @@ import { useNotifications } from '../useNotifications';
 import { SURFACES, SOURCES } from '../types';
 import { apiPost, apiPut, readCsrfToken } from '../../services/apiClient';
 import { apiUrl } from '../../config/api';
+import { isTabStale } from '../../services/tabIdentity';
 import { VERBS } from '../../../server/shared/learningVerbs.js';
 
 // Backend surface batches notifications and POSTs them. Two endpoints today:
@@ -37,6 +38,9 @@ export default function BackendSurface({ sessionId, userId, caseId }) {
         if (queueRef.current.length === 0) return;
         const batch = queueRef.current;
         queueRef.current = [];
+        // Another tab signed in as someone else: this tab's cookie is theirs now, so anything sent
+        // from here would be filed under the wrong person (and refused). Drop it.
+        if (isTabStale()) return;
 
         const clinical = batch.filter(n => n.source === SOURCES.CLINICAL);
         const telemetry = batch.filter(n => n.source !== SOURCES.CLINICAL);

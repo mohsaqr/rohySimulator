@@ -31,5 +31,10 @@
   "report_problem": "Signaler un problème…",
   "request_feature": "Demander une fonctionnalité…",
   "settings": "Paramètres",
-  "settings_menu_aria": "Menu paramètres et profil"
+  "settings_menu_aria": "Menu paramètres et profil",
+  "signed_in_elsewhere_title": "Connecté en tant qu'une autre personne",
+  "signed_in_elsewhere_text": "Ce navigateur est maintenant connecté en tant que {name} dans un autre onglet. Cet onglet ne peut plus travailler en tant que la personne qu'il affiche. Rechargez pour continuer en tant que {name}.",
+  "signed_out_elsewhere_title": "Déconnecté dans un autre onglet",
+  "signed_out_elsewhere_text": "Ce navigateur a été déconnecté dans un autre onglet. Rechargez pour vous reconnecter.",
+  "signed_in_elsewhere_reload": "Recharger"
 }

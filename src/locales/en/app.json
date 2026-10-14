@@ -31,5 +31,10 @@
   "report_problem": "Report a problem…",
   "request_feature": "Request a feature…",
   "settings": "Settings",
-  "settings_menu_aria": "Settings and profile menu"
+  "settings_menu_aria": "Settings and profile menu",
+  "signed_in_elsewhere_reload": "Reload",
+  "signed_in_elsewhere_text": "This browser is now signed in as {name} in another tab. This tab can no longer work as the person it shows. Reload to continue as {name}.",
+  "signed_in_elsewhere_title": "Signed in as someone else",
+  "signed_out_elsewhere_text": "This browser was signed out in another tab. Reload to sign in again.",
+  "signed_out_elsewhere_title": "Signed out in another tab"
 }

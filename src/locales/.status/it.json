@@ -329,6 +329,56 @@
     "reviewer": null,
     "risk": "low"
   },
+  "app.signed_in_elsewhere_reload": {
+    "src": "bdc090ec61e3",
+    "tgt": "e93fa2824a26",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.signed_in_elsewhere_text": {
+    "src": "fcd2982fe302",
+    "tgt": "65968d1cb9c5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.signed_in_elsewhere_title": {
+    "src": "afdbe3a3e2fc",
+    "tgt": "6766db4286ad",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.signed_out_elsewhere_text": {
+    "src": "dd2202e9c833",
+    "tgt": "476d4e51646b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "app.signed_out_elsewhere_title": {
+    "src": "960c9337fc5e",
+    "tgt": "a62856f6088a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.approval_pending_body": {
     "src": "f1bbabbff760",
     "tgt": "8adbb8b0a0d6",

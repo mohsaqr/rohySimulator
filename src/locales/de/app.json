@@ -31,5 +31,10 @@
   "report_problem": "Problem melden…",
   "request_feature": "Funktion vorschlagen…",
   "settings": "Einstellungen",
-  "settings_menu_aria": "Menü für Einstellungen und Profil"
+  "settings_menu_aria": "Menü für Einstellungen und Profil",
+  "signed_in_elsewhere_title": "Als jemand anderes angemeldet",
+  "signed_in_elsewhere_text": "Dieser Browser ist jetzt in einem anderen Tab als {name} angemeldet. Dieser Tab kann nicht mehr als die angezeigte Person arbeiten. Neu laden, um als {name} fortzufahren.",
+  "signed_out_elsewhere_title": "In einem anderen Tab abgemeldet",
+  "signed_out_elsewhere_text": "Dieser Browser wurde in einem anderen Tab abgemeldet. Neu laden, um sich wieder anzumelden.",
+  "signed_in_elsewhere_reload": "Neu laden"
 }

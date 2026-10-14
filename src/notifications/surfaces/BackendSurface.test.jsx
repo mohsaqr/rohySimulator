@@ -171,3 +171,45 @@ describe('BackendSurface — unload flush carries the CSRF token', () => {
         }
     });
 });
+
+// Regression lock: a tab whose browser was signed in as someone else in another tab kept sending its events under the new sign-in; the server refused them as not_owner (vprohy, 2026-10-13)
+describe('BackendSurface — a stale tab sends nothing', () => {
+    function Probe({ onCtx }) {
+        const ctx = useNotifications();
+        useEffect(() => { onCtx(ctx); });
+        return null;
+    }
+
+    it('drops the batch once another tab signed in as someone else', async () => {
+        const { watchIdentity, resetTabIdentityForTests } = await import('../../services/tabIdentity');
+        resetTabIdentityForTests();
+        const stop = watchIdentity(49, () => {});
+        try {
+            apiPost.mockResolvedValue({ inserted: 1 });
+            let ctx = null;
+            renderWithProviders(
+                <>
+                    <Probe onCtx={(c) => { ctx = c; }} />
+                    <BackendSurface sessionId={428} userId={49} caseId={17} />
+                </>,
+                { withToast: false, withVoice: false },
+            );
+            act(() => { ctx.setPrefs({ telemetryBatchSize: 1 }); });
+            const fire = () => act(() => {
+                ctx.notify({ source: SOURCES.TELEMETRY, severity: SEVERITY.INFO, key: `t:${Math.random()}`, message: '', data: { verb: 'LOST_FOCUS', objectType: 'component', sessionId: 428 } });
+            });
+            fire();
+            await act(async () => { await Promise.resolve(); });
+            expect(apiPost).toHaveBeenCalledWith('/learning-events/batch', expect.anything());
+            apiPost.mockClear();
+
+            window.dispatchEvent(new StorageEvent('storage', { key: 'rohy_tab_identity', newValue: JSON.stringify({ userId: 52, username: 'cherish21' }) }));
+            fire();
+            await act(async () => { await Promise.resolve(); });
+            expect(apiPost).not.toHaveBeenCalled();
+        } finally {
+            stop();
+            resetTabIdentityForTests();
+        }
+    });
+});
