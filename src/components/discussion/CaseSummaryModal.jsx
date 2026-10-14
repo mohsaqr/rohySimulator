@@ -144,7 +144,8 @@ export default function CaseSummaryModal({ activeCase, sessionId, onClose }) {
                                 {initial.bpSys != null && <Vital label={t('vital_bp')} value={`${initial.bpSys}/${initial.bpDia ?? '?'}`} />}
                                 {initial.spo2 != null && <Vital label={t('vital_spo2')} value={`${initial.spo2}%`} />}
                                 {initial.rr != null && <Vital label={t('vital_rr')} value={t('vital_per_min', { value: initial.rr })} />}
-                                {initial.temp != null && <Vital label={t('vital_temp')} value={t('vital_celsius', { value: initial.temp })} />}
+                                {/* ICU number: decimal comma and "38,6 °C" in fi/sv/de/…, from the UI language. */}
+                                {initial.temp != null && <Vital label={t('vital_temp')} value={Number.isFinite(Number(initial.temp)) ? t('vital_temperature_c', { value: Number(initial.temp) }) : String(initial.temp)} />}
                                 {initial.etco2 != null && <Vital label={t('vital_etco2')} value={`${initial.etco2}`} />}
                             </div>
                         </Section>

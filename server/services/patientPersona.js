@@ -51,6 +51,21 @@ export async function loadSessionPatientCase({ sessionId, tenant }) {
 }
 
 /**
+ * Whether the session has ended (it has an end_time). The patient speaks only
+ * in a running session; the proxy refuses a patient turn after the end.
+ *
+ * @returns {Promise<boolean>} false also for a session not in this tenant —
+ *   the patient builder answers that one with its own 404
+ */
+export async function isSessionEnded({ sessionId, tenant }) {
+    const row = await dbAdapter.get(
+        'SELECT end_time FROM sessions WHERE id = ? AND tenant_id = ?',
+        [sessionId, tenant]
+    );
+    return Boolean(row?.end_time);
+}
+
+/**
  * The patient template a session speaks with — a server port of
  * src/utils/patientTemplate.js resolvePatientTemplate, same order:
  *   1. the case's attached, enabled patient agent (overrides merged);

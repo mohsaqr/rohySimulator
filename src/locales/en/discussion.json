@@ -74,6 +74,7 @@
   "vital_rr": "RR",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
+  "vital_temperature_c": "{value, number, ::.0} °C",
   "voice_not_supported": "Voice input isn't supported in this browser. Use the type button below.",
   "your_actions": "Your actions"
 }

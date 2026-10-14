@@ -37,6 +37,7 @@ const preTest = {
 
 afterEach(() => {
     cleanup();
+    sessionStorage.clear();
     apiGet.mockReset();
     apiPost.mockReset();
     log.mockReset();
@@ -143,5 +144,87 @@ describe('CaseCoursePanel', () => {
         render(<CaseCoursePanel caseId={10} />);
         expect(await screen.findByText('You will see this score after the post-test.')).toBeInTheDocument();
         expect(screen.queryByText(/Correct answer/)).toBeNull();
+    });
+});
+
+describe('CaseCoursePanel — refused sends, late pre-tests and drafts (FI-0010 review)', () => {
+    const openPre = (extra = {}) => ({ gate: lockedGate, questionnaires: [{ ...preTest, openAttempt: 'pre', attempts: [], ...extra }] });
+    const answerAll = async () => {
+        fireEvent.click(await screen.findByLabelText('Colon'));
+        fireEvent.click(screen.getByLabelText('Glands'));
+    };
+    const refusal = (code, error) => Object.assign(new Error(error), { status: 409, code, body: { error, code } });
+
+    it('says "already sent" in the interface language, not the server text', async () => {
+        // Regression lock: a 409 showed the server's raw English ("You have already answered this") in a Finnish course
+        apiGet.mockResolvedValue(openPre());
+        apiPost.mockRejectedValue(refusal('already_submitted', 'You have already answered this'));
+        render(<CaseCoursePanel caseId={10} />);
+        await answerAll();
+        fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('You have already sent your answers to this questionnaire.');
+        expect(alert).not.toHaveTextContent('You have already answered this');
+    });
+
+    it('says the test can no longer be sent, and to refresh, when the attempt closed', async () => {
+        apiGet.mockResolvedValue(openPre());
+        apiPost.mockRejectedValue(refusal('attempt_closed', 'This questionnaire is not open for that attempt now'));
+        render(<CaseCoursePanel caseId={10} />);
+        await answerAll();
+        fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('This test can no longer be sent. Refresh the course view.');
+        expect(alert).not.toHaveTextContent('not open for that attempt');
+    });
+
+    it('falls back to the generic message for anything else', async () => {
+        apiGet.mockResolvedValue(openPre());
+        apiPost.mockRejectedValue(Object.assign(new Error('Internal'), { status: 500, code: 'HTTP_500', body: { error: 'Failed to save the answers' } }));
+        render(<CaseCoursePanel caseId={10} />);
+        await answerAll();
+        fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Your answers could not be sent. Try again.');
+    });
+
+    it('tells a learner whose materials are already open that the pre-test comes first and counts as late', async () => {
+        apiGet.mockResolvedValue({ gate: { ...lockedGate, unlocked: true }, questionnaires: [{ ...preTest, openAttempt: 'pre', openAttemptLate: true, attempts: [] }] });
+        render(<CaseCoursePanel caseId={10} />);
+        expect(await screen.findByTestId('questionnaire-late-prepost')).toHaveTextContent('answered after the materials opened');
+        expect(screen.getByText('Pre-test')).toBeInTheDocument();
+    });
+
+    it('marks a late pre-test among the sent attempts', async () => {
+        apiGet.mockResolvedValue({
+            gate: { ...lockedGate, unlocked: true },
+            questionnaires: [{ ...preTest, openAttempt: 'post', attempts: [{ attempt: 'pre', late: true, submittedAt: '2026-10-10T10:00:00.000Z', answers: { origin: 0, found: [0] } }] }],
+        });
+        render(<CaseCoursePanel caseId={10} />);
+        expect(await screen.findByTestId('attempt-prepost-pre-late')).toHaveTextContent('Answered after the course materials opened');
+    });
+
+    it('keeps unsent answers when the panel is opened again', async () => {
+        // Regression lock: an in-progress pre-test lived only in component state and was lost on any remount
+        apiGet.mockResolvedValue(openPre());
+        const first = render(<CaseCoursePanel caseId={10} />);
+        fireEvent.click(await screen.findByLabelText('Lung'));
+        fireEvent.change(screen.getByLabelText('Why?'), { target: { value: 'pigment' } });
+        first.unmount();
+
+        render(<CaseCoursePanel caseId={10} />);
+        expect(await screen.findByLabelText('Lung')).toBeChecked();
+        expect(screen.getByLabelText('Why?')).toHaveValue('pigment');
+    });
+
+    it('forgets the draft once the answers are sent', async () => {
+        apiGet.mockResolvedValue(openPre());
+        apiPost.mockResolvedValue({ attempt: 'pre' });
+        const first = render(<CaseCoursePanel caseId={10} />);
+        await answerAll();
+        fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+        await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(2));
+        first.unmount();
+        render(<CaseCoursePanel caseId={10} />);
+        expect(await screen.findByLabelText('Colon')).not.toBeChecked();
     });
 });

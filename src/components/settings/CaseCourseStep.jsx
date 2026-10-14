@@ -380,7 +380,16 @@ function ResponsesSection({ caseId }) {
                             <tr key={r.id} className="border-t border-neutral-800">
                                 <td className="py-1">{r.username}</td>
                                 <td>{r.questionnaire?.title ?? r.questionnaireId}</td>
-                                <td>{t(ATTEMPT_KEYS[r.attempt])}</td>
+                                <td>
+                                    {t(ATTEMPT_KEYS[r.attempt])}
+                                    {/* A pre-test answered after the materials opened is no clean
+                                        baseline: say so beside it, so the pair is not read as one. */}
+                                    {r.late && (
+                                        <span className="ml-1.5 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-200" data-testid={`response-late-${r.id}`}>
+                                            {t('course_responses_late')}
+                                        </span>
+                                    )}
+                                </td>
                                 <td>{r.score === null ? '—' : `${r.score}/${r.maxScore}`}</td>
                                 <td>{new Date(r.submittedAt).toLocaleString(i18n.language)}</td>
                             </tr>

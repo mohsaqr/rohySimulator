@@ -11,7 +11,9 @@ import { useTranslation } from 'react-i18next';
 import { Lock, LockOpen, Clock, Check, Circle, ClipboardList, CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet, apiPost } from '../../services/apiClient';
 import EventLogger, { VERBS, OBJECT_TYPES } from '../../services/eventLogger';
+import { useOptionalAuth } from '../../contexts/AuthContext';
 import { checkAnswers } from '../../../server/shared/caseCourse.js';
+import { draftKey, readDraft, writeDraft, clearDraft } from './questionnaireDraft';
 
 const POLL_MS = 30_000;
 
@@ -149,6 +151,14 @@ function QuestionInput({ question, value, onChange, disabled }) {
     );
 }
 
+// A refused send in the learner's language. The server's own text is for
+// logs (and English); its `code` says what happened.
+function submitProblem(t, err) {
+    if (err?.code === 'already_submitted') return t('error_already_submitted');
+    if (err?.code === 'attempt_closed') return t('error_attempt_closed');
+    return t('submit_failed');
+}
+
 function answerText(question, value) {
     if (value === undefined || value === null) return '—';
     if (question.type === 'text') return value;
@@ -165,6 +175,11 @@ function AttemptResult({ questionnaire, attempt, pre }) {
             <p className="text-sm font-medium text-foreground">
                 {t('attempt_submitted', { attempt: attemptLabel(t, attempt.attempt), time: submitted })}
             </p>
+            {attempt.late && (
+                <p className="mt-0.5 text-xs text-muted-foreground" data-testid={`attempt-${questionnaire.id}-${attempt.attempt}-late`}>
+                    {t('attempt_late')}
+                </p>
+            )}
             {attempt.score !== undefined && (
                 <p className="mt-1 text-sm text-foreground">
                     {attempt.attempt === 'post' && pre?.score !== undefined
@@ -201,12 +216,20 @@ function AttemptResult({ questionnaire, attempt, pre }) {
     );
 }
 
-function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
+function QuestionnaireCard({ caseId, sessionId, userId, questionnaire, onSubmitted }) {
     const { t } = useTranslation('course');
-    const [answers, setAnswers] = useState({});
+    const open = questionnaire.openAttempt;
+    const draft = open ? draftKey({ userId, caseId, questionnaireId: questionnaire.id, attempt: open }) : null;
+    // Unsent answers outlive this card (questionnaireDraft.js). Only answers to
+    // questions the questionnaire still asks: an author's edit can drop one.
+    const [answers, setAnswers] = useState(() => {
+        if (!draft) return {};
+        const asked = new Set(questionnaire.questions.map((q) => q.id));
+        return Object.fromEntries(Object.entries(readDraft(draft)).filter(([id]) => asked.has(id)));
+    });
+    useEffect(() => { if (draft) writeDraft(draft, answers); }, [draft, answers]);
     const [busy, setBusy] = useState(false);
     const [problem, setProblem] = useState(null);
-    const open = questionnaire.openAttempt;
     const pre = questionnaire.attempts.find((a) => a.attempt === 'pre');
 
     const submit = async (event) => {
@@ -229,11 +252,12 @@ function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
                 objectName: questionnaire.title,
                 result: open,
                 component: 'CaseCoursePanel',
-                context: { caseId, attempt: open, timing: questionnaire.timing },
+                context: { caseId, attempt: open, timing: questionnaire.timing, late: questionnaire.openAttemptLate === true },
             });
+            if (draft) clearDraft(draft);
             await onSubmitted();
         } catch (err) {
-            setProblem(err?.body?.error || t('submit_failed'));
+            setProblem(submitProblem(t, err));
         } finally {
             setBusy(false);
         }
@@ -255,6 +279,11 @@ function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
                     {open && (
                         <form onSubmit={submit} className="mt-3" data-testid={`questionnaire-form-${questionnaire.id}`}>
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{attemptLabel(t, open)}</p>
+                            {questionnaire.openAttemptLate && (
+                                <p className="mt-1 rounded-lg border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-sm text-foreground dark:bg-amber-950/20" data-testid={`questionnaire-late-${questionnaire.id}`}>
+                                    {t('pre_late_note')}
+                                </p>
+                            )}
                             <ol className="mt-2 space-y-4">
                                 {questionnaire.questions.map((question, index) => (
                                     <li key={question.id}>
@@ -300,6 +329,7 @@ function QuestionnaireCard({ caseId, sessionId, questionnaire, onSubmitted }) {
  */
 export default function CaseCoursePanel({ caseId, sessionId = null, lockedLessons = [], onGateChange = () => {} }) {
     const { t } = useTranslation('course');
+    const userId = useOptionalAuth()?.user?.id ?? null;
     const [state, setState] = useState(null);
     const [failed, setFailed] = useState(false);
     // A guest is refused the course state (it has no course): show nothing.
@@ -350,6 +380,7 @@ export default function CaseCoursePanel({ caseId, sessionId = null, lockedLesson
                     key={`${questionnaire.id}:${questionnaire.openAttempt}`}
                     caseId={caseId}
                     sessionId={sessionId}
+                    userId={userId}
                     questionnaire={questionnaire}
                     onSubmitted={load}
                 />

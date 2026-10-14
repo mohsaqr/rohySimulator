@@ -261,6 +261,7 @@
   "course_responses_attempt": "Intento",
   "course_responses_csv": "Descargar CSV",
   "course_responses_failed": "No se pudieron cargar las respuestas.",
+  "course_responses_late": "tardía: después de abrirse los materiales",
   "course_responses_none": "Aún no hay respuestas.",
   "course_responses_questionnaire": "Cuestionario",
   "course_responses_score": "Puntuación",

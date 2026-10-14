@@ -261,6 +261,7 @@
   "course_responses_attempt": "Vastauskerta",
   "course_responses_csv": "Lataa CSV",
   "course_responses_failed": "Vastauksia ei voitu ladata.",
+  "course_responses_late": "myöhässä: materiaalien avauduttua",
   "course_responses_none": "Ei vielä vastauksia.",
   "course_responses_questionnaire": "Kysely",
   "course_responses_score": "Pisteet",

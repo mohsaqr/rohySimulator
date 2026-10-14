@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "La chronologie du patient cesse de progresser.",
   "end_session_confirm_title": "Terminer cette session ?",
   "end_session_confirm_transcript": "Vous pourrez consulter la transcription dans la salle de débriefing, mais vous ne pourrez pas rouvrir le cas.",
+  "end_session_failed": "Le cas n'a pas pu être terminé et il est toujours en cours. Vérifiez votre connexion et réessayez.",
+  "end_session_retry": "Réessayer",
   "help_support": "Aide et assistance",
   "language_menu_aria": "Changer de langue",
   "lessons": "Leçons",

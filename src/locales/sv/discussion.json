@@ -73,6 +73,7 @@
   "vital_rr": "AF",
   "vital_spo2": "SpO₂",
   "vital_temp": "Temp",
+  "vital_temperature_c": "{value, number, ::.0} °C",
   "voice_not_supported": "Röstinmatning stöds inte i den här webbläsaren. Använd skrivknappen nedan.",
   "your_actions": "Dina åtgärder",
   "composer_replying_to": "Handledarens fråga"

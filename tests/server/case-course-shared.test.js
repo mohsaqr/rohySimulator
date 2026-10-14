@@ -7,6 +7,7 @@ import {
     normaliseQuestionnaires,
     learnerQuestionnaire,
     openAttempt,
+    isLateAttempt,
     releasesFeedback,
     checkAnswers,
     scoreAnswers,
@@ -105,17 +106,37 @@ describe('openAttempt', () => {
         ['after',    true,     [],               'single'],
         ['pre_post', false,    [],               'pre'],
         ['pre_post', false,    ['pre'],          null],
-        ['pre_post', true,     [],               'post'],
+        ['pre_post', true,     [],               'pre'],
         ['pre_post', true,     ['pre'],          'post'],
         ['pre_post', true,     ['pre', 'post'],  null],
+        ['pre_post', true,     ['post'],         null],
+        ['pre_post', false,    ['post'],         null],
     ])('%s, unlocked=%s, submitted=%j → %s', (timing, unlocked, submitted, open) => {
         expect(openAttempt(quiz({ timing }), unlocked, submitted)).toBe(open);
     });
 
-    it('never opens a pre-test once the materials are open', () => {
-        for (const submitted of [[], ['post'], ['pre'], ['pre', 'post']]) {
-            expect(openAttempt(quiz({ timing: 'pre_post' }), true, submitted)).not.toBe('pre');
+    it('offers the pre-test before the post-test, whether or not the materials are open', () => {
+        // Regression lock: a learner who let the gate open without answering the pre-test was moved straight to the post-test and the baseline was lost (FI-0010 review F14)
+        for (const unlocked of [false, true]) {
+            expect(openAttempt(quiz({ timing: 'pre_post' }), unlocked, [])).toBe('pre');
         }
+    });
+
+    it('never opens the post-test before the pre-test is in', () => {
+        for (const unlocked of [false, true]) {
+            expect(openAttempt(quiz({ timing: 'pre_post' }), unlocked, [])).not.toBe('post');
+        }
+    });
+});
+
+describe('isLateAttempt', () => {
+    it('marks only a pre-test answered after the materials opened', () => {
+        expect(isLateAttempt(quiz({ timing: 'pre_post' }), true, 'pre')).toBe(true);
+        expect(isLateAttempt(quiz({ timing: 'pre_post' }), false, 'pre')).toBe(false);
+        expect(isLateAttempt(quiz({ timing: 'pre_post' }), true, 'post')).toBe(false);
+        expect(isLateAttempt(quiz({ timing: 'after' }), true, 'single')).toBe(false);
+        expect(isLateAttempt(quiz({ timing: 'during' }), true, 'single')).toBe(false);
+        expect(isLateAttempt(quiz({ timing: 'pre_post' }), true, null)).toBe(false);
     });
 });
 

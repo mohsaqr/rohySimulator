@@ -17,6 +17,8 @@ let stale = false;
 export const isTabStale = () => stale;
 
 export function announceIdentity(user) {
+    // This tab just signed in (or out) itself: the browser's sign-in is its own again.
+    stale = false;
     try {
         localStorage.setItem(KEY, JSON.stringify({
             userId: user?.id ?? null,

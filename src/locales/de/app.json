@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "Die Zeitachse des Patienten schreitet nicht mehr voran.",
   "end_session_confirm_title": "Diese Sitzung beenden?",
   "end_session_confirm_transcript": "Sie können das Transkript im Nachbesprechungsraum einsehen, den Fall aber nicht erneut öffnen.",
+  "end_session_failed": "Der Fall konnte nicht beendet werden und läuft noch. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+  "end_session_retry": "Erneut versuchen",
   "help_support": "Hilfe & Support",
   "language_menu_aria": "Sprache ändern",
   "lessons": "Lektionen",

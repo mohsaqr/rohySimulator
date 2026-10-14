@@ -101,6 +101,20 @@ describe('CaseCourseStep', () => {
         expect(screen.getByText('(waits for case 8)')).toBeInTheDocument();
     });
 
+    it('marks a pre-test answered after the materials opened in the answers table', async () => {
+        // Regression lock: a pre-test answered once the materials were open must not read as a clean baseline (FI-0010 review F14)
+        apiGet.mockImplementation(async (path) => (path.endsWith('/questionnaire-responses')
+            ? { questionnaires: [], responses: [
+                { id: 1, questionnaireId: 'q', attempt: 'pre', late: false, username: 'anna', score: 0, maxScore: 1, submittedAt: '2026-10-10T10:00:00.000Z', questionnaire: { title: 'Diagnoosi' } },
+                { id: 2, questionnaireId: 'q', attempt: 'pre', late: true, username: 'ben', score: 1, maxScore: 1, submittedAt: '2026-10-10T11:00:00.000Z', questionnaire: { title: 'Diagnoosi' } },
+            ] }
+            : { data: { cohortId: null, lessons: [] } }));
+        render(<Harness id={10} initialConfig={{}} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show answers' }));
+        expect(await screen.findByTestId('response-late-2')).toHaveTextContent('late: after the materials opened');
+        expect(screen.queryByTestId('response-late-1')).toBeNull();
+    });
+
     it('asks to save the case before choosing locked lessons', () => {
         render(<Harness initialConfig={{}} />);
         expect(screen.getByText('Save the case first, then choose its locked lessons.')).toBeInTheDocument();
@@ -119,9 +133,18 @@ describe('responsesToCsv', () => {
             ] },
         }] }).split('\n');
         expect(csv).toHaveLength(3);
-        expect(csv[0]).toBe('"username","questionnaire_id","attempt","submitted_at","score","max_score","question_id","question","answer"');
-        expect(csv[1]).toBe('"anna","q","post","2026-10-10T10:00:00.000Z","1","1","a","Origin?","Colon"');
-        expect(csv[2]).toBe('"anna","q","post","2026-10-10T10:00:00.000Z","1","1","b","Why?","koska ""CDX2"""');
+        expect(csv[0]).toBe('"username","questionnaire_id","attempt","late","submitted_at","score","max_score","question_id","question","answer"');
+        expect(csv[1]).toBe('"anna","q","post","false","2026-10-10T10:00:00.000Z","1","1","a","Origin?","Colon"');
+        expect(csv[2]).toBe('"anna","q","post","false","2026-10-10T10:00:00.000Z","1","1","b","Why?","koska ""CDX2"""');
+    });
+
+    it('marks a late pre-test in its own column', () => {
+        const csv = responsesToCsv({ responses: [{
+            username: 'ben', questionnaireId: 'q', attempt: 'pre', late: true, submittedAt: 't', score: 0, maxScore: 1,
+            answers: { a: 1 },
+            questionnaire: { questions: [{ id: 'a', type: 'single', text: 'Origin?', options: ['Colon', 'Lung'] }] },
+        }] }).split('\n');
+        expect(csv[1]).toBe('"ben","q","pre","true","t","0","1","a","Origin?","Lung"');
     });
 
     it('writes an answer that starts like a formula as text', () => {

@@ -398,6 +398,60 @@ describe('course gate + case questionnaires', () => {
         });
     });
 
+    describe('a learner who let the gate open without the pre-test', () => {
+        // Regression lock: the gate opening moved a learner straight to the post-test and the pre-test was lost; it is now still offered first and recorded as late (FI-0010 review F14)
+        beforeAll(async () => {
+            await startSession(peerId, minutesAgo(20));
+            await openSlide(peerId, 'slide-a1');
+            await openSlide(peerId, 'slide-b1');
+        });
+        const prepostOf = async () => (await (await peer(`/api/cases/${caseId}/course-state`)).json()).questionnaires.find((q) => q.id === 'prepost');
+
+        it('is still offered the pre-test, and told it counts as late', async () => {
+            const body = await (await peer(`/api/cases/${caseId}/course-state`)).json();
+            expect(body.gate.unlocked).toBe(true);
+            const prepost = body.questionnaires.find((q) => q.id === 'prepost');
+            expect(prepost).toMatchObject({ openAttempt: 'pre', openAttemptLate: true });
+            expect(JSON.stringify(prepost)).not.toContain('CDX2 tukee');
+        });
+
+        it('cannot skip to the post-test', async () => {
+            const res = await peer(`/api/cases/${caseId}/questionnaires/prepost/responses`, {
+                method: 'POST', body: JSON.stringify({ attempt: 'post', answers: { origin: 0 } }),
+            });
+            expect(res.status).toBe(409);
+            expect(await res.json()).toMatchObject({ code: 'attempt_closed', openAttempt: 'pre' });
+        });
+
+        it('stores the pre-test as late, without its key, then opens the post-test', async () => {
+            const res = await peer(`/api/cases/${caseId}/questionnaires/prepost/responses`, {
+                method: 'POST', body: JSON.stringify({ attempt: 'pre', answers: { origin: 0 } }),
+            });
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body).toMatchObject({ attempt: 'pre', late: true });
+            expect(body).not.toHaveProperty('key');
+            const prepost = await prepostOf();
+            expect(prepost.openAttempt).toBe('post');
+            expect(prepost).not.toHaveProperty('openAttemptLate');
+            expect(prepost.attempts.map((a) => [a.attempt, a.late ?? false])).toEqual([['pre', true]]);
+            expect((await peer(`/api/cases/${caseId}/questionnaires/prepost/responses`, {
+                method: 'POST', body: JSON.stringify({ attempt: 'post', answers: { origin: 0 } }),
+            })).status).toBe(201);
+        });
+
+        it('shows the educator which pre-test was late, and only that one', async () => {
+            const body = await (await teacher(`/api/cases/${caseId}/questionnaire-responses`)).json();
+            const prepost = body.responses.filter((r) => r.questionnaireId === 'prepost');
+            expect(prepost.map((r) => [r.username, r.attempt, r.late])).toEqual([
+                ['cg-student', 'pre', false], ['cg-student', 'post', false],
+                ['cg-peer', 'pre', true], ['cg-peer', 'post', false],
+            ]);
+            // The flag is reported beside the snapshot, not inside it.
+            expect(prepost.every((r) => !('late' in r.questionnaire))).toBe(true);
+        });
+    });
+
     describe('a lesson whose case is deleted', () => {
         let strandedId;
         let goneCaseId;

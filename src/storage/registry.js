@@ -160,6 +160,14 @@ export const STORAGE_REGISTRY = Object.freeze({
             + 'Per-tab and gone when the tab closes; keys are sessionId-scoped.',
         lifetime: 'derived',
     },
+    rohy_questionnaire_draft: {
+        keyBuilder: (userId, caseId, questionnaireId, attempt) => `rohy_questionnaire_draft:${userId}:${caseId}:${questionnaireId}:${attempt}`,
+        owner: 'src/components/course/questionnaireDraft.js (used by CaseCoursePanel.jsx)',
+        purpose: 'A learner\'s unsent case-questionnaire answers (sessionStorage, NOT localStorage), '
+            + 'so a remount of the course panel does not lose them. Per-tab, keyed by user, '
+            + 'case, questionnaire and attempt; removed when the attempt is sent.',
+        lifetime: 'derived',
+    },
     // ── Notifications (managed by notifications/persistence.js) ─────────────
     rohy_notification_prefs: {
         keyBuilder: (userIdOrAnon) => `rohy_notification_prefs:${userIdOrAnon}`,

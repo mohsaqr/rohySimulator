@@ -9,6 +9,24 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.64] — 2026-10-14
+
+- **No patient chat after the case has ended.** The server still admitted a learner's patient request on an
+  ended session and sent it to the model; it now refuses it (409 `session_ended`) before building anything.
+  The debrief keeps working.
+- **A failed "End case" stays a running case.** The end request's failure was swallowed and the screen moved to
+  the debrief anyway, while the server still had the session open. The dialog now stays, says it failed, and
+  offers Try again; the ended state is committed only after the server accepts it.
+- **A missed pre-test is still offered, marked late.** A learner whose course gate opened before they answered
+  the pre-test went straight to the post-test. They now get the pre-test first; one answered after the gate
+  opened is stored as late, shown to the learner and with a "late" badge (and CSV column) to the teacher.
+  Unsent answers survive a reload.
+- **Course questionnaire errors in the learner's language** instead of the server's English text.
+- **A stale tab sends nothing at all.** rc.61 stopped a stale tab's event log; every other request now stops
+  too, and signing out in a stale tab no longer signs the other person out. The "signed in elsewhere" message
+  traps the keyboard and makes the page underneath inert.
+- **Numbers in the interface language:** temperature shows 38,6 °C in Finnish (monitor and case summary).
+
 ## [3.0.0-rc.63] — 2026-10-14
 
 - **The on-call specialist cannot say the diagnosis in another form.** The reply guard matched only the authored

@@ -190,6 +190,25 @@ describe('CaseSummaryModal — history, vitals, exam findings (bug report 2.9.15
         expect(screen.getByText('91%')).toBeTruthy();
     });
 
+    it('writes the temperature with the UI language\'s decimal comma and a spaced unit', async () => {
+        // Regression lock: "{value}°C" printed 38.6°C in a Finnish debrief (FI-0010 review F16)
+        const i18n = (await import('../../i18n/index.js')).default;
+        const before = i18n.language;
+        const vitalsCase = { id: 'case-t', name: 'Fever', config: { initialVitals: { temp: 38.6 } } };
+        mockEndpoints({ debrief: null });
+        try {
+            await i18n.changeLanguage('fi');
+            const finnish = renderWithProviders(<CaseSummaryModal activeCase={vitalsCase} sessionId="sess-1" onClose={() => {}} />);
+            expect(await screen.findByText('38,6 °C')).toBeTruthy();
+            finnish.unmount();
+        } finally {
+            await i18n.changeLanguage(before);
+        }
+        mockEndpoints({ debrief: null });
+        renderWithProviders(<CaseSummaryModal activeCase={vitalsCase} sessionId="sess-1" onClose={() => {}} />);
+        expect(await screen.findByText('38.6 °C')).toBeTruthy();
+    });
+
     it('renders exam findings from rows shaped {body_region, finding}', async () => {
         apiFetchMock.mockImplementation((path) => {
             if (path.endsWith('/exam-findings')) {

@@ -12,6 +12,8 @@
   "end_session_confirm_timeline": "La línea de tiempo del paciente deja de avanzar.",
   "end_session_confirm_title": "¿Finalizar esta sesión?",
   "end_session_confirm_transcript": "Puedes revisar la transcripción en la sala de debrief, pero no puedes reabrir el caso.",
+  "end_session_failed": "No se pudo finalizar el caso y sigue en curso. Comprueba tu conexión e inténtalo de nuevo.",
+  "end_session_retry": "Reintentar",
   "help_support": "Ayuda y Soporte",
   "language_menu_aria": "Cambiar idioma",
   "lessons": "Lecciones",

@@ -12,7 +12,8 @@ const csvCell = (value) => {
 
 /** One row per answer (long format): the shape a spreadsheet or R reads directly. */
 export function responsesToCsv({ responses }) {
-    const header = ['username', 'questionnaire_id', 'attempt', 'submitted_at', 'score', 'max_score', 'question_id', 'question', 'answer'];
+    // `late`: a pre-test answered after the course materials opened — no clean baseline.
+    const header = ['username', 'questionnaire_id', 'attempt', 'late', 'submitted_at', 'score', 'max_score', 'question_id', 'question', 'answer'];
     const rows = responses.flatMap((response) => {
         const questions = response.questionnaire?.questions ?? [];
         return questions.map((question) => {
@@ -20,7 +21,7 @@ export function responsesToCsv({ responses }) {
             const answer = value === undefined ? ''
                 : question.type === 'text' ? value
                     : (Array.isArray(value) ? value : [value]).map((n) => question.options?.[n] ?? n).join('; ');
-            return [response.username, response.questionnaireId, response.attempt, response.submittedAt,
+            return [response.username, response.questionnaireId, response.attempt, response.late === true, response.submittedAt,
                 response.score, response.maxScore, question.id, question.text, answer];
         });
     });
