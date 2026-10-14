@@ -31,8 +31,33 @@ The file uploads in pieces, so a large package also works behind a proxy that
 caps request size. The import always creates a **new** case, with its own id
 and case code. It never changes an existing case.
 
+After the upload the server reads, checks and places the media. A package with
+whole-slide images holds tens of thousands of tile files, so these steps can
+take minutes. The dialog shows each step with the files and bytes done so far
+and the time elapsed.
+
+- **Cancel import** stops the import. If the case has not been saved yet,
+  nothing is created and the files already placed are removed. Once the case
+  is saved, Cancel is refused and the import finishes.
+- **Close — the import continues** only closes the dialog. The import keeps
+  running on the server. The case list then shows **Import running — show**,
+  and later **Import finished — show the result**, also after you leave
+  Settings and come back. Do not import the same package again while it runs:
+  every import creates another case.
+
 When the import finishes, the dialog lists anything the receiving server lacks.
-Read the list before you publish the case.
+Read the list before you publish the case. Below it, **Next steps** says what
+still has to happen before learners can play the case:
+
+- the new case is **hidden from learners**. **Show to learners** makes it
+  available;
+- the new course has **no members**. **Open Courses** to add learners or a
+  join code;
+- how many lessons the course has and how many wait until the learner has
+  played the case.
+
+The report also says which slides and media files were already on this server
+and which were copied.
 
 ## What travels
 
@@ -55,7 +80,11 @@ post-tests and the questionnaires are part of the case and travel with it in any
 case.
 
 The import creates a **new course** with the same name, owned by the person who
-imports, linked to the new case. The same lessons are locked behind the new
+imports, linked to the new case. Two courses never end up with the same name:
+if the name carries the exported case's code (`… (FI-0010)`), the new case's
+code replaces it (`… (FI-0011)`); if another course already has the name, the
+new case's code is added. The course's settings record the name and case code
+it was exported with. The same lessons are locked behind the new
 case. The course has **no learners**: the learners of one server are not those
 of another. Add them in **Courses** before you assign the case.
 
@@ -108,7 +137,12 @@ listed in the report. If the database write fails after files were placed, the
 placed files are removed again.
 
 An imported slide is never written over an existing slide. If its library id
-is taken by a different slide, the import gives it a new id.
+is taken by a different slide, the import gives it a new id. A slide that is
+already in this server's library (same files, same calibration, same tenant)
+is reused, not copied again. Files an operating system leaves in a folder,
+such as `.DS_Store`, `Thumbs.db`, `desktop.ini` and `._*`, are not part of a
+slide: they are never exported or imported and do not stop a slide being
+reused.
 
 ## Limits and settings
 

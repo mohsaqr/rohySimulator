@@ -124,9 +124,9 @@ The following variables carry credentials or signing material. Never commit them
 | --- | --- | --- | --- | --- |
 | `GITHUB_ACTIONS` | No | — | _see source_ | `scripts/check-prod-version.mjs:128` |
 | `ROHY_BASE_URL` | No | `http://localhost:3000` | _see source_ | `scripts/llm-language-smoke.mjs:26`<br>`scripts/translate-locales.mjs:49` |
-| `ROHY_CASE_PACKAGE_DIR` | No | — | Where case packages are staged (default: case-packages/ beside the database). | `server/services/casePackage.js:121`<br>`server/services/casePackage.js:122` |
-| `ROHY_CASE_PACKAGE_MAX_BYTES` | No | — | Largest case package export or import, in bytes (default 4 GiB). | `server/services/casePackage.js:127` |
-| `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:133` |
+| `ROHY_CASE_PACKAGE_DIR` | No | — | Where case packages are staged (default: case-packages/ beside the database). | `server/services/casePackage.js:255`<br>`server/services/casePackage.js:256` |
+| `ROHY_CASE_PACKAGE_MAX_BYTES` | No | — | Largest case package export or import, in bytes (default 4 GiB). | `server/services/casePackage.js:261` |
+| `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:267` |
 | `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:98` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
 | `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:71` |

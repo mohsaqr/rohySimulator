@@ -179,6 +179,26 @@ describe('case packages: the case\'s course travels with it', () => {
         expect(readFileSync(join(UPLOADS, pdfName)).equals(PDF(`target-${tag}`))).toBe(true);
     });
 
+    it('a second import of the same package names its course for the new case, remembering where it came from', async () => {
+        // Regression lock: F22 re-importing FI-0010 made case FI-0011 with a course called exactly like the first import's
+        const job = await importPackage(tgtAdmin, pkg);
+        expect(job.state).toBe('done');
+        const code = job.result.case.case_code;
+        expect(job.result.course).toMatchObject({
+            name: `Patologia: Pentin tapaus (${code})`, source_name: 'Patologia: Pentin tapaus', members: 0, lessons: 2, locked: 1,
+        });
+        expect(job.result.case.is_available).toBe(false);
+        const db = await openDb(target.dbPath);
+        const cohort = await get(db, 'SELECT name, settings FROM cohorts WHERE id = ?', [job.result.course.id]);
+        const named = await all(db, "SELECT id FROM cohorts WHERE name = 'Patologia: Pentin tapaus' AND deleted_at IS NULL", []);
+        await closeDb(db);
+        expect(cohort.name).toBe(`Patologia: Pentin tapaus (${code})`);
+        expect(JSON.parse(cohort.settings)).toEqual({
+            imported_from: { case_code: exportJob.result.case_code, course_name: 'Patologia: Pentin tapaus' },
+        });
+        expect(named).toHaveLength(1); // only the first import's course carries the bare name
+    });
+
     it('exports a case without a course as before: no course.json', async () => {
         const id = (await (await srcAdmin('/api/cases', { method: 'POST', json: { name: 'Lone case', description: 'd', config: { patient_name: 'P' } } })).json()).id;
         const { job, bytes } = await exportPackage(srcAdmin, id);

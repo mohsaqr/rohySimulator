@@ -564,6 +564,34 @@ describe('case packages: export from one server, import into another', () => {
             await poll(srcAdmin, id);
             expect((await other(`/api/case-packages/jobs/${id}`)).status).toBe(404);
             expect((await other(`/api/case-packages/jobs/${id}/download`)).status).toBe(404);
+            // Nor cancel it, nor see it in a list.
+            const cancel = await other(`/api/case-packages/jobs/${id}/cancel`, { method: 'POST' });
+            expect(cancel.status).toBe(404);
+            expect((await cancel.json()).code).toBe('job_not_found');
+            expect((await (await other('/api/case-packages/jobs')).json()).jobs).toEqual([]);
+        });
+
+        it('lists the admin\'s own jobs and refuses to cancel a finished one, by code; students get neither', async () => {
+            // Regression lock: F05 there was no way to stop an import job, nor to find one again after closing the dialog
+            const started = await srcAdmin(`/api/cases/${caseId}/package`, { method: 'POST' });
+            const { id } = await started.json();
+            const done = await poll(srcAdmin, id);
+            expect(done).toMatchObject({ state: 'done', cancellable: false });
+            expect(done.elapsed_ms).toBeGreaterThanOrEqual(0);
+
+            const listed = await (await srcAdmin('/api/case-packages/jobs?kind=export')).json();
+            expect(listed.jobs.map((job) => job.id)).toContain(id);
+            expect(listed.jobs.every((job) => job.kind === 'export')).toBe(true);
+            expect((await srcAdmin('/api/case-packages/jobs?kind=everything')).status).toBe(400);
+
+            const late = await srcAdmin(`/api/case-packages/jobs/${id}/cancel`, { method: 'POST' });
+            expect(late.status).toBe(409);
+            expect(await late.json()).toMatchObject({ code: 'job_finished' });
+            const missing = await srcAdmin('/api/case-packages/jobs/no-such-job/cancel', { method: 'POST' });
+            expect(missing.status).toBe(404);
+
+            expect((await srcStudent(`/api/case-packages/jobs/${id}/cancel`, { method: 'POST' })).status).toBe(403);
+            expect((await srcStudent('/api/case-packages/jobs')).status).toBe(403);
         });
     });
 });

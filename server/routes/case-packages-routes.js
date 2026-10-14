@@ -25,11 +25,13 @@ import {
     PACKAGE_EXTENSION,
     PackageError,
     appendChunk,
+    cancelJob,
     cancelUpload,
     casePackagesEnabled,
     completeUpload,
     createUpload,
     getJob,
+    listJobs,
     maxPackageBytes,
     startExport,
 } from '../services/casePackage.js';
@@ -49,7 +51,7 @@ function sendError(req, res, err) {
         return res.status(err.status).json({ error: err.message, code: err.code });
     }
     req.log.error('case package request failed', { error: err.message });
-    return res.status(500).json({ error: 'The case package request failed' });
+    return res.status(500).json({ error: 'The case package request failed', code: 'case_package_failed' });
 }
 
 async function requireEnabled(req, res, next) {
@@ -117,10 +119,41 @@ router.post('/cases/:id/package', authenticateToken, requireAdmin, requireEnable
     }
 });
 
+// The caller's own package jobs (running, queued, or finished within the
+// hour), newest first: a dialog closed mid-import finds its job again here.
+router.get('/case-packages/jobs', authenticateToken, requireAdmin, (req, res) => {
+    const kind = req.query.kind ?? null;
+    if (kind !== null && kind !== 'import' && kind !== 'export') {
+        return res.status(400).json({ error: 'kind must be import or export', code: 'invalid_job_kind' });
+    }
+    res.json({ jobs: listJobs({ actor: actorOf(req), kind }) });
+});
+
 router.get('/case-packages/jobs/:id', authenticateToken, requireAdmin, (req, res) => {
     const job = getJob(req.params.id, actorOf(req));
     if (!job) return res.status(404).json({ error: 'No such job', code: 'job_not_found' });
     res.json(job.view);
+});
+
+// Cancel a job. Not behind the on/off switch: a job started before the
+// switch was turned off must still be stoppable. An import cancelled before
+// it saved the case leaves nothing behind; once saved it is refused (409
+// case_package_committed) and the import is kept.
+router.post('/case-packages/jobs/:id/cancel', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const view = await cancelJob({ id: req.params.id, actor: actorOf(req) });
+        auditSuccess(req, {
+            action: 'cancel_case_package_job',
+            resourceType: 'case_package_job',
+            resourceId: view.id,
+            resourceName: view.kind,
+            metadata: { kind: view.kind, state: view.state, phase: view.phase, progress: view.progress },
+        });
+        req.log.info('case package job cancel requested', { jobId: view.id, kind: view.kind, state: view.state, phase: view.phase });
+        res.status(202).json(view);
+    } catch (err) {
+        sendError(req, res, err);
+    }
 });
 
 router.get('/case-packages/jobs/:id/download', authenticateToken, requireAdmin, requireEnabled, async (req, res) => {

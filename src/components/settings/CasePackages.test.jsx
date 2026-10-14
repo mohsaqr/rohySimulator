@@ -6,12 +6,13 @@
 // shows the report the server returned.
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } from 'vitest';
-import { screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 import CasePackageSettings, { CasePackageExportButton, CasePackageImportButton } from './CasePackages.jsx';
 import useCasePackages, { CASE_PACKAGES_CHANGED } from './useCasePackages.js';
+import { formatBytes, formatElapsed } from './casePackageFormat.js';
 
 // One stable toast, so a test can read what the JSON import reported.
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }));
@@ -175,7 +176,7 @@ describe('CasePackageExportButton', () => {
         await waitFor(() => expect(anchorClick).toHaveBeenCalled());
         expect(calls).toEqual(['export']);
         expect(anchorClick.mock.contexts[0].getAttribute('href')).toBe('/api/case-packages/jobs/job-e/download');
-        expect(await screen.findByText(/Package ready \(2 KB\)/)).toBeInTheDocument();
+        expect(await screen.findByText(/Package ready \(2 KiB\)/)).toBeInTheDocument();
         expect(screen.getByText(/Carried: 1 media file and 2 slides/)).toBeInTheDocument();
         expect(screen.getByText(/Course: 6 lessons\./)).toBeInTheDocument();
     });
@@ -190,7 +191,7 @@ describe('CasePackageImportButton', () => {
         fireEvent.change(screen.getByLabelText('Choose a .rohycase file'), { target: { files: [file] } });
 
         expect(await screen.findByText(/Imported as a new case: Chest pain \(EN-0009\)/)).toBeInTheDocument();
-        expect(screen.getByText(/Course “Patologia” created with 6 lessons\. Add its learners in Courses\./)).toBeInTheDocument();
+        expect(screen.getByText('The course “Patologia” has no members yet. Add learners or a join code in Courses.')).toBeInTheDocument();
         expect(calls).toEqual([
             ['create', 10],
             ['chunk', 0, 4, 'application/octet-stream'],
@@ -248,5 +249,166 @@ describe('CasePackageSettings', () => {
         expect(await screen.findByText('packages off')).toBeInTheDocument();
         fireEvent.click(await screen.findByLabelText('Allow case packages'));
         expect(await screen.findByText('packages on')).toBeInTheDocument();
+    });
+});
+
+// FI-0010 journey review (2026-10-14): a 3 GB package's import sat at one
+// phase line for minutes, Cancel could not stop it, and the summary did not
+// say the new case was hidden or the course empty.
+describe('CasePackageImportButton — a long import', () => {
+    const RUNNING = {
+        id: 'job-i', kind: 'import', state: 'running', phase: 'checking', cancellable: true, cancel_requested: false,
+        elapsed_ms: 187000,
+        progress: { done: 12340, total: 71200, bytes_done: 512 * 1024 ** 2, bytes_total: 2.8 * 1024 ** 3 },
+    };
+    const RESULT = {
+        case: { id: 9, case_code: 'FI-0011', name: 'Pentti', is_available: false },
+        course: { id: 4, name: 'Patologia (FI-0011)', source_name: 'Patologia (FI-0010)', lessons: 6, locked: 5, published: 6, members: 0 },
+        imported: { agents: 3, investigations: 0, treatments: 0, uploads: 0, slides: 4, lessons: 6 },
+        media: { uploads_reused: 0, uploads_copied: 0, slides_reused: 4, slides_copied: 0, files_copied: 0, bytes_copied: 0 },
+        warnings: [],
+    };
+    let job;
+    let cancelAnswer;
+    let listed;
+    const posted = [];
+
+    beforeEach(() => {
+        job = { ...RUNNING };
+        cancelAnswer = null;
+        listed = [];
+        posted.length = 0;
+        window.localStorage.removeItem('rohy.casePackages.detachedJobs');
+        server.use(
+            http.get('*/api/case-packages/jobs/job-i', () => HttpResponse.json(job)),
+            http.get('*/api/case-packages/jobs', () => HttpResponse.json({ jobs: listed })),
+            http.post('*/api/case-packages/jobs/job-i/cancel', () => {
+                posted.push('cancel');
+                if (cancelAnswer) return HttpResponse.json(cancelAnswer.body, { status: cancelAnswer.status });
+                job = { ...job, cancel_requested: true };
+                return HttpResponse.json(job, { status: 202 });
+            }),
+            http.put('*/api/cases/9/availability', async ({ request }) => {
+                posted.push(['availability', await request.json()]);
+                return HttpResponse.json({ success: true });
+            }),
+        );
+    });
+
+    async function startImport(props = {}) {
+        renderWithProviders(<CasePackageImportButton onImported={() => {}} {...props} />);
+        fireEvent.click(screen.getByText('Import package'));
+        fireEvent.change(screen.getByLabelText('Choose a .rohycase file'), { target: { files: [new File(['0123456789'], 'case.rohycase')] } });
+    }
+
+    it('shows files, bytes and time within the phase, not only the phase name', async () => {
+        // Regression lock: F04 the job status carried no done/total, so "Checking media against this server…" looked stalled for 10–60 minutes
+        await startImport();
+        expect(await screen.findByText('Checking media against this server…')).toBeInTheDocument();
+        expect(screen.getByText('12,340 / 71,200 files · 512 MiB of 2.8 GiB · 3:07 elapsed')).toBeInTheDocument();
+        expect(screen.getByRole('progressbar', { name: 'Progress' })).toHaveAttribute('max', '71200');
+    });
+
+    it('Cancel import stops the job on the server, and the dialog says nothing was created', async () => {
+        // Regression lock: F05 Cancel after the upload only closed the dialog; the job ran on and could still create the case and course
+        await startImport();
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancel import' }));
+        await waitFor(() => expect(posted).toEqual(['cancel']));
+        expect(await screen.findByText('Cancelling… removing what the import had placed.')).toBeInTheDocument();
+        job = { ...job, state: 'cancelled', cancellable: false, error: { code: 'case_package_cancelled' } };
+        expect(await screen.findByText('Import cancelled. Nothing was created, and the files it had placed were removed.', {}, { timeout: 3000 })).toBeInTheDocument();
+    });
+
+    it('says Close does not stop the import, and offers the running import again once closed', async () => {
+        // Regression lock: F05 a closed dialog left no trace of the running import, so the admin retried and made a duplicate course
+        await startImport();
+        expect(await screen.findByText(/Closing this window does not stop the import/)).toBeInTheDocument();
+        listed = [job];
+        fireEvent.click(screen.getAllByRole('button', { name: 'Close — the import continues' }).at(-1));
+        expect(posted).toEqual([]); // closing is not cancelling
+        expect(await screen.findByRole('button', { name: 'Import running — show' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Import running — show' }));
+        expect(await screen.findByText('12,340 / 71,200 files · 512 MiB of 2.8 GiB · 3:07 elapsed')).toBeInTheDocument();
+    });
+
+    it('finds a running import when the case list is opened again', async () => {
+        listed = [job];
+        renderWithProviders(<CasePackageImportButton onImported={() => {}} />);
+        expect(await screen.findByRole('button', { name: 'Import running — show' })).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Import package'));
+        expect(screen.getByText(/An import you started is still running/)).toBeInTheDocument();
+    });
+
+    it('says when it is too late to cancel, and then shows the finished import', async () => {
+        cancelAnswer = { status: 409, body: { error: 'The case has already been saved', code: 'case_package_committed' } };
+        await startImport();
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancel import' }));
+        expect(await screen.findByText('Too late to cancel: the case has already been saved. The import is finishing.')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Cancel import' })).not.toBeInTheDocument();
+        job = { ...job, state: 'done', cancellable: false, result: RESULT };
+        expect(await screen.findByText(/Imported as a new case: Pentti \(FI-0011\)/, {}, { timeout: 3000 })).toBeInTheDocument();
+    });
+
+    it('ends with what makes the case playable: show it, add course members, the locked lessons', async () => {
+        // Regression lock: F22 the summary did not say the case starts hidden and the course has no members
+        const onOpenCourses = vi.fn();
+        const onImported = vi.fn();
+        job = { ...job, state: 'done', cancellable: false, result: RESULT };
+        await startImport({ onOpenCourses, onOpenLessons: () => {}, onImported });
+        expect(await screen.findByText('Next steps')).toBeInTheDocument();
+        expect(screen.getByText('The case FI-0011 is hidden: learners do not see it yet.')).toBeInTheDocument();
+        expect(screen.getByText('The course “Patologia (FI-0011)” has no members yet. Add learners or a join code in Courses.')).toBeInTheDocument();
+        expect(screen.getByText(/the package called it “Patologia \(FI-0010\)”/)).toBeInTheDocument();
+        expect(screen.getByText('6 lessons; 5 open only after the learner has played the case.')).toBeInTheDocument();
+        expect(screen.getByText('Already on this server: 4 slides, 0 media files. Copied: 0 slides, 0 media files.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Show to learners' }));
+        expect(await screen.findByText('The case FI-0011 is visible to learners.')).toBeInTheDocument();
+        expect(posted).toEqual([['availability', { is_available: true }]]);
+        expect(onImported).toHaveBeenCalledTimes(2); // once on import, once when shown
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open Courses' }));
+        expect(onOpenCourses).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+});
+
+describe('the package dialog and the keyboard', () => {
+    it('takes focus, keeps Tab inside, closes on Escape and gives focus back', async () => {
+        // Regression lock: F17 the dialog had aria-modal but no initial focus, focus trap, Escape or focus restore
+        renderWithProviders(<><button type="button">Behind</button><CasePackageImportButton onImported={() => {}} /></>);
+        const opener = screen.getByText('Import package').closest('button');
+        opener.focus();
+        fireEvent.click(opener);
+        const dialog = screen.getByRole('dialog');
+        const input = screen.getByLabelText('Choose a .rohycase file');
+        expect(input).toHaveFocus();
+
+        // Tab past the last control wraps to the first; Shift+Tab before the first wraps to the last.
+        const buttons = within(dialog).getAllByRole('button');
+        const [first, last] = [buttons[0], buttons[buttons.length - 1]];
+        last.focus();
+        fireEvent.keyDown(last, { key: 'Tab' });
+        expect(first).toHaveFocus();
+        fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+        expect(last).toHaveFocus();
+
+        fireEvent.keyDown(document.activeElement, { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(opener).toHaveFocus();
+    });
+});
+
+describe('sizes in the UI language', () => {
+    it('formats bytes with the language\'s decimal mark and binary units', () => {
+        // Regression lock: F16 "2.8 GB" was hard-coded English: decimal point and a GB that was really GiB
+        expect(formatBytes(2.8 * 1024 ** 3, 'fi')).toBe('2,8 GiB');
+        expect(formatBytes(2.8 * 1024 ** 3, 'en')).toBe('2.8 GiB');
+        expect(formatBytes(4 * 1024 ** 3, 'de')).toBe('4 GiB');
+        expect(formatBytes(1536 * 1024, 'sv')).toBe('1,5 MiB');
+        expect(formatBytes(10, 'en')).toBe('1 KiB');
+        expect(formatBytes(Number.NaN, 'en')).toBe('');
+        expect(formatElapsed(187000)).toBe('3:07');
+        expect(formatElapsed(3 * 3600 * 1000 + 5000)).toBe('3:00:05');
     });
 });
