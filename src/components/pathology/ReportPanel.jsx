@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    ChevronLeft, FileText, Lightbulb, ListPlus, Lock, Plus, Save, Send,
+    ChevronLeft, FileText, Lightbulb, ListPlus, Lock, Plus, RotateCw, Save, Send,
 } from 'lucide-react';
 import { plural } from './i18n.js';
 import { MISS_REASON_KEYS } from './readAssessment.js';
@@ -42,6 +42,9 @@ export function ReportPanel({
     task,
     logger,
     readResult,
+    readState = null,
+    onRetryFeedback,
+    slides = [],
     examMode = false,
     t = (key, fallback) => fallback ?? key,
 }) {
@@ -67,6 +70,9 @@ export function ReportPanel({
             onSubmit={onSubmit}
             findings={findings}
             readResult={readResult}
+            readState={readState?.reportId === active.id ? readState : null}
+            onRetryFeedback={onRetryFeedback}
+            slides={slides}
         />
     );
 }
@@ -129,7 +135,9 @@ function ReportList({ reports, activeId, onSelect, onAdd, t }) {
     );
 }
 
-function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit, findings, readResult, t }) {
+function ReportEditor({
+    report, reportCount, onBack, onChange, onSave, onSubmit, findings, readResult, readState, onRetryFeedback, slides, t,
+}) {
     const [error, setError] = useState(null);
     const locked = isLocked(report);
     const blockedCode = submitBlockedCode(report);
@@ -233,8 +241,15 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
 
                 {/* The read assessment: how the slide was examined, which is
                     independent of anything written above. Shown only after
-                    submission, so it cannot be used to fish for the answer. */}
-                {locked && readResult && <ReadFeedback result={readResult} t={t} />}
+                    submission, so it cannot be used to fish for the answer.
+                    The report carries its own copy (so it survives a reload);
+                    the room's latest result covers a report scored this visit. */}
+                {locked && (report.readFeedback ?? readResult) && (
+                    <ReadFeedback result={report.readFeedback ?? readResult} slides={slides} t={t} />
+                )}
+                {locked && !(report.readFeedback ?? readResult) && readState && (
+                    <ReadFeedbackStatus state={readState} onRetry={onRetryFeedback} t={t} />
+                )}
             </div>
 
             {!locked && (
@@ -289,15 +304,25 @@ function ReportEditor({ report, reportCount, onBack, onChange, onSave, onSubmit,
  * Every number here comes from the viewport track: which key regions were
  * resolved, at what power, and how much of the tissue was actually screened.
  * It is the one thing an answer-only assessment cannot see.
+ *
+ * `result` is readFeedbackSummary() output (readFeedback.js) — the same shape
+ * whether the read was scored in this browser or by a host that holds the
+ * rubric. Absent figures render as a dash, never as a fabricated 0%.
  */
-function ReadFeedback({ result, t }) {
+const percent = (value) => (typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value * 100)}%` : '—');
+const power = (value) => (typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(1)}x` : '—');
+const seconds = (ms) => `${Math.round((ms ?? 0) / 1000)}s`;
+
+function ReadFeedback({ result, slides = [], t }) {
+    const labelOf = (slideId) => slides.find((s) => s.id === slideId)?.label ?? slideId ?? '';
     const rows = [
         ['read_key_findings', t('read_key_findings', 'Key findings reached'), `${result.roiReached}/${result.roiTotal}`],
         ['read_critical_findings', t('read_critical_findings', 'Critical findings'), `${result.criticalReached}/${result.criticalTotal}`],
-        ['read_slide_screened', t('read_slide_screened', 'Slide screened'), `${Math.round(result.slideCoverage * 100)}%`],
-        ['read_highest_power', t('read_highest_power', 'Highest power used'), `${result.maxObjective.toFixed(1)}x`],
-        ['read_time_on_slide', t('read_time_on_slide', 'Time on the slide'), `${(result.totalTimeMs / 1000).toFixed(0)}s`],
+        ['read_slide_screened', t('read_slide_screened', 'Slide screened'), percent(result.slideCoverage)],
+        ['read_highest_power', t('read_highest_power', 'Highest power used'), power(result.maxObjective)],
+        ['read_time_on_slide', t('read_time_on_slide', 'Time on the slide'), seconds(result.totalTimeMs)],
     ];
+    const perSlide = (result.perSlide ?? []).filter((entry) => entry.slideId);
     return (
         <div className="rounded-lg bg-slate-950/50 p-2 ring-1 ring-slate-800">
             <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -311,11 +336,77 @@ function ReadFeedback({ result, t }) {
                     </div>
                 ))}
             </dl>
-            {result.perRoi?.filter((r) => !r.reached).map((r) => (
-                <p key={r.id} className="mt-1 text-[10px] leading-snug text-amber-300">
-                    {r.critical ? t('missed_key', 'Missed (key)') : t('missed', 'Missed')}: {r.label} — {t(MISS_REASON_KEYS[r.missReason] ?? r.missReason, r.missReason.replace(/_/g, ' '))}
+            {/* One line per slide once there is more than one: a case read is
+                several reads, and an average hides the slide never opened. */}
+            {perSlide.length > 1 && (
+                <ul className="mt-2 space-y-0.5 border-t border-slate-800 pt-1.5" aria-label={t('read_per_slide', 'Per slide')}>
+                    {perSlide.map((entry) => (
+                        <li key={entry.slideId} className="flex gap-2 text-[10px] text-slate-400">
+                            <span className="min-w-0 truncate">{labelOf(entry.slideId)}</span>
+                            <span className="ml-auto shrink-0 tabular-nums">
+                                {plural(
+                                    t,
+                                    'read_slide_line',
+                                    `{reached}/{total} · {covered} · {power} · {time}`,
+                                    {
+                                        reached: entry.roiReached,
+                                        total: entry.roiTotal,
+                                        covered: percent(entry.slideCoverage),
+                                        power: power(entry.maxObjective),
+                                        time: seconds(entry.totalTimeMs),
+                                    },
+                                )}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {(result.missed ?? result.perRoi?.filter((r) => !r.reached) ?? []).map((r) => (
+                <p key={`${r.slideId ?? ''}:${r.id}`} className="mt-1 text-[10px] leading-snug text-amber-300">
+                    {r.critical ? t('missed_key', 'Missed (key)') : t('missed', 'Missed')}: {r.label}
+                    {perSlide.length > 1 && r.slideId ? ` (${labelOf(r.slideId)})` : ''}
+                    {' — '}{t(MISS_REASON_KEYS[r.missReason] ?? r.missReason, String(r.missReason ?? '').replace(/_/g, ' '))}
                 </p>
             ))}
+        </div>
+    );
+}
+
+/**
+ * Feedback the HOST is scoring: waiting, failed (with a bounded retry), or
+ * not available for this case. Said plainly, so an absent panel is never
+ * mistaken for "there is no feedback for this read".
+ */
+function ReadFeedbackStatus({ state, onRetry, t }) {
+    if (state.status === 'pending') {
+        return (
+            <p role="status" className="rounded-lg bg-slate-950/50 p-2 text-[11px] text-slate-400 ring-1 ring-slate-800">
+                {t('read_feedback_pending', 'Working out how this slide was read…')}
+            </p>
+        );
+    }
+    if (state.status === 'unavailable') {
+        return (
+            <p role="status" className="rounded-lg bg-slate-950/50 p-2 text-[11px] text-slate-400 ring-1 ring-slate-800">
+                {t('read_feedback_unavailable', 'No reading feedback is available for this case.')}
+            </p>
+        );
+    }
+    return (
+        <div role="alert" className="space-y-1.5 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-200 ring-1 ring-amber-500/30">
+            <p>{t('read_feedback_failed', 'Your report was submitted, but the feedback on how you read the slides could not be loaded.')}</p>
+            {onRetry ? (
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    className="flex items-center gap-1 rounded-md px-1.5 py-1 font-semibold ring-1 ring-amber-500/40 hover:bg-amber-500/15"
+                >
+                    <RotateCw className="h-3 w-3" aria-hidden="true" />
+                    {t('retry', 'Try again')}
+                </button>
+            ) : (
+                <p className="text-amber-200/80">{t('read_feedback_gave_up', 'It still could not be loaded. Your submitted report is not affected.')}</p>
+            )}
         </div>
     );
 }

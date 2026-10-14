@@ -563,7 +563,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1066",
+        "x-rohy-source": "server/routes/users-routes.js:1068",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -608,7 +608,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1082",
+        "x-rohy-source": "server/routes/users-routes.js:1084",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -643,7 +643,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1040",
+        "x-rohy-source": "server/routes/users-routes.js:1042",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -678,7 +678,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1045",
+        "x-rohy-source": "server/routes/users-routes.js:1047",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1323,7 +1323,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2812",
+        "x-rohy-source": "server/routes/analytics-routes.js:2828",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1355,7 +1355,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2853",
+        "x-rohy-source": "server/routes/analytics-routes.js:2869",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1400,7 +1400,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2828",
+        "x-rohy-source": "server/routes/analytics-routes.js:2844",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1434,7 +1434,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2743",
+        "x-rohy-source": "server/routes/analytics-routes.js:2759",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1478,7 +1478,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2767",
+        "x-rohy-source": "server/routes/analytics-routes.js:2783",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1512,7 +1512,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1424",
+        "x-rohy-source": "server/routes/analytics-routes.js:1440",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1546,7 +1546,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3029",
+        "x-rohy-source": "server/routes/analytics-routes.js:3045",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1581,7 +1581,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2937",
+        "x-rohy-source": "server/routes/analytics-routes.js:2953",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1615,7 +1615,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3088",
+        "x-rohy-source": "server/routes/analytics-routes.js:3104",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1650,7 +1650,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3039",
+        "x-rohy-source": "server/routes/analytics-routes.js:3055",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1685,7 +1685,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:376",
+        "x-rohy-source": "server/routes/analytics-routes.js:377",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1720,7 +1720,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:921",
+        "x-rohy-source": "server/routes/analytics-routes.js:937",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1755,7 +1755,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:209",
+        "x-rohy-source": "server/routes/analytics-routes.js:210",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1799,7 +1799,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:256",
+        "x-rohy-source": "server/routes/analytics-routes.js:257",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -1843,7 +1843,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:965",
+        "x-rohy-source": "server/routes/analytics-routes.js:981",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -1878,7 +1878,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:395",
+        "x-rohy-source": "server/routes/analytics-routes.js:396",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1913,7 +1913,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3068",
+        "x-rohy-source": "server/routes/analytics-routes.js:3084",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1948,7 +1948,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3059",
+        "x-rohy-source": "server/routes/analytics-routes.js:3075",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -1983,7 +1983,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3050",
+        "x-rohy-source": "server/routes/analytics-routes.js:3066",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -2018,7 +2018,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2998",
+        "x-rohy-source": "server/routes/analytics-routes.js:3014",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -2053,7 +2053,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3079",
+        "x-rohy-source": "server/routes/analytics-routes.js:3095",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -2098,7 +2098,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:291",
+        "x-rohy-source": "server/routes/analytics-routes.js:292",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -4780,7 +4780,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1871",
+        "x-rohy-source": "server/routes/analytics-routes.js:1887",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -4815,7 +4815,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1338",
+        "x-rohy-source": "server/routes/analytics-routes.js:1354",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -4849,7 +4849,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:737",
+        "x-rohy-source": "server/routes/analytics-routes.js:753",
         "x-rohy-auth": [
           "authenticateToken",
           "requireEducator"
@@ -4884,7 +4884,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:691",
+        "x-rohy-source": "server/routes/analytics-routes.js:707",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7083,7 +7083,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3161",
+        "x-rohy-source": "server/routes/analytics-routes.js:3177",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7116,7 +7116,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3142",
+        "x-rohy-source": "server/routes/analytics-routes.js:3158",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7160,7 +7160,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:428",
+        "x-rohy-source": "server/routes/analytics-routes.js:429",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7194,7 +7194,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1740",
+        "x-rohy-source": "server/routes/analytics-routes.js:1756",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7228,7 +7228,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3189",
+        "x-rohy-source": "server/routes/analytics-routes.js:3205",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7273,7 +7273,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2228",
+        "x-rohy-source": "server/routes/analytics-routes.js:2244",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -7432,7 +7432,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:163",
+        "x-rohy-source": "server/routes/analytics-routes.js:164",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7476,7 +7476,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:185",
+        "x-rohy-source": "server/routes/analytics-routes.js:186",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7931,7 +7931,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:562",
+        "x-rohy-source": "server/routes/analytics-routes.js:578",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7965,7 +7965,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1016",
+        "x-rohy-source": "server/routes/analytics-routes.js:1032",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -7999,7 +7999,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:853",
+        "x-rohy-source": "server/routes/analytics-routes.js:869",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8033,7 +8033,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:622",
+        "x-rohy-source": "server/routes/analytics-routes.js:638",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8077,7 +8077,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1624",
+        "x-rohy-source": "server/routes/analytics-routes.js:1640",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8111,7 +8111,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:1315",
+        "x-rohy-source": "server/routes/analytics-routes.js:1331",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8145,7 +8145,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:988",
+        "x-rohy-source": "server/routes/analytics-routes.js:1004",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8189,7 +8189,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:773",
+        "x-rohy-source": "server/routes/analytics-routes.js:789",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8233,7 +8233,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:801",
+        "x-rohy-source": "server/routes/analytics-routes.js:817",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -8267,7 +8267,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:915",
+        "x-rohy-source": "server/routes/analytics-routes.js:931",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10901,7 +10901,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3275",
+        "x-rohy-source": "server/routes/analytics-routes.js:3291",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -10933,7 +10933,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:3256",
+        "x-rohy-source": "server/routes/analytics-routes.js:3272",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -11830,7 +11830,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:527",
+        "x-rohy-source": "server/routes/analytics-routes.js:543",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -13234,6 +13234,256 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/pathology-reads": {
+      "get": {
+        "summary": "Get /sessions/:sessionId/pathology-reads",
+        "tags": [
+          "pathology-read"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/pathology-read-routes.js:186",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create /sessions/:sessionId/pathology-reads",
+        "tags": [
+          "pathology-read"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/pathology-read-routes.js:82",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/plugin-state": {
+      "get": {
+        "summary": "Get /sessions/:sessionId/plugin-state",
+        "tags": [
+          "plugin-session-state"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugin-session-state-routes.js:198",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireEducator"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/plugin-state/{pluginId}/{name}": {
+      "get": {
+        "summary": "Get /sessions/:sessionId/plugin-state/:pluginId/:name",
+        "tags": [
+          "plugin-session-state"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugin-session-state-routes.js:87",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Replace /sessions/:sessionId/plugin-state/:pluginId/:name",
+        "tags": [
+          "plugin-session-state"
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pluginId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/plugin-session-state-routes.js:100",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/radiology-orders": {
       "get": {
         "summary": "Get /sessions/:sessionId/radiology-orders",
@@ -13472,7 +13722,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:334",
+        "x-rohy-source": "server/routes/analytics-routes.js:335",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -14348,7 +14598,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1060",
+        "x-rohy-source": "server/routes/users-routes.js:1062",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -14383,7 +14633,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2317",
+        "x-rohy-source": "server/routes/analytics-routes.js:2333",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -14428,7 +14678,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2696",
+        "x-rohy-source": "server/routes/analytics-routes.js:2712",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -14463,7 +14713,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/analytics-routes.js:2670",
+        "x-rohy-source": "server/routes/analytics-routes.js:2686",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -15174,7 +15424,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1172",
+        "x-rohy-source": "server/routes/users-routes.js:1174",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -15208,7 +15458,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1114",
+        "x-rohy-source": "server/routes/users-routes.js:1116",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -15240,7 +15490,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/users-routes.js:1129",
+        "x-rohy-source": "server/routes/users-routes.js:1131",
         "x-rohy-auth": [
           "authenticateToken"
         ],

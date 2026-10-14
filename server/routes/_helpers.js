@@ -390,6 +390,11 @@ export const HARD_DELETE_ON_PURGE_TABLES = [
     // Which slides the user's browser loaded (0068): a trace of one person's
     // activity, with nothing in it worth keeping anonymised.
     'plugin_content_reads',
+    // A learner's work in a plugin room (0069): their own report prose and
+    // annotations — deleted with them, like questionnaire answers.
+    'plugin_session_documents',
+    // How the user read the pathology slides (0070): their scored read.
+    'pathology_read_assessments',
     'export_records',
     'llm_usage',
     'tts_usage'

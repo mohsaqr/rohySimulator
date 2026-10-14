@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createCaseReadRecorder, createReadRecorder } from './readRecorder.js';
+import { createCaseReadRecorder, createReadRecorder, createSampleRecorder } from './readRecorder.js';
 
 /**
  * React binding for createReadRecorder.
@@ -8,19 +8,26 @@ import { createCaseReadRecorder, createReadRecorder } from './readRecorder.js';
  * re-render, or a 60 fps pan would re-render 60 times a second. Only
  * deliberate acts (an ROI reached, the read finishing) surface to the caller.
  *
+ * With no answer key and `opts.recordWithoutRubric`, the read is RECORDED but
+ * not scored (createSampleRecorder): the host scores it wherever the rubric
+ * lives, and `samples()` is what it sends. `finish()` then returns null.
+ *
  * @param {object} answerKey
  * @param {object} logger      a createPathologyLogger() instance
- * @param {object} [opts]      {enabled, sampleIntervalMs}
+ * @param {object} [opts]      {enabled, sampleIntervalMs, recordWithoutRubric}
  */
 export function useReadRecorder(answerKey, logger, opts = {}) {
     const enabled = opts.enabled ?? true;
+    const recordOnly = !answerKey && opts.recordWithoutRubric === true;
     const caseRubric = answerKey && Array.isArray(answerKey.activities) && typeof answerKey.caseId === 'string';
     const recorder = useMemo(
-        () => (answerKey
-            ? (caseRubric ? createCaseReadRecorder(answerKey, opts) : createReadRecorder(answerKey, opts))
-            : null),
+        () => {
+            if (recordOnly) return createSampleRecorder(opts);
+            if (!answerKey) return null;
+            return caseRubric ? createCaseReadRecorder(answerKey, opts) : createReadRecorder(answerKey, opts);
+        },
         // A new answer key is a new read; anything else must not reset it.
-        [answerKey, caseRubric], // eslint-disable-line react-hooks/exhaustive-deps
+        [answerKey, caseRubric, recordOnly], // eslint-disable-line react-hooks/exhaustive-deps
     );
     // The read clock, held as STATE rather than as a ref — and that is a
     // correctness fix, not a style preference.
@@ -76,11 +83,15 @@ export function useReadRecorder(answerKey, logger, opts = {}) {
     const finish = useCallback(() => {
         if (!recorder) return null;
         const done = recorder.finish();
+        // A recording-only read has no score here: the host scores it.
+        if (!done) return null;
         // MISSED_ROI is emitted once per unreached ROI at close, carrying the
         // reason — that is the row a teacher's dashboard is actually built on.
         done.missed.forEach((roi) => logger.roiMissed(roi, roi.missReason));
         return done;
     }, [recorder, logger]);
 
-    return { accept, finish, startedAt, samples: () => recorder?.samples() ?? [] };
+    const samples = useCallback(() => recorder?.samples() ?? [], [recorder]);
+
+    return { accept, finish, startedAt, samples };
 }

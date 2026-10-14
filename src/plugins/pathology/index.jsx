@@ -12,6 +12,7 @@ import {
 } from '../../components/pathology/hostDocument.js';
 import { hasOpticalProfile } from '../../components/pathology/slideGeometry.js';
 import { eventLoggerFor } from '../eventLoggerFor.js';
+import { apiPost } from '../../services/apiClient.js';
 
 /**
  * Host-side tightening of the package's servability gate.
@@ -35,6 +36,30 @@ function hasRenderableMaterial(stored) {
     const photograph = (viewer.specimens ?? []).some((specimen) => (specimen?.images ?? [])
         .some((image) => typeof image?.src === 'string' && image.src !== ''));
     return renderableSlide || photograph;
+}
+
+/**
+ * The host half of "How this slide was read" (FI-0010 F03).
+ *
+ * The room scores a read against the rubric, and the learner's projection has
+ * no rubric — it is the answer key. So the room records the read rubric-free
+ * and, when a report is submitted, hands the packed read to this function,
+ * which posts it to the server (server/routes/pathology-read-routes.js). The
+ * server scores it against the session's case snapshot and returns only the
+ * learner-safe summary, which the room shows. Resolves null when the case has
+ * nothing to score against; rejects (ApiError) so the room can offer a retry.
+ *
+ * No session, no assessment: a preview with no session has nowhere to keep
+ * the result, and the room then simply records nothing.
+ *
+ * @param {string|number|null} sessionId
+ * @returns {Function|undefined}
+ */
+export function hostReadAssessor(sessionId) {
+    if (sessionId === null || sessionId === undefined || sessionId === '') return undefined;
+    const path = `/sessions/${encodeURIComponent(sessionId)}/pathology-reads`;
+    return ({ reportId, activityId, read }) => apiPost(path, { reportId, activityId: activityId ?? null, read })
+        .then((body) => body?.feedback ?? null);
 }
 
 /**
@@ -131,6 +156,11 @@ export default {
         }),
         initialReports: persist.state.reports ?? undefined,
         onReportsChange: (reports) => persist.save({ reports }),
+
+        // Reading feedback, scored on the server where the rubric lives —
+        // see hostReadAssessor above. The room records without a rubric only
+        // because this is supplied.
+        assessRead: hostReadAssessor(ctx.session.id),
     }),
 
     // --- authoring ---------------------------------------------------------

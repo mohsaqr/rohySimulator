@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registry } from './registry.js';
 import { createPluginContext, readOrders } from './context.js';
 import ErrorBoundary from '../components/common/ErrorBoundary.jsx';
+import { NotificationContextObject } from '../notifications/NotificationContextObject.js';
+import { SOURCES, SEVERITY } from '../notifications/types.js';
 
 /**
  * RPS-1 — the generic host mount point.
@@ -71,6 +73,72 @@ export function PluginRoom({
     // eager reset inside the effect, which is the setState-in-effect pattern
     // the lint rule (and RoomNavigator's own comment) discourages.
     const [state, setState] = useState(null);
+    // Bumped when the store hands back a different document than the one the
+    // plugin was seeded with (another tab or device saved first). A plugin
+    // seeds from `persist.state` ONCE, so the only way to show it the server's
+    // copy is to remount it — the `key` below.
+    const [generation, setGeneration] = useState(0);
+    // The document the store itself just handed us (load, conflict reload).
+    // Writing it straight back would be an echo: a PUT on every room open,
+    // and a second revision for nothing after every conflict.
+    const echoRef = useRef(null);
+
+    // Through the context object rather than useNotifications(): the hook
+    // throws outside a provider, and a plugin room must still render (and keep
+    // saving) in a host or test that mounted none.
+    const notifications = useContext(NotificationContextObject);
+    const notifyRef = useRef(null);
+    const tRef = useRef(t);
+    useEffect(() => {
+        notifyRef.current = notifications?.notify ?? null;
+        tRef.current = t;
+    }, [notifications, t]);
+
+    // The store's events: a conflict (another tab or device saved since this
+    // one loaded — the server copy wins and the room reloads from it) and a
+    // failed save (offline: kept on this device and retried; refused: kept on
+    // this device, and the learner must know it is not on the server).
+    useEffect(() => {
+        const store = base?.store;
+        if (!store?.subscribe) return undefined;
+        const unsubscribe = store.subscribe((event) => {
+            // The translator current when the event ARRIVES (tRef), not the
+            // one from when the room opened.
+            const t = tRef.current;
+            if (event.type === 'conflict' && event.name === 'state') {
+                const next = event.value ?? {};
+                echoRef.current = next;
+                setState(next);
+                setGeneration((g) => g + 1);
+                notifyRef.current?.({
+                    source: SOURCES.SYSTEM,
+                    severity: SEVERITY.WARNING,
+                    key: `plugin-state-conflict:${base.pluginId}`,
+                    message: t('plugin_state_conflict', 'This room was saved from another tab or device. It now shows the latest saved version.'),
+                });
+            } else if (event.type === 'save_failed') {
+                base.log('RAISED_ERROR', 'plugin_state', {
+                    objectId: base.pluginId,
+                    result: event.offline ? 'persist_offline' : `persist_refused:${event.code ?? event.status}`,
+                    severity: 'IMPORTANT',
+                    category: 'ERROR',
+                });
+                notifyRef.current?.({
+                    source: SOURCES.SYSTEM,
+                    severity: event.offline ? SEVERITY.WARNING : SEVERITY.ERROR,
+                    key: `plugin-state-save:${base.pluginId}`,
+                    message: event.offline
+                        ? t('plugin_state_offline', 'Your work in this room is saved on this device only. It will be saved to the server when the connection returns.')
+                        : t('plugin_state_save_failed', 'Your work in this room could not be saved to the server. It is kept on this device; keep this tab open and try again.'),
+                });
+            }
+        });
+        return () => {
+            unsubscribe();
+            // Leaving the room (or this session): send anything still queued.
+            store.dispose?.();
+        };
+    }, [base]);
 
     // Keyed on `base`, never on `ctx`: `base` is the mount's IDENTITY (this
     // plugin, this session, this case) and `ctx` additionally carries orders
@@ -80,7 +148,12 @@ export function PluginRoom({
         let cancelled = false;
         if (!base) return undefined;
         const load = base.store ? base.store.get('state', {}) : Promise.resolve({});
-        load.then((loaded) => { if (!cancelled) setState(loaded ?? {}); });
+        load.then((loaded) => {
+            if (cancelled) return;
+            const seeded = loaded ?? {};
+            echoRef.current = seeded;
+            setState(seeded);
+        });
         // Drop the previous plugin/session's state on the way out. Without
         // this, a context change leaves the OLD state renderable while the new
         // load is in flight, and the write-behind effect below flushes that
@@ -95,6 +168,8 @@ export function PluginRoom({
     // normal case when a plugin emits one change per annotation edit.
     useEffect(() => {
         if (state === null || !base?.store) return;
+        // What the store just handed us is already saved — see echoRef.
+        if (state === echoRef.current) return;
         // Surface a failed write. store.set() turns quota/private-mode errors
         // into `false`; ignoring that made persistence failure invisible until
         // the learner reloaded and found their work gone.
@@ -134,7 +209,7 @@ export function PluginRoom({
                 });
             }}
         >
-            <Component {...chrome} {...plugin.props(ctx, persist)} />
+            <Component key={generation} {...chrome} {...plugin.props(ctx, persist)} />
         </ErrorBoundary>
     );
 }

@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**100 tables.**
+**102 tables.**
 
 ## `active_sessions`
 
@@ -1426,6 +1426,29 @@ Stores panel tests records.
 | `custom_value` | REAL | — | — |
 | `display_order` | INTEGER | DEFAULT 0 | — |
 
+## `pathology_read_assessments`
+
+Stores pathology read assessments records.
+
+**Introduced by:** migration `0070_pathology_read_assessments.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (created_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `session_id` | INTEGER | NOT NULL REFERENCES sessions(id) | — |
+| `user_id` | INTEGER | REFERENCES users(id) | — |
+| `case_id` | INTEGER | — | — |
+| `activity_id` | TEXT | NOT NULL | — |
+| `report_id` | TEXT | NOT NULL | — |
+| `sample_count` | INTEGER | NOT NULL | — |
+| `read_score` | REAL | — | — |
+| `result` | TEXT | NOT NULL | — |
+| `feedback` | TEXT | NOT NULL | — |
+| `created_at` | TEXT | NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) | — |
+
 ## `patient_information`
 
 Stores patient information records.
@@ -1617,6 +1640,27 @@ Stores plugin jobs records.
 | `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
 | `started_at` | DATETIME | — | — |
 | `finished_at` | DATETIME | — | — |
+
+## `plugin_session_documents`
+
+Stores plugin session documents records.
+
+**Introduced by:** migration `0069_plugin_session_documents.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (created_at, updated_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `session_id` | INTEGER | NOT NULL REFERENCES sessions(id) | — |
+| `user_id` | INTEGER | REFERENCES users(id) | — |
+| `plugin_id` | TEXT | NOT NULL | — |
+| `name` | TEXT | NOT NULL | — |
+| `document` | TEXT | NOT NULL | — |
+| `revision` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `created_at` | TEXT | NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) | — |
+| `updated_at` | TEXT | NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) | — |
 
 ## `plugin_settings`
 
