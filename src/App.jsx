@@ -682,7 +682,11 @@ function MainApp() {
             const r = await apiFetch(`/courses/for-case/${activeCase.id}`);
             course = { cohortId: r?.data?.cohortId ?? null, cohortName: r?.data?.cohortName ?? null };
          }
-      } catch { /* show the empty state */ }
+      } catch (err) {
+         // Not "no course": the room repeats this lookup itself and shows a
+         // retry if it fails there too (FI-0010 F18).
+         console.error('[App] case → course lookup failed', err);
+      }
       setCourseCohortId(course);
       setShowLessonsRoom(true);
       // Stamp telemetry + gaze windows with the lessons surface, mirroring

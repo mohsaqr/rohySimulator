@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, ChevronDown } from 'lucide-react';
 
 export const SearchableSelect = ({ label, value, onChange, options, className }) => {
+  const { t } = useTranslation(['common']);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef(null);
@@ -40,7 +42,7 @@ export const SearchableSelect = ({ label, value, onChange, options, className })
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="Search..."
+                  placeholder={t('select_search_placeholder', { defaultValue: 'Search…' })}
                   autoFocus
                   className="w-full pl-7 pr-2 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
@@ -62,7 +64,7 @@ export const SearchableSelect = ({ label, value, onChange, options, className })
                 </button>
               ))}
               {filtered.length === 0 && (
-                <p className="px-3 py-2 text-xs text-slate-400">No results</p>
+                <p className="px-3 py-2 text-xs text-slate-400">{t('select_no_results', { defaultValue: 'No results' })}</p>
               )}
             </div>
           </div>

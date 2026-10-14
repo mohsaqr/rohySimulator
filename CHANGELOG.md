@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.62] — 2026-10-14
+
+From the FI-0010 course review (Codex, 2026-10-14):
+
+- **A copied lesson keeps its case lock.** Duplicating a lesson locked behind a case dropped the lock, so once
+  the copy was published a learner who had never started the case could read it — diagnosis title and sections
+  included. The copy now carries `unlock_case_id` like the availability window.
+- **Course surveys accept only the answers they offer.** A single choice must be one of the options, a multiple
+  choice distinct options, free text at most 4000 characters; anything else is refused with a code
+  (`survey_answer_not_an_option`, …) instead of being stored and counted as an extra option in the results.
+- **The course pages speak the interface language.** The lessons module (ported from LAILA) looked up its own
+  namespaces that rohy never shipped, so every language fell back to English ("Course", "6 lessons",
+  "Mark complete", the survey editor and results). It now has catalogues for all eight interface languages, ICU
+  plurals instead of hand-built English ones, and the remaining hardcoded English is translated.
+- **A failed load is not an empty course.** The course room tells loading, failed and empty apart, offers Try
+  again, keeps what it had when a refresh fails, and finds the case's course itself if the first lookup failed.
+- **No dead links in survey results.** The breadcrumbs pointed at `/classes…` routes rohy does not have; they
+  now go back within the course view. Results dates and percentages follow the interface language.
+- **Course surveys and case questionnaires are told apart.** The tab is "Course surveys", with a note that the
+  case's pre-test, post-test and reflection live in the case editor's Course step, and (for admins) a button to
+  open them.
+
 ## [3.0.0-rc.61] — 2026-10-14
 
 - **A tab left open when the browser signs in as someone else stops, and says so.** A browser keeps one

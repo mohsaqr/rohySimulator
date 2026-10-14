@@ -3,7 +3,7 @@
 // lessons reach the vendored lessons room.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 
 const getLectures = vi.fn();
 const getLectureById = vi.fn();
@@ -71,5 +71,64 @@ describe('LessonsRoomContainer for a case with no course for the viewer', () => 
         await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/courses/for-case/18'));
         expect(screen.getByText('This case is not linked to a course yet.')).toBeTruthy();
         expect(screen.queryByText("You are not enrolled in this case's course")).toBeNull();
+    });
+});
+
+describe('LessonsRoomContainer when a request fails', () => {
+    // Regression lock: every load caught to [] (and the case → course lookup to null), so a failed request looked like an empty course or "not linked to a course" (FI-0010 F18)
+    it('says the course could not be loaded, with Retry, instead of showing an empty course', async () => {
+        getLectures.mockRejectedValueOnce(Object.assign(new Error('boom'), { status: 500 }));
+        render(<LessonsRoomContainer cohortId={3} cohortName="Patologia" caseId={null} />);
+        const alert = await screen.findByTestId('course-load-error');
+        expect(alert).toHaveTextContent('The course could not be loaded. Try again.');
+        expect(screen.queryByTestId('lessons-room')).toBeNull();
+        expect(screen.queryByText(/No course content/)).toBeNull();
+
+        getLectures.mockResolvedValueOnce([{ id: 1, title: 'Back again', sections: [] }]);
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        await waitFor(() => expect(screen.getByTestId('lessons-room')).toHaveTextContent('Back again'));
+        expect(screen.queryByTestId('course-load-error')).toBeNull();
+    });
+
+    it('tells an offline failure apart from a refusal', async () => {
+        getLectures.mockRejectedValueOnce(Object.assign(new Error('Network error'), { status: 0, code: 'NETWORK' }));
+        render(<LessonsRoomContainer cohortId={3} cohortName="Patologia" />);
+        expect(await screen.findByTestId('course-load-error')).toHaveTextContent(/server could not be reached/);
+        cleanup();
+        getLectures.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
+        render(<LessonsRoomContainer cohortId={3} cohortName="Patologia" />);
+        expect(await screen.findByTestId('course-load-error')).toHaveTextContent(/not available to you/);
+    });
+
+    it('fails the whole load when the progress request fails, rather than showing nothing completed', async () => {
+        getLectures.mockResolvedValue([{ id: 1, title: 'Open', sections: [] }]);
+        apiFetch.mockImplementation(async (path) => {
+            if (String(path).endsWith('/progress')) throw Object.assign(new Error('x'), { status: 502 });
+            return { data: [] };
+        });
+        render(<LessonsRoomContainer cohortId={3} cohortName="Patologia" />);
+        expect(await screen.findByTestId('course-load-error')).toBeInTheDocument();
+        expect(screen.queryByTestId('lessons-room')).toBeNull();
+    });
+
+    it('does not call a failed case → course lookup "not linked"; it retries and finds the course', async () => {
+        let lookups = 0;
+        apiFetch.mockImplementation(async (path) => {
+            if (String(path).startsWith('/courses/for-case/')) {
+                lookups += 1;
+                if (lookups === 1) throw Object.assign(new Error('Network error'), { status: 0 });
+                return { data: { cohortId: 3, cohortName: 'Patologia' } };
+            }
+            return { data: [] };
+        });
+        getLectures.mockResolvedValue([{ id: 1, title: 'Found it', sections: [] }]);
+        render(<LessonsRoomContainer cohortId={null} cohortName={null} caseId={21} />);
+        expect(await screen.findByTestId('course-load-error')).toBeInTheDocument();
+        expect(screen.queryByText('This case is not linked to a course yet.')).toBeNull();
+        expect(screen.queryByText('No course content here')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        await waitFor(() => expect(screen.getByTestId('lessons-room')).toHaveTextContent('Found it'));
+        expect(getLectures).toHaveBeenCalledWith(3, { includeSections: true });
     });
 });

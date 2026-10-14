@@ -2,7 +2,8 @@
 // A page is the app-shell seam, so ONLY the routing glue is adapted:
 //   • react-router useParams/useNavigate → props + next/navigation router
 //     (classroomId = LAILA's course id, per the module→classroom collapse).
-//   • the course-title breadcrumb query reads chatoyon's classroom detail.
+//   • breadcrumbs go back through the injected onBack (rohy has no URL routes;
+//     the old course-title query called a /classrooms route that never existed).
 //   • navigation targets: LAILA's /courses/:id → /classes.
 // Everything else (state, mutations, header strip, create mode, markup,
 // classNames) is LAILA's, verbatim.
@@ -12,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import { Clock, MoreHorizontal, Trash2, Save } from 'lucide-react';
 import { toast } from '../../toastShim';
 import { coursesApi } from '../../api/courses';
-import apiClient from '../../api/client';
 import { Loading } from '../../components/common/Loading';
 import { Breadcrumb } from '../../components/common/Breadcrumb';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
@@ -33,7 +33,7 @@ import activityLogger from '../../services/activityLogger';
  */
 // TODO(mount): onDone (was router.push after save/create/delete) and onBack
 // are injected by the mounting layer to perform real navigation.
-export const LectureEditor = ({ classroomId, lectureId, onDone = () => {} }) => {
+export const LectureEditor = ({ classroomId, lectureId, onDone = () => {}, onBack = () => {} }) => {
   const { t } = useTranslation(['teaching', 'common', 'navigation', 'courses']);
   const courseId = classroomId;
   const isNew = !lectureId;
@@ -76,14 +76,7 @@ export const LectureEditor = ({ classroomId, lectureId, onDone = () => {} }) => 
     enabled: !isNew && !!lecId,
   });
 
-  const { data: course } = useQuery({
-    queryKey: ['classroom', courseId],
-    queryFn: async () => {
-      const res = await apiClient.get(`/classrooms/${courseId}`);
-      return { title: res.data.classroom.name };
-    },
-    enabled: !!courseId,
-  });
+
 
   useEffect(() => {
     if (lecId && courseId) {
@@ -170,9 +163,9 @@ export const LectureEditor = ({ classroomId, lectureId, onDone = () => {} }) => 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         <div className="mb-4">
           <Breadcrumb
+            showHome={false}
             items={[
-              { label: t('navigation:courses', { defaultValue: 'Classes' }), href: '/classes' },
-              { label: course?.title ?? '…', href: `/classes` },
+              { label: t('teaching:lessons_heading', { defaultValue: 'Lessons' }), onClick: () => onBack() },
               { label: t('new_lesson', { defaultValue: 'New lesson' }) },
             ]}
           />
@@ -251,9 +244,9 @@ export const LectureEditor = ({ classroomId, lectureId, onDone = () => {} }) => 
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <div className="mb-4">
         <Breadcrumb
+          showHome={false}
           items={[
-            { label: t('navigation:courses', { defaultValue: 'Classes' }), href: '/classes' },
-            { label: course?.title ?? '…', href: `/classes` },
+            { label: t('teaching:lessons_heading', { defaultValue: 'Lessons' }), onClick: () => onBack() },
             { label: lecture.title ?? t('teaching:lesson', { defaultValue: 'Lesson' }) },
           ]}
         />

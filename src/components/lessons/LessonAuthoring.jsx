@@ -5,7 +5,7 @@
 // island the vendored editors need.
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, ClipboardList, Plus, ChevronLeft, Pencil } from 'lucide-react';
+import { BookOpen, ClipboardList, Plus, ChevronLeft, Pencil, Info } from 'lucide-react';
 import { LessonsQueryProvider } from './LessonsQueryProvider';
 import { LectureEditor } from './pages/teach/LectureEditor';
 import { SurveyManager } from './pages/teach/SurveyManager';
@@ -18,7 +18,42 @@ import { listCohorts, listCaseAssignments, assignCaseCourse } from '../../servic
 // Parse the lesson id out to keep editing, else drop back to the list.
 const LESSON_ID_RE = /\/lessons\/(\d+)\/edit/;
 
-function AuthoringInner() {
+// Course surveys (this module: surveys attached to a course, answered in the
+// course room) and case questionnaires (cases.config.questionnaires: the
+// pre/post-test and reflection, answered in the case's course panel, edited
+// and read in the case editor's Course step) look alike but are different
+// systems with different storage. Say so where an educator looks for them, and
+// link to the case's questionnaires when the host can open the case editor.
+function SurveyKindsNote({ assignedCase, onOpenCaseQuestionnaires }) {
+  const { t } = useTranslation('authoring_lessons');
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600" data-testid="survey-kinds-note">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" aria-hidden="true" />
+      <div className="flex flex-col gap-1">
+        <p className="font-medium text-neutral-800">
+          {t('survey_kinds_title', { defaultValue: 'Course surveys and case questionnaires are separate' })}
+        </p>
+        <p>
+          {t('survey_kinds_course_surveys', { defaultValue: 'Course surveys are listed here. They belong to this course, and learners answer them in the course room. Their answers are under Responses.' })}
+        </p>
+        <p>
+          {t('survey_kinds_case_questionnaires', { defaultValue: 'A case’s own questionnaires (pre-test, post-test, reflection) are part of the case. Edit them, and read their answers, in the case editor’s Course step.' })}
+        </p>
+        {assignedCase && onOpenCaseQuestionnaires && (
+          <button
+            type="button"
+            onClick={() => onOpenCaseQuestionnaires(assignedCase.caseId)}
+            className="self-start text-sm font-medium text-[var(--rohy-accent,#0f766e)] underline-offset-2 hover:underline"
+          >
+            {t('survey_kinds_open_case', { defaultValue: 'Open the questionnaires of “{caseName}”', caseName: assignedCase.caseName })}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuthoringInner({ onOpenCaseQuestionnaires }) {
   const { t } = useTranslation('authoring_lessons');
   const [cohorts, setCohorts] = useState([]);
   const [cohortId, setCohortId] = useState(null);
@@ -56,7 +91,8 @@ function AuthoringInner() {
       }
       if (newCaseId != null) await assignCaseCourse(newCaseId, cohortId);
     } catch (e) {
-      setError(e.message || 'Failed to assign case');
+      console.error('[LessonAuthoring] assign case failed', e);
+      setError(t('assign_case_failed', { defaultValue: 'The case could not be assigned to this course. Try again.' }));
     } finally {
       setAssignBusy(false);
       loadAssignments();
@@ -72,7 +108,10 @@ function AuthoringInner() {
         setCohorts(list);
         if (list.length && cohortId == null) setCohortId(list[0].id);
       })
-      .catch((e) => alive && setError(e.message || 'Failed to load courses'));
+      .catch((e) => {
+        console.error('[LessonAuthoring] load courses failed', e);
+        if (alive) setError(t('load_courses_failed', { defaultValue: 'The courses could not be loaded. Try again.' }));
+      });
     return () => { alive = false; };
   }, [cohortId]);
 
@@ -133,7 +172,7 @@ function AuthoringInner() {
         </label>
         <div className="inline-flex rounded-xl bg-neutral-100 p-0.5">
           {[['lessons', BookOpen, t('tab_lessons', { defaultValue: 'Lessons' })],
-            ['surveys', ClipboardList, t('tab_surveys', { defaultValue: 'Surveys' })]].map(([key, Icon, label]) => (
+            ['surveys', ClipboardList, t('tab_surveys', { defaultValue: 'Course surveys' })]].map(([key, Icon, label]) => (
             <button
               key={key}
               type="button"
@@ -203,17 +242,26 @@ function AuthoringInner() {
         responsesFor ? (
           <SurveyResponses surveyId={responsesFor} classroomId={cohortId} onBack={() => setResponsesFor(null)} />
         ) : (
-          <SurveyManager classroomId={cohortId} onViewResponses={setResponsesFor} />
+          <div className="flex flex-col gap-3">
+            <SurveyKindsNote assignedCase={assignedCase} onOpenCaseQuestionnaires={onOpenCaseQuestionnaires} />
+            <SurveyManager classroomId={cohortId} onViewResponses={setResponsesFor} />
+          </div>
         )
       )}
     </div>
   );
 }
 
-export default function LessonAuthoring() {
+/**
+ * @param {object} props
+ * @param {(caseId: number) => void} [props.onOpenCaseQuestionnaires]  Opens the
+ *   case editor on that case's Course step. Omitted when the viewer cannot
+ *   edit cases; the surveys tab then only explains where the questionnaires are.
+ */
+export default function LessonAuthoring({ onOpenCaseQuestionnaires } = {}) {
   return (
     <LessonsQueryProvider>
-      <AuthoringInner />
+      <AuthoringInner onOpenCaseQuestionnaires={onOpenCaseQuestionnaires} />
     </LessonsQueryProvider>
   );
 }

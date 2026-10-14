@@ -1538,7 +1538,21 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
 
                     {activeTab === 'lessons' && canManageCohorts && (
                         <Suspense fallback={<div className="p-6 text-sm text-neutral-500">Loading…</div>}>
-                            <LessonAuthoring />
+                            <LessonAuthoring
+                                onOpenCaseQuestionnaires={isAdmin() ? (caseId) => {
+                                    // Course surveys and case questionnaires are separate
+                                    // systems (FI-0010 F21): from the course surveys, open
+                                    // the course's case on the wizard step that holds its
+                                    // questionnaires and their answers — the same path as
+                                    // the case list's Edit button.
+                                    const target = cases.find((c) => c.id === caseId);
+                                    if (!target) return;
+                                    localStorage.removeItem('rohy_editing_case');
+                                    setEditingCase(target);
+                                    setWizardInitialStep(wizardStepNumber('course'));
+                                    setActiveTab('cases');
+                                } : undefined}
+                            />
                         </Suspense>
                     )}
 

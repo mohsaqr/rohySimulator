@@ -15,6 +15,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { extractLessonsMessages, LESSONS_LOCALES_DIR } from './i18n/lessons-catalogue.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EN_DIR = join(ROOT, 'src', 'locales', 'en');
@@ -62,3 +63,10 @@ for (const file of files) {
     writeFileSync(join(XA_DIR, file), JSON.stringify(walk(en), null, 2) + '\n');
 }
 console.log(`Generated ${files.length} en-XA namespace(s) in src/locales/en-XA/`);
+
+// The vendored lessons module keeps its English inline (defaultValue) and its
+// translations beside it (src/components/lessons/locales/<lang>.json), so its
+// pseudo-locale is built from the extracted English, not from src/locales/en.
+const { messages } = extractLessonsMessages();
+writeFileSync(join(LESSONS_LOCALES_DIR, 'en-XA.json'), JSON.stringify(walk(messages), null, 2) + '\n');
+console.log('Generated the lessons module en-XA catalogue in src/components/lessons/locales/');

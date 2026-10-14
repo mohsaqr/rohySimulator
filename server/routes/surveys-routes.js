@@ -13,12 +13,17 @@ import { tenantId, auditSuccess } from './_helpers.js';
 import { logger } from '../logger.js';
 import { isAdminReq, resolveManageableCohort, isLiveCohortMember } from '../lib/cohortAccess.js';
 import { stripHtmlToText } from '../lib/lessonSanitize.js';
+import { validateSurveyAnswers } from '../lib/surveyAnswers.js';
 
 const router = express.Router();
 const log = logger('routes-surveys');
 
 const ok = (res, data, status = 200) => res.status(status).json({ success: true, data });
-const fail = (res, status, error) => res.status(status).json({ success: false, error });
+// `code` is the machine-readable reason (apiClient's ApiError.code), given
+// where a client can act on it.
+const fail = (res, status, error, code) => res.status(status).json(
+    code ? { success: false, error, code } : { success: false, error }
+);
 
 const QUESTION_TYPES = new Set(['single_choice', 'multiple_choice', 'free_text']);
 
@@ -496,17 +501,13 @@ router.post('/surveys/:id/submit', authenticateToken, async (req, res) => {
             if (dup) return fail(res, 409, 'You have already responded');
         }
 
+        // Every answer must be one the author offered (single choice: one of
+        // the options; multiple choice: distinct options; text: bounded), and
+        // every required question answered. HTML is stripped inside, so the
+        // stored value is the text the results view renders.
         const questions = await questionsFor(surveyId);
-        const qById = new Map(questions.map((q) => [q.id, q]));
-        const answers = Array.isArray(b.answers) ? b.answers : [];
-        // Required-question enforcement.
-        for (const q of questions) {
-            if (!q.is_required) continue;
-            const a = answers.find((x) => Number(x.questionId) === q.id);
-            const empty = !a || a.answerValue == null ||
-                (Array.isArray(a.answerValue) ? a.answerValue.length === 0 : String(a.answerValue).trim() === '');
-            if (empty) return fail(res, 400, 'Please answer all required questions');
-        }
+        const { answers, problem } = validateSurveyAnswers(questions, b.answers);
+        if (problem) return fail(res, 400, problem.error, problem.code);
 
         const responseId = await dbAdapter.transaction(async () => {
             const { lastID } = await dbAdapter.run(
@@ -517,16 +518,9 @@ router.post('/surveys/:id/submit', authenticateToken, async (req, res) => {
                  Number.isInteger(b.contextId) ? b.contextId : null]
             );
             for (const a of answers) {
-                const q = qById.get(Number(a.questionId));
-                if (!q) continue; // ignore foreign questions
-                // Strip HTML server-side — free-text answers are rendered in
-                // the analytics view; option values gain nothing from markup.
-                const value = Array.isArray(a.answerValue)
-                    ? JSON.stringify(a.answerValue.map((v) => stripHtmlToText(String(v))))
-                    : stripHtmlToText(String(a.answerValue ?? ''));
                 await dbAdapter.run(
                     `INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES (?,?,?)`,
-                    [lastID, q.id, value]
+                    [lastID, a.questionId, a.value]
                 );
             }
             return lastID;

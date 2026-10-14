@@ -1,9 +1,34 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { surveysApi } from '../../api/surveys';
 import { SurveyQuestion } from './SurveyQuestion';
 import { Button } from '../common/Button';
 import { useTheme } from '../../hooks/useTheme';
 import { activityLogger } from '../../services/activityLogger';
+
+// The learner-facing reason a submission was refused, from the server's
+// machine-readable `code` / HTTP status — never the raw server text, which is
+// English and written for the log.
+export function submitErrorMessage(t, error) {
+  const status = error?.status;
+  const code = error?.code ?? error?.body?.code ?? error?.response?.data?.code;
+  if (status === 409) {
+    return t('survey_error_already_answered', { defaultValue: 'You have already answered this survey.' });
+  }
+  if (code === 'survey_answer_required') {
+    return t('survey_error_required', { defaultValue: 'Answer every required question.' });
+  }
+  if (code === 'survey_answer_too_long') {
+    return t('survey_error_too_long', { defaultValue: 'One of your answers is too long. Shorten it and try again.' });
+  }
+  if (typeof code === 'string' && code.startsWith('survey_answer')) {
+    return t('survey_error_invalid_answer', { defaultValue: 'One of your answers is not an option in this survey. Reload the page and try again.' });
+  }
+  if (status === 403) {
+    return t('survey_error_not_enrolled', { defaultValue: 'You are not enrolled in this course.' });
+  }
+  return t('survey_error_submit_failed', { defaultValue: 'The survey could not be sent. Try again.' });
+}
 
 export const SurveyRenderer = ({
   survey,
@@ -14,6 +39,7 @@ export const SurveyRenderer = ({
   onComplete,
   compact = false,
 }) => {
+  const { t } = useTranslation(['teaching', 'common']);
   const { isDark } = useTheme();
   const [answers, setAnswers] = useState({});
   const [errors, setErrors] = useState({});
@@ -39,7 +65,7 @@ export const SurveyRenderer = ({
       if (question.isRequired) {
         const answer = answers[question.id];
         if (!answer || (Array.isArray(answer) && answer.length === 0)) {
-          newErrors[question.id] = 'This question is required';
+          newErrors[question.id] = t('survey_question_required', { defaultValue: 'Answer this question.' });
         }
       }
     });
@@ -73,7 +99,7 @@ export const SurveyRenderer = ({
       activityLogger.logSurveySubmitted(survey.id, survey.title, courseId, { context, contextId, questionCount: survey.questions?.length });
       onComplete?.();
     } catch (error) {
-      setSubmitError(error.response?.data?.message || 'Failed to submit survey');
+      setSubmitError(submitErrorMessage(t, error));
     } finally {
       setSubmitting(false);
     }
@@ -118,7 +144,7 @@ export const SurveyRenderer = ({
           disabled={submitting}
           className={compact ? 'w-full' : ''}
         >
-          Submit Survey
+          {t('survey_submit', { defaultValue: 'Submit survey' })}
         </Button>
       </div>
     </div>

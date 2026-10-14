@@ -84,7 +84,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       const data = await surveysApi.getSurveys(courseId);
       setSurveys(data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load surveys');
+      console.error('[SurveyManager] survey_error_list_failed', err);
+      setError(t('survey_error_list_failed', { defaultValue: 'The surveys could not be loaded. Try again.' }));
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       setSurveyForm({ title: '', description: '', isAnonymous: false });
       setExpandedSurveyId(newSurvey.id);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create survey');
+      console.error('[SurveyManager] survey_error_create_failed', err);
+      setError(t('survey_error_create_failed', { defaultValue: 'The survey could not be created. Try again.' }));
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +131,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       setShowEditModal(false);
       setSelectedSurvey(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update survey');
+      console.error('[SurveyManager] survey_error_update_failed', err);
+      setError(t('survey_error_update_failed', { defaultValue: 'The survey could not be saved. Try again.' }));
     } finally {
       setSubmitting(false);
     }
@@ -144,7 +147,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
       setShowDeleteModal(false);
       setSelectedSurvey(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete survey');
+      console.error('[SurveyManager] survey_error_delete_failed', err);
+      setError(t('survey_error_delete_failed', { defaultValue: 'The survey could not be deleted. Try again.' }));
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +161,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         prev.map(s => (s.id === survey.id ? { ...s, isPublished: true } : s))
       );
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to publish survey');
+      console.error('[SurveyManager] survey_error_publish_failed', err);
+      setError(t('survey_error_publish_failed', { defaultValue: 'The survey could not be published. Try again.' }));
     }
   };
 
@@ -171,7 +176,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         prev.map(s => (s.id === survey.id ? { ...s, ...updated } : s))
       );
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to unpublish survey');
+      console.error('[SurveyManager] survey_error_unpublish_failed', err);
+      setError(t('survey_error_unpublish_failed', { defaultValue: 'The survey could not be unpublished. Try again.' }));
     }
   };
 
@@ -211,7 +217,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         isRequired: true,
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add question');
+      console.error('[SurveyManager] survey_error_add_question_failed', err);
+      setError(t('survey_error_add_question_failed', { defaultValue: 'The question could not be added. Try again.' }));
     } finally {
       setSubmitting(false);
     }
@@ -258,7 +265,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         isRequired: true,
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update question');
+      console.error('[SurveyManager] survey_error_update_question_failed', err);
+      setError(t('survey_error_update_question_failed', { defaultValue: 'The question could not be saved. Try again.' }));
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +288,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         })
       );
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete question');
+      console.error('[SurveyManager] survey_error_delete_question_failed', err);
+      setError(t('survey_error_delete_question_failed', { defaultValue: 'The question could not be deleted. Try again.' }));
     }
   };
 
@@ -299,7 +308,8 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
         )
       );
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to duplicate question');
+      console.error('[SurveyManager] survey_error_duplicate_question_failed', err);
+      setError(t('survey_error_duplicate_question_failed', { defaultValue: 'The question could not be duplicated. Try again.' }));
     } finally {
       setDuplicatingId(null);
     }
@@ -396,17 +406,11 @@ export const SurveyManager = ({ classroomId, onViewResponses } = {}) => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <div className="mb-6">
+        {/* No links: rohy has no /classes routes, and the course is picked in
+            the surface around this manager (LessonAuthoring). */}
         <Breadcrumb
-          homeHref="/"
-          items={[
-            ...(courseId
-              ? [
-                  { label: t('navigation:courses', { defaultValue: 'Classes' }), href: '/classes' },
-                  { label: 'Class', href: `/classes/${courseId}` },
-                ]
-              : []),
-            { label: t('surveys', { defaultValue: 'Surveys' }) },
-          ]}
+          showHome={false}
+          items={[{ label: t('course_surveys_heading', { defaultValue: 'Course surveys' }) }]}
         />
       </div>
 
