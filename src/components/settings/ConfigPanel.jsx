@@ -999,6 +999,8 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                                                                 const data = await apiFetch('/cases');
                                                                 setCases(data.cases || []);
                                                             }}
+                                                            onOpenCourses={canManageCohorts ? () => setActiveTab('cohorts') : undefined}
+                                                            onOpenLessons={canManageCohorts ? () => setActiveTab('lessons') : undefined}
                                                         />
                                                     )}
                                                 </>

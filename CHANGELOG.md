@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.66] — 2026-10-14
+
+Case package import (the 3 GB FI-0010 package sat at "Checking media…" for up to an hour with no sign of life):
+
+- **Progress you can read.** Each phase reports files and bytes done of the total and the elapsed time
+  ("12 340 / 71 200 files · 512 MiB of 2,8 GiB · 3:07").
+- **Faster.** One read per file, bounded parallel hashing and copying, folders created once, a staged file moved
+  instead of copied. On a synthetic 20 000-tile slide: import 35 s → 4 s, export 181 s → 11 s.
+- **Cancel cancels.** "Cancel import" stops the job and rolls back everything it placed; once the import has
+  committed, cancel is refused and the dialog says it finished. "Close" now says the import continues, and a
+  running or finished import can be found again from the case list, so nobody retries blindly into a duplicate
+  course. New routes `GET /case-packages/jobs` and `POST /case-packages/jobs/:id/cancel`.
+- **Housekeeping files no longer defeat slide reuse.** `.DS_Store`, `Thumbs.db`, `._*`, `__MACOSX` and the like
+  are ignored everywhere, so re-importing the same package reuses its slides instead of copying them again.
+- **What to do next.** The result lists the case's visibility (with "Show to learners"), the course's members and
+  its lessons/locks, with links. A re-import's course is named after its new case code, not the old one's.
+- The import dialog keeps keyboard focus inside it, closes with Escape and returns focus; sizes use the interface
+  language's decimal mark (KiB/MiB/GiB).
+
 ## [3.0.0-rc.65] — 2026-10-14
 
 Pathology room (pathoyon 0.3.0 @ 88c4d47, re-vendored) and the host around it:

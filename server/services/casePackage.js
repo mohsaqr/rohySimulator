@@ -114,6 +114,140 @@ export class PackageError extends Error {
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
+// How many files are read, hashed or copied at once. A deep-zoom slide is
+// tens of thousands of small tiles; one at a time, each open/read/close pays
+// the disk's full latency (FI-0010: 71,200 files, minutes per phase).
+const IO_CONCURRENCY = 8;
+// A carried file up to this size is held in memory while it is checked and
+// written in one call; larger ones stream. At IO_CONCURRENCY pending writes
+// that is at most 32 MB in flight.
+const SMALL_FILE_BYTES = 4 * MIB;
+// How often a job's progress is published. Progress is counted per file;
+// publishing every one would be 71,200 updates for one slide library.
+const PROGRESS_INTERVAL_MS = 500;
+
+// What an operating system leaves in a folder it has shown — never part of
+// a slide. Finder writes .DS_Store (and ._* AppleDouble files on foreign
+// disks), Windows Thumbs.db / desktop.ini. A slide's identity is its layout
+// files, so these are skipped wherever a library folder is listed — export
+// and the "is this slide already here?" comparison (FI-0010 F12: a .DS_Store
+// made every re-import copy 3 GB again). An import never places one: only
+// names matching LIBRARY_FILE_RE / UPLOAD_NAME_RE are placed.
+const HOUSEKEEPING_NAMES = new Set([
+    '.ds_store', 'thumbs.db', 'ehthumbs.db', 'desktop.ini',
+    '.spotlight-v100', '.trashes', '.fseventsd', '.temporaryitems', '__macosx',
+]);
+/** Is `name` (one path segment) a file or folder an operating system left behind? */
+export const isHousekeeping = (name) => name.startsWith('._') || HOUSEKEEPING_NAMES.has(name.toLowerCase());
+
+/**
+ * Run `work` over `items`, at most `limit` at a time. Stops taking new items
+ * at the first failure, waits for the ones already running — so a caller's
+ * cleanup never races a write still in flight — then throws that failure.
+ */
+async function eachLimit(items, limit, work) {
+    let next = 0;
+    let failure = null;
+    const worker = async () => {
+        while (failure === null && next < items.length) {
+            const index = next;
+            next += 1;
+            try {
+                await work(items[index], index);
+            } catch (err) {
+                failure ??= err;
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    if (failure !== null) throw failure;
+}
+
+/**
+ * Writes started without waiting for them, at most `limit` at a time. `add`
+ * waits only for a free slot; `settle` waits for every write and then throws
+ * the first failure, if any.
+ */
+function writePool(limit) {
+    const pending = new Set();
+    let failure = null;
+    return {
+        async add(task) {
+            while (pending.size >= limit) await Promise.race(pending);
+            if (failure !== null) throw failure;
+            const running = task()
+                .catch((err) => { failure ??= err; })
+                .finally(() => pending.delete(running));
+            pending.add(running);
+        },
+        async settle() {
+            await Promise.all(pending);
+            if (failure !== null) throw failure;
+        },
+    };
+}
+
+/**
+ * Within-phase progress: files and bytes done of a total, published at most
+ * every PROGRESS_INTERVAL_MS (and always at a phase's start, its first file
+ * and its end).
+ * `onProgress` receives `{phase, done, total, bytes_done, bytes_total}`;
+ * totals are null while unknown.
+ */
+function progressReporter(onProgress) {
+    let current = { phase: null, done: 0, total: null, bytes_done: 0, bytes_total: null };
+    let lastPublished = 0;
+    const publish = (force) => {
+        const now = Date.now();
+        if (!force && now - lastPublished < PROGRESS_INTERVAL_MS) return;
+        lastPublished = now;
+        onProgress({ ...current });
+    };
+    return {
+        phase(phase, { files = null, bytes = null } = {}) {
+            current = { phase, done: 0, total: files, bytes_done: 0, bytes_total: bytes };
+            publish(true);
+        },
+        totals({ files = current.total, bytes = current.bytes_total }) {
+            current.total = files;
+            current.bytes_total = bytes;
+            publish(true);
+        },
+        advance(files, bytes = 0) {
+            const first = current.done === 0;
+            current.done += files;
+            current.bytes_done += bytes;
+            // The first file is always published — the count visibly starts —
+            // and so is the last.
+            publish(first || (current.total !== null && current.done >= current.total));
+        },
+    };
+}
+
+/**
+ * Advance `progress` by at most `files`/`bytes` in total, however often
+ * `tick` is called — a slide compared against two candidates on disk still
+ * counts once. `finish` makes up the rest.
+ */
+function boundedTicker(progress, files, bytes) {
+    let filesLeft = files;
+    let bytesLeft = bytes;
+    const tick = (f, b) => {
+        const df = Math.min(f, filesLeft);
+        const db = Math.min(b, bytesLeft);
+        filesLeft -= df;
+        bytesLeft -= db;
+        if (df > 0 || db > 0) progress.advance(df, db);
+    };
+    return { tick, finish: () => tick(filesLeft, bytesLeft) };
+}
+
+/** A cancellation that never fires: what a caller without a job gets. */
+const NOT_CANCELLABLE = Object.freeze({ check() {}, commit() {} });
+
+/** The import or export was cancelled before anything was kept. */
+const cancelledError = () => new PackageError('Cancelled; nothing was created', 'case_package_cancelled', 409);
+
 // ---- Settings and places -----------------------------------------------------
 
 /** Where packages are staged: beside the database, on persistent disk — not /tmp, which may be RAM. */
@@ -256,12 +390,16 @@ async function hashFile(file) {
     return { sha256: hash.digest('hex'), bytes };
 }
 
-/** Regular files under `root`, as POSIX relative paths, skipping `source/` (scanner originals). */
+/**
+ * Regular files under `root`, as POSIX relative paths, skipping `source/`
+ * (scanner originals) and anything an operating system left behind.
+ */
 async function listAssetFiles(root) {
     const out = [];
     async function walk(relative) {
         const entries = await fsp.readdir(path.join(root, relative), { withFileTypes: true });
         for (const entry of entries) {
+            if (isHousekeeping(entry.name)) continue;
             const rel = relative ? `${relative}/${entry.name}` : entry.name;
             if (entry.isDirectory()) {
                 if (rel !== 'source') await walk(rel);
@@ -274,16 +412,54 @@ async function listAssetFiles(root) {
     return out.sort();
 }
 
+/**
+ * The files that ARE the slide: the library layout (LIBRARY_FILE_RE). What
+ * export carries and what a re-import compares — the same set on both sides,
+ * so scanner metadata (vips-properties.xml) and housekeeping never decide
+ * whether two slides are the same.
+ */
+async function layoutFiles(root) {
+    return (await listAssetFiles(root)).filter((rel) => LIBRARY_FILE_RE.test(rel));
+}
+
 function digestOf(files) {
     return sha256(files.map((f) => `${f.path}\u0000${f.sha256}\n`).sort().join(''));
 }
 
-async function hashAssetDir(root) {
-    const files = [];
-    for (const rel of await listAssetFiles(root)) {
-        files.push({ path: rel, ...await hashFile(path.join(root, rel)) });
-    }
+/** Hash `rels` under `root`, IO_CONCURRENCY at a time, in `rels` order. */
+async function hashFiles(root, rels) {
+    const files = new Array(rels.length);
+    await eachLimit(rels, IO_CONCURRENCY, async (rel, index) => {
+        files[index] = { path: rel, ...await hashFile(path.join(root, rel)) };
+    });
     return files;
+}
+
+/**
+ * Does the library folder `root` hold exactly `files` (path + sha256)?
+ * Paths and sizes are compared first — free next to hashing tens of
+ * thousands of tiles — and hashing stops at the first difference.
+ * `tick(files, bytes)` is called for every file hashed.
+ */
+async function sameAssetFiles(root, files, tick = () => {}) {
+    const onDisk = await layoutFiles(root);
+    if (onDisk.length !== files.length) return false;
+    const wanted = new Map(files.map((f) => [f.path, f]));
+    if (onDisk.some((rel) => !wanted.has(rel))) return false;
+    let same = true;
+    await eachLimit(onDisk, IO_CONCURRENCY, async (rel) => {
+        if (!same) return;
+        const { size } = await fsp.stat(path.join(root, rel));
+        if (size !== wanted.get(rel).bytes) same = false;
+    });
+    if (!same) return false;
+    await eachLimit(onDisk, IO_CONCURRENCY, async (rel) => {
+        if (!same) return;
+        const hashed = await hashFile(path.join(root, rel));
+        tick(1, hashed.bytes);
+        if (hashed.sha256 !== wanted.get(rel).sha256) same = false;
+    });
+    return same;
 }
 
 /** Plugins whose remote content includes a managed library. */
@@ -446,7 +622,7 @@ async function collectMedia({ doc, course, tenant, scratch }) {
                 notes.push({ field: `config.${pluginId}`, received: `remote:library/${assetId}/`, hint: 'This slide is not in this server\'s library; not carried.' });
                 continue;
             }
-            const files = (await hashAssetDir(root)).filter((f) => LIBRARY_FILE_RE.test(f.path));
+            const files = await hashFiles(root, await layoutFiles(root));
             files.forEach((f) => sources.set(f.sha256, { file: path.join(root, f.path) }));
             library.push({ plugin: pluginId, asset_id: assetId, row, files, digest: digestOf(files) });
         }
@@ -513,15 +689,17 @@ async function collectMedia({ doc, course, tenant, scratch }) {
  * @returns {Promise<{name: string, caseCode: string|null, bytes: number, notes: object[], counts: object}>}
  * @throws {PackageError} 404 when the case is not this tenant's; 507 when the disk is short
  */
-export async function buildCasePackage({ caseId, tenant, outFile, onProgress = () => {} }) {
+export async function buildCasePackage({ caseId, tenant, outFile, onProgress = () => {}, cancellation = NOT_CANCELLABLE }) {
     const doc = await buildCaseDocument({ caseId, tenant });
     if (!doc) throw new PackageError('Case not found', 'case_not_found', 404);
     const scratch = `${outFile}.scratch`;
     await fsp.mkdir(scratch, { recursive: true });
+    const progress = progressReporter(onProgress);
     try {
-        onProgress({ phase: 'collecting' });
+        progress.phase('collecting');
         const { course, notes: courseNotes } = await buildCourseDocument({ caseId, tenant });
         const { manifest, sources, notes: mediaNotes } = await collectMedia({ doc, course, tenant, scratch });
+        cancellation.check();
         const notes = [...courseNotes, ...mediaNotes];
         const unique = [...sources.entries()];
         // Each file's size is taken ONCE and written into its header; a file
@@ -545,11 +723,12 @@ export async function buildCasePackage({ caseId, tenant, outFile, onProgress = (
             await writer.addBuffer('case.json', caseJson);
             await writer.addBuffer('manifest.json', manifestJson);
             if (courseJson) await writer.addBuffer('course.json', courseJson);
-            let done = 0;
+            progress.phase('writing', { files: unique.length, bytes: sizes.reduce((sum, size) => sum + size, 0) });
+            // Sequential by nature: one archive, written in order.
             for (const [index, [sha, source]] of unique.entries()) {
+                cancellation.check();
                 await writer.addStream(`media/${sha}`, sizes[index], fs.createReadStream(source.file));
-                done += 1;
-                onProgress({ phase: 'writing', done, total: unique.length });
+                progress.advance(1, sizes[index]);
             }
             await writer.finish();
         } catch (err) {
@@ -676,24 +855,63 @@ function jsonSink(name, onDone) {
     };
 }
 
-function fileSink(dest, expectedSha, expectedBytes) {
+const HEAD_BYTES = 32;
+const checksumError = () => new PackageError('A media file does not match its checksum', 'case_package_checksum');
+
+/**
+ * A carried file's sink: hashes as it goes, keeps the first HEAD_BYTES (the
+ * type checks read them later without reopening the file), and calls
+ * `onDone(head)` once the bytes are verified.
+ *
+ * A small file is held in memory and handed to `pool` as one write, so the
+ * archive keeps reading while up to IO_CONCURRENCY files are written; a
+ * large one streams to disk. Either way the file exists, verified, once
+ * `pool.settle()` has resolved.
+ */
+function fileSink({ dest, expectedSha, expectedBytes, pool, cancellation, onDone }) {
     const hash = createHash('sha256');
-    const out = fs.createWriteStream(dest, { flags: 'wx' });
     let bytes = 0;
+    let head = Buffer.alloc(0);
+    const take = (chunk) => {
+        bytes += chunk.length;
+        if (bytes > expectedBytes) throw new PackageError('A media file is longer than the manifest says', 'invalid_case_package');
+        hash.update(chunk);
+        if (head.length < HEAD_BYTES) head = Buffer.concat([head, chunk.subarray(0, HEAD_BYTES - head.length)]);
+    };
+    const verify = () => {
+        if (bytes !== expectedBytes || hash.digest('hex') !== expectedSha) throw checksumError();
+    };
+
+    if (expectedBytes <= SMALL_FILE_BYTES) {
+        const chunks = [];
+        return {
+            write(chunk) {
+                take(chunk);
+                chunks.push(Buffer.from(chunk));
+            },
+            async end() {
+                verify();
+                const data = Buffer.concat(chunks);
+                await pool.add(() => fsp.writeFile(dest, data, { flag: 'wx' }));
+                onDone(head);
+            },
+            abort() {},
+        };
+    }
+
+    const out = fs.createWriteStream(dest, { flags: 'wx' });
     const failed = new Promise((_, reject) => out.once('error', reject));
     failed.catch(() => {});
     return {
         async write(chunk) {
-            bytes += chunk.length;
-            if (bytes > expectedBytes) throw new PackageError('A media file is longer than the manifest says', 'invalid_case_package');
-            hash.update(chunk);
+            cancellation.check();
+            take(chunk);
             if (!out.write(chunk)) await Promise.race([new Promise((r) => out.once('drain', r)), failed]);
         },
         async end() {
             await Promise.race([new Promise((r) => out.end(r)), failed]);
-            if (bytes !== expectedBytes || hash.digest('hex') !== expectedSha) {
-                throw new PackageError('A media file does not match its checksum', 'case_package_checksum');
-            }
+            verify();
+            onDone(head);
         },
         /** The read failed mid-file: release the descriptor now, not at GC. */
         abort() {
@@ -706,16 +924,20 @@ function fileSink(dest, expectedSha, expectedBytes) {
  * Read a package into `staging`, checking everything. Nothing outside
  * `staging` is touched.
  *
- * @returns {Promise<{doc: object, manifest: object}>}
+ * @returns {Promise<{doc: object, manifest: object, course: object|null, heads: Map<string, Buffer>}>}
+ *   `heads` holds each carried file's first bytes, by SHA-256.
  */
-async function readPackage(packageFile, staging) {
+async function readPackage(packageFile, staging, { progress, cancellation }) {
     let doc = null;
     let manifest = null;
     let course = null;
     let expected = null;
     const seen = new Set();
+    const heads = new Map();
+    const pool = writePool(IO_CONCURRENCY);
     try {
-        await readTar(fs.createReadStream(packageFile), ({ name, size }) => {
+        await readTar(fs.createReadStream(packageFile, { highWaterMark: MIB }), ({ name, size }) => {
+            cancellation.check();
             if (doc === null) {
                 if (name !== 'case.json') throw new PackageError('A case package must start with case.json', 'invalid_case_package');
                 return jsonSink(name, (value) => { doc = value; });
@@ -725,6 +947,7 @@ async function readPackage(packageFile, staging) {
                 return jsonSink(name, (value) => {
                     manifest = readManifest(value);
                     expected = expectedMedia(manifest);
+                    progress.totals({ files: expected.size, bytes: [...expected.values()].reduce((sum, bytes) => sum + bytes, 0) });
                 });
             }
             if (manifest.course && course === null) {
@@ -738,17 +961,29 @@ async function readPackage(packageFile, staging) {
             if (seen.has(sha)) throw new PackageError('The package carries a file twice', 'invalid_case_package');
             if (expected.get(sha) !== size) throw new PackageError('A media file\'s size differs from the manifest', 'invalid_case_package');
             seen.add(sha);
-            return fileSink(path.join(staging, sha), sha, size);
+            return fileSink({
+                dest: path.join(staging, sha), expectedSha: sha, expectedBytes: size, pool, cancellation,
+                onDone: (head) => {
+                    heads.set(sha, head);
+                    progress.advance(1, size);
+                },
+            });
         });
     } catch (err) {
+        // Every write already started must finish before the caller removes
+        // the staging directory, or a write lands in a directory just removed.
+        // A write's own failure is not reported here: `err` is what stopped
+        // the read, and it is what the job reports.
+        await pool.settle().catch((writeErr) => log.debug('staged write failed after the read stopped', { error: writeErr.message }));
         if (err instanceof TarError) throw new PackageError(`The package is not a valid archive: ${err.message}`, 'invalid_case_package');
         throw err;
     }
+    await pool.settle();
     if (!doc || !manifest) throw new PackageError('The package is empty', 'invalid_case_package');
     if (manifest.course && course === null) throw new PackageError('The package is incomplete: course.json is missing', 'case_package_incomplete');
     const missing = [...expected.keys()].filter((sha) => !seen.has(sha));
     if (missing.length > 0) throw new PackageError(`The package is incomplete: ${missing.length} declared file(s) missing`, 'case_package_incomplete');
-    return { doc, manifest, course };
+    return { doc, manifest, course, heads };
 }
 
 // Leading bytes per media type. The point is to keep anything a browser would
@@ -800,16 +1035,6 @@ function libraryFileLooksRight(rel, head) {
     if (rel.endsWith('.png')) return looksLike('.png', head);
     if (rel.endsWith('.webp')) return looksLike('.webp', head);
     return false;
-}
-
-async function readHead(file) {
-    const handle = await fsp.open(file, 'r');
-    try {
-        const { buffer, bytesRead } = await handle.read(Buffer.alloc(32), 0, 32, 0);
-        return buffer.subarray(0, bytesRead);
-    } finally {
-        await handle.close();
-    }
 }
 
 // ---- Import: placing and writing ------------------------------------------------------
@@ -906,7 +1131,7 @@ const sameNumber = (a, b) => (a == null && b == null) || (a != null && b != null
  * with no row (absent from its slide picker, and from its own exports).
  * Never overwrites: an occupied id moves the import to a new one.
  */
-async function placeAssetId({ libDir, preferredId, digest, tenant, plugin, row }) {
+async function placeAssetId({ libDir, preferredId, digest, files, tenant, plugin, row, tick, cancellation }) {
     const candidates = [
         preferredId,
         `asset-${sha256(`package\u0000${digest}`).slice(0, 24)}`,
@@ -928,7 +1153,7 @@ async function placeAssetId({ libDir, preferredId, digest, tenant, plugin, row }
                 && sameNumber(existing.native_mpp_y, row.native_mpp_y)
             // A specimen photo has no row on either side; identical bytes are the same photo.
             : !existing;
-        if (sameOwner && digestOf(await hashAssetDir(root)) === digest) return { id, reuse: true };
+        if (sameOwner && await sameAssetFiles(root, files, (f, b) => { cancellation.check(); tick(f, b); })) return { id, reuse: true };
     }
     return { id: `asset-${randomBytes(12).toString('hex')}`, reuse: false };
 }
@@ -953,46 +1178,105 @@ async function assertLibraryWritable(plugin, libDir) {
 }
 
 /**
+ * The name an imported course gets on this server. A course whose name
+ * carries the case code it was exported with (`… (FI-0010)`) names the NEW
+ * case code instead; any other name that a live course in this tenant
+ * already has gets the new code appended. Re-importing a package therefore
+ * never makes two courses with one name (FI-0010 F22: FI-0011's course was
+ * called "… (FI-0010)", indistinguishable from the first import's).
+ */
+export function importedCourseName({ name, sourceCaseCode, caseCode, nameTaken }) {
+    if (sourceCaseCode && sourceCaseCode !== caseCode && name.includes(sourceCaseCode)) {
+        return name.split(sourceCaseCode).join(caseCode);
+    }
+    return nameTaken ? `${name} (${caseCode})` : name;
+}
+
+/**
+ * Create the imported case's course, named for this server (importedCourseName),
+ * remembering where it came from in its settings (`imported_from`) — a key the
+ * course editor keeps when it saves its own.
+ *
+ * @returns {Promise<{id: number, name: string, source_name: string, lessons: number, locked: number, published: number, members: number}>}
+ */
+async function insertImportedCourse({ tx, courseDoc, caseId, caseCode, sourceCaseCode, tenant, userId }) {
+    const sourceName = courseDoc.course.name;
+    const taken = await tx.get(
+        'SELECT 1 AS taken FROM cohorts WHERE tenant_id = ? AND name = ? AND deleted_at IS NULL LIMIT 1',
+        [tenant, sourceName]
+    );
+    const name = importedCourseName({ name: sourceName, sourceCaseCode, caseCode, nameTaken: Boolean(taken) });
+    const created = await insertCourse({ tx, course: { ...courseDoc, course: { ...courseDoc.course, name } }, caseId, tenant, userId });
+    await tx.run('UPDATE cohorts SET settings = ? WHERE id = ? AND tenant_id = ?', [
+        JSON.stringify({ imported_from: { case_code: sourceCaseCode, course_name: sourceName } }), created.id, tenant,
+    ]);
+    const members = await tx.get('SELECT COUNT(*) AS n FROM cohort_members WHERE cohort_id = ? AND deleted_at IS NULL', [created.id]);
+    return {
+        ...created,
+        source_name: sourceName,
+        published: courseDoc.lessons.filter((lesson) => lesson.is_published).length,
+        members: members?.n ?? 0,
+    };
+}
+
+/**
  * Import a package as a NEW case.
  *
  * @param {object} opts
  * @param {string} opts.packageFile  the uploaded package
  * @param {object} opts.actor  a snapshot of the request: {user, ip, headers, log}
- * @param {Function} [opts.onProgress]
+ * @param {Function} [opts.onProgress]  receives `{phase, done, total, bytes_done, bytes_total}`
+ *   — files and bytes done within the phase, published at most every PROGRESS_INTERVAL_MS
+ * @param {{check: Function, commit: Function}} [opts.cancellation]  `check()` throws when the
+ *   import has been cancelled; `commit()` is called at the one moment after which it cannot be
  * @returns {Promise<object>} the import report
- * @throws {PackageError} on a refused package (nothing written)
+ * @throws {PackageError} on a refused package (nothing written); `case_package_cancelled`
+ *   when cancelled before the commit point (nothing kept)
  */
-export async function importCasePackage({ packageFile, actor, onProgress = () => {} }) {
+export async function importCasePackage({ packageFile, actor, onProgress = () => {}, cancellation = NOT_CANCELLABLE }) {
     const tenant = actor.user?.tenant_id || 1;
     const staging = `${packageFile}.staging`;
     await fsp.mkdir(staging, { recursive: true });
     const placed = { files: [], dirs: [] };
+    const progress = progressReporter(onProgress);
     try {
+        cancellation.check();
         const { size: packageBytes } = await fsp.stat(packageFile);
         await assertFreeSpace(staging, packageBytes, 'unpacking the package');
-        onProgress({ phase: 'reading' });
-        const { doc, manifest, course } = await readPackage(packageFile, staging);
+        progress.phase('reading');
+        const { doc, manifest, course, heads } = await readPackage(packageFile, staging, { progress, cancellation });
 
         const parsed = readCaseDocument(doc);
         if (parsed.problem) throw new PackageError(parsed.problem.error, parsed.problem.code);
         const parsedCourse = course ? readCourseDocument(course) : null;
         if (parsedCourse?.problem) throw new PackageError(parsedCourse.problem, 'invalid_case_package');
 
-        onProgress({ phase: 'checking' });
+        // Checking counts every carried file once: its type, and — for a
+        // slide that may already be here — the comparison with the copy on disk.
+        const toCheck = [
+            ...manifest.uploads,
+            ...manifest.library.flatMap((a) => a.files),
+            ...manifest.remote.filter((r) => r.carried).flatMap((r) => r.files),
+        ];
+        progress.phase('checking', { files: toCheck.length, bytes: toCheck.reduce((sum, f) => sum + f.bytes, 0) });
         const warnings = [];
         const replacements = [];
 
         // What the case can show once imported — placed now OR already here.
         // The report counts these, not copies: "0 slides" after a re-import
-        // would read as a missing slide when it is simply reused.
+        // would read as a missing slide when it is simply reused. `media`
+        // says which were reused and which copied.
         const available = { uploads: 0, slides: 0 };
+        const media = { uploads_reused: 0, uploads_copied: 0, slides_reused: 0, slides_copied: 0, files_copied: 0, bytes_copied: 0 };
 
         // Uploads: same bytes already here → reuse; else a new name.
         const uploadMoves = [];
         for (const u of manifest.uploads) {
+            cancellation.check();
+            progress.advance(1, u.bytes);
             const ext = path.extname(u.name).toLowerCase();
             const staged = path.join(staging, u.sha256);
-            const head = await readHead(staged);
+            const head = heads.get(u.sha256);
             const accepted = UPLOAD_EXTENSIONS.includes(ext)
                 ? looksLikeAnyMedia(head)
                 : DOCUMENT_EXTENSIONS.includes(ext) && looksLikeDocument(ext, head);
@@ -1005,6 +1289,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             if (await fsp.stat(existing).catch(() => null)) {
                 if ((await hashFile(existing)).sha256 === u.sha256) {
                     available.uploads += 1;
+                    media.uploads_reused += 1;
                     continue;
                 }
                 target = `pkg-${u.sha256.slice(0, 16)}-${u.name}`.slice(0, 200);
@@ -1015,17 +1300,20 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                     }
                     replacements.push([`/uploads/${u.name}`, `/uploads/${target}`]);
                     available.uploads += 1;
+                    media.uploads_reused += 1;
                     continue;
                 }
                 replacements.push([`/uploads/${u.name}`, `/uploads/${target}`]);
             }
             uploadMoves.push({ from: staged, to: path.join(UPLOADS_DIR, target), bytes: u.bytes });
             available.uploads += 1;
+            media.uploads_copied += 1;
         }
 
         // Library assets, from a library or from a content origin.
         const assetPlans = [];
         const plannedIds = new Set();
+        const reusedSlides = new Set();
         // Carried slides and photos this server has nowhere to put. They
         // refuse the whole package below: a pathology case without its slides
         // is not the case that was exported, so it is never created.
@@ -1037,20 +1325,25 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                 return;
             }
             await assertLibraryWritable(plugin, libDir);
+            // The type check reads the first bytes kept while reading the
+            // package — no file is reopened.
             for (const f of files) {
                 const rel = f.target ?? f.path;
-                if (!libraryFileLooksRight(rel, await readHead(path.join(staging, f.sha256)))) {
+                if (!libraryFileLooksRight(rel, heads.get(f.sha256))) {
                     throw new PackageError(`A slide file is not what its name says: ${rel}`, 'invalid_case_package');
                 }
             }
             const placedFiles = files.map((f) => ({ path: f.target ?? f.path, sha256: f.sha256, bytes: f.bytes }));
             const digest = digestOf(placedFiles);
+            const ticker = boundedTicker(progress, placedFiles.length, placedFiles.reduce((sum, f) => sum + f.bytes, 0));
             const { id, reuse } = await placeAssetId({
-                libDir, digest, tenant, plugin, row,
+                libDir, digest, files: placedFiles, tenant, plugin, row, tick: ticker.tick, cancellation,
                 preferredId: preferredId ?? `asset-${sha256(`package\u0000${digest}`).slice(0, 24)}`,
             });
+            ticker.finish();
             toRefs(id).forEach(([from, to]) => { if (from !== to) replacements.push([from, to]); });
             if (row) available.slides += 1;
+            if (row && reuse) reusedSlides.add(id);
             // Two references to the same bytes in one package land once.
             if (!reuse && !plannedIds.has(id)) {
                 plannedIds.add(id);
@@ -1072,7 +1365,10 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             if (!listings.has(r.plugin)) listings.set(r.plugin, await contentListing(r.plugin));
             const listing = listings.get(r.plugin);
             const here = r.files.length > 0 && r.files.every((f) => listing.files.get(f.path)?.sha256 === f.sha256);
-            if (here) continue;
+            if (here) {
+                if (r.carried) progress.advance(r.files.length, r.files.reduce((sum, f) => sum + f.bytes, 0));
+                continue;
+            }
             const ref = `remote:${r.path}`;
             if (!r.carried) {
                 const hint = r.plugin === 'pacs'
@@ -1143,26 +1439,59 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
 
         // Place files. Each asset is assembled in a hidden directory and
         // renamed into place whole, so a reader never sees half a slide.
-        onProgress({ phase: 'placing' });
+        cancellation.check();
+        const toPlace = [...uploadMoves.map((m) => m.bytes), ...assetPlans.flatMap((a) => a.files.map((f) => f.bytes))];
+        progress.phase('placing', { files: toPlace.length, bytes: toPlace.reduce((sum, bytes) => sum + bytes, 0) });
         for (const move of uploadMoves) {
+            cancellation.check();
             await placeFile(move.from, move.to);
             placed.files.push(move.to);
+            progress.advance(1, move.bytes);
         }
+        // A staged file that lands exactly once is MOVED (a rename: no bytes
+        // copied when staging and library share a disk); one whose bytes land
+        // under several names — identical tiles — is copied, so every copy has
+        // its source. A library on another disk falls back to copying.
+        const uses = new Map();
+        [...uploadMoves.map((m) => path.basename(m.from)), ...assetPlans.flatMap((a) => a.files.map((f) => f.sha256))]
+            .forEach((sha) => uses.set(sha, (uses.get(sha) ?? 0) + 1));
+        let canRename = true;
+        const land = async (sha, dest) => {
+            const from = path.join(staging, sha);
+            if (canRename && uses.get(sha) === 1) {
+                try {
+                    await fsp.rename(from, dest);
+                    return;
+                } catch (err) {
+                    if (err.code !== 'EXDEV') throw err;
+                    canRename = false;
+                }
+            }
+            await fsp.copyFile(from, dest);
+        };
         for (const asset of assetPlans) {
             const tmp = path.join(asset.libDir, `.${asset.id}.importing-${randomBytes(4).toString('hex')}`);
             placed.dirs.push(tmp);
-            for (const f of asset.files) {
-                const dest = path.join(tmp, f.path);
-                await fsp.mkdir(path.dirname(dest), { recursive: true });
-                // A slide's tiles can share bytes; copy, so one staged file can land twice.
-                await fsp.copyFile(path.join(staging, f.sha256), dest);
-            }
+            const dirs = [...new Set(asset.files.map((f) => path.dirname(path.join(tmp, f.path))))].sort();
+            for (const dir of dirs) await fsp.mkdir(dir, { recursive: true });
+            await eachLimit(asset.files, IO_CONCURRENCY, async (f) => {
+                cancellation.check();
+                await land(f.sha256, path.join(tmp, f.path));
+                progress.advance(1, f.bytes);
+            });
             const final = path.join(asset.libDir, asset.id);
             await fsp.rename(tmp, final);
             placed.dirs[placed.dirs.length - 1] = final;
+            if (asset.row) media.slides_copied += 1;
+            media.files_copied += asset.files.length;
+            media.bytes_copied += asset.files.reduce((sum, f) => sum + f.bytes, 0);
         }
+        media.slides_reused = reusedSlides.size;
+        media.files_copied += uploadMoves.length;
+        media.bytes_copied += uploadMoves.reduce((sum, m) => sum + m.bytes, 0);
 
-        onProgress({ phase: 'saving' });
+        cancellation.check();
+        progress.phase('saving');
         const { name, description, system_prompt } = caseBody;
         const { patientName, patientGender, patientAge, chiefComplaint, difficultyLevel } = normalised.columns;
         const result = await withWriteConnection(async (tx) => {
@@ -1183,7 +1512,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             await tx.run('UPDATE cases SET case_code = ? WHERE id = ? AND tenant_id = ?', [caseCode, caseId, tenant]);
             const written = await insertCaseRelated({ tx, caseId, tenant, userId: actor.user.id, plan });
             const createdCourse = courseDoc
-                ? await insertCourse({ tx, course: courseDoc, caseId, tenant, userId: actor.user.id })
+                ? await insertImportedCourse({ tx, courseDoc, caseId, caseCode, sourceCaseCode: doc.rohy_export?.source_case_code ?? null, tenant, userId: actor.user.id })
                 : null;
             const now = nowIso();
             for (const asset of assetPlans.filter((a) => a.row)) {
@@ -1202,7 +1531,15 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
                     ]
                 );
             }
-            return { caseId, caseCode, course: createdCourse, ...written };
+            const shown = await tx.get('SELECT is_available FROM cases WHERE id = ?', [caseId]);
+            // The commit point. A cancel that arrived before here rolls the
+            // transaction back and the placed files are removed below. The
+            // check and `commit()` run in one synchronous step — no request
+            // can be handled between them — so a cancel arriving after it is
+            // refused (the import is kept), never half-honoured.
+            cancellation.check();
+            cancellation.commit();
+            return { caseId, caseCode, course: createdCourse, isAvailable: Boolean(shown?.is_available), ...written };
         });
         placed.files = [];
         placed.dirs = [];
@@ -1233,7 +1570,7 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
             resourceType: 'case',
             resourceId: String(result.caseId),
             resourceName: name,
-            metadata: { source_case_code: doc.rohy_export?.source_case_code ?? null, counts, created_templates: result.createdTemplates, course_id: result.course?.id ?? null },
+            metadata: { source_case_code: doc.rohy_export?.source_case_code ?? null, counts, media, created_templates: result.createdTemplates, course_id: result.course?.id ?? null },
         });
         await createCaseVersion(result.caseId, actor.user.id, 'created', 'Imported from a case package', {
             name, description, system_prompt, config: safeConfig, scenario: scenarioWithSource, tenant_id: tenant,
@@ -1245,10 +1582,14 @@ export async function importCasePackage({ packageFile, actor, onProgress = () =>
         });
 
         return {
-            case: { id: result.caseId, case_code: result.caseCode, name },
+            // A new case starts hidden from learners (`is_available`); the
+            // admin's dialog offers to show it.
+            case: { id: result.caseId, case_code: result.caseCode, name, is_available: result.isAvailable },
             // The course made for the case: a new one, with no learners yet.
             course: result.course,
             imported: counts,
+            // Which media was already on this server and which was copied.
+            media,
             created_templates: result.createdTemplates,
             warnings: [...warnings, ...normalised.warnings, ...plan.warnings, ...result.warnings],
         };
@@ -1292,19 +1633,36 @@ function sweep() {
 }
 setInterval(sweep, 10 * 60 * 1000).unref();
 
+const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
+const finished = (job) => ['done', 'failed', 'cancelled'].includes(job.state);
+
 function publicJob(job) {
     return {
         id: job.id,
         kind: job.kind,
         state: job.state,
         phase: job.phase,
+        // Within the phase: files and bytes done of a total (null while unknown).
         progress: job.progress,
+        created_at: iso(job.createdAt),
+        started_at: iso(job.startedAt),
+        finished_at: iso(job.finishedAt),
+        // Measured here, so a browser with a wrong clock still shows the truth.
+        elapsed_ms: job.startedAt ? (job.finishedAt ?? Date.now()) - job.startedAt : 0,
+        cancel_requested: job.cancelRequested,
+        // False once an import has been saved: from then on it is kept.
+        cancellable: !finished(job) && !job.committed,
         result: job.result,
         error: job.error,
     };
 }
 
-function startJob({ kind, actor, work }) {
+/**
+ * Queue `work(job, onProgress, cancellation)`. `cleanup` runs when the job is
+ * cancelled while still queued — the work never starts, so whatever was set
+ * aside for it (an uploaded package) is released by the cancel itself.
+ */
+function startJob({ kind, actor, work, cleanup = async () => {} }) {
     const job = {
         id: randomUUID(),
         kind,
@@ -1316,23 +1674,42 @@ function startJob({ kind, actor, work }) {
         result: null,
         error: null,
         file: null,
+        createdAt: Date.now(),
+        startedAt: null,
         finishedAt: null,
+        cancelRequested: false,
+        committed: false,
+        cleanup,
+    };
+    const cancellation = {
+        check() {
+            if (job.cancelRequested) throw cancelledError();
+        },
+        commit() {
+            job.committed = true;
+        },
     };
     jobs.set(job.id, job);
     queue = queue.then(async () => {
+        if (job.state === 'cancelled') return;
         job.state = 'running';
+        job.startedAt = Date.now();
         try {
             job.result = await work(job, (progress) => {
                 job.phase = progress.phase;
-                job.progress = progress.total ? { done: progress.done, total: progress.total } : null;
-            });
+                job.progress = progress.total === null || progress.total === undefined
+                    ? null
+                    : { done: progress.done, total: progress.total, bytes_done: progress.bytes_done ?? null, bytes_total: progress.bytes_total ?? null };
+            }, cancellation);
             job.state = 'done';
         } catch (err) {
-            job.state = 'failed';
+            const cancelled = err instanceof PackageError && err.code === 'case_package_cancelled';
+            job.state = cancelled ? 'cancelled' : 'failed';
             job.error = err instanceof PackageError
                 ? { error: err.message, code: err.code, status: err.status }
                 : { error: 'The package job failed', code: 'case_package_failed', status: 500 };
-            if (!(err instanceof PackageError)) log.error('case package job failed', { kind, jobId: job.id, error: err.message });
+            if (cancelled) log.info('case package job cancelled', { kind, jobId: job.id, phase: job.phase });
+            else if (!(err instanceof PackageError)) log.error('case package job failed', { kind, jobId: job.id, error: err.message });
             if (job.file) await fsp.rm(job.file, { force: true }).catch(() => {});
             job.file = null;
         } finally {
@@ -1342,11 +1719,50 @@ function startJob({ kind, actor, work }) {
     return publicJob(job);
 }
 
+const ownJob = (job, actor) => Boolean(job) && job.userId === actor.user?.id && job.tenant === (actor.user?.tenant_id || 1);
+
 /** The job, if `actor` started it. */
 export function getJob(id, actor) {
     const job = jobs.get(id);
-    if (!job || job.userId !== actor.user?.id || job.tenant !== (actor.user?.tenant_id || 1)) return null;
+    if (!ownJob(job, actor)) return null;
     return { view: publicJob(job), file: job.state === 'done' ? job.file : null, result: job.result };
+}
+
+/**
+ * The jobs `actor` started that are still remembered — running, queued, or
+ * finished within the last JOB_TTL_MS — newest first. An admin who closed
+ * the dialog finds a running import here instead of starting another.
+ */
+export function listJobs({ actor, kind = null }) {
+    return [...jobs.values()]
+        .filter((job) => ownJob(job, actor) && (kind === null || job.kind === kind))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(publicJob);
+}
+
+/**
+ * Cancel a job `actor` started. A queued job never starts; a running one
+ * stops at its next file and undoes what it placed. Refused once the job
+ * has finished, and once an import has been saved (its commit point).
+ *
+ * @returns {Promise<object>} the job's view
+ * @throws {PackageError} 404 `job_not_found`; 409 `job_finished` or `case_package_committed`
+ */
+export async function cancelJob({ id, actor }) {
+    const job = jobs.get(id);
+    if (!ownJob(job, actor)) throw new PackageError('No such job', 'job_not_found', 404);
+    if (finished(job)) throw new PackageError(`The job has already ${job.state === 'done' ? 'finished' : job.state}`, 'job_finished', 409);
+    if (job.committed) {
+        throw new PackageError('The case has already been saved; the import can no longer be cancelled', 'case_package_committed', 409);
+    }
+    job.cancelRequested = true;
+    if (job.state === 'queued') {
+        job.state = 'cancelled';
+        job.error = { error: 'Cancelled; nothing was created', code: 'case_package_cancelled', status: 409 };
+        job.finishedAt = Date.now();
+        await job.cleanup();
+    }
+    return publicJob(job);
 }
 
 export async function startExport({ caseId, actor }) {
@@ -1354,9 +1770,9 @@ export async function startExport({ caseId, actor }) {
     return startJob({
         kind: 'export',
         actor,
-        work: async (job, onProgress) => {
+        work: async (job, onProgress, cancellation) => {
             job.file = path.join(dir, `export-${job.id}${PACKAGE_EXTENSION}`);
-            const built = await buildCasePackage({ caseId, tenant: job.tenant, outFile: job.file, onProgress });
+            const built = await buildCasePackage({ caseId, tenant: job.tenant, outFile: job.file, onProgress, cancellation });
             auditSuccess(actor, {
                 action: 'export_case_package',
                 resourceType: 'case',
@@ -1455,17 +1871,22 @@ export async function completeUpload({ id, actor }) {
             throw new PackageError(`Upload incomplete: ${upload.received} of ${upload.bytes} bytes`, 'upload_incomplete', 409);
         }
         uploads.delete(id);
+        const release = async () => {
+            reservations.delete(upload.reservation);
+            await fsp.rm(upload.file, { force: true });
+        };
         return startJob({
             kind: 'import',
             actor,
-            work: async (job, onProgress) => {
+            cleanup: release,
+            work: async (job, onProgress, cancellation) => {
                 // Held while queued; released as the import starts, because the
                 // import checks the space it needs itself.
                 reservations.delete(upload.reservation);
                 try {
-                    return await importCasePackage({ packageFile: upload.file, actor, onProgress });
+                    return await importCasePackage({ packageFile: upload.file, actor, onProgress, cancellation });
                 } finally {
-                    await fsp.rm(upload.file, { force: true });
+                    await release();
                 }
             },
         });
