@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.69] — 2026-10-14
+
+- **Two timing-dependent tests made deterministic** (rc.68's CI failed on both; no application change):
+  - `tests/e2e/gate-screen.spec.js` (SESSION.END.01): returning to the patient room remounts the monitor, which
+    shows 0:00 until it has re-read the session's start; the test read the clock in that moment. It now takes the
+    reading once it has settled, then checks it no longer moves.
+  - `tests/server/course-gate-slide-reads.test.js`: a slide read is recorded just after the descriptor is served;
+    the test now waits for the row instead of reading the table once.
+
 ## [3.0.0-rc.68] — 2026-10-14
 
 - **A Prova catalogue to re-test the FI-0010 review fixes** (`prova/fi-0010-fixes-cases.yaml`, imported as

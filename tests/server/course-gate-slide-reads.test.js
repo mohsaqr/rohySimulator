@@ -7,7 +7,7 @@
 // own browser posts, so a learner could open the course materials without
 // opening a slide. Also locked here: guests are refused the course routes.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -148,9 +148,17 @@ describe('course gate: slides opened, as the server saw it', () => {
     it('counts only the learner\'s own reads, and only a descriptor that was served', async () => {
         expect((await peer('/api/plugins/pathology/tiles/missing.dzi')).status).toBe(404);
         expect((await peer('/api/plugins/pathology/tiles/b1.dzi')).status).toBe(200);
-        const rows = await withDb((db) => new Promise((resolve, reject) => db.all(
+        // The read is recorded just after the descriptor is served (fire-and-forget in
+        // plugins-routes.js), so the peer's row can land a moment after the 200: wait for it
+        // rather than read once (CI 2026-10-14 read the table before it arrived).
+        const readRows = () => withDb((db) => new Promise((resolve, reject) => db.all(
             `SELECT u.username, r.path FROM plugin_content_reads r JOIN users u ON u.id = r.user_id ORDER BY u.username, r.path`,
             [], (err, all) => (err ? reject(err) : resolve(all)))));
+        const rows = await vi.waitFor(async () => {
+            const all = await readRows();
+            if (all.length < 3) throw new Error(`only ${all.length} reads recorded yet`);
+            return all;
+        }, { timeout: 5_000, interval: 50 });
         expect(rows).toEqual([
             { username: 'sr-peer', path: 'tiles/b1.dzi' },
             { username: 'sr-student', path: 'library/asset-a1/slide.dzi' },
