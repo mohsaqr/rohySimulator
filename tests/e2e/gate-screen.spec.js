@@ -207,7 +207,16 @@ test.describe('ending a case', () => {
 
         // The clock is marked as ended and frozen.
         await expect(page.getByTestId('monitor-case-ended')).toBeVisible();
-        const first = await clockSeconds(page);
+        // Coming back remounts the monitor, which shows 0:00 until it has re-read the session's
+        // start and then settles on the ended time (CI 2026-10-14 read "0" in that moment and
+        // "2" after it). Take the reading once two reads a second apart agree.
+        let first = null;
+        await expect.poll(async () => {
+            const before = await clockSeconds(page);
+            await page.waitForTimeout(1_000);
+            first = await clockSeconds(page);
+            return before === first;
+        }, { timeout: 15_000 }).toBe(true);
         await page.waitForTimeout(3_000);
         expect(await clockSeconds(page), 'the clock no longer moves').toBe(first);
 
