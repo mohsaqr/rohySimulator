@@ -10,7 +10,7 @@ import { parseConfig } from '../../utils/parseConfig';
 import { sanitizeResponseText } from '../../utils/plainText';
 import OnCallAvatar from './OnCallAvatar';
 import { EndIcon, KeyboardIcon, MicIcon, SendIcon, SpeakerIcon } from './phoneIcons';
-import { NO_ANSWER_RING_MS, formatCallDuration, isFailedReply } from './onCallModel';
+import { NO_ANSWER_RING_MS, displayNameOf, displayRoleOf, failureKeyOf, formatCallDuration } from './onCallModel';
 import { formatRemaining } from '../../utils/agentWait';
 
 // A voice call with one specialist. Push-to-talk like the patient chat: tap
@@ -82,7 +82,7 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
 
     const speak = (reply) => {
         const spoken = sanitizeResponseText(reply);
-        if (mutedRef.current || !spoken || isFailedReply(reply)) return;
+        if (mutedRef.current || !spoken) return;
         const r = resolveVoice({
             voice: parseConfig(agent.config).voice,
             templateVoice: null,
@@ -121,12 +121,16 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
         });
     };
 
-    const sendTurn = async (text) => {
-        const reply = await thread.send(text, { channel: 'call', callId });
-        if (reply === null || endingRef.current) return;
-        setSubtitle(sanitizeResponseText(reply));
-        speak(reply);
+    // Only an answered turn is shown as the specialist's subtitle and spoken.
+    // A failed one (result.ok false) is the thread's `failure`: an error line
+    // with Retry, never read aloud in the specialist's voice.
+    const answered = (result) => {
+        if (!result?.ok || endingRef.current) return;
+        setSubtitle(sanitizeResponseText(result.content));
+        speak(result.content);
     };
+    const sendTurn = async (text) => answered(await thread.send(text, { channel: 'call', callId }));
+    const retryTurn = async () => answered(await thread.retry());
 
     const startTalking = () => {
         if (!VoiceService.isSttSupported()) {
@@ -198,15 +202,20 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
         onEnd();
     };
 
+    const name = displayNameOf(agent, t);
+    const roleTitle = displayRoleOf(agent, t);
+    // Only this call's unanswered turn; one from the chat stays in the chat.
+    const failureKey = thread.failure?.row?.call_id === callId ? failureKeyOf(thread.failure, agent) : null;
+
     let stateLine;
     if (reachability === 'no_answer') {
-        stateLine = unanswered ? t('call_no_answer', { name: agent.name }) : t('call_calling');
+        stateLine = unanswered ? t('call_no_answer', { name }) : t('call_calling');
     } else if (!connected) {
         const remaining = agent.arrives_at ? formatRemaining(agent.arrives_at, now) : '';
         stateLine = remaining ? t('call_paging_eta', { remaining }) : t('call_calling');
     } else if (listening) stateLine = t('call_listening');
-    else if (thread.sending) stateLine = t('call_thinking', { name: agent.name });
-    else if (speaking) stateLine = t('call_speaking', { name: agent.name });
+    else if (thread.sending) stateLine = t('call_thinking', { name });
+    else if (speaking) stateLine = t('call_speaking', { name });
     else stateLine = formatCallDuration(connectedAt ? clock - connectedAt : 0);
 
     const talkDisabled = !connected || thread.sending;
@@ -220,8 +229,8 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
         <div className="screen">
             <div className={callClass}>
                 <OnCallAvatar agent={agent} big />
-                <h2>{agent.name}</h2>
-                {agent.role_title && <div className="call-role">{agent.role_title}</div>}
+                <h2>{name}</h2>
+                {roleTitle && <div className="call-role">{roleTitle}</div>}
                 <div className="call-state" role="status" data-testid="oncall-call-state">{stateLine}</div>
 
                 <div className="captions" aria-live="polite">
@@ -231,7 +240,7 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                             className={`cap ${m.role === 'user' ? 'you' : ''}`}
                             data-testid={i === lastReplyIndex ? 'oncall-subtitle' : undefined}
                         >
-                            <b>{m.role === 'user' ? t('call_you') : agent.name}</b>
+                            <b>{m.role === 'user' ? t('call_you') : name}</b>
                             {m.role === 'user' ? m.content : sanitizeResponseText(m.content)}
                         </p>
                     ))}
@@ -242,7 +251,15 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                         </p>
                     )}
                     {lastReplyIndex === -1 && subtitle && (
-                        <p className="cap" data-testid="oncall-subtitle"><b>{agent.name}</b>{subtitle}</p>
+                        <p className="cap" data-testid="oncall-subtitle"><b>{name}</b>{subtitle}</p>
+                    )}
+                    {failureKey && !thread.sending && (
+                        <p className="sys err" role="alert" data-testid="oncall-reply-failed">
+                            {t(failureKey, { name })}
+                            {thread.failure.kind !== 'no_answer' && (
+                                <button type="button" onClick={retryTurn} disabled={!connected}>{t('retry')}</button>
+                            )}
+                        </p>
                     )}
                 </div>
 
@@ -298,7 +315,7 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                             className={`round ${muted ? '' : 'on'}`}
                             onClick={toggleMute}
                             aria-pressed={muted}
-                            aria-label={muted ? t('call_unmute_label', { name: agent.name }) : t('call_mute_label', { name: agent.name })}
+                            aria-label={muted ? t('call_unmute_label', { name }) : t('call_mute_label', { name })}
                         >
                             <SpeakerIcon on={!muted} />
                         </button>

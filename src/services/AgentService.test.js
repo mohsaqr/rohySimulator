@@ -258,7 +258,7 @@ describe('AgentService — module shape', () => {
             'getSessionAgents', 'pageAgent', 'arriveAgent', 'departAgent', 'getAgentStatus',
             'getConversation', 'addMessage', 'clearConversation',
             'getTeamCommunications', 'addTeamCommunication',
-            'sendAgentMessage', 'extractKeyPoints',
+            'requestAgentReply', 'sendAgentMessage', 'extractKeyPoints',
             'isAgentAvailable', 'getAgentDisplayStatus',
         ];
         for (const name of expected) {
@@ -863,5 +863,78 @@ describe('AgentService.sendAgentMessage', () => {
         // CONTRACT: sendAgentMessage swallows errors and returns a "Error: ..."
         // string so the chat UI can render it inline as an assistant turn.
         expect(out).toMatch(/^Error: Could not communicate with Nurse Joy/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// requestAgentReply: a failure is a typed result, never the agent's words
+// ---------------------------------------------------------------------------
+
+// Regression lock: FI-0010 journey review, F13 (2026-10-14). The only entry
+// point returned transport failures as English strings ("Error: Could not
+// communicate with …", "Rate limit exceeded: …"), which the on-call thread
+// appended as the specialist's reply, logged as agentMessageReceived, and a
+// call could read aloud. requestAgentReply does not exist on the un-fixed
+// service, so every test below fails against it.
+describe('AgentService.requestAgentReply', () => {
+    const agent = { case_agent_id: 31, agent_type: 'pathologist', name: 'On-call Pathologist' };
+    const turnPosts = () => sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/agents/pathologist/conversation'));
+
+    it('answers with the reply as content on success', async () => {
+        const out = await AgentService.requestAgentReply('sess-1', agent, 'what do you see?', []);
+        expect(out).toEqual({ ok: true, content: 'agent reply.', learnerTurnStored: true });
+        expect(turnPosts().map(r => r.body.role)).toEqual(['user', 'assistant']);
+    });
+
+    it('a proxy failure is {ok:false} with a kind and status, and stores no assistant turn', async () => {
+        server.use(http.post('*/api/proxy/llm', () => errJson('upstream blew up', 500)));
+        const out = await AgentService.requestAgentReply('sess-1', agent, 'hi', []);
+        expect(out).toEqual({
+            ok: false,
+            error: { kind: 'failed', status: 500, message: 'upstream blew up' },
+            learnerTurnStored: true,
+        });
+        expect(out).not.toHaveProperty('content');
+        expect(turnPosts().map(r => r.body.role)).toEqual(['user']);
+    });
+
+    it('classifies rate limiting, unavailability and a specialist who does not answer', async () => {
+        server.use(http.post('*/api/proxy/llm', () => errJson('slow down', 429)));
+        expect((await AgentService.requestAgentReply('sess-1', agent, 'a', [])).error.kind).toBe('rate_limited');
+        server.use(http.post('*/api/proxy/llm', () => errJson('down', 503)));
+        expect((await AgentService.requestAgentReply('sess-1', agent, 'b', [])).error.kind).toBe('unavailable');
+        server.use(http.post('*/api/proxy/llm', () => HttpResponse.json({ error: 'No answer', code: 'no_answer' }, { status: 409 })));
+        expect((await AgentService.requestAgentReply('sess-1', agent, 'c', [])).error.kind).toBe('no_answer');
+    });
+
+    it('a network failure has no status, and says whether the learner turn was stored', async () => {
+        server.use(http.post('*/api/sessions/sess-1/agents/pathologist/conversation', () => HttpResponse.error()));
+        const out = await AgentService.requestAgentReply('sess-1', agent, 'hi', []);
+        expect(out.ok).toBe(false);
+        expect(out.error.kind).toBe('failed');
+        expect(out.error.status).toBeNull();
+        expect(out.learnerTurnStored).toBe(false);
+    });
+
+    it('storeLearnerTurn:false (a Retry) does not store the learner turn again', async () => {
+        const out = await AgentService.requestAgentReply('sess-1', agent, 'again', [], { storeLearnerTurn: false });
+        expect(out.ok).toBe(true);
+        expect(turnPosts().map(r => r.body.role)).toEqual(['assistant']);
+    });
+
+    it('refuses an agent with no case_agent_id as a typed failure', async () => {
+        const out = await AgentService.requestAgentReply('sess-1', { agent_type: 'pathologist', name: 'X' }, 'hi', []);
+        expect(out).toMatchObject({ ok: false, error: { kind: 'no_agent', status: null }, learnerTurnStored: false });
+        expect(sentRequests).toEqual([]);
+    });
+
+    it('sendAgentMessage keeps its string contract on top of it', async () => {
+        server.use(http.post('*/api/proxy/llm', () => errJson('slow down', 429)));
+        expect(await AgentService.sendAgentMessage('sess-1', agent, 'a', null, [], null, [])).toBe('Rate limit exceeded: slow down');
+        server.use(http.post('*/api/proxy/llm', () => errJson('down', 503)));
+        expect(await AgentService.sendAgentMessage('sess-1', agent, 'b', null, [], null, [])).toBe('Service unavailable: down');
+        server.use(http.post('*/api/proxy/llm', () => errJson('boom', 500)));
+        expect(await AgentService.sendAgentMessage('sess-1', agent, 'c', null, [], null, []))
+            .toBe('Error: Could not communicate with On-call Pathologist. LLM API Error (500): boom');
     });
 });

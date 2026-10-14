@@ -242,34 +242,46 @@ export const AgentService = {
   // ==================== DEBRIEFING & LLM INTEGRATION ====================
 
   /**
-   * Send a message to an agent via the LLM proxy
-   * Handles the full flow: build context, send message, log response
+   * Send a message to an agent via the LLM proxy and say, in a typed result,
+   * whether it was answered. Nothing a transport failure produces is dressed
+   * up as the agent's words: callers render `error` as an operational message
+   * (with Retry) — never as a reply, never spoken, never logged as
+   * agentMessageReceived (FI-0010 review, F13).
+   *
+   * Options: `caseLanguage` (session dialogue language), `channel` ('chat' |
+   * 'call', default 'chat'), `callId` (the call a turn belongs to) and
+   * `storeLearnerTurn` (default true; false on a Retry whose learner turn was
+   * already stored, so the conversation and the server's turn count do not
+   * gain a duplicate). channel/callId are written on BOTH the learner's and
+   * the agent's turn; they do not change what is sent to the model.
+   *
+   * @returns {Promise<
+   *   {ok: true, content: string, learnerTurnStored: true}
+   *   | {ok: false, error: {kind: 'no_agent'|'rate_limited'|'unavailable'|'no_answer'|'failed', status: number|null, message: string}, learnerTurnStored: boolean}
+   * >} never rejects
    */
-  //
-  // Trailing options: `caseLanguage` (session dialogue language), `channel`
-  // ('chat' | 'call', default 'chat') and `callId` (the call a turn belongs
-  // to). channel/callId are written on BOTH the learner's and the agent's
-  // turn; they do not change what is sent to the model.
-  async sendAgentMessage(sessionId, agent, userMessage, _patientRecord, _teamLog, _currentVitals, conversationHistory = [], _activeCase = null, { caseLanguage = null, channel = 'chat', callId = null } = {}) {
+  async requestAgentReply(sessionId, agent, userMessage, conversationHistory = [], { caseLanguage = null, channel = 'chat', callId = null, storeLearnerTurn = true } = {}) {
     // The server builds a team agent's persona from its case agent id. Without
     // one, /proxy/llm would have nothing to build it from, so refuse before
     // writing the learner's turn or calling the model — an agent that answers
     // with no persona is worse than one that says it cannot be reached.
     if (agent?.case_agent_id == null) {
       const err = new Error('this agent has no case agent id');
-      console.error('[AgentService] sendAgentMessage error:', err);
-      return `Error: Could not communicate with ${agent?.name}. ${err.message}`;
+      console.error('[AgentService] requestAgentReply error:', err);
+      return { ok: false, error: { kind: 'no_agent', status: null, message: err.message }, learnerTurnStored: false };
     }
+    let learnerTurnStored = !storeLearnerTurn;
     try {
       const turnTags = { channel, callId };
-      await this.addMessage(sessionId, agent.agent_type, 'user', userMessage, turnTags);
+      if (storeLearnerTurn) {
+        await this.addMessage(sessionId, agent.agent_type, 'user', userMessage, turnTags);
+        learnerTurnStored = true;
+      }
 
       // No situation is sent: the server builds the agent's persona AND what
       // it is told about the case (its knowledge scope's case context, the
       // live vitals at chart scope, the team's traffic) from rows it reads
-      // itself — services/agentSituation.js (Phase 2, 2026-10-04). The
-      // patientRecord / teamLog / currentVitals / activeCase parameters are
-      // kept for callers' signatures and are no longer read.
+      // itself — services/agentSituation.js (Phase 2, 2026-10-04).
 
       const messages = [
         ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
@@ -287,23 +299,8 @@ export const AgentService = {
       // relative replies stay English in a non-English session.
       if (caseLanguage) requestBody.case_language = caseLanguage;
 
-      let aiContent;
-      try {
-        const data = await apiPost('/proxy/llm', requestBody);
-        aiContent = data?.choices?.[0]?.message?.content || '...';
-      } catch (err) {
-        if (err instanceof ApiError) {
-          if (err.status === 429) {
-            console.warn('[AgentService] Rate limit exceeded:', err.body);
-            return `Rate limit exceeded: ${err.message}`;
-          }
-          if (err.status === 503) {
-            return `Service unavailable: ${err.message}`;
-          }
-          throw new Error(`LLM API Error (${err.status}): ${err.message}`);
-        }
-        throw err;
-      }
+      const data = await apiPost('/proxy/llm', requestBody);
+      const aiContent = data?.choices?.[0]?.message?.content || '...';
 
       await this.addMessage(sessionId, agent.agent_type, 'assistant', aiContent, turnTags);
 
@@ -312,12 +309,47 @@ export const AgentService = {
         await this.addTeamCommunication(sessionId, agent.agent_type, keyPoints);
       }
 
-      return aiContent;
-
+      return { ok: true, content: aiContent, learnerTurnStored: true };
     } catch (err) {
-      console.error('[AgentService] sendAgentMessage error:', err);
-      return `Error: Could not communicate with ${agent.name}. ${err.message}`;
+      // Any step can fail — storing the learner's turn, the proxy, storing
+      // the reply — and each is classified the same way. A failure with no
+      // HTTP answer (network down — ApiError status 0 — or a bug) is
+      // 'failed' with a null status.
+      const isHttp = err instanceof ApiError && err.status > 0;
+      let kind = 'failed';
+      if (isHttp && err.status === 429) kind = 'rate_limited';
+      else if (isHttp && err.status === 503) kind = 'unavailable';
+      else if (isHttp && err.status === 409 && err.code === 'no_answer') kind = 'no_answer';
+      console.error('[AgentService] requestAgentReply error:', err);
+      return {
+        ok: false,
+        error: { kind, status: isHttp ? err.status : null, message: err?.message || String(err) },
+        learnerTurnStored,
+      };
     }
+  },
+
+  /**
+   * Send a message to an agent via the LLM proxy — the original shape, kept
+   * for the team-agent chat (ChatInterface handleSendToAgent): resolves to the
+   * reply, or on failure to an English "Error: …" / "Rate limit exceeded: …"
+   * / "Service unavailable: …" string. New callers use requestAgentReply,
+   * which keeps a failure out of the conversation.
+   *
+   * `_patientRecord`, `_teamLog`, `_currentVitals` and `_activeCase` are kept
+   * for callers' signatures and are no longer read.
+   *
+   * @returns {Promise<string>} never rejects
+   */
+  async sendAgentMessage(sessionId, agent, userMessage, _patientRecord, _teamLog, _currentVitals, conversationHistory = [], _activeCase = null, options = {}) {
+    const { caseLanguage = null, channel = 'chat', callId = null } = options || {};
+    const result = await this.requestAgentReply(sessionId, agent, userMessage, conversationHistory, { caseLanguage, channel, callId });
+    if (result.ok) return result.content;
+    const { kind, status, message } = result.error;
+    if (kind === 'rate_limited') return `Rate limit exceeded: ${message}`;
+    if (kind === 'unavailable') return `Service unavailable: ${message}`;
+    const detail = status != null ? `LLM API Error (${status}): ${message}` : message;
+    return `Error: Could not communicate with ${agent?.name}. ${detail}`;
   },
 
   /**

@@ -28,6 +28,11 @@
 //   2. one seeded default template for that agent_type in server/db.js
 //      DEFAULT_AGENTS (its config.disclosure comes from defaultDisclosure
 //      here, never a copy).
+// `seededName` / `seededRoleTitle` are the seeded template's English name
+// and role title. The template takes them from here, and the on-call phone
+// recognises them to show a translated label instead (an educator's own name
+// is shown as written) — so the two can never drift apart.
+//
 // Plus a findings extractor for its `domain` in services/specialistBrief.js,
 // the editor label keys `type_<agentType>_label` / `_desc` in
 // src/locales/en/authoring_persona.json, and the phone's `specialty_<type>`
@@ -66,6 +71,8 @@ const DISCLOSURE_FIELDS = Object.freeze({
 export const SPECIALTIES = Object.freeze({
     pathologist: Object.freeze({
         agentType: 'pathologist',
+        seededName: 'On-call Pathologist',
+        seededRoleTitle: 'Pathologist',
         standing: 'with_material',
         domain: 'pathology',
         // Plugin rooms this specialty owns (a plugin room's key IS its
@@ -78,6 +85,8 @@ export const SPECIALTIES = Object.freeze({
     }),
     cardiologist: Object.freeze({
         agentType: 'cardiologist',
+        seededName: 'On-call Cardiologist',
+        seededRoleTitle: 'Cardiologist',
         standing: 'with_material',
         domain: 'ecg',
         pluginIds: Object.freeze(['ecg']),
@@ -86,6 +95,8 @@ export const SPECIALTIES = Object.freeze({
     }),
     radiologist: Object.freeze({
         agentType: 'radiologist',
+        seededName: 'On-call Radiologist',
+        seededRoleTitle: 'Radiologist',
         standing: 'always',
         domain: 'radiology',
         pluginIds: Object.freeze(['pacs']),
@@ -96,6 +107,8 @@ export const SPECIALTIES = Object.freeze({
     }),
     laboratorian: Object.freeze({
         agentType: 'laboratorian',
+        seededName: 'On-call Laboratory Specialist',
+        seededRoleTitle: 'Laboratory specialist',
         standing: 'always',
         domain: 'laboratory',
         // The lab has no plugin: it is the core `lab` room

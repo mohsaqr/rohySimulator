@@ -173,6 +173,9 @@
 .oncall-phone .msg.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 6px; }
 .oncall-phone .msg.out { align-self: flex-end; background: var(--bubble-out); color: var(--bubble-out-ink); border-bottom-right-radius: 6px; }
 .oncall-phone .msg .via { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; opacity: .7; margin-bottom: 2px; }
+/* A learner turn the specialist never answered (useSpecialistThread `failure`). */
+.oncall-phone .msg.failed { opacity: .7; border: 1px dashed var(--end); }
+.oncall-phone .msg.failed .via { margin: 2px 0 0; color: var(--end); }
 .oncall-phone .msg.typing { color: var(--muted); font-style: italic; }
 .oncall-phone .sys { align-self: center; font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; margin: 6px 0; text-align: center; }
 .oncall-phone .sys.err { color: var(--end); border-color: color-mix(in srgb, var(--end) 40%, transparent); }

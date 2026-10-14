@@ -3,21 +3,25 @@ import { useTranslation } from 'react-i18next';
 import { sanitizeResponseText } from '../../utils/plainText';
 import OnCallAvatar from './OnCallAvatar';
 import { BackIcon, PhoneIcon, SendIcon } from './phoneIcons';
-import { isFailedReply } from './onCallModel';
+import { displayNameOf, failureKeyOf } from './onCallModel';
 
 // Messaging thread with one specialist: chat bar, bubbles, composer.
 // Replies render as plain text through the chat room's sanitiser. Call turns
-// sit in the same thread, tagged "Call".
+// sit in the same thread, tagged "Call". A turn that went unanswered stays in
+// the thread tagged "Not answered", with an operational error line and Retry
+// below the thread — never as a bubble from the specialist.
 export default function OnCallChat({ agent, reachability, pagingNow, statusLine, thread, onBack, onCall, onPage }) {
     const { t } = useTranslation('oncall');
     const [draft, setDraft] = useState('');
     const threadRef = useRef(null);
     const canSend = reachability === 'available' && !pagingNow;
+    const name = displayNameOf(agent, t);
+    const failureKey = failureKeyOf(thread.failure, agent);
 
     useEffect(() => {
         const el = threadRef.current;
         if (el) el.scrollTop = el.scrollHeight;
-    }, [thread.messages.length, thread.sending]);
+    }, [thread.messages.length, thread.sending, failureKey]);
 
     const sendText = async (text) => {
         const content = String(text || '').trim();
@@ -40,10 +44,10 @@ export default function OnCallChat({ agent, reachability, pagingNow, statusLine,
                 </button>
                 <OnCallAvatar agent={agent} presence={reachability === 'available' ? 'online' : 'away'} />
                 <div className="chat-who">
-                    <strong>{agent.name}</strong>
+                    <strong>{name}</strong>
                     <span>{statusLine}</span>
                 </div>
-                <button type="button" className="icon-btn" onClick={onCall} aria-label={t('call_contact', { name: agent.name })}>
+                <button type="button" className="icon-btn" onClick={onCall} aria-label={t('call_contact', { name })}>
                     <PhoneIcon />
                 </button>
             </div>
@@ -51,39 +55,49 @@ export default function OnCallChat({ agent, reachability, pagingNow, statusLine,
             <div className="thread" ref={threadRef} aria-live="polite">
                 {!thread.loaded && <p className="sys">{t('chat_loading')}</p>}
                 {thread.loaded && thread.messages.length === 0 && !thread.sending && (
-                    <p className="day">{t('chat_empty', { name: agent.name })}</p>
+                    <p className="day">{t('chat_empty', { name })}</p>
                 )}
                 {thread.messages.map((m, i) => {
                     const mine = m.role === 'user';
-                    if (!mine && isFailedReply(m.content)) {
-                        return <p key={m.id ?? `${i}-err`} className="sys err">{m.content}</p>;
-                    }
                     return (
-                        <div key={m.id ?? `${i}-${m.role}`} className={`msg ${mine ? 'out' : 'in'}`}>
+                        <div
+                            key={m.id ?? `${i}-${m.role}`}
+                            className={`msg ${mine ? 'out' : 'in'}${m.failed ? ' failed' : ''}`}
+                            data-testid={m.failed ? 'oncall-unanswered-turn' : undefined}
+                        >
                             {m.channel === 'call' && <span className="via">{t('via_call')}</span>}
                             {mine ? m.content : sanitizeResponseText(m.content)}
+                            {m.failed && <span className="via">{t('turn_unanswered')}</span>}
                         </div>
                     );
                 })}
                 {thread.sending && (
-                    <div className="msg in typing" role="status">{t('typing', { name: agent.name })}</div>
+                    <div className="msg in typing" role="status">{t('typing', { name })}</div>
+                )}
+                {failureKey && !thread.sending && (
+                    <p className="sys err" role="alert" data-testid="oncall-reply-failed">
+                        {t(failureKey, { name })}
+                        {thread.failure.kind !== 'no_answer' && (
+                            <button type="button" onClick={() => thread.retry()}>{t('retry')}</button>
+                        )}
+                    </p>
                 )}
                 {(pagingNow || reachability === 'paging') && (
-                    <p className="sys">{t('composer_waiting', { name: agent.name })}</p>
+                    <p className="sys">{t('composer_waiting', { name })}</p>
                 )}
                 {reachability === 'no_answer' && (
-                    <p className="sys" data-testid="oncall-no-answer">{t('chat_no_answer', { name: agent.name })}</p>
+                    <p className="sys" data-testid="oncall-no-answer">{t('chat_no_answer', { name })}</p>
                 )}
                 {!pagingNow && reachability === 'on_call' && (
                     <p className="sys">
-                        {t('page_needed', { name: agent.name })}
+                        {t('page_needed', { name })}
                         <button type="button" onClick={onPage}>{t('page_contact')}</button>
                     </p>
                 )}
             </div>
 
             <form className="composer" onSubmit={submit}>
-                <label htmlFor="oncall-composer" className="sr-only">{t('composer_label', { name: agent.name })}</label>
+                <label htmlFor="oncall-composer" className="sr-only">{t('composer_label', { name })}</label>
                 <textarea
                     id="oncall-composer"
                     rows={1}

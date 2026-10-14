@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.63] — 2026-10-14
+
+- **The on-call specialist cannot say the diagnosis in another form.** The reply guard matched only the authored
+  answer phrases word for word, so "Kyseessä on adenokarsinooma.", "Löydös sopii adenokarsinoomaan.", "Tämä on
+  syöpä." and "This is adenocarcinoma." all reached a learner in the FI-0010 course. It now guards every word of
+  the answer labels by stem (Finnish and Kazakh inflection included), adds malignancy words in eight languages
+  when the answer is malignant, and never guards a word the learner can already read in the case. Streamed
+  replies were not guarded at all; they are now held and checked sentence by sentence. The fallback question is
+  in the case language.
+- **A failed call is not the specialist talking.** Connection, rate-limit and missing-agent errors were shown
+  (and spoken on a call) as the specialist's reply. The phone now shows a localized error with Retry, marks the
+  question "Not answered", and stores the learner's message only once.
+- **The seeded specialists have names in the interface language** ("Päivystävä patologi"); a name an educator
+  changed is shown as written.
+
 ## [3.0.0-rc.62] — 2026-10-14
 
 From the FI-0010 course review (Codex, 2026-10-14):

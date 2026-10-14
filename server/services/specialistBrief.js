@@ -21,8 +21,14 @@
 //      patient name, age, sex and CHIEF COMPLAINT, which is a symptom.
 //      Findings alone are the whole brief.
 //   3. The model can still name a diagnosis from the findings alone, so
-//      non-streaming replies pass through guardSpecialistReply, which drops
-//      any sentence naming a known answer term.
+//      every reply passes through the reply guard (buildReplyGuard +
+//      guardSpecialistReply), which drops any sentence naming the answer:
+//      the authored answer phrases, their distinctive words matched through
+//      inflection ("adenokarsinoomaan"), and, when the answer is malignant,
+//      the words for malignancy in every case language ("syöpä",
+//      "adenocarcinoma"). Streamed replies are cut into sentences on the
+//      server and each one is guarded before it is written
+//      (createStreamReplyGuard), so nothing reaches the learner unguarded.
 //
 // Pure functions take already-parsed JSON and never throw on malformed input:
 // case documents are authored by hand and by third-party packages, and a bad
@@ -30,9 +36,30 @@
 
 import dbAdapter from '../dbAdapter.js';
 import { resolveSessionCaseConfig } from '../routes/_helpers.js';
+import { DEFAULT_LANGUAGE, isKnownLanguage } from '../shared/languages.js';
+import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
+import { projectCaseConfigForRole } from './caseProjection.js';
+import {
+    AGGLUTINATIVE_LANGUAGES,
+    GENERIC_WORDS,
+    GUARD_FALLBACK_REPLIES,
+    MALIGNANCY_TERMS,
+} from './specialistGuardLexicon.js';
 
-/** Sent when the guard removed every sentence of a reply. */
-export const GUARD_FALLBACK_REPLY = "What do you make of it yourself? Tell me what you've seen and what supports it.";
+export { GUARD_FALLBACK_REPLIES } from './specialistGuardLexicon.js';
+
+/** The English fallback (GUARD_FALLBACK_REPLIES.en); kept for callers that name it. */
+export const GUARD_FALLBACK_REPLY = GUARD_FALLBACK_REPLIES.en;
+
+/**
+ * Sent when the guard removed every sentence of a reply: in the case
+ * language, English for an unknown one.
+ * @param {string} [language]  case language code
+ * @returns {string}
+ */
+export function guardFallbackReply(language) {
+    return GUARD_FALLBACK_REPLIES[language] || GUARD_FALLBACK_REPLIES[DEFAULT_LANGUAGE];
+}
 
 export const BRIEF_HEADER = '## CASE BRIEF (server)';
 export const BRIEF_FINDINGS_LEAD = 'Findings you may share or confirm when the student asks or describes them:';
@@ -373,41 +400,305 @@ export function buildSpecialistBrief({ specialty, findings, disclosureState: sta
 // ---------------------------------------------------------------------------
 
 /**
- * Lowercase, hyphens/dashes to spaces, every other non letter/number to a
- * space, whitespace collapsed. Matching then compares space-padded strings,
- * which is a whole-word / whole-phrase match ("carcinoma" does not match
- * inside "carcinomatosis").
+ * Lowercase, diacritics dropped (ä -> a, é -> e), hyphens/dashes to spaces,
+ * every other non letter/number to a space, whitespace collapsed. Every side
+ * of a comparison — answer terms, the lexicon, the reply — goes through this,
+ * so "syöpä" and "syopa" are the same word. Phrase matching then compares
+ * space-padded strings, which is a whole-word / whole-phrase match
+ * ("carcinoma" does not match inside "carcinomatosis").
  */
 export function normaliseForMatch(text) {
     if (typeof text !== 'string') return '';
     return text
         .normalize('NFKC')
         .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}+/gu, '')
+        .normalize('NFC')
         .replace(/[\p{Pd}‐-―]/gu, ' ')
         .replace(/[^\p{L}\p{N}]+/gu, ' ')
         .trim();
 }
 
+// A word shorter than this is never guarded on its own: it is matched only
+// as part of a whole answer phrase. Short words are where false hits live.
+const MIN_GUARDED_WORD = 5;
+// An answer phrase longer than this is prose (config.diagnosis is often a
+// whole report: "Sigmasuolen adenokarsinooma …, joka kasvaa lihaskerroksen
+// läpi …"); splitting it into words would censor every finding it mentions.
+// Prose is still matched as a whole phrase.
+const MAX_LABEL_WORDS = 4;
+// Outside the agglutinative languages a guarded word may grow by this many
+// letters (carcinoma -> carcinomas, carcinomi; Karzinom -> Karzinoms) and no
+// more, so "invasive" does not reach into "invasion".
+const MAX_SUFFIX = 3;
+// Finnish case endings stripped from an answer word before it becomes a
+// stem, longest first, in normaliseForMatch form (ä -> a). "-nen" adjectives
+// take -se-/-s- in every other form (kolorektaalinen, kolorektaalisen).
+const FINNISH_ENDINGS = ['nen', 'ssa', 'sta', 'lla', 'lta', 'lle', 'ksi', 'en', 'in', 'n', 'a'];
+const TRAILING_VOWELS = /[aeiouyаәеиоөұүыіэюя]+$/u;
+
+const normaliseList = (list) => arrayOf(list).map(normaliseForMatch).filter(Boolean);
+const AGGLUTINATIVE = new Set(AGGLUTINATIVE_LANGUAGES);
+const GENERIC = new Set(Object.values(GENERIC_WORDS).flatMap(normaliseList));
+// Every language's malignancy words, applied together (see the lexicon).
+const MALIGNANCY_ROOTS = [...new Set(Object.values(MALIGNANCY_TERMS).flatMap((entry) => normaliseList(entry.roots)))];
+const MALIGNANCY_WORDS = [...new Set(Object.values(MALIGNANCY_TERMS).flatMap((entry) => normaliseList(entry.words)))];
+
+const wordsOf = (text) => normaliseForMatch(text).split(' ').filter(Boolean);
+
 /**
- * Drop every sentence of a reply that names an answer term.
+ * The stem an answer word is guarded by: what every inflected form of it
+ * starts with. Agglutinative languages lose their case ending and trailing
+ * vowels ("adenokarsinooma" -> "adenokarsinoom", "koolonin" -> "koolon");
+ * elsewhere a long word loses only a final vowel ("carcinoma" -> "carcinom").
+ * A stem that would fall under MIN_GUARDED_WORD keeps the whole word.
+ *
+ * @param {string} word      normalised (normaliseForMatch) single word
+ * @param {string} language  case language code
+ * @returns {string}
+ */
+export function stemForGuard(word, language) {
+    if (AGGLUTINATIVE.has(language)) {
+        let stem = word;
+        if (language === 'fi') {
+            const ending = FINNISH_ENDINGS.find((e) => stem.endsWith(e) && stem.length - e.length >= MIN_GUARDED_WORD);
+            if (ending) stem = stem.slice(0, -ending.length);
+        }
+        stem = stem.replace(TRAILING_VOWELS, '');
+        return stem.length >= MIN_GUARDED_WORD ? stem : word;
+    }
+    return word.length >= 7 ? word.replace(/[aeiouy]$/u, '') : word;
+}
+
+/** Does a reply word (normalised) carry this stem? */
+function stemMatches(stem, word, language) {
+    if (!word.startsWith(stem)) return false;
+    return AGGLUTINATIVE.has(language) || word.length - stem.length <= MAX_SUFFIX;
+}
+
+// Every word a learner already holds of this case: the learner projection
+// (caseProjection.js), i.e. what GET /cases/:id sends a student. A word the
+// learner can read in their own material — the requisition says
+// "sigmasuolen resektaatti" — is not the answer, so it is not guarded on its
+// own even when an answer phrase contains it. Inline media is skipped.
+function learnerVisibleWords(config) {
+    const projected = projectCaseConfigForRole(config, PLUGIN_MANIFESTS, 'student');
+    const words = new Set();
+    const walk = (value) => {
+        if (typeof value === 'string') {
+            if (!value.startsWith('data:')) wordsOf(value).forEach((w) => words.add(w));
+        } else if (Array.isArray(value)) {
+            value.forEach(walk);
+        } else if (isObject(value)) {
+            Object.values(value).forEach(walk);
+        }
+    };
+    walk(projected);
+    return words;
+}
+
+// pathology diagnosis.requireTerms: the words the learner's own answer must
+// contain to be marked right. They are part of the answer.
+function requiredAnswerWords(domain, config) {
+    if (domain !== 'pathology' || !isObject(config.pathology) || !isObject(config.pathology.rubric)) return [];
+    return arrayOf(config.pathology.rubric.activities)
+        .filter((activity) => isObject(activity) && isObject(activity.diagnosis))
+        .flatMap((activity) => arrayOf(activity.diagnosis.requireTerms))
+        .filter((term) => typeof term === 'string');
+}
+
+/**
+ * Is the protected answer a malignancy? Looks inside compounds
+ * ("adenokarsinooma" carries "karsinoom").
+ *
+ * @param {string[]} terms  answer phrases
+ * @returns {boolean}
+ */
+export function isMalignantAnswer(terms) {
+    return arrayOf(terms).some((term) => wordsOf(term).some((word) =>
+        MALIGNANCY_ROOTS.some((root) => word.includes(root)) || MALIGNANCY_WORDS.includes(word)));
+}
+
+/**
+ * Everything the reply guard needs for one specialist on one case.
+ *
+ * - phrases: extractAnswerTerms() — matched as whole phrases.
+ * - stems: each distinctive word of a short answer label (≤ MAX_LABEL_WORDS
+ *   words) and of pathology requireTerms, stemmed for the case language.
+ *   Not guarded on its own: a word under MIN_GUARDED_WORD letters, a generic
+ *   modifier or function word (lexicon GENERIC_WORDS), or a word the
+ *   learner can already read in their own material (learnerVisibleWords).
+ * - classRoots / classWords: the lexicon's malignancy words, every language,
+ *   when the answer itself is malignant.
+ *
+ * @param {string} domain   specialty domain
+ * @param {object} config   parsed case config
+ * @param {object} [options]
+ * @param {string} [options.fallbackLanguage]  used when the config carries no
+ *   known case_language (a legacy case); defaults to English
+ * @returns {{language: string, phrases: string[], stems: string[], classRoots: string[], classWords: string[]}}
+ */
+export function buildReplyGuard(domain, config, { fallbackLanguage } = {}) {
+    const safeConfig = isObject(config) ? config : {};
+    let language = DEFAULT_LANGUAGE;
+    if (isKnownLanguage(safeConfig.case_language)) language = safeConfig.case_language;
+    else if (isKnownLanguage(fallbackLanguage)) language = fallbackLanguage;
+    const phrases = extractAnswerTerms(domain, safeConfig);
+    const required = requiredAnswerWords(domain, safeConfig);
+    const labelWords = [...phrases, ...required]
+        .map(wordsOf)
+        .filter((words) => words.length > 0 && words.length <= MAX_LABEL_WORDS)
+        .flat()
+        .filter((word) => word.length >= MIN_GUARDED_WORD && !GENERIC.has(word) && !/^\p{N}+$/u.test(word));
+    const visible = labelWords.length > 0 ? [...learnerVisibleWords(safeConfig)] : [];
+    const stems = [...new Set(labelWords.map((word) => stemForGuard(word, language)))]
+        .filter((stem) => !visible.some((word) => stemMatches(stem, word, language)));
+    const malignant = isMalignantAnswer([...phrases, ...required]);
+    return {
+        language,
+        phrases,
+        stems,
+        classRoots: malignant ? MALIGNANCY_ROOTS : [],
+        classWords: malignant ? MALIGNANCY_WORDS : [],
+    };
+}
+
+/**
+ * Does the guard have anything to look for?
+ * @param {object} guard  buildReplyGuard()
+ * @returns {boolean}
+ */
+export function guardHasTerms(guard) {
+    if (!isObject(guard)) return false;
+    return ['phrases', 'stems', 'classRoots', 'classWords'].some((key) => arrayOf(guard[key]).length > 0);
+}
+
+// A plain array is the original call shape: answer phrases only, matched as
+// whole phrases.
+function asGuard(guardOrTerms, language) {
+    const lang = isKnownLanguage(language) ? language : DEFAULT_LANGUAGE;
+    if (Array.isArray(guardOrTerms)) {
+        return { language: lang, phrases: guardOrTerms, stems: [], classRoots: [], classWords: [] };
+    }
+    if (!isObject(guardOrTerms)) return { language: lang, phrases: [], stems: [], classRoots: [], classWords: [] };
+    return {
+        language: isKnownLanguage(guardOrTerms.language) ? guardOrTerms.language : lang,
+        phrases: arrayOf(guardOrTerms.phrases),
+        stems: arrayOf(guardOrTerms.stems),
+        classRoots: arrayOf(guardOrTerms.classRoots),
+        classWords: arrayOf(guardOrTerms.classWords),
+    };
+}
+
+function compileGuard(guard) {
+    const needles = guard.phrases.map(normaliseForMatch).filter((t) => t.length >= 2).map((t) => ` ${t} `);
+    const stems = guard.stems.map(normaliseForMatch).filter(Boolean);
+    const roots = guard.classRoots.map(normaliseForMatch).filter(Boolean);
+    const classWords = new Set(guard.classWords.map(normaliseForMatch).filter(Boolean));
+    const empty = needles.length + stems.length + roots.length + classWords.size === 0;
+    const namesAnswer = (sentence) => {
+        const normalised = normaliseForMatch(sentence);
+        if (!normalised) return false;
+        const hay = ` ${normalised} `;
+        if (needles.some((needle) => hay.includes(needle))) return true;
+        return normalised.split(' ').some((word) =>
+            classWords.has(word)
+            || roots.some((root) => word.includes(root))
+            || stems.some((stem) => stemMatches(stem, word, guard.language)));
+    };
+    return { empty, namesAnswer, fallback: guardFallbackReply(guard.language) };
+}
+
+// A sentence ends at terminal punctuation (plus any closing quote/bracket)
+// followed by whitespace, or at a line break. "3.5 cm" is not a boundary.
+const SENTENCE_END = /[.!?…]+["'”’»)\]]*\s+|\n+/gu;
+
+// Complete sentences (each with its trailing whitespace) and the unfinished
+// rest. Joining parts + rest gives back the input exactly.
+function cutSentences(text) {
+    const parts = [];
+    let start = 0;
+    for (const match of text.matchAll(SENTENCE_END)) {
+        const end = match.index + match[0].length;
+        parts.push(text.slice(start, end));
+        start = end;
+    }
+    return { parts, rest: text.slice(start) };
+}
+
+/**
+ * Drop every sentence of a reply that names the answer.
  *
  * @param {string} text
- * @param {string[]} terms   extractAnswerTerms()
+ * @param {object|string[]} guardOrTerms  buildReplyGuard(), or a plain list
+ *   of answer phrases (whole-phrase match only)
+ * @param {object} [options]
+ * @param {string} [options.language]  fallback language for a plain list
  * @returns {{text: string, removed: number}} when every sentence is removed,
- *   text is GUARD_FALLBACK_REPLY
+ *   text is the fallback question in the guard's language
  */
-export function guardSpecialistReply(text, terms) {
+export function guardSpecialistReply(text, guardOrTerms, { language } = {}) {
     if (typeof text !== 'string' || text.trim() === '') return { text: typeof text === 'string' ? text : '', removed: 0 };
-    const needles = arrayOf(terms).map(normaliseForMatch).filter((t) => t.length >= 2).map((t) => ` ${t} `);
-    if (needles.length === 0) return { text, removed: 0 };
-    // A sentence runs to its terminal punctuation (or the end of the text).
-    const sentences = text.match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || [text];
-    const kept = sentences.filter((sentence) => {
-        const hay = ` ${normaliseForMatch(sentence)} `;
-        return !needles.some((needle) => hay.includes(needle));
-    });
+    const compiled = compileGuard(asGuard(guardOrTerms, language));
+    if (compiled.empty) return { text, removed: 0 };
+    const { parts, rest } = cutSentences(text);
+    const sentences = rest ? [...parts, rest] : parts;
+    const kept = sentences.filter((sentence) => !compiled.namesAnswer(sentence));
     const removed = sentences.length - kept.length;
     if (removed === 0) return { text, removed: 0 };
     const joined = kept.map((s) => s.trim()).filter(Boolean).join(' ');
-    return { text: joined || GUARD_FALLBACK_REPLY, removed };
+    return { text: joined || compiled.fallback, removed };
+}
+
+/**
+ * The guard for a STREAMED reply. Deltas are held until a sentence is
+ * complete; each complete sentence is checked and handed back only when it
+ * names no answer. A sentence is therefore never on the wire before it has
+ * been guarded — the cost is that text arrives a sentence at a time.
+ *
+ *   const g = createStreamReplyGuard(guard);
+ *   write(g.push(delta));   // for every delta ('' while a sentence is open)
+ *   write(g.end());         // the last sentence, or the fallback question
+ *                           // when every sentence was removed
+ *   g.removed               // sentences dropped
+ *
+ * @param {object|string[]} guardOrTerms  as guardSpecialistReply
+ * @param {object} [options]
+ * @param {string} [options.language]  fallback language for a plain list
+ * @returns {{push: (delta: string) => string, end: () => string, readonly removed: number}}
+ */
+export function createStreamReplyGuard(guardOrTerms, { language } = {}) {
+    const compiled = compileGuard(asGuard(guardOrTerms, language));
+    let pending = '';
+    let removed = 0;
+    let wroteText = false;
+    let ended = false;
+    const pass = (sentence) => {
+        if (sentence.trim() === '') return wroteText ? sentence : '';
+        if (compiled.namesAnswer(sentence)) {
+            removed += 1;
+            return '';
+        }
+        wroteText = true;
+        return sentence;
+    };
+    return {
+        push(delta) {
+            if (ended || typeof delta !== 'string' || delta === '') return '';
+            pending += delta;
+            const { parts, rest } = cutSentences(pending);
+            pending = rest;
+            return parts.map(pass).join('');
+        },
+        end() {
+            if (ended) return '';
+            ended = true;
+            const last = pending ? pass(pending) : '';
+            pending = '';
+            if (!wroteText && removed > 0) return compiled.fallback;
+            return last;
+        },
+        get removed() { return removed; },
+    };
 }

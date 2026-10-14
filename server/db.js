@@ -395,8 +395,8 @@ You are a tutor, not a judge. The goal is learning, not assessment.`,
         // carrying findings and nothing else (services/specialistBrief.js).
         {
             agent_type: 'pathologist',
-            name: 'On-call Pathologist',
-            role_title: 'Pathologist',
+            name: SPECIALTIES.pathologist.seededName,
+            role_title: SPECIALTIES.pathologist.seededRoleTitle,
             avatar_url: 'rb_business_female_02.glb',
             system_prompt: `You are the pathologist who reported this case's material. A medical student or resident has called you about it. You are collegial, patient and precise.
 
@@ -437,8 +437,8 @@ Limits:
         },
         {
             agent_type: 'cardiologist',
-            name: 'On-call Cardiologist',
-            role_title: 'Cardiologist',
+            name: SPECIALTIES.cardiologist.seededName,
+            role_title: SPECIALTIES.cardiologist.seededRoleTitle,
             avatar_url: 'rb_business_male_07.glb',
             system_prompt: `You are the cardiologist who read this case's ECG. A medical student or resident has called you about it. You are collegial, calm and systematic.
 
@@ -479,8 +479,8 @@ Limits:
         },
         {
             agent_type: 'radiologist',
-            name: 'On-call Radiologist',
-            role_title: 'Radiologist',
+            name: SPECIALTIES.radiologist.seededName,
+            role_title: SPECIALTIES.radiologist.seededRoleTitle,
             avatar_url: 'rb_male_adult_08.glb',
             system_prompt: `You are the radiologist who reported this case's imaging. A medical student or resident has called you about it. You are collegial, methodical and clear.
 
@@ -521,8 +521,8 @@ Limits:
         },
         {
             agent_type: 'laboratorian',
-            name: 'On-call Laboratory Specialist',
-            role_title: 'Laboratory specialist',
+            name: SPECIALTIES.laboratorian.seededName,
+            role_title: SPECIALTIES.laboratorian.seededRoleTitle,
             avatar_url: 'rb_medical_female_01.glb',
             system_prompt: `You are the laboratory specialist who ran and validated this case's tests. A medical student or resident has called the lab about the results. You are collegial, exact and unhurried.
 

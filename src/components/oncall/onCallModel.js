@@ -5,7 +5,7 @@
 // Which agent types are specialists is NOT decided here: the registry in
 // server/shared/specialties.js is the single source of truth.
 
-import { isSpecialistType, specialtyTypeForRoom } from '../../../server/shared/specialties.js';
+import { SPECIALTIES, isSpecialistType, specialtyTypeForRoom } from '../../../server/shared/specialties.js';
 import { AgentService } from '../../services/AgentService';
 
 /** The case's enabled on-call specialists, in the server's order. */
@@ -93,10 +93,73 @@ export function formatCallDuration(ms) {
     return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// AgentService.sendAgentMessage never throws: it returns these English
-// prefixes on failure. They are shown in the thread but never read aloud.
-export function isFailedReply(text) {
-    return typeof text === 'string' && /^(Error:|Rate limit exceeded:|Service unavailable:)/.test(text);
+// oncall-namespace keys for a seeded specialist's name and role title, by
+// agent type. Static so i18next-parser keeps them.
+const SEEDED_NAME_KEYS = Object.freeze({
+    pathologist: 'seeded_name_pathologist',
+    cardiologist: 'seeded_name_cardiologist',
+    radiologist: 'seeded_name_radiologist',
+    laboratorian: 'seeded_name_laboratorian',
+});
+const SEEDED_ROLE_KEYS = Object.freeze({
+    pathologist: 'seeded_role_pathologist',
+    cardiologist: 'seeded_role_cardiologist',
+    radiologist: 'seeded_role_radiologist',
+    laboratorian: 'seeded_role_laboratorian',
+});
+
+const sameText = (a, b) => typeof a === 'string' && typeof b === 'string' && a.trim() === b.trim();
+
+/**
+ * The name the phone shows for a specialist, in the UI language like every
+ * other label on the phone. A specialist still carrying its seeded English
+ * name ("On-call Pathologist", SPECIALTIES[type].seededName) is shown
+ * translated ("Päivystävä patologi"); a name an educator wrote is shown as
+ * written. The stored name is never changed — the event log and the server
+ * prompt keep it.
+ *
+ * @param {object} agent  a session agent row
+ * @param {(key: string) => string} t  react-i18next t for 'oncall'
+ * @returns {string}
+ */
+export function displayNameOf(agent, t) {
+    const name = agent?.name || '';
+    const spec = SPECIALTIES[agent?.agent_type];
+    return spec && sameText(name, spec.seededName) ? t(SEEDED_NAME_KEYS[spec.agentType]) : name;
+}
+
+/** As displayNameOf, for the role title ("Pathologist" -> "Patologi"). */
+export function displayRoleOf(agent, t) {
+    const role = agent?.role_title || '';
+    const spec = SPECIALTIES[agent?.agent_type];
+    return spec && sameText(role, spec.seededRoleTitle) ? t(SEEDED_ROLE_KEYS[spec.agentType]) : role;
+}
+
+// oncall-namespace keys for "could not reach <specialist>". Per specialty,
+// not "{name}" in one sentence: Finnish puts the specialist in the illative
+// ("päivystävään patologiin"), which a name placeholder cannot inflect.
+const REPLY_FAILED_KEYS = Object.freeze({
+    pathologist: 'reply_failed_pathologist',
+    cardiologist: 'reply_failed_cardiologist',
+    radiologist: 'reply_failed_radiologist',
+    laboratorian: 'reply_failed_laboratorian',
+});
+
+/**
+ * The oncall-namespace key for the operational line shown when a turn went
+ * unanswered — never a message from the specialist (useSpecialistThread
+ * `failure`). Every key takes `{ name }`; the ones that do not use it ignore
+ * it.
+ *
+ * @param {{kind: string}|null} failure
+ * @param {object} agent
+ * @returns {string|null}  null when there is no failure
+ */
+export function failureKeyOf(failure, agent) {
+    if (!failure) return null;
+    if (failure.kind === 'rate_limited') return 'reply_rate_limited';
+    if (failure.kind === 'no_answer') return 'chat_no_answer';
+    return REPLY_FAILED_KEYS[agent?.agent_type] || 'reply_failed';
 }
 
 /**

@@ -4,7 +4,9 @@ import {
     formatCallDuration,
     statusKeyFor,
     initialsOf,
-    isFailedReply,
+    displayNameOf,
+    displayRoleOf,
+    failureKeyOf,
     isImageAvatar,
     newCallId,
     reachabilityOf,
@@ -12,7 +14,9 @@ import {
     specialistTypeForRoom,
     SPECIALTY_LABEL_KEYS,
 } from './onCallModel';
-import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
+import { SPECIALIST_TYPES, SPECIALTIES } from '../../../server/shared/specialties.js';
+import fiOncall from '../../locales/fi/oncall.json';
+import enOncall from '../../locales/en/oncall.json';
 
 const team = [
     { agent_type: 'patient', name: 'Default Patient', enabled: true },
@@ -87,16 +91,64 @@ describe('newCallId', () => {
     });
 });
 
-describe('formatCallDuration / isFailedReply', () => {
+describe('formatCallDuration', () => {
     it('formats mm:ss', () => {
         expect(formatCallDuration(0)).toBe('0:00');
         expect(formatCallDuration(65_400)).toBe('1:05');
         expect(formatCallDuration(-5)).toBe('0:00');
     });
-    it('recognises the service failure strings', () => {
-        expect(isFailedReply('Error: Could not communicate with X.')).toBe(true);
-        expect(isFailedReply('Rate limit exceeded: slow down')).toBe(true);
-        expect(isFailedReply('The margins are clear.')).toBe(false);
+});
+
+// Regression lock: FI-0010 journey review (2026-10-14) — a Finnish learner's
+// phone said "On-call Pathologist": the seeded template's English name was
+// rendered as stored. A seeded name is now shown from the oncall catalogue in
+// the UI language; an educator's own name is shown as written.
+describe('displayNameOf / displayRoleOf', () => {
+    const fiT = (key) => fiOncall[key] ?? key;
+    const pathologist = { agent_type: 'pathologist', name: 'On-call Pathologist', role_title: 'Pathologist' };
+
+    it('translates a seeded specialist name and role title', () => {
+        expect(displayNameOf(pathologist, fiT)).toBe('Päivystävä patologi');
+        expect(displayRoleOf(pathologist, fiT)).toBe('Patologi');
+        expect(displayNameOf({ ...pathologist, name: ' On-call Pathologist ' }, fiT)).toBe('Päivystävä patologi');
+    });
+
+    it('keeps an educator-edited name and role as written', () => {
+        const edited = { agent_type: 'pathologist', name: 'Dr. Ana Moreno', role_title: 'Consultant pathologist' };
+        expect(displayNameOf(edited, fiT)).toBe('Dr. Ana Moreno');
+        expect(displayRoleOf(edited, fiT)).toBe('Consultant pathologist');
+    });
+
+    it('does not translate a seeded name found on another agent type', () => {
+        expect(displayNameOf({ agent_type: 'nurse', name: 'On-call Pathologist' }, fiT)).toBe('On-call Pathologist');
+        expect(displayNameOf(null, fiT)).toBe('');
+    });
+
+    it('every specialty: the English label equals the seeded name, and Finnish has its own (invariant)', () => {
+        const enT = (key) => enOncall[key];
+        SPECIALIST_TYPES.forEach((type) => {
+            const seeded = { agent_type: type, name: SPECIALTIES[type].seededName, role_title: SPECIALTIES[type].seededRoleTitle };
+            expect(displayNameOf(seeded, enT), type).toBe(SPECIALTIES[type].seededName);
+            expect(displayRoleOf(seeded, enT), type).toBe(SPECIALTIES[type].seededRoleTitle);
+            expect(displayNameOf(seeded, fiT), type).not.toBe(SPECIALTIES[type].seededName);
+            expect(failureKeyOf({ kind: 'failed' }, seeded) in fiOncall, type).toBe(true);
+        });
+    });
+});
+
+describe('failureKeyOf', () => {
+    it('names the operational error for an unanswered turn', () => {
+        const agent = { agent_type: 'pathologist' };
+        expect(failureKeyOf(null, agent)).toBeNull();
+        expect(failureKeyOf({ kind: 'failed' }, agent)).toBe('reply_failed_pathologist');
+        expect(failureKeyOf({ kind: 'unavailable' }, agent)).toBe('reply_failed_pathologist');
+        expect(failureKeyOf({ kind: 'rate_limited' }, agent)).toBe('reply_rate_limited');
+        expect(failureKeyOf({ kind: 'no_answer' }, agent)).toBe('chat_no_answer');
+        expect(failureKeyOf({ kind: 'failed' }, { agent_type: 'nurse' })).toBe('reply_failed');
+    });
+
+    it('the Finnish pathologist line is the review\'s wording', () => {
+        expect(fiOncall.reply_failed_pathologist).toBe('Yhteyttä päivystävään patologiin ei saatu. Yritä uudelleen.');
     });
 });
 
