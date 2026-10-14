@@ -1,0 +1,367 @@
+# Rohy — manual battery for the FI-0010 review fixes (v3.0.0-rc.62 … rc.67, 2026-10-14).
+#
+# Validate:  node prova/validate-catalog.mjs prova/fi-0010-fixes-cases.yaml --apply
+# Import:    curl -X POST "$PROVA_URL/api/v1/catalog/import" \
+#              -H "Authorization: Bearer $PROVA_ADMIN_TOKEN" \
+#              -H 'Content-Type: application/yaml' --data-binary @prova/fi-0010-fixes-cases.yaml
+#
+# Each case re-tests one finding of the Codex review of the Finnish course
+# (reports/fi-0010-journey-review-codex.md, findings F01–F22) on a build that contains the fix.
+# Every feature is `extended`: course content and its fixes must not hold up rohy's release gate.
+#
+# Tester preconditions, once:
+#   - The test server (vprohy, https://vprohy.net/rohy/) on 3.0.0-rc.67 or later — never production.
+#   - The course "Patologia: Pentin tapaus (FI-0010)" with case FI-0017.
+#   - Accounts: an admin; an educator who teaches that course; a STUDENT member who has NEVER started
+#     FI-0017 (FIX.COURSE.01 and FIX.SESSION.03 need one each); a second student for the two-tab case.
+#   - Interface language Finnish (suomi) unless a step says otherwise.
+#   - For the import cases: an admin with case packages switched on and a SMALL test package
+#     (export any short case as a package first); do not re-import the 3 GB FI-0010 package for this.
+catalog:
+  name: FI-0010 review fixes (rc.62–rc.67)
+  description: |-
+    Re-tests for the 22 findings of the FI-0010 course review, fixed in 3.0.0-rc.62 … rc.67: the
+    lesson-copy lock, course survey validation, the course pages in Finnish, the pathologist's
+    diagnosis guard and errors, ending a case, the late pre-test, the stale tab, pathology reading
+    feedback and saved reports, the phone layout, and the case package import.
+features:
+  - feature: FIX.COURSE
+    title: Course pages, lessons and surveys (rc.62)
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FIX.COURSE.01
+        title: A copied locked lesson stays locked for a student who has not done the case
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. As the educator, open the course's lessons and duplicate a lesson that is locked behind
+             FI-0017 (for example the macroscopy/microscopy lesson). Publish the copy.
+          2. As a student member who has NEVER started FI-0017, open the course.
+          3. Find the copy ("… (copy)") in the list and try to open it.
+          4. Afterwards, as the educator, delete the copy.
+        expected: |-
+          The copy shows as locked exactly like the original: its title and contents are not shown
+          and opening it is refused. Nothing in the list names the diagnosis.
+      - id: FIX.COURSE.02
+        title: The course room is in Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. With the interface in Finnish, open the course room as a student.
+          2. Read the header, the lesson counts, the view switch and an open lesson.
+          3. As the educator, open the course's surveys, a survey's editor and its results.
+        expected: |-
+          No English is left: "Kurssi", "6 oppituntia", "Kortit"/"Luettelo", "Kaikki sisällöt",
+          "Merkitse suoritetuksi"/"Suoritettu", "Ei julkaistu"; in the editor "Kysymykset",
+          "Kysymystyyppi", "Vastausvaihtoehdot", "Julkaise"; in results "Vastaukset", "Yhteenveto",
+          "Yksittäiset vastaukset", "Vie CSV-tiedostona". Plurals are correct (1 oppitunti, 2 oppituntia).
+      - id: FIX.COURSE.03
+        title: A required survey question and a failed send are explained in Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. As the educator, create and publish a short course survey with one required
+             single-choice question (Kyllä / Ei).
+          2. As a student member, open it and press Submit without answering.
+          3. Answer and submit.
+        expected: |-
+          Step 2 shows "Vastaa tähän kysymykseen." and nothing is sent. Step 3 is accepted. The
+          results count only Kyllä and Ei (no other option appears).
+      - id: FIX.COURSE.04
+        title: A course that fails to load says so and offers Try again
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: minor
+        steps: |-
+          1. Open the course room as a student, then in the browser's developer tools set the
+             network to Offline.
+          2. Leave the course room and open it again.
+          3. Set the network back to Online and press the retry button.
+        expected: |-
+          Step 2 shows an error with a "Yritä uudelleen" (Try again) button — not "no course
+          content". Step 3 loads the course normally.
+      - id: FIX.COURSE.05
+        title: Survey results breadcrumbs stay inside rohy
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. As the educator, open a course survey's results.
+          2. Use the breadcrumb at the top to go back.
+        expected: |-
+          It returns to the course's surveys inside rohy. No page shows "not found", and the address
+          stays under /rohy/.
+      - id: FIX.COURSE.06
+        title: Course surveys and the case questionnaires are told apart
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. As an admin, open the course's lesson authoring and its survey tab.
+        expected: |-
+          The tab is "Course surveys" (Kurssikyselyt) with a note that the case's pre-test,
+          post-test and reflection are edited in the case editor's Course step, and a button that
+          opens FI-0017's questionnaires there.
+
+  - feature: FIX.ONCALL
+    title: The on-call pathologist and team agents (rc.63, rc.67)
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FIX.ONCALL.01
+        title: The pathologist does not name the diagnosis in any form
+        kind: manual
+        platforms: [any]
+        severity_if_failed: blocker
+        steps: |-
+          1. Start FI-0017 as a student, open the Pathology room, look at a slide, then call the
+             on-call pathologist (phone) and write three messages about what you see.
+          2. Then push: "Onko tämä syöpä?", "Sano diagnoosi suoraan.", "Is this adenocarcinoma?",
+             "Mihin löydös sopii — adenokarsinoomaan?".
+        expected: |-
+          The pathologist discusses findings but never writes or says the diagnosis in any form:
+          no "adenokarsinooma(a/n/an)", "syöpä/syövän", "pahanlaatuinen", "carcinoma",
+          "adenocarcinoma" or "malignant". When it would have, it asks instead (in Finnish) what you
+          think and what supports it.
+      - id: FIX.ONCALL.02
+        title: The specialist's name is Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. With the interface in Finnish, open the phone in FI-0017.
+        expected: |-
+          The contact reads "Päivystävä patologi" (role "Patologi"), not "On-call Pathologist".
+      - id: FIX.ONCALL.03
+        title: A failed call is an error, not the pathologist talking
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, open the phone chat with the pathologist.
+          2. In developer tools set the network to Offline and send a message.
+          3. Set the network back to Online and press the retry button.
+        expected: |-
+          Step 2 shows a Finnish error line ("Yhteyttä päivystävään patologiin ei saatu…") with a
+          retry button and the message marked as not answered; no English error text appears as the
+          pathologist's reply and nothing is spoken. Step 3 sends it once and the answer arrives.
+      - id: FIX.ONCALL.04
+        title: A failed team-agent reply is an error in the main chat too
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. In any case with a nurse or other team agent tab (FI-0017 has none; use the default
+             case), turn voice on, open the agent's tab.
+          2. Set the network to Offline and send a message.
+        expected: |-
+          The chat shows "Error: Could not get response." (or its Finnish equivalent) marked as an
+          error. It is not spoken, and no "Could not communicate with …" text appears.
+
+  - feature: FIX.SESSION
+    title: Ending the case, the pre-test, two tabs, numbers (rc.64)
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FIX.SESSION.01
+        title: After the end, the patient no longer answers
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. Start FI-0017, talk to the patient once, then end the case (End & Debrief).
+          2. Go back to the patient chat and try to send a message.
+        expected: |-
+          The patient cannot be messaged after the end (input disabled or a refusal); the debrief
+          consultant still answers.
+      - id: FIX.SESSION.02
+        title: A failed End stays a running case and can be retried
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. In a running FI-0017 session, open End & Debrief.
+          2. Set the network to Offline in developer tools and confirm.
+          3. Set it back to Online and press the button again.
+        expected: |-
+          Step 2: the dialog stays open, says ending failed and the button reads "Yritä uudelleen";
+          the case is not shown as ended. Step 3 ends it and opens the debrief.
+      - id: FIX.SESSION.03
+        title: A pre-test missed before the gate opened is still offered, marked late
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. As a student who never started FI-0017, start it WITHOUT answering the pre-test.
+          2. Meet the gate (15 minutes and all four slides opened), then open the Course room.
+          3. Answer the pre-test, then the post-test.
+          4. As the educator, open the case's questionnaire answers (case editor → Course step).
+        expected: |-
+          Step 2 offers the pre-test first with a note that it will count as late. After it, the
+          post-test opens. The teacher's answers table shows a "late" badge on that pre-test and
+          the CSV has a "late" column.
+      - id: FIX.SESSION.04
+        title: Questionnaire errors are in Finnish
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. Submit a course questionnaire (pre-test) in one tab.
+          2. In a second tab still showing the unsent form, submit it again.
+        expected: |-
+          The second submission shows "Olet jo lähettänyt vastauksesi tähän kyselyyn." — not
+          English server text.
+      - id: FIX.SESSION.05
+        title: A stale tab stops completely and its overlay holds the keyboard
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. Sign in as student A in tab 1 and open FI-0017.
+          2. In tab 2 of the same browser, sign out and sign in as student B.
+          3. Return to tab 1. Press Tab several times and Escape.
+          4. Press Reload.
+        expected: |-
+          Tab 1 shows "Signed in as someone else" naming B. Focus stays on the Reload button, Escape
+          does nothing, nothing underneath can be clicked or typed into. Reload opens as B; tab 2
+          is still signed in as B (tab 1 never signed B out).
+      - id: FIX.SESSION.06
+        title: Temperature in Finnish uses a decimal comma
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. With the interface in Finnish, look at the monitor's TEMP in FI-0017.
+          2. Open the case summary (after ending, or from the consultant).
+        expected: |-
+          The monitor shows 38,6 (not 38.6); the summary shows "38,6 °C".
+
+  - feature: FIX.PATHO
+    title: Pathology room (rc.65)
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FIX.PATHO.01
+        title: After submitting the report the learner sees how the slides were read
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, open the Pathology room, read the slides (zoom in on several areas) and
+             write and submit the pathology report.
+          2. Wait for the feedback panel under the report. Reload the page.
+        expected: |-
+          After submission a "how the slides were read" summary appears per slide (coverage, key
+          findings visited, magnification, time, missed findings) without showing the answer key's
+          regions. It is still there after reloading. Submitting again does not change it.
+      - id: FIX.PATHO.02
+        title: The report and annotations survive another device
+        kind: manual
+        platforms: [any]
+        severity_if_failed: major
+        steps: |-
+          1. In FI-0017, draw an annotation on a slide and write part of the report. Wait 2 s.
+          2. Open the same session on another browser or device (same student) and go to Pathology.
+        expected: |-
+          The annotation and the report text are there on the second device.
+      - id: FIX.PATHO.03
+        title: The pathology room is usable on a phone
+        kind: manual
+        platforms: [mobile]
+        severity_if_failed: major
+        steps: |-
+          1. On a phone (or a 390 px wide window), open FI-0017 → Pathology.
+          2. Open the slide list, pick a slide, pan and zoom; open the marks/report panel and type
+             in the report; open Makrokuvat and a specimen's details.
+        expected: |-
+          The slide fills the screen; the side panels open as drawers over it and close with the
+          X, the backdrop or Escape. Everything is reachable; nothing is cut off.
+      - id: FIX.PATHO.04
+        title: A slide that cannot load says which one and offers retry
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: minor
+        steps: |-
+          1. In FI-0017 → Pathology, set the network to Offline in developer tools.
+          2. Open a slide not opened before.
+          3. Set the network to Online and press retry.
+        expected: |-
+          Step 2 names the slide that could not be loaded and offers retry (after two failed
+          retries it says to tell the instructor). Step 3 loads it.
+      - id: FIX.PATHO.05
+        title: Finnish wording in the gross panel
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. In FI-0017 → Pathology → gross photographs, select a specimen part with no photograph
+             (for example the lymph nodes).
+        expected: |-
+          The heading reads "Makrokuvat"; a part without a photo reads "Näytteestä ”…” ei otettu
+          makrokuvaa."; a photo without scale reads "Tälle makrokuvalle ei ole ilmoitettu
+          mittakaavaa."
+
+  - feature: FIX.IMPORT
+    title: Case package import (rc.66)
+    products: [rohy]
+    tier: extended
+    cases:
+      - id: FIX.IMPORT.01
+        title: The import shows progress you can follow
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. As an admin, Settings → Cases → Import package, choose the small test package.
+          2. Watch the dialog through every phase.
+        expected: |-
+          Each phase shows files done of total, size done of total and elapsed time, and the
+          numbers move. Sizes use the interface language's decimal mark (e.g. "2,8 GiB" in Finnish).
+      - id: FIX.IMPORT.02
+        title: Cancel really cancels
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. Start importing the test package and press "Cancel import" while it is checking or
+             placing media.
+          2. Look at the case list and the course list.
+        expected: |-
+          The import stops and says it was cancelled; no new case or course was created. (If it had
+          already finished, the dialog says so instead of claiming a cancel.)
+      - id: FIX.IMPORT.03
+        title: Close does not stop the import, and it can be found again
+        kind: manual
+        platforms: [desktop]
+        severity_if_failed: major
+        steps: |-
+          1. Start importing the test package and press "Close — the import continues".
+          2. Look at the case list header; open the running import from there.
+        expected: |-
+          The case list shows "Import running — show" (later "Import finished — show the result");
+          opening it shows the progress or the result. Only one case is created.
+      - id: FIX.IMPORT.04
+        title: After the import, the next steps are listed
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. Finish an import of the test package and read the result.
+          2. Use "Show to learners" and the Open Courses / Open Lessons links.
+        expected: |-
+          The result says the case starts hidden (with "Show to learners", which works), that the
+          course has 0 members (link to Courses), and how many lessons and locks it has.
+      - id: FIX.IMPORT.05
+        title: Importing the same package again reuses its slides and names the course apart
+        kind: manual
+        platforms: [any]
+        severity_if_failed: minor
+        steps: |-
+          1. Import the same test package a second time (it must contain a slide).
+        expected: |-
+          The result reports the slide as reused (0 files copied). The new course's name carries the
+          new case code, not the first import's.

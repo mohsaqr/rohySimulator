@@ -9,6 +9,13 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.68] — 2026-10-14
+
+- **A Prova catalogue to re-test the FI-0010 review fixes** (`prova/fi-0010-fixes-cases.yaml`, imported as
+  "FI-0010 review fixes (rc.62–rc.67)"): 26 manual cases in five features — course pages and surveys, the on-call
+  pathologist and team agents, ending a case / late pre-test / stale tab, the pathology room, and the case package
+  import. All `extended`, so they do not hold up the release gate. No application change.
+
 ## [3.0.0-rc.67] — 2026-10-14
 
 - **A failed team-agent reply is not the agent talking.** In the main chat, a nurse's or other team agent's
