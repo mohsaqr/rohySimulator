@@ -504,6 +504,20 @@ describe('ChatInterface — broader behaviour (Phase 4 sibling, not the leak tes
         expect(ttsForAgent.body.rate).toBe(0.95);
     });
 
+    // Regression lock: a team agent's failed request was turned into "Error: Could not communicate with Nancy. LLM API Error (500): …" by sendAgentMessage and shown — and in voice mode spoken — as the nurse's own reply (FI-0010 review F13, 2026-10-14)
+    it('a failed team-agent request is shown as an error, not as the agent speaking', async () => {
+        server.use(http.post('*/api/proxy/llm', () => HttpResponse.json({ error: 'upstream exploded' }, { status: 500 })));
+        mount(caseFixture);
+        const nurseTab = await screen.findByRole('button', { name: /nancy/i });
+        fireEvent.click(nurseTab);
+        const nurseInput = await screen.findByPlaceholderText(/message nancy/i);
+        fireEvent.change(nurseInput, { target: { value: 'Update?' } });
+        fireEvent.submit(nurseInput.closest('form'));
+        expect(await screen.findByText('Error: Could not get response.')).toBeInTheDocument();
+        expect(screen.queryByText(/could not communicate with/i)).toBeNull();
+        expect(screen.queryByText(/upstream exploded/i)).toBeNull();
+    });
+
     // Regression lock: the patient's system prompt was assembled here and the proxy used it verbatim. The client now names the persona and sends NO prompt; the server builds it from the session's case snapshot (snapshot-wins, frozen persona and no-authoring-title are locked server-side in tests/server/patient-persona-server-built.test.js) (Phase 1, 2026-10-04)
     it('names the patient persona and sends no system prompt of its own', async () => {
         llmResponseText = 'I see.';

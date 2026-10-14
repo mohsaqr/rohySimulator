@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.67] — 2026-10-14
+
+- **A failed team-agent reply is not the agent talking.** In the main chat, a nurse's or other team agent's
+  failed request became "Error: Could not communicate with Nancy. LLM API Error (500): …", shown — and in voice
+  mode spoken — as the agent's own reply (the phone was fixed in rc.63). The chat now shows its localized error
+  line, marked as an error and left out of the agent's history. The team log it fetched after every reply, and
+  never used, is no longer fetched.
+
 ## [3.0.0-rc.66] — 2026-10-14
 
 Case package import (the 3 GB FI-0010 package sat at "Checking media…" for up to an hour with no sign of life):

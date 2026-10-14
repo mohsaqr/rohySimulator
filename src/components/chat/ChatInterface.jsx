@@ -252,7 +252,7 @@ function notifySubstitutionOnce(toast, t, r) {
     toast?.info?.(t('voice_default_not_configured', { voice: r.file }));
 }
 
-export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, currentVitals, personaRefreshCounter = 0, signalCapture = null, caseEnded = false }) {
+export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, personaRefreshCounter = 0, signalCapture = null, caseEnded = false }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(null);
@@ -414,7 +414,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // per-agent setTimeout — those used to live here and got dropped
     // whenever the chat remounted, leaving agents stuck "on the way".
     const [nowTick, setNowTick] = useState(() => Date.now());
-    const [teamLog, setTeamLog] = useState([]);
     const alarmSpeechCooldownRef = useRef(new Map());
     const pendingAlarmSpeechRef = useRef(null);
 
@@ -544,9 +543,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     await resolvePatientTemplate(agentList, activeCase, () => AgentService.getTemplates()),
                 );
 
-                // Load team communications
-                const log = await AgentService.getTeamCommunications(sessionId);
-                setTeamLog(log);
             } catch (err) {
                 console.error('Failed to load agents:', err);
             }
@@ -1549,17 +1545,18 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setLoading(true);
 
         try {
-            const responseText = await AgentService.sendAgentMessage(
+            // requestAgentReply, not sendAgentMessage: the latter turns a failed
+            // request into an English sentence ("Error: Could not communicate
+            // with …") that was shown, logged and SPOKEN as the agent's words.
+            const result = await AgentService.requestAgentReply(
                 sessionId,
                 agent,
                 input,
-                patientRecord.record,
-                teamLog,
-                currentVitals,
                 currentConversation,
-                caseSnapshot || activeCase,
                 { caseLanguage }
             );
+            if (!result.ok) throw new Error(result.error?.message || 'agent request failed');
+            const responseText = result.content;
 
             // Use functional update with fallback to empty array
             setAgentConversations(prev => ({
@@ -1567,10 +1564,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 [agentType]: [...(prev[agentType] || []), { role: 'assistant', content: responseText }]
             }));
             EventLogger.agentMessageReceived(agentType, agent.name || agentType, responseText, COMPONENTS.CHAT_INTERFACE);
-
-            // Reload team log after agent response
-            const updatedLog = await AgentService.getTeamCommunications(sessionId);
-            setTeamLog(updatedLog);
 
             // Voice playback — agents speak with their own per-agent override
             // (config.voice) on top of global. Visemes flow into the active
