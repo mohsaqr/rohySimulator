@@ -31,5 +31,10 @@
   "report_problem": "Rapportera ett problem…",
   "request_feature": "Föreslå en funktion…",
   "settings": "Inställningar",
-  "settings_menu_aria": "Meny för inställningar och profil"
+  "settings_menu_aria": "Meny för inställningar och profil",
+  "signed_in_elsewhere_title": "Inloggad som någon annan",
+  "signed_in_elsewhere_text": "Den här webbläsaren är nu inloggad som {name} i en annan flik. Den här fliken kan inte längre arbeta som personen den visar. Ladda om för att fortsätta som {name}.",
+  "signed_out_elsewhere_title": "Utloggad i en annan flik",
+  "signed_out_elsewhere_text": "Den här webbläsaren loggades ut i en annan flik. Ladda om för att logga in igen.",
+  "signed_in_elsewhere_reload": "Ladda om"
 }

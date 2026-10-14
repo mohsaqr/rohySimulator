@@ -51,6 +51,11 @@ export const STORAGE_REGISTRY = Object.freeze({
         purpose: 'Last surface (settings tab / wizard step / TNA / debrief / persona editor) so refresh restores the breadcrumb.',
         lifetime: 'logout',
     },
+    rohy_tab_identity: {
+        owner: 'src/services/tabIdentity.js (written by src/contexts/AuthContext.jsx)',
+        purpose: 'Who this browser last signed in as ({userId, username}); other tabs hear it and stop if it is no longer them.',
+        lifetime: 'forever',
+    },
     rohy_ui_language: {
         owner: 'src/contexts/LanguageContext.jsx',
         purpose: 'Preferred UI language (registry code) chosen at login or in the top bar; hydrates i18n before the user profile loads.',

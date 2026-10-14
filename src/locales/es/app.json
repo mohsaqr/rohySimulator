@@ -31,5 +31,10 @@
   "report_problem": "Informar de un problema…",
   "request_feature": "Solicitar una función…",
   "settings": "Configuración",
-  "settings_menu_aria": "Menú de configuración y perfil"
+  "settings_menu_aria": "Menú de configuración y perfil",
+  "signed_in_elsewhere_title": "Sesión iniciada como otra persona",
+  "signed_in_elsewhere_text": "Este navegador tiene ahora la sesión iniciada como {name} en otra pestaña. Esta pestaña ya no puede trabajar como la persona que muestra. Recarga para continuar como {name}.",
+  "signed_out_elsewhere_title": "Sesión cerrada en otra pestaña",
+  "signed_out_elsewhere_text": "Se cerró la sesión de este navegador en otra pestaña. Recarga para volver a iniciar sesión.",
+  "signed_in_elsewhere_reload": "Recargar"
 }

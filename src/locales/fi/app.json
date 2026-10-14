@@ -31,5 +31,10 @@
   "report_problem": "Ilmoita ongelmasta…",
   "request_feature": "Ehdota ominaisuutta…",
   "settings": "Asetukset",
-  "settings_menu_aria": "Asetus- ja profiilivalikko"
+  "settings_menu_aria": "Asetus- ja profiilivalikko",
+  "signed_in_elsewhere_title": "Kirjautunut toisena käyttäjänä",
+  "signed_in_elsewhere_text": "Tämä selain on nyt kirjautunut toisessa välilehdessä käyttäjänä {name}. Tämä välilehti ei voi enää toimia siinä näkyvän henkilön nimissä. Lataa sivu uudelleen jatkaaksesi käyttäjänä {name}.",
+  "signed_out_elsewhere_title": "Kirjauduttu ulos toisessa välilehdessä",
+  "signed_out_elsewhere_text": "Tästä selaimesta kirjauduttiin ulos toisessa välilehdessä. Lataa sivu uudelleen kirjautuaksesi sisään.",
+  "signed_in_elsewhere_reload": "Lataa uudelleen"
 }

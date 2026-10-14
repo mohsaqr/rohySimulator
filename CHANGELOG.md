@@ -9,6 +9,16 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.61] — 2026-10-14
+
+- **A tab left open when the browser signs in as someone else stops, and says so.** A browser keeps one
+  sign-in for all its tabs, so signing in as another person in one tab made every other open tab act as
+  that person while still showing the previous one. On a shared machine such a tab kept running for half an
+  hour; its events carried the first person's session under the second person's sign-in and the server
+  refused all of them (vprohy: 299 `not_owner` rejections in two days). Each tab now announces who it
+  signed in as; a tab that hears someone else (or a sign-out) stops sending events and covers the page with
+  "Signed in as someone else — Reload" (8 languages). Signing back in as the tab's own user clears it.
+
 ## [3.0.0-rc.60] — 2026-10-13
 
 - **Request a feature, several screenshots and a conversation with the team** (Prova report widget 1.4.0,
