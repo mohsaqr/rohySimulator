@@ -64,11 +64,13 @@ import {
     loadHandoverCaseData,
 } from '../services/situationBrief.js';
 import {
+    buildReplyGuard,
     buildSpecialistBrief,
     countStudentTurns,
+    createStreamReplyGuard,
     disclosureState,
-    extractAnswerTerms,
     extractFindings,
+    guardHasTerms,
     guardSpecialistReply,
     hasRoomActivity,
     loadSpecialistCaseData,
@@ -806,13 +808,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
         // On-call specialists get a server-built CASE BRIEF from the session's
         // case document (services/specialistBrief.js): the findings when the
-        // disclosure gate is open, never the diagnosis. `specialistAnswerTerms`
-        // feeds the reply guard further down. The brief is passed to
+        // disclosure gate is open, never the diagnosis. `specialistGuard`
+        // (buildReplyGuard) feeds the reply guard further down — on the
+        // non-streamed reply AND sentence by sentence on a streamed one. The brief is passed to
         // buildAgentPersonaPrompt as its own argument, which places it after
         // the persona and its dos/donts and before any client text -- so the
         // educator's persona leads and the brief is the last word on what may
         // be disclosed.
-        let specialistAnswerTerms = null;
+        let specialistGuard = null;
         // The server-built block that goes in buildAgentPersonaPrompt's `brief`
         // slot: a specialist's CASE BRIEF, or the unbriefed / handover block
         // for a scoped team agent. One slot, because they are mutually
@@ -859,7 +862,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const findings = extractFindings(specialty.domain, config);
             const state = disclosureState({ disclosure: disclosure.value, studentTurns, roomActive });
             serverBrief = buildSpecialistBrief({ specialty, findings, disclosureState: state });
-            specialistAnswerTerms = extractAnswerTerms(specialty.domain, config);
+            // The guard's language (stemming, fallback question) is the
+            // case's own, read here from the snapshot; the body's
+            // case_language only stands in for a legacy case without one.
+            specialistGuard = buildReplyGuard(specialty.domain, config, { fallbackLanguage: case_language });
             (req.log || routesLlmLog).info('specialist brief routed', {
                 session_id,
                 agent_type: caseAgent.agentType,
@@ -868,7 +874,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 disclosure_reason: state.reason,
                 student_turns: studentTurns,
                 room_active: needsRoomProbe ? roomActive : null,
-                answer_terms: specialistAnswerTerms.length,
+                answer_terms: specialistGuard.phrases.length,
+                answer_stems: specialistGuard.stems.length,
+                answer_class_terms: specialistGuard.classRoots.length + specialistGuard.classWords.length,
+                guard_language: specialistGuard.language,
             });
         } else if (caseAgent && agentKnowledge && !serverBuildsSituation(agentKnowledge.scope)) {
             // `summary`, `history`, `chart`: the situation is built here from
@@ -1015,16 +1024,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             || req.body?.stream === true
             || (req.headers.accept || '').includes('text/event-stream');
         if (wantStream) {
-            // The specialist reply guard needs the whole reply to split into
-            // sentences; deltas are already on the wire before a sentence
-            // ends. Streamed specialist replies are therefore NOT guarded —
-            // logged so the gap is visible. The brief still never carries a
-            // diagnosis.
-            if (specialistAnswerTerms) {
-                (req.log || routesLlmLog).warn('specialist reply guard skipped', {
-                    session_id, agent_type: agentType, reason: 'streaming'
-                });
-            }
+            // A specialist's streamed reply is guarded sentence by sentence:
+            // deltas are held until a sentence is complete, and a sentence
+            // naming the answer is never written (createStreamReplyGuard).
+            // Until 2026-10-14 this branch skipped the guard and only logged
+            // it, so any client asking for a stream got the unguarded reply.
+            const streamGuard = guardHasTerms(specialistGuard) ? createStreamReplyGuard(specialistGuard) : null;
             const streamPayload = { ...requestPayload, stream: true };
             // F-005: bound upstream. Connect timeout caps how long we'll
             // wait for the upstream's first response; the max-duration
@@ -1071,6 +1076,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (res.socket) res.socket.setNoDelay(true);
 
             const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+            // Every text delta goes through here, so the guard (when there is
+            // one) sees all of it before any of it is written.
+            const writeDelta = (text) => {
+                const out = streamGuard ? streamGuard.push(text) : text;
+                if (out) sse({ delta: out });
+            };
 
             let promptTokens = 0;
             let completionTokens = 0;
@@ -1118,7 +1129,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                         if (provider === 'anthropic') {
                             if (eventName === 'content_block_delta' && evt?.delta?.type === 'text_delta') {
                                 const t = evt.delta.text || '';
-                                if (t) { sse({ delta: t }); }
+                                if (t) writeDelta(t);
                             } else if (eventName === 'message_delta' && evt?.usage) {
                                 completionTokens = evt.usage.output_tokens || completionTokens;
                             } else if (eventName === 'message_start' && evt?.message?.usage) {
@@ -1127,7 +1138,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                         } else {
                             // OpenAI / OpenAI-compatible
                             const delta = evt?.choices?.[0]?.delta?.content || '';
-                            if (delta) { sse({ delta }); }
+                            if (delta) writeDelta(delta);
                             if (evt?.usage) {
                                 promptTokens = evt.usage.prompt_tokens || promptTokens;
                                 completionTokens = evt.usage.completion_tokens || completionTokens;
@@ -1141,6 +1152,17 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 streamErrMessage = streamErr?.message?.slice(0, 500) || 'stream_error';
             } finally {
                 clearTimeout(overallTimer);
+            }
+            if (streamGuard) {
+                // The last, unterminated sentence — or, when every sentence
+                // was dropped, the fallback question in the case language.
+                const tail = streamGuard.end();
+                if (tail && !res.writableEnded) sse({ delta: tail });
+                if (streamGuard.removed > 0) {
+                    (req.log || routesLlmLog).warn('specialist reply guarded', {
+                        session_id, agent_type: agentType, removed_sentences: streamGuard.removed, streamed: true
+                    });
+                }
             }
 
             // Final usage + log
@@ -1304,11 +1326,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // (services/specialistBrief.js guardSpecialistReply). Only message
         // content changes — usage was accounted above from the upstream
         // numbers, and the response shape is untouched.
-        if (specialistAnswerTerms && specialistAnswerTerms.length > 0 && Array.isArray(data?.choices)) {
+        if (guardHasTerms(specialistGuard) && Array.isArray(data?.choices)) {
             let removedSentences = 0;
             data.choices.forEach((choice) => {
                 if (typeof choice?.message?.content !== 'string') return;
-                const guarded = guardSpecialistReply(choice.message.content, specialistAnswerTerms);
+                const guarded = guardSpecialistReply(choice.message.content, specialistGuard);
                 removedSentences += guarded.removed;
                 choice.message.content = guarded.text;
             });

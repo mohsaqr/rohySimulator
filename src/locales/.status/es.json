@@ -31299,6 +31299,156 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oncall.reply_failed": {
+    "src": "94868e83af4f",
+    "tgt": "a0c461a90457",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.reply_failed_cardiologist": {
+    "src": "f9cb65d62961",
+    "tgt": "c59c9b308d8d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.reply_failed_laboratorian": {
+    "src": "34e6ea2d78af",
+    "tgt": "335e54044efb",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.reply_failed_pathologist": {
+    "src": "854475319d4f",
+    "tgt": "27ca0f791b27",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.reply_failed_radiologist": {
+    "src": "c79e2cf53aeb",
+    "tgt": "59ee261c9451",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.reply_rate_limited": {
+    "src": "1e46d39446c3",
+    "tgt": "e6faa0e38afa",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.retry": {
+    "src": "942087cc2d41",
+    "tgt": "a9254c5f8128",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_name_cardiologist": {
+    "src": "5c22caead413",
+    "tgt": "cf1c1d0b069d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_name_laboratorian": {
+    "src": "17f7d3b3e33f",
+    "tgt": "5f5d50c2e106",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_name_pathologist": {
+    "src": "66e8c628c9cd",
+    "tgt": "7266e6d1a82c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_name_radiologist": {
+    "src": "d194dc8d95d3",
+    "tgt": "7dafe96f9152",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_role_cardiologist": {
+    "src": "a80412453e00",
+    "tgt": "37254340ab50",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_role_laboratorian": {
+    "src": "56527d9ab227",
+    "tgt": "de6106fbf7ba",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_role_pathologist": {
+    "src": "2f8768d1c0c8",
+    "tgt": "c7dba449d889",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.seeded_role_radiologist": {
+    "src": "46cf8bbbc59a",
+    "tgt": "48b2ee247b57",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oncall.send": {
     "src": "f6f4688ff23d",
     "tgt": "e1d12d1a29a7",
@@ -31412,6 +31562,16 @@
   "oncall.status_unavailable": {
     "src": "67a926f7008e",
     "tgt": "b781f6bd9b98",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.turn_unanswered": {
+    "src": "1d4ffa2b3478",
+    "tgt": "261205e89f34",
     "state": "machine",
     "origin": "machine",
     "locked": false,

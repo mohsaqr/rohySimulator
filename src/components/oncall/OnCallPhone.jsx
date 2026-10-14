@@ -7,7 +7,7 @@ import OnCallChat from './OnCallChat';
 import OnCallCall from './OnCallCall';
 import { CloseIcon, MessageIcon, PhoneIcon } from './phoneIcons';
 import { useSpecialistThread } from './useSpecialistThread';
-import { newCallId, reachabilityOf, specialistTypeForRoom, SPECIALTY_LABEL_KEYS, statusKeyFor } from './onCallModel';
+import { displayNameOf, displayRoleOf, newCallId, reachabilityOf, specialistTypeForRoom, SPECIALTY_LABEL_KEYS, statusKeyFor } from './onCallModel';
 import { formatRemaining } from '../../utils/agentWait';
 import './onCallPhone.css';
 
@@ -66,7 +66,7 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
             await team.page(target);
         } catch (err) {
             console.error('[OnCallPhone] page failed:', err);
-            toast?.error?.(t('page_failed', { name: target.name }));
+            toast?.error?.(t('page_failed', { name: displayNameOf(target, t) }));
         } finally {
             setPagingType(null);
         }
@@ -170,6 +170,8 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
                             const r = reachabilityOf(a);
                             const labelKey = SPECIALTY_LABEL_KEYS[a.agent_type];
                             const unavailable = r === 'unavailable';
+                            const name = displayNameOf(a, t);
+                            const roleTitle = displayRoleOf(a, t);
                             return (
                                 <li key={a.agent_type} data-testid={`oncall-contact-${a.agent_type}`} className={`contact spec-${a.agent_type}`}>
                                     <OnCallAvatar agent={a} presence={r === 'available' ? 'online' : unavailable || r === 'no_answer' ? null : 'away'} />
@@ -179,11 +181,11 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
                                         onClick={() => !unavailable && openChat(a)}
                                         disabled={unavailable}
                                     >
-                                        <span className="contact-name">{a.name}</span>
+                                        <span className="contact-name">{name}</span>
                                         <span className="contact-role">
                                             {labelKey && <span className="spec-tag">{t(labelKey)}</span>}
                                             {labelKey && ' · '}
-                                            {a.role_title}
+                                            {roleTitle}
                                         </span>
                                         <span className="contact-last">{statusText(a)}</span>
                                     </button>
@@ -193,7 +195,7 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
                                             className="icon-btn"
                                             onClick={() => openChat(a)}
                                             disabled={unavailable}
-                                            aria-label={t('message_contact', { name: a.name })}
+                                            aria-label={t('message_contact', { name })}
                                         >
                                             <MessageIcon />
                                         </button>
@@ -202,7 +204,7 @@ export default function OnCallPhone({ sessionId, activeCase, patient = null, roo
                                             className="icon-btn"
                                             onClick={() => openCall(a)}
                                             disabled={unavailable}
-                                            aria-label={t('call_contact', { name: a.name })}
+                                            aria-label={t('call_contact', { name })}
                                         >
                                             <PhoneIcon />
                                         </button>

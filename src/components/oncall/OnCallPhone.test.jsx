@@ -18,6 +18,7 @@ import OnCallPhone from './OnCallPhone';
 import { useOnCall } from './useOnCall';
 import { NO_ANSWER_RING_MS } from './onCallModel';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
+import EventLogger from '../../services/eventLogger';
 
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = function scrollIntoView() {};
@@ -38,6 +39,13 @@ vi.mock('../../services/voiceService', () => ({
         speak: (...a) => voice.speak(...a),
         cancelSpeech: (...a) => voice.cancelSpeech(...a),
     },
+}));
+
+// Every agent resolves to a voice, so a reply reaches VoiceService.speak and
+// "was it spoken" is an observable question.
+vi.mock('../../utils/voiceResolver', async (importOriginal) => ({
+    ...(await importOriginal()),
+    resolveVoice: () => ({ file: 'test_voice', rate: 1, pitch: 0, provider: 'kokoro', tier: 'agent', substituted: false }),
 }));
 
 const SESSION = 77;
@@ -272,6 +280,68 @@ describe('OnCallPhone — chat', () => {
     });
 });
 
+// Regression lock: FI-0010 journey review, F13 (2026-10-14). A failed turn
+// came back from AgentService as "Error: Could not communicate with …", was
+// appended as the specialist's reply, logged as agentMessageReceived, and on
+// a call handed to the speech path. These fail against that thread: the
+// error text is in a bubble from the specialist, there is no Retry, and the
+// received-message log fires.
+describe('OnCallPhone — a turn that could not be answered', () => {
+    const failProxy = (status) => server.use(http.post('*/api/proxy/llm', async ({ request }) => {
+        await record(request);
+        return HttpResponse.json({ error: 'LLM Request Failed' }, { status });
+    }));
+
+    it('shows a localized operational error with Retry, never a reply; Retry does not store the turn twice', async () => {
+        const received = vi.spyOn(EventLogger, 'agentMessageReceived');
+        failProxy(500);
+        mount();
+        const dialog = await openPhone();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Message Dr. Ana Moreno' }));
+        const composer = within(dialog).getByLabelText('Message Dr. Ana Moreno');
+        await waitFor(() => expect(composer).not.toBeDisabled());
+        fireEvent.change(composer, { target: { value: 'Is the margin involved?' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Send' }));
+
+        const alert = await within(dialog).findByTestId('oncall-reply-failed');
+        expect(alert).toHaveTextContent('Could not reach the on-call pathologist. Try again.');
+        expect(within(dialog).queryByText(/Error:|Could not communicate|LLM Request Failed/)).not.toBeInTheDocument();
+        // The learner's words stay in the thread, marked as not answered.
+        expect(within(dialog).getByTestId('oncall-unanswered-turn')).toHaveTextContent('Is the margin involved?');
+        expect(received).not.toHaveBeenCalled();
+        expect(conversationPosts('pathologist').map(r => r.body.role)).toEqual(['user']);
+
+        server.resetHandlers(...handlers());
+        fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+        expect(await within(dialog).findByText('What do you think the margins show?')).toBeInTheDocument();
+        expect(within(dialog).queryByTestId('oncall-reply-failed')).not.toBeInTheDocument();
+        expect(within(dialog).queryByTestId('oncall-unanswered-turn')).not.toBeInTheDocument();
+        expect(received).toHaveBeenCalledTimes(1);
+        // One learner turn stored, not two; the model saw it once.
+        expect(conversationPosts('pathologist').map(r => r.body.role)).toEqual(['user', 'assistant']);
+        const llm = requests.filter(r => r.path.endsWith('/api/proxy/llm')).at(-1);
+        expect(llm.body.messages.filter(m => m.role === 'user')).toHaveLength(1);
+        received.mockRestore();
+    });
+
+    it('on a call, a failure is never spoken or captioned as the specialist', async () => {
+        sttSupported = false;
+        failProxy(503);
+        mount();
+        const dialog = await openPhone();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Call Dr. Jonas Berg' }));
+        const input = await within(dialog).findByLabelText('What you say');
+        fireEvent.change(input, { target: { value: 'Can you walk me through the CT?' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Say it' }));
+
+        expect(await within(dialog).findByTestId('oncall-reply-failed'))
+            .toHaveTextContent('Could not reach the on-call radiologist. Try again.');
+        expect(within(dialog).queryByTestId('oncall-subtitle')).not.toBeInTheDocument();
+        expect(within(dialog).queryByText(/Service unavailable/)).not.toBeInTheDocument();
+        expect(voice.speak).not.toHaveBeenCalled();
+    });
+});
+
 describe('OnCallPhone — call', () => {
     it('without speech recognition offers typing; a call turn posts channel "call" with a call id; End returns to chat', async () => {
         sttSupported = false;
@@ -287,6 +357,9 @@ describe('OnCallPhone — call', () => {
         fireEvent.click(within(dialog).getByRole('button', { name: 'Say it' }));
 
         expect(await within(dialog).findByTestId('oncall-subtitle')).toHaveTextContent('What do you think the margins show?');
+        // An answered turn is read aloud (the failure test below relies on this).
+        await waitFor(() => expect(voice.speak).toHaveBeenCalledTimes(1));
+        expect(voice.speak.mock.calls[0][0].text).toBe('What do you think the margins show?');
 
         const posts = conversationPosts('radiologist');
         expect(posts).toHaveLength(2);
