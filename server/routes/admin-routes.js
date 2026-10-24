@@ -31,6 +31,12 @@ import {
     normalizeAffectSettings,
 } from '../shared/affectNote.js';
 import {
+    normalizeRemoteUrl,
+    kokoroRemoteState,
+    refreshKokoroRemoteSettings,
+    testKokoroRemote,
+} from '../services/kokoroTts.js';
+import {
     deriveVoiceProvider,
     getAllProviderStatus,
     defaultVoiceKey,
@@ -1809,6 +1815,28 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
             out[providerEnabledKey(p)] = v !== '0' && v !== 'false';
         }
         out.providers = await getAllProviderStatus();
+        // Remote Kokoro names an operator's host, and its key state is no
+        // learner's business: admins only (this GET serves every authed
+        // user). The key itself is never returned, as for the cloud keys.
+        if (hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
+            const remote = kokoroRemoteState();
+            const storedKey = await getPlatformSetting('kokoro_remote_api_key');
+            out.kokoro_remote_url = (await getPlatformSetting('kokoro_remote_url')) || '';
+            out.kokoro_remote_api_key_set = !!storedKey || (remote.source === 'env' && remote.keySource === 'env');
+            out.kokoro_remote_api_key_via_env = !storedKey && remote.keySource === 'env';
+            out.kokoro_remote = {
+                enabled: remote.enabled,
+                source: remote.source,
+                host: remote.host,
+                env_host: remote.envHost,
+                key_set: remote.keySet,
+                failures: remote.failures,
+                paused: remote.open,
+                ms_until_retry: remote.msUntilRetry,
+                last_error: remote.lastError,
+                last_ok_at: remote.lastOkAt,
+            };
+        }
         res.json(out);
     } catch (err) {
         (req.log || routesLlmLog).error('voice platform settings read failed', { error: err.message });
@@ -1826,6 +1854,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             'stt_provider', 'stt_language',
             'avatar_type', 'llm_model_voice',
             'google_tts_api_key', 'openai_tts_api_key',
+            'kokoro_remote_url', 'kokoro_remote_api_key',
             ...defaultVoiceKeys(),
             ...providerEnabledKeys()
         ]);
@@ -1938,7 +1967,7 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
         // shape-validate beyond a length cap and a charset filter — different
         // providers have different prefixes, and stale validation tends to
         // reject keys that work fine.
-        for (const k of ['google_tts_api_key', 'openai_tts_api_key']) {
+        for (const k of ['google_tts_api_key', 'openai_tts_api_key', 'kokoro_remote_api_key']) {
             if (k in body) {
                 const v = body[k];
                 // Intentional control-char filter — rejects API keys that
@@ -1951,8 +1980,28 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
             }
         }
 
+        // Remote Kokoro base URL: empty clears it (back to the env file's host,
+        // or local synthesis). Validated by the same function that uses it.
+        if ('kokoro_remote_url' in body) {
+            const v = body.kokoro_remote_url;
+            if (v === null || v === '') {
+                setIfPresent('kokoro_remote_url', '');
+            } else {
+                const normalized = normalizeRemoteUrl(v);
+                if (!normalized) {
+                    return res.status(400).json({ error: 'kokoro_remote_url must be an http(s) URL without credentials, query or fragment (≤ 512 chars), or empty to clear' });
+                }
+                setIfPresent('kokoro_remote_url', normalized);
+            }
+        }
+
         for (const [k, v] of writes) {
             await setAuditedPlatformSetting(req, k, v, 'update_platform_voice_settings');
+        }
+        // The synthesis path reads the remote values from memory; reload them
+        // now so the next reply uses what was just saved.
+        if (writes.some(([k]) => k.startsWith('kokoro_remote_'))) {
+            await refreshKokoroRemoteSettings(getPlatformSetting);
         }
 
         res.json({
@@ -1963,6 +2012,50 @@ router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (r
     } catch (err) {
         (req.log || routesLlmLog).error('voice platform settings update failed', { error: err.message });
         res.status(500).json({ error: 'Failed to update voice settings' });
+    }
+});
+
+// POST /api/platform-settings/voice/kokoro-remote/test - Test the SAVED remote
+// Kokoro host (Admin only). One synthesis with no local fallback, so a refused
+// key or a dead host is reported instead of being covered by the local voice.
+// Unsaved values are never tested: what is probed is what was saved (and
+// audited). The reply carries the HTTP status and failure kind only — never
+// the host's response body.
+const KOKORO_REMOTE_TEST_MESSAGES = {
+    not_configured: 'No remote Kokoro host is configured.',
+    timeout: 'The remote host did not answer in time.',
+    network: 'The remote host could not be reached.',
+    bad_audio: 'The remote host answered, but not with audio.',
+};
+function kokoroRemoteHttpMessage(status) {
+    if (status === 401 || status === 403) return `The remote host refused the API key (HTTP ${status}).`;
+    if (status === 404) return 'The remote host has no Kokoro speech endpoint at this URL (HTTP 404).';
+    if (status === 429) return 'The remote host is rate-limiting requests (HTTP 429).';
+    return `The remote host returned HTTP ${status}.`;
+}
+
+router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const result = await testKokoroRemote();
+        (req.log || routesLlmLog).info('kokoro remote test', {
+            ok: result.ok, kind: result.kind || null, status: result.status ?? null, latency_ms: result.latencyMs, host: result.host,
+        });
+        if (result.ok) {
+            return res.json({ ok: true, host: result.host, latency_ms: result.latencyMs, audio_seconds: result.audioSeconds });
+        }
+        if (result.kind === 'not_configured') {
+            return res.status(400).json({ error: KOKORO_REMOTE_TEST_MESSAGES.not_configured, code: 'not_configured' });
+        }
+        res.status(502).json({
+            error: result.kind === 'http' ? kokoroRemoteHttpMessage(result.status) : KOKORO_REMOTE_TEST_MESSAGES[result.kind],
+            code: `remote_${result.kind}`,
+            status: result.status,
+            host: result.host,
+            latency_ms: result.latencyMs,
+        });
+    } catch (err) {
+        (req.log || routesLlmLog).error('kokoro remote test failed', { error: err.message });
+        res.status(500).json({ error: 'Remote Kokoro test failed' });
     }
 });
 

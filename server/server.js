@@ -23,7 +23,7 @@ import seedStemiCourse from './seedStemiCourse.js';
 import { seedLanguageCases } from './seedLanguageCases.js';
 import seedStemiCase from './seedStemiCase.js';
 import { seedLlmDefaults } from './seeders/llmSettings.js';
-import { loadKokoro, kokoroIdleUnloadMs, kokoroRemoteEnabled } from './services/kokoroTts.js';
+import { loadKokoro, kokoroIdleUnloadMs, kokoroRemoteEnabled, kokoroRemoteState, refreshKokoroRemoteSettings } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
 import requestIdMiddleware from './middleware/requestId.js';
@@ -286,7 +286,8 @@ function maybeWarmupKokoro() {
     // loaded the first time the remote host fails. Warming it would hold
     // ~400–600 MB for a box that may never need it.
     if (kokoroRemoteEnabled()) {
-        kokoroLog.info('boot warmup skipped: remote synthesis', { host: new URL(process.env.ROHY_KOKORO_URL).host });
+        const remote = kokoroRemoteState();
+        kokoroLog.info('boot warmup skipped: remote synthesis', { host: remote.host, source: remote.source });
         return;
     }
 
@@ -438,6 +439,16 @@ async function initializeAndStart() {
         await seedLlmDefaults(setSettingIfEmpty);
     } catch (e) {
         migrationLog.warn('llm defaults seed failed', { error: e.message });
+    }
+
+    // Remote Kokoro host saved in Settings → Voice: load it before the warmup
+    // decision below reads it. A failed read is not fatal — the env file's
+    // host (if any) still applies, and the next save reloads the settings.
+    try {
+        await refreshKokoroRemoteSettings(async (key) =>
+            (await dbAdapter.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key]))?.setting_value ?? null);
+    } catch (e) {
+        kokoroLog.warn('remote kokoro settings load failed', { error: e.message });
     }
 
     // Start the server, then trigger TTS warmup async.

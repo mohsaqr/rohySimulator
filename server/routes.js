@@ -214,6 +214,7 @@ if (oyonRoutes) {
 // router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
 // router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (req, res) => {
+// router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/platform-settings/avatars', authenticateToken, async (req, res) => {
 // router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/agents/templates', authenticateToken, async (req, res) => {
