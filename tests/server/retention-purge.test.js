@@ -15,6 +15,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-retention-tests-secret';
 
@@ -119,6 +120,8 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'retention-admin-tok' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, adminToken, { userId: admin.id });
     });
 
     afterAll(async () => {
@@ -169,12 +172,18 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
         const reads = await dbAll(db, 'SELECT * FROM plugin_content_reads WHERE user_id = ?', [targetUserId]);
         expect(reads).toEqual([]);
 
-        // Anonymised log tables: rows retained but user_id is NULL.
+        // Regression lock (security audit 2026-10-24, SEC-41): the audit chain
+        // is left alone. Its entry_hash covers user_id, so the old in-place
+        // `SET user_id = NULL` made verifyAuditChain report tampering after
+        // every purge. Rows are retained unchanged; the purge itself is the
+        // next link in the chain.
         const audits = await dbAll(db, 'SELECT user_id FROM system_audit_log WHERE action = ?', ['self_test']);
         expect(audits.length).toBeGreaterThanOrEqual(1);
         for (const a of audits) {
-            expect(a.user_id).toBeNull();
+            expect(a.user_id).toBe(targetUserId);
         }
+        const purgeRows = await dbAll(db, 'SELECT id FROM system_audit_log WHERE action = ? AND resource_id = ?', ['purge_user', String(targetUserId)]);
+        expect(purgeRows.length).toBeGreaterThanOrEqual(1);
 
         // Authored agent template: deleted_at set, created_by NULLed.
         const agent = await dbGet(db, "SELECT * FROM agent_templates WHERE name = 'Target Authored Agent'");
@@ -211,6 +220,8 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'retention-student' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, studentToken, { userId: targetUserId });
         // Note: targetUserId now points to a purged (status='inactive') user.
         // authenticateToken should reject before requireAdmin even runs.
         const res = await fetch(`${server.baseUrl}/api/users/${targetUserId}/purge`, {
@@ -302,6 +313,8 @@ describe('Oyon purge + retention contract', () => {
             { id: admin.id, username: 'oyon_admin', email: 'oyon_admin@example.com', role: 'admin', tenant_id: 1 },
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'oyon-admin-tok' });
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, adminToken, { userId: admin.id });
     });
 
     afterAll(async () => {

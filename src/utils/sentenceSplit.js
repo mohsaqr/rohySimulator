@@ -17,6 +17,14 @@
 // Rationale: false-positive splits cause Kokoro to produce a clipped clip
 // with a weird intonation; missed splits just delay the next chunk by
 // a few tokens. We bias toward fewer splits.
+//
+// One exception, for the FIRST chunk of a reply only (`firstChunk: true`):
+// nothing is spoken until that chunk is complete, so a long opening sentence
+// is a long silence. There, a clause break — `,` `;` `:` or an em dash,
+// followed by whitespace — also ends the chunk once it holds at least
+// FIRST_CHUNK_MIN_WORDS words. After the first chunk, splitting is
+// sentence-only again: one early split buys the latency, more would only
+// buy odd intonation. "1,000" never splits (no whitespace after the comma).
 
 const ABBREV = new Set([
     'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st',
@@ -27,6 +35,20 @@ const ABBREV = new Set([
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
 ]);
+
+// Master switch for the early first chunk (see the header). false = every
+// chunk waits for a sentence terminal, as before.
+export const EARLY_FIRST_CHUNK = true;
+// Words the first chunk needs before a clause break may end it. Fewer would
+// speak fragments like "Well, doctor," on their own.
+export const FIRST_CHUNK_MIN_WORDS = 6;
+
+const CLAUSE_BREAKS = new Set([',', ';', ':', '\u2014']);
+
+function wordCount(text) {
+    const trimmed = text.trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+}
 
 // True when the run of letters ending at `endExclusive` (i.e. the last
 // alphabetic character is at index endExclusive-1) is one of our known
@@ -44,12 +66,22 @@ function isDecimalPoint(text, dotIdx) {
     return /\d/.test(text[dotIdx - 1] || '') && /\d/.test(text[dotIdx + 1] || '');
 }
 
-export function extractCompleteSentences(buffer) {
+export function extractCompleteSentences(buffer, { firstChunk = false } = {}) {
     const sentences = [];
     let cursor = 0;
 
     for (let i = 0; i < buffer.length; i++) {
         const ch = buffer[i];
+        if (firstChunk && sentences.length === 0 && CLAUSE_BREAKS.has(ch)
+            && /\s/.test(buffer[i + 1] || '')
+            && wordCount(buffer.slice(cursor, i + 1)) >= FIRST_CHUNK_MIN_WORDS) {
+            sentences.push(buffer.slice(cursor, i + 1).trim());
+            let next = i + 1;
+            while (next < buffer.length && /\s/.test(buffer[next])) next++;
+            cursor = next;
+            i = next - 1;
+            continue;
+        }
         if (ch !== '.' && ch !== '!' && ch !== '?') continue;
 
         // Run of consecutive terminals (`...`, `?!`, etc.) — treat as one boundary
@@ -91,5 +123,28 @@ export function extractCompleteSentences(buffer) {
     return {
         sentences,
         remainder: buffer.slice(cursor)
+    };
+}
+
+// Stateful wrapper for one streamed reply: push() each LLM delta and get
+// back the chunks now ready to speak; flush() returns the unterminated tail
+// once the stream ends. Only the reply's first chunk may end early at a
+// clause break (see the header); `earlyFirstChunk: false` turns that off.
+export function createSpeechChunker({ earlyFirstChunk = EARLY_FIRST_CHUNK } = {}) {
+    let buffer = '';
+    let firstPending = earlyFirstChunk;
+    return {
+        push(delta) {
+            buffer += delta;
+            const { sentences, remainder } = extractCompleteSentences(buffer, { firstChunk: firstPending });
+            buffer = remainder;
+            if (sentences.length > 0) firstPending = false;
+            return sentences;
+        },
+        flush() {
+            const tail = buffer.trim();
+            buffer = '';
+            return tail;
+        }
     };
 }

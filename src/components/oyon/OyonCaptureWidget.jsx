@@ -79,28 +79,38 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
       roomRef.current = room;
    }, [sessionId, caseId, room]);
 
-   // The server-side consent default (user_preferences.onboarding_settings
+   // The server-side consent record (user_preferences.onboarding_settings
    // .oyon_consent, set on the first-run screen / Settings → Oyon) wins over
    // whatever this browser parked earlier: write it through to localStorage
    // once per mount so readConsentPref() stays the single choke point and
-   // the choice follows the user across devices.
+   // the choice follows the user across devices. When that record cannot be
+   // read, nothing is persisted this mount: the local flag may be another
+   // account's, or stale, and a failed lookup must not become consent.
+   const consentLookupFailedRef = useRef(false);
    useEffect(() => {
       apiFetch('/users/preferences')
          .then(prefs => {
+            consentLookupFailedRef.current = false;
             const consent = parseOnboardingSettings(prefs).oyon_consent;
             if (typeof consent === 'boolean') {
                try { localStorage.setItem(CONSENT_PREF_KEY, consent ? '1' : '0'); } catch { /* private mode */ }
             }
          })
-         .catch(() => { /* fall back to the local flag */ });
+         .catch((err) => {
+            consentLookupFailedRef.current = true;
+            persistGateRef.current = false;
+            oyonClientLog('warn', 'consent preference could not be read — capture stays local-only', {
+               error: err?.message || String(err),
+            });
+         });
    }, []);
 
    const ensureConsent = useCallback(async () => {
       const sid = sessionRef.current;
-      if (!sid || !readConsentPref()) {
+      if (!sid || consentLookupFailedRef.current || !readConsentPref()) {
          persistGateRef.current = false;
          oyonClientLog('info', 'capture running without consent — local-only', {
-            session_id: sid, user_consent: readConsentPref(),
+            session_id: sid, user_consent: readConsentPref(), consent_lookup_failed: consentLookupFailedRef.current,
          });
          return;
       }
@@ -387,16 +397,16 @@ async function persistWindows(windows, { sessionId, caseId, room }, setPersistOk
    }
 }
 
-function readConsentPref() {
-   // Tenant-level emotion_capture_enabled is the admin's opt-in. Per-user
-   // consent defaults to ON when the tenant has opted in, opting OUT only
-   // when the user explicitly toggled the switch off in Settings → Oyon
-   // (which writes '0'). Default-on matches what the deployment's admin
-   // already decided when they enabled Oyon at the tenant level.
+export function readConsentPref() {
+   // Tenant-level emotion_capture_enabled is the admin's opt-in; it is not
+   // the learner's. Consent is only what the learner CHOSE — the first-run
+   // card, Settings → Oyon or the re-consent prompt write '1' — so no stored
+   // choice, or storage that cannot be read, is NOT consent. (It used to be
+   // "on unless '0'", which persisted affect windows for a learner who had
+   // never been asked.)
    try {
-      const v = localStorage.getItem(CONSENT_PREF_KEY);
-      return v !== '0';
-   } catch { return true; }
+      return localStorage.getItem(CONSENT_PREF_KEY) === '1';
+   } catch { return false; }
 }
 
 function readGraphPref() {

@@ -17,6 +17,7 @@ The following variables carry credentials or signing material. Never commit them
 - `OPENAI_API_KEY`
 - `ROHY_ADMIN_PASSWORD`
 - `ROHY_CONTENT_TOKEN`
+- `ROHY_KOKORO_API_KEY`
 - `ROHY_PASSWORD`
 - `ROHY_PLUGIN_ORIGIN_TOKENS`
 - `ROHY_PROVA_INSTALLATION_KEY`
@@ -27,36 +28,37 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:59` |
-| `NODE_ENV` | No | `development` | Runtime mode; `production` tightens defaults and enables prod-only validation. | `server/logger.js:40`<br>`server/logger.js:41`<br>`server/middleware/csrf.js:71`<br>_+13 more_ |
-| `PORT` | No | — | HTTP listen port. | `server/server.js:51` |
+| `HTTPS_PORT` | No | — | HTTPS listen port (used when TLS cert/key are set). | `server/server.js:70` |
+| `NODE_ENV` | No | `development` | Runtime mode; `production` tightens defaults and enables prod-only validation. | `server/logger.js:40`<br>`server/logger.js:41`<br>`server/middleware/authTtl.js:65`<br>_+13 more_ |
+| `PORT` | No | — | HTTP listen port. | `server/server.js:56` |
 
 ## Auth/security
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ALLOW_DEFAULT_USERS` | No | — | Bootstrap-only flag to seed default users on first boot. | `server/seeders/users.js:111` |
+| `ALLOW_DEFAULT_USERS` | No | — | Bootstrap-only flag to seed default users on first boot. | `server/seeders/users.js:113` |
 | `GITHUB_TOKEN` | No | — | Fallback credential for `npm run setup:content` when ROHY_CONTENT_TOKEN is unset. Install-time only; no runtime code reads it. **⚠ secret — see security note above.** | `scripts/setup-content.mjs:90` |
 | `JWT_EXPIRY` | No | `7d` | Lifetime of issued JWTs. | `server/middleware/authTtl.js:42` |
-| `JWT_SECRET` | Yes | — | Secret used to sign/verify auth + audit tokens. Fatal if unset. _Fatal if unset (validateEnv pushes an error)._ **⚠ secret — see security note above.** | `server/middleware/auth.js:16` |
-| `ROHY_ADMIN_EMAIL` | No | — | Email for the provisioned first admin. Defaults to &lt;username&gt;@rohy.local. | `server/seeders/users.js:58` |
-| `ROHY_ADMIN_NAME` | No | — | Display name for the provisioned first admin. Defaults to "System Administrator". | `server/seeders/users.js:59` |
-| `ROHY_ADMIN_PASSWORD` | No | — | Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. **⚠ secret — see security note above.** | `server/seeders/users.js:57` |
-| `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:56` |
+| `JWT_SECRET` | Yes | — | Secret used to sign/verify auth + audit tokens. Fatal if unset. _Fatal if unset (validateEnv pushes an error)._ **⚠ secret — see security note above.** | `server/middleware/auth.js:17` |
+| `ROHY_ADMIN_EMAIL` | No | — | Email for the provisioned first admin. Defaults to &lt;username&gt;@rohy.local. | `server/seeders/users.js:60` |
+| `ROHY_ADMIN_NAME` | No | — | Display name for the provisioned first admin. Defaults to "System Administrator". | `server/seeders/users.js:61` |
+| `ROHY_ADMIN_PASSWORD` | No | — | Password for the provisioned first admin. Must satisfy the normal password policy or the seeder refuses it. **⚠ secret — see security note above.** | `server/seeders/users.js:59` |
+| `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:58` |
 | `ROHY_CONTENT_TOKEN` | No | — | A GitHub token with read access to the content repository, read by `npm run setup:content` if set. The content repository is now PUBLIC, so no credential is needed and this variable can be left unset; it remains supported for a deployment that mirrors the archives behind its own private release. Install-time only: nothing at runtime reads it. `GITHUB_TOKEN` is accepted as a fallback, as is the `gh` CLI when the machine is logged in. Installing from a local file with `--from` needs no token at all, because the installer trusts the archive's SHA-256 rather than the host it came from. **⚠ secret — see security note above.** | `scripts/setup-content.mjs:90` |
-| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:81`<br>`server/routes/registration-routes.js:38`<br>`server/routes/terms-routes.js:50` |
+| `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:123`<br>`server/routes/registration-routes.js:38`<br>`server/routes/terms-routes.js:56` |
+| `ROHY_KOKORO_API_KEY` | No | `'' (empty string)` | Bearer key for ROHY_KOKORO_URL, and sent ONLY to that URL — never to a URL saved in Settings → Voice. A key saved in Settings overrides it. Missing while the URL is set: every request is refused and speech falls back to the local model (boot warns). **⚠ secret — see security note above.** | `server/services/kokoroTts.js:536` |
 | `ROHY_PLUGIN_ORIGIN_TOKENS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;token&gt;` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy's own server-to-server fetch as `Authorization: Bearer &lt;token&gt;` — never returned to a browser, never logged, and never the caller's own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation's access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. **⚠ secret — see security note above.** | `server/lib/pluginOriginTokens.js:84` |
 | `ROHY_PROVA_INSTALLATION_KEY` | No | `'' (empty string)` | An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova's unverified queue until someone trusts the installation. **⚠ secret — see security note above.** | `server/routes/report-routes.js:57` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:121` |
-| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:68` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:60` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:61` |
+| `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:81` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:71` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:72` |
 
 ## Database
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ROHY_DB` | No | — | Absolute path to the SQLite database file. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (DB otherwise lives inside the repo tree)._ | `scripts/import-loinc-mapping.js:108`<br>`scripts/migrate.js:10`<br>`scripts/nuke-30-tats.js:34`<br>_+8 more_ |
+| `ROHY_DB` | No | — | Absolute path to the SQLite database file. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (DB otherwise lives inside the repo tree)._ | `scripts/import-loinc-mapping.js:108`<br>`scripts/migrate.js:10`<br>`scripts/nuke-30-tats.js:34`<br>_+7 more_ |
 | `ROHY_KB_DB` | No | — | Where the derived knowledge base is written (default `data/knowledge.db`). Tooling only — the server never reads it. Set it to build a scratch copy without clobbering the real one, which is what the parser tests do. The file itself is gitignored and rebuilt by `npm run kb:build`; see docs/integrator/knowledge-base.md. | `scripts/knowledge/lib.mjs:15` |
 
 ## Observability
@@ -69,7 +71,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
 | `ROHY_PATHOLOGY_CONTENT` | No | — | Path to a built slide content origin, overriding the sibling `../Pathoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:239` |
 | `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:57` |
-| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:462` |
+| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:521` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
 | `VERBOSE` | No | — | Extra console diagnostics when truthy. | `scripts/rocketbox-convert/convert.mjs:135` |
 
@@ -77,8 +79,8 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:92` |
-| `FRONTEND_URL` | No | — | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/server.js:91` |
+| `EXTRA_CORS_ORIGINS` | No | — | _see source_ | `server/server.js:105` |
+| `FRONTEND_URL` | No | `'' (empty string)` | Public frontend origin; drives CORS allow-list. _Recommended in production (validateEnv warns when unset)._ _Recommended in production (CORS rejects non-localhost origins when unset)._ | `server/middleware/authTtl.js:66`<br>`server/server.js:104` |
 | `ROHY_PLUGIN_IMPORT_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming the hosts a plugin may DOWNLOAD from (RPS-1 1.4). The operator's outer bound: a tenant admin narrows it through the plugin's own settings and can never widen it, because a tenant admin is not the server operator and naming a host for rohy's server to fetch from is the SSRF shape proxy-routes.js already closed once. A plugin id may repeat and the origins accumulate. Unset means NO plugin may import from anywhere — the correct default for a server nobody has told where content may come from. Malformed is fatal at boot. | `server/lib/pluginImportOrigins.js:86` |
 | `ROHY_PLUGIN_ORIGINS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;origin&gt;` allowlist naming where each RPS-1 plugin's remote content is fetched from, e.g. `pathology=https://slides.example.edu`. Unset means no plugin has a remote origin: the plugin serves the bundled starter content if any is installed, and otherwise every plugin proxy route answers 503. A malformed entry is fatal at boot — a typo must not degrade into rohy silently never contacting the host an operator believes it is using. The origin is operator configuration only: it is never read from a manifest, a case config or a request. | `server/lib/pluginRemoteOrigins.js:72` |
 
@@ -86,14 +88,14 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:650` |
-| `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:138` |
-| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1771`<br>`server/routes/admin-routes.js:1796`<br>`server/routes/admin-routes.js:1797`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1798`<br>`server/routes/admin-routes.js:1799`<br>`server/routes/proxy-routes.js:656`<br>_+2 more_ |
+| `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:757` |
+| `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:139` |
+| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1875`<br>`server/routes/admin-routes.js:1900`<br>`server/routes/admin-routes.js:1901`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1902`<br>`server/routes/admin-routes.js:1903`<br>`server/routes/proxy-routes.js:763`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
-| `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
-| `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |
-| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:277` |
+| `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:176` |
+| `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:184` |
+| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:290` |
 | `ROHY_TEST_FAKE_OPENAI_TTS` | No | — | Test hook: stub OpenAI TTS instead of calling the API. | `server/services/openaiTts.js:74` |
 
 ## Oyon
@@ -106,16 +108,16 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `RETENTION_DAYS` | No | — | Data-retention window in days for the retention sweep. | `scripts/retention-sweep.js:42` |
-| `RETENTION_SECONDS` | No | — | Data-retention window in seconds (overrides days when set). | `scripts/retention-sweep.js:40` |
-| `ROHY_RETENTION_DAYS` | No | — | Data-retention window in days (Rohy-prefixed alias). | `scripts/retention-sweep.js:41` |
-| `ROHY_RETENTION_SECONDS` | No | — | Data-retention window in seconds (Rohy-prefixed alias). | `scripts/retention-sweep.js:39` |
+| `RETENTION_DAYS` | No | — | Data-retention window in days for the retention sweep. | `scripts/retention-sweep.js:39` |
+| `RETENTION_SECONDS` | No | — | Data-retention window in seconds (overrides days when set). | `scripts/retention-sweep.js:41` |
+| `ROHY_RETENTION_DAYS` | No | — | Data-retention window in days (Rohy-prefixed alias). | `scripts/retention-sweep.js:39` |
+| `ROHY_RETENTION_SECONDS` | No | — | Data-retention window in seconds (Rohy-prefixed alias). | `scripts/retention-sweep.js:41` |
 
 ## Update/deploy
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:758` |
+| `ROHY_BACKUP_BEFORE_MIGRATE` | No | — | Toggles the pre-migration DB snapshot. | `server/db.js:818` |
 | `ROHY_NO_AUTO_SEED` | No | — | Skips automatic seeders on boot. | `server/db.js:61` |
 
 ## Uncategorized
@@ -123,29 +125,33 @@ The following variables carry credentials or signing material. Never commit them
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
 | `GITHUB_ACTIONS` | No | — | _see source_ | `scripts/check-prod-version.mjs:128` |
+| `ROHY_ALLOW_PRIVATE_LLM_HOSTS` | No | — | _see source_ | `server/lib/outboundUrl.js:76` |
 | `ROHY_BASE_URL` | No | `http://localhost:3000` | _see source_ | `scripts/llm-language-smoke.mjs:26`<br>`scripts/translate-locales.mjs:49` |
+| `ROHY_BIND` | No | `0.0.0.0` | _see source_ | `server/server.js:61` |
 | `ROHY_CASE_PACKAGE_DIR` | No | — | Where case packages are staged (default: case-packages/ beside the database). | `server/services/casePackage.js:255`<br>`server/services/casePackage.js:256` |
 | `ROHY_CASE_PACKAGE_MAX_BYTES` | No | — | Largest case package export or import, in bytes (default 4 GiB). | `server/services/casePackage.js:261` |
 | `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:267` |
-| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:98` |
+| `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:121`<br>`server/routes.js:98` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
-| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:71` |
+| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:84` |
+| `ROHY_KOKORO_TIMEOUT_MS` | No | — | Per-request timeout for ROHY_KOKORO_URL, in ms (default 8000). Not a positive integer: fatal at boot. | `server/services/kokoroTts.js:537` |
+| `ROHY_KOKORO_URL` | No | `'' (empty string)` | Base URL of an OpenAI-compatible Kokoro host (e.g. `https://api.dynasite.org/v1`); Kokoro voices are then synthesized there (`POST &lt;url&gt;/audio/speech`, pcm) one sentence at a time, with the local model only as fallback (not warmed at boot). A failed request speaks locally; 3 failures in a row skip the host for 60 s. A URL saved in Settings → Voice overrides this one. Unset (and none saved) = local synthesis. Malformed is fatal at boot. | `server/services/kokoroTts.js:535`<br>`server/services/kokoroTts.js:619` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:89` |
 | `ROHY_PACS_CONTENT` | No | — | Path to a built imaging content origin, overriding the sibling `../Radoyon/radoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:238` |
 | `ROHY_PASSWORD` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:49` |
-| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:611` |
-| `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:120` |
+| `ROHY_PLUGIN_IMPORT_MAX_BYTES` | No | — | Deployment-wide ceiling, in bytes, on any plugin setting that binds to it (RPS-1 1.4, `ceilingEnv`) — today pathology's `imports.maxBytes`. A tenant admin may set a value BELOW this and can never set one above it, so an operator who caps a deployment is not overridden by a manifest declaring a larger max. Unset means the manifest's own max applies; an unparseable value is treated as unset rather than as zero, so a typo cannot silently forbid every legal value. | `server/routes/plugins-routes.js:624` |
+| `ROHY_PLUGIN_LIBRARY_DIRS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;absolute path&gt;` map of the managed library directory each plugin's server module may write in (RPS-1 1.4). Plural, one per plugin, because a singular variable cannot serve a second plugin and "the second plugin needs no host edit" is the claim RPS-1 makes. Paths must be absolute: a relative path resolves against whatever working directory the service happens to have, which differs between a dev shell, a systemd unit and a Docker image. Unset means the plugin has no library and its import surface is unavailable — not an error. Malformed is fatal at boot. | `server/lib/pluginServerSlot.js:169` |
 | `ROHY_PLUGIN_VIPS_CONCURRENCY` | No | — | How many threads an image tool (libvips) may use for a plugin conversion job. Defaults to half the machine's cores, minimum 1. libvips otherwise uses every core: measured on a 4-core server, one unbounded `dzsave` took 301% CPU for 21 seconds — three of four cores — starving the web server sharing the box, and its peak memory scales with thread count too, so an unbounded tool on a wide machine uses far more RAM than a capacity proof taken on a narrow one. Raise it on a dedicated conversion host. | `server/lib/pluginSpawn.js:63` |
 | `ROHY_PROVA_URL` | No | `'' (empty string)` | Where "Report a problem" reports go: the Prova service rohy relays to (`/api/report`, `/api/reports/mine`, `/api/reports/:id/messages`). Production defaults to `https://prova.lacarm.com`; anywhere else reporting is off unless this is set; `off` turns it off. The browser never talks to Prova — this server adds the signed-in username and the installation key. | `server/routes/report-routes.js:49` |
 | `ROHY_REJECTED_EVENTS_ALERT` | No | `1000` | _see source_ | `server/routes/health-routes.js:67` |
 | `ROHY_REPORT_HOST` | No | `'' (empty string)` | The host Prova shows beside the label, e.g. `rohy.lacarm.com`. Default: the request's Host header. | `server/routes/report-routes.js:60` |
 | `ROHY_REPORT_KEY_FILE` | No | — | Where the self-registered installation key is kept (mode 0600). Default: `report-key.json` beside the database (ROHY_DB). | `server/routes/report-routes.js:56` |
 | `ROHY_REPORT_LABEL` | No | `Rohy` | The installation's name in Prova ("beyza · via &lt;label&gt; · &lt;host&gt;"). Default `Rohy`. | `server/routes/report-routes.js:58` |
-| `ROHY_STARTER_CONTENT` | No | `'' (empty string)` | Set to `off` to refuse the starter content bundles rohy ships under `server/plugin-content/`. Those bundles are a licence-audited subset of the plugins' real content origins, served from disk when `ROHY_PLUGIN_ORIGINS` names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience. | `server/routes/health-routes.js:255`<br>`server/routes/plugins-routes.js:247` |
-| `ROHY_STARTER_CONTENT_DIR` | No | — | Where the starter content bundles live, overriding `server/plugin-content/`. The bundles are gigabytes, generated by `npm run setup:content` and not part of the source tree, so a container wants them on a mounted volume rather than baked into the image. Set this to the mount point. Unset uses the in-tree directory. | `server/routes/health-routes.js:252`<br>`server/routes/health-routes.js:253`<br>`server/routes/plugins-routes.js:236` |
+| `ROHY_STARTER_CONTENT` | No | `'' (empty string)` | Set to `off` to refuse the starter content bundles rohy ships under `server/plugin-content/`. Those bundles are a licence-audited subset of the plugins' real content origins, served from disk when `ROHY_PLUGIN_ORIGINS` names no origin for a plugin, so that a fresh deployment finds imaging rather than an environment variable it cannot act on. A configured origin always wins over them. Turn them off where a deployment must show only its own material — a reading room in which an unrelated teaching image appears is a governance problem, not a convenience. | `server/routes/health-routes.js:272`<br>`server/routes/plugins-routes.js:247` |
+| `ROHY_STARTER_CONTENT_DIR` | No | — | Where the starter content bundles live, overriding `server/plugin-content/`. The bundles are gigabytes, generated by `npm run setup:content` and not part of the source tree, so a container wants them on a mounted volume rather than baked into the image. Set this to the mount point. Unset uses the in-tree directory. | `server/routes/health-routes.js:269`<br>`server/routes/health-routes.js:270`<br>`server/routes/plugins-routes.js:236` |
 | `ROHY_USERNAME` | No | — | _see source_ | `scripts/llm-language-smoke.mjs:48` |
 
 ---
 
-_73 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._
+_78 variables discovered. Generated by `scripts/docs-gen/gen-config.mjs` — regenerate with `npm run docs:gen:config`._

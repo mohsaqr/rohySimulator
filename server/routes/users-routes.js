@@ -40,6 +40,7 @@ import {
 // 15 s session read as 3 h (RPS-1 §17, migrations 0050-0052).
 import { SQL_NOW } from '../shared/time.js';
 import { REDACTED } from '../redaction.js';
+import { sanitizeUserLlmSettings } from '../lib/llmGuards.js';
 
 const radiologyLog = logger('radiology');
 const routesAuthLog = logger('routes-auth-users-tenants');
@@ -435,7 +436,22 @@ router.get('/users/preferences', authenticateToken, (req, res) => {
 // profile panel saving only { default_llm_settings } silently reset
 // language and theme back to defaults on every AI-settings save.
 router.put('/users/preferences', authenticateToken, (req, res) => {
-    const { theme, language, notification_settings, dashboard_layout, default_llm_settings, default_monitor_settings, accessibility_settings, onboarding_settings } = req.body;
+    const { theme, language, notification_settings, dashboard_layout, default_monitor_settings, accessibility_settings, onboarding_settings } = req.body;
+
+    // What a user may store about LLM routing (security audit 2026-10-24,
+    // LLM-2): below educator, baseUrl / apiKey / provider are dropped; for
+    // educator+ a baseUrl must pass validateOutboundUrl and is stored
+    // normalised. The same rule guards POST /sessions and the proxy itself.
+    const checkedLlm = sanitizeUserLlmSettings(req.body.default_llm_settings, req.user);
+    if (!checkedLlm.ok) {
+        return res.status(400).json({ error: checkedLlm.error, code: 'invalid_llm_settings' });
+    }
+    if (checkedLlm.dropped.length > 0) {
+        (req.log || routesAuthLog).info('llm routing fields dropped from user preferences', {
+            user_id: req.user.id, role: req.user.role, dropped: checkedLlm.dropped
+        });
+    }
+    const default_llm_settings = checkedLlm.settings;
 
     dbAdapter.get(`SELECT * FROM user_preferences WHERE user_id = ? AND tenant_id = ?`, [req.user.id, tenantId(req)], (readErr, oldPrefs) => {
         if (readErr) return res.status(500).json({ error: readErr.message });

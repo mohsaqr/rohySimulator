@@ -37,8 +37,42 @@ export const LLM_PROVIDERS = {
     groq:       { name: 'Groq',                        defaultBase: 'https://api.groq.com/openai/v1',                                      needsKey: true,  modelRequired: true,  keyPrefix: 'gsk_',    apiShape: 'openai',    group: 'cloud' },
     together:   { name: 'Together AI',                 defaultBase: 'https://api.together.xyz/v1',                                         needsKey: true,  modelRequired: true,  keyPrefix: '',        apiShape: 'openai',    group: 'cloud' },
     azure:      { name: 'Azure OpenAI',               defaultBase: 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT', needsKey: true, modelRequired: false, keyPrefix: '',    apiShape: 'openai',    group: 'cloud' },
-    custom:     { name: 'Custom OpenAI-Compatible',   defaultBase: 'http://localhost:8000/v1',                                            needsKey: false, modelRequired: false, keyPrefix: '',        apiShape: 'openai',    group: 'other' }
+    // A custom server may be a local one with no auth or a hosted gateway that
+    // requires a key (e.g. a GPU host behind a proxy): the key is OPTIONAL —
+    // offered in the forms, never required.
+    custom:     { name: 'Custom OpenAI-Compatible',   defaultBase: 'http://localhost:8000/v1',                                            needsKey: false, optionalKey: true, modelRequired: false, keyPrefix: '', apiShape: 'openai', group: 'other' }
 };
+
+// "Thinking off" (platform setting llm_thinking; off unless it is 'on'): the
+// request options that turn a reasoning model's thinking off, per provider.
+// Only providers where they are known to work are listed — an OpenAI-style API
+// rejects unknown parameters, so nothing is sent to the others. A custom
+// OpenAI-compatible server (vLLM / SGLang behind a gateway) gets both switches,
+// because each model family reads only one and ignores the other. Measured
+// 2026-10-24 at api.dynasite.org:
+//   - Qwen3 reads chat_template_kwargs.enable_thinking: no thinking at all,
+//     first text at ~0.15 s instead of ~2.5 s.
+//   - gpt-oss reads reasoning_effort and cannot stop thinking entirely: 'low'
+//     cuts it ~80% (first text ~0.26 s instead of ~0.68 s). 'none' is REJECTED
+//     with a 400 ("Harmony does not support reasoning_effort='none'") — never
+//     send it, or every gpt-oss reply fails.
+export const THINKING_OFF_PARAMS = {
+    custom: { chat_template_kwargs: { enable_thinking: false }, reasoning_effort: 'low' },
+};
+
+/** Request fields that turn thinking off for `provider`, or null when it has none. */
+export function thinkingOffParams(provider) {
+    return THINKING_OFF_PARAMS[provider] ?? null;
+}
+
+/**
+ * Thinking is off unless an admin turned it on: an unset llm_thinking means
+ * off. Off costs nothing visible — a model's reasoning is never shown or
+ * spoken — and on delays every reply (and the patient's voice) by seconds.
+ */
+export function thinkingIsOff(storedValue) {
+    return storedValue !== 'on';
+}
 
 // Curated model catalogue per provider, newest first. Providers whose model is
 // entirely deployment-specific (lmstudio, azure, custom) get [] — the picker

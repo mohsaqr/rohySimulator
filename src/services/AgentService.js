@@ -88,15 +88,6 @@ export const AgentService = {
     }
   },
 
-  async testLLM(templateId) {
-    try {
-      return await apiPost(`/agents/templates/${templateId}/test-llm`);
-    } catch (err) {
-      console.error('[AgentService] testLLM error:', err);
-      throw err;
-    }
-  },
-
   // ==================== CASE AGENTS ====================
 
   async getCaseAgents(caseId) {

@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dbAdapter from '../dbAdapter.js';
 import { csrfRequired, verifyCsrf } from './csrf.js';
+import { requireTermsAccepted } from './termsGate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,11 +125,17 @@ export function extractToken(req) {
 //      and we reject 401 *even though* the JWT itself is still cryptographically
 //      valid. This is the missing half of the audit's "token revocation not
 //      enforced" finding.
-//
-// Tokens that pre-date this change have no active_sessions row at all. We
-// accept those (legacy compatibility) so rolling out doesn't force every
-// signed-in user to re-login on the deploy. Once they expire (see
-// authTtlSeconds), the next login goes through the new path.
+//   3. Fail closed on a MISSING row: 401 { code: 'session_unknown' }. A JWT
+//      that was never issued through login/register/refresh has no row — a
+//      token forged with a leaked secret, or one minted before the secret was
+//      rotated — and until the security audit of 2026-10-24 it was accepted as
+//      a "legacy" token, which made it the one kind of token that could never
+//      be revoked. Every issuer records a row before the token leaves the
+//      server (recordActiveSession), so a live client never hits this; a
+//      pre-change session that is still open simply signs in again.
+//   4. Terms of use: once the user is resolved, requireTermsAccepted() refuses
+//      (451) an account that has not accepted the current version while an
+//      administrator requires it. See ./termsGate.js for the exempt paths.
 export const authenticateToken = (req, res, next) => {
     const { token, source, malformed } = extractToken(req);
 
@@ -157,36 +164,37 @@ export const authenticateToken = (req, res, next) => {
                     return res.status(500).json({ error: 'Failed to verify session state' });
                 }
 
-                // If there IS a row, enforce its state. Missing row = legacy
-                // token; fall through to the user lookup as before.
-                if (sessionRow) {
-                    if (!sessionRow.is_active) {
-                        return res.status(401).json({ error: 'Session revoked' });
+                // No row: this token was not issued by this server's login,
+                // register or refresh — nothing could ever revoke it. Refuse.
+                if (!sessionRow) {
+                    return res.status(401).json({ error: 'Session not found', code: 'session_unknown' });
+                }
+                if (!sessionRow.is_active) {
+                    return res.status(401).json({ error: 'Session revoked' });
+                }
+                if (sessionRow.expires_at) {
+                    // SQLite emits `YYYY-MM-DD HH:MM:SS` without a TZ
+                    // marker — JS parses that as LOCAL time, which is
+                    // wrong because the column is stored in UTC. Force
+                    // UTC interpretation by appending 'Z' (or replacing
+                    // the space with 'T' for older parsers).
+                    const utcStamp = sessionRow.expires_at
+                        .replace(' ', 'T') + 'Z';
+                    if (new Date(utcStamp) < new Date()) {
+                        return res.status(401).json({ error: 'Session expired' });
                     }
-                    if (sessionRow.expires_at) {
-                        // SQLite emits `YYYY-MM-DD HH:MM:SS` without a TZ
-                        // marker — JS parses that as LOCAL time, which is
-                        // wrong because the column is stored in UTC. Force
-                        // UTC interpretation by appending 'Z' (or replacing
-                        // the space with 'T' for older parsers).
-                        const utcStamp = sessionRow.expires_at
-                            .replace(' ', 'T') + 'Z';
-                        if (new Date(utcStamp) < new Date()) {
-                            return res.status(401).json({ error: 'Session expired' });
-                        }
-                    }
-                    // Best-effort touch — failure is non-fatal. At most once a
-                    // minute per session: it used to be a write on EVERY
-                    // authenticated request, which under load multiplied the
-                    // write-lock contention (stability run, rc.47). Its one
-                    // reader orders an admin list by it.
-                    if (shouldTouchActivity(tokenHash)) {
-                        dbAdapter.run(
-                            `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
-                            [tokenHash],
-                            () => { /* ignore */ }
-                        );
-                    }
+                }
+                // Best-effort touch — failure is non-fatal. At most once a
+                // minute per session: it used to be a write on EVERY
+                // authenticated request, which under load multiplied the
+                // write-lock contention (stability run, rc.47). Its one
+                // reader orders an admin list by it.
+                if (shouldTouchActivity(tokenHash)) {
+                    dbAdapter.run(
+                        `UPDATE active_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = ?`,
+                        [tokenHash],
+                        () => { /* ignore */ }
+                    );
                 }
 
                 dbAdapter.get(
@@ -219,7 +227,12 @@ export const authenticateToken = (req, res, next) => {
                                 return res.status(verdict.status).json(verdict.body);
                             }
                         }
-                        next();
+                        // Terms of use, enforced server-side. Runs here, not
+                        // in routes.js, because this is the only point that
+                        // knows who the caller is: every router applies
+                        // authenticateToken per route, so nothing mounted
+                        // before them sees req.user. Exempt paths pass.
+                        requireTermsAccepted(req, res, next);
                     }
                 );
             }

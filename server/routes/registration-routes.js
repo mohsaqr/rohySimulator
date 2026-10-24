@@ -320,9 +320,15 @@ router.post('/registration-requests/:id/approve', authenticateToken, requireAdmi
             throw err;
         }
 
+        // The hash now lives on the users row; the copy on the request has
+        // done its job and is dropped, so a decided request never carries a
+        // second, un-rotated copy of someone's password hash. Blanked to ''
+        // rather than NULL: the column is NOT NULL (migration 0038) and an
+        // empty string can never satisfy bcrypt.compare.
         await dbRun(
             `UPDATE registration_requests
-                SET status = 'approved', decided_at = CURRENT_TIMESTAMP, decided_by = ?, user_id = ?
+                SET status = 'approved', decided_at = CURRENT_TIMESTAMP, decided_by = ?, user_id = ?,
+                    password_hash = ''
               WHERE id = ?`,
             [req.user.id, userId, request.id]
         );
@@ -365,9 +371,14 @@ router.post('/registration-requests/:id/reject', authenticateToken, requireAdmin
             });
         }
 
+        // No account will ever be made from this row, so the password hash
+        // has no further use and is dropped with the decision (security audit
+        // 2026-10-24). The username, email and timestamps stay as the record.
+        // '' not NULL: the column is NOT NULL (see the approve route).
         await dbRun(
             `UPDATE registration_requests
-                SET status = 'rejected', decided_at = CURRENT_TIMESTAMP, decided_by = ?, decision_note = ?
+                SET status = 'rejected', decided_at = CURRENT_TIMESTAMP, decided_by = ?, decision_note = ?,
+                    password_hash = ''
               WHERE id = ?`,
             [req.user.id, req.body?.note || null, request.id]
         );

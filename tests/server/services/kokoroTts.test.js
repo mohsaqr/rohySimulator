@@ -591,3 +591,390 @@ describe('kokoroTts: idle unload', () => {
         expect(mockState.disposeCalls).toBe(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Remote mode — ROHY_KOKORO_URL set. Synthesis goes to an OpenAI-compatible
+//    host one sentence per request (response_format pcm), the local model is
+//    only a fallback, and a circuit breaker keeps a dead host from costing a
+//    timeout on every reply. `fetch` is stubbed; the local model is the same
+//    fake as above, so "spoke locally" is visible as fromPretrainedCalls > 0.
+// ---------------------------------------------------------------------------
+
+const REMOTE_URL = 'https://kokoro.test/v1';
+
+// One recorded call per remote request.
+let remoteCalls = [];
+
+function pcmBytes(samples, fill) {
+    return Buffer.alloc(samples * 2, fill);
+}
+
+// `respond(call)` returns a Response, a Promise of one, or throws.
+function stubRemote(respond) {
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+        const call = { url, init, body: JSON.parse(init.body), signal: init.signal };
+        remoteCalls.push(call);
+        return respond(call);
+    }));
+}
+
+const okPcm = (buf) => new Response(buf, { status: 200 });
+
+async function collect(gen) {
+    const out = [];
+    for await (const chunk of gen) out.push(chunk);
+    return out;
+}
+
+describe('kokoroTts: remote synthesis (ROHY_KOKORO_URL)', () => {
+    beforeEach(() => {
+        remoteCalls = [];
+        process.env.ROHY_KOKORO_URL = `${REMOTE_URL}/`; // trailing slash is trimmed
+        process.env.ROHY_KOKORO_API_KEY = 'test-key';
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+    });
+    afterEach(() => {
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+    });
+
+    it('streams one pcm request per sentence, in order, without loading the local model', async () => {
+        stubRemote(({ body }) => okPcm(pcmBytes(4, body.input.length)));
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'Hello doctor. My chest hurts!', voice: 'am_adam' }));
+
+        expect(remoteCalls.map((c) => c.url)).toEqual([`${REMOTE_URL}/audio/speech`, `${REMOTE_URL}/audio/speech`]);
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer test-key');
+        expect(remoteCalls.map((c) => c.body)).toEqual([
+            { model: 'kokoro', voice: 'am_adam', input: 'Hello doctor.', response_format: 'pcm', speed: 1 },
+            { model: 'kokoro', voice: 'am_adam', input: 'My chest hurts!', response_format: 'pcm', speed: 1 },
+        ]);
+        expect(chunks.map((c) => c.sampleRate)).toEqual([24000, 24000]);
+        expect(chunks.map((c) => c.pcm[0])).toEqual(['Hello doctor.'.length, 'My chest hurts!'.length]);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+        expect(sut.isKokoroLoaded()).toBe(false);
+    });
+
+    it('requests the next sentence before the current one is consumed, and keeps order when it finishes first', async () => {
+        let releaseFirst;
+        stubRemote(({ body }) => (body.input === 'One.'
+            ? new Promise((r) => { releaseFirst = () => r(okPcm(pcmBytes(2, 1))); })
+            : okPcm(pcmBytes(2, 2))));
+        const sut = await loadFreshSUT();
+        const gen = sut.synthesizeKokoroStream({ text: 'One. Two.', voice: 'am_adam' });
+        const first = gen.next();
+        // Both requests are out while sentence one is still pending.
+        await vi.waitFor(() => expect(remoteCalls).toHaveLength(2));
+        releaseFirst();
+        expect((await first).value.pcm[0]).toBe(1);
+        expect((await gen.next()).value.pcm[0]).toBe(2);
+        expect((await gen.next()).done).toBe(true);
+    });
+
+    it('forwards a numeric speed and wraps the batch result in a 24 kHz WAV header', async () => {
+        stubRemote(() => okPcm(pcmBytes(10, 0)));
+        const sut = await loadFreshSUT();
+        const wav = await sut.synthesizeKokoro({ text: 'Two sentences. In one request.', voice: 'af_bella', speed: 1.2 });
+        expect(remoteCalls).toHaveLength(1);
+        expect(remoteCalls[0].body).toMatchObject({ input: 'Two sentences. In one request.', speed: 1.2 });
+        expect(wav.subarray(0, 4).toString('ascii')).toBe('RIFF');
+        expect(wav.readUInt32LE(24)).toBe(24000);
+        expect(wav.length).toBe(44 + 20);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('rejects an unknown voice with UNKNOWN_VOICE before any request or model load', async () => {
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await expect(collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'xx_nobody' })))
+            .rejects.toMatchObject({ code: 'UNKNOWN_VOICE' });
+        await expect(sut.synthesizeKokoro({ text: 'Hi.', voice: 'xx_nobody' }))
+            .rejects.toMatchObject({ code: 'UNKNOWN_VOICE' });
+        expect(remoteCalls).toHaveLength(0);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('lists the bundled catalogue and answers isKokoroVoice without loading the model', async () => {
+        const sut = await loadFreshSUT();
+        const list = sut.listKokoroVoices();
+        expect(list.length).toBeGreaterThanOrEqual(20);
+        expect(list.find((v) => v.filename === 'af_heart')).toMatchObject({ gender: 'female', sampleRate: 24000 });
+        expect(list.find((v) => v.filename === 'am_michael')).toMatchObject({ gender: 'male' });
+        expect(await sut.isKokoroVoice('bm_george')).toBe(true);
+        expect(await sut.isKokoroVoice('xx_nobody')).toBe(false);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it.each([
+        ['a 5xx', () => new Response('upstream down', { status: 502 })],
+        ['a 401 (bad key)', () => new Response('{"detail":"bad key"}', { status: 401 })],
+        ['a network error', () => { throw new TypeError('fetch failed'); }],
+        ['an odd-length body', () => okPcm(Buffer.alloc(3))],
+    ])('falls back to the local model on %s', async (_label, respond) => {
+        stubRemote(respond);
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'Hello.', voice: 'af_bella' }));
+        expect(chunks).toHaveLength(1);
+        expect(mockState.fromPretrainedCalls).toBe(1);
+        expect(mockState.splitterPushed).toEqual(['Hello.']);
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 1, open: false });
+    });
+
+    it('falls back on a timeout (ROHY_KOKORO_TIMEOUT_MS)', async () => {
+        process.env.ROHY_KOKORO_TIMEOUT_MS = '40';
+        stubRemote(({ signal }) => new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }));
+        const sut = await loadFreshSUT();
+        const wav = await sut.synthesizeKokoro({ text: 'Hello.', voice: 'af_bella' });
+        expect(wav.subarray(0, 4).toString('ascii')).toBe('RIFF');
+        expect(mockState.fromPretrainedCalls).toBe(1);
+    });
+
+    it('a failure mid-stream speaks that sentence and the rest locally, keeping what was already yielded', async () => {
+        stubRemote(({ body }) => (body.input === 'One.'
+            ? okPcm(pcmBytes(2, 7))
+            : new Response('', { status: 503 })));
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'One. Two. Three.', voice: 'af_bella' }));
+        expect(chunks[0].pcm[0]).toBe(7);
+        // The fake local stream yields one chunk for whatever text it is given.
+        expect(chunks).toHaveLength(2);
+        expect(mockState.splitterPushed).toEqual(['Two. Three.']);
+    });
+
+    it('opens the breaker after 3 consecutive failures: the next reply skips the remote host for 60 s', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(3);
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 3, open: true });
+
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'af_bella' }));
+        expect(remoteCalls).toHaveLength(3); // skipped, spoke locally
+
+        vi.setSystemTime(new Date('2026-10-24T12:01:01Z'));
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(4); // the trial request went out and closed it
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 0, open: false });
+    });
+
+    it('after the window, lets ONE trial request through while concurrent replies stay local', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(3);
+
+        vi.setSystemTime(new Date('2026-10-24T12:01:01Z'));
+        let releaseTrial;
+        stubRemote(() => new Promise((r) => { releaseTrial = () => r(new Response('', { status: 500 })); }));
+        const trial = sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await vi.waitFor(() => expect(releaseTrial).toBeTypeOf('function'));
+        // Two more replies while the trial is out: both speak locally.
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'af_bella' }));
+        expect(remoteCalls).toHaveLength(4);
+        releaseTrial();
+        await trial;
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 4, open: true }); // failed trial reopens
+
+        // Once the reopened window has passed, the next trial succeeds and
+        // closes the breaker.
+        vi.setSystemTime(new Date('2026-10-24T12:02:02Z'));
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 0, open: false });
+    });
+
+    it('a consumer that stops early aborts the prefetched request', async () => {
+        stubRemote(({ body, signal }) => (body.input === 'One.'
+            ? okPcm(pcmBytes(2, 1))
+            : new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))));
+        const sut = await loadFreshSUT();
+        for await (const chunk of sut.synthesizeKokoroStream({ text: 'One. Two.', voice: 'am_adam' })) {
+            expect(chunk.pcm[0]).toBe(1);
+            break;
+        }
+        expect(remoteCalls).toHaveLength(2);
+        expect(remoteCalls[1].signal.aborted).toBe(true);
+        // An abandoned prefetch is not a remote failure.
+        expect(sut.kokoroRemoteState().failures).toBe(0);
+    });
+});
+
+describe('kokoroTts: splitSentences / parseRemoteTimeoutMs', () => {
+    it('splits on terminal punctuation and keeps titles, initials and decimals whole', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.splitSentences('Hello doctor. Dr. Smith said it hurts! Is it 3.5 cm? John F. Kennedy spoke… "Really." Done'))
+            .toEqual(['Hello doctor.', 'Dr. Smith said it hurts!', 'Is it 3.5 cm?', 'John F. Kennedy spoke…', '"Really."', 'Done']);
+        expect(sut.splitSentences('   ')).toEqual([]);
+    });
+
+    it('treats anything but a positive integer timeout as the 8000 ms default', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.parseRemoteTimeoutMs(undefined)).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('2500')).toBe(2500);
+        expect(sut.parseRemoteTimeoutMs('0')).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('abc')).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('1.5')).toBe(8000);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Remote host set in Settings → Voice (platform settings), alongside or
+//     instead of the env file. refreshKokoroRemoteSettings(getSetting) loads
+//     the saved values; settings override env, except that the env file's key
+//     is never sent to a URL that came from settings.
+// ---------------------------------------------------------------------------
+
+describe('kokoroTts: remote host from settings', () => {
+    const settingsGetter = (values) => async (key) => values[key] ?? null;
+
+    beforeEach(() => {
+        remoteCalls = [];
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+    });
+    afterEach(() => {
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        vi.unstubAllGlobals();
+    });
+
+    it('normalizeRemoteUrl accepts http(s) base URLs and refuses everything else', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.normalizeRemoteUrl(' https://api.example.org/v1/ ')).toBe('https://api.example.org/v1');
+        expect(sut.normalizeRemoteUrl('http://localhost:8880/v1')).toBe('http://localhost:8880/v1');
+        for (const bad of ['', '   ', 'api.example.org/v1', 'ftp://h/v1', 'javascript:alert(1)',
+            'https://user:pw@h/v1', 'https://h/v1?x=1', 'https://h/v1#f', `https://h/${'a'.repeat(600)}`, 42, null]) {
+            expect(sut.normalizeRemoteUrl(bad)).toBeNull();
+        }
+    });
+
+    it('a saved URL + key turns remote mode on, with no env at all', async () => {
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        expect(sut.kokoroRemoteEnabled()).toBe(false);
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'saved-key' }));
+        expect(sut.kokoroRemoteState()).toMatchObject({ enabled: true, source: 'settings', host: 'saved.test', keySet: true, keySource: 'settings' });
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://saved.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer saved-key');
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('a saved URL overrides the env URL — and the env key is NOT sent to it', async () => {
+        // Regression lock for the key-exfiltration rule: an admin-entered URL
+        // must never receive the operator's env-file key.
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-secret';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://attacker.test/v1' }));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://attacker.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).not.toContain('env-secret');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'settings', keySet: false, keySource: null, envHost: 'env.test' });
+    });
+
+    it('a saved key with no saved URL goes to the env URL (the host the admin sees)', async () => {
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-secret';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_api_key: 'new-key' }));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://env.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer new-key');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'env', keySource: 'settings' });
+    });
+
+    it('with nothing saved, the env pair is used as before', async () => {
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-key';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({}));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer env-key');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'env', keySource: 'env' });
+    });
+
+    it('ignores a stored URL that is not acceptable (edited in the DB by hand)', async () => {
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'ftp://nope/v1' }));
+        expect(sut.kokoroRemoteEnabled()).toBe(false);
+    });
+
+    it('a changed setting resets the breaker, so a fixed key is tried on the next reply', async () => {
+        stubRemote(() => new Response('', { status: 401 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'old' }));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: true, lastError: { kind: 'http', status: 401 } });
+
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'new' }));
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: false, failures: 0, lastError: null });
+        remoteCalls = [];
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(1);
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer new');
+    });
+
+    it('an unchanged refresh keeps the breaker as it is', async () => {
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        const values = { kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' };
+        await sut.refreshKokoroRemoteSettings(settingsGetter(values));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await sut.refreshKokoroRemoteSettings(settingsGetter(values));
+        expect(sut.kokoroRemoteState().open).toBe(true);
+    });
+
+    it('the state never carries the key', async () => {
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'sk-very-secret' }));
+        expect(JSON.stringify(sut.kokoroRemoteState())).not.toContain('sk-very-secret');
+    });
+
+    it('testKokoroRemote reports a refusal without falling back, loading the model, or echoing the body', async () => {
+        stubRemote(() => new Response('{"error":"internal page contents"}', { status: 401 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' }));
+        const result = await sut.testKokoroRemote();
+        expect(result).toMatchObject({ ok: false, kind: 'http', status: 401, host: 'saved.test' });
+        expect(JSON.stringify(result)).not.toContain('internal page contents');
+        expect(mockState.fromPretrainedCalls).toBe(0);
+        // A failed test is not a reply: the breaker is untouched.
+        expect(sut.kokoroRemoteState().failures).toBe(0);
+    });
+
+    it('testKokoroRemote success reports latency and audio length, and closes an open breaker', async () => {
+        stubRemote(() => new Response('', { status: 503 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' }));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState().open).toBe(true);
+        stubRemote(() => okPcm(pcmBytes(24000, 0))); // 1 s
+        const result = await sut.testKokoroRemote();
+        expect(result).toMatchObject({ ok: true, audioSeconds: 1, host: 'saved.test' });
+        expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: false, failures: 0 });
+    });
+
+    it('testKokoroRemote with nothing configured says so', async () => {
+        const sut = await loadFreshSUT();
+        expect(await sut.testKokoroRemote()).toMatchObject({ ok: false, kind: 'not_configured' });
+    });
+});

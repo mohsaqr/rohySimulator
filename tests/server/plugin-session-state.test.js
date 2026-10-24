@@ -195,6 +195,30 @@ describe('plugin session state: the server copy of a learner\'s room work', () =
         expect(empty).not.toContain('SUBMITTED REPORTS');
     });
 
+    it('caps the distinct documents one plugin may keep for a session, never an update', async () => {
+        // Regression lock: a learner's client could create unlimited 192 KB documents per session by looping over names
+        const peerPath = (name) => path(peerSessionId, 'pathology', name);
+        // Sequential on purpose: each save is its own BEGIN IMMEDIATE connection.
+        const statuses = await Array.from({ length: 32 }, (_, i) => i).reduce(async (acc, i) => [
+            ...(await acc),
+            (await put(peer, { document: { n: i }, expectedRevision: 0 }, peerSessionId, 'pathology', `doc${i}`)).status,
+        ], Promise.resolve([]));
+        expect(statuses).toEqual(Array(32).fill(200));
+
+        const over = await put(peer, { document: { n: 32 }, expectedRevision: 0 }, peerSessionId, 'pathology', 'doc32');
+        expect(over.status).toBe(413);
+        expect((await over.json()).code).toBe('plugin_state_quota');
+        expect((await (await peer(peerPath('doc32'))).json()).document).toBeNull();
+
+        // An existing name still saves.
+        const update = await put(peer, { document: { n: 'again' }, expectedRevision: 1 }, peerSessionId, 'pathology', 'doc0');
+        expect(update.status).toBe(200);
+        expect((await update.json()).revision).toBe(2);
+        const count = await withDb((db) => pGet(db,
+            'SELECT COUNT(*) AS n FROM plugin_session_documents WHERE session_id = ?', [peerSessionId]));
+        expect(count.n).toBe(32);
+    });
+
     it('is erased with the user', async () => {
         const purgedToken = await login(server.baseUrl, 'ps-purged');
         const purged = authedFetch(server.baseUrl, purgedToken);

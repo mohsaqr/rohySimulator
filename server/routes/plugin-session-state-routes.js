@@ -51,6 +51,14 @@ const log = logger('routes-plugin-session-state');
  */
 export const PLUGIN_STATE_MAX_BYTES = 192 * 1024;
 
+/**
+ * The cap on distinct document NAMES one plugin may keep for one session.
+ * The byte cap above bounds a document, not how many a learner's client can
+ * create; without this, a loop over names could fill the table 192 KB at a
+ * time. Updates to an existing name are never refused by it.
+ */
+export const PLUGIN_STATE_MAX_DOCUMENTS = 32;
+
 /** A store key: short, safe, never a path. */
 export const PLUGIN_STATE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 
@@ -144,6 +152,15 @@ router.put('/sessions/:sessionId/plugin-state/:pluginId/:name', authenticateToke
             }
             const now = new Date().toISOString();
             if (!current) {
+                // A NEW name counts against the per-(session, plugin) quota;
+                // counted inside the same transaction so two tabs cannot both
+                // squeeze past it.
+                const { n } = await tx.get(
+                    `SELECT COUNT(*) AS n FROM plugin_session_documents
+                      WHERE tenant_id = ? AND session_id = ? AND plugin_id = ?`,
+                    [tenant, sessionId, pluginId]
+                );
+                if (n >= PLUGIN_STATE_MAX_DOCUMENTS) return { quota: true };
                 await tx.run(
                     `INSERT INTO plugin_session_documents
                         (tenant_id, session_id, user_id, plugin_id, name, document, revision, created_at, updated_at)
@@ -166,6 +183,13 @@ router.put('/sessions/:sessionId/plugin-state/:pluginId/:name', authenticateToke
             };
         });
 
+        if (outcome.quota) {
+            (req.log || log).warn('plugin state quota reached', { session_id: sessionId, plugin_id: pluginId, name, max: PLUGIN_STATE_MAX_DOCUMENTS });
+            return res.status(413).json({
+                error: `This room already keeps ${PLUGIN_STATE_MAX_DOCUMENTS} documents for this session; no new one can be added.`,
+                code: 'plugin_state_quota',
+            });
+        }
         if (outcome.conflict) {
             (req.log || log).info('plugin state conflict', { session_id: sessionId, plugin_id: pluginId, name, expected: expectedRevision, current: outcome.current?.revision ?? 0 });
             return res.status(409).json({

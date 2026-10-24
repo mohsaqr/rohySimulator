@@ -11,8 +11,8 @@
  *
  * IDEMPOTENT OVER ITS OWN DIRECTORY, because the host requires it: a job whose
  * process died is requeued FROM THE START, so a second run must be able to
- * finish rather than trip over its own leftovers. `assetId` is derived from the
- * source URL, so a retry reuses the same directory; each phase clears what it
+ * finish rather than trip over its own leftovers. `assetId` is the row's (tenant + URL),
+ * so a retry reuses the same directory; each phase clears what it
  * is about to rewrite; and the source is re-used when its digest still matches
  * rather than downloaded again.
  *
@@ -119,7 +119,9 @@ export async function importSlide(job, api, ctx) {
         throw new ImportRefused('slide imports are disabled for this tenant', 'plugin_imports_disabled');
     }
 
-    const assetId = stableAssetId('import', url);
+    // The row's own id (index.js derives it per TENANT and URL); the directory
+    // must be the row's, or a tenant-scoped id tiles into a directory nobody reads.
+    const assetId = job.asset_id || stableAssetId('import', `${job.tenant_id}\0${url}`);
     const paths = assetPaths(ctx.libraryDir, assetId);
     const fileName = safeFileName(new URL(url).pathname, 'slide');
     const accepted = settings['imports.acceptedFormats'] ?? [];

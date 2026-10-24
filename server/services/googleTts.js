@@ -8,7 +8,7 @@
 // entire teaching cohort at zero cost.
 //
 // API ref: https://cloud.google.com/text-to-speech/docs/reference/rest/v1/text/synthesize
-//   POST https://texttospeech.googleapis.com/v1/text:synthesize?key=API_KEY
+//   POST https://texttospeech.googleapis.com/v1/text:synthesize  (header X-Goog-Api-Key: API_KEY)
 //   { input: { text }, voice: { languageCode, name }, audioConfig: {...} }
 //
 // Quirks:
@@ -16,7 +16,8 @@
 //     the route's pipePcmStream helper can use it uniformly.
 //   - Google wraps LINEAR16 PCM in a 44-byte RIFF/WAVE header even when
 //     the format is "raw PCM". We strip it before yielding raw samples.
-//   - Auth uses an API key on the URL — same pattern as Cloud Speech-to-Text.
+//   - Auth sends the API key in the X-Goog-Api-Key header, never on the URL
+//     (a URL lands in timeout messages and logs — audit 2026-10-24).
 
 import { Buffer } from 'node:buffer';
 import { fetchWithTimeout } from './fetchWithTimeout.js';
@@ -213,9 +214,11 @@ export async function* synthesizeGoogleStream({ text, voice, speed, pitch, apiKe
     // Audit #10: 30s timeout via fetchWithTimeout matches the OpenAI path
     // and the catalogue proxies — uniform policy across server-side
     // outbound calls.
-    const res = await fetchWithTimeout(`${GOOGLE_TTS_URL}?key=${encodeURIComponent(key)}`, {
+    // The key travels in a header, never in the URL: a URL ends up in timeout
+    // messages, access logs and error bodies (security audit 2026-10-24, TTS-1).
+    const res = await fetchWithTimeout(GOOGLE_TTS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key },
         body: JSON.stringify({
             input: { text },
             voice: { languageCode, name: voice },

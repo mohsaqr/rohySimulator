@@ -9,6 +9,222 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.80] — 2026-10-24
+
+- **A user purge no longer edits the audit chain.** Purging a learner used to set `system_audit_log.user_id = NULL` in
+  place; every row's hash covers that column, so the chain reported tampering after any purge — which the new chain
+  verification in `scripts/audit-retention.sh` caught on CI. Audit rows are now retained unchanged (the purged user
+  row is gone, so the id alone identifies no one) and the `purge_user` entry records the erasure in the chain itself.
+  `system_audit_log` is also out of the age-based retention list for the same reason. The upload-audit test polls for
+  the row the server appends after answering.
+
+## [3.0.0-rc.79] — 2026-10-24
+
+- **CI follow-up to the security release.** A platform admin may again move another admin between tenants (placing a
+  new tenant's first admin is the job; `tests/e2e/tenant.spec.js` does exactly that) — only moving your own account
+  is refused (`403 self_move`). `scripts/audit-redaction.sh` creates its keyed test session as an admin, since a
+  student's `llm_settings.apiKey` is now dropped on write, and checks that drop separately. Two auth tests poll for
+  the `login_logs` row the server writes after it has answered.
+
+## [3.0.0-rc.78] — 2026-10-24
+
+**Security release.** A full read-only audit of the repository (authentication, authorization and tenant isolation,
+the LLM and TTS proxies, file handling, SQL construction, the client, plugins, deployment and CI) found 4 critical or
+high server-side issues and about 40 medium and low ones. Every code-level finding is fixed here, each with a
+regression-lock test. The audit report itself is kept out of the repository. Behaviour changes operators and
+educators will notice are marked **(change)**.
+
+- **Authorization and tenant isolation**
+  - The system-log table viewer (`GET /system-log/table/:name`) showed any table raw. `platform_settings` has no
+    tenant column, so any tenant's admin could read the LLM, Google TTS, OpenAI TTS and remote Kokoro API keys in
+    clear, plus `users.password_hash` and `active_sessions.token_hash`. It now serves only an allowlist of tenant-
+    scoped log tables, through the same redaction every other route uses.
+  - **(change)** Creating tenants and moving a user between tenants is limited to a *platform admin* (an admin of the
+    default tenant); an admin can no longer move a peer or superior. Every write to the install-wide
+    `platform_settings` (LLM, voice, registration, terms, case packages, language, monitor, chat, affect, avatars,
+    rate limits, user fields, cohort enforcement) is platform-admin only too (`403 platform_admin_required`).
+  - Complete-session export, questionnaire responses and emotion logs are tenant- and owner-scoped (an educator could
+    export any tenant's transcript and student e-mail; a reviewer could list every tenant's questionnaire answers).
+  - Orders accept only investigations that belong to the session's own case and tenant; lab-result edits and
+    treatment lookups are bound to the session's case; private scenarios are readable only by their author;
+    catalogue "promote" is tenant-bound; deleted sessions are hidden from every session route.
+  - **(change)** Master catalogue writes (medications, lab tests, diagnoses, the lab database file) need an admin, not
+    an educator. The public master lists cap a page at 200 rows and treat `%` and `_` in a search literally.
+  - `/llm/usage/all`, `/tts/voice-usage` and `/admin/export-records` show only the caller's tenant.
+  - The route-auth test now scans every route module, so an unauthenticated route can no longer land unnoticed.
+- **LLM and TTS proxies**
+  - A custom agent endpoint (`llm_provider: custom`) was sent the **platform** API key when the template had none of
+    its own, so an educator could collect it at a host they control. The platform key now travels only to the
+    platform URL.
+  - **(change)** Students can no longer set a custom `baseUrl`, `apiKey` or `provider` on a session or in their
+    preferences (they could receive the hidden persona prompt, including answer material, at their own server, and
+    make rohy call internal hosts). Educator-set URLs, agent `llm_endpoint`s and the admin probes are validated by
+    `server/lib/outboundUrl.js`: http(s) only, no credentials, no loopback/link-local/private host, redirects not
+    followed. Set `ROHY_ALLOW_PRIVATE_LLM_HOSTS=1` for an on-premises model server on the LAN.
+  - Session-supplied model, `maxOutputTokens` and temperature are bounded (catalogue model, platform token cap,
+    0–2); client messages must be `user`/`assistant` text only (≤ 200 messages, ≤ 200,000 characters);
+    `rate_limit_requests_per_user_hourly` is now enforced (`429 hourly_limit`); the budget pre-flight reserves at
+    least 256 tokens.
+  - The Google TTS key moves from the URL to the `X-Goog-Api-Key` header and timeout errors drop query strings, so a
+    timeout no longer logs the key. Piper input goes to a private temp directory.
+  - Removed the broken `POST /agents/templates/:id/test-llm` route (it read a table no migration creates) and its
+    editor button; `avatar_url` and imported template fields are validated.
+- **Authentication**
+  - **(change)** A JWT with no `active_sessions` row is refused (`401 session_unknown`); the "legacy token"
+    fall-through meant a forged or pre-rotation token could never be revoked. Every signed-in user re-authenticates
+    once after this deploy.
+  - Login no longer reveals whether an account exists, is disabled or is locked: unknown users cost a bcrypt compare
+    too, and 403/423 come only after a correct password. An expired lockout resets the failure counter (one wrong
+    password used to re-lock an account for another 15 minutes, indefinitely).
+  - **(change)** The terms of use are enforced by the server (`451 terms_required` on every non-exempt route while
+    acceptance is pending); the client gate re-probes when it sees one.
+  - Cookies are `Secure` whenever `FRONTEND_URL` is https; registration trims and validates username and e-mail;
+    approved and rejected registration requests no longer keep the applicant's password hash.
+  - **(change)** In production a `JWT_SECRET` under 32 characters and `ALLOW_DEFAULT_USERS=1` are fatal. The first
+    admin is provisioned with `ROHY_ADMIN_USERNAME`/`ROHY_ADMIN_PASSWORD`; the installers generate the password.
+- **Server and deployment**
+  - **(change)** Docker trusts the Caddy container (`ROHY_TRUST_PROXY=uniquelocal`): with `loopback`, Express ignored
+    `X-Forwarded-For`, so every user shared one login rate-limit bucket and the audit log recorded Caddy's address.
+    Production warns when the value is unset or `loopback`.
+  - In production every 5xx answers `Internal server error` plus a request id instead of the raw message
+    (236 handlers echoed `err.message`); multer errors answer 413/415. `X-Powered-By` is gone.
+  - Only `OyonR/standalone` is served under `/oyon` (the whole tree, including internal notes, was public).
+    Production fails fast on a busy port instead of binding the next one; an uncaught exception drains and exits.
+    New `ROHY_BIND`.
+  - The old retention sweep deleted audit-chain rows and inserted an unhashed one, which made the tamper-evidence
+    chain report "broken"; it now delegates to the chain-safe sweeper, `audit-retention.sh` verifies the chain, and
+    example systemd units run a daily verification. Pre-migration `.bak` snapshots are pruned to the newest five.
+  - Invite tokens are redacted from the request log; `/health/plugins` caches origin probes for 30 s; `/ready` and
+    `/health/plugins` are limited to 30 requests a minute per IP.
+  - `dynajs` is pinned to a commit with a version check and the image is built with `npm ci`; the JWT secret gets
+    its own Docker volume; compose drops all capabilities; the systemd unit no longer lets the service write its own
+    code; third-party GitHub Actions are pinned to commit SHAs; `googlekey.text` and the Prova notes are excluded
+    from the Docker build context.
+- **Uploads, imports, lessons, plugins, client**
+  - **(change)** `POST /api/upload` is educator-only, 25 MB, byte-checked against the declared image type and
+    audited (any signed-in role could fill the uploads volume at 100 MB a request). Body-map regions are admin-only
+    and validated.
+  - The lesson HTML scrub reads attributes tag by tag and catches `/`-separated handlers, `srcdoc`, `formaction` and
+    entity-encoded `javascript:` URLs; lesson file, link and embed URLs are allow-listed; embeds lose
+    `allow-same-origin`.
+  - Learners no longer receive lesson MCQ answer keys in the page; answers are checked by
+    `POST /courses/lectures/:id/mcq/check`.
+  - A pathology slide import is per tenant (the same URL in another tenant renamed and re-tiled the first tenant's
+    slide); a session keeps at most 32 plugin documents per plugin; every plugin route requires sign-in.
+  - **(change)** Oyon affect capture is persisted only after an explicit consent; no stored choice means local-only.
+  - Logout clears the case-edit draft and debrief transcripts from localStorage.
+  - Dependencies: `dompurify` 3.4.17, `multer` 2.5.0, `express` 5.3.0, `body-parser` 2.4.0 (all had open advisories).
+
+## [3.0.0-rc.77] — 2026-10-24
+
+- **`npm run lint` ignores the local `tmp/` folder.** It is gitignored scratch space (Prova verification runs keep
+  whole copies of the repo there), and linting it reported ~1,100 errors that CI never sees, hiding the real result.
+
+## [3.0.0-rc.76] — 2026-10-24
+
+- **The on-call specialists talk like colleagues, not tutors.** The cardiologist answered a learner's "Hello" with
+  "What have you looked at so far on the ECG, and how did you start your interpretation?" — five layers told it to.
+  All four specialists (pathologist, cardiologist, radiologist, laboratory specialist) now answer the question asked,
+  report or confirm the findings in their brief when asked, ask at most one question and only when they need the
+  answer, and teach only on request. They still never name the diagnosis: the conclusion stays the learner's.
+  - Seeded prompts and `dos`/`donts` rewritten (`server/db.js`).
+  - The default disclosure is now `on_request` instead of `after_effort` (3 learner turns + a visit to the
+    specialty's room before any finding). An educator can still pick the gate per case.
+  - The server brief no longer says "teach them how to look" / "ask what THEY found", and the line that replaces a
+    reply naming the diagnosis is now "That conclusion is yours to draw. I can only tell you what the findings
+    show." (all eight languages).
+  - Migration **0071** brings existing installs along, but only where a template still holds exactly what was
+    seeded (prompt, dos/donts, default disclosure — each matched separately), so an educator's edits are kept.
+    Per-case overrides are never touched. A test pins that an upgraded install ends up identical to a fresh one.
+
+## [3.0.0-rc.75] — 2026-10-24
+
+- **Thinking is off by default, and gpt-oss thinks as little as it can.** For a custom OpenAI-compatible server the
+  "Turn the model's thinking off" box now starts ticked: an unset `llm_thinking` means off, and only an admin who
+  unticks it (`'on'`) lets the model think. The API values are now `'off' | 'on'` (rc.74's `'default'` is gone; rc.74
+  was never deployed). With thinking off the request also carries `reasoning_effort: "low"`, because each model family
+  reads only one switch: Qwen3 reads `chat_template_kwargs.enable_thinking` (no thinking at all), gpt-oss reads
+  `reasoning_effort` and cannot stop thinking entirely. Measured on api.dynasite.org: gpt-oss-120b first text
+  ~680 ms → ~260 ms with `low`, reasoning ~80% shorter; qwen3.8-27b ~2.5 s → ~0.15 s. `reasoning_effort: "none"` is
+  rejected by gpt-oss with a 400 and is never sent (locked by a test). One helper, `thinkingIsOff()` in
+  `server/shared/llmCatalogue.js`, decides it for the proxy, Test Connection and the settings API. Help text in all
+  eight languages.
+
+## [3.0.0-rc.74] — 2026-10-24
+
+- **"Turn the model's thinking off"** (Settings → LLM, shown for a custom OpenAI-compatible server). A reasoning
+  model (e.g. Qwen3 behind a vLLM/SGLang gateway) thinks before it answers; rohy never shows or speaks that
+  thinking (only the answer text is read), but the patient's first word waits for it. With the setting on, every
+  patient/agent request — and Test Connection — carries `chat_template_kwargs: {"enable_thinking": false}`.
+  Measured on `qwen3.8-27b` at api.dynasite.org: first answer text at 0.24 s instead of 2.4 s. Off by default
+  (`llm_thinking` empty = the model decides), so no install changes behaviour until an admin ticks it. Sent only to
+  providers with a known switch (`THINKING_OFF_PARAMS` in `server/shared/llmCatalogue.js`: custom only) — an
+  OpenAI-style API rejects unknown parameters. Label and help text in all eight languages.
+
+## [3.0.0-rc.73] — 2026-10-24
+
+- **A custom OpenAI-compatible LLM server can take an API key.** The "Custom OpenAI-Compatible API" provider was
+  keyless by definition, so Settings → LLM (and the setup wizard) hid the key field and a hosted gateway that needs
+  one (e.g. a GPU host behind a proxy) could not be configured: every request was refused. The key is now offered
+  there and never required (`optionalKey` in `server/shared/llmCatalogue.js`); LM Studio and Ollama stay keyless.
+- **Model detection uses the saved key.** The settings form holds a `[redacted]` placeholder for a saved key and
+  sent it back to `POST /platform-settings/llm/models/detect`, which used it verbatim as the bearer token — so
+  detecting models on any key-protected server always failed once a key was saved. The placeholder now means "use
+  the saved key".
+
+## [3.0.0-rc.72] — 2026-10-24
+
+- **The remote Kokoro host can be set in Settings → Voice** (the Kokoro card), next to the cloud keys: an
+  OpenAI-compatible base URL, an API key (masked, never sent back to the browser, redacted in the audit chain and
+  the settings list), where it stands now (host, where it came from, last failure in plain words such as "the key
+  was refused (HTTP 401)", or paused after failures), and a **Test remote host** button. Saving applies at once,
+  with no restart, and a changed URL or key resets the circuit breaker so the fix is tried on the next reply.
+- **Settings override the env file**, as for the Google and OpenAI keys, with one rule on top: the
+  `ROHY_KOKORO_API_KEY` from the env file is sent only to `ROHY_KOKORO_URL`, never to a URL entered in Settings
+  (otherwise an admin could point the URL at their own host and receive the operator's key). A key saved in
+  Settings goes to whichever URL is in use; the card names that host.
+- **The test checks the SAVED values, with no local fallback** (`POST /api/platform-settings/voice/kokoro-remote/test`,
+  admin only): a refused key is reported, not covered by the local voice. The reply names the HTTP status and
+  failure kind, never the remote host's response body. The button waits until edits are saved.
+- The remote fields are in the voice settings GET for admins only; learners' GET is unchanged. A URL must be http(s)
+  without credentials, query or fragment (≤ 512 chars); one validator serves both the save and the synthesis path.
+
+## [3.0.0-rc.71] — 2026-10-24
+
+- **The patient starts speaking sooner.** The first spoken chunk of a reply may now end at a clause break
+  (`,` `;` `:` or an em dash, followed by a space) once it holds 6 words, instead of waiting for the whole first
+  sentence; every later chunk still waits for a full sentence, and "1,000", decimals and abbreviations never split.
+  `createSpeechChunker()` in `src/utils/sentenceSplit.js` (switch: `EARLY_FIRST_CHUNK`, threshold:
+  `FIRST_CHUNK_MIN_WORDS`), used by the patient chat and the debrief room.
+- **Sentences are fetched in parallel.** `voiceService` used to request sentence N+1 only after sentence N had
+  fully downloaded, which could leave gaps between sentences. Each sentence's `/tts` request now starts when it is
+  enqueued (at most 3 open per session) and its audio is buffered until its turn; playback order, the
+  one-failed-sentence-is-skipped behaviour and cancel are unchanged.
+- **Debrief room: every sentence in a chunk is spoken on time.** Its inline splitter took one sentence per LLM
+  delta, so a delta carrying two finished sentences held the second back until the next token arrived.
+
+## [3.0.0-rc.70] — 2026-10-24
+
+- **Kokoro can synthesize on a remote GPU host** (opt-in, `ROHY_KOKORO_URL` + `ROHY_KOKORO_API_KEY`, optional
+  `ROHY_KOKORO_TIMEOUT_MS`, default 8000). Same model and voices, sent to an OpenAI-compatible
+  `POST <url>/audio/speech` with `response_format: pcm` (int16 mono 24 kHz, the format a local chunk already has),
+  one request per sentence with the next sentence requested ahead. Measured from a dev Mac against
+  `api.dynasite.org`: first audio of a 3-sentence reply at ~0.14 s warm (~0.35 s on a cold connection), the whole
+  reply (7.1 s of speech) by ~0.3 s; local CPU synthesis is ~1.3 s per sentence plus a reload after every idle
+  unload. Unset URL = today's local behaviour.
+- **The local model is only the fallback in remote mode.** It is not warmed at boot (saves ~400–600 MB on the
+  3.7 GB box) and loads the first time a remote request fails. Any remote failure (network, timeout, HTTP error,
+  malformed audio) speaks that request — or the rest of a stream from the failing sentence — locally. After 3
+  failures in a row the remote host is skipped for 60 s; then one trial request goes out while everyone else stays
+  local.
+- **Voices are validated before any request**, from the voice map bundled in kokoro-js (the 28 voices the local
+  engine can play), so remote mode never loads the model to check a voice and an unknown voice is the same
+  `UNKNOWN_VOICE` in both modes. The parser moved to `server/services/kokoroVoices.js`, shared with
+  `ttsProviders.js`. With a remote host configured, a local model that failed to load no longer marks Kokoro as
+  incapable.
+- `validateEnv`: a malformed `ROHY_KOKORO_URL` or `ROHY_KOKORO_TIMEOUT_MS` is fatal at boot; a URL without a key,
+  a key without a URL, or plain http to a non-local host in production is a warning.
+
 ## [3.0.0-rc.69] — 2026-10-14
 
 - **Two timing-dependent tests made deterministic** (rc.68's CI failed on both; no application change):

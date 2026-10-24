@@ -36,11 +36,11 @@ export default {
                             native_objective = ?, native_mpp_x = ?, native_mpp_y = ?,
                             tiled_objective = ?, width = ?, height = ?, disk_bytes = ?,
                             error = NULL, updated_at = ?
-                      WHERE id = ? AND plugin_id = 'pathology'`,
+                      WHERE id = ? AND tenant_id = ? AND plugin_id = 'pathology'`,
                     [record.state, record.sourceSha256, record.sourceBytes,
                         record.nativeObjective, record.nativeMppX, record.nativeMppY,
                         record.tiledObjective, record.width, record.height, record.diskBytes,
-                        ctx.now(), record.assetId]
+                        ctx.now(), record.assetId, job.tenant_id]
                 );
                 return record;
             } catch (err) {
@@ -49,8 +49,8 @@ export default {
                 // saying why it is broken long after that.
                 await ctx.db.run(
                     `UPDATE plugin_assets SET state = 'failed', error = ?, updated_at = ?
-                      WHERE id = ? AND plugin_id = 'pathology'`,
-                    [String(err?.message ?? err).slice(0, 1000), ctx.now(), job.asset_id]
+                      WHERE id = ? AND tenant_id = ? AND plugin_id = 'pathology'`,
+                    [String(err?.message ?? err).slice(0, 1000), ctx.now(), job.asset_id, job.tenant_id]
                 );
                 throw err;
             }
@@ -105,9 +105,14 @@ export default {
                 });
             }
 
-            const assetId = stableAssetId('import', url);
             // Deterministic id ⇒ re-importing the same URL updates the same row
             // rather than accumulating duplicates of a multi-gigabyte slide.
+            // The TENANT is part of the identity: without it two tenants
+            // importing one URL shared one row, and the second import renamed
+            // and re-tiled the first tenant's slide (the upsert below never
+            // touches tenant_id, by design — it must not move a row across
+            // tenants). Rows imported before this keep their old ids.
+            const assetId = stableAssetId('import', `${tenant}\0${url}`);
             await ctx.db.run(
                 `INSERT INTO plugin_assets (id, tenant_id, plugin_id, label, state, source_url, created_by, created_at, updated_at)
                  VALUES (?, ?, 'pathology', ?, 'importing', ?, ?, ?, ?)

@@ -13,6 +13,7 @@ import {
 
 
 import { logger } from '../logger.js';
+import { sanitizeUserLlmSettings } from '../lib/llmGuards.js';
 import { projectCaseSnapshotForRole, readsWholeCase } from '../services/caseProjection.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { attachStandingSpecialists } from '../services/standingSpecialists.js';
@@ -80,6 +81,30 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             (req.log || routesCasesLog).warn('user preferences fetch failed', { error: err.message });
         }
     }
+
+    // What the session may say about LLM routing (security audit 2026-10-24,
+    // LLM-2): below educator, baseUrl / apiKey / provider are dropped; for
+    // educator+ a baseUrl must pass validateOutboundUrl and is stored
+    // normalised. Applied to the body AND to a stored preference, since a
+    // preference row may predate the same check in PUT /users/preferences.
+    // A refused body is the caller's mistake (400). A refused STORED
+    // preference is not something this request can fix, so the session
+    // starts without its routing fields rather than being blocked for ever.
+    let checkedLlm = sanitizeUserLlmSettings(effectiveLlmSettings, req.user);
+    if (!checkedLlm.ok && effectiveLlmSettings !== llm_settings && effectiveLlmSettings && typeof effectiveLlmSettings === 'object') {
+        (req.log || routesCasesLog).warn('stored default llm settings refused; routing fields dropped', { user_id, reason: checkedLlm.error });
+        const { baseUrl: _b, apiKey: _k, provider: _p, ...rest } = effectiveLlmSettings;
+        checkedLlm = { ok: true, settings: rest, dropped: [] };
+    }
+    if (!checkedLlm.ok) {
+        return res.status(400).json({ error: checkedLlm.error, code: 'invalid_llm_settings' });
+    }
+    if (checkedLlm.dropped.length > 0) {
+        (req.log || routesCasesLog).info('llm routing fields dropped from session settings', {
+            user_id, role: req.user.role, dropped: checkedLlm.dropped
+        });
+    }
+    effectiveLlmSettings = checkedLlm.settings || {};
 
     // Build the case snapshot from the live cases row at session-start time.
     // Once written, runtime readers (labs / treatments / vitals / scenario)

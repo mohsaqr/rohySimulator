@@ -9,6 +9,6 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/sessions/:sessionId/plugin-state` | `authenticateToken, requireEducator` | `server/routes/plugin-session-state-routes.js:198` |
-| `GET` | `/api/sessions/:sessionId/plugin-state/:pluginId/:name` | `authenticateToken` | `server/routes/plugin-session-state-routes.js:87` |
-| `PUT` | `/api/sessions/:sessionId/plugin-state/:pluginId/:name` | `authenticateToken` | `server/routes/plugin-session-state-routes.js:100` |
+| `GET` | `/api/sessions/:sessionId/plugin-state` | `authenticateToken, requireEducator` | `server/routes/plugin-session-state-routes.js:222` |
+| `GET` | `/api/sessions/:sessionId/plugin-state/:pluginId/:name` | `authenticateToken` | `server/routes/plugin-session-state-routes.js:95` |
+| `PUT` | `/api/sessions/:sessionId/plugin-state/:pluginId/:name` | `authenticateToken` | `server/routes/plugin-session-state-routes.js:108` |

@@ -16,9 +16,9 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken } from '../utils/authHttp.js';
 import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
 import { TYPING_MAX_INTERVALS } from '../../src/components/oyon/useSignalCapture.js';
 
@@ -41,8 +41,10 @@ function dbGet(db, sql, params = []) {
     );
 }
 function dbClose(db) { return new Promise((r) => db.close(() => r())); }
-function tokenFor(user, jti) {
-    return jwt.sign(user, SECRET, { expiresIn: '1h', jwtid: jti });
+// Signs the JWT AND records its active_sessions row: authenticateToken fails
+// closed on a token with no row (401 session_unknown), exactly like a forged one.
+function tokenFor(dbPath, user, jti) {
+    return mintToken(dbPath, user, SECRET, { jti });
 }
 
 async function setOyonViewFlags(dbPath, { admin = 1, educator = 1, student = 1 } = {}) {
@@ -183,9 +185,9 @@ describe('Oyon 3 modality-scoped window ingest', () => {
             [String(stu.id), String(sessionId)]);
         await dbClose(db);
 
-        studentTok = tokenFor({ id: stu.id, username: 'osw_stu', role: 'student', tenant_id: 1 }, 'sw-s');
-        educatorTok = tokenFor({ id: edu.id, username: 'osw_edu', role: 'educator', tenant_id: 1 }, 'sw-e');
-        adminTok = tokenFor({ id: admin.id, username: 'osw_admin', role: 'admin', tenant_id: 1 }, 'sw-a');
+        studentTok = await tokenFor(server.dbPath, { id: stu.id, username: 'osw_stu', role: 'student', tenant_id: 1 }, 'sw-s');
+        educatorTok = await tokenFor(server.dbPath, { id: edu.id, username: 'osw_edu', role: 'educator', tenant_id: 1 }, 'sw-e');
+        adminTok = await tokenFor(server.dbPath, { id: admin.id, username: 'osw_admin', role: 'admin', tenant_id: 1 }, 'sw-a');
 
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
     });
@@ -466,7 +468,7 @@ describe('consent v2 gate for host-driven modalities', () => {
         v1Session = await seedSession(db, stu.id, 'oyon-consent-v1');
         v2Session = await seedSession(db, stu.id, 'oyon-consent-v2');
         await dbClose(db);
-        studentTok = tokenFor({ id: stu.id, username: 'cg_stu', role: 'student', tenant_id: 1 }, 'cg-s');
+        studentTok = await tokenFor(server.dbPath, { id: stu.id, username: 'cg_stu', role: 'student', tenant_id: 1 }, 'cg-s');
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
     });
 
@@ -596,7 +598,7 @@ describe('consent v3 gate for voice', () => {
         v2Session = await seedSession(db, stu.id, 'oyon-consent-v2');
         v3Session = await seedSession(db, stu.id, 'oyon-consent-v3');
         await dbClose(db);
-        studentTok = tokenFor({ id: stu.id, username: 'v3_stu', role: 'student', tenant_id: 1 }, 'v3-s');
+        studentTok = await tokenFor(server.dbPath, { id: stu.id, username: 'v3_stu', role: 'student', tenant_id: 1 }, 'v3-s');
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
     });
 
@@ -664,7 +666,7 @@ describe('consent v3 gate for voice', () => {
     // KEY-PRESENCE merge for signal flags: sending only voice_enabled must turn
     // voice on and leave every other signal exactly as it was.
     it('lets an admin turn voice on without disturbing the other signals', async () => {
-        const adminTok = tokenFor({ id: 1, username: 'admin', role: 'admin', tenant_id: 1 }, 'v3-admin');
+        const adminTok = await tokenFor(server.dbPath, { id: 1, username: 'admin', role: 'admin', tenant_id: 1 }, 'v3-admin');
         await setV3Flags({ voice: false });
         const db0 = await openDb(server.dbPath);
         await dbRun(db0, 'UPDATE oyon_settings SET typing_enabled = 1 WHERE tenant_id = ?', ['1']);
@@ -778,7 +780,7 @@ describe('session consent row is server-authoritative', () => {
              VALUES ('xd_stu', 'xd_stu', ?, 'xd@example.com', 'student', 'active', 1)`, [pwd]);
         userId = (await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['xd_stu'])).id;
         await dbClose(db);
-        tok = tokenFor({ id: userId, username: 'xd_stu', role: 'student', tenant_id: 1 }, 'xd-s');
+        tok = await tokenFor(server.dbPath, { id: userId, username: 'xd_stu', role: 'student', tenant_id: 1 }, 'xd-s');
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
     });
 

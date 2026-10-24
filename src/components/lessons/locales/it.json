@@ -150,6 +150,7 @@
     "mcq_add_option": "Aggiungi opzione",
     "mcq_add_question": "Aggiungi domanda",
     "mcq_check": "Verifica risposta",
+    "mcq_check_failed": "Impossibile verificare la risposta. Riprova.",
     "mcq_complete": "Autoverifica completata.",
     "mcq_correct": "Corretto!",
     "mcq_explanation_placeholder": "Spiegazione mostrata dopo la risposta (facoltativa)",

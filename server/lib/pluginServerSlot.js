@@ -67,6 +67,55 @@ const log = logger('plugin-server-slot');
 const SLOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
 
 /**
+ * Marks a request the slot has already authenticated.
+ *
+ * Every plugin router is mounted behind `authenticateToken` (mountPluginRoutes),
+ * so a plugin route can never be reached without a sign-in, whatever the plugin
+ * declared. The plugin's own `guards.authenticated` is then redundant on that
+ * request — and `authenticateToken` is not idempotent-for-free: it re-verifies
+ * the JWT and runs two more DB lookups each time. So the slot stamps the
+ * request and the guard handed to the plugin skips the second run. The role
+ * guards stay as they are: they only read `req.user`.
+ */
+const SLOT_AUTHENTICATED = Symbol('plugin-slot-authenticated');
+
+function slotAuthenticate(req, res, next) {
+    authenticateToken(req, res, () => {
+        req[SLOT_AUTHENTICATED] = true;
+        next();
+    });
+}
+
+function pluginAuthenticated(req, res, next) {
+    if (req[SLOT_AUTHENTICATED] === true && req.user) return next();
+    return authenticateToken(req, res, next);
+}
+
+/**
+ * Mount a plugin's routes under its own id, behind the host's sign-in.
+ *
+ * The forced guard is the point: a plugin that forgot `guards.authenticated`
+ * on one route used to expose it to the internet. Now the worst such a plugin
+ * can do is leave a route open to any signed-in user, which its role guards
+ * (and the review of them) are for.
+ *
+ * @param {import('express').Router} router  the host's plugin slot router
+ * @param {string} id                        the plugin id
+ * @param {{routes?: Function}} mod          the plugin's server module
+ * @param {object} ctx                       the RPS-1 server context
+ */
+export function mountPluginRoutes(router, id, mod, ctx) {
+    if (typeof mod?.routes !== 'function') return false;
+    // Every route the plugin declares lands under its own id, so the
+    // manifest's one identity stays one identity (§2).
+    const sub = express.Router();
+    sub.use(slotAuthenticate);
+    mod.routes(sub, ctx);
+    router.use(`/plugins/${id}`, sub);
+    return true;
+}
+
+/**
  * Per-plugin managed library directories.
  *
  * Plural — one directory per plugin — rather than the single
@@ -334,7 +383,7 @@ export function buildServerContext(manifest) {
          * clients. Every one of those is lost by a hand-rolled equivalent.
          */
         guards: {
-            authenticated: authenticateToken,
+            authenticated: pluginAuthenticated,
             student: requireStudent,
             reviewer: requireReviewer,
             educator: requireEducator,
@@ -462,13 +511,7 @@ export async function mountPluginServerSlots(router) {
             Object.entries(mod.jobs ?? {}).forEach(([kind, handler]) => {
                 ctx.registerJob(kind, (job, api) => handler(job, api, ctx));
             });
-            if (typeof mod.routes === 'function') {
-                // Every route the plugin declares lands under its own id, so the
-                // manifest's one identity stays one identity (§2).
-                const sub = express.Router();
-                mod.routes(sub, ctx);
-                router.use(`/plugins/${id}`, sub);
-            }
+            mountPluginRoutes(router, id, mod, ctx);
             report.push({
                 id,
                 ok: true,

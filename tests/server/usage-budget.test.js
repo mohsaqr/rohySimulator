@@ -92,6 +92,21 @@ describe('usage budget tracker', () => {
             .rejects.toMatchObject({ name: 'BudgetExceededError', used: 8, limit: 10 });
     });
 
+    // Regression lock: the LLM pre-flight reserved `maxOutputTokens || 4096`,
+    // so a client-supplied tiny value shrank the reservation; minRequested
+    // floors it (security audit 2026-10-24, finding 8).
+    it('enforceBudget never reserves less than minRequested', async () => {
+        settings.set('budget.llm.user.daily_tokens', '300');
+        await budget.recordUsage({ tenantId: 1, userId: 7, provider: 'llm-openai', metric: 'tokens', amount: 100 });
+        await expect(budget.enforceBudget({ tenantId: 1, userId: 7, provider: 'llm-openai', metric: 'tokens', requested: 1 }))
+            .resolves.toBeUndefined();
+        await expect(budget.enforceBudget({
+            tenantId: 1, userId: 7, provider: 'llm-openai', metric: 'tokens', requested: 1,
+            minRequested: budget.LLM_MIN_PREFLIGHT_TOKENS,
+        })).rejects.toMatchObject({ name: 'BudgetExceededError', used: 100, limit: 300 });
+        expect(budget.LLM_MIN_PREFLIGHT_TOKENS).toBe(256);
+    });
+
     it('window rollover after 24h resets current usage', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-05-07T12:00:00.000Z'));

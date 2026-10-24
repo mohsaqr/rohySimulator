@@ -451,6 +451,8 @@
   "llm_system_prompt_placeholder": "Instruktioner som skickas med varje konversation (t.ex. 'Du är en simulerad patient...')",
   "llm_system_prompt_template": "Systempromptmall",
   "llm_temperature": "Temperature",
+  "llm_thinking_off": "Stäng av modellens resonerande",
+  "llm_thinking_off_help": "På som standard. Modellen svarar direkt i stället för att resonera först, så svaren (och patientens röst) börjar flera sekunder tidigare. Vissa modeller (som gpt-oss) kan inte sluta resonera helt och håller det i stället till ett minimum. Avmarkera för att låta modellen resonera om svaren blir sämre.",
   "llm_todays_usage": "Dagens användning",
   "llm_tokens_per_user": "Tokens per användare (Dagligen)",
   "llm_tokens_per_user_help": "Max tokens varje användare kan använda per dag (0 = obegränsat)",

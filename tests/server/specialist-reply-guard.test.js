@@ -60,7 +60,7 @@ const FI_CONFIG = Object.freeze({
     },
 });
 
-const FI_FALLBACK = 'Mitä itse ajattelet löydöksistä? Kerro, mitä olet havainnut ja mihin tulkintasi perustuu.';
+const FI_FALLBACK = 'Johtopäätös on sinun tehtäväsi. Voin kertoa vain, mitä löydökset osoittavat.';
 
 describe('reply guard on FI-0010 (F02)', () => {
     const guard = buildReplyGuard('pathology', FI_CONFIG);

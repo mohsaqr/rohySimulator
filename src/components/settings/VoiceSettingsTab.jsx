@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Mic, Save, RefreshCw, Info } from 'lucide-react';
-import { ApiError, apiFetch, apiPut } from '../../services/apiClient.js';
+import { ApiError, apiFetch, apiPost, apiPut } from '../../services/apiClient.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
@@ -66,6 +66,14 @@ const blankSettings = {
     openai_tts_api_key: '',
     openai_tts_api_key_set: false,
     openai_tts_api_key_via_env: false,
+    // Remote Kokoro host (admin-only fields on the GET). The URL is a plain
+    // value that round-trips; the key follows the cloud-key rule above.
+    kokoro_remote_url: '',
+    kokoro_remote_url_saved: '',
+    kokoro_remote_api_key: '',
+    kokoro_remote_api_key_set: false,
+    kokoro_remote_api_key_via_env: false,
+    kokoro_remote: null,
     // Voice 2.0: provider status cards + policy toggles + per-language
     // default voices.
     providers: [],
@@ -110,6 +118,12 @@ export default function VoiceSettingsTab() {
                 openai_tts_api_key: '',
                 openai_tts_api_key_set: !!s.openai_tts_api_key_set,
                 openai_tts_api_key_via_env: !!s.openai_tts_api_key_via_env,
+                kokoro_remote_url: s.kokoro_remote_url || '',
+                kokoro_remote_url_saved: s.kokoro_remote_url || '',
+                kokoro_remote_api_key: '',
+                kokoro_remote_api_key_set: !!s.kokoro_remote_api_key_set,
+                kokoro_remote_api_key_via_env: !!s.kokoro_remote_api_key_via_env,
+                kokoro_remote: s.kokoro_remote || null,
                 providers: s.providers || [],
                 ...Object.fromEntries(TTS_PROVIDERS.map(p => [
                     `tts_provider_enabled_${p}`, s[`tts_provider_enabled_${p}`] !== false
@@ -183,6 +197,11 @@ export default function VoiceSettingsTab() {
             // something — empty input means "leave the existing key alone".
             if (settings.google_tts_api_key.trim()) payload.google_tts_api_key = settings.google_tts_api_key.trim();
             if (settings.openai_tts_api_key.trim()) payload.openai_tts_api_key = settings.openai_tts_api_key.trim();
+            // Remote Kokoro: only an admin's GET carries these fields, so only
+            // send the URL when it was loaded — a payload without it leaves
+            // the stored URL alone.
+            if (settings.kokoro_remote) payload.kokoro_remote_url = settings.kokoro_remote_url.trim();
+            if (settings.kokoro_remote_api_key.trim()) payload.kokoro_remote_api_key = settings.kokoro_remote_api_key.trim();
             const res = await apiPut('/platform-settings/voice', payload);
             toast.success?.('Voice settings saved');
             // Tolerant-validation warnings ("couldn't verify X; saved
@@ -279,7 +298,7 @@ export default function VoiceSettingsTab() {
                                                 ? 'bg-amber-900/30 text-amber-300 border-amber-800'
                                                 : 'bg-emerald-900/30 text-emerald-300 border-emerald-800'
                                         }`}>
-                                            {isPaidProvider(p) ? 'paid · API' : 'free · local'}
+                                            {isPaidProvider(p) ? 'paid · API' : (p === 'kokoro' && settings.kokoro_remote?.enabled ? 'remote host' : 'free · local')}
                                         </span>
                                     </div>
                                     <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
@@ -313,7 +332,19 @@ export default function VoiceSettingsTab() {
                                         );
                                     })()}
                                 </div>
-                                <p className="text-[11px] text-neutral-500">{ENGINE_INFO[p].blurb}</p>
+                                <p className="text-[11px] text-neutral-500">
+                                    {p === 'kokoro' && settings.kokoro_remote?.enabled
+                                        ? `Synthesized on ${settings.kokoro_remote.host}, one sentence at a time; this server's local model speaks if that host fails.`
+                                        : ENGINE_INFO[p].blurb}
+                                </p>
+                                {p === 'kokoro' && settings.kokoro_remote && (
+                                    <RemoteKokoroFields
+                                        settings={settings}
+                                        update={update}
+                                        onClearKey={() => clearKey('kokoro_remote_api_key')}
+                                        onTested={loadAll}
+                                    />
+                                )}
                                 {p === 'google' && (
                                     <ApiKeyField
                                         label="Google TTS API key"
@@ -779,6 +810,118 @@ function GoogleFreeTier({ remaining, total }) {
 // and the env wins until unset). Pasting a new value into the input + Save
 // replaces whatever's in the DB. The Clear button explicitly wipes the DB
 // entry so the env var (if any) becomes authoritative again.
+// Plain words for a remote failure the server recorded ({ kind, status }).
+function describeRemoteFailure(err) {
+    if (!err) return null;
+    if (err.kind === 'http') {
+        if (err.status === 401 || err.status === 403) return `the key was refused (HTTP ${err.status})`;
+        if (err.status === 404) return 'no speech endpoint at this URL (HTTP 404)';
+        return `HTTP ${err.status}`;
+    }
+    return {
+        timeout: 'no answer in time',
+        network: 'host unreachable',
+        bad_audio: 'the answer was not audio',
+    }[err.kind] || err.kind;
+}
+
+// Remote Kokoro host on the Kokoro card: the URL, the key (same masked field
+// as the cloud keys), where it stands now, and a test of the SAVED values —
+// the server never tests unsaved ones, so the button waits for a save.
+function RemoteKokoroFields({ settings, update, onClearKey, onTested }) {
+    const toast = useToast();
+    const [testing, setTesting] = useState(false);
+    const [result, setResult] = useState(null);
+    const remote = settings.kokoro_remote;
+    const unsaved = settings.kokoro_remote_url.trim() !== settings.kokoro_remote_url_saved
+        || settings.kokoro_remote_api_key.trim() !== '';
+
+    const runTest = async () => {
+        setTesting(true);
+        setResult(null);
+        try {
+            const res = await apiPost('/platform-settings/voice/kokoro-remote/test', {});
+            setResult({ ok: true, text: `Spoke ${res.audio_seconds} s of audio from ${res.host} in ${res.latency_ms} ms.` });
+            await onTested?.();
+        } catch (err) {
+            const message = err instanceof ApiError ? (err.body?.error || 'Test failed') : err.message;
+            setResult({ ok: false, text: message });
+            toast.error?.(message);
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    let statusLine;
+    if (!remote.enabled) {
+        statusLine = <span className="text-neutral-400">Remote host: off — Kokoro synthesizes on this server.</span>;
+    } else {
+        const where = remote.source === 'env' ? 'from the server .env' : 'from these settings';
+        const health = remote.paused
+            ? <span className="text-amber-400"> · paused {Math.ceil(remote.ms_until_retry / 1000)} s after {remote.failures} failures — speaking locally</span>
+            : remote.last_error
+                ? <span className="text-amber-400"> · last request failed: {describeRemoteFailure(remote.last_error)}</span>
+                : remote.last_ok_at
+                    ? <span className="text-emerald-400"> · last request OK</span>
+                    : null;
+        statusLine = (
+            <span className="text-neutral-300">
+                Remote host: <span className="font-mono">{remote.host}</span> ({where}){health}
+                {!remote.key_set && <span className="text-amber-400"> · no API key</span>}
+            </span>
+        );
+    }
+
+    return (
+        <div className="space-y-2 border-t border-neutral-700 pt-2">
+            <label className="block">
+                <span className="text-xs text-neutral-400 block mb-1">Remote Kokoro host (OpenAI-compatible base URL)</span>
+                <input
+                    type="url"
+                    value={settings.kokoro_remote_url}
+                    placeholder={remote.env_host ? `using server .env: ${remote.env_host}` : 'https://api.example.org/v1'}
+                    onChange={(e) => update('kokoro_remote_url', e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-neutral-600"
+                    autoComplete="off"
+                    spellCheck={false}
+                />
+                <span className="text-[11px] text-neutral-500 mt-1 block">
+                    {remote.env_host
+                        ? <>Blank uses the server <code>.env</code> host ({remote.env_host}); a URL here overrides it.</>
+                        : 'Blank = synthesize on this server.'}
+                </span>
+            </label>
+            <ApiKeyField
+                label="Remote Kokoro API key"
+                inputValue={settings.kokoro_remote_api_key}
+                isSet={settings.kokoro_remote_api_key_set}
+                viaEnv={settings.kokoro_remote_api_key_via_env}
+                placeholder="sk-…"
+                onChange={(v) => update('kokoro_remote_api_key', v)}
+                onClear={onClearKey}
+                hint="Sent only to the remote host above. A key in the server .env is never sent to a URL entered here."
+            />
+            <div className="text-[11px]">{statusLine}</div>
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={runTest}
+                    disabled={testing || unsaved || !remote.enabled}
+                    className="px-2 py-1 text-xs rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {testing ? 'Testing…' : 'Test remote host'}
+                </button>
+                {unsaved && <span className="text-[11px] text-neutral-500">Save first — the test uses the saved values.</span>}
+                {result && (
+                    <span role="status" className={`text-[11px] ${result.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {result.ok ? '✓ ' : '✗ '}{result.text}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function ApiKeyField({ label, inputValue, isSet, viaEnv, placeholder, onChange, onClear, hint }) {
     return (
         <label className="block">

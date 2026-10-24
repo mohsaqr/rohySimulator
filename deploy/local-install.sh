@@ -33,6 +33,8 @@
 #   bash deploy/local-install.sh --prewarm-kokoro       # download model now
 #   bash deploy/local-install.sh --bind localhost --port 3000  # dev mode
 #   bash deploy/local-install.sh --no-oyon              # disable Oyon emotion capture
+#   bash deploy/local-install.sh --allow-defaults       # provision an admin with a
+#                                                       # generated password (printed once)
 
 set -euo pipefail
 
@@ -169,16 +171,27 @@ else
         # the binary bundles in step 3b. Use --no-oyon to opt out; the
         # server will then mount a 503 stub that tells settings tabs why.
         echo "OYON_ENABLED=$([[ $WITH_OYON -eq 1 ]] && echo 1 || echo 0)"
+        # --allow-defaults used to write ALLOW_DEFAULT_USERS=1 (admin/admin123),
+        # which production now refuses at boot. It provisions the first admin
+        # through ROHY_ADMIN_* with a generated password instead; the fixed
+        # affixes satisfy the password policy (upper, lower, digit).
         if (( ALLOW_DEFAULTS )); then
+            ADMIN_PASSWORD=$(node -e "console.log(['Rohy', require('crypto').randomBytes(12).toString('hex'), 'Aa1'].join('-'))")
             echo
-            echo "# REMOVE the next line after first login + password change."
-            echo "ALLOW_DEFAULT_USERS=1"
+            echo "# First-boot admin (applied only while the users table is empty)."
+            echo "# Safe to delete both lines after the first login; never re-applied."
+            echo "ROHY_ADMIN_USERNAME=admin"
+            echo "ROHY_ADMIN_PASSWORD=${ADMIN_PASSWORD}"
         fi
     } > "$ENV_FILE"
     chmod 600 "$ENV_FILE"
     mkdir -p "$REPO_DIR/data" "$REPO_DIR/data/hf-cache"
     ok "wrote $ENV_FILE (mode 0600)"
     ok "FRONTEND_URL=$FRONTEND_URL"
+    if (( ALLOW_DEFAULTS )); then
+        ok "first admin: username 'admin', password ${ADMIN_PASSWORD}"
+        warn "record that password now — it is not printed again (it stays in $ENV_FILE until you remove it)"
+    fi
 fi
 
 # -- step 5: optional Piper -------------------------------------------------

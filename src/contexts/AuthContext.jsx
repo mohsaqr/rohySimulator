@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
 import { apiPost } from '../services/apiClient';
 import { announceIdentity, isTabStale, watchIdentity } from '../services/tabIdentity';
+import { STORAGE_REGISTRY } from '../storage/registry';
 
 const AuthContext = createContext(null);
 
@@ -226,10 +227,17 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('rohy_view');
             localStorage.removeItem('rohy_scenario_anchor');
             localStorage.removeItem('rohy_session_pause');
-            // Per-session debrief keys are tagged with the session id; we
-            // don't have it in scope here, but they'll be overwritten on
-            // the next session and never read without a matching active
-            // session anyway, so they self-prune.
+            // The case-edit stash holds a whole case — system prompt and
+            // answer material included — and the debrief transcripts are
+            // keyed per session, so neither is cleared by the removes above.
+            // Both would otherwise outlive the sign-in on a shared machine.
+            localStorage.removeItem('rohy_editing_case');
+            const debriefPrefix = STORAGE_REGISTRY.rohy_discussion_history.keyBuilder('');
+            // Storage.key(i), not Object.keys(): the latter is not part of the
+            // Storage contract. Collected first — removing while indexing shifts keys.
+            Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+                .filter((key) => typeof key === 'string' && key.startsWith(debriefPrefix))
+                .forEach((key) => localStorage.removeItem(key));
         } catch (e) {
             console.warn('[Auth] failed to clear local session state on logout:', e.message);
         }

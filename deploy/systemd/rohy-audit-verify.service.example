@@ -1,0 +1,51 @@
+# /etc/systemd/system/rohy-audit-verify.service — daily audit-chain check.
+#
+# Walks system_audit_log and recomputes every row's prev_hash/entry_hash
+# (server/audit-chain.js). Exit codes: 0 chain intact, 2 tampering detected,
+# 1 infrastructure error. A non-zero exit leaves the unit "failed", which is
+# what `systemctl --failed`, node-exporter's systemd collector and most
+# monitoring agents alert on; the JSON verdict (naming the first broken row)
+# lands in the journal: `journalctl -u rohy-audit-verify`.
+# On a failure: preserve the database file as evidence before anything else
+# writes to it, then compare against the newest scripts/rohy-backup.sh snapshot.
+#
+# Install (with the timer that runs it daily):
+#   sudo cp deploy/systemd/rohy-audit-verify.service.example /etc/systemd/system/rohy-audit-verify.service
+#   sudo cp deploy/systemd/rohy-audit-verify.timer.example   /etc/systemd/system/rohy-audit-verify.timer
+#   sudo nano /etc/systemd/system/rohy-audit-verify.service   # same User=/paths as rohy.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rohy-audit-verify.timer
+#   sudo systemctl start rohy-audit-verify.service            # run once now
+#
+# Never pair this with scripts/retention-sweep.js from releases before it
+# became a shim: that script deleted audit rows and broke the chain. The
+# supported sweep, scripts/sweep-retention.js, leaves the audit table alone.
+
+[Unit]
+Description=rohy — verify the tamper-evident audit chain
+Documentation=https://github.com/mohsaqr/rohySimulator
+After=rohy.service
+
+[Service]
+Type=oneshot
+# CHANGE — the same user and paths as rohy.service.
+User=saqr
+Group=saqr
+WorkingDirectory=/opt/repos/rohy
+# Supplies ROHY_DB (and JWT_SECRET, which server modules check at import).
+EnvironmentFile=/etc/rohy/env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node scripts/verify-audit-chain.js --json
+
+# Read-only check: it opens the database (sqlite needs to write its -wal/-shm
+# side files beside it) and nothing else.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service
+ReadWritePaths=/opt/data/rohy

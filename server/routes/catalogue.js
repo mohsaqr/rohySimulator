@@ -329,10 +329,12 @@ router.post('/medications/:id/promote', authenticateToken, requireAdmin, asyncHa
     if (!['tenant', 'platform'].includes(target)) {
         return res.status(400).json({ error: 'scope must be "tenant" or "platform"' });
     }
-    const row = await dbGet('SELECT * FROM medications WHERE id = ? AND deleted_at IS NULL', [id]);
+    // Only this tenant's rows: promoting another tenant's private row to
+    // platform scope would publish it to everyone (security audit 2026-10-24, #11).
+    const row = await dbGet('SELECT * FROM medications WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, req.user.tenant_id ?? 1]);
     if (!row) return res.status(404).json({ error: 'Medication not found' });
 
-    await dbRun('UPDATE medications SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [target, id]);
+    await dbRun('UPDATE medications SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [target, id, req.user.tenant_id ?? 1]);
     await audit(req, {
         action: 'promote_catalogue_medication',
         resourceType: 'medication',
@@ -501,9 +503,9 @@ router.post('/lab-tests/:id/promote', authenticateToken, requireAdmin, asyncHand
     if (!['tenant', 'platform'].includes(target)) {
         return res.status(400).json({ error: 'scope must be "tenant" or "platform"' });
     }
-    const row = await dbGet('SELECT * FROM lab_tests WHERE id = ?', [id]);
+    const row = await dbGet('SELECT * FROM lab_tests WHERE id = ? AND tenant_id = ?', [id, req.user.tenant_id ?? 1]);
     if (!row) return res.status(404).json({ error: 'Lab test not found' });
-    await dbRun('UPDATE lab_tests SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [target, id]);
+    await dbRun('UPDATE lab_tests SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [target, id, req.user.tenant_id ?? 1]);
     await audit(req, {
         action: 'promote_catalogue_lab_test',
         resourceType: 'lab_test',

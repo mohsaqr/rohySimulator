@@ -32,6 +32,7 @@ import jwt from 'jsonwebtoken';
 
 import { synthesizeGoogleStream } from '../../server/services/googleTts.js';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 // ---------------------------------------------------------------------------
 // Block A — pitch reaches Google audioConfig
@@ -197,6 +198,8 @@ describe('platform-settings pitch validation (live server)', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId: row.id });
     }, 90_000);
 
     afterAll(async () => {

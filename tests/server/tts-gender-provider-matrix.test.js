@@ -24,9 +24,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Buffer } from 'node:buffer';
 import sqlite3 from 'sqlite3';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 
@@ -64,10 +64,11 @@ async function installAdmin(dbPath) {
     );
     const row = await dbGet(db, 'SELECT id, username, email, role, tenant_id FROM users WHERE username = ?', ['ttsmatrix']);
     await dbClose(db);
-    return jwt.sign(
+    // mintToken signs AND records the active_sessions row authenticateToken requires.
+    return mintToken(
+        dbPath,
         { id: row.id, username: row.username, email: row.email, role: 'admin', tenant_id: row.tenant_id || 1 },
         TEST_JWT_SECRET,
-        { expiresIn: '1h' }
     );
 }
 

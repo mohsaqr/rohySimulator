@@ -18,6 +18,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-sessions-concurrency-secret';
 
@@ -83,6 +84,8 @@ describe('POST /api/sessions — concurrency', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'concurrent-session-tok' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId });
     });
 
     afterAll(async () => {

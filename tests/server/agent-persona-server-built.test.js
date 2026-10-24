@@ -689,3 +689,39 @@ describe('POST /proxy/llm — config.knowledge scopes', () => {
         expect(order).toEqual([...order].sort((a, b) => a - b));
     });
 });
+
+// "Thinking off" (platform llm_thinking unset or 'off' — off is the default): a
+// reasoning model behind a custom OpenAI-compatible server is told to answer at
+// once. The switches ride on every proxied request for that provider unless an
+// admin set llm_thinking = 'on'.
+describe('POST /proxy/llm — thinking off', () => {
+    async function setThinking(value) {
+        const db = await openDb(server.dbPath);
+        await pRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_thinking', ?)
+                        ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`, [value]);
+        await closeDb(db);
+    }
+    const ask = () => proxyAs(studentToken, {
+        session_id: sessionId,
+        messages: [{ role: 'user', content: 'Is this an NSTEMI?' }],
+        agent_llm_config: { case_agent_id: consultantAgentId },
+    });
+
+    afterAll(async () => { await setThinking(''); });
+
+    it.each([['unset (the default)', ''], ['off', 'off']])('turns thinking off on a custom server when it is %s', async (_label, value) => {
+        await setThinking(value);
+        const res = await ask();
+        expect(res.status).toBe(200);
+        expect(llm.bodies.at(-1).chat_template_kwargs).toEqual({ enable_thinking: false });
+        expect(llm.bodies.at(-1).reasoning_effort).toBe('low');
+    });
+
+    it('sends nothing extra when an admin turned thinking on', async () => {
+        await setThinking('on');
+        const res = await ask();
+        expect(res.status).toBe(200);
+        expect(llm.bodies.at(-1)).not.toHaveProperty('chat_template_kwargs');
+        expect(llm.bodies.at(-1)).not.toHaveProperty('reasoning_effort');
+    });
+});

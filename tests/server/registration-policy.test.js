@@ -21,7 +21,8 @@ import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 
 const PASSWORD = 'RegPolicy1!';
-const ENV = { NODE_ENV: 'production', FRONTEND_URL: 'http://localhost', ROHY_DISABLE_AUTH_RATE_LIMIT: '1' };
+// validateEnv refuses a JWT_SECRET under 32 chars in production.
+const ENV = { NODE_ENV: 'production', JWT_SECRET: 'rohy-tests-production-secret-0123456789', FRONTEND_URL: 'http://localhost', ROHY_DISABLE_AUTH_RATE_LIMIT: '1' };
 
 function openDb(dbPath) {
     const sqlite = sqlite3.verbose();

@@ -21,6 +21,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dbAdapter from '../dbAdapter.js';
 import { isSpecialistType } from '../shared/specialties.js';
+import { LEGACY_SCOPE_BY_CONTEXT_FILTER } from '../shared/agentKnowledge.js';
 import { configOverrideProblem } from '../routes/agents-routes.js';
 import { normalizeCaseTreatmentFlags } from '../routes/orders-routes.js';
 
@@ -183,6 +184,55 @@ export async function buildCaseDocument({ caseId, tenant }) {
 
 const problem = (error, code = 'invalid_case_file') => ({ problem: { error, code } });
 
+// What an imported persona template may carry. These columns are written
+// straight into agent_templates and read back by every client that renders
+// the persona, so a crafted case file is a path to stored content: the legacy
+// context_filter ladder is a closed set (shared/agentKnowledge.js); an avatar
+// is an id from the avatar manifest (`rb_medical_female_01.glb`), an upload
+// the package carried, or an https URL — never a javascript: or data: URL
+// that a card would render; the title is a short label; config is the
+// persona's own JSON, bounded so one document cannot become a megabyte row.
+export const TEMPLATE_CONTEXT_FILTERS = Object.freeze(Object.keys(LEGACY_SCOPE_BY_CONTEXT_FILTER));
+export const TEMPLATE_ROLE_TITLE_MAX = 120;
+export const TEMPLATE_CONFIG_MAX_BYTES = 64 * 1024;
+const AVATAR_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const AVATAR_PATH_RE = /^\.?\/(uploads|avatars)\/[A-Za-z0-9_./-]+$/;
+
+function avatarUrlOk(value) {
+    if (value === undefined || value === null || value === '') return true;
+    if (typeof value !== 'string' || value.length > 2048) return false;
+    if (value.includes('..')) return false;
+    if (AVATAR_ID_RE.test(value) || AVATAR_PATH_RE.test(value)) return true;
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && !url.username && !url.password;
+    } catch {
+        return false;
+    }
+}
+
+function templateProblem(tpl, where) {
+    if (tpl.context_filter !== undefined && tpl.context_filter !== null && !TEMPLATE_CONTEXT_FILTERS.includes(tpl.context_filter)) {
+        return `${where}.context_filter must be one of ${TEMPLATE_CONTEXT_FILTERS.join(', ')}`;
+    }
+    if (!avatarUrlOk(tpl.avatar_url)) {
+        return `${where}.avatar_url must be an avatar id, a /uploads/ or /avatars/ path, or an https URL`;
+    }
+    if (!isOptionalString(tpl.role_title) || (tpl.role_title ?? '').length > TEMPLATE_ROLE_TITLE_MAX) {
+        return `${where}.role_title must be text of at most ${TEMPLATE_ROLE_TITLE_MAX} characters`;
+    }
+    if (!isOptionalString(tpl.communication_style)) return `${where}.communication_style must be text`;
+    for (const key of ['config', 'memory_access']) {
+        const value = tpl[key];
+        if (value === undefined || value === null) continue;
+        if (!isPlainObject(value)) return `${where}.${key} must be an object`;
+        if (Buffer.byteLength(JSON.stringify(value)) > TEMPLATE_CONFIG_MAX_BYTES) {
+            return `${where}.${key} must serialise to at most ${TEMPLATE_CONFIG_MAX_BYTES} bytes`;
+        }
+    }
+    return null;
+}
+
 function agentProblem(agent, index) {
     const where = `related.agents[${index}]`;
     if (!isPlainObject(agent)) return `${where} must be an object`;
@@ -191,6 +241,8 @@ function agentProblem(agent, index) {
         return `${where}.template needs agent_type and name`;
     }
     if (!isOptionalString(tpl.system_prompt)) return `${where}.template.system_prompt must be text`;
+    const templateWhy = templateProblem(tpl, `${where}.template`);
+    if (templateWhy) return templateWhy;
     for (const key of ['name_override', 'system_prompt_override', 'availability_type']) {
         if (!isOptionalString(agent[key])) return `${where}.${key} must be text`;
     }

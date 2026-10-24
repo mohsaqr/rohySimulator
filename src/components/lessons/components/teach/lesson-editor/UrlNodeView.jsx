@@ -2,14 +2,7 @@ import { NodeViewWrapper } from '@tiptap/react';
 import { Link2, ExternalLink, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../hooks/useTheme';
-
-/** Only allow safe schemes — never javascript:, data:, etc. */
-const safeHref = (raw) => {
-  const u = (raw || '').trim();
-  if (/^https?:\/\//i.test(u)) return u;
-  if (/^www\./i.test(u)) return `https://${u}`;
-  return '';
-};
+import { safeHref } from '../../../utils/safeUrl';
 
 /** Short host label for the meta line, e.g. "https://docs.example.com/x" → "docs.example.com". */
 const hostOf = (raw) => {

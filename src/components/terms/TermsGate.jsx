@@ -16,7 +16,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, FileText, Loader2, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { apiFetch, ApiError } from '../../services/apiClient';
+import { apiFetch, ApiError, TERMS_REQUIRED_EVENT } from '../../services/apiClient';
 import TermsDocument from './TermsDocument';
 
 export default function TermsGate({ children }) {
@@ -59,6 +59,17 @@ export default function TermsGate({ children }) {
             });
         return () => { cancelled = true; };
     }, [user?.id, statusPath]);
+
+    // The server enforces acceptance too (451 terms_required from any route,
+    // server/middleware/termsGate.js). A provider above this gate may fire a
+    // request before the status probe lands, or an admin may raise the version
+    // mid-session: apiClient announces the 451 and the gate re-probes, so the
+    // agreement is shown instead of a trail of failed requests.
+    useEffect(() => {
+        const onRequired = () => { load(); };
+        window.addEventListener(TERMS_REQUIRED_EVENT, onRequired);
+        return () => window.removeEventListener(TERMS_REQUIRED_EVENT, onRequired);
+    }, [load]);
 
     // The checkbox unlocks once the text has been scrolled to the end — a small
     // piece of friction that makes "I have read this" less of a fiction. A text

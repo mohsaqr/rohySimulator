@@ -15,8 +15,8 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'node:module';
 import dbAdapter from '../dbAdapter.js';
+import { kokoroStaticIds } from './kokoroVoices.js';
 import { logger } from '../logger.js';
 import {
     TTS_PROVIDERS,
@@ -72,31 +72,9 @@ const defaultGetSetting = async (key) => {
 // Catalogues
 // ---------------------------------------------------------------------------
 
-// Kokoro's usable voice set, WITHOUT loading the ~600 MB model. CAREFUL:
-// the package ships 54 <id>.bin files (incl. Italian/Japanese/Chinese
-// packs), but the runtime `tts.voices` map exposes only 28 — English
-// a/b-prefix voices (verified against a live load, 2026-07-10). A .bin
-// file is NOT synthesizable; the bundled VOICES map is. We parse the ids
-// out of the package's dist bundle (exact match with the runtime map —
-// self-updating on package upgrades), and once the model IS loaded the
-// live instance map wins outright.
-let _kokoroStaticIds = null;
-function kokoroStaticIds() {
-    if (_kokoroStaticIds) return _kokoroStaticIds;
-    try {
-        const req = createRequire(import.meta.url);
-        const distEntry = req.resolve('kokoro-js');
-        const src = fs.readFileSync(distEntry, 'utf8');
-        const ids = new Set(src.match(/\b[a-z][fm]_[a-z]+\b/g) || []);
-        if (ids.size > 0) {
-            _kokoroStaticIds = ids;
-            return _kokoroStaticIds;
-        }
-    } catch (err) {
-        providersLog.warn('kokoro static voice listing failed', { error: err.message });
-    }
-    return null; // don't cache a failure — a later call may succeed
-}
+// Kokoro's usable voice set, WITHOUT loading the ~600 MB model, comes from
+// kokoroVoices.js (the bundled runtime voice map, not the package's .bin
+// files). Once the model IS loaded the live instance map wins outright.
 
 async function kokoroHasVoice(voiceId) {
     const { isKokoroLoaded, listKokoroVoices, isKokoroVoice } = await import('./kokoroTts.js');
@@ -182,9 +160,11 @@ async function probeCapability(provider, getSetting) {
     switch (provider) {
         case 'kokoro': {
             try {
-                const { kokoroDisabledReason } = await import('./kokoroTts.js');
+                const { kokoroDisabledReason, kokoroRemoteEnabled } = await import('./kokoroTts.js');
                 const disabled = kokoroDisabledReason();
-                if (disabled) return { capable: false, reason: `model failed to load (${disabled})` };
+                // A remote Kokoro host speaks whatever the local model's state;
+                // the local model is only its fallback there.
+                if (disabled && !kokoroRemoteEnabled()) return { capable: false, reason: `model failed to load (${disabled})` };
             } catch (err) {
                 return { capable: false, reason: `kokoro unavailable (${err.message})` };
             }

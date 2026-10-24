@@ -9,8 +9,8 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:52` |
-| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:285` |
-| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:322` |
-| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:402` |
-| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:374` |
+| `POST` | `/api/sessions` | `authenticateToken` | `server/routes/sessions-routes.js:53` |
+| `GET` | `/api/sessions/:id` | `authenticateToken` | `server/routes/sessions-routes.js:310` |
+| `PUT` | `/api/sessions/:id/end` | `authenticateToken` | `server/routes/sessions-routes.js:347` |
+| `GET` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:427` |
+| `POST` | `/api/sessions/:id/vitals` | `authenticateToken` | `server/routes/sessions-routes.js:399` |

@@ -5,7 +5,6 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
     authenticateToken,
-    requireAdmin,
 } from '../middleware/auth.js';
 
 
@@ -13,7 +12,8 @@ import {
 
 import { logger } from '../logger.js';
 import {
-    auditSuccess
+    auditSuccess,
+    requirePlatformAdmin
 } from './_helpers.js';
 
 const radiologyLog = logger('radiology');
@@ -34,7 +34,11 @@ try {
 
 const router = express.Router();
 
-router.post('/tenants', authenticateToken, requireAdmin, (req, res) => {
+// Creating a tenant and moving a user between tenants are install-level
+// operations: only an admin of the default tenant may do them. A tenant
+// admin could otherwise mint tenants, or pull any user on the install into
+// their own tenant and administer them (security audit 2026-10-24, #2).
+router.post('/tenants', authenticateToken, requirePlatformAdmin, (req, res) => {
     const { slug, name } = req.body || {};
     const normalizedSlug = String(slug || '').trim().toLowerCase();
     const displayName = String(name || '').trim();
@@ -72,16 +76,23 @@ router.post('/tenants', authenticateToken, requireAdmin, (req, res) => {
 // POST /api/users/:id/tenant - Minimal assignment hook for tests/controlled
 // admin use. Full migration tooling remains deferred because it must move or
 // archive all resource ownership coherently.
-router.post('/users/:id/tenant', authenticateToken, requireAdmin, (req, res) => {
+router.post('/users/:id/tenant', authenticateToken, requirePlatformAdmin, (req, res) => {
     const targetUserId = req.params.id;
     const nextTenantId = Number(req.body?.tenant_id);
     if (!Number.isInteger(nextTenantId) || nextTenantId <= 0) {
         return res.status(400).json({ error: 'tenant_id must be a positive integer' });
     }
 
-    dbAdapter.get('SELECT id, username, tenant_id FROM users WHERE id = ?', [targetUserId], (userErr, user) => {
+    dbAdapter.get('SELECT id, username, role, tenant_id FROM users WHERE id = ?', [targetUserId], (userErr, user) => {
         if (userErr) return res.status(500).json({ error: userErr.message });
         if (!user) return res.status(404).json({ error: 'User not found' });
+        // Only a platform admin reaches this point (requirePlatformAdmin), and
+        // placing a new tenant's first admin IS the job — so any role may be
+        // moved, except the caller: moving yourself out of the default tenant
+        // would end your own platform-admin standing with no one left to undo it.
+        if (Number(user.id) === Number(req.user.id)) {
+            return res.status(403).json({ error: 'You cannot move your own account', code: 'self_move' });
+        }
         dbAdapter.get('SELECT id, slug, name FROM tenants WHERE id = ?', [nextTenantId], (tenantErr, tenant) => {
             if (tenantErr) return res.status(500).json({ error: tenantErr.message });
             if (!tenant) return res.status(404).json({ error: 'Tenant not found' });

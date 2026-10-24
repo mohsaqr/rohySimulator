@@ -530,3 +530,117 @@ describe('voiceService — wire entries are literal and carry the language (2.0)
         expect(entry.requestedVoice).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Block 2.1 — per-sentence fetches run in parallel, playback stays in order.
+// Each enqueue starts its /tts request at once (capped per session) instead
+// of after the previous sentence has fully downloaded; only scheduling is
+// chained. Sentences are told apart by their PCM length (the stub buffer's
+// duration is samples / 24000).
+// ---------------------------------------------------------------------------
+
+describe('voiceService — sentence fetches run in parallel, playback in order (2.1)', () => {
+    const SAMPLES = { one: 480, two: 960, three: 1440, four: 1920, five: 2400 };
+
+    function pcmResponse(samples) {
+        return new HttpResponse(buildPcmStreamBody({ samples }), {
+            headers: { 'Content-Type': 'application/x-rohy-pcm-stream' },
+        });
+    }
+
+    // Route every stream request through `respond(text)`, recording texts in
+    // arrival order. A pending response resolves with the request's abort.
+    function useTts(respond) {
+        const arrived = [];
+        server.use(http.post('*/api/tts', async ({ request }) => {
+            const { text } = await request.clone().json();
+            arrived.push(text);
+            return respond(text, request);
+        }));
+        return arrived;
+    }
+
+    function deferred() {
+        let resolve;
+        const promise = new Promise((r) => { resolve = r; });
+        return { promise, resolve };
+    }
+
+    const durations = () => createdSources.map((s) => s.buffer?.duration);
+
+    // Regression lock: enqueue chained the whole fetch, so sentence N+1 was not
+    // requested until N had fully downloaded (gaps between sentences).
+    it('requests sentence 2 before sentence 1 has arrived, and still plays 1 then 2', async () => {
+        const gateOne = deferred();
+        const arrived = useTts(async (text) => {
+            if (text === 'one') await gateOne.promise;
+            return pcmResponse(SAMPLES[text]);
+        });
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', provider: 'kokoro' });
+        session.enqueue('one');
+        session.enqueue('two');
+        await vi.waitFor(() => expect(arrived).toEqual(['one', 'two']));
+        // Sentence two is fully fetched by now but must wait for one.
+        await new Promise((r) => setTimeout(r, 30));
+        expect(createdSources).toHaveLength(0);
+        gateOne.resolve();
+        await session.flush();
+        expect(durations()).toEqual([480 / 24000, 960 / 24000]);
+    });
+
+    it('keeps at most 3 sentence fetches open per session', async () => {
+        const gates = { one: deferred(), two: deferred(), three: deferred(), four: deferred(), five: deferred() };
+        const arrived = useTts(async (text) => {
+            await gates[text].promise;
+            return pcmResponse(SAMPLES[text]);
+        });
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', provider: 'kokoro' });
+        for (const text of ['one', 'two', 'three', 'four', 'five']) session.enqueue(text);
+        await vi.waitFor(() => expect(arrived).toHaveLength(3));
+        await new Promise((r) => setTimeout(r, 30));
+        expect(arrived).toEqual(['one', 'two', 'three']);
+        gates.two.resolve();
+        await vi.waitFor(() => expect(arrived).toEqual(['one', 'two', 'three', 'four']));
+        for (const g of Object.values(gates)) g.resolve();
+        await session.flush();
+        expect(durations()).toEqual([480, 960, 1440, 1920, 2400].map((n) => n / 24000));
+    });
+
+    it('one failed sentence is reported and skipped; the others still play in order', async () => {
+        useTts(async (text) => (text === 'two'
+            ? HttpResponse.json({ error: 'synth exploded' }, { status: 500 })
+            : pcmResponse(SAMPLES[text])));
+        const onError = vi.fn();
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', provider: 'kokoro', onError });
+        session.enqueue('one');
+        session.enqueue('two');
+        session.enqueue('three');
+        await session.flush();
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].message).toMatch(/synth exploded/);
+        expect(durations()).toEqual([480 / 24000, 1440 / 24000]);
+    });
+
+    it('cancel() aborts every in-flight fetch and nothing is scheduled', async () => {
+        const arrived = useTts((_text, request) => new Promise((_, reject) => {
+            request.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+        }));
+        const onError = vi.fn();
+        const onEnd = vi.fn();
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', provider: 'kokoro', onError, onEnd });
+        session.enqueue('one');
+        session.enqueue('two');
+        session.enqueue('three');
+        await vi.waitFor(() => expect(arrived).toHaveLength(3));
+        session.cancel();
+        await vi.waitFor(() => {
+            // Newest first: the three requests of this session.
+            const ours = getRecentTtsRequests().slice(0, 3);
+            expect(ours.map((r) => r.status)).toEqual(['aborted', 'aborted', 'aborted']);
+        });
+        await new Promise((r) => setTimeout(r, 30));
+        expect(createdSources).toHaveLength(0);
+        expect(onError).not.toHaveBeenCalled();
+        expect(onEnd).toHaveBeenCalledTimes(1);
+    });
+});

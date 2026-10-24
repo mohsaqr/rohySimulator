@@ -830,6 +830,81 @@ describe('ConfigPanel', () => {
     });
 });
 
+describe('ConfigPanel — API key field for a custom OpenAI-compatible server', () => {
+    function serveLlm(provider, extra = {}) {
+        const puts = [];
+        server.use(
+            http.get('*/api/platform-settings/llm', () => HttpResponse.json({
+                provider,
+                model: 'qwen3.8-27b',
+                baseUrl: 'https://api.example.org/v1',
+                apiKey: '',
+                enabled: true,
+                maxOutputTokens: '',
+                temperature: '',
+                systemPromptTemplate: '',
+                ...extra,
+            })),
+            http.post('*/api/platform-settings/llm/models/detect', () => HttpResponse.json({ models: [], supported: true })),
+            http.put('*/api/platform-settings/llm', async ({ request }) => {
+                puts.push(await request.json());
+                return HttpResponse.json({ message: 'ok' });
+            }),
+        );
+        return puts;
+    }
+
+    it('offers the key field for a custom server and saves what is typed (no key required)', async () => {
+        // Regression lock: the custom provider was keyless by definition, so a
+        // hosted gateway that needs a key could not be configured at all.
+        const puts = serveLlm('custom');
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        const keyInput = await screen.findByPlaceholderText('API key');
+        expect(keyInput).toHaveAttribute('type', 'password');
+        fireEvent.change(keyInput, { target: { value: 'gateway-key' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+        await waitFor(() => expect(puts.length).toBeGreaterThan(0));
+        expect(puts[0]).toMatchObject({ provider: 'custom', apiKey: 'gateway-key' });
+    });
+
+    it('a custom server saves fine with no key at all', async () => {
+        const puts = serveLlm('custom');
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        await screen.findByPlaceholderText('API key');
+        fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+        await waitFor(() => expect(puts.length).toBeGreaterThan(0));
+        expect(puts[0]).toMatchObject({ provider: 'custom', apiKey: '' });
+    });
+
+    it('a custom server shows "thinking off" ticked by default; unticking saves thinking: on', async () => {
+        const puts = serveLlm('custom', { thinking: 'off' });
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        const box = await screen.findByRole('checkbox', { name: /thinking off/i });
+        expect(box).toBeChecked();
+        fireEvent.click(box);
+        fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+        await waitFor(() => expect(puts.length).toBeGreaterThan(0));
+        expect(puts[0]).toMatchObject({ provider: 'custom', thinking: 'on' });
+    });
+
+    it('a local LM Studio server still shows no key field', async () => {
+        serveLlm('lmstudio', { baseUrl: 'http://localhost:1234/v1' });
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        await screen.findByLabelText('Model name');
+        expect(screen.queryByPlaceholderText('API key')).toBeNull();
+        // No known thinking switch for LM Studio, so no checkbox either.
+        expect(screen.queryByRole('checkbox', { name: /thinking off/i })).toBeNull();
+    });
+});
+
 describe('ConfigPanel — wizard deep-link step derivation (source contract)', () => {
     // Regression lock: repository-select sent teachers to Story, not Scenario
     // (bug report 2.9.15 #2). The handler hardcoded `setWizardInitialStep(3)`

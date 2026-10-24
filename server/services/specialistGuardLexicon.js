@@ -120,14 +120,14 @@ export const GENERIC_WORDS = Object.freeze({
  * the case, not the learner's interface language.
  */
 export const GUARD_FALLBACK_REPLIES = Object.freeze({
-    en: "What do you make of it yourself? Tell me what you've seen and what supports it.",
-    fi: 'Mitä itse ajattelet löydöksistä? Kerro, mitä olet havainnut ja mihin tulkintasi perustuu.',
-    sv: 'Vad tror du själv om fynden? Berätta vad du har sett och vad din tolkning bygger på.',
-    de: 'Was denken Sie selbst über die Befunde? Sagen Sie mir, was Sie gesehen haben und worauf Ihre Einschätzung beruht.',
-    es: '¿Qué piensas tú de los hallazgos? Cuéntame qué has visto y en qué basas tu interpretación.',
-    it: 'Che cosa ne pensi tu dei reperti? Dimmi che cosa hai osservato e su che cosa si basa la tua interpretazione.',
-    fr: "Qu'en pensez-vous vous-même ? Dites-moi ce que vous avez observé et sur quoi repose votre interprétation.",
-    kk: 'Табылған өзгерістер туралы өзіңіз не ойлайсыз? Не көргеніңізді және пайымдауыңыз неге сүйенетінін айтыңыз.',
+    en: "That conclusion is yours to draw. I can only tell you what the findings show.",
+    fi: 'Johtopäätös on sinun tehtäväsi. Voin kertoa vain, mitä löydökset osoittavat.',
+    sv: 'Den slutsatsen är din att dra. Jag kan bara berätta vad fynden visar.',
+    de: 'Diese Schlussfolgerung müssen Sie selbst ziehen. Ich kann Ihnen nur sagen, was die Befunde zeigen.',
+    es: 'Esa conclusión te corresponde a ti. Yo solo puedo decirte lo que muestran los hallazgos.',
+    it: 'Quella conclusione spetta a te. Io posso solo dirti che cosa mostrano i reperti.',
+    fr: "Cette conclusion vous revient. Je peux seulement vous dire ce que montrent les résultats.",
+    kk: 'Бұл қорытындыны сіз өзіңіз жасауыңыз керек. Мен тек табылған өзгерістердің не көрсететінін айта аламын.',
 });
 
 /**

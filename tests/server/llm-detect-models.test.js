@@ -17,6 +17,7 @@ import sqlite3 from 'sqlite3';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 
@@ -41,11 +42,24 @@ describe('POST /platform-settings/llm/models/detect', () => {
     let upstream;
     let upstreamUrl;
     let lastPath = null;
+    let lastAuth = null;
+    let lastChatBody = null;
 
     beforeAll(async () => {
         // Stub "LM Studio": returns the OpenAI-compatible model-list shape.
         upstream = http.createServer((req, res) => {
             lastPath = req.url;
+            lastAuth = req.headers.authorization ?? null;
+            if (req.url === '/chat/completions') {
+                let raw = '';
+                req.on('data', (c) => { raw += c; });
+                req.on('end', () => {
+                    lastChatBody = JSON.parse(raw || '{}');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'test successful' } }] }));
+                });
+                return;
+            }
             if (req.url === '/models') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen2.5-7b' }, { id: 'llama-3.1-8b' }] }));
@@ -75,6 +89,8 @@ describe('POST /platform-settings/llm/models/detect', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId: row.id });
     }, 90_000);
 
     afterAll(async () => {
@@ -114,6 +130,63 @@ describe('POST /platform-settings/llm/models/detect', () => {
         const { status, json } = await detect({ provider: 'lmstudio', baseUrl: `${upstreamUrl}/nope` });
         expect(status).toBe(400);
         expect(json.error).toMatch(/returned 404/);
+    });
+
+    it('sends a typed key, sends none for an empty one, and uses the SAVED key for the form\u2019s [redacted] placeholder', async () => {
+        // Regression lock: the settings form holds REDACTED for a saved key and
+        // sends it back; the route used it verbatim as the bearer token, so
+        // detection against a key-protected server always failed with 401.
+        const db = await openDb(server.dbPath);
+        // The saved key is honoured only for the SAVED URL (security audit
+        // 2026-10-24, #10): the URL is stored too, and a different body URL
+        // with the placeholder gets no key at all.
+        await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_api_key', 'saved-key')
+                         ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`);
+        await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_base_url', ?)
+                         ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`, [upstreamUrl]);
+        await new Promise((resolve) => db.close(() => resolve()));
+
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: 'typed-key' });
+        expect(lastAuth).toBe('Bearer typed-key');
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: '' });
+        expect(lastAuth).toBeNull();
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: '[redacted]' });
+        expect(lastAuth).toBe('Bearer saved-key');
+        await detect({ provider: 'custom', baseUrl: `${upstreamUrl}/elsewhere`, apiKey: '[redacted]' });
+        expect(lastAuth).toBeNull();
+    });
+
+    async function adminCall(method, path, body) {
+        const res = await fetch(`${server.baseUrl}/api${path}`, {
+            method,
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        let json = null;
+        try { json = await res.json(); } catch { /* not json */ }
+        return { status: res.status, json };
+    }
+
+    it('thinking: off by default, refuses an unknown value, round-trips on, and Test Connection sends the switch only for custom', async () => {
+        expect((await adminCall('PUT', '/platform-settings/llm', { thinking: 'maybe' })).status).toBe(400);
+        // Never set: off.
+        expect((await adminCall('GET', '/platform-settings/llm')).json.thinking).toBe('off');
+
+        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl })).status).toBe(200);
+        expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
+        expect(lastChatBody.chat_template_kwargs).toEqual({ enable_thinking: false });
+        expect(lastChatBody.reasoning_effort).toBe('low');
+
+        // A provider with no known switch gets nothing, even with thinking off.
+        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'lmstudio', baseUrl: upstreamUrl })).status).toBe(200);
+        expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
+        expect(lastChatBody).not.toHaveProperty('chat_template_kwargs');
+
+        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl, thinking: 'on' })).status).toBe(200);
+        expect((await adminCall('GET', '/platform-settings/llm')).json.thinking).toBe('on');
+        expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
+        expect(lastChatBody).not.toHaveProperty('chat_template_kwargs');
+        expect(lastChatBody).not.toHaveProperty('reasoning_effort');
     });
 
     it('requires authentication', async () => {

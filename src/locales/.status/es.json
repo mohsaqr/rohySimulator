@@ -6539,6 +6539,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.llm_thinking_off": {
+    "src": "13bc52946ddf",
+    "tgt": "9ebe57db84cc",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.llm_thinking_off_help": {
+    "src": "c9ffe0684d49",
+    "tgt": "9b836e1c2ac1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.llm_todays_usage": {
     "src": "a20de9579b0f",
     "tgt": "63fd67bd4f7e",

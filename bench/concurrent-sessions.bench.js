@@ -99,6 +99,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 import { startTestServer } from '../tests/utils/startTestServer.js';
+import { recordSession } from '../tests/utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 
@@ -203,6 +204,8 @@ let caseId;
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(db, token, { userId: userRow.id });
     } finally {
         await dbClose(db);
     }

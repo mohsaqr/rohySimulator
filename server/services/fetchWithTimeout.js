@@ -21,19 +21,13 @@
  */
 import { logger } from '../logger.js';
 
-export class FetchTimeoutError extends Error {
-    constructor(url, timeoutMs) {
-        super(`Request to ${url} timed out after ${timeoutMs}ms`);
-        this.name = 'FetchTimeoutError';
-        this.url = url;
-        this.timeoutMs = timeoutMs;
-    }
-}
-
-const DEFAULT_TIMEOUT_MS = 15_000;
-const httpLog = logger('http-out');
-
-function summarizeTarget(url) {
+/**
+ * origin + path of a URL, never its query string or credentials. Every
+ * message or log field built from a URL in this module goes through here: a
+ * query string may carry an API key (Google's `?key=` did until 2026-10-24),
+ * and callers log `err.message` (security audit 2026-10-24, TTS-1).
+ */
+export function summarizeTarget(url) {
     try {
         const parsed = new URL(String(url));
         return `${parsed.origin}${parsed.pathname}`;
@@ -41,6 +35,19 @@ function summarizeTarget(url) {
         return String(url).split('?')[0];
     }
 }
+
+export class FetchTimeoutError extends Error {
+    constructor(url, timeoutMs) {
+        super(`Request to ${summarizeTarget(url)} timed out after ${timeoutMs}ms`);
+        this.name = 'FetchTimeoutError';
+        this.url = url;
+        this.target = summarizeTarget(url);
+        this.timeoutMs = timeoutMs;
+    }
+}
+
+const DEFAULT_TIMEOUT_MS = 15_000;
+const httpLog = logger('http-out');
 
 function methodOf(init = {}) {
     return String(init.method || 'GET').toUpperCase();

@@ -3,6 +3,7 @@ import {
     resolveTenant,
     ROLE_RANKS,
     VALID_ROLES,
+    getRoleRank,
     hasRoleAtLeast,
     normalizeRole
 } from '../middleware/auth.js';
@@ -27,6 +28,61 @@ export const canReadAcrossUsers = (user) => hasRoleAtLeast(user, ROLE_RANKS.revi
 export const isValidRole = (role) => VALID_ROLES.includes(normalizeRole(role));
 export const roleForStorage = (role, fallback = 'student') => normalizeRole(role || fallback);
 export const tenantId = (req) => resolveTenant(req);
+
+// The default tenant (migrations/0004_tenants.sql seeds it as id 1) is the
+// one the install was set up from, and its admins are the only people who
+// may act on things that have no tenant: platform_settings (one LLM key,
+// one voice key, one registration policy for every tenant), the tenants
+// table itself, and moving a user between tenants. A tenant admin is an
+// admin of their tenant's users, cases and logs — not of the install
+// (security audit 2026-10-24, findings 2 and 9).
+export const PLATFORM_TENANT_ID = 1;
+export const isPlatformAdmin = (user) =>
+    hasRoleAtLeast(user, ROLE_RANKS.admin) && Number(user?.tenant_id ?? PLATFORM_TENANT_ID) === PLATFORM_TENANT_ID;
+
+export function requirePlatformAdmin(req, res, next) {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
+        return res.status(403).json({ error: 'Insufficient role' });
+    }
+    if (!isPlatformAdmin(req.user)) {
+        return res.status(403).json({ error: 'Platform administrator required', code: 'platform_admin_required' });
+    }
+    next();
+}
+
+/** Rank of a role or user — re-exported so route files need one import. */
+export { getRoleRank };
+
+/**
+ * Escape a user-typed search term for a `LIKE ? ESCAPE '\\'` clause: `%`, `_`
+ * and the escape character itself become literals, so a learner typing `_`
+ * matches an underscore rather than any character.
+ */
+export function escapeLikeTerm(value) {
+    return String(value ?? '').replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * Parse a page size from the query string: an integer clamped to [1, max],
+ * `fallback` when absent or not an integer (so `limit=-1` and `limit=abc`
+ * cannot mean "everything").
+ */
+export function clampLimit(raw, fallback, max) {
+    if (raw === undefined || raw === null || raw === '') return Math.min(fallback, max);
+    const n = Number(raw);
+    if (!Number.isInteger(n)) return Math.min(fallback, max);
+    return Math.min(Math.max(n, 1), max);
+}
+
+/** Parse an offset from the query string: a non-negative integer, else 0. */
+export function clampOffset(raw, max = 100000) {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0) return 0;
+    return Math.min(n, max);
+}
 
 // --- Cohort-case access enforcement (class-centric, date-windowed) ----------
 // Enforcement is ON unless an admin turns it off (Settings → Courses → Course
@@ -407,7 +463,10 @@ export const RETENTION_TABLES = [
     // anonymise-on-purge contract (user_id is the principal who posted).
     { table: 'learning_events_rejected', column: 'received_at', userColumn: 'user_id' },
     { table: 'interactions', column: 'timestamp', userColumn: null },
-    { table: 'system_audit_log', column: 'timestamp', userColumn: 'user_id' },
+    // system_audit_log is absent on purpose: its rows form a hash chain
+    // (server/audit-chain.js), so deleting by age or anonymising in place
+    // breaks verification. scripts/sweep-retention.js refuses it for the
+    // same reason (security audit 2026-10-24, SEC-41).
     { table: 'alarm_events', column: 'triggered_at', userColumn: null },
     { table: 'llm_request_log', column: 'request_timestamp', userColumn: 'user_id' },
     // client_logs (audit Phase 3): high-volume, useful for incident
@@ -740,7 +799,12 @@ export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, 
 
         await dbRun(`UPDATE event_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE learning_events SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE system_audit_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        // system_audit_log is deliberately NOT touched: every row's entry_hash
+        // covers user_id, so nulling it in place made verifyAuditChain report
+        // tampering after every purge (security audit 2026-10-24, SEC-41). The
+        // user row itself is purged above — an orphan integer id no longer
+        // identifies anyone — and the purge_user entry appended below records
+        // the erasure in the chain itself.
         await dbRun(`UPDATE llm_request_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE login_logs SET user_id = NULL, username = ? WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
         await dbRun(`UPDATE settings_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
@@ -1121,7 +1185,9 @@ export function verifySessionOwnership(sessionId, user, res, { requireSession = 
         // hinge of a cross-tenant mutation. Rank widens WHOSE sessions you may
         // touch; it never widens WHICH TENANT.
         const staff = hasRoleAtLeast(user, ROLE_RANKS.educator);
-        dbAdapter.get('SELECT user_id, tenant_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, user?.tenant_id || 1], (err, row) => {
+        // `deleted_at IS NULL`: an erased session (user purge, retention
+        // sweep) is gone for every reader, staff included.
+        dbAdapter.get('SELECT user_id, tenant_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, user?.tenant_id || 1], (err, row) => {
             if (err) {
                 res.status(500).json({ error: err.message });
                 return resolve(false);

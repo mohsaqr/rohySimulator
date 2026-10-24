@@ -47,8 +47,12 @@
 //   never        — teaches how to look, never confirms findings
 export const DISCLOSURE_MODES = Object.freeze(['after_effort', 'on_request', 'never']);
 
+// on_request since 2026-10-24 (migration 0071): the after_effort default made
+// every specialist quiz a learner for three turns before saying anything, which
+// the owner found "too instructive". The turn / room fields keep their values
+// so an educator who picks after_effort for a case gets the old gate back.
 const DEFAULT_DISCLOSURE = Object.freeze({
-    findings: 'after_effort',
+    findings: 'on_request',
     minStudentTurns: 3,
     requireRoomActivity: true,
 });

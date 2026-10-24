@@ -53,7 +53,7 @@ import CaseVersionHistory from './CaseVersionHistory.jsx';
 const LessonAuthoring = lazy(() => import('../lessons/LessonAuthoring'));
 import CaseAvatarVoicePicker from './CaseAvatarVoicePicker';
 import { LANGUAGES } from '../../i18n/languages';
-import { LLM_PROVIDERS, defaultModelFor } from '../../services/llmCatalogue';
+import { LLM_PROVIDERS, defaultModelFor, thinkingOffParams } from '../../services/llmCatalogue';
 import ModelSelect from './ModelSelect';
 import { friendlyLlmError } from '../../utils/llmErrorMessage';
 import { SCENARIO_TEMPLATES, scaleScenarioTimeline } from '../../data/scenarioTemplates';
@@ -1938,7 +1938,8 @@ function LLMConfiguration() {
         enabled: true,
         maxOutputTokens: '',
         temperature: '',
-        systemPromptTemplate: ''
+        systemPromptTemplate: '',
+        thinking: 'off'
     });
     const [rateLimits, setRateLimits] = useState({
         tokensPerUserDaily: 0,
@@ -2213,8 +2214,9 @@ function LLMConfiguration() {
                         )}
                     </div>
 
-                    {/* API Key */}
-                    {currentProvider.needsKey && (
+                    {/* API Key — required for cloud providers, optional for a
+                        custom server (a hosted gateway may need one). */}
+                    {(currentProvider.needsKey || currentProvider.optionalKey) && (
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">
                                 {t('llm_api_key')}
@@ -2260,7 +2262,7 @@ function LLMConfiguration() {
                             <dd className="text-neutral-200 font-mono">{llmConfig.model || <span className="text-neutral-500">{t('llm_provider_default')}</span>}</dd>
                             <dt className="text-neutral-500">{t('llm_base_url')}</dt>
                             <dd className="text-neutral-200 font-mono break-all">{llmConfig.baseUrl || <span className="text-neutral-500">{t('llm_unset')}</span>}</dd>
-                            {currentProvider.needsKey && (
+                            {(currentProvider.needsKey || (currentProvider.optionalKey && llmConfig.apiKey)) && (
                                 <>
                                     <dt className="text-neutral-500">{t('llm_key')}</dt>
                                     <dd className="text-neutral-200 font-mono">
@@ -2301,6 +2303,23 @@ function LLMConfiguration() {
                             <p className="text-xs text-neutral-500 mt-1">{t('llm_empty_provider_default_range')}</p>
                         </div>
                     </div>
+
+                    {/* Thinking off — only where the provider has a known switch
+                        (THINKING_OFF_PARAMS); elsewhere nothing would be sent. */}
+                    {thinkingOffParams(llmConfig.provider) && (
+                        <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={llmConfig.thinking !== 'on'}
+                                onChange={(e) => setLlmConfig(prev => ({ ...prev, thinking: e.target.checked ? 'off' : 'on' }))}
+                                className="w-4 h-4 mt-0.5 accent-cyan-500"
+                            />
+                            <span>
+                                <span className="block text-sm font-medium text-neutral-300">{t('llm_thinking_off')}</span>
+                                <span className="block text-xs text-neutral-500 mt-1">{t('llm_thinking_off_help')}</span>
+                            </span>
+                        </label>
+                    )}
 
                     {/* System Prompt Template */}
                     <div className="pt-2">

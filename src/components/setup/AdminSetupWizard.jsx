@@ -178,7 +178,7 @@ function LLMStep({ t, toast, onChanged, tested, setTested }) {
                         className={inputClass}
                     />
                 </div>
-                {providerInfo.needsKey && (
+                {(providerInfo.needsKey || providerInfo.optionalKey) && (
                     <div>
                         <label className="block text-xs text-neutral-400 mb-1">{t('llm_api_key')}</label>
                         <div className="relative">

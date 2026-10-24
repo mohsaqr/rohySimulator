@@ -451,6 +451,8 @@
   "llm_system_prompt_placeholder": "Istruzioni inviate con ogni conversazione (es., 'Sei un paziente simulato...')",
   "llm_system_prompt_template": "Modello di prompt di sistema",
   "llm_temperature": "Temperatura",
+  "llm_thinking_off": "Disattiva il ragionamento del modello",
+  "llm_thinking_off_help": "Attivo per impostazione predefinita. Il modello risponde subito invece di ragionare prima, quindi le risposte (e la voce del paziente) iniziano alcuni secondi prima. Alcuni modelli (come gpt-oss) non possono smettere del tutto di ragionare e lo riducono al minimo. Deselezionalo per lasciar ragionare il modello se le risposte peggiorano.",
   "llm_todays_usage": "Utilizzo di oggi",
   "llm_tokens_per_user": "Token per utente (Giornalieri)",
   "llm_tokens_per_user_help": "Token massimi che ogni utente può usare al giorno (0 = illimitato)",

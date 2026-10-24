@@ -85,6 +85,18 @@ export const coursesApi = {
     return response.data;
   },
 
+  // Self-check grading (rohy): a learner's lesson carries no answer keys, so
+  // the server checks `answerIndex` for question `questionIndex` of the
+  // `blockIndex`-th <lecture-mcq> in section `sectionId`.
+  // Resolves to { correct, correctIndex, explanation }.
+  checkMcqAnswer: async (lectureId, { sectionId, blockIndex, questionIndex, answerIndex }) => {
+    const response = await apiClient.post(
+      `/courses/lectures/${lectureId}/mcq/check`,
+      { sectionId, blockIndex, questionIndex, answerIndex }
+    );
+    return response.data.data;
+  },
+
   // Progress (chatoyon: LAILA exposed this via enrollmentsApi.markLectureComplete)
   markLectureComplete: async (lectureId) => {
     const response = await apiClient.post(

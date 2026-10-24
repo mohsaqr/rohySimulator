@@ -104,9 +104,31 @@ const generalLimiter = rateLimit({
 // Health + readiness mounted BEFORE the rate limiter so monitoring probes
 // (k8s, systemd watchdog, external uptime checks) can't be rate-limited by
 // a hostile request storm. They're also public — no auth needed.
+//
+// /health is a constant-time liveness answer and stays unlimited. /ready and
+// /health/plugins are not: one runs four database probes, the other an
+// outbound fetch to every plugin content origin, and both were reachable
+// unauthenticated and unlimited (security audit 2026-10-24). A probe runs
+// once a second at most, so 30/min per client IP is generous for a monitor
+// and tight for a storm. Same test-harness escape hatch as generalLimiter.
+const PROBE_LIMIT_PER_MINUTE = 30;
+const probeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: PROBE_LIMIT_PER_MINUTE,
+    message: { error: 'Too many readiness probes. Please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => process.env.ROHY_DISABLE_GENERAL_RATE_LIMIT === '1',
+});
+router.use(['/ready', '/health/plugins'], probeLimiter);
 router.use(healthRoutes);
 
 router.use(generalLimiter);
+
+// Terms of use are enforced server-side (451 until accepted) from INSIDE
+// authenticateToken — see middleware/termsGate.js. It cannot be mounted here:
+// every router below applies authenticateToken per route, so a guard placed
+// at this level never sees req.user.
 
 // Per-route timeout — sends 504 if a handler runs longer than
 // ROHY_ROUTE_TIMEOUT_MS (default 30s). Skips /tts and /proxy/llm internally
@@ -214,6 +236,7 @@ if (oyonRoutes) {
 // router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
 // router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (req, res) => {
+// router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/platform-settings/avatars', authenticateToken, async (req, res) => {
 // router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/agents/templates', authenticateToken, async (req, res) => {
@@ -222,7 +245,6 @@ if (oyonRoutes) {
 // router.put('/agents/templates/:id', authenticateToken, requireEducator, async (req, res) => {
 // router.delete('/agents/templates/:id', authenticateToken, requireEducator, async (req, res) => {
 // router.post('/agents/templates/:id/reset-to-default', authenticateToken, requireEducator, async (req, res) => {
-// router.post('/agents/templates/:id/test-llm', authenticateToken, requireEducator, async (req, res) => {
 // router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducator, async (req, res) => {
 // router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
 // router.post('/cases/:caseId/agents', authenticateToken, async (req, res) => {
@@ -376,10 +398,10 @@ if (oyonRoutes) {
 // router.get('/sessions/:sessionId/vitals', authenticateToken, async (req, res) => {
 // router.post('/tenants', authenticateToken, requireAdmin, (req, res) => {
 // router.post('/users/:id/tenant', authenticateToken, requireAdmin, (req, res) => {
-// router.post('/upload', authenticateToken, upload.single('photo'), (req, res) => {
+// router.post('/upload', authenticateToken, requireEducator, upload.single('photo'), (req, res) => {
 // router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
 // router.get('/bodymap-regions', (req, res) => {
-// router.post('/bodymap-regions', authenticateToken, requireEducator, (req, res) => {
+// router.post('/bodymap-regions', authenticateToken, requireAdmin, (req, res) => {
 // router.post('/users/create', authenticateToken, requireAdmin, async (req, res) => {
 // router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) => {
 // router.get('/users', authenticateToken, requireAdmin, (req, res) => {

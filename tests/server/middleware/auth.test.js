@@ -38,6 +38,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -153,6 +154,17 @@ async function seedUser({
 
 function signToken(payload, opts = {}) {
     return jwt.sign(payload, JWT_SECRET, opts);
+}
+
+// Sign a token AND record it in active_sessions, the way login does. Since the
+// fail-closed change a token with no row is refused before the user lookup, so
+// every test that wants to reach the user-row branch issues its token here. A
+// random jti keeps same-second, same-payload tokens from colliding on the
+// UNIQUE token_hash.
+async function signLiveToken(payload, opts = {}) {
+    const token = signToken(payload, { jwtid: crypto.randomUUID(), ...opts });
+    await auth.recordActiveSession(token, { id: payload.id, tenant_id: payload.tenant_id || 1 });
+    return token;
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +352,7 @@ describe('auth middleware — authenticateToken', () => {
     });
 
     it('accepts a valid JWT and populates req.user from the DB row', async () => {
-        const token = signToken({ id: 104, role: 'student' /* stale role in token */ });
+        const token = await signLiveToken({ id: 104, role: 'student' /* stale role in token */ });
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
@@ -359,7 +371,7 @@ describe('auth middleware — authenticateToken', () => {
         // call. Locks the "no caching, no token revocation needed for
         // role downgrades" behaviour.
         await seedUser({ id: 110, username: 'mutating_u', role: 'reviewer' });
-        const token = signToken({ id: 110, role: 'reviewer' });
+        const token = await signLiveToken({ id: 110, role: 'reviewer' });
 
         const req1 = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res1 = makeRes();
@@ -375,7 +387,7 @@ describe('auth middleware — authenticateToken', () => {
     });
 
     it('rejects valid JWT for a SOFT-DELETED user (403, "Invalid or inactive user")', async () => {
-        const token = signToken({ id: 201, role: 'admin' });
+        const token = await signLiveToken({ id: 201, role: 'admin' });
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
@@ -384,7 +396,7 @@ describe('auth middleware — authenticateToken', () => {
     });
 
     it('rejects valid JWT for an INACTIVE user (status != active)', async () => {
-        const token = signToken({ id: 200, role: 'student' });
+        const token = await signLiveToken({ id: 200, role: 'student' });
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
@@ -393,7 +405,7 @@ describe('auth middleware — authenticateToken', () => {
     });
 
     it('rejects valid JWT whose user_id no longer exists in the DB', async () => {
-        const token = signToken({ id: 9_999_999, role: 'admin' });
+        const token = await signLiveToken({ id: 9_999_999, role: 'admin' });
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
@@ -406,7 +418,7 @@ describe('auth middleware — authenticateToken', () => {
         // request without forcing a token refresh. Locks that req.user.tenant_id
         // is read from the DB row, NOT from the JWT payload.
         await seedUser({ id: 120, username: 'tenant_migrating_u', role: 'admin', tenant_id: 1 });
-        const token = signToken({ id: 120, role: 'admin', tenant_id: 1 });
+        const token = await signLiveToken({ id: 120, role: 'admin', tenant_id: 1 });
 
         const req1 = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res1 = makeRes();
@@ -639,18 +651,21 @@ describe('auth middleware — server-side token revocation via active_sessions',
         expect(res.__nextCalled).toBeFalsy();
     });
 
-    it('accepts a token with NO active_sessions row at all (legacy compatibility)', async () => {
-        // Tokens issued before this feature have no row to revoke. We let
-        // them through so a deploy doesn't force every signed-in user to
-        // re-login; their natural JWT expiry caps the worst case.
-        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-legacy' });
+    // Regression lock: a JWT with no active_sessions row is refused (401
+    // session_unknown). It used to be accepted as a "legacy" token, which made
+    // a token forged with a leaked secret, or minted before a secret rotation,
+    // the one kind of token that could never be revoked.
+    it('rejects 401 "session_unknown" for a valid JWT with NO active_sessions row', async () => {
+        const token = signToken({ id: 104, role: 'admin' }, { jwtid: 'rev-no-row' });
         // Deliberately no recordActiveSession call.
 
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);
-        expect(res.__nextCalled).toBe(true);
-        expect(req.user.id).toBe(104);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'Session not found', code: 'session_unknown' });
+        expect(res.__nextCalled).toBeFalsy();
+        expect(req.user).toBeUndefined();
     });
 
     it('rejects 401 "Session expired" if the row\'s expires_at is in the past', async () => {
@@ -772,7 +787,7 @@ describe('auth middleware — convenience wrappers + self-escalation', () => {
         // End-to-end: authenticate first (DB-backed) so req.user reflects
         // the actual role, then run requireAdmin. Educator (rank 3) must
         // be rejected by the admin gate.
-        const token = signToken({ id: 103, role: 'educator' });
+        const token = await signLiveToken({ id: 103, role: 'educator' });
         const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
         const res = makeRes();
         await runMiddleware(auth.authenticateToken, req, res);

@@ -45,10 +45,15 @@ export function validateEnv(env = process.env) {
             "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""
         );
     } else if (env.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
-        warnings.push(
-            `JWT_SECRET is only ${env.JWT_SECRET.length} chars. ` +
-            `Recommend ≥${MIN_JWT_SECRET_LENGTH} for production-grade entropy.`
-        );
+        // Every session token is signed with this. A short secret is a
+        // brute-forceable one, and a forged token is a login as anyone — so in
+        // production it is fatal, not advisory (security audit 2026-10-24).
+        // Dev and test keep the warning so a throwaway secret still boots.
+        const msg =
+            `JWT_SECRET is only ${env.JWT_SECRET.length} chars; it must be at least ` +
+            `${MIN_JWT_SECRET_LENGTH} (session tokens are signed with it). ` +
+            "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"";
+        (isProd(env) ? errors : warnings).push(msg);
     }
 
     // ROHY_PLUGIN_ORIGINS — fatal if malformed. Checked here rather than left
@@ -93,6 +98,33 @@ export function validateEnv(env = process.env) {
         } catch (err) {
             errors.push(err.message);
         }
+    }
+
+    // ROHY_KOKORO_URL — remote Kokoro TTS. Fatal if malformed: the failure
+    // mode is an operator who believes voices come from the GPU host while
+    // every reply quietly synthesizes on this box's CPU (the local fallback
+    // hides the misconfiguration from learners, so boot must not).
+    if (env.ROHY_KOKORO_URL) {
+        let kokoroUrl = null;
+        try {
+            kokoroUrl = new URL(env.ROHY_KOKORO_URL);
+        } catch { /* reported below */ }
+        if (!kokoroUrl || !['http:', 'https:'].includes(kokoroUrl.protocol)) {
+            errors.push(`ROHY_KOKORO_URL="${env.ROHY_KOKORO_URL}" is not an http(s) URL (expected e.g. https://api.example.org/v1).`);
+        } else {
+            if (kokoroUrl.protocol === 'http:' && isProd(env) && !isLocalUrl(env.ROHY_KOKORO_URL)) {
+                warnings.push('ROHY_KOKORO_URL uses plain http in production: the API key and every spoken line cross the network unencrypted.');
+            }
+            if (!env.ROHY_KOKORO_API_KEY) {
+                warnings.push('ROHY_KOKORO_URL is set but ROHY_KOKORO_API_KEY is not: the remote host will refuse every request and all speech will fall back to the local model.');
+            }
+        }
+    } else if (env.ROHY_KOKORO_API_KEY) {
+        warnings.push('ROHY_KOKORO_API_KEY is set but ROHY_KOKORO_URL is not, so the key is unused and Kokoro synthesizes locally.');
+    }
+    if (env.ROHY_KOKORO_TIMEOUT_MS != null && env.ROHY_KOKORO_TIMEOUT_MS !== ''
+        && !/^[1-9]\d*$/.test(String(env.ROHY_KOKORO_TIMEOUT_MS))) {
+        errors.push(`ROHY_KOKORO_TIMEOUT_MS="${env.ROHY_KOKORO_TIMEOUT_MS}" is not a positive integer (milliseconds).`);
     }
 
     // PORT / HTTPS_PORT — must be numeric if set.
@@ -169,18 +201,39 @@ export function validateEnv(env = process.env) {
         );
     }
 
-    // ALLOW_DEFAULT_USERS — bootstrap-only flag; warn if left on in prod.
+    // ALLOW_DEFAULT_USERS — seeds the well-known demo accounts (admin/admin123
+    // and friends). In production that is a published password on an admin
+    // account, so it is fatal (security audit 2026-10-24); a first admin is
+    // provisioned with ROHY_ADMIN_USERNAME/ROHY_ADMIN_PASSWORD instead, which
+    // the install and deploy scripts set.
     if (isProd(env) && env.ALLOW_DEFAULT_USERS === '1') {
-        warnings.push(
-            'ALLOW_DEFAULT_USERS=1 in production. This is only safe for the FIRST boot to ' +
-            'seed default users. Remove it from /etc/rohy/env once admin login works.'
+        errors.push(
+            'ALLOW_DEFAULT_USERS=1 in production seeds the demo accounts with their published ' +
+            'passwords (admin/admin123). Remove it and provision the first administrator with ' +
+            'ROHY_ADMIN_USERNAME and ROHY_ADMIN_PASSWORD instead.'
         );
     }
 
-    // ROHY_TRUST_PROXY — typo guard. The Express docs accept several values;
-    // we only validate that it parses as one of the documented forms.
-    if (env.ROHY_TRUST_PROXY != null && env.ROHY_TRUST_PROXY !== '') {
-        const v = String(env.ROHY_TRUST_PROXY).trim();
+    // ROHY_TRUST_PROXY — the rate limiters, the audit log and login_logs key
+    // on req.ip. Behind a reverse proxy on ANOTHER host or container (nginx in
+    // its own container, a cloud load balancer) every request arrives from the
+    // proxy's address: with the default 'loopback' X-Forwarded-For is ignored,
+    // every client shares one rate-limit bucket (one student's burst locks the
+    // whole class out of login) and every audit row names the proxy.
+    const trustProxyRaw = env.ROHY_TRUST_PROXY == null ? '' : String(env.ROHY_TRUST_PROXY).trim();
+    if (isProd(env) && (trustProxyRaw === '' || trustProxyRaw === 'loopback')) {
+        warnings.push(
+            `ROHY_TRUST_PROXY is ${trustProxyRaw === '' ? 'not set (default "loopback")' : '"loopback"'} in production. ` +
+            'That is right only when the reverse proxy runs on this host. Behind nginx in another ' +
+            'container or a load balancer, every client shares ONE rate-limit bucket and the audit ' +
+            "log records the proxy's address — set ROHY_TRUST_PROXY to the proxy's IP/CIDR or hop count."
+        );
+    }
+
+    // Typo guard. The Express docs accept several values; we only validate
+    // that it parses as one of the documented forms.
+    if (trustProxyRaw !== '') {
+        const v = trustProxyRaw;
         const valid =
             v === 'true' || v === 'false' ||
             v === 'loopback' || v === 'linklocal' || v === 'uniquelocal' ||

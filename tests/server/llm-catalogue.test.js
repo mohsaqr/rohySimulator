@@ -17,7 +17,10 @@ import {
     modelsFor,
     defaultModelFor,
     isKnownModel,
-    pricingSeedRows
+    pricingSeedRows,
+    thinkingOffParams,
+    thinkingIsOff,
+    THINKING_OFF_PARAMS
 } from '../../server/shared/llmCatalogue.js';
 
 const PROVIDER_KEYS = Object.keys(LLM_PROVIDERS);
@@ -33,6 +36,35 @@ describe('LLM_PROVIDERS', () => {
         expect(typeof p.modelRequired).toBe('boolean');
         expect(['anthropic', 'openai']).toContain(p.apiShape);
         expect(['local', 'cloud', 'other']).toContain(p.group);
+    });
+
+    it('only the custom provider takes an optional key, and optional never means required', () => {
+        // A custom OpenAI-compatible server may be a hosted gateway that needs
+        // a key: the forms must offer the field without demanding it.
+        const optional = PROVIDER_KEYS.filter(k => LLM_PROVIDERS[k].optionalKey === true);
+        expect(optional).toEqual(['custom']);
+        for (const k of optional) expect(LLM_PROVIDERS[k].needsKey).toBe(false);
+    });
+
+    it('thinking off has a known switch only for the custom provider', () => {
+        // Both switches: Qwen3 reads the template kwarg, gpt-oss reads reasoning_effort.
+        expect(thinkingOffParams('custom')).toEqual({ chat_template_kwargs: { enable_thinking: false }, reasoning_effort: 'low' });
+        // OpenAI-style APIs reject unknown parameters: nothing is sent there.
+        for (const k of PROVIDER_KEYS.filter(k => k !== 'custom')) expect(thinkingOffParams(k)).toBeNull();
+        expect(thinkingOffParams('no-such-provider')).toBeNull();
+    });
+
+    // Regression lock: gpt-oss (Harmony) answers reasoning_effort='none' with a 400,
+    // so sending it would fail every reply. 'low' is the lowest accepted value.
+    it('never asks for reasoning_effort none', () => {
+        for (const params of Object.values(THINKING_OFF_PARAMS)) {
+            if ('reasoning_effort' in params) expect(['low', 'medium', 'high']).toContain(params.reasoning_effort);
+        }
+    });
+
+    it('thinking is off unless it was explicitly turned on', () => {
+        for (const unset of [undefined, null, '', 'off', 'default']) expect(thinkingIsOff(unset)).toBe(true);
+        expect(thinkingIsOff('on')).toBe(false);
     });
 
     it('only anthropic uses the anthropic request shape', () => {

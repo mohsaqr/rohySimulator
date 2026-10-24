@@ -16,7 +16,7 @@ import { useVoice } from '../../contexts/VoiceContext';
 import { sanitizeResponseText } from '../../utils/plainText';
 import { parseConfig } from '../../utils/parseConfig';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { extractCompleteSentences } from '../../utils/sentenceSplit';
+import { createSpeechChunker } from '../../utils/sentenceSplit';
 import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
@@ -1156,7 +1156,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         conversationBus.publish({ voiced: Boolean(speech) && !voiceErrored });
 
         let acc = '';            // raw accumulator (for chat bubble + bubble-final)
-        let speechBuffer = '';   // sentence detector buffer (TTS only)
+        // Sentence detector for TTS; the reply's first chunk may end at a
+        // clause break so the patient starts speaking sooner.
+        const speechChunker = createSpeechChunker();
 
         // streamMessage REJECTS on failure (LLMError) — it never resolves with
         // an "Error: …" string any more. Catch here and keep the same visible
@@ -1194,10 +1196,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         });
 
                         if (!speech || voiceErrored) return;
-                        speechBuffer += delta;
-                        const { sentences, remainder } = extractCompleteSentences(speechBuffer);
-                        speechBuffer = remainder;
-                        for (const s of sentences) {
+                        for (const s of speechChunker.push(delta)) {
                             const spoken = sanitizeResponseText(s).trim();
                             if (spoken) speech.enqueue(spoken);
                         }
@@ -1239,7 +1238,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             if (isError || !responseText) {
                 speech.cancel();
             } else {
-                const tail = sanitizeResponseText(speechBuffer).trim();
+                const tail = sanitizeResponseText(speechChunker.flush()).trim();
                 if (tail) speech.enqueue(tail);
                 speech.flush();
             }

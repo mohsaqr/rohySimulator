@@ -97,7 +97,9 @@ export const FileCard = ({ fileName, fileType, url, fileSize, description, onDow
           <p className="mt-1 text-sm" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>{description}</p>
         )}
       </div>
-      {canView ? (
+      {/* An address outside the allow-list (resolveFileUrl → '') gets no link at
+          all: the card stays a plain description of the file. */}
+      {!url ? null : canView ? (
         <a
           href={url}
           target="_blank"

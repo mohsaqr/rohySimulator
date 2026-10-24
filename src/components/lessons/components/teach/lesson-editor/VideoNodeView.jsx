@@ -106,7 +106,7 @@ export const VideoNodeView = ({ node, deleteNode, editor }) => {
               preload="metadata"
               // The `#t=0.1` media fragment makes the browser seek to and
               // paint the first frame as a poster thumbnail before playback.
-              src={src ? `${resolveFileUrl(src)}#t=0.1` : undefined}
+              src={resolveFileUrl(src) ? `${resolveFileUrl(src)}#t=0.1` : undefined}
               className="absolute inset-0 w-full h-full"
               style={{ objectFit: 'contain' }}
             />
