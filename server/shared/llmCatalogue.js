@@ -37,7 +37,10 @@ export const LLM_PROVIDERS = {
     groq:       { name: 'Groq',                        defaultBase: 'https://api.groq.com/openai/v1',                                      needsKey: true,  modelRequired: true,  keyPrefix: 'gsk_',    apiShape: 'openai',    group: 'cloud' },
     together:   { name: 'Together AI',                 defaultBase: 'https://api.together.xyz/v1',                                         needsKey: true,  modelRequired: true,  keyPrefix: '',        apiShape: 'openai',    group: 'cloud' },
     azure:      { name: 'Azure OpenAI',               defaultBase: 'https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT', needsKey: true, modelRequired: false, keyPrefix: '',    apiShape: 'openai',    group: 'cloud' },
-    custom:     { name: 'Custom OpenAI-Compatible',   defaultBase: 'http://localhost:8000/v1',                                            needsKey: false, modelRequired: false, keyPrefix: '',        apiShape: 'openai',    group: 'other' }
+    // A custom server may be a local one with no auth or a hosted gateway that
+    // requires a key (e.g. a GPU host behind a proxy): the key is OPTIONAL —
+    // offered in the forms, never required.
+    custom:     { name: 'Custom OpenAI-Compatible',   defaultBase: 'http://localhost:8000/v1',                                            needsKey: false, optionalKey: true, modelRequired: false, keyPrefix: '', apiShape: 'openai', group: 'other' }
 };
 
 // Curated model catalogue per provider, newest first. Providers whose model is

@@ -35,6 +35,14 @@ describe('LLM_PROVIDERS', () => {
         expect(['local', 'cloud', 'other']).toContain(p.group);
     });
 
+    it('only the custom provider takes an optional key, and optional never means required', () => {
+        // A custom OpenAI-compatible server may be a hosted gateway that needs
+        // a key: the forms must offer the field without demanding it.
+        const optional = PROVIDER_KEYS.filter(k => LLM_PROVIDERS[k].optionalKey === true);
+        expect(optional).toEqual(['custom']);
+        for (const k of optional) expect(LLM_PROVIDERS[k].needsKey).toBe(false);
+    });
+
     it('only anthropic uses the anthropic request shape', () => {
         const anthropicShaped = PROVIDER_KEYS.filter(k => LLM_PROVIDERS[k].apiShape === 'anthropic');
         expect(anthropicShaped).toEqual(['anthropic']);

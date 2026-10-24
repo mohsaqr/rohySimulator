@@ -1568,7 +1568,11 @@ router.post('/platform-settings/llm/models/detect', authenticateToken, requireAd
     try {
         const provider = req.body?.provider || await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
         const baseUrl = (req.body?.baseUrl ?? await getPlatformSetting('llm_base_url')) || DEFAULT_LLM_SETTINGS.baseUrl;
-        const apiKey = (req.body?.apiKey ?? await getPlatformSetting('llm_api_key')) || '';
+        // The settings form holds the REDACTED placeholder for a saved key (the
+        // GET never returns the key itself) and sends it back here; that means
+        // "use the saved key", not a key called "[redacted]".
+        const bodyKey = req.body?.apiKey;
+        const apiKey = ((bodyKey === REDACTED ? undefined : bodyKey) ?? await getPlatformSetting('llm_api_key')) || '';
 
         if (provider === 'anthropic') {
             // Anthropic has no OpenAI-style /models list to enumerate here; the
