@@ -451,6 +451,8 @@
   "llm_system_prompt_placeholder": "Instrucciones enviadas con cada conversación (por ejemplo, 'Eres un paciente simulado...')",
   "llm_system_prompt_template": "Plantilla de Prompts del Sistema",
   "llm_temperature": "Temperatura",
+  "llm_thinking_off": "Desactivar el razonamiento del modelo",
+  "llm_thinking_off_help": "El modelo responde de inmediato en lugar de razonar primero, así que las respuestas (y la voz del paciente) empiezan segundos antes. Desmárquelo si las respuestas empeoran.",
   "llm_todays_usage": "Uso de Hoy",
   "llm_tokens_per_user": "Tokens por Usuario (Diario)",
   "llm_tokens_per_user_help": "Máximo de tokens que cada usuario puede usar por día (0 = ilimitado)",

@@ -43,6 +43,22 @@ export const LLM_PROVIDERS = {
     custom:     { name: 'Custom OpenAI-Compatible',   defaultBase: 'http://localhost:8000/v1',                                            needsKey: false, optionalKey: true, modelRequired: false, keyPrefix: '', apiShape: 'openai', group: 'other' }
 };
 
+// "Thinking off" (platform setting llm_thinking = 'off'): the request option
+// that turns a reasoning model's thinking off, per provider. Only providers
+// where it is known to work are listed — an OpenAI-style API rejects unknown
+// parameters, so nothing is sent to the others. A custom OpenAI-compatible
+// server (vLLM / SGLang behind a gateway, e.g. Qwen3) takes the chat template
+// switch: measured 2026-10-24 on qwen3.8-27b, first reply text at 0.24 s
+// instead of 2.4 s.
+export const THINKING_OFF_PARAMS = {
+    custom: { chat_template_kwargs: { enable_thinking: false } },
+};
+
+/** Request fields that turn thinking off for `provider`, or null when it has none. */
+export function thinkingOffParams(provider) {
+    return THINKING_OFF_PARAMS[provider] ?? null;
+}
+
 // Curated model catalogue per provider, newest first. Providers whose model is
 // entirely deployment-specific (lmstudio, azure, custom) get [] — the picker
 // falls straight through to the "Custom…" free-text field for those.

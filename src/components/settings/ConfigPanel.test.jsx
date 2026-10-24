@@ -880,6 +880,19 @@ describe('ConfigPanel — API key field for a custom OpenAI-compatible server', 
         expect(puts[0]).toMatchObject({ provider: 'custom', apiKey: '' });
     });
 
+    it('a custom server offers "thinking off", which saves as thinking: off', async () => {
+        const puts = serveLlm('custom', { thinking: 'default' });
+        mount({ initialTab: 'platform' });
+        await waitForAdmin();
+        fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
+        const box = await screen.findByRole('checkbox', { name: /thinking off/i });
+        expect(box).not.toBeChecked();
+        fireEvent.click(box);
+        fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+        await waitFor(() => expect(puts.length).toBeGreaterThan(0));
+        expect(puts[0]).toMatchObject({ provider: 'custom', thinking: 'off' });
+    });
+
     it('a local LM Studio server still shows no key field', async () => {
         serveLlm('lmstudio', { baseUrl: 'http://localhost:1234/v1' });
         mount({ initialTab: 'platform' });
@@ -887,6 +900,8 @@ describe('ConfigPanel — API key field for a custom OpenAI-compatible server', 
         fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
         await screen.findByLabelText('Model name');
         expect(screen.queryByPlaceholderText('API key')).toBeNull();
+        // No known thinking switch for LM Studio, so no checkbox either.
+        expect(screen.queryByRole('checkbox', { name: /thinking off/i })).toBeNull();
     });
 });
 
