@@ -61,14 +61,11 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up QEMU (multi-arch)
-        uses: docker/setup-qemu-action@v3
-
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Resolve release tag
         id: tag
         run: |
@@ -79,7 +76,7 @@ jobs:
           fi
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -87,7 +84,7 @@ jobs:
 
       - name: Build and push image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           file: deploy/docker/Dockerfile
@@ -127,8 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Resolve release tag
         id: tag
         run: |
@@ -138,7 +134,7 @@ jobs:
             echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -243,7 +239,7 @@ jobs:
           echo "----"; head -60 release-notes.md
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.tag.outputs.ref }}
           fail_on_unmatched_files: true
@@ -287,8 +283,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Resolve release tag
         id: tag
         run: |
@@ -299,7 +294,7 @@ jobs:
           fi
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -311,15 +306,21 @@ jobs:
           docker image inspect ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }} \
             --format '{{.Architecture}} {{.Os}} size={{.Size}}'
 
+      # The first admin comes from ROHY_ADMIN_* with a per-run password, the
+      # way an operator provisions one; ALLOW_DEFAULT_USERS=1 (admin/admin123)
+      # is refused in production.
       - name: Boot the container as if on a fresh box
         run: |
+          ROHY_VERIFY_ADMIN_PASSWORD="Ci-$(openssl rand -hex 16)-Aa1"
+          echo "::add-mask::$ROHY_VERIFY_ADMIN_PASSWORD"
           docker run -d \
             --name rohy-verify \
             -p 4000:4000 \
             -e JWT_SECRET="$(openssl rand -hex 32)" \
             -e NODE_ENV=production \
             -e FRONTEND_URL=http://localhost:4000 \
-            -e ALLOW_DEFAULT_USERS=1 \
+            -e ROHY_ADMIN_USERNAME=admin \
+            -e ROHY_ADMIN_PASSWORD="$ROHY_VERIFY_ADMIN_PASSWORD" \
             -e OYON_ENABLED=1 \
             ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
 
@@ -405,8 +406,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Resolve release tag
         id: tag
         run: |
@@ -417,7 +417,7 @@ jobs:
           fi
 
       - name: Log in to GHCR (to pull the just-pushed image)
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -436,7 +436,7 @@ jobs:
           ls -la "$OUT"
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.tag.outputs.ref }}
           fail_on_unmatched_files: true

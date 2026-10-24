@@ -13,8 +13,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken } from '../utils/authHttp.js';
 import sqlite3 from 'sqlite3';
 
 const SECRET = 'oyon-signal-settings-secret';
@@ -61,8 +61,9 @@ describe('Oyon 3 signal settings', () => {
         const admin = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oss_admin']);
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oss_stu']);
         await dbClose(db);
-        adminTok = jwt.sign({ id: admin.id, username: 'oss_admin', role: 'admin', tenant_id: 1 }, SECRET, { expiresIn: '1h', jwtid: 'ss-a' });
-        studentTok = jwt.sign({ id: stu.id, username: 'oss_stu', role: 'student', tenant_id: 1 }, SECRET, { expiresIn: '1h', jwtid: 'ss-s' });
+        // mintToken signs AND records the active_sessions row authenticateToken requires.
+        adminTok = await mintToken(server.dbPath, { id: admin.id, username: 'oss_admin', role: 'admin', tenant_id: 1 }, SECRET, { jti: 'ss-a' });
+        studentTok = await mintToken(server.dbPath, { id: stu.id, username: 'oss_stu', role: 'student', tenant_id: 1 }, SECRET, { jti: 'ss-s' });
     });
 
     afterAll(async () => { if (server) await server.close(); });

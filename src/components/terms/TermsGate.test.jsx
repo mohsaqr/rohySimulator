@@ -20,7 +20,7 @@ vi.mock('../../services/apiClient', () => {
     class ApiError extends Error {
         constructor(message, { status = 0 } = {}) { super(message); this.status = status; }
     }
-    return { apiFetch: vi.fn(), ApiError };
+    return { apiFetch: vi.fn(), ApiError, TERMS_REQUIRED_EVENT: 'rohy:terms-required' };
 });
 
 const TERMS = { required: true, title: 'Rohy terms', body: '## 1. One\n\nText.', version: '1.0', accepted: false, pending: true, lang: 'de', is_fallback: false };
@@ -110,6 +110,22 @@ describe('TermsGate', () => {
         apiFetch.mockRejectedValue(new Error('offline'));
         renderGate();
         expect(await screen.findByTestId('main-app')).toBeInTheDocument();
+    });
+
+    // Regression lock: security audit 2026-10-24 — the server now refuses every
+    // non-exempt route with 451 terms_required; apiClient announces it on the
+    // window and the gate re-probes, so a request a provider fired early (or an
+    // admin raising the version mid-session) shows the agreement.
+    it('re-probes and shows the agreement when a request is refused with 451 terms_required', async () => {
+        let pending = false;
+        apiFetch.mockImplementation(() => Promise.resolve({ terms: pending ? TERMS : { ...TERMS, required: false, pending: false } }));
+        renderGate();
+        expect(await screen.findByTestId('main-app')).toBeInTheDocument();
+        pending = true;
+        window.dispatchEvent(new CustomEvent('rohy:terms-required'));
+        expect(await screen.findByText('Rohy terms')).toBeInTheDocument();
+        expect(screen.queryByTestId('main-app')).not.toBeInTheDocument();
+        expect(apiFetch).toHaveBeenCalledTimes(2);
     });
 
     it('asks for the agreement in the reader language and says so when English stands in', async () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
-import OyonCaptureWidget from './OyonCaptureWidget.jsx';
+import OyonCaptureWidget, { readConsentPref } from './OyonCaptureWidget.jsx';
 
 const mocks = vi.hoisted(() => ({
     apiFetch: vi.fn(),
@@ -97,5 +97,58 @@ describe('OyonCaptureWidget persistence gate', () => {
         expect(container.querySelector('oyon-app')).toBe(el);
         expect(mocks.loadOyonElement).toHaveBeenCalledTimes(1);
         mocks.language = 'en';
+    });
+
+    // Regression lock: readConsentPref treated "nothing stored" (and unreadable storage) as consent, and a failed preference fetch fell back to it, so affect windows were persisted for learners who never chose
+    describe('consent is only an explicit choice', () => {
+        async function runAndEmitWindow(container) {
+            await waitFor(() => expect(container.querySelector('oyon-app')).toBeTruthy());
+            const el = container.querySelector('oyon-app');
+            await act(async () => {
+                el.dispatchEvent(new CustomEvent('oyon:status', { detail: { state: 'running' } }));
+            });
+            await act(async () => {
+                el.dispatchEvent(new CustomEvent('oyon:window', {
+                    detail: { windows: [{ record_id: 'w-1', dominant_emotion: 'neutral' }] },
+                }));
+            });
+            // Let any (wrong) persistence call settle before asserting its absence.
+            await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+        }
+
+        it('reads missing, \'0\', garbage and unreadable storage as NOT consented', () => {
+            localStorage.removeItem('oyon.defaultConsent');
+            expect(readConsentPref()).toBe(false);
+            localStorage.setItem('oyon.defaultConsent', '0');
+            expect(readConsentPref()).toBe(false);
+            localStorage.setItem('oyon.defaultConsent', 'true');
+            expect(readConsentPref()).toBe(false);
+            localStorage.setItem('oyon.defaultConsent', '1');
+            expect(readConsentPref()).toBe(true);
+            const spy = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+            try { expect(readConsentPref()).toBe(false); } finally { spy.mockRestore(); }
+        });
+
+        it('persists nothing when no choice was ever stored', async () => {
+            localStorage.removeItem('oyon.defaultConsent');
+            const { container } = render(<OyonCaptureWidget sessionId="s-1" caseId="case-1" room="chat" />);
+            await runAndEmitWindow(container);
+            expect(apiCalls('/addons/oyon/consent')).toHaveLength(0);
+            expect(apiCalls('/addons/oyon/emotion-records')).toHaveLength(0);
+        });
+
+        it('persists nothing when the server preference cannot be read, even with a local \'1\'', async () => {
+            localStorage.setItem('oyon.defaultConsent', '1');
+            mocks.apiFetch.mockImplementation((url) => {
+                if (url === '/users/preferences') return Promise.reject(new Error('503'));
+                if (url === '/addons/oyon/config') return Promise.resolve({ enabled: true, runtime: {} });
+                return Promise.resolve({});
+            });
+            const { container } = render(<OyonCaptureWidget sessionId="s-1" caseId="case-1" room="chat" />);
+            await waitFor(() => expect(apiCalls('/users/preferences')).toHaveLength(1));
+            await runAndEmitWindow(container);
+            expect(apiCalls('/addons/oyon/consent')).toHaveLength(0);
+            expect(apiCalls('/addons/oyon/emotion-records')).toHaveLength(0);
+        });
     });
 });

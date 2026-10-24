@@ -747,6 +747,62 @@ async function seedAvatarDefaults() {
     }
 }
 
+// How many pre-migration snapshots to keep beside the database. Every release
+// that ships a migration adds one full copy of the database; left alone they
+// accumulate until the disk is full (which then breaks the next backup, and
+// the next migration with it). Five covers rolling back across several
+// releases; the operator's real backups are scripts/rohy-backup.sh.
+export const MIGRATION_BACKUPS_KEEP = 5;
+
+/**
+ * Remove all but the newest `keep` `<db>.bak.*` snapshots beside `databasePath`.
+ *
+ * Newest by modification time, with the name as the tie-break so the order is
+ * deterministic. Returns the paths removed; a listing or unlink failure is
+ * reported, not thrown — pruning is housekeeping, never a reason to fail a boot.
+ *
+ * @param {string} databasePath
+ * @param {object} [opts]
+ * @param {number} [opts.keep=MIGRATION_BACKUPS_KEEP]
+ * @param {object} [opts.log=dbLog]
+ * @returns {Promise<string[]>} the files that were removed
+ */
+export async function pruneMigrationBackups(databasePath, { keep = MIGRATION_BACKUPS_KEEP, log = dbLog } = {}) {
+    const fs = await import('node:fs/promises');
+    const dir = path.dirname(databasePath);
+    const prefix = `${path.basename(databasePath)}.bak.`;
+    let names;
+    try {
+        names = (await fs.readdir(dir)).filter((name) => name.startsWith(prefix));
+    } catch (err) {
+        log.warn('pre-migration backup prune skipped', { dir, error: err.message });
+        return [];
+    }
+    const stats = (await Promise.all(names.map(async (name) => {
+        const file = path.join(dir, name);
+        try {
+            const stat = await fs.stat(file);
+            return stat.isFile() ? { file, mtimeMs: stat.mtimeMs, name } : null;
+        } catch (err) {
+            log.warn('pre-migration backup not inspected', { backup_path: file, error: err.message });
+            return null;
+        }
+    }))).filter(Boolean);
+    stats.sort((a, b) => (b.mtimeMs - a.mtimeMs) || b.name.localeCompare(a.name));
+    const stale = stats.slice(keep);
+    const removed = [];
+    for (const { file } of stale) {
+        try {
+            await fs.unlink(file);
+            removed.push(file);
+        } catch (err) {
+            log.warn('pre-migration backup not removed', { backup_path: file, error: err.message });
+        }
+    }
+    if (removed.length) log.info('pre-migration backups pruned', { kept: keep, removed });
+    return removed;
+}
+
 // Migrations only — safe to run on every boot. Idempotent.
 //
 // Before running any migration that hasn't been applied yet, snapshot the
@@ -754,7 +810,11 @@ async function seedAvatarDefaults() {
 // if the migration corrupts data we can roll back by copying the snapshot
 // back over database.sqlite. Snapshot is skipped for in-memory DBs and when
 // ROHY_BACKUP_BEFORE_MIGRATE=0 (CI/test where DBs are throwaway anyway).
+// After the batch applies cleanly, older snapshots are pruned (see
+// pruneMigrationBackups) — the one just taken is always the newest, so it
+// survives.
 export async function runDbMigrations() {
+    let tookBackup = false;
     if (process.env.ROHY_BACKUP_BEFORE_MIGRATE !== '0' && dbPath !== ':memory:') {
         try {
             // Compare on-disk migration files vs schema_migrations to decide
@@ -774,6 +834,7 @@ export async function runDbMigrations() {
                 const backupPath = `${dbPath}.bak.${ts}.${targetVersion}`;
                 const fs = await import('node:fs/promises');
                 await fs.copyFile(dbPath, backupPath);
+                tookBackup = true;
                 dbLog.info('pre-migration backup created', {
                     backup_path: backupPath,
                     pending_migrations: willApply.length,
@@ -789,6 +850,7 @@ export async function runDbMigrations() {
         }
     }
     await runMigrations(db);
+    if (tookBackup) await pruneMigrationBackups(dbPath);
 }
 
 

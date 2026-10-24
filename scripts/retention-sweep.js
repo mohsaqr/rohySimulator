@@ -1,121 +1,57 @@
 #!/usr/bin/env node
-import sqlite3 from 'sqlite3';
+/**
+ * DEPRECATED — use scripts/sweep-retention.js.
+ *
+ * This script used to delete rows from system_audit_log by age and then insert
+ * an unhashed "retention_sweep" row. Both break the tamper-evident audit chain
+ * (server/audit-chain.js: every row carries prev_hash/entry_hash, so a gap or
+ * an unhashed row makes `node scripts/verify-audit-chain.js` report tampering).
+ * sweep-retention.js never touches the audit table, so this file now only
+ * delegates to it, preserving the command line.
+ *
+ * Differences a caller must know:
+ *   - sweep-retention.js is a DRY RUN unless `--apply` is passed. Nothing is
+ *     deleted by `node scripts/retention-sweep.js` alone any more.
+ *   - The horizon is `--days N`. ROHY_RETENTION_DAYS / RETENTION_DAYS are
+ *     mapped onto it when no --days is given; the *_SECONDS variables are not
+ *     (the new script works in whole days), so a caller relying on them gets
+ *     the 365-day default and a warning here.
+ *   - system_audit_log is never swept. Audit retention needs a checkpoint-
+ *     and-snapshot design first (see sweep-retention.js header).
+ *   - The per-tenant Oyon sweep (oyon_settings.retention_days) that this
+ *     script also ran is kept: with --apply, after sweep-retention.js
+ *     succeeds, sweepOyonRetention() runs and its per-tenant counts go to
+ *     stderr (stdout stays sweep-retention.js's own output, so --json is
+ *     still one parseable document). Like before, that import needs
+ *     JWT_SECRET in the environment.
+ */
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sweepOyonRetention } from '../server/routes/_helpers.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const root = path.resolve(__dirname, '..');
-const dbPath = process.env.ROHY_DB || path.join(root, 'server', 'database.sqlite');
-const sqlite = sqlite3.verbose();
+const here = path.dirname(fileURLToPath(import.meta.url));
+const target = path.join(here, 'sweep-retention.js');
+const args = process.argv.slice(2);
 
-const TABLES = [
-    { table: 'event_log', column: 'timestamp' },
-    { table: 'learning_events', column: 'timestamp' },
-    { table: 'interactions', column: 'timestamp' },
-    { table: 'system_audit_log', column: 'timestamp' },
-    { table: 'alarm_events', column: 'triggered_at' },
-    { table: 'llm_request_log', column: 'request_timestamp' }
-];
+process.stderr.write('[retention-sweep] DEPRECATED: delegating to scripts/sweep-retention.js (dry run unless --apply; the audit log is never swept)\n');
 
-const db = new sqlite.Database(dbPath);
-
-function get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.get(sql, params, (err, row) => err ? reject(err) : resolve(row || null));
-    });
-}
-
-function run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function onRun(err) {
-            err ? reject(err) : resolve(this);
-        });
-    });
-}
-
-async function resolveRetentionSeconds() {
-    if (process.env.ROHY_RETENTION_SECONDS) return Number(process.env.ROHY_RETENTION_SECONDS);
-    if (process.env.RETENTION_SECONDS) return Number(process.env.RETENTION_SECONDS);
-    if (process.env.ROHY_RETENTION_DAYS) return Number(process.env.ROHY_RETENTION_DAYS) * 86400;
-    if (process.env.RETENTION_DAYS) return Number(process.env.RETENTION_DAYS) * 86400;
-
-    const row = await get(
-        `SELECT setting_value FROM platform_settings
-         WHERE setting_key IN ('retention_days', 'log_retention_days')
-         ORDER BY CASE setting_key WHEN 'retention_days' THEN 0 ELSE 1 END
-         LIMIT 1`
-    ).catch(() => null);
-    const days = row ? Number(row.setting_value) : 90;
-    return Number.isFinite(days) && days >= 0 ? days * 86400 : 90 * 86400;
-}
-
-function cutoffExpression(seconds) {
-    return `datetime('now', '-${Math.max(0, Math.floor(seconds))} seconds')`;
-}
-
-async function sweep() {
-    const seconds = await resolveRetentionSeconds();
-    if (!Number.isFinite(seconds) || seconds < 0) {
-        throw new Error('Retention window must be a non-negative number');
+if (!args.includes('--days')) {
+    const days = process.env.ROHY_RETENTION_DAYS || process.env.RETENTION_DAYS;
+    if (days) args.push('--days', String(days));
+    else if (process.env.ROHY_RETENTION_SECONDS || process.env.RETENTION_SECONDS) {
+        process.stderr.write('[retention-sweep] *_SECONDS retention variables are no longer honoured; pass --days N\n');
     }
-
-    const results = {};
-    await run('BEGIN');
-    try {
-        for (const entry of TABLES) {
-            const sql = `DELETE FROM ${entry.table} WHERE ${entry.column} < ${cutoffExpression(seconds)}`;
-            const result = await run(sql);
-            results[entry.table] = result.changes || 0;
-        }
-
-        // Oyon retention is per-tenant from oyon_settings.retention_days, not
-        // the global window above. Run the shared helper inside the same
-        // transaction so the audit row covers both global + Oyon deletes.
-        // Pass the local sqlite3-backed runner — sweepOyonRetention defaults
-        // to dbAdapter, which has its own connection unrelated to this script.
-        const oyonRunner = {
-            all: (sql, params) => new Promise((resolve, reject) => {
-                db.all(sql, params || [], (err, rows) => err ? reject(err) : resolve(rows || []));
-            }),
-            run: (sql, params) => new Promise((resolve, reject) => {
-                db.run(sql, params || [], function onRun(err) {
-                    err ? reject(err) : resolve({ changes: this.changes, lastID: this.lastID });
-                });
-            }),
-        };
-        const oyonDeletedByTenant = await sweepOyonRetention({ runner: oyonRunner });
-        const oyonTotal = Object.values(oyonDeletedByTenant).reduce((a, b) => a + Number(b || 0), 0);
-        results.oyon_emotion_records = oyonTotal;
-
-        await run(
-            `INSERT INTO system_audit_log
-             (user_id, username, action, resource_type, resource_id, resource_name,
-              new_value, status, metadata, tenant_id)
-             VALUES (NULL, 'retention-sweep', 'retention_sweep', 'retention', 'time_bounded_logs',
-                     'Retention sweep', ?, 'success', ?, 1)`,
-            [
-                JSON.stringify({ deleted: results, oyon_per_tenant: oyonDeletedByTenant }),
-                JSON.stringify({ retention_seconds: seconds, retention_days: seconds / 86400 })
-            ]
-        );
-        await run('COMMIT');
-    } catch (err) {
-        await run('ROLLBACK').catch(() => {});
-        throw err;
-    }
-
-    return { retention_seconds: seconds, retention_days: seconds / 86400, deleted: results };
 }
 
-sweep()
-    .then((result) => {
-        console.log(JSON.stringify(result, null, 2));
-        db.close();
-    })
-    .catch((err) => {
-        console.error(`[retention-sweep] ${err.message}`);
-        db.close();
-        process.exit(1);
-    });
+const result = spawnSync(process.execPath, [target, ...args], { stdio: 'inherit', env: process.env });
+if (result.status !== 0 || !args.includes('--apply')) process.exit(result.status ?? 1);
+
+try {
+    const { sweepOyonRetention } = await import('../server/routes/_helpers.js');
+    const deletedByTenant = await sweepOyonRetention();
+    process.stderr.write(`[retention-sweep] oyon_emotion_records deleted per tenant: ${JSON.stringify(deletedByTenant)}\n`);
+    process.exit(0);
+} catch (err) {
+    process.stderr.write(`[retention-sweep] oyon retention sweep failed: ${err.message}\n`);
+    process.exit(1);
+}

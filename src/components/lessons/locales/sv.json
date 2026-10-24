@@ -150,6 +150,7 @@
     "mcq_add_option": "Lägg till alternativ",
     "mcq_add_question": "Lägg till fråga",
     "mcq_check": "Kontrollera svaret",
+    "mcq_check_failed": "Svaret kunde inte kontrolleras. Försök igen.",
     "mcq_complete": "Självtestet är klart.",
     "mcq_correct": "Rätt!",
     "mcq_explanation_placeholder": "Förklaring som visas efter svaret (valfritt)",

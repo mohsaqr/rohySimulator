@@ -32,7 +32,13 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
-import { auditSuccess, dbAll, dbGet, dbRun, tenantId } from './_helpers.js';
+import { requireTermsAccepted, resetTermsGateCache } from '../middleware/termsGate.js';
+import { auditSuccess, dbAll, dbGet, dbRun, tenantId, requirePlatformAdmin } from './_helpers.js';
+
+// The server-side gate (451 until the current version is accepted) lives in
+// middleware/termsGate.js and runs inside authenticateToken; re-exported here so
+// a route that wants it explicitly can import it from the terms module.
+export { requireTermsAccepted };
 import { logger } from '../logger.js';
 import {
     DEFAULT_TERMS_BODY, DEFAULT_TERMS_TITLE, DEFAULT_TERMS_VERSION,
@@ -229,7 +235,10 @@ router.get('/platform-settings/terms', authenticateToken, requireAdmin, async (r
     }
 });
 
-router.put('/platform-settings/terms', authenticateToken, requireAdmin, async (req, res) => {
+// platform_settings is install-wide (no tenant_id): only an admin of the
+// default tenant may change the terms every tenant's users must accept
+// (security audit 2026-10-24, finding 9).
+router.put('/platform-settings/terms', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const body = req.body || {};
         const updates = {};
@@ -273,6 +282,9 @@ router.put('/platform-settings/terms', authenticateToken, requireAdmin, async (r
                 [key, value, req.user.id],
             );
         }
+        // The gate caches terms_required/terms_version for 30 s; an admin's
+        // change must bind on the very next request, not half a minute later.
+        resetTermsGateCache();
         const after = await readDraft();
         // Audited without the text itself: what matters is that the terms
         // changed, to which version, and by whom. The accepted text is already

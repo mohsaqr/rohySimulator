@@ -462,17 +462,20 @@ describe('synthesizeGoogleStream — error mapping', () => {
 
 describe('synthesizeGoogleStream — API key resolution', () => {
     let capturedUrl;
+    let capturedHeaders;
     let originalEnvTts;
     let originalEnvGoogle;
 
     beforeEach(() => {
         capturedUrl = null;
+        capturedHeaders = null;
         originalEnvTts = process.env.GOOGLE_TTS_API_KEY;
         originalEnvGoogle = process.env.GOOGLE_API_KEY;
         delete process.env.GOOGLE_TTS_API_KEY;
         delete process.env.GOOGLE_API_KEY;
-        vi.stubGlobal('fetch', vi.fn(async (url) => {
+        vi.stubGlobal('fetch', vi.fn(async (url, init) => {
             capturedUrl = url;
+            capturedHeaders = init?.headers || {};
             return makeGoogleResponse();
         }));
     });
@@ -495,15 +498,26 @@ describe('synthesizeGoogleStream — API key resolution', () => {
         await drain(synthesizeGoogleStream({
             text: 'hi', voice: 'en-US-Neural2-D', apiKey: 'caller-key', // ignored
         }));
-        expect(capturedUrl).toContain('key=env-key-wins');
-        expect(capturedUrl).not.toContain('caller-key');
+        expect(capturedHeaders['X-Goog-Api-Key']).toBe('env-key-wins');
+        expect(JSON.stringify(capturedHeaders)).not.toContain('caller-key');
     });
 
     it('caller-provided apiKey is used when no env vars are set', async () => {
         await drain(synthesizeGoogleStream({
             text: 'hi', voice: 'en-US-Neural2-D', apiKey: 'caller-fallback',
         }));
-        expect(capturedUrl).toContain('key=caller-fallback');
+        expect(capturedHeaders['X-Goog-Api-Key']).toBe('caller-fallback');
+    });
+
+    // Regression lock: the Google key travelled as `?key=` and so reached
+    // FetchTimeoutError messages and logs (security audit 2026-10-24, TTS-1).
+    it('never puts the API key in the URL', async () => {
+        await drain(synthesizeGoogleStream({
+            text: 'hi', voice: 'en-US-Neural2-D', apiKey: 'secret-google-key',
+        }));
+        expect(String(capturedUrl)).not.toContain('secret-google-key');
+        expect(String(capturedUrl)).not.toContain('key=');
+        expect(capturedHeaders['X-Goog-Api-Key']).toBe('secret-google-key');
     });
 
     it('throws code=NO_API_KEY when neither env nor caller key is set', async () => {

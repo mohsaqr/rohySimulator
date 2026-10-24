@@ -150,6 +150,7 @@
     "mcq_add_option": "Lisää vaihtoehto",
     "mcq_add_question": "Lisää kysymys",
     "mcq_check": "Tarkista vastaus",
+    "mcq_check_failed": "Vastausta ei voitu tarkistaa. Yritä uudelleen.",
     "mcq_complete": "Itsearviointi valmis.",
     "mcq_correct": "Oikein!",
     "mcq_explanation_placeholder": "Selitys, joka näytetään vastaamisen jälkeen (valinnainen)",

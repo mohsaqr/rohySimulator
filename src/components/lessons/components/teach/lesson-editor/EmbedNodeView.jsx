@@ -2,14 +2,10 @@ import { NodeViewWrapper } from '@tiptap/react';
 import { Trash2, MonitorPlay } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BlockCard } from './BlockCard';
+import { safeEmbedSrc } from '../../../utils/safeUrl';
 
-/** Only http/https iframes are allowed — never javascript:, data:, etc. */
-export const safeEmbedSrc = (raw) => {
-  const u = (raw || '').trim();
-  if (/^https?:\/\//i.test(u)) return u;
-  if (/^www\./i.test(u)) return `https://${u}`;
-  return '';
-};
+// Re-exported for VideoNodeView, which shares the iframe allow-list.
+export { safeEmbedSrc };
 
 /**
  * Generic external embed node — an iframe for H5P, Padlet, Genially, Google
@@ -26,6 +22,9 @@ export const EmbedNodeView = ({ node, deleteNode, editor }) => {
 
   const frame = src ? (
     <div className="relative w-full overflow-hidden rounded-lg bg-black" style={{ height }}>
+      {/* The sandbox has no allow-same-origin: with allow-scripts it would let a
+          same-origin embed climb out of its sandbox; a cross-origin embed never
+          needs it. */}
       <iframe
         src={src}
         title={t('block_embed', { defaultValue: 'Embedded content' })}
@@ -34,7 +33,7 @@ export const EmbedNodeView = ({ node, deleteNode, editor }) => {
         loading="lazy"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
         allowFullScreen
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+        sandbox="allow-scripts allow-popups allow-forms allow-presentation"
       />
     </div>
   ) : (

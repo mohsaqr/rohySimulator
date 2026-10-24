@@ -334,8 +334,11 @@ cmd_apply() {
   # 4. npm install + build
   # `npm install`, NOT `npm ci`: rohy's file: siblings (dynajs/oyon) make
   # npm ci's strict lock check environment-fragile — a lock valid on the
-  # build machine fails `npm ci` on a clean host. Every other supported
-  # path (Docker, bootstrap.sh, local-install.sh) already uses npm install.
+  # build machine fails `npm ci` on a clean host when the operator's dynajs
+  # checkout differs from the one the lock was written against.
+  # bootstrap.sh and local-install.sh use npm install for the same reason.
+  # The Docker image is the exception: it pins dynajs to a commit and
+  # verifies its version, so there `npm ci` is reliable and is used.
   # --silent dropped on purpose: it previously hid the install failure.
   step "npm install"
   ( cd "$ROHY_REPO_DIR" && npm install --prefer-offline --no-audit --no-fund ) \

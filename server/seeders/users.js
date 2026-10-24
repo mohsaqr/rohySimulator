@@ -8,7 +8,9 @@
  *   1. Operator-provisioned (ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD) — seeds
  *      a single admin with the operator's own credentials. Allowed in production.
  *   2. Development defaults (admin/admin123 + student/student123) — refused in
- *      production unless ALLOW_DEFAULT_USERS=1.
+ *      production. (ALLOW_DEFAULT_USERS=1 once overrode that; production boot
+ *      now refuses the flag outright in config/validateEnv.js, so the override
+ *      in seedUsers() no longer fires in a server that booted normally.)
  *
  * If neither applies, the instance boots with zero users and the first account
  * registered through the UI claims it as admin (see routes/auth-routes.js).

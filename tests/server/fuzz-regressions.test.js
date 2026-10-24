@@ -18,7 +18,7 @@ import net from 'node:net';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { startTestServer } from '../utils/startTestServer.js';
-import { closeDb, openDb, run } from '../utils/authHttp.js';
+import { closeDb, mintToken, openDb, recordSession, run } from '../utils/authHttp.js';
 import { missingField } from '../../server/routes/_helpers.js';
 
 const TEST_JWT_SECRET = 'rohy-fuzz-regressions-secret';
@@ -56,6 +56,7 @@ describe('missingField', () => {
 describe('API fuzzer findings stay fixed', () => {
     let server;
     let educatorToken;
+    let adminToken;
 
     beforeAll(async () => {
         const deadPort = await closedPort();
@@ -72,6 +73,15 @@ describe('API fuzzer findings stay fixed', () => {
             { id: user.id, username: user.username, email: user.email, role: 'educator', tenant_id: 1 },
             TEST_JWT_SECRET, { expiresIn: '1h' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(db, educatorToken, { userId: user.id });
+        // The /master/* catalogue writes are admin-only (security audit
+        // 2026-10-24): an educator now gets 403 there before any validation.
+        const adminInsert = await run(db, `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
+            VALUES ('fuzzadmin', 'Fuzz Admin', ?, 'fuzzadmin@example.com', 'admin', 'active', 1)`, [hash]);
+        adminToken = await mintToken(db,
+            { id: adminInsert.lastID, username: 'fuzzadmin', email: 'fuzzadmin@example.com', role: 'admin', tenant_id: 1 },
+            TEST_JWT_SECRET);
         // A provider that cannot be reached: nothing listens on deadPort.
         await run(db, `INSERT OR REPLACE INTO platform_settings (setting_key, setting_value) VALUES
             ('llm_enabled', 'true'), ('llm_provider', 'custom'),
@@ -105,14 +115,14 @@ describe('API fuzzer findings stay fixed', () => {
     // Regression lock: each of these inserted NULL into a NOT NULL column and
     // answered SQLITE_CONSTRAINT as 500.
     it.each([
-        ['/api/cases', 'name'],
-        ['/api/master/body-regions', 'region_id'],
-        ['/api/master/scenario-templates', 'template_id'],
-        ['/api/master/lab-tests', 'test_name'],
-        ['/api/master/medications', 'generic_name'],
-        ['/api/settings/log', 'setting_type'],
-    ])('%s without %s is a 400 naming the field', async (path, field) => {
-        const res = await post(path, { body: {} });
+        ['/api/cases', 'name', 'educator'],
+        ['/api/master/body-regions', 'region_id', 'admin'],
+        ['/api/master/scenario-templates', 'template_id', 'admin'],
+        ['/api/master/lab-tests', 'test_name', 'admin'],
+        ['/api/master/medications', 'generic_name', 'admin'],
+        ['/api/settings/log', 'setting_type', 'educator'],
+    ])('%s without %s is a 400 naming the field', async (path, field, as) => {
+        const res = await post(path, { body: {}, token: as === 'admin' ? adminToken : educatorToken });
         expect(res.status).toBe(400);
         expect((await res.json()).error).toBe(`${field} is required`);
     });

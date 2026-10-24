@@ -61,6 +61,31 @@ describe('GET /api/health/plugins', () => {
         } finally { await server.close(); await wrong.close(); await dark.close(); }
     }, 60_000);
 
+    // Regression lock: every unauthenticated GET /api/health/plugins made two outbound fetches per configured origin, so a client polling it in a loop had rohy hammer the origin (security audit 2026-10-24)
+    it('caches the origin probe: repeated requests inside the window fetch the origin once, with the same answer', async () => {
+        const hits = { content: 0, catalog: 0 };
+        const upstream = await startOrigin((req, res) => {
+            if (req.url === '/content.json') hits.content += 1;
+            if (req.url === '/catalog.json') hits.catalog += 1;
+            return goodBundle()(req, res);
+        });
+        const server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: `pathology=${upstream.origin}` } });
+        try {
+            const bodies = [];
+            for (let i = 0; i < 5; i++) {
+                const res = await fetch(`${server.baseUrl}/api/health/plugins`);
+                expect(res.status).toBe(200);
+                bodies.push(await res.json());
+            }
+            expect(hits).toEqual({ content: 1, catalog: 1 });
+            // Same response shape every time — the cache is invisible to the caller.
+            for (const body of bodies) {
+                expect(body.plugins.pathology).toMatchObject({ reachable: true, status: 200, content_version: '2026-08-29a' });
+                expect(Object.keys(body).sort()).toEqual(Object.keys(bodies[0]).sort());
+            }
+        } finally { await server.close(); await upstream.close(); }
+    }, 60_000);
+
     it('with no origins configured it is 200 with nothing to report — a fresh install is healthy', async () => {
         const server = await startTestServer({ seed: false, env: { ROHY_PLUGIN_ORIGINS: '' } });
         try {

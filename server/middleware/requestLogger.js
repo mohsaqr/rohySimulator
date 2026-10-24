@@ -17,6 +17,27 @@ function bytesOut(res, measured) {
     return headerNumber(header) || measured || 0;
 }
 
+// Paths that carry a credential. An invite link is `/auth/invite/<token>`
+// (registration-routes.js), and some clients pass tokens as `?token=`. Logged
+// verbatim, the request log would hold every invite token ever previewed —
+// readable by anyone with log access, usable by anyone until it is claimed.
+const INVITE_TOKEN_PATH_RE = /(\/auth\/invite\/)[^/?#]+/i;
+const TOKEN_QUERY_RE = /([?&](?:[a-z_]*token)=)[^&#]*/gi;
+
+/**
+ * The request path as it is safe to log: credential-bearing segments and
+ * query values replaced with `[redacted]`, everything else untouched.
+ *
+ * @param {string} url  req.originalUrl or req.url
+ * @returns {string}
+ */
+export function redactRequestPath(url) {
+    if (typeof url !== 'string') return url;
+    return url
+        .replace(INVITE_TOKEN_PATH_RE, '$1[redacted]')
+        .replace(TOKEN_QUERY_RE, '$1[redacted]');
+}
+
 function userFields(req) {
     return {
         user_id: req.user?.id || null,
@@ -60,7 +81,7 @@ export function requestLoggerMiddleware(options = {}) {
             const fields = {
                 request_id: req.request_id || null,
                 method: req.method,
-                path: req.originalUrl || req.url,
+                path: redactRequestPath(req.originalUrl || req.url),
                 status,
                 duration_ms: Number(durationMs.toFixed(3)),
                 bytes_in: bytesIn(req),

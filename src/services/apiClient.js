@@ -25,6 +25,9 @@
 import { apiUrl } from '../config/api.js';
 import { isTabStale } from './tabIdentity.js';
 
+/** Window event fired when a request is refused with 451 terms_required. */
+export const TERMS_REQUIRED_EVENT = 'rohy:terms-required';
+
 export class ApiError extends Error {
     constructor(message, { status = 0, code = null, body = null, url = null } = {}) {
         super(message);
@@ -277,9 +280,16 @@ export async function apiFetch(path, options = {}) {
 
     if (!response.ok) {
         const { body: errBody, message } = await readErrorBody(response);
+        const code = (errBody && typeof errBody === 'object' && errBody.code) || `HTTP_${response.status}`;
+        // The server refuses every non-exempt route until the terms of use are
+        // accepted (451, server/middleware/termsGate.js). Tell the gate so it
+        // shows the agreement; the caller still gets its ApiError.
+        if (response.status === 451 && code === 'terms_required' && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(TERMS_REQUIRED_EVENT));
+        }
         throw new ApiError(message, {
             status: response.status,
-            code: (errBody && typeof errBody === 'object' && errBody.code) || `HTTP_${response.status}`,
+            code,
             body: errBody,
             url,
         });

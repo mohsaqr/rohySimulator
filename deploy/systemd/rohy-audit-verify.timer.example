@@ -1,0 +1,16 @@
+# /etc/systemd/system/rohy-audit-verify.timer — runs rohy-audit-verify.service
+# once a day. See that unit for installation and what a failure means.
+#
+# Daily keeps the gap between "a row was altered" and "someone noticed"
+# to at most a day. Persistent=yes runs a missed check at the next boot.
+
+[Unit]
+Description=rohy — daily audit-chain verification
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=15min
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

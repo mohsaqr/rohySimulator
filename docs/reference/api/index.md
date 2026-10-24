@@ -23,7 +23,7 @@
 | Area | Endpoints |
 |------|-----------|
 | [admin](./admin.md) | 58 |
-| [agents](./agents.md) | 23 |
+| [agents](./agents.md) | 22 |
 | [analytics](./analytics.md) | 51 |
 | [auth](./auth.md) | 7 |
 | [case-course](./case-course.md) | 3 |
@@ -33,7 +33,7 @@
 | [cohorts](./cohorts.md) | 33 |
 | [health](./health.md) | 3 |
 | [help](./help.md) | 2 |
-| [lessons](./lessons.md) | 19 |
+| [lessons](./lessons.md) | 20 |
 | [notes](./notes.md) | 2 |
 | [notification](./notification.md) | 2 |
 | [orders](./orders.md) | 38 |

@@ -156,6 +156,23 @@ export default router;
 // manifest paths only), and this endpoint never returns the origin's body.
 const ORIGIN_PROBE_TIMEOUT_MS = 2500;
 
+// Each probe is two outbound requests per origin, and this route is public
+// and unauthenticated: a client hitting it in a loop would have rohy fetch the
+// origin in a loop (amplified SSRF-shaped traffic from the server's own
+// address). The probe result is cached per process for a short window; a
+// deploy verify re-polling every few seconds still sees a fresh-enough answer.
+export const PLUGIN_PROBE_CACHE_MS = 30_000;
+const probeCache = new Map();
+
+async function probeOriginCached(origin, pluginId, now = Date.now()) {
+    const key = `${pluginId}\u0000${origin}`;
+    const hit = probeCache.get(key);
+    if (hit && now - hit.at < PLUGIN_PROBE_CACHE_MS) return hit.result;
+    const result = await probeOrigin(origin, pluginId);
+    probeCache.set(key, { at: now, result });
+    return result;
+}
+
 async function probeOrigin(origin, pluginId) {
     const started = Date.now();
     try {
@@ -286,7 +303,7 @@ router.get('/health/plugins', async (req, res) => {
     const configured = [...origins.keys()];
     const entries = await Promise.all(configured.map(async (id) => {
         const manifest = PLUGIN_MANIFESTS.find((m) => m.id === id) || null;
-        const probe = await probeOrigin(origins.get(id), id);
+        const probe = await probeOriginCached(origins.get(id), id);
         // The origin must describe itself as THIS plugin's content: a bundle
         // for another plugin on the right port is the kind of mistake that
         // otherwise surfaces as "every slide is a 404".

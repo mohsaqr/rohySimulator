@@ -6,6 +6,9 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now rohy
 #
+# Companion units: rohy-audit-verify.service + .timer (same directory) verify
+# the tamper-evident audit chain once a day — install them alongside this one.
+#
 # All env vars come from /etc/rohy/env (use deploy/env.example as the
 # canonical reference). Don't put secrets in this file — it lives in
 # /etc/systemd/ which is world-readable.
@@ -35,6 +38,11 @@ EnvironmentFile=/etc/rohy/env
 # fall back to NODE_ENV=development with a relative ROHY_DB.
 Environment=NODE_ENV=production
 Environment=PORT=4000
+# nginx runs on this host, so the Node listener needs no network exposure of
+# its own: bound to loopback, nothing can reach PORT around nginx (and around
+# its TLS and X-Forwarded-For handling). Values in /etc/rohy/env override
+# this line — set ROHY_BIND=0.0.0.0 there only if no proxy is in front.
+Environment=ROHY_BIND=127.0.0.1
 
 # CRITICAL — keep the Hugging Face Kokoro cache OUTSIDE node_modules so
 # `npm ci` during deploy doesn't wipe the model. Pre-create this dir with
@@ -74,8 +82,24 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-# Allow writes only where rohy actually needs them.
-ReadWritePaths=/opt/data/rohy /var/cache/rohy-hf /opt/repos/rohy
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+# Node serves on an unprivileged port and needs no Linux capability at all.
+CapabilityBoundingSet=
+# IPv4/IPv6 for HTTP and outbound LLM/TTS calls, AF_UNIX for local sockets.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+# Allow writes only where rohy actually needs them. The repo itself is NOT
+# writable: a compromised process must not be able to rewrite server/*.js or
+# the built frontend. The runtime-writable spots inside it are listed one by
+# one (the "-" prefix tolerates a path that does not exist yet):
+#   public/uploads              media uploads (no env var relocates it)
+#   public/bodymap-regions.json body-map regions saved from Settings
+#   server/data                 lab database edits, Piper voices
+# Plugin libraries (ROHY_PLUGIN_LIBRARY_DIRS) outside /opt/data/rohy need
+# their own entry here.
+ReadWritePaths=/opt/data/rohy /var/cache/rohy-hf
+ReadWritePaths=/opt/repos/rohy/public/uploads -/opt/repos/rohy/public/bodymap-regions.json -/opt/repos/rohy/server/data
 
 [Install]
 WantedBy=multi-user.target

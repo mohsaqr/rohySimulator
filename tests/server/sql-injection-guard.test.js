@@ -137,13 +137,13 @@ const ALLOWLIST = [
     },
     {
         file: 'server/routes/analytics-routes.js',
-        lineSubstring: 'FROM "${t.name}"',
-        why: '/system-log/tables — t.name is enumerated from sqlite_master, never from a request.',
+        lineSubstring: 'FROM "${name}" WHERE tenant_id = ?',
+        why: '/system-log/tables — name iterates SYSTEM_LOG_TABLES (a constant built from EXPORT_SOURCES), never a request value.',
     },
     {
         file: 'server/routes/analytics-routes.js',
-        lineSubstring: 'FROM "${name}" ${where}',
-        why: '/system-log/table/:name — name is validated against sqlite_master existence on the line above (404 otherwise) before any SQL is built; orderClause comes from a hardcoded { id | timestamp | created_at } selection.',
+        lineSubstring: 'FROM "${cfg.table}" WHERE tenant_id = ? ORDER BY "${orderCol}"',
+        why: '/system-log/table/:name — cfg comes from SYSTEM_LOG_TABLES (constant allowlist; 404 otherwise) and orderCol is "id" or cfg.dateCol, both server constants.',
     },
     {
         file: 'server/routes/analytics-routes.js',

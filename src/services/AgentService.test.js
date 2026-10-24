@@ -106,11 +106,6 @@ const handlers = [
         if (nextResponse) return nextResponse();
         return okJson({ reset: true, id: 'tpl-1' });
     }),
-    http.post('*/api/agents/templates/:id/test-llm', async ({ request }) => {
-        await recordRequest(request);
-        if (nextResponse) return nextResponse();
-        return okJson({ ok: true, latency_ms: 123 });
-    }),
 
     // ---- Case agents ----
     http.get('*/api/cases/:caseId/agents', async ({ request }) => {
@@ -252,7 +247,7 @@ describe('AgentService — module shape', () => {
         // (auth headers now come from the central client, not per-service).
         const expected = [
             'getTemplates', 'getTemplate', 'createTemplate', 'updateTemplate',
-            'deleteTemplate', 'duplicateTemplate', 'resetTemplateToDefault', 'testLLM',
+            'deleteTemplate', 'duplicateTemplate', 'resetTemplateToDefault',
             'getCaseAgents', 'addAgentToCase', 'updateCaseAgent',
             'removeAgentFromCase', 'addDefaultAgentsToCase',
             'getSessionAgents', 'pageAgent', 'arriveAgent', 'departAgent', 'getAgentStatus',
@@ -344,15 +339,6 @@ describe('AgentService templates — happy paths', () => {
         expect(req.body).toBeNull(); // no JSON body sent
         expect(req.headers.authorization).toBe(`Bearer ${BEARER}`);
     });
-
-    it('testLLM: POST /api/agents/templates/:id/test-llm returns server payload', async () => {
-        const out = await AgentService.testLLM('tpl-1');
-        expect(out).toEqual({ ok: true, latency_ms: 123 });
-
-        const req = lastRequest({ method: 'POST', pathEndsWith: '/api/agents/templates/tpl-1/test-llm' });
-        expect(req).toBeTruthy();
-        expect(req.body).toBeNull();
-    });
 });
 
 describe('AgentService templates — error paths', () => {
@@ -397,9 +383,10 @@ describe('AgentService templates — error paths', () => {
             .rejects.toThrow('only default templates can be reset');
     });
 
-    it('testLLM: rethrows server { error } message', async () => {
-        nextResponse = () => errJson('provider unreachable', 502);
-        await expect(AgentService.testLLM('id')).rejects.toThrow('provider unreachable');
+    // Regression lock: the test-llm route was removed server-side (audit
+    // 2026-10-24); the client must not keep a method that calls it.
+    it('testLLM is gone with its server route', () => {
+        expect(AgentService.testLLM).toBeUndefined();
     });
 
     it('createTemplate: surfaces fetch network rejections as Error', async () => {

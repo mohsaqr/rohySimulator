@@ -21,6 +21,7 @@ import {
     generateCsrfToken,
 } from '../middleware/csrf.js';
 import { sqliteTsToIso } from '../sqliteTime.js';
+import { cookieSecure } from '../middleware/authTtl.js';
 
 // Account lockout: after MAX_FAILED_LOGINS consecutive failed attempts the
 // account is locked for LOCKOUT_MINUTES. Restored after the routes.js split
@@ -28,6 +29,46 @@ import { sqliteTsToIso } from '../sqliteTime.js';
 // threshold branch ReferenceError'd in production.
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MINUTES = 15;
+
+// Compared against when the username does not exist, so an unknown name costs
+// the same bcrypt work as a wrong password for a real one. Before this the
+// unknown-username branch returned in microseconds and the wrong-password
+// branch in ~100 ms — a timing oracle for which accounts exist (security
+// audit 2026-10-24). Cost 10 matches the hashes register/create write.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('rohy-dummy', 10);
+
+// How much of a submitted username is kept in login_logs for a failed attempt.
+// The column is a free-text copy of whatever the client sent; without a cap a
+// single request could park kilobytes per row in a table nobody prunes.
+const LOGIN_LOG_USERNAME_MAX = 128;
+
+// Identity rules for self-registration. Usernames are what people type at
+// login and what every log and audit row names, so they are a conservative
+// ASCII set; emails are trimmed and lower-cased so `Alice@Example.com` and
+// `alice@example.com` are one account, not two.
+export const USERNAME_PATTERN = /^[A-Za-z0-9_.-]{3,64}$/;
+export const EMAIL_MAX_LENGTH = 254;
+
+/**
+ * Normalise a submitted username/email pair and say what is wrong with it.
+ * @returns {{username: string, email: string, error: string|null}}
+ */
+export function normalizeIdentity({ username, email }) {
+    const user = typeof username === 'string' ? username.trim() : '';
+    const mail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!USERNAME_PATTERN.test(user)) {
+        return {
+            username: user, email: mail,
+            error: 'Username must be 3-64 characters: letters, digits, underscore, dot or hyphen',
+        };
+    }
+    const at = mail.indexOf('@');
+    const oneAt = at > 0 && at < mail.length - 1 && at === mail.lastIndexOf('@');
+    if (mail.length > EMAIL_MAX_LENGTH || !oneAt || /\s/.test(mail)) {
+        return { username: user, email: mail, error: 'A valid email address is required' };
+    }
+    return { username: user, email: mail, error: null };
+}
 
 
 
@@ -59,7 +100,8 @@ import {
 function authCookieOptions(maxAgeSeconds = authTtlSeconds()) {
     return {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        // Shared with the rohy_csrf cookie — see cookieSecure() in authTtl.js.
+        secure: cookieSecure(),
         sameSite: 'lax',
         path: '/',
         maxAge: maxAgeSeconds * 1000,
@@ -162,13 +204,23 @@ router.get('/auth/registration-policy', policyLimiter, async (req, res) => {
 });
 
 router.post('/auth/register', registerLimiter, async (req, res) => {
-    const { username, name, email, password, role = 'student' } = req.body;
+    const { name, password, role = 'student' } = req.body || {};
     const requestedRole = roleForStorage(role);
 
     // Validation
-    if (!username || !email || !password) {
+    if (!req.body?.username || !req.body?.email || !password) {
         return res.status(400).json({ error: 'Username, email, and password are required' });
     }
+    if (typeof password !== 'string') {
+        return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+    // Trimmed, lower-cased email, bounded username alphabet — stored and
+    // compared in this normalised form from here on.
+    const identity = normalizeIdentity(req.body);
+    if (identity.error) {
+        return res.status(400).json({ error: identity.error, code: 'invalid_identity' });
+    }
+    const { username, email } = identity;
 
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
@@ -419,6 +471,11 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
             res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
+            // The JWT is returned in the body as well as in the HttpOnly cookie
+            // (also on login and refresh). Reviewed in the security audit of
+            // 2026-10-24 and kept: the client stores it only under an explicit
+            // "remember me" opt-in, and it is what the bearer-header path and
+            // the test/bench tooling authenticate with.
             res.status(201).json({
                 message: 'User registered successfully',
                 user: { id: user.id, username, name, email, role: finalRole, tenant_id: defaultTenantId },
@@ -432,14 +489,28 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 
 // POST /api/users/create - Create user (Admin only, no auto-login)
 
+// The login response is deliberately uniform. Whatever the real reason — the
+// username does not exist, the password is wrong, the account is disabled or
+// locked — a caller who does not know the password gets the same 401 after the
+// same bcrypt work. Disabled (403) and locked (423) are only ever told to
+// someone who has just proved they know the password: those codes exist so a
+// legitimate owner learns why they cannot get in, not so a stranger can learn
+// which usernames are worth guessing (security audit 2026-10-24). The real
+// reason still goes to login_logs and the learning-event stream.
 router.post('/auth/login', authLimiter, (req, res) => {
-    const { username, password } = req.body;
+    const rawUsername = req.body?.username;
+    const password = req.body?.password;
     const ipAddress = req.ip || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
-    if (!username || !password) {
+    if (typeof rawUsername !== 'string' || typeof password !== 'string' || !rawUsername.trim() || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
     }
+    // The same trim registration applies, so a copy-pasted name with a
+    // trailing space still finds its account.
+    const username = rawUsername.trim();
+    const loggedUsername = username.slice(0, LOGIN_LOG_USERNAME_MAX);
+    const generic401 = () => res.status(401).json({ error: 'Invalid username or password' });
 
     const sql = `SELECT * FROM users WHERE username = ?`;
     dbAdapter.get(sql, [username], async (err, user) => {
@@ -448,62 +519,73 @@ router.post('/auth/login', authLimiter, (req, res) => {
         }
 
         if (!user) {
+            try {
+                // Burn the same bcrypt time a real account would — see
+                // DUMMY_PASSWORD_HASH.
+                await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+            } catch (e) {
+                (req.log || authLog).warn('dummy password compare failed', { error: e.message });
+            }
             // Log failed login attempt — dual-write so the unified Activity
             // view sees auth events alongside in-session learning events.
             dbAdapter.run(
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [null, username, 'failed_login', ipAddress, userAgent, 1]
+                [null, loggedUsername, 'failed_login', ipAddress, userAgent, 1]
             );
             // No learning event for an UNKNOWN username: there is no learner
             // to attribute it to and no honest tenant to file it under (the
             // old row hard-coded tenant 1). login_logs and the audit chain
             // keep the attempt.
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
-
-        // An account an admin disabled must not be able to mint a token. Checked
-        // before bcrypt (same posture as the lockout branch below): a suspended
-        // account is a closed door, not a slow one. authenticateToken already
-        // 403s every SUBSEQUENT request, so skipping this only ever produced a
-        // token that immediately stopped working — while writing a *successful*
-        // login to login_logs and re-running auto-enrolment for the very account
-        // that had just been switched off.
-        if (user.deleted_at || user.status !== 'active') {
-            dbAdapter.run(
-                `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
-            );
-            return res.status(403).json({
-                code: 'account_disabled',
-                error: 'This account is not active. Contact an administrator.'
-            });
-        }
-
-        // Honour active lockout window. Users with a future `locked_until`
-        // get rejected without bcrypt compare so timing-side-channel and
-        // CPU-burn aren't escalation paths.
-        //
-        // sqliteTsToIso is load-bearing, not decoration: SQLite writes
-        // `YYYY-MM-DD HH:MM:SS` in UTC with no `Z`, and V8 parses that shape as
-        // LOCAL time. On a server east of UTC (this deploys to Helsinki) the raw
-        // string parsed to a moment already in the past, `lockedUntilMs > now()`
-        // was never true, and the lockout silently did nothing — unlimited
-        // password guessing. Docker's UTC default hid it. See sqliteTime.js.
-        if (user.locked_until) {
-            const lockedUntilMs = new Date(sqliteTsToIso(user.locked_until)).getTime();
-            if (Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now()) {
-                const minsLeft = Math.ceil((lockedUntilMs - Date.now()) / 60000);
-                return res.status(423).json({
-                    error: `Account locked. Try again in ${minsLeft} minute${minsLeft === 1 ? '' : 's'}.`
-                });
-            }
+            return generic401();
         }
 
         try {
-            const match = await bcrypt.compare(password, user.password_hash);
+            // PASSWORD FIRST. Disabled and locked are decided after it, so a
+            // wrong password on any existing account looks exactly like a
+            // wrong password on an active one.
+            const match = user.password_hash
+                ? await bcrypt.compare(password, user.password_hash)
+                : (await bcrypt.compare(password, DUMMY_PASSWORD_HASH), false);
+
+            const disabled = Boolean(user.deleted_at) || user.status !== 'active';
+
+            // Lock state. sqliteTsToIso is load-bearing, not decoration: SQLite
+            // writes `YYYY-MM-DD HH:MM:SS` in UTC with no `Z`, and V8 parses that
+            // shape as LOCAL time. On a server east of UTC (this deploys to
+            // Helsinki) the raw string parsed to a moment already in the past,
+            // the lock was never "active", and the lockout silently did nothing
+            // — unlimited password guessing. Docker's UTC default hid it.
+            let lockActive = false;
+            let lockExpired = false;
+            let lockedUntilMs = NaN;
+            if (user.locked_until) {
+                lockedUntilMs = new Date(sqliteTsToIso(user.locked_until)).getTime();
+                lockActive = Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now();
+                lockExpired = !lockActive;
+            }
+
+            const logFailure = (reason, extra = {}) => {
+                dbAdapter.run(
+                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                    [user.id, loggedUsername, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
+                );
+                recordServerEvent(req, {
+                    user_id: user.id, verb: 'FAILED_LOGIN', object_type: 'auth', object_name: username,
+                    context: { ip: ipAddress, ua: userAgent, reason, ...extra },
+                }, { tenantId: user.tenant_id || 1, source: 'server:auth' }).catch(() => {});
+            };
+
             if (!match) {
-                // Log + bump fail counter; lock at threshold.
-                const newAttempts = (user.failed_login_attempts || 0) + 1;
+                // Bump the fail counter; lock at the threshold. A lock that has
+                // EXPIRED starts the count again from zero: the counter used to
+                // survive the lock, so after the first lockout every single
+                // wrong password re-locked the account for another 15 minutes
+                // — anyone who knew a username could keep its owner out for
+                // good with one request a quarter-hour (security audit
+                // 2026-10-24). An ACTIVE lock keeps counting, so hammering a
+                // locked account renews the lock rather than running it down.
+                const priorAttempts = lockExpired ? 0 : (user.failed_login_attempts || 0);
+                const newAttempts = priorAttempts + 1;
                 // Awaited: the next attempt reads this counter, and a 401 that
                 // races ahead of its own UPDATE lets a sixth wrong password
                 // see four. (Fire-and-forget here was a latent race that the
@@ -515,21 +597,44 @@ router.post('/auth/login', authLimiter, (req, res) => {
                          WHERE id = ?`,
                         [newAttempts, LOCKOUT_MINUTES, user.id]
                     );
+                } else if (lockExpired) {
+                    await dbAdapter.run(
+                        `UPDATE users SET failed_login_attempts = ?, locked_until = NULL WHERE id = ?`,
+                        [newAttempts, user.id]
+                    );
                 } else {
                     await dbAdapter.run(
                         `UPDATE users SET failed_login_attempts = ? WHERE id = ?`,
                         [newAttempts, user.id]
                     );
                 }
-                dbAdapter.run(
-                    `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                    [user.id, username, 'failed_login', ipAddress, userAgent, user.tenant_id || 1]
-                );
-                recordServerEvent(req, {
-                    user_id: user.id, verb: 'FAILED_LOGIN', object_type: 'auth', object_name: username,
-                    context: { ip: ipAddress, ua: userAgent, reason: 'bad_password', attempts: newAttempts },
-                }, { tenantId: user.tenant_id || 1, source: 'server:auth' }).catch(() => {});
-                return res.status(401).json({ error: 'Invalid username or password' });
+                logFailure(disabled ? 'account_disabled' : lockActive ? 'locked' : 'bad_password', { attempts: newAttempts });
+                return generic401();
+            }
+
+            // From here on the caller has proved they know the password, so the
+            // specific reason may be told.
+
+            // An account an admin disabled must not be able to mint a token.
+            // authenticateToken already 403s every SUBSEQUENT request, so
+            // skipping this only ever produced a token that immediately stopped
+            // working — while writing a *successful* login to login_logs and
+            // re-running auto-enrolment for the very account that had just been
+            // switched off.
+            if (disabled) {
+                logFailure('account_disabled');
+                return res.status(403).json({
+                    code: 'account_disabled',
+                    error: 'This account is not active. Contact an administrator.'
+                });
+            }
+
+            if (lockActive) {
+                const minsLeft = Math.ceil((lockedUntilMs - Date.now()) / 60000);
+                logFailure('locked');
+                return res.status(423).json({
+                    error: `Account locked. Try again in ${minsLeft} minute${minsLeft === 1 ? '' : 's'}.`
+                });
             }
 
             // Log successful login (dual-write: legacy login_logs + canonical learning_events).
@@ -586,6 +691,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // this and echoes it as X-CSRF-Token. See middleware/csrf.js.
             res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
+            // `token` in the body: see the note on the register response.
             res.json({
                 message: 'Login successful',
                 user: {
@@ -696,6 +802,7 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
         res.cookie(AUTH_COOKIE_NAME, newToken, authCookieOptions());
         res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
 
+        // `token` in the body: see the note on the register response.
         res.json({
             message: 'Token refreshed',
             user: {

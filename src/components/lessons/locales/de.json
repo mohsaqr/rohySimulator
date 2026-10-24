@@ -150,6 +150,7 @@
     "mcq_add_option": "Option hinzufügen",
     "mcq_add_question": "Frage hinzufügen",
     "mcq_check": "Antwort prüfen",
+    "mcq_check_failed": "Die Antwort konnte nicht geprüft werden. Bitte erneut versuchen.",
     "mcq_complete": "Selbsttest abgeschlossen.",
     "mcq_correct": "Richtig!",
     "mcq_explanation_placeholder": "Erklärung, die nach der Antwort angezeigt wird (optional)",

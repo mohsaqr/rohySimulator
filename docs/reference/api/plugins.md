@@ -9,13 +9,13 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:725` |
-| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:476` |
-| `GET` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:638` |
-| `PUT` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:667` |
-| `GET` | `/api/plugins/pathology/assets` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:157` |
-| `DELETE` | `/api/plugins/pathology/assets/:assetId` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:203` |
-| `PUT` | `/api/plugins/pathology/assets/:assetId/calibration` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:230` |
+| `GET` | `/api/plugins/:pluginId/*splat` | `authenticateToken, requireStudent` | `server/routes/plugins-routes.js:738` |
+| `GET` | `/api/plugins/:pluginId/catalog` | `authenticateToken` | `server/routes/plugins-routes.js:489` |
+| `GET` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:651` |
+| `PUT` | `/api/plugins/:pluginId/settings` | `authenticateToken` | `server/routes/plugins-routes.js:680` |
+| `GET` | `/api/plugins/pathology/assets` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:162` |
+| `DELETE` | `/api/plugins/pathology/assets/:assetId` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:208` |
+| `PUT` | `/api/plugins/pathology/assets/:assetId/calibration` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:235` |
 | `POST` | `/api/plugins/pathology/imports` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:68` |
-| `GET` | `/api/plugins/pathology/jobs/:jobId` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:133` |
-| `POST` | `/api/plugins/pathology/jobs/:jobId/cancel` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:144` |
+| `GET` | `/api/plugins/pathology/jobs/:jobId` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:138` |
+| `POST` | `/api/plugins/pathology/jobs/:jobId/cancel` | `authenticateToken, requireEducator` | `server/plugins/pathology/index.js:149` |

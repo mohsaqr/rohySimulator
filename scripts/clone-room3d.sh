@@ -4,6 +4,10 @@
 # Authentication deliberately uses a one-shot HTTP header instead of putting
 # the token in the remote URL. Git would persist a credential-bearing URL in
 # .git/config, and Docker copies this source tree into the runtime image.
+# The header reaches git through the GIT_CONFIG_COUNT/KEY/VALUE environment
+# (git >= 2.31) rather than `-c http.extraHeader=…` on the command line: argv
+# is readable by every process on the build host (`ps`, /proc/<pid>/cmdline),
+# the environment of a child process is not.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -25,8 +29,10 @@ repo="https://github.com/mohsaqr/3D.git"
 
 if [[ -n "${ROOM3D_GIT_TOKEN:-}" ]]; then
     basic_auth="$(printf 'x-access-token:%s' "$ROOM3D_GIT_TOKEN" | base64 | tr -d '\r\n')"
-    git -c "http.extraHeader=Authorization: Basic $basic_auth" \
-        clone --depth 1 --branch "$ref" "$repo" "$destination"
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=http.extraHeader \
+    GIT_CONFIG_VALUE_0="Authorization: Basic $basic_auth" \
+        git clone --depth 1 --branch "$ref" "$repo" "$destination"
     unset basic_auth
 else
     git clone --depth 1 --branch "$ref" "$repo" "$destination"

@@ -19,7 +19,7 @@ import express from 'express';
 import fs from 'fs';
 import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
-import { auditSuccess } from './_helpers.js';
+import { auditSuccess, requirePlatformAdmin } from './_helpers.js';
 import {
     CHUNK_BYTES,
     PACKAGE_EXTENSION,
@@ -77,7 +77,9 @@ router.get('/platform-settings/case-packages', authenticateToken, requireAdmin, 
     }
 });
 
-router.put('/platform-settings/case-packages', authenticateToken, requireAdmin, async (req, res) => {
+// platform_settings is install-wide: only a default-tenant admin may flip
+// the feature for every tenant (security audit 2026-10-24, finding 9).
+router.put('/platform-settings/case-packages', authenticateToken, requirePlatformAdmin, async (req, res) => {
     if (typeof req.body?.enabled !== 'boolean') {
         return res.status(400).json({ error: 'enabled must be true or false', code: 'invalid_setting' });
     }

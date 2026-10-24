@@ -5,6 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
     authenticateToken,
+    requireAdmin,
     requireEducator,
     requireReviewer,
     ROLE_RANKS,
@@ -77,9 +78,20 @@ router.get('/cases/:id/investigations', authenticateToken, requireEducator, (req
 });
 
 // POST /api/investigations - Admin creates investigation for case
-router.post('/investigations', authenticateToken, requireEducator, (req, res) => {
+router.post('/investigations', authenticateToken, requireEducator, async (req, res) => {
     const { case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes } = req.body;
-    
+
+    // The case must be this tenant's: the row inherits the caller's tenant_id,
+    // so a case id from another tenant would attach a result to it that only
+    // the attacker's tenant can see or edit (security audit 2026-10-24, #5).
+    let owningCase;
+    try {
+        owningCase = await dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [case_id ?? null, tenantId(req)]);
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+    if (!owningCase) return res.status(404).json({ error: 'Case not found' });
+
     const sql = `INSERT INTO case_investigations (case_id, investigation_type, test_name, result_data, image_url, turnaround_minutes, tenant_id) 
                  VALUES (?, ?, ?, ?, ?, ?, ?)`;
     
@@ -101,14 +113,31 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     }
 
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+
+    if (investigation_ids.length === 0) {
+        return res.json({ message: '0 investigations ordered' });
+    }
+
+    // Only investigations configured on THIS session's case, in this tenant,
+    // can be ordered. The ids used to be inserted as sent, so a learner could
+    // order (and then read the result of) any case's investigation on the
+    // install, including another tenant's (security audit 2026-10-24, #5).
+    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const matching = await dbAdapter.all(
+        `SELECT id, investigation_type FROM case_investigations
+          WHERE tenant_id = ? AND case_id = ? AND deleted_at IS NULL AND id IN (${investigation_ids.map(() => '?').join(',')})`,
+        [tenantId(req), session.case_id, ...investigation_ids]
+    );
+    if (matching.length === 0) {
+        return res.status(400).json({ error: 'No investigation_ids belong to this session\'s case' });
+    }
+    const orderableIds = matching.map((row) => row.id);
+
     // Each ordered investigation belongs to the lab or radiology room; an
     // order touching a room the case switched off is refused whole.
-    const orderedTypes = investigation_ids.length === 0 ? [] : await dbAdapter.all(
-        `SELECT DISTINCT investigation_type FROM case_investigations
-          WHERE tenant_id = ? AND id IN (${investigation_ids.map(() => '?').join(',')})`,
-        [tenantId(req), ...investigation_ids]
-    );
-    for (const { investigation_type: room } of orderedTypes) {
+    const orderedTypes = [...new Set(matching.map((row) => row.investigation_type))];
+    for (const room of orderedTypes) {
         if ((room === 'lab' || room === 'radiology') && !await requireSessionRoom(req, res, sessionId, [room])) return;
     }
 
@@ -121,14 +150,9 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     const stmt = dbAdapter.prepare(sql);
     let inserted = 0;
     let runError = null;
-    let pending = investigation_ids.length;
+    let pending = orderableIds.length;
 
-    if (pending === 0) {
-        stmt.finalize();
-        return res.json({ message: '0 investigations ordered' });
-    }
-
-    investigation_ids.forEach(invId => {
+    orderableIds.forEach(invId => {
         stmt.run([sessionId, invId, invId, tenantId(req), tenantId(req)], function(err) {
             if (err && !runError) {
                 runError = err;
@@ -180,7 +204,7 @@ router.get('/sessions/:id/orders', authenticateToken, async (req, res) => {
             CASE WHEN datetime(io.available_at) <= datetime('now') THEN 1 ELSE 0 END as is_ready_db,
             (julianday(io.available_at) - julianday('now')) * 24 * 60 as minutes_remaining
         FROM investigation_orders io
-        JOIN case_investigations ci ON io.investigation_id = ci.id
+        JOIN case_investigations ci ON io.investigation_id = ci.id AND ci.tenant_id = io.tenant_id
         WHERE io.session_id = ? AND io.tenant_id = ? AND ci.investigation_type = 'lab'
         ORDER BY io.ordered_at DESC
     `;
@@ -246,7 +270,7 @@ router.put('/orders/:id/view', authenticateToken, (req, res) => {
                ci.investigation_type,
                s.case_id, s.id as session_id, s.user_id as session_user_id
         FROM investigation_orders io
-        LEFT JOIN case_investigations ci ON io.investigation_id = ci.id
+        LEFT JOIN case_investigations ci ON io.investigation_id = ci.id AND ci.tenant_id = io.tenant_id
         LEFT JOIN sessions s ON io.session_id = s.id
         WHERE io.id = ? AND io.tenant_id = ?
     `;
@@ -410,8 +434,11 @@ router.get('/labs/stats', authenticateToken, requireReviewer, (req, res) => {
     }
 });
 
+// The lab catalogue (data/lab_database.json) is one file shared by every
+// tenant on the install, so its writes are admin-only; an educator's
+// per-case lab rows live in case_investigations (security audit 2026-10-24, #6).
 // POST /api/labs/test - Add a new lab test (Admin only)
-router.post('/labs/test', authenticateToken, requireEducator, (req, res) => {
+router.post('/labs/test', authenticateToken, requireAdmin, (req, res) => {
     try {
         const result = labDb.addTest(req.body);
         if (!result.success) {
@@ -431,7 +458,7 @@ router.post('/labs/test', authenticateToken, requireEducator, (req, res) => {
 });
 
 // PUT /api/labs/test - Update a lab test (Admin only)
-router.put('/labs/test', authenticateToken, requireEducator, (req, res) => {
+router.put('/labs/test', authenticateToken, requireAdmin, (req, res) => {
     const { test_name, category, ...updates } = req.body;
 
     if (!test_name || !category) {
@@ -459,7 +486,7 @@ router.put('/labs/test', authenticateToken, requireEducator, (req, res) => {
 });
 
 // DELETE /api/labs/test - Delete a lab test (Admin only)
-router.delete('/labs/test', authenticateToken, requireEducator, (req, res) => {
+router.delete('/labs/test', authenticateToken, requireAdmin, (req, res) => {
     const { test_name, category } = req.body;
 
     if (!test_name || !category) {
@@ -486,7 +513,7 @@ router.delete('/labs/test', authenticateToken, requireEducator, (req, res) => {
 });
 
 // POST /api/labs/import - Import lab tests from CSV (Admin only)
-router.post('/labs/import', authenticateToken, requireEducator, (req, res) => {
+router.post('/labs/import', authenticateToken, requireAdmin, (req, res) => {
     const { tests, overwrite = false } = req.body;
 
     if (!tests || !Array.isArray(tests) || tests.length === 0) {
@@ -511,7 +538,7 @@ router.post('/labs/import', authenticateToken, requireEducator, (req, res) => {
 });
 
 // POST /api/labs/reload - Force reload the lab database (Admin only)
-router.post('/labs/reload', authenticateToken, requireEducator, (req, res) => {
+router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
     try {
         labDb.clearCache();
         const tests = labDb.loadLabDatabase();
@@ -1401,7 +1428,7 @@ router.get('/sessions/:sessionId/lab-results', authenticateToken, async (req, re
             ci.is_abnormal,
             ci.gender_category
         FROM investigation_orders io
-        JOIN case_investigations ci ON io.investigation_id = ci.id
+        JOIN case_investigations ci ON io.investigation_id = ci.id AND ci.tenant_id = io.tenant_id
         WHERE io.session_id = ? AND ci.investigation_type = 'lab'
         AND datetime(io.available_at) <= datetime('now')
         ORDER BY io.available_at DESC
@@ -1433,10 +1460,19 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
         return res.status(400).json({ error: 'current_value is required' });
     }
 
-    // Update the lab value in case_investigations
-    const sql = `UPDATE case_investigations SET current_value = ?, is_abnormal = 1 WHERE id = ?`;
+    // The session must be reachable by the caller, and the lab row must be one
+    // of that session's case in this tenant: the UPDATE used to run by id
+    // before any check, so an educator could rewrite any case's result on
+    // the install (security audit 2026-10-24, #5).
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
 
-    dbAdapter.run(sql, [current_value, labId], async function(err) {
+    // Update the lab value in case_investigations
+    const sql = `UPDATE case_investigations SET current_value = ?, is_abnormal = 1
+                  WHERE id = ? AND case_id = ? AND tenant_id = ? AND deleted_at IS NULL`;
+
+    dbAdapter.run(sql, [current_value, labId, session.case_id, tenantId(req)], async function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -1625,7 +1661,7 @@ router.get('/sessions/:sessionId/radiology-orders', authenticateToken, async (re
                 ELSE 0
             END as minutes_remaining
         FROM investigation_orders io
-        JOIN case_investigations ci ON io.investigation_id = ci.id
+        JOIN case_investigations ci ON io.investigation_id = ci.id AND ci.tenant_id = io.tenant_id
         WHERE io.session_id = ? AND io.tenant_id = ? AND ci.investigation_type = 'radiology'
         ORDER BY io.ordered_at DESC
     `;
@@ -1733,7 +1769,7 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
         // re-orders of the same study because investigation_id is always new.
         const existingRadSql = `
             SELECT io.id FROM investigation_orders io
-            JOIN case_investigations ci ON io.investigation_id = ci.id
+            JOIN case_investigations ci ON io.investigation_id = ci.id AND ci.tenant_id = io.tenant_id
             WHERE io.session_id = ? AND ci.investigation_type = 'radiology' AND ci.test_name = ?
             LIMIT 1
         `;
@@ -1934,9 +1970,13 @@ async function loadCaseTreatments({ sessionId, caseId, tenant, log }) {
 const treatmentKey = (type, name) => `${type}:${String(name || '').trim().toLowerCase()}`;
 
 // GET /api/sessions/:sessionId/available-treatments - Get available treatments for session's case
-router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req, res) => {
+router.get('/sessions/:sessionId/available-treatments', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { type } = req.query; // Optional filter: medication, iv_fluid, oxygen, nursing
+
+    // Own session (or staff of the tenant) only — the case's treatment setup
+    // is part of the case, not of the install.
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     dbAdapter.get('SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ? AND s.tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1998,6 +2038,10 @@ router.get('/sessions/:sessionId/available-treatments', authenticateToken, (req,
                             delete safe.points_if_ordered;
                             delete safe.feedback_if_ordered;
                             delete safe.feedback_if_missed;
+                            // The author's per-case physiology override is
+                            // authoring data too: it tells the learner what the
+                            // monitor will do before they order.
+                            delete safe.custom_effect_override;
                             return safe;
                         });
                 }

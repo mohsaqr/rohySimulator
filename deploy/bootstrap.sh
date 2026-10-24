@@ -24,7 +24,10 @@
 # Flags:
 #   --frontend-url URL   Write FRONTEND_URL=URL into the env file
 #                        (eliminates the "edit env then re-run" loop)
-#   --admin-bootstrap    Set ALLOW_DEFAULT_USERS=1 in env (REMOVE after first login)
+#   --admin-bootstrap    Provision the first admin: writes ROHY_ADMIN_USERNAME=admin
+#                        and a freshly generated ROHY_ADMIN_PASSWORD into the env
+#                        file and prints the password ONCE (applied on first boot
+#                        only, while the users table is empty)
 #   --with-dynajs        Auto-clone dynajs sibling if missing, then build it
 #   --prewarm-kokoro     Download the Kokoro model now (~330 MB) so first
 #                        TTS request doesn't sit on a slow download
@@ -161,7 +164,7 @@ printf 'build step     : %s\n' "$([[ $DO_BUILD -eq 1 ]] && echo yes || echo skip
 printf 'dynajs step    : %s\n' "$([[ $DO_DYNAJS -eq 1 ]] && echo yes || echo skipped)"
 printf 'kokoro prewarm : %s\n' "$([[ $DO_PREWARM -eq 1 ]] && echo yes || echo skipped)"
 printf 'frontend url   : %s\n' "${ARG_FRONTEND_URL:-<edit env file later>}"
-printf 'admin seed     : %s\n' "$([[ $DO_ADMIN_BOOTSTRAP -eq 1 ]] && echo "yes (REMOVE after first login)" || echo no)"
+printf 'admin seed     : %s\n' "$([[ $DO_ADMIN_BOOTSTRAP -eq 1 ]] && echo "yes (ROHY_ADMIN_* with a generated password)" || echo no)"
 printf 'dry-run        : %s\n' "$([[ $DRY_RUN -eq 1 ]] && echo yes || echo no)"
 
 # -- 1. package prereqs (distro-aware) ------------------------------------
@@ -294,6 +297,10 @@ if (( DO_BUILD )); then
         printf '  ! no package.json at %s — bootstrap must run from inside the rohy repo\n' "$REPO_SRC" >&2
         exit 1
     fi
+    # `npm install`, not `npm ci`, on purpose here: an operator host may
+    # carry a dynajs checkout other than the one the lockfile was written
+    # against, and `npm ci` refuses any lock mismatch outright. The Docker
+    # image (deploy/docker/Dockerfile) pins dynajs and uses `npm ci`.
     # `npm install` triggers our postinstall hook which calls
     # OyonR/scripts/download-models.sh — fetches the ~93 MB MediaPipe +
     # ONNX vendor bundles + emotion models that are gitignored. Hook is
@@ -369,6 +376,18 @@ else
         exit 1
     fi
     JWT=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+    # --admin-bootstrap: a per-install admin password instead of the
+    # well-known admin/admin123 (ALLOW_DEFAULT_USERS=1 is refused in
+    # production). The fixed affixes guarantee the password policy's upper,
+    # lower and digit; the middle is 24 random hex characters.
+    ADMIN_PASSWORD=""
+    if (( DO_ADMIN_BOOTSTRAP )); then
+        ADMIN_PASSWORD=$(node -e "console.log(['Rohy', require('crypto').randomBytes(12).toString('hex'), 'Aa1'].join('-'))")
+    fi
+    # rohy behind a same-host proxy binds to 127.0.0.1 (env.example); with no
+    # proxy in front it has to listen on every interface itself.
+    BIND_LINE="ROHY_BIND=127.0.0.1"
+    [[ "$DO_PROXY" == "none" ]] && BIND_LINE="ROHY_BIND=0.0.0.0"
     if [[ -n "$ARG_FRONTEND_URL" ]]; then
         FRONTEND_LINE="FRONTEND_URL=${ARG_FRONTEND_URL}"
     else
@@ -384,12 +403,15 @@ else
             -e "s|^ROHY_DB=.*|ROHY_DB=${ROHY_DATA_DIR}/database.sqlite|" \
             -e "s|^TRANSFORMERS_CACHE=.*|TRANSFORMERS_CACHE=${ROHY_HF_CACHE}|" \
             -e "s|^PORT=.*|PORT=${ROHY_PORT}|" \
+            -e "s|^ROHY_BIND=.*|${BIND_LINE}|" \
             "$REPO_SRC/deploy/env.example" > "$ROHY_ENV_FILE"
         if (( DO_ADMIN_BOOTSTRAP )); then
             {
                 echo
-                echo "# --- Bootstrap-only — REMOVE after first login + password change ---"
-                echo "ALLOW_DEFAULT_USERS=1"
+                echo "# --- First-boot admin (applied only while the users table is empty) ---"
+                echo "# Safe to delete both lines after the first login; never re-applied."
+                echo "ROHY_ADMIN_USERNAME=admin"
+                echo "ROHY_ADMIN_PASSWORD=${ADMIN_PASSWORD}"
             } >> "$ROHY_ENV_FILE"
         fi
         chmod 600 "$ROHY_ENV_FILE"
@@ -401,7 +423,10 @@ else
             printf '  EDIT NOW: set FRONTEND_URL=https://your-host/rohy and restart rohy\n'
         fi
         if (( DO_ADMIN_BOOTSTRAP )); then
-            printf '  ALLOW_DEFAULT_USERS=1 added — log in as admin/admin123, change password, REMOVE the line\n'
+            # Printed once, here; it also sits in the 0600 env file until removed.
+            printf '  first admin provisioned from ROHY_ADMIN_* — record this now, it is not shown again:\n'
+            printf '      username: admin\n'
+            printf '      password: %s\n' "$ADMIN_PASSWORD"
         fi
     fi
 fi
@@ -515,9 +540,8 @@ if [[ -z "$ARG_FRONTEND_URL" ]] && ! grep -q '^FRONTEND_URL=https\?://' "$ROHY_E
 fi
 
 if (( DO_ADMIN_BOOTSTRAP )); then
-    printf '  %d. Open the deploy URL, log in as admin / admin123, change the password.\n' "$step"
-    printf '       Then REMOVE the ALLOW_DEFAULT_USERS=1 line in %s\n' "$ROHY_ENV_FILE"
-    printf '       and  sudo systemctl restart rohy .\n\n'
+    printf '  %d. Open the deploy URL and log in as admin with the password printed in step [7/10].\n' "$step"
+    printf '       Then delete the ROHY_ADMIN_PASSWORD line from %s (it is never re-applied).\n\n' "$ROHY_ENV_FILE"
     step=$((step+1))
 fi
 

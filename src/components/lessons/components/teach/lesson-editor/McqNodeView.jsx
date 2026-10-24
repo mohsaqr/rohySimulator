@@ -1,18 +1,25 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NodeViewWrapper } from '@tiptap/react';
 import { ListChecks, Plus, Trash2, Check, X, CheckCircle2, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { useTheme } from '../../../hooks/useTheme';
 import { BlockCard } from './BlockCard';
-import { normalizeQuestion, blankQuestion } from './mcqShared';
+import { normalizeQuestion, blankQuestion, mcqBlockIndexOf } from './mcqShared';
+import { LessonMediaContext } from './LessonMediaContext';
+import { coursesApi } from '../../../api/courses';
 import { activityLogger } from '../../../services/activityLogger';
 
 /**
  * Multiple-choice self-check block. Author view = a list of question editors;
  * student view = a stepper that gives instant feedback per question and a
  * final summary. No scores are persisted. Wrapped in the shared BlockCard.
+ *
+ * A learner's copy of the lesson carries no answer keys (the server strips
+ * `correctIndex`/`explanation`; normalizeQuestion keeps that as null), so the
+ * student view asks POST /courses/lectures/:id/mcq/check. A staff preview still
+ * has the keys in the document and grades locally, as it always did.
  */
-export const McqNodeView = ({ node, updateAttributes, deleteNode, editor }) => {
+export const McqNodeView = ({ node, updateAttributes, deleteNode, editor, getPos }) => {
   const { t } = useTranslation(['teaching', 'common']);
   const { isDark } = useTheme();
   const editable = editor?.isEditable ?? true;
@@ -169,16 +176,20 @@ export const McqNodeView = ({ node, updateAttributes, deleteNode, editor }) => {
   }
 
   // ─── Student view (stepper) ──────────────────────────────────────────────
-  return <McqStudent questions={questions} isDark={isDark} />;
+  return <McqStudent questions={questions} isDark={isDark} editor={editor} getPos={getPos} />;
 };
 
 /** Interactive multi-question self-check for learners. */
-const McqStudent = ({ questions, isDark }) => {
+const McqStudent = ({ questions, isDark, editor, getPos }) => {
   const { t } = useTranslation(['teaching', 'common']);
+  const { lectureId, sectionId } = useContext(LessonMediaContext);
   const n = questions.length;
   const [cur, setCur] = useState(0);
   const [answers, setAnswers] = useState(() => questions.map(() => null));
-  const [revealed, setRevealed] = useState(() => questions.map(() => false));
+  // Per question, the verdict once checked: { correct, correctIndex, explanation }.
+  const [results, setResults] = useState(() => questions.map(() => null));
+  const [checking, setChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [done, setDone] = useState(false);
 
   const cardBg = isDark ? '#1e293b' : '#ffffff';
@@ -189,30 +200,53 @@ const McqStudent = ({ questions, isDark }) => {
 
   const q = questions[cur];
   const picked = answers[cur];
-  const isRevealed = revealed[cur];
-  const correctCount = answers.filter((a, i) => a === questions[i].correctIndex).length;
+  const result = results[cur];
+  const isRevealed = result !== null;
+  const correctCount = results.filter((r) => r?.correct).length;
 
   const pick = (oi) => {
     if (isRevealed) return;
     setAnswers(prev => prev.map((a, i) => (i === cur ? oi : a)));
   };
-  const check = () => {
-    setRevealed(prev => prev.map((r, i) => (i === cur ? true : r)));
-    // Self-check grading is client-side by design (no persistence), but the
+  const check = async () => {
+    if (picked === null || checking) return;
+    let verdict;
+    if (Number.isInteger(q.correctIndex)) {
+      // The answer key is in the document: a staff preview. Grade here.
+      verdict = { correct: picked === q.correctIndex, correctIndex: q.correctIndex, explanation: q.explanation };
+    } else {
+      setChecking(true);
+      setCheckFailed(false);
+      try {
+        verdict = await coursesApi.checkMcqAnswer(lectureId, {
+          sectionId,
+          blockIndex: mcqBlockIndexOf(editor, getPos),
+          questionIndex: cur,
+          answerIndex: picked,
+        });
+      } catch {
+        setCheckFailed(true);
+        setChecking(false);
+        return;
+      }
+      setChecking(false);
+    }
+    setResults(prev => prev.map((r, i) => (i === cur ? verdict : r)));
+    // Nothing is persisted (a self-check is not an assessment), but the
     // attempt itself is a learning event — log it like other rooms do.
     activityLogger.log({
       verb: 'ANSWERED',
-      result: picked === q.correctIndex ? 'correct' : 'incorrect',
+      result: verdict.correct ? 'correct' : 'incorrect',
       objectType: 'question',
       objectId: `mcq-${cur + 1}`,
       objectTitle: q.question,
       questionIndex: cur,
       questionCount: n,
       pickedIndex: picked,
-      correctIndex: q.correctIndex,
+      correctIndex: verdict.correctIndex,
     });
   };
-  const restart = () => { setAnswers(questions.map(() => null)); setRevealed(questions.map(() => false)); setCur(0); setDone(false); };
+  const restart = () => { setAnswers(questions.map(() => null)); setResults(questions.map(() => null)); setCheckFailed(false); setCur(0); setDone(false); };
 
   const optStyle = (oi) => {
     const base = { backgroundColor: cardBg, borderColor: cardBorder, color: subtle };
@@ -221,7 +255,7 @@ const McqStudent = ({ questions, isDark }) => {
         ? { ...base, borderColor: accent, backgroundColor: isDark ? 'rgba(45,212,191,0.10)' : '#f0fdfa' }
         : base;
     }
-    if (oi === q.correctIndex) return { ...base, borderColor: '#10b981', backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' };
+    if (oi === result.correctIndex) return { ...base, borderColor: '#10b981', backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' };
     if (oi === picked) return { ...base, borderColor: '#ef4444', backgroundColor: isDark ? 'rgba(239,68,68,0.12)' : '#fef2f2' };
     return base;
   };
@@ -275,19 +309,24 @@ const McqStudent = ({ questions, isDark }) => {
                       {String.fromCharCode(65 + oi)}
                     </span>
                     <span className="flex-1 min-w-0 break-words">{opt}</span>
-                    {isRevealed && oi === q.correctIndex && <CheckCircle2 className="w-4 h-4" style={{ color: '#10b981' }} />}
-                    {isRevealed && oi === picked && oi !== q.correctIndex && <X className="w-4 h-4" style={{ color: '#ef4444' }} />}
+                    {isRevealed && oi === result.correctIndex && <CheckCircle2 className="w-4 h-4" style={{ color: '#10b981' }} />}
+                    {isRevealed && oi === picked && !result.correct && <X className="w-4 h-4" style={{ color: '#ef4444' }} />}
                   </button>
                 ))}
               </div>
 
               {isRevealed && (
                 <div className="mt-3 space-y-1">
-                  <div className="text-sm font-medium" style={{ color: picked === q.correctIndex ? '#10b981' : '#ef4444' }}>
-                    {picked === q.correctIndex ? t('mcq_correct', { defaultValue: 'Correct!' }) : t('mcq_incorrect', { defaultValue: 'Not quite.' })}
+                  <div className="text-sm font-medium" style={{ color: result.correct ? '#10b981' : '#ef4444' }}>
+                    {result.correct ? t('mcq_correct', { defaultValue: 'Correct!' }) : t('mcq_incorrect', { defaultValue: 'Not quite.' })}
                   </div>
-                  {q.explanation && <p className="text-sm" style={{ color: muted }}>{q.explanation}</p>}
+                  {result.explanation && <p className="text-sm" style={{ color: muted }}>{result.explanation}</p>}
                 </div>
+              )}
+              {checkFailed && (
+                <p className="mt-3 text-sm" role="alert" style={{ color: '#ef4444' }}>
+                  {t('mcq_check_failed', { defaultValue: 'The answer could not be checked. Try again.' })}
+                </p>
               )}
 
               <div className="mt-3 flex items-center justify-between">
@@ -305,7 +344,7 @@ const McqStudent = ({ questions, isDark }) => {
                 {!isRevealed ? (
                   <button
                     type="button"
-                    disabled={picked === null}
+                    disabled={picked === null || checking}
                     onClick={check}
                     className="px-4 py-1.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-cyan-400"
                     style={{ backgroundColor: accent }}

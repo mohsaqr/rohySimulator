@@ -69,11 +69,9 @@ jobs:
     timeout-minutes: 35
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       # --no-cache simulates a truly fresh build — the same path a
       # first-time operator hits. With cache, layers from a previous CI
       # run could mask a regression like "rohy-tna got removed from git
@@ -94,10 +92,11 @@ jobs:
             .
           docker run --rm --entrypoint sh rohy:ci -c 'test ! -e /opt/3D/.git'
 
-      # JWT_SECRET is required (server refuses to start without it). We
-      # use ALLOW_DEFAULT_USERS=1 only so the seeded `admin` user is
-      # present for the optional auth'd browser smoke later — no real
-      # secrets ever land in this throwaway container.
+      # JWT_SECRET is required (server refuses to start without it). The
+      # first admin is provisioned through ROHY_ADMIN_USERNAME/PASSWORD with a
+      # password generated for this run — the same path an operator uses.
+      # ALLOW_DEFAULT_USERS=1 (admin/admin123) is refused in production, and
+      # a CI job that leaned on it would stop exercising the real bootstrap.
       #
       # FRONTEND_URL is also required in production mode (entrypoint.sh
       # bails out before Node starts otherwise — without it browsers see
@@ -106,6 +105,11 @@ jobs:
       # is exactly what we want for this single-container smoke run.
       - name: Start container (port 4000 → host)
         run: |
+          # Upper, lower and a digit are guaranteed by the fixed affixes, so
+          # the seeder's password policy always accepts it.
+          ROHY_CI_ADMIN_PASSWORD="Ci-$(openssl rand -hex 16)-Aa1"
+          echo "::add-mask::$ROHY_CI_ADMIN_PASSWORD"
+          echo "ROHY_CI_ADMIN_PASSWORD=$ROHY_CI_ADMIN_PASSWORD" >> "$GITHUB_ENV"
           docker run -d \
             --name rohy-ci \
             -p 4000:4000 \
@@ -113,7 +117,8 @@ jobs:
             -e NODE_ENV=production \
             -e ROHY_PROVA_URL=off \
             -e FRONTEND_URL=http://localhost:4000 \
-            -e ALLOW_DEFAULT_USERS=1 \
+            -e ROHY_ADMIN_USERNAME=admin \
+            -e ROHY_ADMIN_PASSWORD="$ROHY_CI_ADMIN_PASSWORD" \
             -e OYON_ENABLED=1 \
             rohy:ci
 
@@ -132,6 +137,21 @@ jobs:
           echo "✗ rohy did not become healthy within 90s"
           docker logs rohy-ci
           exit 1
+
+      # The ROHY_ADMIN_* bootstrap must have produced a working login: a
+      # fresh install that cannot reach its admin is a failed install.
+      - name: Provisioned admin can log in
+        run: |
+          body=$(jq -nc --arg p "$ROHY_CI_ADMIN_PASSWORD" '{username:"admin",password:$p}')
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' -d "$body" \
+            http://localhost:4000/api/auth/login)
+          if [ "$code" != "200" ]; then
+            echo "✗ admin login returned $code: $(cat /tmp/login.json)"
+            docker logs rohy-ci | tail -50
+            exit 1
+          fi
+          echo "✓ provisioned admin logged in"
 
       # tech-test runs 27+ checks (liveness, frontend bundle integrity,
       # Oyon API gating, security headers, response timing, ORT vendor

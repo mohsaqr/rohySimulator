@@ -203,3 +203,107 @@ describe('deploy/docker/entrypoint.sh — FRONTEND_URL derivation', () => {
         expect(r.stderr).toMatch(/ROHY_HOSTNAME/);
     });
 });
+
+// Regression lock: the image and compose defaulted ROHY_TRUST_PROXY=loopback while Caddy runs in a SEPARATE container, so Express ignored X-Forwarded-For — every user shared one login rate-limit bucket and every audit row carried Caddy's bridge IP (security audit 2026-10-24)
+describe('trust proxy on the Docker path', () => {
+    const DOCKERFILE = fs.readFileSync(path.join(REPO, 'deploy', 'docker', 'Dockerfile'), 'utf8');
+    const CADDYFILE = fs.readFileSync(path.join(REPO, 'deploy', 'docker', 'Caddyfile'), 'utf8');
+
+    it('compose defaults ROHY_TRUST_PROXY to uniquelocal, never loopback', () => {
+        const env = yaml.load(composeSrc).services.rohy.environment;
+        expect(env.ROHY_TRUST_PROXY).toBe('${ROHY_TRUST_PROXY:-uniquelocal}');
+        expect(env.ROHY_TRUST_PROXY).not.toMatch(/loopback/);
+    });
+
+    it('the image default agrees', () => {
+        expect(DOCKERFILE).toMatch(/ROHY_TRUST_PROXY=uniquelocal/);
+        expect(DOCKERFILE).not.toMatch(/ROHY_TRUST_PROXY=loopback/);
+    });
+
+    it('is safe only because rohy:4000 is unpublished and Caddy overwrites X-Forwarded-For', () => {
+        const rohy = yaml.load(composeSrc).services.rohy;
+        expect(rohy.ports).toBeUndefined();
+        // Every header_up X-Forwarded-For REPLACES the value with the peer address.
+        const xff = CADDYFILE.split('\n').filter((l) => /header_up\s+X-Forwarded-For/.test(l) && !/^\s*#/.test(l));
+        expect(xff.length).toBeGreaterThan(0);
+        for (const line of xff) expect(line).toMatch(/X-Forwarded-For\s+\{remote_host\}\s*$/);
+    });
+});
+
+// Regression lock: the rohy container ran with Docker's default capability set and could gain privileges via setuid, and the generated JWT secret lived inside the database volume, so any copy of the DB volume carried the signing key (security audit 2026-10-24)
+describe('container hardening', () => {
+    const doc = yaml.load(composeSrc);
+    const DOCKERFILE = fs.readFileSync(path.join(REPO, 'deploy', 'docker', 'Dockerfile'), 'utf8');
+
+    it('drops every capability and forbids new privileges', () => {
+        expect(doc.services.rohy.cap_drop).toEqual(['ALL']);
+        expect(doc.services.rohy.security_opt).toContain('no-new-privileges:true');
+    });
+
+    it('keeps the JWT secret on its own named volume, declared in compose and the image', () => {
+        expect(doc.services.rohy.volumes).toContain('rohy-secrets:/var/lib/rohy-secrets');
+        expect(Object.keys(doc.volumes)).toContain('rohy-secrets');
+        expect(DOCKERFILE).toMatch(/VOLUME \[[^\]]*"\/var\/lib\/rohy-secrets"/);
+        expect(DOCKERFILE).toMatch(/ROHY_SECRETS_DIR=\/var\/lib\/rohy-secrets/);
+    });
+
+    it('pins dynajs to a commit, not a branch', () => {
+        const args = doc.services.rohy.build.args;
+        expect(args.DYNAJS_GIT_REF).toMatch(/^\$\{DYNAJS_GIT_REF:-[0-9a-f]{40}\}$/);
+        expect(DOCKERFILE).toMatch(/^ARG DYNAJS_GIT_REF=[0-9a-f]{40}$/m);
+        // The same pin in both places, or the compose build and a bare
+        // `docker build` produce different images.
+        const composeSha = args.DYNAJS_GIT_REF.match(/[0-9a-f]{40}/)[0];
+        expect(DOCKERFILE).toContain(`ARG DYNAJS_GIT_REF=${composeSha}`);
+    });
+
+    it('no longer passes ALLOW_DEFAULT_USERS through compose (refused in production)', () => {
+        expect(Object.keys(doc.services.rohy.environment)).not.toContain('ALLOW_DEFAULT_USERS');
+        expect(Object.keys(doc.services.rohy.environment)).toEqual(
+            expect.arrayContaining(['ROHY_ADMIN_USERNAME', 'ROHY_ADMIN_PASSWORD'])
+        );
+    });
+});
+
+describe('deploy/docker/entrypoint.sh — JWT secret location', () => {
+    function run(env, tmp) {
+        return execFileSync('sh', [ENTRYPOINT, '/bin/sh', '-c', 'printf "JWT=%s" "$JWT_SECRET"'], {
+            env: {
+                PATH: process.env.PATH,
+                ROHY_HOSTNAME: 'localhost',
+                ROHY_DB: path.join(tmp, 'db', 'database.sqlite'),
+                TRANSFORMERS_CACHE: path.join(tmp, 'hf'),
+                ...env,
+            },
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+    }
+
+    it('generates the secret into ROHY_SECRETS_DIR and reuses it on the next start', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rohy-ep-secret-'));
+        try {
+            const env = { ROHY_SECRETS_DIR: path.join(tmp, 'secrets'), ROHY_LEGACY_SECRETS_DIR: path.join(tmp, 'db', '.secrets') };
+            const first = run(env, tmp).match(/JWT=(.*)$/)[1];
+            expect(first.length).toBeGreaterThanOrEqual(32);
+            expect(fs.readFileSync(path.join(tmp, 'secrets', 'jwt_secret'), 'utf8')).toBe(first);
+            expect(fs.statSync(path.join(tmp, 'secrets', 'jwt_secret')).mode & 0o077).toBe(0);
+            expect(run(env, tmp).match(/JWT=(.*)$/)[1]).toBe(first);
+            // Nothing written into the database volume.
+            expect(fs.existsSync(path.join(tmp, 'db', '.secrets'))).toBe(false);
+        } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+
+    it('moves a secret from the old in-DB-volume location so existing sessions survive the upgrade', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rohy-ep-legacy-'));
+        try {
+            const legacyDir = path.join(tmp, 'db', '.secrets');
+            fs.mkdirSync(legacyDir, { recursive: true });
+            fs.writeFileSync(path.join(legacyDir, 'jwt_secret'), 'legacy-secret-0123456789abcdef0123456789');
+            const env = { ROHY_SECRETS_DIR: path.join(tmp, 'secrets'), ROHY_LEGACY_SECRETS_DIR: legacyDir };
+            expect(run(env, tmp)).toContain('JWT=legacy-secret-0123456789abcdef0123456789');
+            expect(fs.existsSync(path.join(legacyDir, 'jwt_secret'))).toBe(false);
+            expect(fs.readFileSync(path.join(tmp, 'secrets', 'jwt_secret'), 'utf8')).toBe('legacy-secret-0123456789abcdef0123456789');
+        } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+});

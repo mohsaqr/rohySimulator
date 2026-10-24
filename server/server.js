@@ -48,7 +48,18 @@ const voiceAuditLog = logger('voice-audit');
 // surprises.
 validateEnvOrExit();
 
+// Express advertises itself in `X-Powered-By: Express` by default. The header
+// serves nobody but a scanner fingerprinting the stack; curl against the dev
+// server confirmed it was still going out (2026-10-24).
+app.disable('x-powered-by');
+
 const PORT = parseInt(process.env.PORT, 10) || 3000;
+// Interface the listeners bind to. Behind a same-host reverse proxy (the
+// systemd + nginx path) set ROHY_BIND=127.0.0.1 so the Node port is never
+// reachable from the LAN directly; in a container it must stay 0.0.0.0 because
+// the proxy is another container.
+const BIND_HOST = process.env.ROHY_BIND || '0.0.0.0';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // Optional HTTPS listener — needed in any deployment that isn't
 // localhost/127.0.0.1, because Chrome blocks getUserMedia and
 // SpeechRecognition on insecure origins (private LAN IPs included).
@@ -64,7 +75,9 @@ const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '';
 // :4000). Without this, Express ignores X-Forwarded-For and every request
 // looks like 127.0.0.1 — rate-limiters then collapse all users into one
 // bucket. Restricted to loopback so we don't trust spoofed XFFs from the
-// public internet. Override via env if the proxy chain ever changes.
+// public internet. Override via env if the proxy chain ever changes: the
+// Docker image sets `uniquelocal`, because there Caddy is a separate
+// container on the bridge network, not 127.0.0.1 (deploy/docker/Dockerfile).
 app.set('trust proxy', process.env.ROHY_TRUST_PROXY || 'loopback');
 
 instrumentSqliteDb(db);
@@ -131,10 +144,19 @@ app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Not found', code: 'not_found' });
 });
 
-// Full OyonR app. This intentionally serves the copied Oyon tree as-is so
-// Rohy does not recreate Oyon capture, settings, logs, or analytics UI.
+// The Oyon standalone bundle (capture element, analytics pages, wasm/onnx
+// vendor files). Rohy loads it from /oyon/standalone/… (OYON_ASSET_BASE in
+// src/components/oyon/captureBridge.js) and the pages themselves use absolute
+// /standalone/… asset URLs, so both prefixes serve the SAME directory. Only
+// that directory, plus the ES modules under OyonR/src that its pages import
+// relatively (logs-dashboard.js → ../src/analytics/…, standalone-demo.js →
+// ../src/index.js): the wider OyonR/ tree (docs, tests, scripts,
+// node_modules, HANDOFF.md) used to be mounted whole and unauthenticated
+// under /oyon, with the relaxed frame CSP below, and nothing in the app ever
+// requested the rest of it.
 const oyonRoot = path.join(__dirname, "..", "OyonR");
-if (fs.existsSync(oyonRoot)) {
+const oyonStandaloneRoot = path.join(oyonRoot, "standalone");
+if (fs.existsSync(oyonStandaloneRoot)) {
     const allowOyonFrame = (req, res, next) => {
         res.removeHeader('X-Frame-Options');
         const frameAncestors = process.env.NODE_ENV === 'production'
@@ -159,11 +181,19 @@ if (fs.existsSync(oyonRoot)) {
         );
         next();
     };
-    app.use('/oyon', allowOyonFrame);
-    app.use('/standalone', allowOyonFrame);
-    app.use('/oyon', express.static(oyonRoot));
+    const oyonStandaloneStatic = express.static(oyonStandaloneRoot);
+    app.use('/oyon/standalone', allowOyonFrame, oyonStandaloneStatic);
     // Oyon standalone currently uses absolute /standalone asset URLs.
-    app.use('/standalone', express.static(path.join(oyonRoot, 'standalone')));
+    app.use('/standalone', allowOyonFrame, oyonStandaloneStatic);
+
+    // Module source only — no directory index, no dotfiles, nothing but .js.
+    // It carries the normal app headers, not the relaxed frame CSP: these are
+    // scripts imported by the pages above, never framed documents.
+    const oyonSrcRoot = path.join(oyonRoot, 'src');
+    if (fs.existsSync(oyonSrcRoot)) {
+        const oyonSrcStatic = express.static(oyonSrcRoot, { index: false, dotfiles: 'ignore', fallthrough: true });
+        app.use('/oyon/src', (req, res, next) => (/\.m?js$/i.test(req.path) ? oyonSrcStatic(req, res, next) : next()));
+    }
 }
 
 // Serve the SPA shell. `/register` is listed EXPLICITLY rather than behind a
@@ -215,10 +245,15 @@ if (fs.existsSync(docsDist)) {
 app.use('/', express.static(path.join(__dirname, "..", "frontend")));
 app.use(errorHandler);
 
-// Start server with port fallback — bind to :: with ipv6Only:false for dual-stack (IPv4 + IPv6)
-function startServer(port, maxRetries = 10) {
-    const server = applyKeepAliveTimeouts(app.listen(port, '0.0.0.0', () => {
-        bootLog.info('http server listening', { host: '0.0.0.0', port });
+// Start the HTTP listener. Outside production a busy port falls through to the
+// next one (a dev box with a stale `node --watch` still holding :3000). In
+// production that fallback is a hazard, not a convenience: the proxy keeps
+// forwarding to the configured port, which some OTHER process now owns, and
+// rohy quietly serves on a port nobody routes to. Fail fast there so systemd
+// / the container runtime restarts into a clear error instead.
+function startServer(port, maxRetries = IS_PRODUCTION ? 0 : 10) {
+    const server = applyKeepAliveTimeouts(app.listen(port, BIND_HOST, () => {
+        bootLog.info('http server listening', { host: BIND_HOST, port });
     }));
 
     server.on('error', (err) => {
@@ -226,6 +261,11 @@ function startServer(port, maxRetries = 10) {
             bootLog.warn('http port in use, retrying', { port, next_port: port + 1 });
             server.close();
             startServer(port + 1, maxRetries - 1);
+        } else if (err.code === 'EADDRINUSE') {
+            bootLog.error('http port in use — refusing to fall back to another port in production', {
+                port, host: BIND_HOST, hint: 'stop the other process or change PORT',
+            });
+            process.exit(1);
         } else {
             bootLog.error('http server error', { error: err.message, code: err.code || null });
             process.exit(1);
@@ -253,8 +293,8 @@ function startHttpsServer(port) {
         return null;
     }
     try {
-        const server = applyKeepAliveTimeouts(https.createServer({ cert, key }, app).listen(port, '0.0.0.0', () => {
-            httpsLog.info('https server listening', { host: '0.0.0.0', port });
+        const server = applyKeepAliveTimeouts(https.createServer({ cert, key }, app).listen(port, BIND_HOST, () => {
+            httpsLog.info('https server listening', { host: BIND_HOST, port });
         }));
         server.on('error', (err) => {
             httpsLog.warn('https listener error', { error: err.message, code: err.code || null });
@@ -480,11 +520,15 @@ async function initializeAndStart() {
 // our 15s grace window.
 const SHUTDOWN_GRACE_MS = parseInt(process.env.ROHY_SHUTDOWN_GRACE_MS, 10) || 15_000;
 let shuttingDown = false;
+// Set by installGracefulShutdown once the listeners exist, so the
+// uncaughtException handler below can drain through the same path. Before
+// that point there is nothing to drain and the process simply exits.
+let beginShutdown = null;
 function installGracefulShutdown(servers) {
-    const handleSignal = (signal) => {
+    const handleSignal = (signal, exitCode = 0) => {
         if (shuttingDown) return;
         shuttingDown = true;
-        bootLog.info('graceful shutdown initiated', { signal, grace_ms: SHUTDOWN_GRACE_MS });
+        bootLog.info('graceful shutdown initiated', { signal, grace_ms: SHUTDOWN_GRACE_MS, exit_code: exitCode });
 
         // Hard deadline — if anything wedges, exit anyway.
         const hardKill = setTimeout(() => {
@@ -516,22 +560,29 @@ function installGracefulShutdown(servers) {
                 clearTimeout(hardKill);
                 if (err) bootLog.warn('db close error during shutdown', { error: err.message });
                 else bootLog.info('database closed cleanly');
-                process.exit(0);
+                process.exit(exitCode);
             });
         }).catch((err) => {
             bootLog.warn('listener close error', { error: err?.message || String(err) });
         });
     };
 
+    beginShutdown = handleSignal;
     process.on('SIGTERM', () => handleSignal('SIGTERM'));
     process.on('SIGINT', () => handleSignal('SIGINT'));
 }
 
 initializeAndStart();
 
-// Keep process alive and handle errors
+// An uncaught exception leaves the process in an unknown state (a half-run
+// handler, a lock never released, a timer never cleared). Node's own policy is
+// to exit; swallowing it kept a possibly-wedged server alive and "healthy".
+// Log it, drain in-flight requests through the same path SIGTERM uses, and
+// exit non-zero so systemd / the container runtime restarts a clean process.
 process.on('uncaughtException', (err) => {
-    bootLog.error('uncaught exception', { error: err.message, stack: err.stack || null });
+    bootLog.error('uncaught exception — shutting down', { error: err?.message || String(err), stack: err?.stack || null });
+    if (beginShutdown) beginShutdown('uncaughtException', 1);
+    else process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {

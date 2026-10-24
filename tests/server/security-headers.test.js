@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { buildCsp, securityHeaders } from '../../server/security-headers.js';
+import { startTestServer } from '../utils/startTestServer.js';
 
 function runMiddleware(middleware, { req = {}, res = makeRes() } = {}) {
     return new Promise((resolve) => {
@@ -111,5 +112,17 @@ describe('securityHeaders middleware', () => {
             mw({}, makeRes(), () => { calls++; resolve(); });
         });
         expect(calls).toBe(1);
+    });
+});
+
+// Regression lock: Express's default `X-Powered-By: Express` header was still sent on every response, fingerprinting the stack for scanners (security audit 2026-10-24)
+describe('live server response headers', () => {
+    let server;
+    beforeAll(async () => { server = await startTestServer({ seed: false }); }, 60_000);
+    afterAll(async () => { await server?.close(); });
+
+    it.each(['/', '/api/health', '/api/no-such-route'])('%s carries no X-Powered-By', async (p) => {
+        const res = await fetch(`${server.baseUrl}${p}`);
+        expect(res.headers.get('x-powered-by')).toBeNull();
     });
 });

@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 import {
     authenticateToken,
     requireAdmin,
-    requireEducator,
     hasRoleAtLeast,
     ROLE_RANKS,
 } from '../middleware/auth.js';
@@ -18,6 +17,8 @@ import {
     REDACTED,
     redactPlatformSettingRows,
 } from '../redaction.js';
+import { validateOutboundUrl, OUTBOUND_FETCH_OPTIONS } from '../lib/outboundUrl.js';
+import { fetchWithTimeout, FetchTimeoutError } from '../services/fetchWithTimeout.js';
 import { logger } from '../logger.js';
 import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
 import { ensureSettings } from '../lib/oyonSettings.js';
@@ -48,13 +49,17 @@ import {
 import {
     missingField,
     auditSuccess,
+    clampLimit,
+    clampOffset,
     commitThen,
     dbAll,
+    escapeLikeTerm,
     parseCohortCaseEnforcement,
     redactAuditSetting,
     redactRows,
     REGISTRATION_MODES,
     registrationPolicy,
+    requirePlatformAdmin,
     resetCohortCaseEnforcementCache,
     resetRegistrationPolicyCache,
     tenantId,
@@ -128,8 +133,8 @@ router.post('/admin/export-records', authenticateToken, requireAdmin, (req, res)
     const { export_type, export_format, resource_type, resource_ids, record_count, file_name, file_size_bytes, filters_applied, notes } = req.body;
 
     dbAdapter.run(
-        `INSERT INTO export_records (user_id, export_type, export_format, resource_type, resource_ids, record_count, file_name, file_size_bytes, filters_applied, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO export_records (user_id, export_type, export_format, resource_type, resource_ids, record_count, file_name, file_size_bytes, filters_applied, notes, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             req.user.id,
             export_type,
@@ -140,7 +145,8 @@ router.post('/admin/export-records', authenticateToken, requireAdmin, (req, res)
             file_name || null,
             file_size_bytes || null,
             filters_applied ? JSON.stringify(filters_applied) : null,
-            notes || null
+            notes || null,
+            tenantId(req)
         ],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -151,15 +157,17 @@ router.post('/admin/export-records', authenticateToken, requireAdmin, (req, res)
 
 // GET /api/admin/export-records - Get export history (Admin only)
 router.get('/admin/export-records', authenticateToken, requireAdmin, (req, res) => {
-    const { limit = 100, offset = 0 } = req.query;
+    const limit = clampLimit(req.query.limit, 100, 1000);
+    const offset = clampOffset(req.query.offset);
 
     dbAdapter.all(
         `SELECT er.*, u.username
          FROM export_records er
          LEFT JOIN users u ON er.user_id = u.id
+         WHERE er.tenant_id = ?
          ORDER BY er.exported_at DESC
          LIMIT ? OFFSET ?`,
-        [parseInt(limit), parseInt(offset)],
+        [tenantId(req), limit, offset],
         (err, records) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ records: redactRows(records, { pii: 'allow', internal: 'allow' }) });
@@ -227,8 +235,12 @@ router.get('/master/body-regions', (req, res) => {
     );
 });
 
+// Master catalogue writes are admin-only. These tables have no tenant_id —
+// a row is seen by every tenant on the install — so an educator of one
+// tenant must not be able to add to them or (DELETE /master/medications/all)
+// soft-delete every medication platform-wide (security audit 2026-10-24, #6).
 // POST /api/master/body-regions - Create body region (Admin)
-router.post('/master/body-regions', authenticateToken, requireEducator, (req, res) => {
+router.post('/master/body-regions', authenticateToken, requireAdmin, (req, res) => {
     const missing = missingField(req.body, ['region_id', 'name']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { region_id, name, anatomical_view, description, parent_region_id, display_order } = req.body;
@@ -352,7 +364,7 @@ router.get('/master/scenario-templates/:id', (req, res) => {
 });
 
 // POST /api/master/scenario-templates - Create scenario template (Admin)
-router.post('/master/scenario-templates', authenticateToken, requireEducator, (req, res) => {
+router.post('/master/scenario-templates', authenticateToken, requireAdmin, (req, res) => {
     const missing = missingField(req.body, ['template_id', 'name', 'duration_minutes']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline } = req.body;
@@ -408,9 +420,15 @@ router.post('/master/scenario-templates', authenticateToken, requireEducator, (r
 // ---------------------------------------------------------------------------
 // --- LAB TESTS ---
 
+// Public master GETs page at most this many rows: `limit=-1` used to mean
+// "the whole table" and `limit=abc` became NULL (security audit 2026-10-24, #7).
+const MASTER_PAGE_MAX = 200;
+
 // GET /api/master/lab-tests - Get all lab tests
 router.get('/master/lab-tests', (req, res) => {
-    const { group, category, search, limit = 500, offset = 0 } = req.query;
+    const { group, category, search } = req.query;
+    const limit = clampLimit(req.query.limit, MASTER_PAGE_MAX, MASTER_PAGE_MAX);
+    const offset = clampOffset(req.query.offset);
 
     let sql = `SELECT * FROM lab_tests WHERE is_active = 1`;
     const params = [];
@@ -424,12 +442,13 @@ router.get('/master/lab-tests', (req, res) => {
         params.push(category);
     }
     if (search) {
-        sql += ` AND (test_name LIKE ? OR test_code LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`);
+        const term = `%${escapeLikeTerm(search)}%`;
+        sql += ` AND (test_name LIKE ? ESCAPE '\\' OR test_code LIKE ? ESCAPE '\\')`;
+        params.push(term, term);
     }
 
     sql += ` ORDER BY test_group, test_name LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limit, offset);
 
     dbAdapter.all(sql, params, (err, tests) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -450,7 +469,7 @@ router.get('/master/lab-tests/groups', (req, res) => {
 });
 
 // POST /api/master/lab-tests - Create lab test (Admin)
-router.post('/master/lab-tests', authenticateToken, requireEducator, (req, res) => {
+router.post('/master/lab-tests', authenticateToken, requireAdmin, (req, res) => {
     const missing = missingField(req.body, ['test_name', 'test_group', 'unit']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes } = req.body;
@@ -524,7 +543,9 @@ router.get('/master/lab-panels', (req, res) => {
 
 // GET /api/master/medications - Get all medications
 router.get('/master/medications', (req, res) => {
-    const { drug_class, category, search, limit = 500, offset = 0 } = req.query;
+    const { drug_class, category, search } = req.query;
+    const limit = clampLimit(req.query.limit, MASTER_PAGE_MAX, MASTER_PAGE_MAX);
+    const offset = clampOffset(req.query.offset);
 
     let sql = `SELECT * FROM medications WHERE is_active = 1 AND deleted_at IS NULL`;
     const params = [];
@@ -538,12 +559,13 @@ router.get('/master/medications', (req, res) => {
         params.push(category);
     }
     if (search) {
-        sql += ` AND (generic_name LIKE ? OR brand_names LIKE ? OR medication_code LIKE ? OR indications LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        const term = `%${escapeLikeTerm(search)}%`;
+        sql += ` AND (generic_name LIKE ? ESCAPE '\\' OR brand_names LIKE ? ESCAPE '\\' OR medication_code LIKE ? ESCAPE '\\' OR indications LIKE ? ESCAPE '\\')`;
+        params.push(term, term, term, term);
     }
 
     sql += ` ORDER BY generic_name LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limit, offset);
 
     dbAdapter.all(sql, params, (err, medications) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -552,7 +574,7 @@ router.get('/master/medications', (req, res) => {
 });
 
 // POST /api/master/medications - Create medication (Admin)
-router.post('/master/medications', authenticateToken, requireEducator, (req, res) => {
+router.post('/master/medications', authenticateToken, requireAdmin, (req, res) => {
     const missing = missingField(req.body, ['generic_name']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert } = req.body;
@@ -576,7 +598,7 @@ router.post('/master/medications', authenticateToken, requireEducator, (req, res
 });
 
 // POST /api/master/medications/bulk - Bulk import medications (Admin)
-router.post('/master/medications/bulk', authenticateToken, requireEducator, (req, res) => {
+router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, res) => {
     const { medications } = req.body; // Array of { name, uses, side_effects, description }
 
     if (!Array.isArray(medications) || medications.length === 0) {
@@ -633,7 +655,7 @@ router.post('/master/medications/bulk', authenticateToken, requireEducator, (req
 });
 
 // DELETE /api/master/medications/:id - Delete single medication (Admin)
-router.delete('/master/medications/:id', authenticateToken, requireEducator, (req, res) => {
+router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
 
     dbAdapter.get('SELECT * FROM medications WHERE id = ? AND deleted_at IS NULL', [id], (readErr, oldMedication) => {
@@ -707,7 +729,7 @@ router.delete('/master/medications/:id', authenticateToken, requireEducator, (re
 });
 
 // DELETE /api/master/medications/all - Clear all medications (Admin)
-router.delete('/master/medications/all', authenticateToken, requireEducator, (req, res) => {
+router.delete('/master/medications/all', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.get('SELECT COUNT(*) AS count FROM medications WHERE deleted_at IS NULL', [], (readErr, row) => {
         if (readErr) return res.status(500).json({ error: readErr.message });
         const oldCount = row?.count || 0;
@@ -821,7 +843,9 @@ router.get('/master/vital-sign-definitions', (req, res) => {
 
 // GET /api/master/diagnoses - Get diagnoses
 router.get('/master/diagnoses', (req, res) => {
-    const { body_system, severity, search, limit = 500, offset = 0 } = req.query;
+    const { body_system, severity, search } = req.query;
+    const limit = clampLimit(req.query.limit, MASTER_PAGE_MAX, MASTER_PAGE_MAX);
+    const offset = clampOffset(req.query.offset);
 
     let sql = `SELECT * FROM diagnoses WHERE is_active = 1`;
     const params = [];
@@ -835,12 +859,13 @@ router.get('/master/diagnoses', (req, res) => {
         params.push(severity);
     }
     if (search) {
-        sql += ` AND (name LIKE ? OR icd_code LIKE ? OR description LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        const term = `%${escapeLikeTerm(search)}%`;
+        sql += ` AND (name LIKE ? ESCAPE '\\' OR icd_code LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')`;
+        params.push(term, term, term);
     }
 
     sql += ` ORDER BY name LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limit, offset);
 
     dbAdapter.all(sql, params, (err, diagnoses) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1066,7 +1091,7 @@ router.get('/platform-settings/user-fields', authenticateToken, (req, res) => {
 });
 
 // PUT /api/platform-settings/user-fields - Update user field configuration (Admin only)
-router.put('/platform-settings/user-fields', authenticateToken, requireAdmin, (req, res) => {
+router.put('/platform-settings/user-fields', authenticateToken, requirePlatformAdmin, (req, res) => {
     const { config } = req.body;
 
     if (!config || typeof config !== 'object') {
@@ -1104,6 +1129,11 @@ router.put('/platform-settings/user-fields', authenticateToken, requireAdmin, (r
         });
 });
 
+// platform_settings has no tenant_id: one row of each key for the whole
+// install. Reads stay open to every tenant's admin (they are redacted), but
+// every write below is `requirePlatformAdmin` — an admin of the default
+// tenant — so a tenant admin cannot repoint the LLM provider, swap the voice
+// keys or change who may register (security audit 2026-10-24, #9).
 // GET /api/platform-settings - Get all platform settings (Admin only)
 router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.all(
@@ -1192,7 +1222,7 @@ router.get('/platform-settings/cohort-case-enforcement', authenticateToken, requ
     }
 });
 
-router.put('/platform-settings/cohort-case-enforcement', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/cohort-case-enforcement', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const enabled = req.body?.enabled === true || req.body?.enabled === 'true';
         await setAuditedPlatformSetting(req, 'enforce_cohort_case_access', enabled ? 'true' : 'false', 'update_cohort_case_enforcement');
@@ -1221,7 +1251,7 @@ router.get('/platform-settings/registration', authenticateToken, requireAdmin, a
     }
 });
 
-router.put('/platform-settings/registration', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/registration', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const mode = req.body?.mode;
         if (!REGISTRATION_MODES.includes(mode)) {
@@ -1271,7 +1301,7 @@ router.get('/platform-settings/language', async (req, res) => {
     }
 });
 
-router.put('/platform-settings/language', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/language', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const code = req.body?.default_ui_language;
         if (typeof code !== 'string' || !LANGUAGES[code]) {
@@ -1370,7 +1400,7 @@ router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) =>
 
 // Completion flag. "Finish" and "Dismiss" both land here — either way the
 // wizard stops auto-showing; it stays reachable from the top-bar menu.
-router.put('/platform-settings/setup', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/setup', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const completed = req.body?.completed === true || req.body?.completed === 'true';
         await setAuditedPlatformSetting(req, 'setup_completed', completed ? 'true' : 'false', 'update_setup_completed');
@@ -1461,7 +1491,7 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/platform-settings/llm - Update LLM configuration (Admin only)
-router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/llm', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const { provider, model, baseUrl, apiKey, enabled, maxOutputTokens, temperature, systemPromptTemplate, thinking } = req.body;
         if (thinking !== undefined && thinking !== 'off' && thinking !== 'on') {
@@ -1470,7 +1500,11 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
 
         if (provider) await setAuditedPlatformSetting(req, 'llm_provider', provider, 'update_platform_llm_settings');
         if (model !== undefined) await setAuditedPlatformSetting(req, 'llm_model', model, 'update_platform_llm_settings');
-        if (baseUrl) await setAuditedPlatformSetting(req, 'llm_base_url', baseUrl, 'update_platform_llm_settings');
+        if (baseUrl) {
+            const checked = validateOutboundUrl(baseUrl, PLATFORM_LLM_URL_OPTIONS);
+            if (!checked.ok) return res.status(400).json({ error: `Base URL rejected: ${checked.reason}`, code: 'invalid_base_url' });
+            await setAuditedPlatformSetting(req, 'llm_base_url', checked.url, 'update_platform_llm_settings');
+        }
         if (apiKey !== undefined && apiKey !== REDACTED) await setAuditedPlatformSetting(req, 'llm_api_key', apiKey, 'update_platform_llm_settings');
         if (enabled !== undefined) await setAuditedPlatformSetting(req, 'llm_enabled', String(enabled), 'update_platform_llm_settings');
         if (maxOutputTokens !== undefined) await setAuditedPlatformSetting(req, 'llm_max_output_tokens', String(maxOutputTokens), 'update_platform_llm_settings');
@@ -1484,13 +1518,62 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
     }
 });
 
+// Where an LLM probe (Test Connection, Detect models) goes, and with which
+// key. The caller may probe UNSAVED edits — `baseUrl`/`apiKey` in the body —
+// but the stored key travels only to the stored URL: pairing a body URL with
+// the saved key let an admin recover the key by pointing the probe at a host
+// they control (security audit 2026-10-24, #10). The form's `[redacted]`
+// placeholder means "the saved key", which is honoured only for the saved
+// URL. The URL itself passes validateOutboundUrl (http(s) only, no
+// credentials), the fetch gets a budget and never follows a redirect, and
+// upstream error text is truncated.
+//
+// The platform URL may name a private host: only a platform admin reaches
+// these routes (requirePlatformAdmin), the shipped default is a local model
+// server (http://localhost:1234/v1), and the proxy calls the stored URL as-is.
+// The host check guards URLs typed by LESS trusted callers (session/user/agent
+// settings, server/lib/llmGuards.js); applying it here would break the default
+// install while adding nothing an admin could not do by saving the URL.
+const PLATFORM_LLM_URL_OPTIONS = Object.freeze({ allowPrivate: true });
+const LLM_PROBE_TIMEOUT_MS = 10_000;
+const UPSTREAM_ERROR_MAX_CHARS = 300;
+
+const normalizeBaseUrl = (value) => String(value ?? '').trim().replace(/\/+$/, '');
+
+async function resolveLlmProbeTarget(body = {}) {
+    const storedBaseUrl = await getPlatformSetting('llm_base_url') || DEFAULT_LLM_SETTINGS.baseUrl;
+    const requestedBaseUrl = (typeof body?.baseUrl === 'string' && body.baseUrl.trim()) ? body.baseUrl : storedBaseUrl;
+    const sameAsStored = normalizeBaseUrl(requestedBaseUrl) === normalizeBaseUrl(storedBaseUrl);
+
+    const bodyKey = body?.apiKey;
+    let apiKey;
+    if (typeof bodyKey === 'string' && bodyKey !== REDACTED) {
+        apiKey = bodyKey;
+    } else {
+        apiKey = sameAsStored ? (await getPlatformSetting('llm_api_key') || '') : '';
+    }
+
+    const checked = validateOutboundUrl(requestedBaseUrl, PLATFORM_LLM_URL_OPTIONS);
+    if (!checked.ok) return { ok: false, reason: `Base URL rejected: ${checked.reason}` };
+    return { ok: true, baseUrl: checked.url, apiKey, sameAsStored };
+}
+
+async function upstreamErrorText(response) {
+    const text = await response.text();
+    return text.length > UPSTREAM_ERROR_MAX_CHARS ? `${text.slice(0, UPSTREAM_ERROR_MAX_CHARS)}…` : text;
+}
+
 // POST /api/platform-settings/llm/test - Test LLM connection (Admin only)
-router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/platform-settings/llm/test', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const provider = await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
         const model = await getPlatformSetting('llm_model') || '';
-        const baseUrl = await getPlatformSetting('llm_base_url') || DEFAULT_LLM_SETTINGS.baseUrl;
-        const apiKey = await getPlatformSetting('llm_api_key') || '';
+        // Test Connection probes the SAVED configuration only (the client sends
+        // `{}`), and a pass is recorded as that configuration's fingerprint —
+        // so the body is deliberately not read here.
+        const target = await resolveLlmProbeTarget({});
+        if (!target.ok) return res.status(400).json({ success: false, error: target.reason });
+        const { baseUrl, apiKey } = target;
 
         let headers = { 'Content-Type': 'application/json' };
         let requestPayload = {};
@@ -1525,14 +1608,15 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
         }
 
         (req.log || routesLlmLog).info('llm test request sending', { provider, endpoint });
-        const testResponse = await fetch(endpoint, {
+        const testResponse = await fetchWithTimeout(endpoint, {
             method: 'POST',
             headers,
-            body: JSON.stringify(requestPayload)
-        });
+            body: JSON.stringify(requestPayload),
+            ...OUTBOUND_FETCH_OPTIONS,
+        }, { timeoutMs: LLM_PROBE_TIMEOUT_MS });
 
         if (!testResponse.ok) {
-            const errText = await testResponse.text();
+            const errText = await upstreamErrorText(testResponse);
             await setPlatformSetting(LLM_LAST_TEST_KEY, '', req.user.id);
             return res.status(400).json({
                 success: false,
@@ -1575,15 +1659,9 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
 //
 // Body params (baseUrl/apiKey/provider) let the caller detect against UNSAVED
 // edits; each falls back to the persisted platform setting when omitted.
-router.post('/platform-settings/llm/models/detect', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/platform-settings/llm/models/detect', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const provider = req.body?.provider || await getPlatformSetting('llm_provider') || DEFAULT_LLM_SETTINGS.provider;
-        const baseUrl = (req.body?.baseUrl ?? await getPlatformSetting('llm_base_url')) || DEFAULT_LLM_SETTINGS.baseUrl;
-        // The settings form holds the REDACTED placeholder for a saved key (the
-        // GET never returns the key itself) and sends it back here; that means
-        // "use the saved key", not a key called "[redacted]".
-        const bodyKey = req.body?.apiKey;
-        const apiKey = ((bodyKey === REDACTED ? undefined : bodyKey) ?? await getPlatformSetting('llm_api_key')) || '';
 
         if (provider === 'anthropic') {
             // Anthropic has no OpenAI-style /models list to enumerate here; the
@@ -1591,14 +1669,18 @@ router.post('/platform-settings/llm/models/detect', authenticateToken, requireAd
             return res.json({ models: [], supported: false });
         }
 
+        const target = await resolveLlmProbeTarget(req.body);
+        if (!target.ok) return res.status(400).json({ error: target.reason, code: 'invalid_base_url' });
+        const { baseUrl, apiKey } = target;
+
         const headers = { 'Content-Type': 'application/json' };
         if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-        const endpoint = `${String(baseUrl).replace(/\/$/, '')}/models`;
+        const endpoint = `${baseUrl}/models`;
 
         (req.log || routesLlmLog).info('llm models detect', { provider, endpoint });
-        const resp = await fetch(endpoint, { method: 'GET', headers });
+        const resp = await fetchWithTimeout(endpoint, { method: 'GET', headers, ...OUTBOUND_FETCH_OPTIONS }, { timeoutMs: LLM_PROBE_TIMEOUT_MS });
         if (!resp.ok) {
-            const errText = await resp.text();
+            const errText = await upstreamErrorText(resp);
             return res.status(400).json({ error: `Model list request returned ${resp.status}: ${errText}` });
         }
         const data = await resp.json();
@@ -1620,6 +1702,7 @@ router.post('/platform-settings/llm/models/detect', authenticateToken, requireAd
         // internal fault (a bug in this handler, a JSON parse of our own
         // state), which is what the fetch-shaped check below separates out.
         const upstreamUnreachable = err instanceof TypeError
+            || err instanceof FetchTimeoutError
             || err?.name === 'AbortError'
             || err?.name === 'FetchError'
             || typeof err?.cause?.code === 'string';
@@ -1657,7 +1740,7 @@ router.get('/platform-settings/rate-limits', authenticateToken, async (req, res)
 });
 
 // PUT /api/platform-settings/rate-limits - Update rate limit configuration (Admin only)
-router.put('/platform-settings/rate-limits', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/rate-limits', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const { tokensPerUserDaily, costPerUserDaily, tokensPlatformDaily, costPlatformDaily, requestsPerUserHourly } = req.body;
 
@@ -1701,7 +1784,7 @@ router.get('/platform-settings/monitor', async (req, res) => {
 });
 
 // PUT /api/platform-settings/monitor - Update monitor visibility settings (Admin only)
-router.put('/platform-settings/monitor', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/monitor', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const validKeys = Object.keys(DEFAULT_MONITOR_SETTINGS);
         const invalidKey = validKeys.find(key => req.body[key] !== undefined && typeof req.body[key] !== 'boolean');
@@ -1745,7 +1828,7 @@ router.get('/platform-settings/chat', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/platform-settings/chat - Update chat/doctor settings (Admin only)
-router.put('/platform-settings/chat', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/chat', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const { doctorName, doctorAvatar } = req.body;
 
@@ -1860,7 +1943,7 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/platform-settings/voice - Update voice settings (Admin only)
-router.put('/platform-settings/voice', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/voice', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const body = req.body || {};
         const allowed = new Set([
@@ -2094,7 +2177,7 @@ router.get('/platform-settings/affect', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/platform-settings/affect - Update affect-routing config (Admin only)
-router.put('/platform-settings/affect', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/affect', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const body = req.body || {};
         const allowed = new Set(Object.keys(DEFAULT_AFFECT_ROUTING));
@@ -2179,7 +2262,7 @@ router.get('/platform-settings/avatars', authenticateToken, async (req, res) => 
 });
 
 // PUT /api/platform-settings/avatars - Update persona defaults (Admin only)
-router.put('/platform-settings/avatars', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/platform-settings/avatars', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const body = req.body || {};
         for (const key of Object.keys(body)) {

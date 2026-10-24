@@ -157,7 +157,8 @@ describe('registration & auth-entry pathways', () => {
         it('claims an empty instance for its first signup, tolerating a concurrent racer', async () => {
             const fresh = await startTestServer({
                 seed: false,
-                env: { NODE_ENV: 'production', ROHY_DISABLE_AUTH_RATE_LIMIT: '1' },
+                // validateEnv refuses a JWT_SECRET under 32 chars in production.
+                env: { NODE_ENV: 'production', JWT_SECRET: 'rohy-tests-production-secret-0123456789', ROHY_DISABLE_AUTH_RATE_LIMIT: '1' },
             });
             const freshDb = await openDb(fresh.dbPath);
             try {
@@ -340,6 +341,11 @@ describe('registration approval queue', () => {
             `SELECT COUNT(*) AS n FROM cohort_members m JOIN users u ON u.id = m.user_id
               WHERE u.username = ? AND m.deleted_at IS NULL`, ['approve_applicant']);
         expect(member.n).toBeGreaterThanOrEqual(1);
+
+        // Regression lock: the approved request kept its copy of the password
+        // hash forever. It moved to the users row; the request keeps none.
+        const decided = await get(db, `SELECT password_hash FROM registration_requests WHERE id = ?`, [req.id]);
+        expect(decided.password_hash).toBe('');
     });
 
     it('refuses a non-admin the approve route entirely', async () => {
@@ -384,6 +390,12 @@ describe('registration approval queue', () => {
             `SELECT COUNT(*) AS n FROM registration_requests WHERE username = ? AND status = 'rejected'`,
             ['applicant2']);
         expect(rej.n).toBe(1);
+        // Regression lock: a rejected request kept the applicant's password
+        // hash forever, though no account would ever be made from it.
+        const rejRow = await get(db,
+            `SELECT password_hash FROM registration_requests WHERE username = ? AND status = 'rejected'`,
+            ['applicant2']);
+        expect(rejRow.password_hash).toBe('');
 
         // The partial unique index covers LIVE (pending) rows only, so a rejected
         // applicant is free to re-apply — leaving a rejected row AND a fresh

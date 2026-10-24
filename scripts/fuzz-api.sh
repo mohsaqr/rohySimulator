@@ -103,7 +103,6 @@ EXCLUDE=(
     # own provider override answers 500 "no such table: config". The fix is to
     # resolve the platform LLM the way /proxy/llm does, which is a change to
     # the LLM resolution path, not a one-line guard. Remove this line with it.
-    '^/api/agents/templates/\{id\}/test-llm$'
     # Proxies to a plugin's content origin. With no content installed (CI never
     # runs `npm run setup:content`) it answers 503 plugin_remote_not_configured
     # BY DESIGN — plugin-rooms.spec.js pins that message — so it is not a
@@ -157,6 +156,12 @@ fi
 # run (no library there; a dev box had one). An empty directory is enough:
 # the routes then answer 400/404 like any other.
 mkdir -p "$OUT/pathology-library"
+# The server runs with NODE_ENV=production, where ALLOW_DEFAULT_USERS=1
+# (admin/admin123) is refused at boot. Provision the admin through the
+# ROHY_ADMIN_* bootstrap with a per-run password instead, and create the
+# student account through the API like the educator below.
+FUZZ_ADMIN_PASSWORD="Fuzz-$(openssl rand -hex 12)-Aa1"
+FUZZ_STUDENT_PASSWORD="FuzzStudent-123"
 echo "[fuzz] booting an isolated server on :$PORT"
 (
     cd "$ROOT"
@@ -166,7 +171,8 @@ echo "[fuzz] booting an isolated server on :$PORT"
     NODE_ENV=production \
     ROHY_PROVA_URL=off \
     FRONTEND_URL="$API" \
-    ALLOW_DEFAULT_USERS=1 \
+    ROHY_ADMIN_USERNAME=admin \
+    ROHY_ADMIN_PASSWORD="$FUZZ_ADMIN_PASSWORD" \
     ROHY_DISABLE_AUTH_RATE_LIMIT=1 \
     ROHY_DISABLE_GENERAL_RATE_LIMIT=1 \
     OYON_ENABLED=1 \
@@ -178,13 +184,16 @@ echo "[fuzz] booting an isolated server on :$PORT"
 SERVER_PID=$!
 wait_for_server || { echo "[fuzz] server failed to boot" >&2; exit 1; }
 
-ADMIN_TOKEN="$(login admin admin123)"
+ADMIN_TOKEN="$(login admin "$FUZZ_ADMIN_PASSWORD")"
 [ -n "$ADMIN_TOKEN" ] || { echo "[fuzz] admin login failed" >&2; exit 1; }
 curl -s -o "$OUT/educator-create.json" -X POST "$API/api/users/create" \
     -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
     --data '{"username":"fuzz_educator","name":"Fuzz Educator","email":"fuzz_educator@example.invalid","password":"FuzzEducator-123","role":"educator"}'
+curl -s -o "$OUT/student-create.json" -X POST "$API/api/users/create" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+    --data "{\"username\":\"student\",\"name\":\"Fuzz Student\",\"email\":\"fuzz_student@example.invalid\",\"password\":\"$FUZZ_STUDENT_PASSWORD\",\"role\":\"student\"}"
 EDUCATOR_TOKEN="$(login fuzz_educator FuzzEducator-123)"
-STUDENT_TOKEN="$(login student student123)"
+STUDENT_TOKEN="$(login student "$FUZZ_STUDENT_PASSWORD")"
 [ -n "$EDUCATOR_TOKEN" ] || { echo "[fuzz] educator login failed: $(cat "$OUT/educator-create.json")" >&2; exit 1; }
 [ -n "$STUDENT_TOKEN" ] || { echo "[fuzz] student login failed" >&2; exit 1; }
 

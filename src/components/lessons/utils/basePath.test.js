@@ -17,7 +17,13 @@ describe('lesson files under a base path', () => {
         const { withBasePath, resolveFileUrl } = await loadUnder('/rohy/');
         expect(resolveFileUrl('/uploads/a.pdf')).toBe('/rohy/uploads/a.pdf');
         expect(resolveFileUrl('https://x.example/uploads/a.pdf')).toBe('https://x.example/uploads/a.pdf');
-        expect(resolveFileUrl('./uploads/a.png')).toBe('./uploads/a.png');
+        // Regression lock: a non-/uploads lesson file URL (javascript:, data:, relative) reached an <a href> verbatim
+        expect(resolveFileUrl('./uploads/a.png')).toBe('');
+        expect(resolveFileUrl('javascript:alert(1)')).toBe('');
+        expect(resolveFileUrl(' JavaScript:alert(1)')).toBe('');
+        expect(resolveFileUrl('data:text/html,<script>alert(1)</script>')).toBe('');
+        expect(resolveFileUrl('//evil.example/x.pdf')).toBe('');
+        expect(resolveFileUrl('/api/files/7')).toBe('/rohy/api/files/7');
         expect(resolveFileUrl(null)).toBe('');
         expect(withBasePath('<img src="/uploads/a.png"><a href=\'/uploads/b.pdf\'>b</a><a href="https://x.example/uploads/c">c</a><p>/uploads/d in prose</p>'))
             .toBe('<img src="/rohy/uploads/a.png"><a href=\'/rohy/uploads/b.pdf\'>b</a><a href="https://x.example/uploads/c">c</a><p>/uploads/d in prose</p>');

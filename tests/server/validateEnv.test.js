@@ -7,6 +7,9 @@ const baseProdEnv = () => ({
     FRONTEND_URL: 'https://example.com/rohy',
     ROHY_DB: '/opt/data/rohy/database.sqlite',
     TRANSFORMERS_CACHE: '/var/cache/rohy-hf',
+    // A proxy on another host: the production posture the validator stops
+    // warning about (unset / loopback warn — see the ROHY_TRUST_PROXY block).
+    ROHY_TRUST_PROXY: '172.18.0.0/16',
 });
 
 describe('validateEnv', () => {
@@ -48,9 +51,19 @@ describe('validateEnv', () => {
             expect(errors).toEqual(expect.arrayContaining([expect.stringMatching(/JWT_SECRET is not set/)]));
         });
 
-        it('warns on short secret (<32 chars)', () => {
-            const { warnings } = validateEnv({ JWT_SECRET: 'short' });
+        it('warns on short secret (<32 chars) outside production', () => {
+            const { errors, warnings } = validateEnv({ JWT_SECRET: 'short' });
             expect(warnings).toEqual(expect.arrayContaining([expect.stringMatching(/JWT_SECRET is only 5 chars/)]));
+            expect(errors).toHaveLength(0);
+        });
+
+        // Regression lock: a short JWT_SECRET only warned in production. Every
+        // session token is signed with it, so a guessable secret is a login as
+        // anyone — fatal at boot, not a line in the log.
+        it('is FATAL on a short secret in production', () => {
+            const { errors, warnings } = validateEnv({ ...baseProdEnv(), JWT_SECRET: 'short' });
+            expect(errors).toEqual(expect.arrayContaining([expect.stringMatching(/JWT_SECRET is only 5 chars.*at least 32/)]));
+            expect(warnings.find(w => w.includes('JWT_SECRET'))).toBeUndefined();
         });
 
         it('passes for a sufficiently long secret', () => {
@@ -146,14 +159,41 @@ describe('validateEnv', () => {
     });
 
     describe('ALLOW_DEFAULT_USERS', () => {
-        it('warns when set to 1 in production', () => {
+        // Regression lock: ALLOW_DEFAULT_USERS=1 in production only warned. It
+        // seeds admin/admin123 — a published password on an admin account — so
+        // it is fatal, and the message names the variables to use instead.
+        it('is FATAL when set to 1 in production, and points at ROHY_ADMIN_USERNAME/PASSWORD', () => {
             const env = { ...baseProdEnv(), ALLOW_DEFAULT_USERS: '1' };
-            const { warnings } = validateEnv(env);
-            expect(warnings).toEqual(expect.arrayContaining([expect.stringMatching(/ALLOW_DEFAULT_USERS=1 in production/)]));
-        });
-        it('does NOT warn in dev', () => {
-            const { warnings } = validateEnv({ NODE_ENV: 'development', JWT_SECRET: 'x'.repeat(40), ALLOW_DEFAULT_USERS: '1' });
+            const { errors, warnings } = validateEnv(env);
+            expect(errors).toEqual(expect.arrayContaining([expect.stringMatching(/ALLOW_DEFAULT_USERS=1 in production/)]));
+            expect(errors.join(' ')).toMatch(/ROHY_ADMIN_USERNAME/);
+            expect(errors.join(' ')).toMatch(/ROHY_ADMIN_PASSWORD/);
             expect(warnings.find(w => w.includes('ALLOW_DEFAULT_USERS'))).toBeUndefined();
+        });
+        it('is neither an error nor a warning in dev', () => {
+            const { errors, warnings } = validateEnv({ NODE_ENV: 'development', JWT_SECRET: 'x'.repeat(40), ALLOW_DEFAULT_USERS: '1' });
+            expect(warnings.find(w => w.includes('ALLOW_DEFAULT_USERS'))).toBeUndefined();
+            expect(errors.find(e => e.includes('ALLOW_DEFAULT_USERS'))).toBeUndefined();
+        });
+    });
+
+    describe('ROHY_TRUST_PROXY in production', () => {
+        // Regression lock: behind a proxy on another host every client shares
+        // one rate-limit bucket unless this is set; production must say so.
+        it('warns when unset', () => {
+            const env = baseProdEnv();
+            delete env.ROHY_TRUST_PROXY;
+            const { warnings } = validateEnv(env);
+            expect(warnings).toEqual(expect.arrayContaining([expect.stringMatching(/ROHY_TRUST_PROXY is not set.*ONE rate-limit bucket/)]));
+        });
+        it('warns when left at loopback', () => {
+            const { warnings } = validateEnv({ ...baseProdEnv(), ROHY_TRUST_PROXY: 'loopback' });
+            expect(warnings).toEqual(expect.arrayContaining([expect.stringMatching(/ROHY_TRUST_PROXY is "loopback" in production/)]));
+        });
+        it('does not warn for a proxy address or hop count, and never in dev', () => {
+            expect(validateEnv({ ...baseProdEnv(), ROHY_TRUST_PROXY: '10.0.0.5' }).warnings.find(w => w.includes('ROHY_TRUST_PROXY'))).toBeUndefined();
+            expect(validateEnv({ ...baseProdEnv(), ROHY_TRUST_PROXY: '1' }).warnings.find(w => w.includes('ROHY_TRUST_PROXY'))).toBeUndefined();
+            expect(validateEnv({ NODE_ENV: 'development', JWT_SECRET: 'x'.repeat(40) }).warnings.find(w => w.includes('ROHY_TRUST_PROXY'))).toBeUndefined();
         });
     });
 

@@ -28,7 +28,7 @@
  */
 
 import crypto from 'crypto';
-import { authTtlSeconds } from './authTtl.js';
+import { authTtlSeconds, cookieSecure } from './authTtl.js';
 
 export const CSRF_COOKIE_NAME = 'rohy_csrf';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
@@ -68,7 +68,8 @@ export function csrfCookieOptions(maxAgeSeconds = authTtlSeconds()) {
         // (rohy_auth) IS HttpOnly; this one is the public half of the
         // double-submit pair.
         httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
+        // Same rule as the rohy_auth cookie — see cookieSecure() in authTtl.js.
+        secure: cookieSecure(),
         sameSite: 'lax',
         path: '/',
         maxAge: maxAgeSeconds * 1000,

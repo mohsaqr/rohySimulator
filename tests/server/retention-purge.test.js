@@ -15,6 +15,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-retention-tests-secret';
 
@@ -119,6 +120,8 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'retention-admin-tok' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, adminToken, { userId: admin.id });
     });
 
     afterAll(async () => {
@@ -211,6 +214,8 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'retention-student' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, studentToken, { userId: targetUserId });
         // Note: targetUserId now points to a purged (status='inactive') user.
         // authenticateToken should reject before requireAdmin even runs.
         const res = await fetch(`${server.baseUrl}/api/users/${targetUserId}/purge`, {
@@ -302,6 +307,8 @@ describe('Oyon purge + retention contract', () => {
             { id: admin.id, username: 'oyon_admin', email: 'oyon_admin@example.com', role: 'admin', tenant_id: 1 },
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'oyon-admin-tok' });
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, adminToken, { userId: admin.id });
     });
 
     afterAll(async () => {

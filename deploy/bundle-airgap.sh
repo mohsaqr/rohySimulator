@@ -509,7 +509,7 @@ command -v docker >/dev/null 2>&1 || { echo "docker not installed on this host";
 if [[ ! -f .env ]]; then
     cp .env.example .env
     echo "[airgap-docker] .env created from .env.example — EDIT it before continuing:"
-    echo "                ROHY_HOSTNAME, ALLOW_DEFAULT_USERS=1 (first boot only), API keys."
+    echo "                ROHY_HOSTNAME, ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD (first boot only), API keys."
     echo "                Then re-run this installer."
     exit 0
 fi

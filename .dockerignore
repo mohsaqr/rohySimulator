@@ -74,6 +74,11 @@ e2e
 # Agent + scratch directories
 codexIntmep
 AGENT-NOTE-*.md
+# Named explicitly as well: these hold live credentials (the Prova tokens, a
+# Google service key), so they must stay out even if the patterns above are
+# ever narrowed. `*.md` and `AGENT-NOTE-*.md` already cover the first today.
+AGENT-NOTE-PROVA-*.md
+googlekey.text
 ultraReview
 .claude
 .claude-claudef

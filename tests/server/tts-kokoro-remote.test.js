@@ -14,6 +14,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken, recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 const REMOTE_KEY = 'remote-test-key';
@@ -81,6 +82,8 @@ describe('POST /api/tts with ROHY_KOKORO_URL (live server, stub remote host)', (
             TEST_JWT_SECRET,
             { expiresIn: '1h' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId: row.id });
     }, 90_000);
 
     afterAll(async () => {
@@ -162,7 +165,8 @@ describe('remote Kokoro from Settings → Voice (live server)', () => {
             );
         });
         await new Promise((resolve) => db.close(() => resolve()));
-        return jwt.sign({ id, username, email: `${username}@example.com`, role, tenant_id: 1 }, TEST_JWT_SECRET, { expiresIn: '1h' });
+        // mintToken signs AND records the active_sessions row authenticateToken requires.
+        return mintToken(dbPath, { id, username, email: `${username}@example.com`, role, tenant_id: 1 }, TEST_JWT_SECRET);
     }
 
     async function call(method, path, token, body) {

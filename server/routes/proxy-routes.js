@@ -44,12 +44,21 @@ import {
 import { isRoomEnabled, specialistAnswers } from '../shared/caseRooms.js';
 import {
     BudgetExceededError,
+    LLM_MIN_PREFLIGHT_TOKENS,
     budgetExceededResponse,
     enforceBudget,
     recordUsage
 } from '../usage-budget.js';
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor, thinkingOffParams, thinkingIsOff } from '../shared/llmCatalogue.js';
-import { SQL_NOW } from '../shared/time.js';
+import { SQL_NOW, sqlNowPlus } from '../shared/time.js';
+import { OUTBOUND_FETCH_OPTIONS, validateOutboundUrl } from '../lib/outboundUrl.js';
+import {
+    DEFAULT_MAX_OUTPUT_TOKENS_CAP,
+    clampOutputTokens,
+    clampTemperature,
+    resolveSessionModel,
+    validateChatMessages,
+} from '../lib/llmGuards.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { buildSessionPatientPrompt, isSessionEnded } from '../services/patientPersona.js';
 import { buildSessionDiscussantPrompt, buildTeamAgentSituation } from '../services/agentSituation.js';
@@ -168,6 +177,16 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
     const startTime = Date.now();
 
     try {
+        // 0. The client's conversation, checked before anything is read or
+        // spent: {role: user|assistant, content: string} only, bounded in
+        // count and size. The server builds the one system message below;
+        // both provider paths (Anthropic, OpenAI-compatible) send only what
+        // passed here (security audit 2026-10-24, LLM-4).
+        const chat = validateChatMessages(messages);
+        if (!chat.ok) {
+            return res.status(400).json({ error: chat.error, code: 'invalid_messages' });
+        }
+
         // 1. Check if LLM is enabled
         const llmEnabled = await new Promise((resolve, reject) => {
             dbAdapter.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', ['llm_enabled'], (err, row) => {
@@ -256,6 +275,36 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 error: 'Platform daily cost limit exceeded. Please try again tomorrow.',
                 resetsAt: 'midnight UTC'
             });
+        }
+
+        // 6b. Requests per user per hour (admin setting
+        // `rate_limit_requests_per_user_hourly`, written by PUT
+        // /platform-settings/rate-limits). Stored since the setting existed,
+        // enforced only since 2026-10-24: it was read back to the admin page
+        // and never consulted here. Counts this user's requests that reached
+        // the provider in the last hour (refusals are not held against them,
+        // or a limited user would stay limited for ever). Rows are stamped
+        // with SQL_NOW (ISO, 'T'), so the string comparison is exact for every
+        // row written since migration 0050.
+        const requestsPerUserHourly = await getLimitSetting('rate_limit_requests_per_user_hourly', 0);
+        if (requestsPerUserHourly > 0) {
+            const hourly = await dbAdapter.get(
+                `SELECT COUNT(*) AS n FROM llm_request_log
+                  WHERE tenant_id = ? AND user_id = ?
+                    AND COALESCE(status, 'success') != 'rate_limited'
+                    AND request_timestamp >= ${sqlNowPlus("'-1 hour'")}`,
+                [tenantId(req), userId]
+            );
+            const requestsThisHour = Number(hourly?.n || 0);
+            if (requestsThisHour >= requestsPerUserHourly) {
+                logRateLimit('User hourly request limit exceeded');
+                return res.status(429).json({
+                    error: 'Hourly request limit reached. Please try again later.',
+                    code: 'hourly_limit',
+                    requestsUsed: requestsThisHour,
+                    requestsLimit: requestsPerUserHourly
+                });
+            }
         }
 
         // 7. Get LLM settings from platform settings (these are the defaults)
@@ -564,9 +613,66 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
         }
 
-        // Priority: agent > session > platform
-        let provider = agentProvider || (sessionLlmSettings?.provider && sessionLlmSettings.provider.trim()) || platformProvider;
-        const baseModel = agentModel || (sessionLlmSettings?.model && sessionLlmSettings.model.trim()) || platformModel;
+        // Priority: agent > session > platform.
+        //
+        // What a SESSION may say about routing (security audit 2026-10-24,
+        // LLM-2): its baseUrl is honoured only when it is the platform's own
+        // URL, or when the requester is educator+, the URL passes
+        // validateOutboundUrl and the session ships its own apiKey. The
+        // write paths (POST /sessions, PUT /users/preferences) enforce the
+        // same rule, but rows written before the fix did not pass it, so it
+        // is re-checked here. A session provider is meaningful only with
+        // such a custom endpoint — on the platform URL it would just change
+        // the payload shape — so it is honoured only alongside one.
+        const stripSlash = (u) => String(u || '').trim().replace(/\/+$/, '');
+        const platformBaseNormalised = stripSlash(platformBaseUrl);
+        const requesterIsEducator = hasRoleAtLeast(req.user, ROLE_RANKS.educator);
+        // A session apiKey counts only for educator+ (the write paths drop it
+        // below that); a pre-fix student row's key is ignored like its URL.
+        const sessionKey = (requesterIsEducator && typeof sessionLlmSettings?.apiKey === 'string' && sessionLlmSettings.apiKey.trim()) || null;
+        let sessionCustomBase = null;      // validated, non-platform URL to use
+        let sessionBaseIsPlatform = false;
+        if (sessionLlmSettings?.baseUrl && String(sessionLlmSettings.baseUrl).trim()) {
+            const sessionBase = stripSlash(sessionLlmSettings.baseUrl);
+            if (sessionBase === platformBaseNormalised) {
+                sessionBaseIsPlatform = true;
+            } else {
+                const checked = validateOutboundUrl(sessionBase);
+                let refusal = null;
+                if (!requesterIsEducator) refusal = 'requester is below educator';
+                else if (!checked.ok) refusal = checked.reason;
+                else if (!sessionKey) refusal = 'no session-supplied apiKey';   // F-002
+                if (refusal) {
+                    (req.log || routesLlmLog).warn('ignoring custom session baseUrl', {
+                        user_id: userId, session_id: session_id ?? null, reason: refusal
+                    });
+                } else {
+                    sessionCustomBase = checked.url;
+                }
+            }
+        }
+        const sessionProvider = sessionCustomBase && typeof sessionLlmSettings?.provider === 'string'
+            ? sessionLlmSettings.provider.trim() || null
+            : null;
+        if (!sessionProvider && !agentProvider && sessionLlmSettings?.provider) {
+            (req.log || routesLlmLog).info('ignoring session provider without a custom endpoint', { session_id: session_id ?? null });
+        }
+        let provider = agentProvider || sessionProvider || platformProvider;
+        // A session model is honoured only when it is in the catalogue for the
+        // provider, equals the platform model, or goes to the educator's own
+        // endpoint (LLM-3); anything else falls back to the platform model.
+        let baseModel = agentModel || platformModel;
+        if (!agentModel && sessionLlmSettings?.model) {
+            const picked = resolveSessionModel({
+                requested: sessionLlmSettings.model, provider, platformModel, customEndpoint: Boolean(sessionCustomBase)
+            });
+            baseModel = picked.model;
+            if (!picked.honoured) {
+                (req.log || routesLlmLog).info('session model not in catalogue; using platform model', {
+                    session_id: session_id ?? null, provider, requested: String(sessionLlmSettings.model).slice(0, 80)
+                });
+            }
+        }
 
         // Voice-mode model override: when client sends session_mode='voice' AND admin has set
         // llm_model_voice in platform settings, swap to that model for this call only.
@@ -592,46 +698,46 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             // Agent provider override
             if (agentProvider === 'openai') {
                 baseUrl = 'https://api.openai.com/v1';
+                apiKey = agentApiKey || platformApiKey;
             } else if (agentProvider === 'anthropic') {
                 baseUrl = 'https://api.anthropic.com/v1';
+                apiKey = agentApiKey || platformApiKey;
             } else if (agentProvider === 'openrouter') {
                 baseUrl = 'https://openrouter.ai/api/v1';
+                apiKey = agentApiKey || platformApiKey;
             } else if (agentProvider === 'custom' && agentEndpoint) {
-                baseUrl = agentEndpoint;
-            }
-            apiKey = agentApiKey || platformApiKey;
-        } else if (sessionLlmSettings?.baseUrl && sessionLlmSettings.baseUrl.trim()) {
-            // F-002: session-level baseUrl is reachable from
-            // /users/preferences (any authenticated user can set it).
-            // Pre-fix we paired the user-supplied URL with the platform
-            // API key, which let any account exfiltrate the platform key
-            // by pointing baseUrl at an attacker-controlled host. Now:
-            // a custom session baseUrl is only honored when it ships with
-            // its own apiKey. Otherwise we fall through to the platform
-            // baseUrl + platform key (still server-trusted).
-            const sessionBase = sessionLlmSettings.baseUrl.trim();
-            const sessionKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || null;
-            // Normalize trailing slashes so an operator setting the same
-            // URL with/without a trailing `/` doesn't silently fall into
-            // the "custom URL → drop platform key" branch.
-            const stripSlash = (u) => (u || '').replace(/\/+$/, '');
-            if (stripSlash(sessionBase) === stripSlash(platformBaseUrl)) {
-                // Same endpoint as platform — safe to reuse platform key.
-                apiKey = sessionKey || platformApiKey;
-            } else if (sessionKey) {
-                baseUrl = sessionBase;
-                apiKey = sessionKey;
+                // An educator-typed URL. The platform key goes ONLY to the
+                // platform's own URL (LLM-1): on any other host the agent
+                // uses its own key or none. The URL is re-checked here —
+                // templates saved before 2026-10-24 were never validated —
+                // and a refused one falls back to the platform endpoint and
+                // key, as a session URL without a key always has.
+                const agentBase = stripSlash(agentEndpoint);
+                if (agentBase === platformBaseNormalised) {
+                    apiKey = agentApiKey || platformApiKey;
+                } else {
+                    const checked = validateOutboundUrl(agentBase);
+                    if (checked.ok) {
+                        baseUrl = checked.url;
+                        apiKey = agentApiKey || '';
+                    } else {
+                        (req.log || routesLlmLog).warn('agent endpoint refused; using the platform endpoint', {
+                            agent_template_id: agentTemplateId, reason: checked.reason
+                        });
+                    }
+                }
             } else {
-                (req.log || routesLlmLog).warn('refusing custom session baseUrl without session-supplied apiKey', {
-                    user_id: userId,
-                    session_id: session_id ?? null
-                });
-                // Drop the custom baseUrl; keep the rest of the request
-                // flowing on the platform endpoint+key.
-                apiKey = platformApiKey;
+                apiKey = agentApiKey || platformApiKey;
             }
+        } else if (sessionCustomBase) {
+            // Educator+, validated URL, own key (checked above).
+            baseUrl = sessionCustomBase;
+            apiKey = sessionKey;
+        } else if (sessionBaseIsPlatform) {
+            // Same endpoint as platform — safe to reuse platform key.
+            apiKey = sessionKey || platformApiKey;
         } else {
-            apiKey = (sessionLlmSettings?.apiKey && sessionLlmSettings.apiKey.trim()) || platformApiKey;
+            apiKey = sessionKey || platformApiKey;
         }
 
         // Voice override may pick a model from a different vendor than the
@@ -683,12 +789,28 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         // Precedence (matches provider/model): agent > session > platform.
         // `?? null` because `0` is a valid temperature; `||` would silently
         // skip it.
-        const maxOutputTokensRaw = agentMaxTokens ?? (sessionLlmSettings?.maxOutputTokens || platformMaxTokens);
-        const temperatureRaw = agentTemperature ?? (sessionLlmSettings?.temperature !== undefined && sessionLlmSettings?.temperature !== '' ? sessionLlmSettings.temperature : platformTemperature);
+        const sessionMaxTokensRaw = sessionLlmSettings?.maxOutputTokens;
+        const sessionTemperatureRaw = sessionLlmSettings?.temperature;
+        const maxTokensFromSession = agentMaxTokens == null && Boolean(sessionMaxTokensRaw);
+        const temperatureFromSession = agentTemperature == null
+            && sessionTemperatureRaw !== undefined && sessionTemperatureRaw !== null && sessionTemperatureRaw !== '';
+        const maxOutputTokensRaw = agentMaxTokens ?? (sessionMaxTokensRaw || platformMaxTokens);
+        const temperatureRaw = agentTemperature ?? (temperatureFromSession ? sessionTemperatureRaw : platformTemperature);
         let maxOutputTokens = maxOutputTokensRaw !== null && maxOutputTokensRaw !== undefined && maxOutputTokensRaw !== ''
             ? parseInt(maxOutputTokensRaw, 10)
             : null;
         if (!Number.isFinite(maxOutputTokens)) maxOutputTokens = null;
+        // A session value is user-controlled (LLM-3): bound it by the
+        // platform's configured cap (DEFAULT_MAX_OUTPUT_TOKENS_CAP when none).
+        if (maxTokensFromSession && maxOutputTokens !== null) {
+            const bounded = clampOutputTokens(maxOutputTokens, { platformMax: platformMaxTokens });
+            if (bounded.clamped) {
+                (req.log || routesLlmLog).info('session maxOutputTokens clamped', {
+                    session_id: session_id ?? null, requested: maxOutputTokens, cap: bounded.value
+                });
+            }
+            maxOutputTokens = bounded.value;
+        }
         // In voice mode every extra word adds synthesis time. Cap responses
         // hard so the patient stays terse and TTS turnaround stays under ~3s.
         if (session_mode === 'voice') {
@@ -699,6 +821,15 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             ? parseFloat(temperatureRaw)
             : null;
         if (!Number.isFinite(temperature)) temperature = null;
+        if (temperatureFromSession && temperature !== null) {
+            const bounded = clampTemperature(temperature);
+            if (bounded.clamped) {
+                (req.log || routesLlmLog).info('session temperature clamped', {
+                    session_id: session_id ?? null, requested: temperature, value: bounded.value
+                });
+            }
+            temperature = bounded.value;
+        }
 
         // Debug logging
         (req.log || routesLlmLog).info('llm final settings resolved', { provider, model: model || null, base_url: baseUrl });
@@ -707,13 +838,16 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         const budgetProvider = `llm-${provider || 'unknown'}`;
-        const requestedTokens = maxOutputTokens || 4096;
+        // The pre-flight reserves the clamped output size; a tiny
+        // client-supplied value may not shrink it below LLM_MIN_PREFLIGHT_TOKENS.
+        const requestedTokens = maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS_CAP;
         await enforceBudget({
             tenantId: tenantId(req),
             userId,
             provider: budgetProvider,
             metric: 'tokens',
-            requested: requestedTokens
+            requested: requestedTokens,
+            minRequested: LLM_MIN_PREFLIGHT_TOKENS
         });
 
         // 8. Build system prompt. See assembleSystemPrompt for the ordering
@@ -973,16 +1107,12 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             llmHeaders['x-api-key'] = apiKey;
             llmHeaders['anthropic-version'] = '2023-06-01';
 
-            // Filter out system messages for Anthropic (uses separate system field)
-            const anthropicMessages = (messages || []).filter(m => m.role !== 'system').map(m => ({
-                role: m.role === 'assistant' ? 'assistant' : 'user',
-                content: m.content
-            }));
-
+            // Only the validated conversation (step 0); the system prompt goes
+            // in Anthropic's separate `system` field.
             requestPayload = {
                 model: model || defaultModelFor('anthropic'),
                 max_tokens: maxOutputTokens || 1024,
-                messages: anthropicMessages
+                messages: chat.messages
             };
             if (fullSystemPrompt) {
                 requestPayload.system = fullSystemPrompt;
@@ -997,13 +1127,13 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 llmHeaders['Authorization'] = `Bearer ${apiKey}`;
             }
 
+            // The server-built system prompt is the only system message; the
+            // rest is the validated conversation (step 0).
             const conversation = [];
             if (fullSystemPrompt) {
                 conversation.push({ role: 'system', content: fullSystemPrompt });
             }
-            if (messages && Array.isArray(messages)) {
-                conversation.push(...messages);
-            }
+            conversation.push(...chat.messages);
 
             requestPayload = {
                 messages: conversation,
@@ -1033,6 +1163,21 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
         // 10. Make LLM request
         (req.log || routesLlmLog).info('llm upstream request sending', { user_id: userId, provider, model: model || null, endpoint });
+
+        // A request to anything but the platform's own URL never follows a
+        // redirect (the redirect target was not validated — LLM-2d); a 3xx
+        // from such an endpoint is an upstream error, answered as 502.
+        const upstreamIsPlatform = stripSlash(baseUrl) === platformBaseNormalised;
+        const upstreamFetchOptions = upstreamIsPlatform ? {} : OUTBOUND_FETCH_OPTIONS;
+        const upstreamRedirected = (upstream) => !upstreamIsPlatform && upstream.status >= 300 && upstream.status < 400;
+        const refuseRedirect = (upstream, responseTime) => {
+            let target = null;
+            try { const loc = new URL(upstream.headers.get('location') || '', endpoint); target = `${loc.origin}${loc.pathname}`; } catch { /* unparseable Location */ }
+            (req.log || routesLlmLog).error('llm upstream redirected; not followed', { status: upstream.status, target });
+            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                [userId, session_id, ...logAttribution(), model, 'error', `upstream redirected (${upstream.status})`, responseTime]);
+            return res.status(502).json({ error: 'The LLM endpoint redirected the request; redirects are not followed', code: 'upstream_redirect' });
+        };
 
         // Streaming branch — emit SSE deltas from the upstream provider.
         // Client requests it via Accept: text/event-stream OR ?stream=1.
@@ -1068,6 +1213,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             let upstream;
             try {
                 upstream = await fetch(endpoint, {
+                    ...upstreamFetchOptions,
                     method: 'POST',
                     headers: llmHeaders,
                     body: JSON.stringify(streamPayload),
@@ -1075,6 +1221,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 });
             } finally {
                 clearTimeout(connectTimer);
+            }
+            if (upstreamRedirected(upstream)) {
+                clearTimeout(overallTimer);
+                return refuseRedirect(upstream, Date.now() - startTime);
             }
             if (!upstream.ok) {
                 clearTimeout(overallTimer);
@@ -1249,6 +1399,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         let rawData;
         try {
             response = await fetch(endpoint, {
+                ...upstreamFetchOptions,
                 method: 'POST',
                 headers: llmHeaders,
                 body: JSON.stringify(requestPayload),
@@ -1257,6 +1408,9 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
 
             const responseTime = Date.now() - startTime;
 
+            if (upstreamRedirected(response)) {
+                return refuseRedirect(response, responseTime);
+            }
             if (!response.ok) {
                 const errText = await response.text();
                 (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
@@ -1497,11 +1651,11 @@ router.get('/tts/voice-usage', authenticateToken, requireAdmin, async (req, res)
         const rows = await new Promise((resolve, reject) => {
             dbAdapter.all(`
                 SELECT 'persona' AS kind, id, name, config FROM agent_templates
-                WHERE config LIKE '%case_voice%'
+                WHERE tenant_id = ? AND deleted_at IS NULL AND config LIKE '%case_voice%'
                 UNION ALL
                 SELECT 'case' AS kind, id, name, config FROM cases
-                WHERE config LIKE '%case_voice%'
-            `, (err, r) => err ? reject(err) : resolve(r || []));
+                WHERE tenant_id = ? AND deleted_at IS NULL AND config LIKE '%case_voice%'
+            `, [tenantId(req), tenantId(req)], (err, r) => err ? reject(err) : resolve(r || []));
         });
         const byProvider = Object.fromEntries(TTS_PROVIDERS.map(p => [p, []]));
         const unknown = [];
@@ -2000,14 +2154,21 @@ async function synthesizeToResponse(req, res, plan, { text, rate, pitch }) {
     // piper-tts 1.x (Python rewrite) truncates stdin synthesis to ~0.6s
     // regardless of input length. The `-i FILE` path doesn't have this bug,
     // so we write the prompt to a temp file and feed it that way.
-    const tmpDir = os.tmpdir();
-    const tmpFile = path.join(tmpDir, `rohy-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
+    // A private directory of our own (mkdtemp: unguessable, mode 0700) and an
+    // exclusive create ('wx'): a pre-planted file or symlink at a guessable
+    // name in the shared tmpdir can neither be overwritten nor followed.
+    let tmpDir;
+    let tmpFile;
     try {
-        fs.writeFileSync(tmpFile, text, 'utf8');
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rohy-tts-'));
+        tmpFile = path.join(tmpDir, 'input.txt');
+        fs.writeFileSync(tmpFile, text, { encoding: 'utf8', flag: 'wx' });
     } catch (err) {
         routesLlmLog.error('piper temp input write failed', { error: err.message });
+        if (tmpDir) { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ } }
         throw publicError('Failed to prepare TTS input');
     }
+    const removeTmp = () => { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ } };
 
     // piper1-gpl (Python rewrite) accepts `-m / --model`, `-i / --input-file`,
     // `--output-raw`, and `--length-scale` — same names as the old standalone.
@@ -2026,7 +2187,7 @@ async function synthesizeToResponse(req, res, plan, { text, rate, pitch }) {
         piper = spawn(PIPER_BIN, args);
     } catch (err) {
         routesLlmLog.error('piper spawn failed', { error: err.message });
-        try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
+        removeTmp();
         throw publicError('Failed to start Piper');
     }
 
@@ -2040,9 +2201,7 @@ async function synthesizeToResponse(req, res, plan, { text, rate, pitch }) {
         let aborted = false;
         let clientGone = false;
 
-        const cleanup = () => {
-            try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
-        };
+        const cleanup = removeTmp;
 
         // If the client disconnects before piper finishes, kill the subprocess
         // so we don't burn CPU and disk on a synthesis nobody's listening to.
@@ -2136,9 +2295,9 @@ router.get('/llm/usage/all', authenticateToken, requireAdmin, async (req, res) =
                 `SELECT lu.*, u.username, u.name
                  FROM llm_usage lu
                  JOIN users u ON lu.user_id = u.id
-                 WHERE lu.date = ?
+                 WHERE lu.date = ? AND lu.tenant_id = ?
                  ORDER BY lu.total_tokens DESC`,
-                [today],
+                [today, tenantId(req)],
                 (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows || []);
