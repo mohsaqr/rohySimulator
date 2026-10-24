@@ -1939,7 +1939,7 @@ function LLMConfiguration() {
         maxOutputTokens: '',
         temperature: '',
         systemPromptTemplate: '',
-        thinking: 'default'
+        thinking: 'off'
     });
     const [rateLimits, setRateLimits] = useState({
         tokensPerUserDaily: 0,
@@ -2310,8 +2310,8 @@ function LLMConfiguration() {
                         <label className="flex items-start gap-3 cursor-pointer select-none">
                             <input
                                 type="checkbox"
-                                checked={llmConfig.thinking === 'off'}
-                                onChange={(e) => setLlmConfig(prev => ({ ...prev, thinking: e.target.checked ? 'off' : 'default' }))}
+                                checked={llmConfig.thinking !== 'on'}
+                                onChange={(e) => setLlmConfig(prev => ({ ...prev, thinking: e.target.checked ? 'off' : 'on' }))}
                                 className="w-4 h-4 mt-0.5 accent-cyan-500"
                             />
                             <span>

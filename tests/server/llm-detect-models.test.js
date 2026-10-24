@@ -157,23 +157,26 @@ describe('POST /platform-settings/llm/models/detect', () => {
         return { status: res.status, json };
     }
 
-    it('thinking: refuses an unknown value, round-trips off, and Test Connection sends the switch only for custom', async () => {
+    it('thinking: off by default, refuses an unknown value, round-trips on, and Test Connection sends the switch only for custom', async () => {
         expect((await adminCall('PUT', '/platform-settings/llm', { thinking: 'maybe' })).status).toBe(400);
-        expect((await adminCall('GET', '/platform-settings/llm')).json.thinking).toBe('default');
-
-        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl, thinking: 'off' })).status).toBe(200);
+        // Never set: off.
         expect((await adminCall('GET', '/platform-settings/llm')).json.thinking).toBe('off');
+
+        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl })).status).toBe(200);
         expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
         expect(lastChatBody.chat_template_kwargs).toEqual({ enable_thinking: false });
+        expect(lastChatBody.reasoning_effort).toBe('low');
 
         // A provider with no known switch gets nothing, even with thinking off.
         expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'lmstudio', baseUrl: upstreamUrl })).status).toBe(200);
         expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
         expect(lastChatBody).not.toHaveProperty('chat_template_kwargs');
 
-        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl, thinking: 'default' })).status).toBe(200);
+        expect((await adminCall('PUT', '/platform-settings/llm', { provider: 'custom', baseUrl: upstreamUrl, thinking: 'on' })).status).toBe(200);
+        expect((await adminCall('GET', '/platform-settings/llm')).json.thinking).toBe('on');
         expect((await adminCall('POST', '/platform-settings/llm/test', {})).status).toBe(200);
         expect(lastChatBody).not.toHaveProperty('chat_template_kwargs');
+        expect(lastChatBody).not.toHaveProperty('reasoning_effort');
     });
 
     it('requires authentication', async () => {

@@ -452,7 +452,7 @@
   "llm_system_prompt_template": "Modèle de prompt système",
   "llm_temperature": "Température",
   "llm_thinking_off": "Désactiver le raisonnement du modèle",
-  "llm_thinking_off_help": "Le modèle répond tout de suite au lieu de raisonner d’abord : les réponses (et la voix du patient) commencent plusieurs secondes plus tôt. Décochez si les réponses se dégradent.",
+  "llm_thinking_off_help": "Activé par défaut. Le modèle répond tout de suite au lieu de raisonner d’abord : les réponses (et la voix du patient) commencent plusieurs secondes plus tôt. Certains modèles (comme gpt-oss) ne peuvent pas cesser complètement de raisonner et le réduisent au minimum. Décochez pour laisser le modèle raisonner si les réponses se dégradent.",
   "llm_todays_usage": "Utilisation du jour",
   "llm_tokens_per_user": "Tokens par utilisateur (par jour)",
   "llm_tokens_per_user_help": "Nombre maximal de tokens que chaque utilisateur peut consommer par jour (0 = illimité)",

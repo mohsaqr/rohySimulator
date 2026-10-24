@@ -48,7 +48,7 @@ import {
     enforceBudget,
     recordUsage
 } from '../usage-budget.js';
-import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor, thinkingOffParams } from '../shared/llmCatalogue.js';
+import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor, thinkingOffParams, thinkingIsOff } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { buildSessionPatientPrompt, isSessionEnded } from '../services/patientPersona.js';
@@ -1022,10 +1022,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (model && model.trim() !== '') {
                 requestPayload.model = model;
             }
-            // Thinking off: a reasoning model answers at once. Its thinking is
-            // never shown or spoken anyway (only delta.content is read), but it
-            // delays the first word by seconds — the whole voice turn waits.
-            const noThinking = platformThinking === 'off' ? thinkingOffParams(provider) : null;
+            // Thinking off (the default): a reasoning model answers at once. Its
+            // thinking is never shown or spoken anyway (only delta.content is
+            // read), but it delays the first word by seconds — the whole voice
+            // turn waits.
+            const noThinking = thinkingIsOff(platformThinking) ? thinkingOffParams(provider) : null;
             if (noThinking) Object.assign(requestPayload, noThinking);
             endpoint = `${baseUrl}/chat/completions`;
         }

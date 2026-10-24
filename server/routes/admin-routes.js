@@ -30,7 +30,7 @@ import {
     DEFAULT_AFFECT_ROUTING,
     normalizeAffectSettings,
 } from '../shared/affectNote.js';
-import { thinkingOffParams } from '../shared/llmCatalogue.js';
+import { thinkingOffParams, thinkingIsOff } from '../shared/llmCatalogue.js';
 import {
     normalizeRemoteUrl,
     kokoroRemoteState,
@@ -1431,8 +1431,8 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             enabled: settings.llm_enabled !== 'false',
             maxOutputTokens: settings.llm_max_output_tokens || '',
             temperature: settings.llm_temperature || '',
-            // 'off' or 'default' (the model decides). See THINKING_OFF_PARAMS.
-            thinking: settings.llm_thinking === 'off' ? 'off' : 'default'
+            // 'off' (the default when unset) or 'on'. See THINKING_OFF_PARAMS.
+            thinking: thinkingIsOff(settings.llm_thinking) ? 'off' : 'on'
         };
 
         // F-008: the system-prompt template is rubric framing / pedagogy
@@ -1464,8 +1464,8 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
 router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { provider, model, baseUrl, apiKey, enabled, maxOutputTokens, temperature, systemPromptTemplate, thinking } = req.body;
-        if (thinking !== undefined && thinking !== 'off' && thinking !== 'default') {
-            return res.status(400).json({ error: "thinking must be 'off' or 'default'" });
+        if (thinking !== undefined && thinking !== 'off' && thinking !== 'on') {
+            return res.status(400).json({ error: "thinking must be 'off' or 'on'" });
         }
 
         if (provider) await setAuditedPlatformSetting(req, 'llm_provider', provider, 'update_platform_llm_settings');
@@ -1476,7 +1476,7 @@ router.put('/platform-settings/llm', authenticateToken, requireAdmin, async (req
         if (maxOutputTokens !== undefined) await setAuditedPlatformSetting(req, 'llm_max_output_tokens', String(maxOutputTokens), 'update_platform_llm_settings');
         if (temperature !== undefined) await setAuditedPlatformSetting(req, 'llm_temperature', String(temperature), 'update_platform_llm_settings');
         if (systemPromptTemplate !== undefined) await setAuditedPlatformSetting(req, 'llm_system_prompt_template', systemPromptTemplate, 'update_platform_llm_settings');
-        if (thinking !== undefined) await setAuditedPlatformSetting(req, 'llm_thinking', thinking === 'off' ? 'off' : '', 'update_platform_llm_settings');
+        if (thinking !== undefined) await setAuditedPlatformSetting(req, 'llm_thinking', thinking, 'update_platform_llm_settings');
 
         res.json({ message: 'LLM settings updated successfully' });
     } catch (err) {
@@ -1519,7 +1519,7 @@ router.post('/platform-settings/llm/test', authenticateToken, requireAdmin, asyn
             }
             // The test sends what a real reply sends, thinking switch included,
             // so a server that rejects the switch fails here, not mid-case.
-            const noThinking = (await getPlatformSetting('llm_thinking')) === 'off' ? thinkingOffParams(provider) : null;
+            const noThinking = thinkingIsOff(await getPlatformSetting('llm_thinking')) ? thinkingOffParams(provider) : null;
             if (noThinking) Object.assign(requestPayload, noThinking);
             endpoint = `${baseUrl}/chat/completions`;
         }

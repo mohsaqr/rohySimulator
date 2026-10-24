@@ -452,7 +452,7 @@
   "llm_system_prompt_template": "System Prompt Template",
   "llm_temperature": "Temperature",
   "llm_thinking_off": "Turn the model's thinking off",
-  "llm_thinking_off_help": "The model answers straight away instead of reasoning first, so replies (and the patient's voice) start seconds sooner. Untick it if the answers get worse.",
+  "llm_thinking_off_help": "On by default. The model answers straight away instead of reasoning first, so replies (and the patient's voice) start seconds sooner. Some models (such as gpt-oss) cannot stop thinking entirely and keep it to a minimum instead. Untick it to let the model think, if the answers get worse.",
   "llm_todays_usage": "Today's Usage",
   "llm_tokens_per_user": "Tokens per User (Daily)",
   "llm_tokens_per_user_help": "Max tokens each user can use per day (0 = unlimited)",
