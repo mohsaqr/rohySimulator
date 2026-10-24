@@ -690,9 +690,10 @@ describe('POST /proxy/llm — config.knowledge scopes', () => {
     });
 });
 
-// "Thinking off" (platform llm_thinking = 'off'): a reasoning model behind a
-// custom OpenAI-compatible server is told to answer at once. The switch rides
-// on every proxied request for that provider and is absent otherwise.
+// "Thinking off" (platform llm_thinking unset or 'off' — off is the default): a
+// reasoning model behind a custom OpenAI-compatible server is told to answer at
+// once. The switches ride on every proxied request for that provider unless an
+// admin set llm_thinking = 'on'.
 describe('POST /proxy/llm — thinking off', () => {
     async function setThinking(value) {
         const db = await openDb(server.dbPath);
@@ -708,17 +709,19 @@ describe('POST /proxy/llm — thinking off', () => {
 
     afterAll(async () => { await setThinking(''); });
 
-    it('sends chat_template_kwargs.enable_thinking=false to a custom server when it is off', async () => {
-        await setThinking('off');
+    it.each([['unset (the default)', ''], ['off', 'off']])('turns thinking off on a custom server when it is %s', async (_label, value) => {
+        await setThinking(value);
         const res = await ask();
         expect(res.status).toBe(200);
         expect(llm.bodies.at(-1).chat_template_kwargs).toEqual({ enable_thinking: false });
+        expect(llm.bodies.at(-1).reasoning_effort).toBe('low');
     });
 
-    it('sends nothing extra when thinking is left to the model', async () => {
-        await setThinking('');
+    it('sends nothing extra when an admin turned thinking on', async () => {
+        await setThinking('on');
         const res = await ask();
         expect(res.status).toBe(200);
         expect(llm.bodies.at(-1)).not.toHaveProperty('chat_template_kwargs');
+        expect(llm.bodies.at(-1)).not.toHaveProperty('reasoning_effort');
     });
 });

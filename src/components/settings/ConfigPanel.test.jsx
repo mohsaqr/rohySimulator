@@ -880,17 +880,17 @@ describe('ConfigPanel — API key field for a custom OpenAI-compatible server', 
         expect(puts[0]).toMatchObject({ provider: 'custom', apiKey: '' });
     });
 
-    it('a custom server offers "thinking off", which saves as thinking: off', async () => {
-        const puts = serveLlm('custom', { thinking: 'default' });
+    it('a custom server shows "thinking off" ticked by default; unticking saves thinking: on', async () => {
+        const puts = serveLlm('custom', { thinking: 'off' });
         mount({ initialTab: 'platform' });
         await waitForAdmin();
         fireEvent.click(screen.getByRole('button', { name: 'AI / LLM' }));
         const box = await screen.findByRole('checkbox', { name: /thinking off/i });
-        expect(box).not.toBeChecked();
+        expect(box).toBeChecked();
         fireEvent.click(box);
         fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
         await waitFor(() => expect(puts.length).toBeGreaterThan(0));
-        expect(puts[0]).toMatchObject({ provider: 'custom', thinking: 'off' });
+        expect(puts[0]).toMatchObject({ provider: 'custom', thinking: 'on' });
     });
 
     it('a local LM Studio server still shows no key field', async () => {

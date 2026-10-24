@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.75] — 2026-10-24
+
+- **Thinking is off by default, and gpt-oss thinks as little as it can.** For a custom OpenAI-compatible server the
+  "Turn the model's thinking off" box now starts ticked: an unset `llm_thinking` means off, and only an admin who
+  unticks it (`'on'`) lets the model think. The API values are now `'off' | 'on'` (rc.74's `'default'` is gone; rc.74
+  was never deployed). With thinking off the request also carries `reasoning_effort: "low"`, because each model family
+  reads only one switch: Qwen3 reads `chat_template_kwargs.enable_thinking` (no thinking at all), gpt-oss reads
+  `reasoning_effort` and cannot stop thinking entirely. Measured on api.dynasite.org: gpt-oss-120b first text
+  ~680 ms → ~260 ms with `low`, reasoning ~80% shorter; qwen3.8-27b ~2.5 s → ~0.15 s. `reasoning_effort: "none"` is
+  rejected by gpt-oss with a 400 and is never sent (locked by a test). One helper, `thinkingIsOff()` in
+  `server/shared/llmCatalogue.js`, decides it for the proxy, Test Connection and the settings API. Help text in all
+  eight languages.
+
 ## [3.0.0-rc.74] — 2026-10-24
 
 - **"Turn the model's thinking off"** (Settings → LLM, shown for a custom OpenAI-compatible server). A reasoning

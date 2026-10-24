@@ -452,7 +452,7 @@
   "llm_system_prompt_template": "System-Prompt-Vorlage",
   "llm_temperature": "Temperatur",
   "llm_thinking_off": "Denken des Modells ausschalten",
-  "llm_thinking_off_help": "Das Modell antwortet sofort, statt zuerst nachzudenken – Antworten (und die Stimme des Patienten) beginnen Sekunden früher. Deaktivieren Sie die Option, wenn die Antworten schlechter werden.",
+  "llm_thinking_off_help": "Standardmäßig aktiv. Das Modell antwortet sofort, statt zuerst nachzudenken – Antworten (und die Stimme des Patienten) beginnen Sekunden früher. Manche Modelle (etwa gpt-oss) können das Denken nicht ganz abschalten und halten es stattdessen minimal. Deaktivieren Sie die Option, damit das Modell nachdenkt, wenn die Antworten schlechter werden.",
   "llm_todays_usage": "Heutige Nutzung",
   "llm_tokens_per_user": "Tokens pro Benutzer (täglich)",
   "llm_tokens_per_user_help": "Maximale Tokens, die jeder Benutzer pro Tag nutzen kann (0 = unbegrenzt)",

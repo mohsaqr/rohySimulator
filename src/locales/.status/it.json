@@ -6550,8 +6550,8 @@
     "risk": "low"
   },
   "authoring_config.llm_thinking_off_help": {
-    "src": "02ed0a5730c2",
-    "tgt": "2e6f79910492",
+    "src": "c9ffe0684d49",
+    "tgt": "7b726653ea97",
     "state": "machine",
     "origin": "machine",
     "locked": false,
