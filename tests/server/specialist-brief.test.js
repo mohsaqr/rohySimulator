@@ -216,6 +216,14 @@ describe('disclosureState', () => {
         expect(disclosureState({ disclosure: disclosure({ findings: 'never' }), studentTurns: 99 }).findingsAllowed).toBe(false);
     });
 
+    // Regression lock: a specialist with no disclosure config (every seeded one
+    // since 0071) shares its findings on the first turn instead of quizzing
+    // the learner for three — the "too instructive" cardiologist, 2026-10-24.
+    it('the default (no config) is open from the first turn, without a room visit', () => {
+        const state = disclosureState({ disclosure: disclosure(undefined), studentTurns: 0, roomActive: false });
+        expect(state).toMatchObject({ findingsAllowed: true, reason: 'on_request' });
+    });
+
     it("'on_request' is open from the first turn", () => {
         const state = disclosureState({ disclosure: disclosure({ findings: 'on_request' }), studentTurns: 0 });
         expect(state).toMatchObject({ findingsAllowed: true, reason: 'on_request' });
