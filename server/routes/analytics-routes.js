@@ -42,6 +42,7 @@ import {
     missingField,
     auditSuccess,
     canReadAcrossUsers,
+    clampLimit,
     dbRun,
     redactRow,
     redactRows,
@@ -261,7 +262,7 @@ router.get('/analytics/sessions/:id', authenticateToken, (req, res) => {
         FROM sessions s
         LEFT JOIN cases c ON s.case_id = c.id
         LEFT JOIN users u ON s.user_id = u.id
-        WHERE s.id = ? AND s.tenant_id = ?
+        WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL
     `;
 
     dbAdapter.get(sessionSql, [req.params.id, tenantId(req)], (err, session) => {
@@ -426,18 +427,14 @@ router.get('/analytics/settings-logs', authenticateToken, requireAdmin, (req, re
 //   * /api/export/questionnaire-responses — reflection questionnaire
 
 // GET /api/export/complete-session/:sessionId - Export complete session data
-router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) => {
+router.get('/export/complete-session/:sessionId', authenticateToken, async (req, res) => {
     const sessionId = req.params.sessionId;
-    
-    // Verify ownership
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ?', [sessionId], (err, session) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!session) return res.status(404).json({ error: 'Session not found' });
-        
-        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
 
+    // Ownership AND tenant: the old check read `sessions` by id alone and let
+    // any educator through, so an educator in tenant B could export tenant
+    // A's transcript with the learner's email (security audit 2026-10-24, #3).
+    if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+    {
         // Get complete session data
         const sql = `
             SELECT 
@@ -451,16 +448,17 @@ router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) 
             JOIN users u ON s.user_id = u.id
             JOIN cases c ON s.case_id = c.id
             LEFT JOIN session_settings ss ON s.id = ss.session_id
-            WHERE s.id = ?
+            WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL
         `;
 
-        dbAdapter.get(sql, [sessionId], (err, sessionData) => {
+        dbAdapter.get(sql, [sessionId, tenantId(req)], (err, sessionData) => {
             if (err) return res.status(500).json({ error: err.message });
+            if (!sessionData) return res.status(404).json({ error: 'Session not found' });
 
             // Get all interactions
             dbAdapter.all(
-                'SELECT role, content, timestamp FROM interactions WHERE session_id = ? ORDER BY timestamp ASC',
-                [sessionId],
+                'SELECT role, content, timestamp FROM interactions WHERE session_id = ? AND tenant_id = ? ORDER BY timestamp ASC',
+                [sessionId, tenantId(req)],
                 async (err, interactions) => {
                     if (err) return res.status(500).json({ error: err.message });
 
@@ -489,7 +487,7 @@ router.get('/export/complete-session/:sessionId', authenticateToken, (req, res) 
                 }
             );
         });
-    });
+    }
 });
 
 // Helper function to convert JSON to CSV
@@ -822,7 +820,9 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
         return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { start_date, end_date, verb, case_id, limit = 1000 } = req.query;
+    const { start_date, end_date, verb, case_id } = req.query;
+    // Page size is capped: `limit=-1` used to mean "every event of the user".
+    const limit = clampLimit(req.query.limit, 1000, 1000);
 
     let sql = `
         SELECT le.*, s.start_time as session_start, c.name as case_name
@@ -851,7 +851,7 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
     }
 
     sql += ` ORDER BY le.timestamp DESC LIMIT ?`;
-    params.push(parseInt(limit));
+    params.push(limit);
 
     dbAdapter.all(sql, params, (err, events) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -2674,83 +2674,74 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
     }).catch((e) => res.status(500).json({ error: e.message }));
 });
 
-// --- SYSTEM LOG (raw DB reflection, admin only) ---
+// --- SYSTEM LOG (raw DB table view, admin only) ---
 //
-// Goal: an obsessive raw view of every table in the database. No curation,
-// no joins — just one table at a time. The endpoint validates the
-// requested table name against sqlite_master so callers can't smuggle
-// arbitrary SQL through ":name". Tenant scoping is applied when the
-// target table has a tenant_id column.
+// One log table at a time, no joins. The dumpable tables are an explicit
+// allowlist — the same tenant-scoped log tables the CSV export above offers
+// (EXPORT_SOURCES). The route used to accept any name present in
+// sqlite_master and only tenant-scoped the tables that had a tenant_id, so
+// an admin could dump `platform_settings` (cleartext LLM / TTS API keys),
+// `users` (password hashes) and `active_sessions` (token hashes) whole
+// (security audit 2026-10-24, #1). Every row now also passes through the
+// response redaction policy, so a secret or hash column never leaves even
+// if one is added to a log table later.
+const SYSTEM_LOG_TABLES = Object.freeze(
+    Object.fromEntries(Object.values(EXPORT_SOURCES).map((cfg) => [cfg.table, cfg]))
+);
 
-// GET /api/system-log/tables — list every table with its row count.
-router.get('/system-log/tables', authenticateToken, requireAdmin, (req, res) => {
-    dbAdapter.all(
-        `SELECT name FROM sqlite_master
-         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-         ORDER BY name`,
-        [],
-        async (err, tables) => {
-            if (err) return res.status(500).json({ error: err.message });
-            try {
-                const out = await Promise.all(tables.map(t => new Promise((resolve) => {
-                    dbAdapter.get(
-                        `SELECT COUNT(*) AS n FROM "${t.name}"`,
-                        [],
-                        (e2, row) => resolve({ name: t.name, count: e2 ? null : (row?.n ?? 0) })
-                    );
-                })));
-                res.json({ tables: out });
-            } catch (e) {
-                res.status(500).json({ error: e.message });
-            }
-        }
-    );
+function systemLogTableConfig(name) {
+    return Object.prototype.hasOwnProperty.call(SYSTEM_LOG_TABLES, name) ? SYSTEM_LOG_TABLES[name] : null;
+}
+
+// GET /api/system-log/tables — the dumpable tables with this tenant's row count.
+router.get('/system-log/tables', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const tenant = tenantId(req);
+        const tables = await Promise.all(Object.keys(SYSTEM_LOG_TABLES).sort().map(async (name) => {
+            // `name` comes from SYSTEM_LOG_TABLES (a server-side constant), never from the request.
+            const row = await dbAdapter.get(`SELECT COUNT(*) AS n FROM "${name}" WHERE tenant_id = ?`, [tenant]);
+            return { name, count: row?.n ?? 0 };
+        }));
+        res.json({ tables });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// GET /api/system-log/table/:name — return rows from a single table.
-// Validated against sqlite_master before any SQL is built.
-router.get('/system-log/table/:name', authenticateToken, requireAdmin, (req, res) => {
+// GET /api/system-log/table/:name — rows of one allowlisted log table, this tenant only.
+router.get('/system-log/table/:name', authenticateToken, requireAdmin, async (req, res) => {
     const { name } = req.params;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const cfg = systemLogTableConfig(name);
+    if (!cfg) return res.status(404).json({ error: `Unknown table: ${name}` });
+    const limit = clampLimit(req.query.limit, 500, 5000);
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
 
-    dbAdapter.get(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
-        [name],
-        (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!row) return res.status(404).json({ error: `Unknown table: ${name}` });
-
-            // Discover columns + tenant_id presence.
-            dbAdapter.all(`PRAGMA table_info("${name}")`, [], (err2, cols) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                const colNames = cols.map(c => c.name);
-                const hasTenant = colNames.includes('tenant_id');
-                const orderCol = colNames.includes('id') ? 'id' :
-                                 colNames.includes('timestamp') ? 'timestamp' :
-                                 colNames.includes('created_at') ? 'created_at' : null;
-
-                const where = hasTenant ? `WHERE tenant_id = ?` : '';
-                const orderClause = orderCol ? `ORDER BY "${orderCol}" DESC` : '';
-                const sql = `SELECT * FROM "${name}" ${where} ${orderClause} LIMIT ? OFFSET ?`;
-                const params = hasTenant
-                    ? [tenantId(req), limit, offset]
-                    : [limit, offset];
-
-                dbAdapter.all(sql, params, (err3, rows) => {
-                    if (err3) return res.status(500).json({ error: err3.message });
-                    res.json({
-                        table: name,
-                        columns: colNames,
-                        rows,
-                        limit,
-                        offset,
-                        total_returned: rows.length,
-                    });
-                });
-            });
-        }
-    );
+    try {
+        // cfg.table and cfg.dateCol come from EXPORT_SOURCES (constant map); the
+        // request only chose the key.
+        const cols = await dbAdapter.all(`PRAGMA table_info("${cfg.table}")`, []);
+        const colNames = cols.map((c) => c.name);
+        const orderCol = colNames.includes('id') ? 'id' : cfg.dateCol;
+        const rows = await dbAdapter.all(
+            `SELECT * FROM "${cfg.table}" WHERE tenant_id = ? ORDER BY "${orderCol}" DESC LIMIT ? OFFSET ?`,
+            [tenantId(req), limit, offset]
+        );
+        const classification = { pii: 'allow', internal: 'allow' };
+        const redacted = redactRows(rows, classification);
+        // Column list after the same policy, so a hidden column (token_hash,
+        // password_hash) is not advertised either.
+        const columns = Object.keys(redactRow(Object.fromEntries(colNames.map((c) => [c, 'x'])), classification));
+        res.json({
+            table: cfg.table,
+            columns,
+            rows: redacted,
+            limit,
+            offset,
+            total_returned: redacted.length,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // --- ALARM ENDPOINTS ---
@@ -3155,13 +3146,15 @@ router.get('/analytics/filter-options', authenticateToken, requireAdmin, (req, r
 // ============================================================
 
 // POST /api/emotion-logs - Log a doctor emotion during a session
-router.post('/emotion-logs', authenticateToken, (req, res) => {
+router.post('/emotion-logs', authenticateToken, async (req, res) => {
     const { session_id, case_id, emotion } = req.body;
     const user_id = req.user.id;
 
     if (!emotion || typeof emotion !== 'string' || !emotion.trim()) {
         return res.status(400).json({ error: 'emotion is required' });
     }
+    // A log may be filed against a session only by someone who may reach it.
+    if (!await verifySessionOwnership(session_id, req.user, res)) return;
 
     dbAdapter.run(
         `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`,
@@ -3219,9 +3212,9 @@ router.get('/export/questionnaire-responses', authenticateToken, requireAdmin, (
         FROM questionnaire_responses qr
         LEFT JOIN users u ON qr.user_id = u.id
         LEFT JOIN cases c ON qr.case_id = c.id
-        WHERE 1=1
+        WHERE qr.tenant_id = ?
     `;
-    const params = [];
+    const params = [tenantId(req)];
     if (start_date) { sql += ' AND qr.submitted_at >= ?'; params.push(start_date); }
     if (end_date)   { sql += ' AND qr.submitted_at <= ?'; params.push(end_date); }
     sql += ' ORDER BY qr.submitted_at DESC';
@@ -3269,19 +3262,23 @@ router.get('/export/questionnaire-responses', authenticateToken, requireAdmin, (
 });
 
 // POST /api/questionnaire-responses - Save a questionnaire submission
-router.post('/questionnaire-responses', authenticateToken, (req, res) => {
+router.post('/questionnaire-responses', authenticateToken, async (req, res) => {
     const { session_id, case_id, responses } = req.body;
     const user_id = req.user.id;
 
     if (!responses || typeof responses !== 'object') {
         return res.status(400).json({ error: 'responses is required and must be an object' });
     }
+    // The row is the caller's reflection on a session they may reach; a
+    // session id from another tenant (or another learner) is refused, and the
+    // row carries the caller's tenant so the exports above can find it.
+    if (!await verifySessionOwnership(session_id, req.user, res)) return;
 
     const sql = `
-        INSERT INTO questionnaire_responses (session_id, user_id, case_id, responses)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO questionnaire_responses (session_id, user_id, case_id, responses, tenant_id)
+        VALUES (?, ?, ?, ?, ?)
     `;
-    dbAdapter.run(sql, [session_id || null, user_id, case_id || null, JSON.stringify(responses)], function(err) {
+    dbAdapter.run(sql, [session_id || null, user_id, case_id || null, JSON.stringify(responses), tenantId(req)], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
     });
@@ -3299,19 +3296,20 @@ router.get('/questionnaire-responses', authenticateToken, (req, res) => {
             FROM questionnaire_responses qr
             LEFT JOIN users u ON qr.user_id = u.id
             LEFT JOIN cases c ON qr.case_id = c.id
+            WHERE qr.tenant_id = ?
             ORDER BY qr.submitted_at DESC
         `;
-        params = [];
+        params = [tenantId(req)];
     } else {
         sql = `
             SELECT qr.id, qr.session_id, qr.case_id, qr.submitted_at, qr.responses,
                    c.name as case_name
             FROM questionnaire_responses qr
             LEFT JOIN cases c ON qr.case_id = c.id
-            WHERE qr.user_id = ?
+            WHERE qr.tenant_id = ? AND qr.user_id = ?
             ORDER BY qr.submitted_at DESC
         `;
-        params = [req.user.id];
+        params = [tenantId(req), req.user.id];
     }
 
     dbAdapter.all(sql, params, (err, rows) => {

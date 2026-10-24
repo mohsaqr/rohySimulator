@@ -63,6 +63,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 import { startTestServer } from '../../utils/startTestServer.js';
+import { recordSession } from '../../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 
@@ -118,6 +119,8 @@ describe('GET /api/tts/voices — provider catalog smoke', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId: row.id });
     }, BOOT_TIMEOUT_MS);
 
     afterAll(async () => {

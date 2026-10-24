@@ -7,6 +7,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-proxy-budget-secret';
 
@@ -96,6 +97,8 @@ describe('proxy budget enforcement', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(db, token, { userId: user.id });
         // INSERT OR REPLACE so the test always wins on keys that the server
         // may pre-seed (e.g. tts_provider, which the boot path now writes
         // 'kokoro' into via setSettingIfEmpty on first run).

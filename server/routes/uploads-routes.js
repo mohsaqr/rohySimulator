@@ -52,6 +52,15 @@ const storage = multer.diskStorage({
     }
 });
 
+// A fileFilter rejection is the caller's mistake, not the server's: carry the
+// status so middleware/errorHandler.js answers 415 instead of 500.
+function unsupportedType(message) {
+    const err = new Error(message);
+    err.status = 415;
+    err.code = 'unsupported_media_type';
+    return err;
+}
+
 // File type validation
 //
 // SVG is intentionally NOT in the allowlist for /api/upload — uploaded files
@@ -90,17 +99,63 @@ const fileFilter = (req, file, cb) => {
     if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
         cb(null, true);
     } else {
-        cb(new Error(`Invalid file type. Allowed: ${allowedExts.join(', ')}`), false);
+        cb(unsupportedType(`Invalid file type. Allowed: ${allowedExts.join(', ')}`), false);
     }
 };
+
+// 25 MB: the largest thing this route legitimately carries is a short
+// auscultation clip or a radiology video; the previous 100 MB cap was a
+// disk-filling surface for any signed-in account (students included, before
+// the educator gate below).
+export const GENERIC_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 100 * 1024 * 1024 // 100MB max
+        fileSize: GENERIC_UPLOAD_MAX_BYTES
     }
 });
+
+// Leading bytes per image type (the same table casePackage.js uses for a
+// package's media). The declared Content-Type and the extension are the
+// client's claims; the bytes are what a browser will interpret. An HTML or SVG
+// document renamed `.png` and served back from /uploads is stored XSS, so a
+// declared image is accepted only when its bytes start like one.
+function looksLikeImage(ext, head) {
+    const at = (offset, text) => head.subarray(offset, offset + text.length).toString('latin1') === text;
+    switch (ext) {
+    case '.jpg': case '.jpeg': return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+    case '.png': return at(0, '\x89PNG\r\n\x1a\n');
+    case '.gif': return at(0, 'GIF87a') || at(0, 'GIF89a');
+    case '.webp': return at(0, 'RIFF') && at(8, 'WEBP');
+    default: return false;
+    }
+}
+
+function readHead(filePath, bytes = 16) {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+        const head = Buffer.alloc(bytes);
+        const n = fs.readSync(fd, head, 0, bytes, 0);
+        return head.subarray(0, n);
+    } finally {
+        fs.closeSync(fd);
+    }
+}
+
+/** True when a file declared as an image does not start like that image. */
+function imageBytesMismatch(file) {
+    if (!file.mimetype.startsWith('image/')) return false;
+    const ext = path.extname(file.originalname).toLowerCase();
+    return !looksLikeImage(ext, readHead(file.path));
+}
+
+function removeQuietly(filePath, log) {
+    try { fs.unlinkSync(filePath); } catch (err) {
+        log.warn('could not remove rejected upload', { path: filePath, error: err.message });
+    }
+}
 
 // Separate multer for the body-image silhouette upload. That route renames
 // the file into public/uploads/bodymap/<fixed-name>.svg|.png and is admin-only,
@@ -110,7 +165,7 @@ const bodyImageFileFilter = (req, file, cb) => {
     const okMime = file.mimetype === 'image/png' || file.mimetype === 'image/svg+xml';
     const okExt = ext === '.png' || ext === '.svg';
     if (okMime && okExt) cb(null, true);
-    else cb(new Error('Body image must be PNG or SVG'), false);
+    else cb(unsupportedType('Body image must be PNG or SVG'), false);
 };
 const uploadBodyImage = multer({
     storage,
@@ -127,10 +182,25 @@ const uploadBodyImage = multer({
 
 // POST /api/auth/register - Register a new user
 
-router.post('/upload', authenticateToken, upload.single('photo'), (req, res) => {
+// Authoring media (auscultation audio, radiology images/videos). Educator-gated:
+// it is only ever called from the case editors, yet it used to accept any
+// signed-in role, which made every student account a 100 MB-per-request
+// writer into a publicly served directory. Audited like every other mutation.
+router.post('/upload', authenticateToken, requireEducator, upload.single('photo'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
+    if (imageBytesMismatch(req.file)) {
+        removeQuietly(req.file.path, req.log || routesCasesLog);
+        return res.status(415).json({ error: 'The file does not look like the image type it declares', code: 'unsupported_media_type' });
+    }
+    auditSuccess(req, {
+        action: 'upload_media',
+        resourceType: 'upload',
+        resourceId: req.file.filename,
+        resourceName: req.file.originalname,
+        newValue: { size: req.file.size, mimetype: req.file.mimetype },
+    });
     const imageUrl = `./uploads/${req.file.filename}`;
     res.json({ imageUrl });
 });
@@ -164,7 +234,7 @@ function makeUpload(mimes, exts, maxBytesMB) {
         fileFilter: (req, file, cb) => {
             const ext = path.extname(file.originalname).toLowerCase();
             if (mimes.includes(file.mimetype) && exts.includes(ext)) cb(null, true);
-            else cb(new Error(`Invalid file type. Allowed: ${exts.join(', ')}`), false);
+            else cb(unsupportedType(`Invalid file type. Allowed: ${exts.join(', ')}`), false);
         },
     });
 }
@@ -174,6 +244,17 @@ const videoUpload = makeUpload(VIDEO_MIME, VIDEO_EXT, 200);
 
 function sendUploaded(req, res) {
     if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+    if (imageBytesMismatch(req.file)) {
+        removeQuietly(req.file.path, req.log || routesCasesLog);
+        return res.status(415).json({ success: false, error: 'The file does not look like the image type it declares', code: 'unsupported_media_type' });
+    }
+    auditSuccess(req, {
+        action: 'upload_media',
+        resourceType: 'upload',
+        resourceId: req.file.filename,
+        resourceName: req.file.originalname,
+        newValue: { size: req.file.size, mimetype: req.file.mimetype },
+    });
     const url = `/uploads/${req.file.filename}`;
     const data = {
         url,
@@ -307,15 +388,48 @@ router.get('/bodymap-regions', (req, res) => {
     }
 });
 
-// POST save body map regions (admin only)
-router.post('/bodymap-regions', authenticateToken, requireEducator, (req, res) => {
+// What a saved region may look like: a flat object of strings and numbers
+// (id, label, x, y, w, h, side …). The file is read back by every learner's
+// body map without authentication, so a nested object or a megabyte of text
+// must be refused here rather than written for everyone to download.
+export const BODYMAP_REGIONS_MAX = 500;
+export const BODYMAP_REGIONS_MAX_BYTES = 256 * 1024;
+
+function regionsProblem(regions) {
+    if (!Array.isArray(regions)) return 'regions must be an array';
+    if (regions.length > BODYMAP_REGIONS_MAX) return `regions may hold at most ${BODYMAP_REGIONS_MAX} entries`;
+    for (const [i, region] of regions.entries()) {
+        if (region === null || typeof region !== 'object' || Array.isArray(region)) return `regions[${i}] must be an object`;
+        for (const [key, value] of Object.entries(region)) {
+            const ok = typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value));
+            if (!ok) return `regions[${i}].${key} must be a string or a number`;
+        }
+    }
+    if (Buffer.byteLength(JSON.stringify({ regions })) > BODYMAP_REGIONS_MAX_BYTES) {
+        return `regions must serialise to at most ${BODYMAP_REGIONS_MAX_BYTES} bytes`;
+    }
+    return null;
+}
+
+// POST save body map regions (admin only — it rewrites a file every learner
+// downloads, so it is platform configuration, not course authoring)
+router.post('/bodymap-regions', authenticateToken, requireAdmin, (req, res) => {
     const { regions } = req.body;
     if (!regions) {
         return res.status(400).json({ error: 'No regions data provided' });
     }
+    const why = regionsProblem(regions);
+    if (why) return res.status(400).json({ error: why, code: 'invalid_regions' });
 
     try {
         fs.writeFileSync(BODYMAP_REGIONS_FILE, JSON.stringify({ regions }, null, 2));
+        auditSuccess(req, {
+            action: 'save_bodymap_regions',
+            resourceType: 'bodymap_regions',
+            resourceId: 'bodymap-regions',
+            resourceName: 'Body map regions',
+            newValue: { count: regions.length },
+        });
         res.json({ success: true, message: 'Body map regions saved' });
     } catch (err) {
         (req.log || routesCasesLog).error('bodymap regions save failed', { error: err.message });

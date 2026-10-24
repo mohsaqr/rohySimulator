@@ -94,7 +94,7 @@ function MedDetail({ med, currentUser, onEdit, onCancel, isEditing, onSave, savi
                         )}
                         {med.rxcui && (
                             <a
-                                href={`https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${med.rxcui}`}
+                                href={`https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(med.rxcui)}`}
                                 target="_blank" rel="noreferrer"
                                 className="rohy-badge-teal uppercase tracking-wide hover:brightness-95"
                             >

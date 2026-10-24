@@ -28,9 +28,47 @@ import { specialistAnswers } from '../shared/caseRooms.js';
 import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/specialties.js';
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
+import { validateOutboundUrl } from '../lib/outboundUrl.js';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
+
+// A template's `llm_endpoint` is a URL the SERVER will call with the
+// template's key (proxy-routes.js), so it passes the shared outbound-URL rule
+// before it is stored; empty clears it (security audit 2026-10-24, LLM-1).
+function checkAgentEndpoint(value) {
+    if (value === undefined || value === null || String(value).trim() === '') return { ok: true, value: null };
+    const checked = validateOutboundUrl(value);
+    if (!checked.ok) return { ok: false, error: `llm_endpoint: ${checked.reason}` };
+    return { ok: true, value: checked.url };
+}
+
+// `avatar_url` is loaded by every learner's browser: it may be an avatar id
+// from the head manifest (what the editor's picker stores, e.g.
+// `rb_medical_female_01.glb`), one of this server's own upload paths, or an
+// https URL — nothing else (no javascript:/data:/http:, no path traversal).
+// Same rule as case import (services/caseTransfer.js) — audit 2026-10-24.
+const AVATAR_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const AVATAR_PATH_RE = /^\/(uploads|avatars)\/[A-Za-z0-9_./-]+$/;
+const AVATAR_ERROR = 'avatar_url must be an avatar id, an /uploads/ or /avatars/ path on this server, or an https URL';
+function checkAvatarUrl(value) {
+    if (value === undefined || value === null || String(value).trim() === '') return { ok: true, value: null };
+    if (typeof value !== 'string') return { ok: false, error: 'avatar_url must be a string' };
+    const trimmed = value.trim();
+    if (trimmed.length > 2048) return { ok: false, error: 'avatar_url is too long' };
+    if (trimmed.includes('..')) return { ok: false, error: AVATAR_ERROR };
+    if (AVATAR_ID_RE.test(trimmed)) return { ok: true, value: trimmed };
+    if (trimmed.startsWith('/')) {
+        if (AVATAR_PATH_RE.test(trimmed)) return { ok: true, value: trimmed };
+        return { ok: false, error: AVATAR_ERROR };
+    }
+    let url;
+    try { url = new URL(trimmed); } catch { return { ok: false, error: AVATAR_ERROR }; }
+    if (url.protocol !== 'https:' || url.username || url.password) {
+        return { ok: false, error: AVATAR_ERROR };
+    }
+    return { ok: true, value: url.toString() };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -307,6 +345,10 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
             ? parseFloat(llm_temperature) : null;
         const maxTokensVal = (llm_max_tokens !== undefined && llm_max_tokens !== null && llm_max_tokens !== '' && Number.isFinite(parseInt(llm_max_tokens, 10)))
             ? parseInt(llm_max_tokens, 10) : null;
+        const endpoint = checkAgentEndpoint(llm_endpoint);
+        if (!endpoint.ok) return res.status(400).json({ error: endpoint.error, code: 'invalid_endpoint' });
+        const avatar = checkAvatarUrl(avatar_url);
+        if (!avatar.ok) return res.status(400).json({ error: avatar.error, code: 'invalid_avatar_url' });
 
         const result = await new Promise((resolve, reject) => {
             dbAdapter.run(
@@ -315,9 +357,9 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
                   llm_provider, llm_model, llm_api_key, llm_endpoint, llm_config, llm_temperature, llm_max_tokens, memory_access, created_by, tenant_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    agent_type, name, role_title, avatar_url, system_prompt, context_filter, communication_style,
+                    agent_type, name, role_title, avatar.value, system_prompt, context_filter, communication_style,
                     JSON.stringify(config),
-                    llm_provider || null, llm_model || null, llm_api_key || null, llm_endpoint || null,
+                    llm_provider || null, llm_model || null, llm_api_key || null, endpoint.value,
                     llm_config ? JSON.stringify(llm_config) : null,
                     tempVal, maxTokensVal,
                     memory_access ? JSON.stringify(memory_access) : null,
@@ -428,7 +470,11 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         if (agent_type !== undefined) { updates.push('agent_type = ?'); params.push(agent_type); }
         if (name !== undefined) { updates.push('name = ?'); params.push(name); }
         if (role_title !== undefined) { updates.push('role_title = ?'); params.push(role_title); }
-        if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
+        if (avatar_url !== undefined) {
+            const avatar = checkAvatarUrl(avatar_url);
+            if (!avatar.ok) return res.status(400).json({ error: avatar.error, code: 'invalid_avatar_url' });
+            updates.push('avatar_url = ?'); params.push(avatar.value);
+        }
         if (system_prompt !== undefined) { updates.push('system_prompt = ?'); params.push(system_prompt); }
         if (context_filter !== undefined) { updates.push('context_filter = ?'); params.push(context_filter); }
         if (communication_style !== undefined) { updates.push('communication_style = ?'); params.push(communication_style); }
@@ -437,7 +483,11 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         if (llm_provider !== undefined) { updates.push('llm_provider = ?'); params.push(llm_provider || null); }
         if (llm_model !== undefined) { updates.push('llm_model = ?'); params.push(llm_model || null); }
         if (llm_api_key !== undefined && llm_api_key !== REDACTED) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
-        if (llm_endpoint !== undefined) { updates.push('llm_endpoint = ?'); params.push(llm_endpoint || null); }
+        if (llm_endpoint !== undefined) {
+            const endpoint = checkAgentEndpoint(llm_endpoint);
+            if (!endpoint.ok) return res.status(400).json({ error: endpoint.error, code: 'invalid_endpoint' });
+            updates.push('llm_endpoint = ?'); params.push(endpoint.value);
+        }
         if (llm_config !== undefined) { updates.push('llm_config = ?'); params.push(llm_config ? JSON.stringify(llm_config) : null); }
         // Stage-4: temperature + max_tokens. Empty string clears (resolver falls
         // back to session/platform); a finite number persists.
@@ -689,156 +739,6 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
     } catch (err) {
         (req.log || routesAdminLog).error('agent template reset failed', { error: err.message });
         res.status(500).json({ error: err.message });
-    }
-});
-
-// POST /api/agents/templates/:id/test-llm - Test agent LLM configuration
-router.post('/agents/templates/:id/test-llm', authenticateToken, requireEducator, async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Get template with LLM config
-        const template = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM agent_templates WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        if (!template) {
-            return res.status(404).json({ error: 'Agent template not found' });
-        }
-
-        // Get provider config - use template override or fall back to platform default
-        let provider = template.llm_provider;
-        let model = template.llm_model;
-        let apiKey = template.llm_api_key;
-        let endpoint = template.llm_endpoint;
-
-        // If no override, use platform defaults
-        if (!provider) {
-            const platformConfig = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT value FROM config WHERE key = ?', ['llm_provider'], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row?.value || 'openai');
-                });
-            });
-            provider = platformConfig;
-        }
-
-        if (!model) {
-            const platformModel = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT value FROM config WHERE key = ?', ['llm_model'], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row?.value || 'gpt-4o-mini');
-                });
-            });
-            model = platformModel;
-        }
-
-        if (!apiKey) {
-            const keyMap = {
-                'openai': 'openai_api_key',
-                'anthropic': 'anthropic_api_key',
-                'openrouter': 'openrouter_api_key'
-            };
-            const keyName = keyMap[provider] || 'openai_api_key';
-            const platformKey = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT value FROM config WHERE key = ?', [keyName], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row?.value);
-                });
-            });
-            apiKey = platformKey;
-        }
-
-        if (!endpoint && provider === 'custom') {
-            const platformEndpoint = await new Promise((resolve, reject) => {
-                dbAdapter.get('SELECT value FROM config WHERE key = ?', ['custom_llm_endpoint'], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row?.value);
-                });
-            });
-            endpoint = platformEndpoint;
-        }
-
-        if (!apiKey && provider !== 'custom') {
-            return res.status(400).json({ error: `No API key configured for provider: ${provider}` });
-        }
-
-        // Build a simple test message
-        const testMessages = [
-            { role: 'system', content: template.system_prompt || 'You are a helpful assistant.' },
-            { role: 'user', content: 'Please respond with a single sentence confirming you are working correctly.' }
-        ];
-
-        let response;
-        const startTime = Date.now();
-
-        if (provider === 'openai') {
-            const OpenAI = (await import('openai')).default;
-            const openai = new OpenAI({ apiKey });
-            const completion = await openai.chat.completions.create({
-                model: model || 'gpt-4o-mini',
-                messages: testMessages,
-                max_tokens: 100
-            });
-            response = completion.choices[0]?.message?.content;
-        } else if (provider === 'anthropic') {
-            const Anthropic = (await import('@anthropic-ai/sdk')).default;
-            const anthropic = new Anthropic({ apiKey });
-            const completion = await anthropic.messages.create({
-                model: model || 'claude-3-5-sonnet-20241022',
-                max_tokens: 100,
-                system: testMessages[0].content,
-                messages: [{ role: 'user', content: testMessages[1].content }]
-            });
-            response = completion.content[0]?.text;
-        } else if (provider === 'openrouter') {
-            const OpenAI = (await import('openai')).default;
-            const openai = new OpenAI({
-                apiKey,
-                baseURL: 'https://openrouter.ai/api/v1'
-            });
-            const completion = await openai.chat.completions.create({
-                model: model || 'openai/gpt-4o-mini',
-                messages: testMessages,
-                max_tokens: 100
-            });
-            response = completion.choices[0]?.message?.content;
-        } else if (provider === 'custom' && endpoint) {
-            const OpenAI = (await import('openai')).default;
-            const openai = new OpenAI({
-                apiKey: apiKey || 'not-needed',
-                baseURL: endpoint
-            });
-            const completion = await openai.chat.completions.create({
-                model: model || 'default',
-                messages: testMessages,
-                max_tokens: 100
-            });
-            response = completion.choices[0]?.message?.content;
-        } else {
-            return res.status(400).json({ error: `Unsupported provider: ${provider}` });
-        }
-
-        const latency = Date.now() - startTime;
-
-        res.json({
-            success: true,
-            provider,
-            model,
-            latency_ms: latency,
-            response,
-            message: 'LLM connection test successful'
-        });
-    } catch (err) {
-        (req.log || routesAdminLog).error('agent llm test failed', { error: err.message });
-        res.status(500).json({
-            success: false,
-            error: err.message,
-            message: 'LLM connection test failed'
-        });
     }
 });
 

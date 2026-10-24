@@ -68,6 +68,13 @@ require_cmd() {
 
 # ── pre-flight ──────────────────────────────────────────────────────────────
 require_cmd sqlite3
+# The label becomes part of the snapshot directory AND is interpolated into
+# `VACUUM INTO '<path>'`. A quote, a slash or `..` in it would escape either.
+# bin/rohy-update passes labels it builds itself; an operator types this one.
+if [[ -n "$LABEL" && ! "$LABEL" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
+  printf 'rohy-backup: --label may only contain letters, digits, . _ - (1-64 chars)\n' >&2
+  exit 2
+fi
 [[ -f "$ROHY_DB" ]] || die "DB not found: $ROHY_DB (set ROHY_DB if non-default)"
 
 # ── --check mode: integrity-check the latest snapshot, no new write ─────────
@@ -117,7 +124,11 @@ mkdir -p "$SUBDIR"
 # SQLite online backup. VACUUM INTO produces a defragmented consistent copy
 # without holding a write lock — safe to run while rohy is serving requests.
 step "running VACUUM INTO (consistent online snapshot)"
-sqlite3 "$ROHY_DB" "VACUUM INTO '$SUBDIR/database.sqlite'"
+# The target path is quoted for SQL (' doubled) even though the label is
+# validated above, so a future ROHY_BACKUP_DIR with a quote in it cannot
+# break the statement either.
+SNAPSHOT_SQL_PATH="${SUBDIR//\'/\'\'}/database.sqlite"
+sqlite3 "$ROHY_DB" "VACUUM INTO '$SNAPSHOT_SQL_PATH'"
 DB_BYTES=$(stat -c%s "$SUBDIR/database.sqlite" 2>/dev/null \
         || stat -f%z "$SUBDIR/database.sqlite")
 note "wrote database.sqlite ($DB_BYTES bytes)"

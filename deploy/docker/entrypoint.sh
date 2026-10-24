@@ -3,9 +3,11 @@
 #
 # Responsibilities (idempotent — safe to run on every container start):
 #   1. Generate a JWT_SECRET on first run if the operator didn't set one.
-#      Persists to /var/lib/rohy/.secrets/jwt_secret so the same secret
-#      survives container restarts (otherwise every restart logs out
-#      every user).
+#      Persists to /var/lib/rohy-secrets/jwt_secret — its own volume, NOT the
+#      database volume, so a DB backup or a `docker cp` of rohy-db never
+#      carries the signing key — and the same secret survives container
+#      restarts (otherwise every restart logs out every user). A secret left
+#      at the old location (/var/lib/rohy/.secrets) is moved over once.
 #   2. Validate FRONTEND_URL is set when not in dev — bail out with a
 #      clear error rather than letting the app boot into silent CORS 500s.
 #   3. Pre-create the DB parent dir (volume might be empty on first run).
@@ -20,10 +22,22 @@
 
 set -eu
 
-SECRETS_DIR="${ROHY_SECRETS_DIR:-/var/lib/rohy/.secrets}"
+SECRETS_DIR="${ROHY_SECRETS_DIR:-/var/lib/rohy-secrets}"
 JWT_FILE="${SECRETS_DIR}/jwt_secret"
+LEGACY_JWT_FILE="${ROHY_LEGACY_SECRETS_DIR:-/var/lib/rohy/.secrets}/jwt_secret"
 
 # 1. JWT_SECRET ------------------------------------------------------------
+# Upgrade path: images before the rohy-secrets volume kept the secret inside
+# the DB volume. Move it (not copy) so existing sessions stay valid and the DB
+# volume stops carrying the key.
+if [ -z "${JWT_SECRET:-}" ] && [ ! -e "$JWT_FILE" ] && [ -r "$LEGACY_JWT_FILE" ] \
+    && [ "$LEGACY_JWT_FILE" != "$JWT_FILE" ]; then
+    mkdir -p "$SECRETS_DIR"
+    chmod 700 "$SECRETS_DIR"
+    (umask 077 && cp "$LEGACY_JWT_FILE" "$JWT_FILE")
+    rm -f "$LEGACY_JWT_FILE"
+    echo "[entrypoint] Moved JWT_SECRET from $LEGACY_JWT_FILE to $JWT_FILE"
+fi
 if [ -z "${JWT_SECRET:-}" ]; then
     if [ -r "$JWT_FILE" ]; then
         JWT_SECRET="$(cat "$JWT_FILE")"
@@ -89,8 +103,10 @@ mkdir -p "${TRANSFORMERS_CACHE:-/var/cache/rohy-hf}"
 if [ -n "${ROHY_ADMIN_USERNAME:-}" ] && [ -n "${ROHY_ADMIN_PASSWORD:-}" ]; then
     echo "[entrypoint] admin bootstrap: provisioning '${ROHY_ADMIN_USERNAME}' from ROHY_ADMIN_* (first boot only, if users table is empty)." >&2
 elif [ "${ALLOW_DEFAULT_USERS:-0}" = "1" ]; then
-    echo "[entrypoint] WARNING: ALLOW_DEFAULT_USERS=1 — admin/admin123 will be seeded if users table is empty." >&2
-    echo "[entrypoint] After first login + password change, REMOVE this env var and restart the container." >&2
+    # The server refuses ALLOW_DEFAULT_USERS=1 in production (it would seed
+    # the well-known admin/admin123). Say why before it exits.
+    echo "[entrypoint] ERROR: ALLOW_DEFAULT_USERS=1 is refused in production — it seeds the well-known admin/admin123." >&2
+    echo "[entrypoint] Remove it and set ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD (first boot, empty users table) instead." >&2
 else
     echo "[entrypoint] admin bootstrap: none configured — the FIRST account registered through the UI will claim this instance as admin." >&2
     echo "[entrypoint] To provision an admin instead, set ROHY_ADMIN_USERNAME + ROHY_ADMIN_PASSWORD and start with an empty DB volume." >&2

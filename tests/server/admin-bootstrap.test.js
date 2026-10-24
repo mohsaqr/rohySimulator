@@ -99,6 +99,8 @@ describe('admin bootstrap: operator-provisioned (ROHY_ADMIN_*)', () => {
             platformSettings: { registration_mode: 'open' },
             env: {
                 NODE_ENV: 'production',
+                // validateEnv refuses a JWT_SECRET under 32 chars in production.
+                JWT_SECRET: 'rohy-tests-production-secret-0123456789',
                 ROHY_ADMIN_USERNAME: 'ops',
                 ROHY_ADMIN_PASSWORD: STRONG,
                 ROHY_ADMIN_EMAIL: 'ops@hospital.example',
@@ -145,6 +147,8 @@ describe('admin bootstrap: first signup claims an unclaimed instance', () => {
             platformSettings: { registration_mode: 'open' },
             env: {
                 NODE_ENV: 'production',
+                // validateEnv refuses a JWT_SECRET under 32 chars in production.
+                JWT_SECRET: 'rohy-tests-production-secret-0123456789',
                 FRONTEND_URL: 'http://localhost',
                 ROHY_DISABLE_AUTH_RATE_LIMIT: '1',
             },

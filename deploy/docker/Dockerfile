@@ -19,9 +19,14 @@
 # Build with Piper TTS bundled:
 #   docker build -f deploy/docker/Dockerfile --build-arg INCLUDE_PIPER=1 -t rohy:latest .
 #
-# Pin the dynajs commit (recommended for reproducible builds):
+# The dynajs sibling is pinned to a commit (DYNAJS_GIT_REF below) and the
+# cloned package.json version is checked against DYNAJS_EXPECTED_VERSION, the
+# same way scripts/clone-room3d.sh checks the 3D room. To move the pin:
 #   docker build -f deploy/docker/Dockerfile \
-#     --build-arg DYNAJS_GIT_REF=<sha-or-tag> -t rohy:latest .
+#     --build-arg DYNAJS_GIT_REF=<sha> --build-arg DYNAJS_EXPECTED_VERSION=<x.y.z> -t rohy:latest .
+# An unpinned `main` meant the image was built from whatever dynajs happened to
+# be that day — unreproducible, and a compromised upstream commit would have
+# shipped straight into the runtime image.
 #
 # The 3D patient room (`rohy-3d-patient-room`, "file:../3D") is a second
 # sibling. For a private repository, pass its credential as a BuildKit secret:
@@ -38,7 +43,9 @@ ARG INCLUDE_PIPER=0
 # cannot be tiled. Set INCLUDE_VIPS=0 to leave it out (~70 MB).
 ARG INCLUDE_VIPS=1
 ARG DYNAJS_GIT_URL=https://github.com/mohsaqr/dynajs.git
-ARG DYNAJS_GIT_REF=main
+# mohsaqr/dynajs main as of 2026-10-24 (package version 0.1.0).
+ARG DYNAJS_GIT_REF=0dbc6bb1fc8a1d33c8b91f7de38670fd61df6798
+ARG DYNAJS_EXPECTED_VERSION=0.1.0
 
 # ===========================================================================
 # Stage 1: builder
@@ -47,6 +54,7 @@ FROM node:${NODE_VERSION} AS builder
 
 ARG DYNAJS_GIT_URL
 ARG DYNAJS_GIT_REF
+ARG DYNAJS_EXPECTED_VERSION
 
 # Build deps: git for cloning dynajs, python3/make/g++ for sqlite3 native
 # build, curl for OyonR/scripts/download-models.sh (fetches the ~93 MB
@@ -57,10 +65,18 @@ RUN apt-get update -qq \
  && rm -rf /var/lib/apt/lists/*
 
 # Clone + build dynajs FIRST so its dist/ exists before rohy's npm install
-# runs. Layer is cached on DYNAJS_GIT_REF.
+# runs. Layer is cached on DYNAJS_GIT_REF. A commit sha cannot be `--branch`
+# cloned, so clone, check the ref out detached, and verify the package
+# version matches what this Dockerfile was written against. Repository
+# metadata is dropped so no remote URL travels into the runtime image.
 WORKDIR /workspace
-RUN git clone --depth 1 --branch "${DYNAJS_GIT_REF}" "${DYNAJS_GIT_URL}" dynajs \
- || git clone "${DYNAJS_GIT_URL}" dynajs && cd dynajs && git checkout "${DYNAJS_GIT_REF}"
+RUN git clone "${DYNAJS_GIT_URL}" dynajs \
+ && git -C dynajs checkout --detach "${DYNAJS_GIT_REF}" \
+ && actual="$(node -p "require('/workspace/dynajs/package.json').version")" \
+ && if [ "$actual" != "${DYNAJS_EXPECTED_VERSION}" ]; then \
+        echo "dynajs ${DYNAJS_GIT_REF} has package version $actual; expected ${DYNAJS_EXPECTED_VERSION}" >&2; exit 1; \
+    fi \
+ && rm -rf dynajs/.git
 WORKDIR /workspace/dynajs
 # Use install (not ci) so the prepare script that produces dist/ runs.
 RUN npm install --prefer-offline --no-audit --no-fund
@@ -97,13 +113,16 @@ COPY OyonR ./OyonR
 # in the repo yet not YET in the layer that needs it". Adding a postinstall
 # step means checking what the install layer can actually see.
 COPY scripts ./scripts
-# `npm install` triggers our postinstall hook which calls
-# OyonR/scripts/download-models.sh — that fetches the ~93 MB MediaPipe +
-# ONNX bundles + emotion models. The script is idempotent (skips if
-# already present) and the postinstall is `|| true` tolerant, so we
-# re-run it explicitly here to FAIL THE BUILD if the download didn't
-# succeed (vs. shipping a runtime image without face/emotion assets).
-RUN npm install --prefer-offline --no-audit --no-fund \
+# `npm ci`, not `npm install`: the lockfile is the contract, and an install
+# that rewrote it would put a different dependency tree in the image than
+# the one the test suite ran against. The `file:../dynajs` and `file:../3D`
+# siblings are in place at this point (same layout CI's `npm ci` uses).
+# The postinstall hook calls OyonR/scripts/download-models.sh — that fetches
+# the ~93 MB MediaPipe + ONNX bundles + emotion models. The script is
+# idempotent (skips if already present) and the postinstall is `|| true`
+# tolerant, so we re-run it explicitly here to FAIL THE BUILD if the download
+# didn't succeed (vs. shipping a runtime image without face/emotion assets).
+RUN npm ci --prefer-offline --no-audit --no-fund \
  && bash OyonR/scripts/download-models.sh
 
 # Now bring in source and build.
@@ -161,8 +180,9 @@ RUN apt-get update -qq \
         $(if [ "${INCLUDE_VIPS}" != "0" ]; then echo "libvips-tools"; fi) \
  && rm -rf /var/lib/apt/lists/* \
  && if [ "${INCLUDE_VIPS}" != "0" ]; then vips -l | grep -q openslideload || { echo "libvips has no OpenSlide loader" >&2; exit 1; }; fi \
- && mkdir -p /opt/rohy /var/lib/rohy /var/cache/rohy-hf \
- && chown -R node:node /opt/rohy /var/lib/rohy /var/cache/rohy-hf
+ && mkdir -p /opt/rohy /var/lib/rohy /var/lib/rohy-secrets /var/cache/rohy-hf \
+ && chown -R node:node /opt/rohy /var/lib/rohy /var/lib/rohy-secrets /var/cache/rohy-hf \
+ && chmod 700 /var/lib/rohy-secrets
 
 WORKDIR /opt/rohy
 
@@ -238,15 +258,25 @@ RUN mkdir -p /var/lib/rohy-plugin-library/pathology \
 
 # Persistent state lives in volumes so `docker compose down && up` doesn't
 # wipe the DB, force a 330 MB Kokoro re-download, or drop uploaded images
-# and imported slides.
-VOLUME ["/var/lib/rohy", "/var/cache/rohy-hf", "/opt/rohy/public/uploads", "/var/lib/rohy-plugin-library"]
+# and imported slides. The generated JWT secret has its own volume
+# (/var/lib/rohy-secrets, see entrypoint.sh): a database backup or a `docker
+# cp` of the DB volume must not carry the signing key with it.
+VOLUME ["/var/lib/rohy", "/var/lib/rohy-secrets", "/var/cache/rohy-hf", "/opt/rohy/public/uploads", "/var/lib/rohy-plugin-library"]
 
+# ROHY_TRUST_PROXY=uniquelocal, not loopback: Caddy is a separate container,
+# so its requests arrive from a private bridge address (172.x / 10.x), never
+# 127.0.0.1. With `loopback` Express ignored X-Forwarded-For entirely — every
+# user shared one login rate-limit bucket and every audit row carried Caddy's
+# IP. `uniquelocal` is safe because rohy:4000 is not published to the host and
+# Caddy REPLACES X-Forwarded-For with {remote_host} (header_up in Caddyfile),
+# so a client cannot smuggle its own value through.
 ENV NODE_ENV=production \
     PORT=4000 \
     ROHY_DB=/var/lib/rohy/database.sqlite \
+    ROHY_SECRETS_DIR=/var/lib/rohy-secrets \
     ROHY_PLUGIN_LIBRARY_DIRS=pathology=/var/lib/rohy-plugin-library/pathology \
     TRANSFORMERS_CACHE=/var/cache/rohy-hf \
-    ROHY_TRUST_PROXY=loopback
+    ROHY_TRUST_PROXY=uniquelocal
 
 EXPOSE 4000
 

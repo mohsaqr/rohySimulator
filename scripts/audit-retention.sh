@@ -198,26 +198,38 @@ AUDIT_ROW=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM system_audit_log WHERE acti
 assert_ge "purge audit row retained with target id" "$AUDIT_ROW" 1
 
 section "Retention sweep"
+# system_audit_log is deliberately NOT seeded or swept here: its rows form a
+# hash chain (server/audit-chain.js), so an unhashed test row — or a sweep that
+# deletes by age — is exactly the tampering the verifier below exists to catch.
 sqlite3 "$DB_PATH" <<'SQLEOF'
 INSERT INTO event_log (event_type, description, timestamp, tenant_id) VALUES ('audit_retention_old', 'old', datetime('now','-10 seconds'), 1);
 INSERT INTO learning_events (verb, object_type, timestamp, tenant_id) VALUES ('AUDIT_RETENTION_OLD', 'audit', datetime('now','-10 seconds'), 1);
 INSERT INTO interactions (role, content, timestamp, tenant_id) VALUES ('system', 'audit_retention_old', datetime('now','-10 seconds'), 1);
-INSERT INTO system_audit_log (action, resource_type, timestamp, tenant_id) VALUES ('audit_retention_old', 'audit', datetime('now','-10 seconds'), 1);
 INSERT INTO alarm_events (vital_sign, threshold_type, triggered_at, tenant_id) VALUES ('hr', 'high', datetime('now','-10 seconds'), 1);
 INSERT INTO llm_request_log (model, status, request_timestamp, tenant_id) VALUES ('audit-retention', 'success', datetime('now','-10 seconds'), 1);
 SQLEOF
+AUDIT_ROWS_BEFORE=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM system_audit_log;")
 
-ROHY_DB="$DB_PATH" ROHY_RETENTION_SECONDS=1 node "$ROOT/scripts/retention-sweep.js" > "$OUT/retention-sweep.json"
+# 0.0001 days = 8.64 s, so the rows stamped 10 s ago are past the horizon.
+ROHY_DB="$DB_PATH" node "$ROOT/scripts/sweep-retention.js" --apply --json --days 0.0001 > "$OUT/retention-sweep.json"
 OLD_LEFT=$(sqlite3 "$DB_PATH" "SELECT
     (SELECT COUNT(*) FROM event_log WHERE event_type='audit_retention_old') +
     (SELECT COUNT(*) FROM learning_events WHERE verb='AUDIT_RETENTION_OLD') +
     (SELECT COUNT(*) FROM interactions WHERE content='audit_retention_old') +
-    (SELECT COUNT(*) FROM system_audit_log WHERE action='audit_retention_old') +
     (SELECT COUNT(*) FROM alarm_events WHERE vital_sign='hr' AND threshold_type='high' AND triggered_at < datetime('now','-1 seconds')) +
     (SELECT COUNT(*) FROM llm_request_log WHERE model='audit-retention');")
 assert_eq "retention sweep deletes old time-bounded rows" "0" "$OLD_LEFT"
-SWEEP_AUDIT=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM system_audit_log WHERE action='retention_sweep';")
-assert_ge "retention sweep audit row written" "$SWEEP_AUDIT" 1
+AUDIT_ROWS_AFTER=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM system_audit_log;")
+assert_eq "retention sweep leaves system_audit_log untouched" "$AUDIT_ROWS_BEFORE" "$AUDIT_ROWS_AFTER"
+
+section "Audit chain"
+# The sweep (and everything this audit did before it) must leave the chain
+# verifiable: exit 0 clean, 2 tampering, 1 infrastructure error.
+if ROHY_DB="$DB_PATH" node "$ROOT/scripts/verify-audit-chain.js" --json > "$OUT/audit-chain.json"; then
+    pass "audit chain verifies after retention sweep"
+else
+    fail "audit chain verification failed (exit $?): $(cat "$OUT/audit-chain.json")"
+fi
 
 printf "\nRetention audit result: %s pass, %s fail\n" "$PASS_COUNT" "$FAIL_COUNT"
 if [ "$FAIL_COUNT" -ne 0 ]; then

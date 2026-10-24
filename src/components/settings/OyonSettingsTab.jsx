@@ -28,10 +28,11 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    // When set, we render the friendly panel instead of trying to load config.
    const [serverDisabled, setServerDisabled] = useState(null);
    const [defaultConsent, setDefaultConsent] = useState(() => {
-      // Match the opt-out semantics in OyonCaptureWidget.readConsentPref:
-      // ON unless explicitly turned off ('0'). Tenant-level enablement is the
-      // admin's opt-in; per-user consent only acts as the opt-out switch.
-      try { return localStorage.getItem(CONSENT_PREF_KEY) !== '0'; } catch { return true; }
+      // Match OyonCaptureWidget.readConsentPref: consent is only an explicit
+      // '1' this learner chose. The switch shows OFF until they tick it —
+      // showing it on for a choice never made is how windows got persisted
+      // without consent.
+      try { return localStorage.getItem(CONSENT_PREF_KEY) === '1'; } catch { return false; }
    });
    const [showValenceGraph, setShowValenceGraph] = useState(() => {
       try { return localStorage.getItem(VALENCE_GRAPH_PREF_KEY) === '1'; } catch { return false; }

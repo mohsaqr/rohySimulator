@@ -86,7 +86,11 @@ describe('PUT /api/users/preferences — merge, not replace', () => {
     beforeAll(async () => {
         server = await startTestServer({ seed: false });
         db = await openDb(server.dbPath);
-        await seedUser(db, { username: 'prefs-student', role: 'student' });
+        // Educator: since 2026-10-24 only educator+ may store provider /
+        // apiKey / baseUrl in default_llm_settings (a student's are dropped —
+        // tests/server/llm-proxy-security.test.js), and this suite is about
+        // how those fields merge.
+        await seedUser(db, { username: 'prefs-student', role: 'educator' });
         studentFetch = authed(server.baseUrl, await login(server.baseUrl, 'prefs-student'));
     }, 90_000);
 

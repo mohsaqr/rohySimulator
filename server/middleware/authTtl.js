@@ -44,3 +44,24 @@ export function authTtlSeconds() {
     if (!match) return DEFAULT_TTL_SECONDS;
     return Number(match[1]) * TTL_UNIT_SECONDS[(match[2] || 's').toLowerCase()];
 }
+
+/**
+ * Whether the auth cookies (`rohy_auth`, `rohy_csrf`) carry the `Secure` flag.
+ *
+ * Shared by middleware/csrf.js and routes/auth-routes.js so the two halves of
+ * the credential can never disagree. It used to be `NODE_ENV === 'production'`
+ * alone, which left a staging or self-hosted instance that serves over HTTPS
+ * but runs with NODE_ENV unset sending the session cookie over any plain-HTTP
+ * request to the same host (security audit 2026-10-24). A public URL that
+ * starts with https: is as clear a signal as NODE_ENV that the browser will
+ * only ever talk to this server over TLS.
+ *
+ * Read per call, like authTtlSeconds(), so tests can flip the env between
+ * cases. Lives here because csrf.js must stay importable without db.js.
+ *
+ * @returns {boolean}
+ */
+export function cookieSecure() {
+    if (process.env.NODE_ENV === 'production') return true;
+    return /^https:/i.test(String(process.env.FRONTEND_URL || '').trim());
+}

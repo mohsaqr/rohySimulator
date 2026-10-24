@@ -9,11 +9,11 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `DELETE` | `/api/body-image/:type` | `authenticateToken, requireAdmin` | `server/routes/uploads-routes.js:256` |
-| `GET` | `/api/bodymap-regions` | `(none)` | `server/routes/uploads-routes.js:296` |
-| `POST` | `/api/bodymap-regions` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:311` |
-| `POST` | `/api/upload` | `authenticateToken` | `server/routes/uploads-routes.js:130` |
-| `POST` | `/api/upload-body-image` | `authenticateToken, requireAdmin` | `server/routes/uploads-routes.js:199` |
-| `POST` | `/api/uploads/file` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:191` |
-| `POST` | `/api/uploads/image` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:190` |
-| `POST` | `/api/uploads/video` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:192` |
+| `DELETE` | `/api/body-image/:type` | `authenticateToken, requireAdmin` | `server/routes/uploads-routes.js:337` |
+| `GET` | `/api/bodymap-regions` | `(none)` | `server/routes/uploads-routes.js:377` |
+| `POST` | `/api/bodymap-regions` | `authenticateToken, requireAdmin` | `server/routes/uploads-routes.js:416` |
+| `POST` | `/api/upload` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:189` |
+| `POST` | `/api/upload-body-image` | `authenticateToken, requireAdmin` | `server/routes/uploads-routes.js:280` |
+| `POST` | `/api/uploads/file` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:272` |
+| `POST` | `/api/uploads/image` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:271` |
+| `POST` | `/api/uploads/video` | `authenticateToken, requireEducator` | `server/routes/uploads-routes.js:273` |

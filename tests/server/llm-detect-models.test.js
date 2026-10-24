@@ -17,6 +17,7 @@ import sqlite3 from 'sqlite3';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-tests-secret';
 
@@ -88,6 +89,8 @@ describe('POST /platform-settings/llm/models/detect', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h' }
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, token, { userId: row.id });
     }, 90_000);
 
     afterAll(async () => {
@@ -134,8 +137,13 @@ describe('POST /platform-settings/llm/models/detect', () => {
         // sends it back; the route used it verbatim as the bearer token, so
         // detection against a key-protected server always failed with 401.
         const db = await openDb(server.dbPath);
+        // The saved key is honoured only for the SAVED URL (security audit
+        // 2026-10-24, #10): the URL is stored too, and a different body URL
+        // with the placeholder gets no key at all.
         await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_api_key', 'saved-key')
                          ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`);
+        await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_base_url', ?)
+                         ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`, [upstreamUrl]);
         await new Promise((resolve) => db.close(() => resolve()));
 
         await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: 'typed-key' });
@@ -144,6 +152,8 @@ describe('POST /platform-settings/llm/models/detect', () => {
         expect(lastAuth).toBeNull();
         await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: '[redacted]' });
         expect(lastAuth).toBe('Bearer saved-key');
+        await detect({ provider: 'custom', baseUrl: `${upstreamUrl}/elsewhere`, apiKey: '[redacted]' });
+        expect(lastAuth).toBeNull();
     });
 
     async function adminCall(method, path, body) {

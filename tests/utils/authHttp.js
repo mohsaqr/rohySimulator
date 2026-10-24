@@ -16,7 +16,9 @@
 //   const alice = await asUser(server.baseUrl, 'alice');
 //   const res = await alice('/api/cases');
 
+import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 
 /** The password every seeded user gets. Satisfies the platform policy
@@ -78,6 +80,46 @@ export async function seedUser(db, opts = {}) {
         [username, username, email, hash, role, tenantId, status]
     );
     return r.lastID;
+}
+
+/**
+ * Register a JWT as a live session, the way login/register/refresh do.
+ *
+ * authenticateToken fails CLOSED on a token with no active_sessions row
+ * (401 `session_unknown`): a JWT that was never issued by this server cannot
+ * be revoked, so it is not accepted. A test that signs its own token must
+ * therefore record it here before using it — the same sha256 keying as
+ * server/middleware/auth.js hashToken().
+ *
+ * `db` is an open sqlite handle or a path to the server's database file.
+ */
+export async function recordSession(db, token, { userId, tenantId = 1, expiresIn = '+1 hour' }) {
+    const own = typeof db === 'string';
+    const handle = own ? await openDb(db) : db;
+    try {
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        await run(
+            handle,
+            `INSERT INTO active_sessions (user_id, token_hash, expires_at, tenant_id, is_active)
+             VALUES (?, ?, datetime('now', ?), ?, 1)`,
+            [userId, tokenHash, expiresIn, tenantId]
+        );
+        return tokenHash;
+    } finally {
+        if (own) await closeDb(handle);
+    }
+}
+
+/**
+ * Sign a JWT for `user` with `secret` AND record it as a live session, so it
+ * authenticates against a server started with that secret. `user.id` is
+ * required; `jti` defaults to a random UUID so two tokens for the same payload
+ * signed in the same second never collide on active_sessions.token_hash.
+ */
+export async function mintToken(db, user, secret, { expiresIn = '1h', jti = crypto.randomUUID() } = {}) {
+    const token = jwt.sign(user, secret, { expiresIn, jwtid: jti });
+    await recordSession(db, token, { userId: user.id, tenantId: user.tenant_id || 1 });
+    return token;
 }
 
 /** POST /auth/login and return the raw JWT. Throws with the body on failure,

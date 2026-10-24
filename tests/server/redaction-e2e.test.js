@@ -16,6 +16,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { recordSession } from '../utils/authHttp.js';
 
 const TEST_JWT_SECRET = 'rohy-redaction-tests-secret';
 
@@ -72,6 +73,8 @@ describe('PII redaction — end to end via admin routes', () => {
             TEST_JWT_SECRET,
             { expiresIn: '1h', jwtid: 'redact-admin-tok' },
         );
+        // authenticateToken fails closed on a token with no active_sessions row.
+        await recordSession(server.dbPath, adminToken, { userId: admin.id });
     });
 
     afterAll(async () => {

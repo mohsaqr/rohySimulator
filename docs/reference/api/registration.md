@@ -16,4 +16,4 @@ model.
 | `GET` | `/api/registration-invites/:id/uses` | `authenticateToken, requireAdmin` | `server/routes/registration-routes.js:220` |
 | `GET` | `/api/registration-requests` | `authenticateToken, requireAdmin` | `server/routes/registration-routes.js:253` |
 | `POST` | `/api/registration-requests/:id/approve` | `authenticateToken, requireAdmin` | `server/routes/registration-routes.js:279` |
-| `POST` | `/api/registration-requests/:id/reject` | `authenticateToken, requireAdmin` | `server/routes/registration-routes.js:354` |
+| `POST` | `/api/registration-requests/:id/reject` | `authenticateToken, requireAdmin` | `server/routes/registration-routes.js:360` |

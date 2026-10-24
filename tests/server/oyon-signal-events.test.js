@@ -13,9 +13,9 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken } from '../utils/authHttp.js';
 
 const SECRET = 'oyon-signal-events-tests-secret';
 
@@ -41,8 +41,10 @@ function dbAll(db, sql, params = []) {
     );
 }
 function dbClose(db) { return new Promise((r) => db.close(() => r())); }
-function tokenFor(user, jti) {
-    return jwt.sign(user, SECRET, { expiresIn: '1h', jwtid: jti });
+// Signs the JWT AND records its active_sessions row: authenticateToken fails
+// closed on a token with no row (401 session_unknown), exactly like a forged one.
+function tokenFor(dbPath, user, jti) {
+    return mintToken(dbPath, user, SECRET, { jti });
 }
 
 async function withDb(dbPath, work) {
@@ -122,9 +124,9 @@ describe('Oyon signal events', () => {
                     min_valid_frames, smoothing_alpha, min_hold_ms, min_switch_confidence
                  ) VALUES ('1', 1, 1, 1, 0, 'hse-emotion-mtl', 500, 10000, 3, 0.28, 3000, 0.5)`);
 
-            stuTok = tokenFor({ id: stu.id, username: 'ose_stu', role: 'student', tenant_id: 1 }, 'se-s');
-            otherTok = tokenFor({ id: other.id, username: 'ose_other', role: 'student', tenant_id: 1 }, 'se-o');
-            eduTok = tokenFor({ id: edu.id, username: 'ose_edu', role: 'educator', tenant_id: 1 }, 'se-e');
+            stuTok = await tokenFor(server.dbPath, { id: stu.id, username: 'ose_stu', role: 'student', tenant_id: 1 }, 'se-s');
+            otherTok = await tokenFor(server.dbPath, { id: other.id, username: 'ose_other', role: 'student', tenant_id: 1 }, 'se-o');
+            eduTok = await tokenFor(server.dbPath, { id: edu.id, username: 'ose_edu', role: 'educator', tenant_id: 1 }, 'se-e');
         });
     });
 

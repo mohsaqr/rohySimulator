@@ -15,9 +15,9 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
+import { mintToken } from '../utils/authHttp.js';
 
 const SECRET = 'oyon-routes-tests-secret';
 
@@ -39,8 +39,10 @@ function dbGet(db, sql, params = []) {
 }
 function dbClose(db) { return new Promise((r) => db.close(() => r())); }
 
-function tokenFor(user, jti) {
-    return jwt.sign(user, SECRET, { expiresIn: '1h', jwtid: jti });
+// Signs the JWT AND records its active_sessions row: authenticateToken fails
+// closed on a token with no row (401 session_unknown), exactly like a forged one.
+function tokenFor(dbPath, user, jti) {
+    return mintToken(dbPath, user, SECRET, { jti });
 }
 
 async function setOyonViewFlags(dbPath, { admin = 1, educator = 1, student = 1 } = {}) {
@@ -77,9 +79,9 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oroute_stu']);
         await dbClose(db);
 
-        adminTok = tokenFor({ id: admin.id, username: 'oroute_admin', role: 'admin', tenant_id: 1 }, 'a');
-        educatorTok = tokenFor({ id: edu.id, username: 'oroute_edu', role: 'educator', tenant_id: 1 }, 'e');
-        studentTok = tokenFor({ id: stu.id, username: 'oroute_stu', role: 'student', tenant_id: 1 }, 's');
+        adminTok = await tokenFor(server.dbPath, { id: admin.id, username: 'oroute_admin', role: 'admin', tenant_id: 1 }, 'a');
+        educatorTok = await tokenFor(server.dbPath, { id: edu.id, username: 'oroute_edu', role: 'educator', tenant_id: 1 }, 'e');
+        studentTok = await tokenFor(server.dbPath, { id: stu.id, username: 'oroute_stu', role: 'student', tenant_id: 1 }, 's');
     });
 
     afterAll(async () => { if (server) await server.close(); });

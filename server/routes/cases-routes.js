@@ -748,8 +748,14 @@ router.get('/scenarios', authenticateToken, (req, res) => {
 // Get single scenario
 router.get('/scenarios/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
-    
-    dbAdapter.get('SELECT * FROM scenarios WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, tenantId(req)], (err, row) => {
+
+    // Same visibility as the list: public, or the caller's own. The row
+    // fetch used to skip that predicate, so a private scenario was readable
+    // by anyone in the tenant who guessed its id (security audit 2026-10-24, #11).
+    dbAdapter.get(
+        'SELECT * FROM scenarios WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND (is_public = 1 OR created_by = ?)',
+        [id, tenantId(req), req.user?.id],
+        (err, row) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -761,7 +767,8 @@ router.get('/scenarios/:id', authenticateToken, (req, res) => {
             ...redactRow(row, { internal: hasRoleAtLeast(req.user, ROLE_RANKS.admin) ? 'allow' : 'redact' }),
             timeline: JSON.parse(row.timeline || '[]')
         });
-    });
+        }
+    );
 });
 
 // ---- ECG rhythm canonicalisation (server/shared/rhythms.js) ----

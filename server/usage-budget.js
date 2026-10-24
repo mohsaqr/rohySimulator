@@ -118,8 +118,21 @@ export async function getCurrentUsage({ tenantId, userId = null, provider, metri
     };
 }
 
-export async function enforceBudget({ tenantId, userId, provider, metric, requested }) {
-    const amount = Math.max(0, Number(requested) || 0);
+/**
+ * The smallest output-token reservation the LLM pre-flight makes. A session
+ * may ask for fewer output tokens, but the pre-flight never reserves less,
+ * so a tiny client-supplied value cannot slip a request under a budget it
+ * would otherwise exceed.
+ */
+export const LLM_MIN_PREFLIGHT_TOKENS = 256;
+
+/**
+ * Refuse (BudgetExceededError) when `requested` more units would take the
+ * user's or the tenant's daily usage over its limit. `minRequested` is a floor
+ * on the reservation; the caller passes it when `requested` is user-controlled.
+ */
+export async function enforceBudget({ tenantId, userId, provider, metric, requested, minRequested = 0 }) {
+    const amount = Math.max(0, Number(minRequested) || 0, Number(requested) || 0);
     const checks = [
         await getCurrentUsage({ tenantId, userId, provider, metric }),
         await getCurrentUsage({ tenantId, userId: null, provider, metric }),

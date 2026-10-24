@@ -409,15 +409,28 @@ function learnerItem(item, keys) {
     );
 }
 
-/** The READY managed slides for this tenant. */
-async function managedAssets(pluginId, tenant) {
-    return dbAll(
-        `SELECT id, label, native_objective, native_mpp_x, tiled_objective, width, height
-           FROM plugin_assets
-          WHERE plugin_id = ? AND tenant_id = ? AND state = 'ready'
-          ORDER BY created_at DESC`,
-        [pluginId, tenant]
-    ).catch(() => []);
+/**
+ * The READY managed slides for this tenant.
+ *
+ * A failed read degrades to "no managed slides" so the bundled half of the
+ * library is still offered — but it is SAID, at warn, with the request id:
+ * silently empty was indistinguishable from a tenant that imported nothing.
+ */
+async function managedAssets(pluginId, tenant, reqLog = log) {
+    try {
+        return await dbAll(
+            `SELECT id, label, native_objective, native_mpp_x, tiled_objective, width, height
+               FROM plugin_assets
+              WHERE plugin_id = ? AND tenant_id = ? AND state = 'ready'
+              ORDER BY created_at DESC`,
+            [pluginId, tenant]
+        );
+    } catch (err) {
+        reqLog.warn('managed assets could not be read; offering the bundled library only', {
+            pluginId, tenant_id: tenant, error: err.message,
+        });
+        return [];
+    }
 }
 
 /**
@@ -512,7 +525,7 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     // catalog IS that collection. A plugin with another shape has no managed
     // half — an imported slide is not an entry in an imaging archive — and
     // merging one in would put a foreign row into its library.
-    const managed = shape.collection === 'assets' ? await managedAssets(pluginId, tenantId(req)) : [];
+    const managed = shape.collection === 'assets' ? await managedAssets(pluginId, tenantId(req), req.log || log) : [];
     const origin = pluginOrigins().get(pluginId);
     // A configured origin always wins; the starter bundle is what a deployment
     // has INSTEAD of one, never as well as one. Otherwise an operator who

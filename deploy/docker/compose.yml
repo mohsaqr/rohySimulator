@@ -28,6 +28,8 @@
 # Persistence model:
 #   rohy-db          : SQLite database. Survives `docker compose down`.
 #                      Wiped only by `docker volume rm rohy-db`.
+#   rohy-secrets     : the generated JWT signing secret. Losing it logs
+#                      everyone out; back it up apart from the DB.
 #   rohy-hf-cache    : Kokoro model + HF Transformers cache. ~330 MB
 #                      after first TTS request. Re-downloads if wiped.
 #   caddy-data       : Caddy's state (TLS certs from Let's Encrypt).
@@ -46,8 +48,11 @@ services:
         INCLUDE_PIPER: "${INCLUDE_PIPER:-0}"
         # libvips for tiling new pathology slides; 0 leaves it out.
         INCLUDE_VIPS: "${INCLUDE_VIPS:-1}"
-        # Pin a dynajs commit for reproducible builds. Default is main.
-        DYNAJS_GIT_REF: "${DYNAJS_GIT_REF:-main}"
+        # dynajs is pinned to a commit (mohsaqr/dynajs, package 0.1.0) so the
+        # image is reproducible; the Dockerfile verifies the cloned version.
+        # Move both together when bumping the pin.
+        DYNAJS_GIT_REF: "${DYNAJS_GIT_REF:-0dbc6bb1fc8a1d33c8b91f7de38670fd61df6798}"
+        DYNAJS_EXPECTED_VERSION: "${DYNAJS_EXPECTED_VERSION:-0.1.0}"
     image: rohy:latest
     container_name: rohy
     restart: unless-stopped
@@ -72,10 +77,14 @@ services:
       # tells "operator set no hostname" (a fatal misconfiguration in
       # production) from "operator chose localhost" (a valid local run).
       ROHY_HOSTNAME: "${ROHY_HOSTNAME:-}"
-      # Trust the proxy chain so rate-limit + X-Forwarded-* work.
-      ROHY_TRUST_PROXY: "${ROHY_TRUST_PROXY:-loopback}"
-      # First-boot only: seed admin/admin123. REMOVE after first login.
-      ALLOW_DEFAULT_USERS: "${ALLOW_DEFAULT_USERS:-}"
+      # Trust the proxy chain so rate-limit + X-Forwarded-* work. NOT
+      # `loopback`: Caddy is another container, so its requests come from a
+      # private bridge address and `loopback` made Express ignore
+      # X-Forwarded-For (one shared login rate-limit bucket for every user,
+      # Caddy's IP on every audit row). `uniquelocal` trusts private ranges
+      # only, and is safe because rohy:4000 is not published to the host and
+      # Caddy replaces X-Forwarded-For with {remote_host} (Caddyfile).
+      ROHY_TRUST_PROXY: "${ROHY_TRUST_PROXY:-uniquelocal}"
       # Recommended bootstrap: provision the first admin with your OWN password
       # (no well-known credential ever exists). Applied on first boot only, when
       # the users table is empty. Leave empty and the first account registered
@@ -83,8 +92,10 @@ services:
       ROHY_ADMIN_USERNAME: "${ROHY_ADMIN_USERNAME:-}"
       ROHY_ADMIN_PASSWORD: "${ROHY_ADMIN_PASSWORD:-}"
       ROHY_ADMIN_EMAIL: "${ROHY_ADMIN_EMAIL:-}"
-      # JWT_SECRET is auto-generated and persisted to the volume on first
-      # boot. Override here only if you have an external secret manager.
+      # JWT_SECRET is auto-generated on first boot and persisted to its OWN
+      # volume (rohy-secrets at /var/lib/rohy-secrets), so a copy of the
+      # database volume never carries the signing key with it. Override here
+      # only if you have an external secret manager.
       JWT_SECRET: "${JWT_SECRET:-}"
       # Local-browser emotion capture add-on (Oyon). Defaults to ON to
       # match the source-install path. Set OYON_ENABLED=0 in .env to opt
@@ -95,8 +106,15 @@ services:
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       GOOGLE_TTS_API_KEY: "${GOOGLE_TTS_API_KEY:-}"
+    # Least privilege: node needs no Linux capabilities to serve on :4000,
+    # and nothing in the image should ever gain privileges through setuid.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - rohy-db:/var/lib/rohy
+      - rohy-secrets:/var/lib/rohy-secrets
       - rohy-hf-cache:/var/cache/rohy-hf
       # Uploaded images (body-map silhouettes). Without this they lived in
       # the container layer and vanished on every image redeploy.
@@ -141,6 +159,7 @@ services:
 
 volumes:
   rohy-db:
+  rohy-secrets:
   rohy-hf-cache:
   rohy-uploads:
   rohy-plugin-library:

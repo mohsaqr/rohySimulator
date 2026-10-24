@@ -179,3 +179,58 @@ describe('discovery is peaceful', () => {
         report.forEach((r) => expect(r).toMatchObject({ id: expect.any(String), ok: expect.any(Boolean), reason: expect.any(String) }));
     });
 });
+
+// Regression lock: a plugin route mounted without guards.authenticated was reachable with no sign-in; the slot now forces authenticateToken on every plugin router
+describe('every plugin route sits behind the host sign-in', () => {
+    let baseUrl;
+    let httpServer;
+    let token;
+    let userId;
+
+    beforeAll(async () => {
+        const express = (await import('express')).default;
+        const { seedUser, mintToken, openDb, closeDb } = await import('../utils/authHttp.js');
+        const db = await openDb(testDb.dbPath);
+        try {
+            userId = await seedUser(db, { username: 'slot-auth-user', role: 'student' });
+        } finally {
+            await closeDb(db);
+        }
+        token = await mintToken(testDb.dbPath, { id: userId, username: 'slot-auth-user', role: 'student', tenant_id: 1 }, process.env.JWT_SECRET);
+
+        const router = express.Router();
+        const ctx = slot.buildServerContext({ id: 'slotdemo', settings: undefined });
+        slot.mountPluginRoutes(router, 'slotdemo', {
+            routes(sub, c) {
+                // Forgot the guard: must still require a sign-in.
+                sub.get('/open', (req, res) => res.json({ userId: req.user?.id ?? null }));
+                // Declared the guard: running it a second time must be harmless.
+                sub.get('/guarded', c.guards.authenticated, c.guards.student, (req, res) => res.json({ userId: req.user.id }));
+            },
+        }, ctx);
+        const app = express();
+        app.use('/api', router);
+        await new Promise((resolve) => { httpServer = app.listen(0, '127.0.0.1', resolve); });
+        baseUrl = `http://127.0.0.1:${httpServer.address().port}/api/plugins/slotdemo`;
+    });
+    afterAll(async () => { await new Promise((r) => (httpServer ? httpServer.close(r) : r())); });
+
+    it('refuses an unguarded plugin route without a token', async () => {
+        expect((await fetch(`${baseUrl}/open`)).status).toBe(401);
+        expect((await fetch(`${baseUrl}/guarded`)).status).toBe(401);
+    });
+
+    it('serves both routes to a signed-in user, the plugin\'s own guard included', async () => {
+        const headers = { authorization: `Bearer ${token}` };
+        const open = await fetch(`${baseUrl}/open`, { headers });
+        expect(open.status).toBe(200);
+        expect((await open.json()).userId).toBe(userId);
+        const guarded = await fetch(`${baseUrl}/guarded`, { headers });
+        expect(guarded.status).toBe(200);
+        expect((await guarded.json()).userId).toBe(userId);
+    });
+
+    it('a module without routes mounts nothing', () => {
+        expect(slot.mountPluginRoutes({ use: () => { throw new Error('must not mount'); } }, 'x', {}, {})).toBe(false);
+    });
+});

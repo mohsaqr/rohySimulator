@@ -5,16 +5,20 @@
 // `err.response.data` so callers reading `err.response.data.message` work.
 import { apiFetch } from '../../../services/apiClient';
 import { baseUrl } from '../../../config/api';
+import { safeFileHref } from '../utils/safeUrl';
 
 /**
  * Resolve a file URL. rohy serves /uploads/* and /api paths from the same
  * origin, but under the install's base path: a stored `/uploads/x.pdf` is
- * `/rohy/uploads/x.pdf` on an install served at '/rohy/'. Other addresses
- * (relative, or on another host) pass through unchanged.
+ * `/rohy/uploads/x.pdf` on an install served at '/rohy/'. An http(s) address
+ * on another host passes through unchanged. Anything else (a relative path,
+ * a `javascript:` or `data:` URL) is '' — it used to reach an `<a href>`
+ * verbatim, and the caller renders '' as text, not a link.
  */
 export const resolveFileUrl = (fileUrl) => {
-  if (!fileUrl) return '';
-  return /^\/(uploads|api)\//.test(fileUrl) ? baseUrl(fileUrl) : fileUrl;
+  const safe = safeFileHref(fileUrl);
+  if (!safe) return '';
+  return /^\/(uploads|api)\//.test(safe) ? baseUrl(safe) : safe;
 };
 
 function withErrorShape(promise) {

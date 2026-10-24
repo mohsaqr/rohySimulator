@@ -9,6 +9,95 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.78] — 2026-10-24
+
+**Security release.** A full read-only audit of the repository (authentication, authorization and tenant isolation,
+the LLM and TTS proxies, file handling, SQL construction, the client, plugins, deployment and CI) found 4 critical or
+high server-side issues and about 40 medium and low ones. Every code-level finding is fixed here, each with a
+regression-lock test. The audit report itself is kept out of the repository. Behaviour changes operators and
+educators will notice are marked **(change)**.
+
+- **Authorization and tenant isolation**
+  - The system-log table viewer (`GET /system-log/table/:name`) showed any table raw. `platform_settings` has no
+    tenant column, so any tenant's admin could read the LLM, Google TTS, OpenAI TTS and remote Kokoro API keys in
+    clear, plus `users.password_hash` and `active_sessions.token_hash`. It now serves only an allowlist of tenant-
+    scoped log tables, through the same redaction every other route uses.
+  - **(change)** Creating tenants and moving a user between tenants is limited to a *platform admin* (an admin of the
+    default tenant); an admin can no longer move a peer or superior. Every write to the install-wide
+    `platform_settings` (LLM, voice, registration, terms, case packages, language, monitor, chat, affect, avatars,
+    rate limits, user fields, cohort enforcement) is platform-admin only too (`403 platform_admin_required`).
+  - Complete-session export, questionnaire responses and emotion logs are tenant- and owner-scoped (an educator could
+    export any tenant's transcript and student e-mail; a reviewer could list every tenant's questionnaire answers).
+  - Orders accept only investigations that belong to the session's own case and tenant; lab-result edits and
+    treatment lookups are bound to the session's case; private scenarios are readable only by their author;
+    catalogue "promote" is tenant-bound; deleted sessions are hidden from every session route.
+  - **(change)** Master catalogue writes (medications, lab tests, diagnoses, the lab database file) need an admin, not
+    an educator. The public master lists cap a page at 200 rows and treat `%` and `_` in a search literally.
+  - `/llm/usage/all`, `/tts/voice-usage` and `/admin/export-records` show only the caller's tenant.
+  - The route-auth test now scans every route module, so an unauthenticated route can no longer land unnoticed.
+- **LLM and TTS proxies**
+  - A custom agent endpoint (`llm_provider: custom`) was sent the **platform** API key when the template had none of
+    its own, so an educator could collect it at a host they control. The platform key now travels only to the
+    platform URL.
+  - **(change)** Students can no longer set a custom `baseUrl`, `apiKey` or `provider` on a session or in their
+    preferences (they could receive the hidden persona prompt, including answer material, at their own server, and
+    make rohy call internal hosts). Educator-set URLs, agent `llm_endpoint`s and the admin probes are validated by
+    `server/lib/outboundUrl.js`: http(s) only, no credentials, no loopback/link-local/private host, redirects not
+    followed. Set `ROHY_ALLOW_PRIVATE_LLM_HOSTS=1` for an on-premises model server on the LAN.
+  - Session-supplied model, `maxOutputTokens` and temperature are bounded (catalogue model, platform token cap,
+    0–2); client messages must be `user`/`assistant` text only (≤ 200 messages, ≤ 200,000 characters);
+    `rate_limit_requests_per_user_hourly` is now enforced (`429 hourly_limit`); the budget pre-flight reserves at
+    least 256 tokens.
+  - The Google TTS key moves from the URL to the `X-Goog-Api-Key` header and timeout errors drop query strings, so a
+    timeout no longer logs the key. Piper input goes to a private temp directory.
+  - Removed the broken `POST /agents/templates/:id/test-llm` route (it read a table no migration creates) and its
+    editor button; `avatar_url` and imported template fields are validated.
+- **Authentication**
+  - **(change)** A JWT with no `active_sessions` row is refused (`401 session_unknown`); the "legacy token"
+    fall-through meant a forged or pre-rotation token could never be revoked. Every signed-in user re-authenticates
+    once after this deploy.
+  - Login no longer reveals whether an account exists, is disabled or is locked: unknown users cost a bcrypt compare
+    too, and 403/423 come only after a correct password. An expired lockout resets the failure counter (one wrong
+    password used to re-lock an account for another 15 minutes, indefinitely).
+  - **(change)** The terms of use are enforced by the server (`451 terms_required` on every non-exempt route while
+    acceptance is pending); the client gate re-probes when it sees one.
+  - Cookies are `Secure` whenever `FRONTEND_URL` is https; registration trims and validates username and e-mail;
+    approved and rejected registration requests no longer keep the applicant's password hash.
+  - **(change)** In production a `JWT_SECRET` under 32 characters and `ALLOW_DEFAULT_USERS=1` are fatal. The first
+    admin is provisioned with `ROHY_ADMIN_USERNAME`/`ROHY_ADMIN_PASSWORD`; the installers generate the password.
+- **Server and deployment**
+  - **(change)** Docker trusts the Caddy container (`ROHY_TRUST_PROXY=uniquelocal`): with `loopback`, Express ignored
+    `X-Forwarded-For`, so every user shared one login rate-limit bucket and the audit log recorded Caddy's address.
+    Production warns when the value is unset or `loopback`.
+  - In production every 5xx answers `Internal server error` plus a request id instead of the raw message
+    (236 handlers echoed `err.message`); multer errors answer 413/415. `X-Powered-By` is gone.
+  - Only `OyonR/standalone` is served under `/oyon` (the whole tree, including internal notes, was public).
+    Production fails fast on a busy port instead of binding the next one; an uncaught exception drains and exits.
+    New `ROHY_BIND`.
+  - The old retention sweep deleted audit-chain rows and inserted an unhashed one, which made the tamper-evidence
+    chain report "broken"; it now delegates to the chain-safe sweeper, `audit-retention.sh` verifies the chain, and
+    example systemd units run a daily verification. Pre-migration `.bak` snapshots are pruned to the newest five.
+  - Invite tokens are redacted from the request log; `/health/plugins` caches origin probes for 30 s; `/ready` and
+    `/health/plugins` are limited to 30 requests a minute per IP.
+  - `dynajs` is pinned to a commit with a version check and the image is built with `npm ci`; the JWT secret gets
+    its own Docker volume; compose drops all capabilities; the systemd unit no longer lets the service write its own
+    code; third-party GitHub Actions are pinned to commit SHAs; `googlekey.text` and the Prova notes are excluded
+    from the Docker build context.
+- **Uploads, imports, lessons, plugins, client**
+  - **(change)** `POST /api/upload` is educator-only, 25 MB, byte-checked against the declared image type and
+    audited (any signed-in role could fill the uploads volume at 100 MB a request). Body-map regions are admin-only
+    and validated.
+  - The lesson HTML scrub reads attributes tag by tag and catches `/`-separated handlers, `srcdoc`, `formaction` and
+    entity-encoded `javascript:` URLs; lesson file, link and embed URLs are allow-listed; embeds lose
+    `allow-same-origin`.
+  - Learners no longer receive lesson MCQ answer keys in the page; answers are checked by
+    `POST /courses/lectures/:id/mcq/check`.
+  - A pathology slide import is per tenant (the same URL in another tenant renamed and re-tiled the first tenant's
+    slide); a session keeps at most 32 plugin documents per plugin; every plugin route requires sign-in.
+  - **(change)** Oyon affect capture is persisted only after an explicit consent; no stored choice means local-only.
+  - Logout clears the case-edit draft and debrief transcripts from localStorage.
+  - Dependencies: `dompurify` 3.4.17, `multer` 2.5.0, `express` 5.3.0, `body-parser` 2.4.0 (all had open advisories).
+
 ## [3.0.0-rc.77] — 2026-10-24
 
 - **`npm run lint` ignores the local `tmp/` folder.** It is gitignored scratch space (Prova verification runs keep

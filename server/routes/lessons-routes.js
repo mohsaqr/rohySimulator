@@ -24,8 +24,130 @@ const log = logger('routes-lessons');
 const ok = (res, data, status = 200) => res.status(status).json({ success: true, data });
 const fail = (res, status, error) => res.status(status).json({ success: false, error });
 
+// --- MCQ answer keys ---------------------------------------------------------
+//
+// A self-check block is stored in the section HTML as
+// `<lecture-mcq data-questions="[{question, options, correctIndex, explanation}]">`
+// — the editor's own serialisation. Served verbatim, that attribute put every
+// answer key and explanation in the learner's browser before they answered.
+// For a learner the attribute is rewritten without those two fields and the
+// grading moves to POST /courses/lectures/:lectureId/mcq/check below; staff
+// (anyone who may manage the lesson) still get the whole attribute, so the
+// editor and its preview keep working.
+//
+// The scrub is a tag-level rewrite rather than a DOM pass: the stored HTML is
+// what the editor's DOM serialiser emitted, so `&`, `"` and `<` inside the
+// attribute arrive entity-escaped, and the attribute scanner below accepts a
+// quoted value whatever it contains (a question may well read "a > b").
+
+const MCQ_OPEN_TAG_RE = /<lecture-mcq\b((?:\s+[\w:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*\/?>/gi;
+const ATTR_RE = /\s+([\w:-]+)(?:\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+const ENTITY_RE = /&(?:#(\d+)|#x([0-9a-f]+)|(quot|amp|lt|gt|apos));/gi;
+const NAMED_ENTITIES = { quot: '"', amp: '&', lt: '<', gt: '>', apos: '\'' };
+// Every attribute a <lecture-mcq> carries its questions in; the learner copy
+// replaces all of them with one key-less data-questions.
+const MCQ_KEY_ATTRS = new Set(['data-questions', 'data-question', 'data-options', 'data-correct', 'data-explanation']);
+
+function decodeAttr(value) {
+    return value.replace(ENTITY_RE, (m, dec, hex, name) => {
+        if (name) return NAMED_ENTITIES[name.toLowerCase()];
+        return String.fromCodePoint(parseInt(dec ?? hex, dec ? 10 : 16));
+    });
+}
+
+function encodeAttr(value) {
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** The attributes of one <lecture-mcq> opening tag, decoded, lower-cased names. */
+function mcqAttributes(attrText) {
+    const attrs = {};
+    for (const m of attrText.matchAll(ATTR_RE)) {
+        attrs[m[1].toLowerCase()] = decodeAttr(m[3] ?? m[4] ?? m[5] ?? '');
+    }
+    return attrs;
+}
+
+// Mirrors the editor's normalizeQuestion (src/components/lessons/.../mcqShared.js):
+// the two must agree on what question N, option K means or the grade is wrong.
+function normalizeQuestion(raw) {
+    const q = raw && typeof raw === 'object' ? raw : {};
+    const options = Array.isArray(q.options) ? q.options.map((o) => String(o ?? '')) : ['', ''];
+    const safeOptions = options.length >= 2 ? options : [...options, '', ''].slice(0, 2);
+    let correctIndex = Number.isInteger(q.correctIndex) ? q.correctIndex : 0;
+    if (correctIndex < 0 || correctIndex >= safeOptions.length) correctIndex = 0;
+    return {
+        question: typeof q.question === 'string' ? q.question : '',
+        options: safeOptions,
+        correctIndex,
+        explanation: typeof q.explanation === 'string' ? q.explanation : '',
+    };
+}
+
+/** The questions one <lecture-mcq> tag carries (current or legacy attributes). */
+function mcqQuestionsOf(attrs) {
+    if (attrs['data-questions'] !== undefined) {
+        try {
+            const parsed = JSON.parse(attrs['data-questions']);
+            if (Array.isArray(parsed) && parsed.length) return parsed.map(normalizeQuestion);
+        } catch {
+            // Not JSON: fall through to the legacy attributes, then to nothing.
+        }
+    }
+    if (attrs['data-question'] !== undefined || attrs['data-options'] !== undefined) {
+        let options = ['', ''];
+        try {
+            const p = attrs['data-options'] ? JSON.parse(attrs['data-options']) : [];
+            if (Array.isArray(p)) options = p.map(String);
+        } catch { /* keep the two blanks */ }
+        return [normalizeQuestion({
+            question: attrs['data-question'] ?? '',
+            options,
+            correctIndex: parseInt(attrs['data-correct'] ?? '0', 10) || 0,
+            explanation: attrs['data-explanation'] ?? '',
+        })];
+    }
+    return [];
+}
+
+/**
+ * Every self-check block of a section, in document order: an array (one per
+ * <lecture-mcq>) of normalised questions. Index into it with the client's
+ * (blockIndex, questionIndex).
+ */
+export function mcqBlocksOf(html) {
+    if (typeof html !== 'string' || !html.includes('<lecture-mcq')) return [];
+    return [...html.matchAll(MCQ_OPEN_TAG_RE)].map((m) => mcqQuestionsOf(mcqAttributes(m[1])));
+}
+
+/**
+ * The section HTML as a learner may see it: each <lecture-mcq> keeps its
+ * questions and options and loses `correctIndex` and `explanation` (and the
+ * legacy data-correct / data-explanation attributes). Anything else in the
+ * HTML is untouched.
+ */
+export function stripMcqAnswerKeys(html) {
+    if (typeof html !== 'string' || !html.includes('<lecture-mcq')) return html;
+    return html.replace(MCQ_OPEN_TAG_RE, (tag, attrText) => {
+        // Current AND legacy single-question attributes are folded into one
+        // key-less data-questions: a legacy tag stripped of only data-correct
+        // would be read by the editor as "answer 0" and graded locally, wrongly.
+        const questions = mcqQuestionsOf(mcqAttributes(attrText));
+        const kept = [...attrText.matchAll(ATTR_RE)]
+            .filter((m) => !MCQ_KEY_ATTRS.has(m[1].toLowerCase()))
+            .map((m) => m[0]);
+        if (questions.length) {
+            const learnerView = questions.map(({ question, options }) => ({ question, options }));
+            kept.push(` data-questions="${encodeAttr(JSON.stringify(learnerView))}"`);
+        }
+        return `<lecture-mcq${kept.join('')}${tag.endsWith('/>') ? ' />' : '>'}`;
+    });
+}
+
 // --- row → client (camelCase) mappers ---------------------------------------
-function mapLesson(row, sections) {
+// `learner` — the reader may not manage the lesson: answer keys are removed
+// from every HTML body (see "MCQ answer keys" above).
+function mapLesson(row, sections, { learner = false } = {}) {
     if (!row) return null;
     const out = {
         id: row.id,
@@ -33,7 +155,7 @@ function mapLesson(row, sections) {
         cohortId: row.cohort_id,
         title: row.title,
         description: row.description,
-        content: row.content,
+        content: learner ? stripMcqAnswerKeys(row.content) : row.content,
         contentType: row.content_type,
         videoUrl: row.video_url,
         duration: row.duration,
@@ -46,7 +168,7 @@ function mapLesson(row, sections) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
-    if (sections) out.sections = sections.map(mapSection);
+    if (sections) out.sections = sections.map((s) => mapSection(s, { learner }));
     return out;
 }
 
@@ -94,13 +216,13 @@ async function lockFor(lesson, req) {
 
 const lockedReply = (res) => res.status(403).json({ success: false, error: 'This lesson opens after the case', code: 'lesson_locked' });
 
-function mapSection(row) {
+function mapSection(row, { learner = false } = {}) {
     return {
         id: row.id,
         lectureId: row.lesson_id,
         title: row.title,
         type: row.type,
-        content: row.content,
+        content: learner ? stripMcqAnswerKeys(row.content) : row.content,
         fileName: row.file_name,
         fileUrl: row.file_url,
         fileType: row.file_type,
@@ -184,7 +306,7 @@ router.get('/courses/modules/:moduleId/lectures', authenticateToken, async (req,
             return state && !state.unlocked ? state : null;
         };
         const open = rows.filter((r) => !lockOf(r));
-        const shape = (r, sections) => (lockOf(r) ? mapLockedLesson(r, lockOf(r)) : mapLesson(r, sections));
+        const shape = (r, sections) => (lockOf(r) ? mapLockedLesson(r, lockOf(r)) : mapLesson(r, sections, { learner: !staff }));
         // ?include=sections — batch-fetch every lesson's sections in ONE query
         // (the client would otherwise N+1 per lesson) and attach them in the
         // same shape as the single-lesson detail endpoint.
@@ -459,10 +581,54 @@ router.get('/courses/lectures/:id', authenticateToken, async (req, res) => {
         if (!access) return fail(res, 404, 'Lesson not found');
         if (access.locked) return lockedReply(res);
         const sections = await sectionsFor(lessonId);
-        return ok(res, mapLesson(access.lesson, sections));
+        return ok(res, mapLesson(access.lesson, sections, { learner: !access.staff }));
     } catch (err) {
         log.error('get lecture failed', { error: err.message });
         return fail(res, 500, 'Failed to load lesson');
+    }
+});
+
+// POST /courses/lectures/:lectureId/mcq/check — grade one self-check answer.
+//
+// The learner's copy of the section carries no answer keys (stripMcqAnswerKeys),
+// so the check happens here, against the stored content, for anyone who may
+// read the lesson. Body: { sectionId, blockIndex = 0, questionIndex, answerIndex }
+// — the block is the Nth <lecture-mcq> of the section in document order.
+// Answers { correct, correctIndex, explanation }. Nothing is stored: a
+// self-check is not an assessment, exactly as before.
+router.post('/courses/lectures/:lectureId/mcq/check', authenticateToken, async (req, res) => {
+    try {
+        const lessonId = Number(req.params.lectureId);
+        if (!Number.isInteger(lessonId)) return fail(res, 400, 'Invalid lesson id');
+        const access = await lessonForRead(lessonId, req);
+        if (!access) return fail(res, 404, 'Lesson not found');
+        if (access.locked) return lockedReply(res);
+
+        const b = req.body ?? {};
+        const sectionId = Number(b.sectionId);
+        const blockIndex = b.blockIndex === undefined ? 0 : Number(b.blockIndex);
+        const questionIndex = Number(b.questionIndex);
+        const answerIndex = Number(b.answerIndex);
+        const index = (n) => Number.isInteger(n) && n >= 0;
+        if (!Number.isInteger(sectionId) || !index(blockIndex) || !index(questionIndex) || !index(answerIndex)) {
+            return fail(res, 400, 'sectionId, blockIndex, questionIndex and answerIndex must be non-negative integers');
+        }
+        const section = await dbAdapter.get(
+            `SELECT content FROM lesson_sections WHERE id = ? AND lesson_id = ? AND deleted_at IS NULL`,
+            [sectionId, lessonId]
+        );
+        if (!section) return fail(res, 404, 'Section not found');
+        const question = mcqBlocksOf(section.content)[blockIndex]?.[questionIndex];
+        if (!question) return fail(res, 404, 'Question not found');
+        if (answerIndex >= question.options.length) return fail(res, 400, 'answerIndex is outside the options');
+        return ok(res, {
+            correct: answerIndex === question.correctIndex,
+            correctIndex: question.correctIndex,
+            explanation: question.explanation,
+        });
+    } catch (err) {
+        log.error('mcq check failed', { error: err.message });
+        return fail(res, 500, 'Failed to check the answer');
     }
 });
 
@@ -619,7 +785,7 @@ router.get('/courses/lectures/:lectureId/sections', authenticateToken, async (re
         if (!access) return fail(res, 404, 'Lesson not found');
         if (access.locked) return lockedReply(res);
         const rows = await sectionsFor(lessonId);
-        return ok(res, rows.map(mapSection));
+        return ok(res, rows.map((row) => mapSection(row, { learner: !access.staff })));
     } catch (err) {
         log.error('list sections failed', { error: err.message });
         return fail(res, 500, 'Failed to list sections');

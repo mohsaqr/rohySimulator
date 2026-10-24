@@ -55,10 +55,8 @@ describe('Settings → Oyon consent toggle records WHICH contract was accepted',
         const { findByRole } = renderWithProviders(<OyonSettingsTab />);
         const box = await findByRole('checkbox', { name: /Capture emotions during my simulation sessions/i });
 
-        // It defaults to ticked, so untick then re-tick to record a grant.
-        fireEvent.click(box);
-        await waitFor(() => expect(consentPut()).toBeTruthy());
-        apiFetch.mockClear();
+        // Regression lock: the switch defaulted to ticked for a learner who never chose; it starts OFF, so one tick is the grant.
+        expect(box.checked).toBe(false);
         fireEvent.click(box);
 
         await waitFor(() => expect(consentPut()).toBeTruthy());
@@ -90,6 +88,7 @@ describe('Settings → Oyon consent toggle records WHICH contract was accepted',
     });
 
     it('clears the recorded version when consent is withdrawn', async () => {
+        localStorage.setItem('oyon.defaultConsent', '1'); // a choice made earlier
         localStorage.setItem(OYON_CONSENT_VERSION_LS_KEY, 'oyon-consent-v2');
         const { findByRole } = renderWithProviders(<OyonSettingsTab />);
         const box = await findByRole('checkbox', { name: /Capture emotions during my simulation sessions/i });

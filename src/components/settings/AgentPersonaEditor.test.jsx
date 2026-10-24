@@ -15,9 +15,7 @@
 //   4. Voice preview — Preview button calls VoiceService.speak with the
 //      resolved voice. While playing, button label flips to "Stop preview"
 //      and clicking again calls VoiceService.cancelSpeech.
-//   5. LLM test — calls AgentService.testLLM(id) and renders the result in a
-//      panel. Disabled until an LLM provider is set AND the template has
-//      been saved (isCreate gate per HANDOFF.md).
+//   5. No LLM test button — the server route was removed (audit 2026-10-24).
 //   6. Avatar preview re-renders on field change — switching avatar_url and
 //      tweaking framing sliders updates the (stubbed) PatientAvatar's props.
 //   7. Discussant section — only renders when agent_type === 'discussant'.
@@ -83,7 +81,6 @@ vi.mock('../../services/AgentService', () => {
             deleteTemplate: vi.fn(),
             duplicateTemplate: vi.fn(),
             resetTemplateToDefault: vi.fn(),
-            testLLM: vi.fn(),
         },
     };
 });
@@ -418,50 +415,15 @@ describe('AgentPersonaEditor', () => {
         expect(VoiceService.cancelSpeech).toHaveBeenCalled();
     });
 
-    it('CONTRACT 5a — LLM Test button is hidden until provider is set, then disabled in create mode', async () => {
-        const user = userEvent.setup();
-        // Create mode (templateId='new'): no provider yet, no Test button.
-        AgentService.getTemplate.mockResolvedValue(makeTemplate());
-        renderWithProviders(<AgentPersonaEditor templateId="new" onClose={vi.fn()} />);
-        await waitFor(() => {
-            expect(
-                screen.queryByText(/loading persona editor/i)
-            ).not.toBeInTheDocument();
-        });
-        // No Test LLM button visible yet (provider empty hides the panel).
-        expect(screen.queryByRole('button', { name: /Test LLM connection/i })).not.toBeInTheDocument();
-
-        // Pick a provider.
-        const providerSelect = screen.getByDisplayValue(/Use Platform Default/i);
-        await user.selectOptions(providerSelect, 'openai');
-
-        // Now the Test button is rendered, but DISABLED (isCreate gate).
-        const testBtn = screen.getByRole('button', { name: /Test LLM connection/i });
-        expect(testBtn).toBeDisabled();
-    });
-
-    it('CONTRACT 5b — Test LLM calls AgentService.testLLM and renders the response', async () => {
-        const user = userEvent.setup();
-        AgentService.testLLM.mockResolvedValue({
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-            latency_ms: 233,
-            response: 'Hello there.',
-        });
-        // Saved template (id=42) + provider already set, so button is enabled.
+    // Regression lock: POST /agents/templates/:id/test-llm was removed
+    // (security audit 2026-10-24) — it read a non-existent `config` table and
+    // let an educator point the server at any URL. The editor must not offer
+    // a button that calls it.
+    it('CONTRACT 5 — no Test LLM button, even with a provider set on a saved template', async () => {
         await mountEditor({ template: makeTemplate({ llm_provider: 'openai' }) });
-
-        const testBtn = await screen.findByRole('button', { name: /Test LLM connection/i });
-        expect(testBtn).not.toBeDisabled();
-        await user.click(testBtn);
-
-        await waitFor(() => {
-            expect(AgentService.testLLM).toHaveBeenCalledWith(42);
-        });
-        // Response panel shows latency and response text.
-        await screen.findByText(/Test successful/i);
-        expect(screen.getByText(/Hello there\./)).toBeInTheDocument();
-        expect(screen.getByText(/233ms/)).toBeInTheDocument();
+        await screen.findByDisplayValue(/OpenAI/i);
+        expect(screen.queryByRole('button', { name: /Test LLM connection/i })).not.toBeInTheDocument();
+        expect(AgentService.testLLM).toBeUndefined();
     });
 
     it('CONTRACT 6a — Avatar preview receives current avatar_url as a prop', async () => {
