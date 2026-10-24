@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.73] — 2026-10-24
+
+- **A custom OpenAI-compatible LLM server can take an API key.** The "Custom OpenAI-Compatible API" provider was
+  keyless by definition, so Settings → LLM (and the setup wizard) hid the key field and a hosted gateway that needs
+  one (e.g. a GPU host behind a proxy) could not be configured: every request was refused. The key is now offered
+  there and never required (`optionalKey` in `server/shared/llmCatalogue.js`); LM Studio and Ollama stay keyless.
+- **Model detection uses the saved key.** The settings form holds a `[redacted]` placeholder for a saved key and
+  sent it back to `POST /platform-settings/llm/models/detect`, which used it verbatim as the bearer token — so
+  detecting models on any key-protected server always failed once a key was saved. The placeholder now means "use
+  the saved key".
+
 ## [3.0.0-rc.72] — 2026-10-24
 
 - **The remote Kokoro host can be set in Settings → Voice** (the Kokoro card), next to the cloud keys: an

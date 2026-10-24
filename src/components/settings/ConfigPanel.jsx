@@ -2213,8 +2213,9 @@ function LLMConfiguration() {
                         )}
                     </div>
 
-                    {/* API Key */}
-                    {currentProvider.needsKey && (
+                    {/* API Key — required for cloud providers, optional for a
+                        custom server (a hosted gateway may need one). */}
+                    {(currentProvider.needsKey || currentProvider.optionalKey) && (
                         <div>
                             <label className="block text-sm font-medium text-neutral-300 mb-2">
                                 {t('llm_api_key')}
@@ -2260,7 +2261,7 @@ function LLMConfiguration() {
                             <dd className="text-neutral-200 font-mono">{llmConfig.model || <span className="text-neutral-500">{t('llm_provider_default')}</span>}</dd>
                             <dt className="text-neutral-500">{t('llm_base_url')}</dt>
                             <dd className="text-neutral-200 font-mono break-all">{llmConfig.baseUrl || <span className="text-neutral-500">{t('llm_unset')}</span>}</dd>
-                            {currentProvider.needsKey && (
+                            {(currentProvider.needsKey || (currentProvider.optionalKey && llmConfig.apiKey)) && (
                                 <>
                                     <dt className="text-neutral-500">{t('llm_key')}</dt>
                                     <dd className="text-neutral-200 font-mono">

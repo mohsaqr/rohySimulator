@@ -90,8 +90,8 @@ The following variables carry credentials or signing material. Never commit them
 | --- | --- | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:650` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:138` |
-| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1777`<br>`server/routes/admin-routes.js:1802`<br>`server/routes/admin-routes.js:1803`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1804`<br>`server/routes/admin-routes.js:1805`<br>`server/routes/proxy-routes.js:656`<br>_+2 more_ |
+| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1781`<br>`server/routes/admin-routes.js:1806`<br>`server/routes/admin-routes.js:1807`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1808`<br>`server/routes/admin-routes.js:1809`<br>`server/routes/proxy-routes.js:656`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |

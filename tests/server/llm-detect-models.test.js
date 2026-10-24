@@ -41,11 +41,13 @@ describe('POST /platform-settings/llm/models/detect', () => {
     let upstream;
     let upstreamUrl;
     let lastPath = null;
+    let lastAuth = null;
 
     beforeAll(async () => {
         // Stub "LM Studio": returns the OpenAI-compatible model-list shape.
         upstream = http.createServer((req, res) => {
             lastPath = req.url;
+            lastAuth = req.headers.authorization ?? null;
             if (req.url === '/models') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen2.5-7b' }, { id: 'llama-3.1-8b' }] }));
@@ -114,6 +116,23 @@ describe('POST /platform-settings/llm/models/detect', () => {
         const { status, json } = await detect({ provider: 'lmstudio', baseUrl: `${upstreamUrl}/nope` });
         expect(status).toBe(400);
         expect(json.error).toMatch(/returned 404/);
+    });
+
+    it('sends a typed key, sends none for an empty one, and uses the SAVED key for the form\u2019s [redacted] placeholder', async () => {
+        // Regression lock: the settings form holds REDACTED for a saved key and
+        // sends it back; the route used it verbatim as the bearer token, so
+        // detection against a key-protected server always failed with 401.
+        const db = await openDb(server.dbPath);
+        await dbRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_api_key', 'saved-key')
+                         ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`);
+        await new Promise((resolve) => db.close(() => resolve()));
+
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: 'typed-key' });
+        expect(lastAuth).toBe('Bearer typed-key');
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: '' });
+        expect(lastAuth).toBeNull();
+        await detect({ provider: 'custom', baseUrl: upstreamUrl, apiKey: '[redacted]' });
+        expect(lastAuth).toBe('Bearer saved-key');
     });
 
     it('requires authentication', async () => {
