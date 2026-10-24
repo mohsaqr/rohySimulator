@@ -73,9 +73,11 @@ describe('SPECIALTIES registry', () => {
         expect(roomKeysOf(null)).toEqual([]);
     });
 
-    it('ships the after-effort default disclosure', () => {
+    // on_request since 0071: the after_effort default made every specialist
+    // quiz for three turns before answering ("too instructive", 2026-10-24).
+    it('ships the on-request default disclosure', () => {
         expect(SPECIALTIES.pathologist.defaultDisclosure).toEqual({
-            findings: 'after_effort',
+            findings: 'on_request',
             minStudentTurns: 3,
             requireRoomActivity: true,
         });

@@ -124,8 +124,9 @@ const callPathologist = (sessionId, content) => postAs(studentToken, '/api/proxy
     agent_llm_config: { case_agent_id: pathologistAgentId },
 });
 
-// The default disclosure gate also requires the learner to have been in the
-// specialty's own room (`requireRoomActivity`). Any learning_events row
+// The after_effort gate (chosen for this case's pathologist, see beforeAll)
+// also requires the learner to have been in the specialty's own room
+// (`requireRoomActivity`). Any learning_events row
 // carrying that room satisfies it — the gate asks whether they went and
 // looked, not what they did there.
 const visitRoom = async (sessionId, room) => {
@@ -170,7 +171,11 @@ beforeAll(async () => {
             `INSERT INTO case_agents (case_id, agent_template_id, enabled, availability_type, tenant_id)
              VALUES (?, ?, 1, 'on-call', 1)`, [caseId, templateId])).lastID;
         const bullets = JSON.stringify({ dos: [DO_BULLET], donts: [DONT_BULLET] });
-        pathologistAgentId = await attach(await addTemplate('pathologist', 'Dr Path', 'Consultant pathologist', PATHOLOGIST_PROMPT, bullets));
+        // The gate is opt-in since 0071 (default on_request); this pathologist
+        // opts in, so the gate tests below exercise an educator's choice.
+        const gated = JSON.stringify({ dos: [DO_BULLET], donts: [DONT_BULLET],
+            disclosure: { findings: 'after_effort', minStudentTurns: 3, requireRoomActivity: true } });
+        pathologistAgentId = await attach(await addTemplate('pathologist', 'Dr Path', 'Consultant pathologist', PATHOLOGIST_PROMPT, gated));
         nurseAgentId = await attach(await addTemplate('nurse', 'Nurse', 'Bedside nurse', 'NURSE-PROMPT', bullets));
 
         const addSession = async (snapshot = null, onCase = caseId) => (await pRun(db,
@@ -256,8 +261,8 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
     });
 
     it('holds the findings back while the learner has never opened the pathology room', async () => {
-        // Turn quota met (this is the 3rd), room quota not: the default
-        // disclosure sets requireRoomActivity, and no learning_events row for
+        // Turn quota met (this is the 3rd), room quota not: the case's
+        // after_effort gate sets requireRoomActivity, and no learning_events row for
         // this session carries `pathology` yet.
         await storeStudentTurn(liveSessionId, 'I saw cells in the stroma.');
         await storeStudentTurn(liveSessionId, 'They look like nests to me.');
@@ -331,10 +336,10 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
         expect(body.choices[0].finish_reason).toBe('stop');
     });
 
-    it('answers with a question when every sentence names the answer', async () => {
+    it('answers with the fallback line when every sentence names the answer', async () => {
         llm.reply.content = 'IDC.';
         const body = await (await callPathologist(liveSessionId, 'Just tell me.')).json();
-        expect(body.choices[0].message.content).toBe("What do you make of it yourself? Tell me what you've seen and what supports it.");
+        expect(body.choices[0].message.content).toBe('That conclusion is yours to draw. I can only tell you what the findings show.');
     });
 
     it('does not brief or guard a non-specialist agent', async () => {

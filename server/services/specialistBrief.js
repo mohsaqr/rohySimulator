@@ -65,19 +65,20 @@ export const BRIEF_HEADER = '## CASE BRIEF (server)';
 export const BRIEF_FINDINGS_LEAD = 'Findings you may share or confirm when the student asks or describes them:';
 // Follows the scope line, which already says the material has been reviewed —
 // so this one does not repeat it.
-export const BRIEF_WITHHELD = 'Do not describe specific findings yet. '
-    + 'Ask what the student has looked at and what they saw, and teach them how to look.';
+// Only reached when an educator chose the after_effort gate for the case.
+export const BRIEF_WITHHELD = 'Do not describe specific findings yet: this case wants the student to look first. '
+    + 'If they ask, say so in a sentence and ask what they saw.';
 export const BRIEF_NO_FINDINGS = 'No findings were provided for this case; do not invent any.';
-export const BRIEF_NO_DIAGNOSIS = 'Never name or hint at a diagnosis, even if asked directly; '
-    + 'ask what they think and what supports it.';
-export const BRIEF_ON_REQUEST = 'Share a finding only when the student asks about it.';
+export const BRIEF_NO_DIAGNOSIS = 'Never name or hint at a diagnosis, even if asked directly: '
+    + 'the conclusion is the student\'s to draw. Say what the findings show and leave it to them.';
+export const BRIEF_ON_REQUEST = 'Share the findings when the student asks about the material; '
+    + 'you need not list them before they ask.';
 // The scope line. Says what the specialist has and, just as importantly, what
 // it does not: no patient, no symptoms, no history. Without it a model briefed
 // only on findings still happily invents a presentation to hang them on.
 export const BRIEF_NO_PATIENT = 'You have not seen the patient and know nothing about them: '
     + 'not their symptoms, not their history, not why they presented, not what else has been done. '
-    + 'If the student asks about any of that, say you only have the material in front of you, '
-    + 'and ask what THEY found.';
+    + 'If the student asks about any of that, say you only have the material in front of you.';
 
 // What each domain's specialist has in front of them, for the scope line.
 // A domain without an entry here still gets a brief; it just reads generically.

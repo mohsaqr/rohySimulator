@@ -114,7 +114,7 @@ describe('default specialist templates', () => {
     it('ships a conduct-only prompt that confines the specialist to its brief', async () => {
         for (const row of await specialistRows()) {
             expect(row.system_prompt, row.agent_type).toMatch(/only discuss findings given to you in the case brief/i);
-            expect(row.system_prompt, row.agent_type).toMatch(/never state the diagnosis/i);
+            expect(row.system_prompt, row.agent_type).toMatch(/do not name the diagnosis/i);
         }
     });
 

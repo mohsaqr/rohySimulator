@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.76] — 2026-10-24
+
+- **The on-call specialists talk like colleagues, not tutors.** The cardiologist answered a learner's "Hello" with
+  "What have you looked at so far on the ECG, and how did you start your interpretation?" — five layers told it to.
+  All four specialists (pathologist, cardiologist, radiologist, laboratory specialist) now answer the question asked,
+  report or confirm the findings in their brief when asked, ask at most one question and only when they need the
+  answer, and teach only on request. They still never name the diagnosis: the conclusion stays the learner's.
+  - Seeded prompts and `dos`/`donts` rewritten (`server/db.js`).
+  - The default disclosure is now `on_request` instead of `after_effort` (3 learner turns + a visit to the
+    specialty's room before any finding). An educator can still pick the gate per case.
+  - The server brief no longer says "teach them how to look" / "ask what THEY found", and the line that replaces a
+    reply naming the diagnosis is now "That conclusion is yours to draw. I can only tell you what the findings
+    show." (all eight languages).
+  - Migration **0071** brings existing installs along, but only where a template still holds exactly what was
+    seeded (prompt, dos/donts, default disclosure — each matched separately), so an educator's edits are kept.
+    Per-case overrides are never touched. A test pins that an upgraded install ends up identical to a fresh one.
+
 ## [3.0.0-rc.75] — 2026-10-24
 
 - **Thinking is off by default, and gpt-oss thinks as little as it can.** For a custom OpenAI-compatible server the
