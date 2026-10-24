@@ -463,7 +463,10 @@ export const RETENTION_TABLES = [
     // anonymise-on-purge contract (user_id is the principal who posted).
     { table: 'learning_events_rejected', column: 'received_at', userColumn: 'user_id' },
     { table: 'interactions', column: 'timestamp', userColumn: null },
-    { table: 'system_audit_log', column: 'timestamp', userColumn: 'user_id' },
+    // system_audit_log is absent on purpose: its rows form a hash chain
+    // (server/audit-chain.js), so deleting by age or anonymising in place
+    // breaks verification. scripts/sweep-retention.js refuses it for the
+    // same reason (security audit 2026-10-24, SEC-41).
     { table: 'alarm_events', column: 'triggered_at', userColumn: null },
     { table: 'llm_request_log', column: 'request_timestamp', userColumn: 'user_id' },
     // client_logs (audit Phase 3): high-volume, useful for incident
@@ -796,7 +799,12 @@ export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, 
 
         await dbRun(`UPDATE event_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE learning_events SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE system_audit_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
+        // system_audit_log is deliberately NOT touched: every row's entry_hash
+        // covers user_id, so nulling it in place made verifyAuditChain report
+        // tampering after every purge (security audit 2026-10-24, SEC-41). The
+        // user row itself is purged above — an orphan integer id no longer
+        // identifies anyone — and the purge_user entry appended below records
+        // the erasure in the chain itself.
         await dbRun(`UPDATE llm_request_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
         await dbRun(`UPDATE login_logs SET user_id = NULL, username = ? WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
         await dbRun(`UPDATE settings_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);

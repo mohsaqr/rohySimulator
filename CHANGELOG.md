@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.80] — 2026-10-24
+
+- **A user purge no longer edits the audit chain.** Purging a learner used to set `system_audit_log.user_id = NULL` in
+  place; every row's hash covers that column, so the chain reported tampering after any purge — which the new chain
+  verification in `scripts/audit-retention.sh` caught on CI. Audit rows are now retained unchanged (the purged user
+  row is gone, so the id alone identifies no one) and the `purge_user` entry records the erasure in the chain itself.
+  `system_audit_log` is also out of the age-based retention list for the same reason. The upload-audit test polls for
+  the row the server appends after answering.
+
 ## [3.0.0-rc.79] — 2026-10-24
 
 - **CI follow-up to the security release.** A platform admin may again move another admin between tenants (placing a

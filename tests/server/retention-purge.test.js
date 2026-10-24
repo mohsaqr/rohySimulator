@@ -172,12 +172,18 @@ describe('POST /api/users/:id/purge — retention contract (audit follow-up)', (
         const reads = await dbAll(db, 'SELECT * FROM plugin_content_reads WHERE user_id = ?', [targetUserId]);
         expect(reads).toEqual([]);
 
-        // Anonymised log tables: rows retained but user_id is NULL.
+        // Regression lock (security audit 2026-10-24, SEC-41): the audit chain
+        // is left alone. Its entry_hash covers user_id, so the old in-place
+        // `SET user_id = NULL` made verifyAuditChain report tampering after
+        // every purge. Rows are retained unchanged; the purge itself is the
+        // next link in the chain.
         const audits = await dbAll(db, 'SELECT user_id FROM system_audit_log WHERE action = ?', ['self_test']);
         expect(audits.length).toBeGreaterThanOrEqual(1);
         for (const a of audits) {
-            expect(a.user_id).toBeNull();
+            expect(a.user_id).toBe(targetUserId);
         }
+        const purgeRows = await dbAll(db, 'SELECT id FROM system_audit_log WHERE action = ? AND resource_id = ?', ['purge_user', String(targetUserId)]);
+        expect(purgeRows.length).toBeGreaterThanOrEqual(1);
 
         // Authored agent template: deleted_at set, created_by NULLed.
         const agent = await dbGet(db, "SELECT * FROM agent_templates WHERE name = 'Target Authored Agent'");
