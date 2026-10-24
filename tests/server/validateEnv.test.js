@@ -219,3 +219,48 @@ describe('validateEnvOrExit', () => {
     // body — left out per CLAUDE.md "skipped tests policy".
     it.skip('exits with code 1 when errors are present (covered via spawn smoke)', () => {});
 });
+
+describe('validateEnv — remote Kokoro (ROHY_KOKORO_*)', () => {
+    const base = { JWT_SECRET: 'a'.repeat(64) };
+    const kokoroWarnings = (env) => validateEnv(env).warnings.filter((w) => w.includes('ROHY_KOKORO'));
+
+    it('accepts an https URL with a key, and unset is not an error', () => {
+        const env = { ...baseProdEnv(), ROHY_KOKORO_URL: 'https://api.example.org/v1', ROHY_KOKORO_API_KEY: 'k', ROHY_KOKORO_TIMEOUT_MS: '8000' };
+        expect(validateEnv(env).errors).toHaveLength(0);
+        expect(kokoroWarnings(env)).toHaveLength(0);
+        expect(validateEnv(base).errors).toHaveLength(0);
+    });
+
+    it('is fatal on a URL that does not parse or is not http(s)', () => {
+        for (const bad of ['not a url', 'ftp://api.example.org/v1']) {
+            expect(validateEnv({ ...base, ROHY_KOKORO_URL: bad }).errors)
+                .toEqual([expect.stringMatching(/ROHY_KOKORO_URL/)]);
+        }
+    });
+
+    it('is fatal on a timeout that is not a positive integer', () => {
+        for (const bad of ['0', '-5', '1.5', 'soon']) {
+            expect(validateEnv({ ...base, ROHY_KOKORO_TIMEOUT_MS: bad }).errors)
+                .toEqual([expect.stringMatching(/ROHY_KOKORO_TIMEOUT_MS/)]);
+        }
+    });
+
+    it('warns when the URL has no key, or the key has no URL', () => {
+        expect(kokoroWarnings({ ...base, ROHY_KOKORO_URL: 'https://api.example.org/v1' }))
+            .toEqual([expect.stringMatching(/ROHY_KOKORO_API_KEY is not/)]);
+        expect(kokoroWarnings({ ...base, ROHY_KOKORO_API_KEY: 'k' }))
+            .toEqual([expect.stringMatching(/ROHY_KOKORO_URL is not/)]);
+    });
+
+    it('warns on plain http to a non-local host in production only', () => {
+        const env = { ...baseProdEnv(), ROHY_KOKORO_URL: 'http://api.example.org/v1', ROHY_KOKORO_API_KEY: 'k' };
+        expect(kokoroWarnings(env)).toEqual([expect.stringMatching(/plain http/)]);
+        expect(kokoroWarnings({ ...env, ROHY_KOKORO_URL: 'http://localhost:8880/v1' })).toHaveLength(0);
+        expect(kokoroWarnings({ ...base, ROHY_KOKORO_URL: 'http://api.example.org/v1', ROHY_KOKORO_API_KEY: 'k' })).toHaveLength(0);
+    });
+
+    it('never puts the API key in an error or warning', () => {
+        const { errors, warnings } = validateEnv({ ...base, ROHY_KOKORO_URL: 'bad', ROHY_KOKORO_API_KEY: 'sk-s3cr3t' });
+        expect([...errors, ...warnings].join(' ')).not.toContain('sk-s3cr3t');
+    });
+});

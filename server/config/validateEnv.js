@@ -95,6 +95,33 @@ export function validateEnv(env = process.env) {
         }
     }
 
+    // ROHY_KOKORO_URL — remote Kokoro TTS. Fatal if malformed: the failure
+    // mode is an operator who believes voices come from the GPU host while
+    // every reply quietly synthesizes on this box's CPU (the local fallback
+    // hides the misconfiguration from learners, so boot must not).
+    if (env.ROHY_KOKORO_URL) {
+        let kokoroUrl = null;
+        try {
+            kokoroUrl = new URL(env.ROHY_KOKORO_URL);
+        } catch { /* reported below */ }
+        if (!kokoroUrl || !['http:', 'https:'].includes(kokoroUrl.protocol)) {
+            errors.push(`ROHY_KOKORO_URL="${env.ROHY_KOKORO_URL}" is not an http(s) URL (expected e.g. https://api.example.org/v1).`);
+        } else {
+            if (kokoroUrl.protocol === 'http:' && isProd(env) && !isLocalUrl(env.ROHY_KOKORO_URL)) {
+                warnings.push('ROHY_KOKORO_URL uses plain http in production: the API key and every spoken line cross the network unencrypted.');
+            }
+            if (!env.ROHY_KOKORO_API_KEY) {
+                warnings.push('ROHY_KOKORO_URL is set but ROHY_KOKORO_API_KEY is not: the remote host will refuse every request and all speech will fall back to the local model.');
+            }
+        }
+    } else if (env.ROHY_KOKORO_API_KEY) {
+        warnings.push('ROHY_KOKORO_API_KEY is set but ROHY_KOKORO_URL is not, so the key is unused and Kokoro synthesizes locally.');
+    }
+    if (env.ROHY_KOKORO_TIMEOUT_MS != null && env.ROHY_KOKORO_TIMEOUT_MS !== ''
+        && !/^[1-9]\d*$/.test(String(env.ROHY_KOKORO_TIMEOUT_MS))) {
+        errors.push(`ROHY_KOKORO_TIMEOUT_MS="${env.ROHY_KOKORO_TIMEOUT_MS}" is not a positive integer (milliseconds).`);
+    }
+
     // PORT / HTTPS_PORT — must be numeric if set.
     for (const key of ['PORT', 'HTTPS_PORT']) {
         if (env[key] != null && env[key] !== '' && !/^\d+$/.test(String(env[key]))) {

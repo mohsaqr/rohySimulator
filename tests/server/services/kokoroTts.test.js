@@ -591,3 +591,240 @@ describe('kokoroTts: idle unload', () => {
         expect(mockState.disposeCalls).toBe(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Remote mode — ROHY_KOKORO_URL set. Synthesis goes to an OpenAI-compatible
+//    host one sentence per request (response_format pcm), the local model is
+//    only a fallback, and a circuit breaker keeps a dead host from costing a
+//    timeout on every reply. `fetch` is stubbed; the local model is the same
+//    fake as above, so "spoke locally" is visible as fromPretrainedCalls > 0.
+// ---------------------------------------------------------------------------
+
+const REMOTE_URL = 'https://kokoro.test/v1';
+
+// One recorded call per remote request.
+let remoteCalls = [];
+
+function pcmBytes(samples, fill) {
+    return Buffer.alloc(samples * 2, fill);
+}
+
+// `respond(call)` returns a Response, a Promise of one, or throws.
+function stubRemote(respond) {
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+        const call = { url, init, body: JSON.parse(init.body), signal: init.signal };
+        remoteCalls.push(call);
+        return respond(call);
+    }));
+}
+
+const okPcm = (buf) => new Response(buf, { status: 200 });
+
+async function collect(gen) {
+    const out = [];
+    for await (const chunk of gen) out.push(chunk);
+    return out;
+}
+
+describe('kokoroTts: remote synthesis (ROHY_KOKORO_URL)', () => {
+    beforeEach(() => {
+        remoteCalls = [];
+        process.env.ROHY_KOKORO_URL = `${REMOTE_URL}/`; // trailing slash is trimmed
+        process.env.ROHY_KOKORO_API_KEY = 'test-key';
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+    });
+    afterEach(() => {
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+    });
+
+    it('streams one pcm request per sentence, in order, without loading the local model', async () => {
+        stubRemote(({ body }) => okPcm(pcmBytes(4, body.input.length)));
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'Hello doctor. My chest hurts!', voice: 'am_adam' }));
+
+        expect(remoteCalls.map((c) => c.url)).toEqual([`${REMOTE_URL}/audio/speech`, `${REMOTE_URL}/audio/speech`]);
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer test-key');
+        expect(remoteCalls.map((c) => c.body)).toEqual([
+            { model: 'kokoro', voice: 'am_adam', input: 'Hello doctor.', response_format: 'pcm', speed: 1 },
+            { model: 'kokoro', voice: 'am_adam', input: 'My chest hurts!', response_format: 'pcm', speed: 1 },
+        ]);
+        expect(chunks.map((c) => c.sampleRate)).toEqual([24000, 24000]);
+        expect(chunks.map((c) => c.pcm[0])).toEqual(['Hello doctor.'.length, 'My chest hurts!'.length]);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+        expect(sut.isKokoroLoaded()).toBe(false);
+    });
+
+    it('requests the next sentence before the current one is consumed, and keeps order when it finishes first', async () => {
+        let releaseFirst;
+        stubRemote(({ body }) => (body.input === 'One.'
+            ? new Promise((r) => { releaseFirst = () => r(okPcm(pcmBytes(2, 1))); })
+            : okPcm(pcmBytes(2, 2))));
+        const sut = await loadFreshSUT();
+        const gen = sut.synthesizeKokoroStream({ text: 'One. Two.', voice: 'am_adam' });
+        const first = gen.next();
+        // Both requests are out while sentence one is still pending.
+        await vi.waitFor(() => expect(remoteCalls).toHaveLength(2));
+        releaseFirst();
+        expect((await first).value.pcm[0]).toBe(1);
+        expect((await gen.next()).value.pcm[0]).toBe(2);
+        expect((await gen.next()).done).toBe(true);
+    });
+
+    it('forwards a numeric speed and wraps the batch result in a 24 kHz WAV header', async () => {
+        stubRemote(() => okPcm(pcmBytes(10, 0)));
+        const sut = await loadFreshSUT();
+        const wav = await sut.synthesizeKokoro({ text: 'Two sentences. In one request.', voice: 'af_bella', speed: 1.2 });
+        expect(remoteCalls).toHaveLength(1);
+        expect(remoteCalls[0].body).toMatchObject({ input: 'Two sentences. In one request.', speed: 1.2 });
+        expect(wav.subarray(0, 4).toString('ascii')).toBe('RIFF');
+        expect(wav.readUInt32LE(24)).toBe(24000);
+        expect(wav.length).toBe(44 + 20);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('rejects an unknown voice with UNKNOWN_VOICE before any request or model load', async () => {
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await expect(collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'xx_nobody' })))
+            .rejects.toMatchObject({ code: 'UNKNOWN_VOICE' });
+        await expect(sut.synthesizeKokoro({ text: 'Hi.', voice: 'xx_nobody' }))
+            .rejects.toMatchObject({ code: 'UNKNOWN_VOICE' });
+        expect(remoteCalls).toHaveLength(0);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('lists the bundled catalogue and answers isKokoroVoice without loading the model', async () => {
+        const sut = await loadFreshSUT();
+        const list = sut.listKokoroVoices();
+        expect(list.length).toBeGreaterThanOrEqual(20);
+        expect(list.find((v) => v.filename === 'af_heart')).toMatchObject({ gender: 'female', sampleRate: 24000 });
+        expect(list.find((v) => v.filename === 'am_michael')).toMatchObject({ gender: 'male' });
+        expect(await sut.isKokoroVoice('bm_george')).toBe(true);
+        expect(await sut.isKokoroVoice('xx_nobody')).toBe(false);
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it.each([
+        ['a 5xx', () => new Response('upstream down', { status: 502 })],
+        ['a 401 (bad key)', () => new Response('{"detail":"bad key"}', { status: 401 })],
+        ['a network error', () => { throw new TypeError('fetch failed'); }],
+        ['an odd-length body', () => okPcm(Buffer.alloc(3))],
+    ])('falls back to the local model on %s', async (_label, respond) => {
+        stubRemote(respond);
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'Hello.', voice: 'af_bella' }));
+        expect(chunks).toHaveLength(1);
+        expect(mockState.fromPretrainedCalls).toBe(1);
+        expect(mockState.splitterPushed).toEqual(['Hello.']);
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 1, open: false });
+    });
+
+    it('falls back on a timeout (ROHY_KOKORO_TIMEOUT_MS)', async () => {
+        process.env.ROHY_KOKORO_TIMEOUT_MS = '40';
+        stubRemote(({ signal }) => new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }));
+        const sut = await loadFreshSUT();
+        const wav = await sut.synthesizeKokoro({ text: 'Hello.', voice: 'af_bella' });
+        expect(wav.subarray(0, 4).toString('ascii')).toBe('RIFF');
+        expect(mockState.fromPretrainedCalls).toBe(1);
+    });
+
+    it('a failure mid-stream speaks that sentence and the rest locally, keeping what was already yielded', async () => {
+        stubRemote(({ body }) => (body.input === 'One.'
+            ? okPcm(pcmBytes(2, 7))
+            : new Response('', { status: 503 })));
+        const sut = await loadFreshSUT();
+        const chunks = await collect(sut.synthesizeKokoroStream({ text: 'One. Two. Three.', voice: 'af_bella' }));
+        expect(chunks[0].pcm[0]).toBe(7);
+        // The fake local stream yields one chunk for whatever text it is given.
+        expect(chunks).toHaveLength(2);
+        expect(mockState.splitterPushed).toEqual(['Two. Three.']);
+    });
+
+    it('opens the breaker after 3 consecutive failures: the next reply skips the remote host for 60 s', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(3);
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 3, open: true });
+
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'af_bella' }));
+        expect(remoteCalls).toHaveLength(3); // skipped, spoke locally
+
+        vi.setSystemTime(new Date('2026-10-24T12:01:01Z'));
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(4); // the trial request went out and closed it
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 0, open: false });
+    });
+
+    it('after the window, lets ONE trial request through while concurrent replies stay local', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-24T12:00:00Z'));
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(3);
+
+        vi.setSystemTime(new Date('2026-10-24T12:01:01Z'));
+        let releaseTrial;
+        stubRemote(() => new Promise((r) => { releaseTrial = () => r(new Response('', { status: 500 })); }));
+        const trial = sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await vi.waitFor(() => expect(releaseTrial).toBeTypeOf('function'));
+        // Two more replies while the trial is out: both speak locally.
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await collect(sut.synthesizeKokoroStream({ text: 'Hi.', voice: 'af_bella' }));
+        expect(remoteCalls).toHaveLength(4);
+        releaseTrial();
+        await trial;
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 4, open: true }); // failed trial reopens
+
+        // Once the reopened window has passed, the next trial succeeds and
+        // closes the breaker.
+        vi.setSystemTime(new Date('2026-10-24T12:02:02Z'));
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState()).toMatchObject({ failures: 0, open: false });
+    });
+
+    it('a consumer that stops early aborts the prefetched request', async () => {
+        stubRemote(({ body, signal }) => (body.input === 'One.'
+            ? okPcm(pcmBytes(2, 1))
+            : new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))));
+        const sut = await loadFreshSUT();
+        for await (const chunk of sut.synthesizeKokoroStream({ text: 'One. Two.', voice: 'am_adam' })) {
+            expect(chunk.pcm[0]).toBe(1);
+            break;
+        }
+        expect(remoteCalls).toHaveLength(2);
+        expect(remoteCalls[1].signal.aborted).toBe(true);
+        // An abandoned prefetch is not a remote failure.
+        expect(sut.kokoroRemoteState().failures).toBe(0);
+    });
+});
+
+describe('kokoroTts: splitSentences / parseRemoteTimeoutMs', () => {
+    it('splits on terminal punctuation and keeps titles, initials and decimals whole', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.splitSentences('Hello doctor. Dr. Smith said it hurts! Is it 3.5 cm? John F. Kennedy spoke… "Really." Done'))
+            .toEqual(['Hello doctor.', 'Dr. Smith said it hurts!', 'Is it 3.5 cm?', 'John F. Kennedy spoke…', '"Really."', 'Done']);
+        expect(sut.splitSentences('   ')).toEqual([]);
+    });
+
+    it('treats anything but a positive integer timeout as the 8000 ms default', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.parseRemoteTimeoutMs(undefined)).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('2500')).toBe(2500);
+        expect(sut.parseRemoteTimeoutMs('0')).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('abc')).toBe(8000);
+        expect(sut.parseRemoteTimeoutMs('1.5')).toBe(8000);
+    });
+});
