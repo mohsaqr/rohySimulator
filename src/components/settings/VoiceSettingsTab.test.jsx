@@ -437,3 +437,105 @@ describe('VoiceSettingsTab apiFetch migration', () => {
         expect(screen.queryByText(/Patient voices/i)).toBeNull();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Remote Kokoro host on the Kokoro card. The GET carries the kokoro_remote*
+// fields for admins only; the card shows them, saves the URL (and a key only
+// when one is typed), and tests the SAVED values through its own endpoint.
+// ---------------------------------------------------------------------------
+
+describe('VoiceSettingsTab — remote Kokoro host', () => {
+    const remoteOff = {
+        kokoro_remote_url: '',
+        kokoro_remote_api_key_set: false,
+        kokoro_remote_api_key_via_env: false,
+        kokoro_remote: { enabled: false, source: null, host: null, env_host: null, key_set: false, failures: 0, paused: false, ms_until_retry: 0, last_error: null, last_ok_at: null },
+    };
+    const remoteOn = (extra = {}) => ({
+        kokoro_remote_url: 'https://gpu.example.org/v1',
+        kokoro_remote_api_key_set: true,
+        kokoro_remote_api_key_via_env: false,
+        kokoro_remote: { enabled: true, source: 'settings', host: 'gpu.example.org', env_host: null, key_set: true, failures: 0, paused: false, ms_until_retry: 0, last_error: null, last_ok_at: null, ...extra },
+    });
+
+    function serve(settingsExtra, onTest) {
+        fetchSpy.mockImplementation((url, init) => {
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice/kokoro-remote/test')) {
+                return Promise.resolve(onTest(init));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/platform-settings/voice')) {
+                return Promise.resolve(jsonResponse(voiceSettingsPayload(settingsExtra)));
+            }
+            if (typeof url === 'string' && url.endsWith('/api/llm/models')) return Promise.resolve(jsonResponse({ models: [] }));
+            if (typeof url === 'string' && url.includes('/api/tts/voices')) return Promise.resolve(jsonResponse(allVoicesPayload()));
+            return Promise.resolve(jsonResponse({}));
+        });
+    }
+
+    const render = () => renderWithProviders(<VoiceSettingsTab />, { withAuth: false, withNotifications: false, withToast: false });
+    const putBody = () => JSON.parse(voiceCalls().find(([, init]) => init?.method === 'PUT')[1].body);
+    const saveAndWait = async () => {
+        fireEvent.click(screen.getByRole('button', { name: /save voice settings/i }));
+        await waitFor(() => expect(voiceCalls().some(([, init]) => init?.method === 'PUT')).toBe(true));
+    };
+
+    it('shows no remote fields, and sends no remote URL, when the GET has none (not an admin payload)', async () => {
+        render();
+        await screen.findByText(/Voice & Avatar/i);
+        expect(screen.queryByLabelText(/Remote Kokoro host/i)).toBeNull();
+        await saveAndWait();
+        // Regression lock: a payload without the field must not clear a
+        // URL it never loaded.
+        expect(putBody()).not.toHaveProperty('kokoro_remote_url');
+        expect(putBody()).not.toHaveProperty('kokoro_remote_api_key');
+    });
+
+    it('remote off: says so, keeps the local badge, and round-trips the empty URL', async () => {
+        serve(remoteOff);
+        render();
+        expect(await screen.findByText(/Remote host: off/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/Remote Kokoro host/i)).toHaveValue('');
+        expect(screen.getByRole('button', { name: /test remote host/i })).toBeDisabled();
+        await saveAndWait();
+        expect(putBody()).toMatchObject({ kokoro_remote_url: '' });
+        expect(putBody()).not.toHaveProperty('kokoro_remote_api_key');
+    });
+
+    it('a typed URL and key are saved; the test waits for the save', async () => {
+        serve(remoteOff);
+        render();
+        const urlInput = await screen.findByLabelText(/Remote Kokoro host/i);
+        fireEvent.change(urlInput, { target: { value: ' https://gpu.example.org/v1 ' } });
+        fireEvent.change(screen.getByLabelText(/Remote Kokoro API key/i), { target: { value: 'sk-new' } });
+        expect(screen.getByText(/Save first/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /test remote host/i })).toBeDisabled();
+        await saveAndWait();
+        expect(putBody()).toMatchObject({ kokoro_remote_url: 'https://gpu.example.org/v1', kokoro_remote_api_key: 'sk-new' });
+    });
+
+    it('remote on: badge, host, and a refused key named in plain words', async () => {
+        serve(remoteOn({ last_error: { kind: 'http', status: 401, at: '2026-10-24T08:00:00Z' } }));
+        render();
+        expect(await screen.findByText('remote host')).toBeInTheDocument();
+        expect(screen.getByText(/Synthesized on gpu.example.org/)).toBeInTheDocument();
+        expect(screen.getByText(/the key was refused \(HTTP 401\)/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /test remote host/i })).toBeEnabled();
+    });
+
+    it('Test remote host reports success from the server', async () => {
+        serve(remoteOn(), () => jsonResponse({ ok: true, host: 'gpu.example.org', latency_ms: 180, audio_seconds: 1.9 }));
+        render();
+        fireEvent.click(await screen.findByRole('button', { name: /test remote host/i }));
+        expect(await screen.findByText(/Spoke 1.9 s of audio from gpu.example.org in 180 ms/)).toBeInTheDocument();
+        const [, init] = fetchSpy.mock.calls.find(([url]) => String(url).endsWith('/kokoro-remote/test'));
+        expect(init.method).toBe('POST');
+    });
+
+    it('Test remote host shows the server’s reason when it fails', async () => {
+        serve(remoteOn(), () => jsonResponse({ error: 'The remote host refused the API key (HTTP 401).', code: 'remote_http', status: 401 }, { status: 502 }));
+        render();
+        fireEvent.click(await screen.findByRole('button', { name: /test remote host/i }));
+        expect(await screen.findByRole('status')).toHaveTextContent('The remote host refused the API key (HTTP 401).');
+        expect(toast.error).toHaveBeenCalledWith('The remote host refused the API key (HTTP 401).');
+    });
+});

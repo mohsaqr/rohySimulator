@@ -828,3 +828,153 @@ describe('kokoroTts: splitSentences / parseRemoteTimeoutMs', () => {
         expect(sut.parseRemoteTimeoutMs('1.5')).toBe(8000);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 10. Remote host set in Settings → Voice (platform settings), alongside or
+//     instead of the env file. refreshKokoroRemoteSettings(getSetting) loads
+//     the saved values; settings override env, except that the env file's key
+//     is never sent to a URL that came from settings.
+// ---------------------------------------------------------------------------
+
+describe('kokoroTts: remote host from settings', () => {
+    const settingsGetter = (values) => async (key) => values[key] ?? null;
+
+    beforeEach(() => {
+        remoteCalls = [];
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        delete process.env.ROHY_KOKORO_TIMEOUT_MS;
+    });
+    afterEach(() => {
+        delete process.env.ROHY_KOKORO_URL;
+        delete process.env.ROHY_KOKORO_API_KEY;
+        vi.unstubAllGlobals();
+    });
+
+    it('normalizeRemoteUrl accepts http(s) base URLs and refuses everything else', async () => {
+        const sut = await loadFreshSUT();
+        expect(sut.normalizeRemoteUrl(' https://api.example.org/v1/ ')).toBe('https://api.example.org/v1');
+        expect(sut.normalizeRemoteUrl('http://localhost:8880/v1')).toBe('http://localhost:8880/v1');
+        for (const bad of ['', '   ', 'api.example.org/v1', 'ftp://h/v1', 'javascript:alert(1)',
+            'https://user:pw@h/v1', 'https://h/v1?x=1', 'https://h/v1#f', `https://h/${'a'.repeat(600)}`, 42, null]) {
+            expect(sut.normalizeRemoteUrl(bad)).toBeNull();
+        }
+    });
+
+    it('a saved URL + key turns remote mode on, with no env at all', async () => {
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        expect(sut.kokoroRemoteEnabled()).toBe(false);
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'saved-key' }));
+        expect(sut.kokoroRemoteState()).toMatchObject({ enabled: true, source: 'settings', host: 'saved.test', keySet: true, keySource: 'settings' });
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://saved.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer saved-key');
+        expect(mockState.fromPretrainedCalls).toBe(0);
+    });
+
+    it('a saved URL overrides the env URL — and the env key is NOT sent to it', async () => {
+        // Regression lock for the key-exfiltration rule: an admin-entered URL
+        // must never receive the operator's env-file key.
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-secret';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://attacker.test/v1' }));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://attacker.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).not.toContain('env-secret');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'settings', keySet: false, keySource: null, envHost: 'env.test' });
+    });
+
+    it('a saved key with no saved URL goes to the env URL (the host the admin sees)', async () => {
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-secret';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_api_key: 'new-key' }));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].url).toBe('https://env.test/v1/audio/speech');
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer new-key');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'env', keySource: 'settings' });
+    });
+
+    it('with nothing saved, the env pair is used as before', async () => {
+        process.env.ROHY_KOKORO_URL = 'https://env.test/v1';
+        process.env.ROHY_KOKORO_API_KEY = 'env-key';
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({}));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer env-key');
+        expect(sut.kokoroRemoteState()).toMatchObject({ source: 'env', keySource: 'env' });
+    });
+
+    it('ignores a stored URL that is not acceptable (edited in the DB by hand)', async () => {
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'ftp://nope/v1' }));
+        expect(sut.kokoroRemoteEnabled()).toBe(false);
+    });
+
+    it('a changed setting resets the breaker, so a fixed key is tried on the next reply', async () => {
+        stubRemote(() => new Response('', { status: 401 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'old' }));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: true, lastError: { kind: 'http', status: 401 } });
+
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'new' }));
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: false, failures: 0, lastError: null });
+        remoteCalls = [];
+        stubRemote(() => okPcm(pcmBytes(2, 0)));
+        await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(remoteCalls).toHaveLength(1);
+        expect(remoteCalls[0].init.headers.Authorization).toBe('Bearer new');
+    });
+
+    it('an unchanged refresh keeps the breaker as it is', async () => {
+        stubRemote(() => new Response('', { status: 500 }));
+        const sut = await loadFreshSUT();
+        const values = { kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' };
+        await sut.refreshKokoroRemoteSettings(settingsGetter(values));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        await sut.refreshKokoroRemoteSettings(settingsGetter(values));
+        expect(sut.kokoroRemoteState().open).toBe(true);
+    });
+
+    it('the state never carries the key', async () => {
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'sk-very-secret' }));
+        expect(JSON.stringify(sut.kokoroRemoteState())).not.toContain('sk-very-secret');
+    });
+
+    it('testKokoroRemote reports a refusal without falling back, loading the model, or echoing the body', async () => {
+        stubRemote(() => new Response('{"error":"internal page contents"}', { status: 401 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' }));
+        const result = await sut.testKokoroRemote();
+        expect(result).toMatchObject({ ok: false, kind: 'http', status: 401, host: 'saved.test' });
+        expect(JSON.stringify(result)).not.toContain('internal page contents');
+        expect(mockState.fromPretrainedCalls).toBe(0);
+        // A failed test is not a reply: the breaker is untouched.
+        expect(sut.kokoroRemoteState().failures).toBe(0);
+    });
+
+    it('testKokoroRemote success reports latency and audio length, and closes an open breaker', async () => {
+        stubRemote(() => new Response('', { status: 503 }));
+        const sut = await loadFreshSUT();
+        await sut.refreshKokoroRemoteSettings(settingsGetter({ kokoro_remote_url: 'https://saved.test/v1', kokoro_remote_api_key: 'k' }));
+        for (let i = 0; i < 3; i++) await sut.synthesizeKokoro({ text: 'Hi.', voice: 'af_bella' });
+        expect(sut.kokoroRemoteState().open).toBe(true);
+        stubRemote(() => okPcm(pcmBytes(24000, 0))); // 1 s
+        const result = await sut.testKokoroRemote();
+        expect(result).toMatchObject({ ok: true, audioSeconds: 1, host: 'saved.test' });
+        expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+        expect(sut.kokoroRemoteState()).toMatchObject({ open: false, failures: 0 });
+    });
+
+    it('testKokoroRemote with nothing configured says so', async () => {
+        const sut = await loadFreshSUT();
+        expect(await sut.testKokoroRemote()).toMatchObject({ ok: false, kind: 'not_configured' });
+    });
+});

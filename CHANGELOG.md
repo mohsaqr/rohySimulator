@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.72] — 2026-10-24
+
+- **The remote Kokoro host can be set in Settings → Voice** (the Kokoro card), next to the cloud keys: an
+  OpenAI-compatible base URL, an API key (masked, never sent back to the browser, redacted in the audit chain and
+  the settings list), where it stands now (host, where it came from, last failure in plain words such as "the key
+  was refused (HTTP 401)", or paused after failures), and a **Test remote host** button. Saving applies at once,
+  with no restart, and a changed URL or key resets the circuit breaker so the fix is tried on the next reply.
+- **Settings override the env file**, as for the Google and OpenAI keys, with one rule on top: the
+  `ROHY_KOKORO_API_KEY` from the env file is sent only to `ROHY_KOKORO_URL`, never to a URL entered in Settings
+  (otherwise an admin could point the URL at their own host and receive the operator's key). A key saved in
+  Settings goes to whichever URL is in use; the card names that host.
+- **The test checks the SAVED values, with no local fallback** (`POST /api/platform-settings/voice/kokoro-remote/test`,
+  admin only): a refused key is reported, not covered by the local voice. The reply names the HTTP status and
+  failure kind, never the remote host's response body. The button waits until edits are saved.
+- The remote fields are in the voice settings GET for admins only; learners' GET is unchanged. A URL must be http(s)
+  without credentials, query or fragment (≤ 512 chars); one validator serves both the save and the synthesis path.
+
 ## [3.0.0-rc.71] — 2026-10-24
 
 - **The patient starts speaking sooner.** The first spoken chunk of a reply may now end at a clause break

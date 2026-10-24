@@ -12,7 +12,7 @@
 ## Overview
 
 - **Routers:** 30
-- **Endpoints:** 410
+- **Endpoints:** 411
 - **Base path:** all endpoints are mounted under `/api`.
 - **Machine-readable spec:** [`openapi.json`](./openapi.json) (OpenAPI 3.1).
   Each operation carries an `x-rohy-source` extension pointing at the exact
@@ -22,7 +22,7 @@
 
 | Area | Endpoints |
 |------|-----------|
-| [admin](./admin.md) | 57 |
+| [admin](./admin.md) | 58 |
 | [agents](./agents.md) | 23 |
 | [analytics](./analytics.md) | 51 |
 | [auth](./auth.md) | 7 |

@@ -19,7 +19,8 @@
 // Hugging Face Hub into the user's transformers.js cache (~330 MB). After
 // that, startup is ~2 s and inference is ~0.7× realtime on M-series CPU.
 //
-// Remote mode (ROHY_KOKORO_URL set): synthesis goes to an OpenAI-compatible
+// Remote mode (a URL in Settings → Voice, or ROHY_KOKORO_URL in the server env):
+// synthesis goes to an OpenAI-compatible
 // Kokoro host (`POST <url>/audio/speech`, response_format pcm = int16 LE mono
 // 24 kHz, the exact format of a local chunk), one request per sentence. The
 // local model is then only a fallback: it is never loaded at boot, and is
@@ -469,24 +470,95 @@ export function parseRemoteTimeoutMs(raw) {
     return Number.isInteger(n) && n > 0 ? n : DEFAULT_REMOTE_TIMEOUT_MS;
 }
 
-// Read per call rather than at import, so a test (or an operator's restart
-// with a changed env file) never sees a stale value. Cheap: three env reads.
-function remoteConfig() {
-    const url = (process.env.ROHY_KOKORO_URL || '').trim().replace(/\/+$/, '');
-    if (!url) return null;
-    return {
-        url,
-        apiKey: (process.env.ROHY_KOKORO_API_KEY || '').trim(),
-        timeoutMs: parseRemoteTimeoutMs(process.env.ROHY_KOKORO_TIMEOUT_MS),
-    };
+const REMOTE_URL_MAX_LENGTH = 512;
+
+/**
+ * The one validator for a remote Kokoro base URL (the settings route uses it
+ * too, so what can be saved and what is used cannot disagree). Accepts an
+ * http(s) URL with no credentials, query or fragment, at most 512 chars;
+ * returns it without trailing slashes, or null when it is not acceptable.
+ */
+export function normalizeRemoteUrl(raw) {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim().replace(/\/+$/, '');
+    if (!trimmed || trimmed.length > REMOTE_URL_MAX_LENGTH) return null;
+    let parsed;
+    try {
+        parsed = new URL(trimmed);
+    } catch {
+        return null;
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+    return trimmed;
 }
 
-/** True when ROHY_KOKORO_URL is set, i.e. the local model is only a fallback. */
+// What an admin saved in Settings → Voice (platform settings
+// kokoro_remote_url / kokoro_remote_api_key). Held here so the hot path and
+// the synchronous status readers never touch the database; reloaded at boot
+// and after every save by refreshKokoroRemoteSettings().
+let _settings = { url: '', apiKey: '' };
+
+/**
+ * Reload the admin-set remote values through `getSetting(key)`. A stored URL
+ * that fails normalizeRemoteUrl (only possible by editing the database
+ * directly) is ignored with a warning. Any change resets the breaker, so a
+ * corrected key or host is tried on the very next reply instead of after
+ * the pause the old one earned.
+ */
+export async function refreshKokoroRemoteSettings(getSetting) {
+    const [rawUrl, rawKey] = await Promise.all([
+        getSetting('kokoro_remote_url'),
+        getSetting('kokoro_remote_api_key'),
+    ]);
+    const url = rawUrl ? normalizeRemoteUrl(rawUrl) : '';
+    if (url === null) {
+        kokoroLog.warn('stored kokoro_remote_url is not an acceptable http(s) URL; ignored');
+    }
+    const next = { url: url || '', apiKey: typeof rawKey === 'string' ? rawKey.trim() : '' };
+    const changed = next.url !== _settings.url || next.apiKey !== _settings.apiKey;
+    _settings = next;
+    if (changed) resetBreaker();
+    return kokoroRemoteState();
+}
+
+// Which URL and key a remote request uses. Read per call (never cached at
+// import), so a save or a test's env change applies at once.
+//
+// Settings override the env file, as for every other TTS key on the Voice
+// tab. One rule on top: the env file's key travels ONLY with the env file's
+// URL. An admin who saves a URL of their own gets no env key with it —
+// otherwise pointing the URL at a host they control would hand them the
+// operator's secret. A key saved in Settings is sent to whichever URL is in
+// use; the admin sees that host on the same card.
+function remoteConfig() {
+    const envUrl = (process.env.ROHY_KOKORO_URL || '').trim().replace(/\/+$/, '');
+    const envKey = (process.env.ROHY_KOKORO_API_KEY || '').trim();
+    const timeoutMs = parseRemoteTimeoutMs(process.env.ROHY_KOKORO_TIMEOUT_MS);
+    if (_settings.url) {
+        return { url: _settings.url, apiKey: _settings.apiKey, source: 'settings', keySource: _settings.apiKey ? 'settings' : null, timeoutMs };
+    }
+    if (envUrl) {
+        const apiKey = _settings.apiKey || envKey;
+        return { url: envUrl, apiKey, source: 'env', keySource: _settings.apiKey ? 'settings' : (envKey ? 'env' : null), timeoutMs };
+    }
+    return null;
+}
+
+/** True when a remote host is configured, i.e. the local model is only a fallback. */
 export function kokoroRemoteEnabled() {
     return remoteConfig() !== null;
 }
 
-const _breaker = { failures: 0, openUntil: 0, trialUntil: 0 };
+const _breaker = { failures: 0, openUntil: 0, trialUntil: 0, lastError: null, lastOkAt: null };
+
+function resetBreaker() {
+    _breaker.failures = 0;
+    _breaker.openUntil = 0;
+    _breaker.trialUntil = 0;
+    _breaker.lastError = null;
+    _breaker.lastOkAt = null;
+}
 
 function remoteAvailable(cfg) {
     const now = Date.now();
@@ -502,6 +574,7 @@ function remoteSucceeded() {
     _breaker.failures = 0;
     _breaker.openUntil = 0;
     _breaker.trialUntil = 0;
+    _breaker.lastOkAt = new Date().toISOString();
 }
 
 function remoteFailed(err) {
@@ -511,6 +584,7 @@ function remoteFailed(err) {
         _breaker.openUntil = Date.now() + BREAKER_OPEN_MS;
         _breaker.trialUntil = 0;
     }
+    _breaker.lastError = { kind: err.kind, status: err.status ?? null, at: new Date().toISOString() };
     // One line per failed request; the key never appears (only the
     // failure kind, the HTTP status and the host's own short message).
     kokoroLog.warn('remote synthesis failed; speaking locally', {
@@ -522,15 +596,60 @@ function remoteFailed(err) {
     });
 }
 
-/** Diagnostic + test view of the breaker. */
+function hostOf(url) {
+    if (!url) return null;
+    try { return new URL(String(url).trim()).host || null; } catch { return null; }
+}
+
+/**
+ * Where remote synthesis stands, for the admin's Voice card and for tests.
+ * Never carries the key — only whether one is set and where it came from.
+ * `url`/`host` name an operator's host, so callers show this to admins only.
+ */
 export function kokoroRemoteState() {
     const now = Date.now();
+    const cfg = remoteConfig();
     return {
-        enabled: kokoroRemoteEnabled(),
+        enabled: cfg !== null,
+        source: cfg?.source ?? null,
+        url: cfg?.url ?? null,
+        host: hostOf(cfg?.url),
+        // The env file's host even while a saved URL overrides it, so the
+        // card can say what clearing the URL would fall back to.
+        envHost: hostOf(process.env.ROHY_KOKORO_URL),
+        keySet: !!cfg?.apiKey,
+        keySource: cfg?.keySource ?? null,
         failures: _breaker.failures,
         open: now < _breaker.openUntil,
         msUntilRetry: Math.max(0, _breaker.openUntil - now),
+        lastError: _breaker.lastError,
+        lastOkAt: _breaker.lastOkAt,
     };
+}
+
+/**
+ * One synthesis against the configured remote host, with NO local fallback:
+ * the admin's "Test" button must hear about a refused key, not a local voice
+ * covering for it. Success closes the breaker (the host is proven back);
+ * failure leaves the breaker alone. Returns
+ * { ok: true, latencyMs, audioSeconds, host } or
+ * { ok: false, kind, status, latencyMs, host } — never the host's response
+ * body, so the test cannot be used to read pages from inside the network.
+ */
+export async function testKokoroRemote() {
+    const cfg = remoteConfig();
+    if (!cfg) return { ok: false, kind: 'not_configured', status: null, latencyMs: 0, host: null };
+    const host = kokoroRemoteState().host;
+    const voice = kokoroCatalogue()?.keys().next().value || 'af_heart';
+    const t0 = Date.now();
+    try {
+        const pcm = await remoteSpeech(cfg, { text: 'This is the remote Kokoro voice.', voice, speed: 1 });
+        remoteSucceeded();
+        return { ok: true, latencyMs: Date.now() - t0, audioSeconds: Number((pcm.length / (REMOTE_SAMPLE_RATE * 2)).toFixed(2)), host };
+    } catch (err) {
+        if (!isRemoteFailure(err)) throw err;
+        return { ok: false, kind: err.kind, status: err.status ?? null, latencyMs: Date.now() - t0, host };
+    }
 }
 
 class KokoroRemoteError extends Error {
@@ -650,7 +769,6 @@ export function splitSentences(text) {
 
 /** Test-only: forget breaker state between tests. */
 export function _resetRemoteForTest() {
-    _breaker.failures = 0;
-    _breaker.openUntil = 0;
-    _breaker.trialUntil = 0;
+    resetBreaker();
+    _settings = { url: '', apiKey: '' };
 }

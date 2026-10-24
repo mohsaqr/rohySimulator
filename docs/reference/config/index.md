@@ -46,7 +46,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_ADMIN_USERNAME` | No | — | Provisions the first admin on first boot (with ROHY_ADMIN_PASSWORD). Applied only while the users table is empty. | `server/seeders/users.js:56` |
 | `ROHY_CONTENT_TOKEN` | No | — | A GitHub token with read access to the content repository, read by `npm run setup:content` if set. The content repository is now PUBLIC, so no credential is needed and this variable can be left unset; it remains supported for a deployment that mirrors the archives behind its own private release. Install-time only: nothing at runtime reads it. `GITHUB_TOKEN` is accepted as a fallback, as is the `gh` CLI when the machine is logged in. Installing from a local file with `--from` needs no token at all, because the installer trusts the archive's SHA-256 rather than the host it came from. **⚠ secret — see security note above.** | `scripts/setup-content.mjs:90` |
 | `ROHY_DISABLE_AUTH_RATE_LIMIT` | No | — | Disables the auth-endpoint rate limiter (dev/test). | `server/routes/auth-routes.js:81`<br>`server/routes/registration-routes.js:38`<br>`server/routes/terms-routes.js:50` |
-| `ROHY_KOKORO_API_KEY` | No | `'' (empty string)` | Bearer key for ROHY_KOKORO_URL. Missing while the URL is set: every request is refused and speech falls back to the local model (boot warns). **⚠ secret — see security note above.** | `server/services/kokoroTts.js:479` |
+| `ROHY_KOKORO_API_KEY` | No | `'' (empty string)` | Bearer key for ROHY_KOKORO_URL, and sent ONLY to that URL — never to a URL saved in Settings → Voice. A key saved in Settings overrides it. Missing while the URL is set: every request is refused and speech falls back to the local model (boot warns). **⚠ secret — see security note above.** | `server/services/kokoroTts.js:536` |
 | `ROHY_PLUGIN_ORIGIN_TOKENS` | No | — | Comma-separated `&lt;pluginId&gt;=&lt;token&gt;` credentials rohy presents to each plugin content origin, so an origin can be closed to the public rather than merely unadvertised. Sent only on rohy's own server-to-server fetch as `Authorization: Bearer &lt;token&gt;` — never returned to a browser, never logged, and never the caller's own credential: the proxy forwards no cookies, no Authorization header and no query string from the learner. Per DEPLOYMENT rather than per user, so one installation's access can be revoked without touching the others. Unset means the origin is fetched anonymously, which is correct for a public origin. Malformed is fatal at boot. **⚠ secret — see security note above.** | `server/lib/pluginOriginTokens.js:84` |
 | `ROHY_PROVA_INSTALLATION_KEY` | No | `'' (empty string)` | An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova's unverified queue until someone trusts the installation. **⚠ secret — see security note above.** | `server/routes/report-routes.js:57` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:121` |
@@ -71,7 +71,7 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_LOG_SKIP_PATHS` | No | — | Comma-separated request paths excluded from access logging. | `server/observability.js:46` |
 | `ROHY_PATHOLOGY_CONTENT` | No | — | Path to a built slide content origin, overriding the sibling `../Pathoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:239` |
 | `ROHY_ROUTE_TIMEOUT_MS` | No | — | Per-route request timeout (ms). | `server/middleware/routeTimeout.js:57` |
-| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:470` |
+| `ROHY_SHUTDOWN_GRACE_MS` | No | — | Graceful-shutdown drain window (ms). | `server/server.js:481` |
 | `ROHY_SLOW_QUERY_MS` | No | — | Threshold (ms) above which a DB query is logged as slow. | `server/observability.js:22`<br>`server/observability.js:29` |
 | `VERBOSE` | No | — | Extra console diagnostics when truthy. | `scripts/rocketbox-convert/convert.mjs:135` |
 
@@ -90,12 +90,12 @@ The following variables carry credentials or signing material. Never commit them
 | --- | --- | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API credential (LLM). **⚠ secret — see security note above.** | `server/routes/proxy-routes.js:650` |
 | `GOOGLE_API_KEY` | No | — | Google API credential. **⚠ secret — see security note above.** | `server/services/googleTts.js:138` |
-| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1771`<br>`server/routes/admin-routes.js:1796`<br>`server/routes/admin-routes.js:1797`<br>_+2 more_ |
-| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1798`<br>`server/routes/admin-routes.js:1799`<br>`server/routes/proxy-routes.js:656`<br>_+2 more_ |
+| `GOOGLE_TTS_API_KEY` | No | — | Google Text-to-Speech API credential. **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1777`<br>`server/routes/admin-routes.js:1802`<br>`server/routes/admin-routes.js:1803`<br>_+2 more_ |
+| `OPENAI_API_KEY` | No | — | OpenAI API credential (LLM / TTS). **⚠ secret — see security note above.** | `server/routes/admin-routes.js:1804`<br>`server/routes/admin-routes.js:1805`<br>`server/routes/proxy-routes.js:656`<br>_+2 more_ |
 | `PIPER_BIN` | No | — | Path to the Piper TTS binary. | `server/services/ttsProviders.js:35` |
 | `ROHY_TEST_FAIL_GOOGLE_TTS` | No | — | _see source_ | `server/services/googleTts.js:175` |
 | `ROHY_TEST_FAKE_GOOGLE_TTS` | No | — | Test hook: stub Google TTS instead of calling the API. | `server/services/googleTts.js:183` |
-| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:289` |
+| `ROHY_TEST_FAKE_KOKORO_TTS` | No | — | _see source_ | `server/services/kokoroTts.js:290` |
 | `ROHY_TEST_FAKE_OPENAI_TTS` | No | — | Test hook: stub OpenAI TTS instead of calling the API. | `server/services/openaiTts.js:74` |
 
 ## Oyon
@@ -131,9 +131,9 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_CASE_PACKAGE_MIN_FREE_BYTES` | No | — | Disk space a case package must leave free, in bytes (default 1 GiB). | `server/services/casePackage.js:267` |
 | `ROHY_DISABLE_GENERAL_RATE_LIMIT` | No | — | _see source_ | `server/routes.js:98` |
 | `ROHY_I18N_GLOSSARY` | No | — | _see source_ | `scripts/i18n/lib.mjs:356` |
-| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:83` |
-| `ROHY_KOKORO_TIMEOUT_MS` | No | — | Per-request timeout for ROHY_KOKORO_URL, in ms (default 8000). Not a positive integer: fatal at boot. | `server/services/kokoroTts.js:480` |
-| `ROHY_KOKORO_URL` | No | `'' (empty string)` | Base URL of an OpenAI-compatible Kokoro host (e.g. `https://api.dynasite.org/v1`); Kokoro voices are then synthesized there (`POST &lt;url&gt;/audio/speech`, pcm) one sentence at a time, with the local model only as fallback (not warmed at boot). A failed request speaks locally; 3 failures in a row skip the host for 60 s. Unset = local synthesis. Malformed is fatal at boot. | `server/server.js:289`<br>`server/services/kokoroTts.js:475` |
+| `ROHY_KOKORO_IDLE_UNLOAD_MIN` | No | `10` | Minutes without a synthesis before the Kokoro model is unloaded from RAM (frees ~380 MB on Linux; next voice reply reloads it). 0 = always resident + boot warmup. | `server/services/kokoroTts.js:84` |
+| `ROHY_KOKORO_TIMEOUT_MS` | No | — | Per-request timeout for ROHY_KOKORO_URL, in ms (default 8000). Not a positive integer: fatal at boot. | `server/services/kokoroTts.js:537` |
+| `ROHY_KOKORO_URL` | No | `'' (empty string)` | Base URL of an OpenAI-compatible Kokoro host (e.g. `https://api.dynasite.org/v1`); Kokoro voices are then synthesized there (`POST &lt;url&gt;/audio/speech`, pcm) one sentence at a time, with the local model only as fallback (not warmed at boot). A failed request speaks locally; 3 failures in a row skip the host for 60 s. A URL saved in Settings → Voice overrides this one. Unset (and none saved) = local synthesis. Malformed is fatal at boot. | `server/services/kokoroTts.js:535`<br>`server/services/kokoroTts.js:619` |
 | `ROHY_LANGS` | No | `'' (empty string)` | _see source_ | `scripts/llm-language-smoke.mjs:108` |
 | `ROHY_LOCALES_ROOT` | No | — | _see source_ | `scripts/i18n/lib.mjs:89` |
 | `ROHY_PACS_CONTENT` | No | — | Path to a built imaging content origin, overriding the sibling `../Radoyon/radoyon/dist-content` that `npm run starter-content` reads by default. Build-time only — nothing at runtime reads it. | `scripts/build-starter-content.mjs:238` |
