@@ -14846,7 +14846,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/tenants-routes.js:42",
+        "x-rohy-source": "server/routes/tenants-routes.js:41",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -16139,7 +16139,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/tenants-routes.js:80",
+        "x-rohy-source": "server/routes/tenants-routes.js:79",
         "x-rohy-auth": [
           "authenticateToken"
         ],

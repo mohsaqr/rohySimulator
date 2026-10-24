@@ -24,6 +24,17 @@ import { termsGateExempt } from '../../server/middleware/termsGate.js';
 
 const REG_PASSWORD = 'Hardening1!';
 
+/** Re-run `read` until `ok(result)` holds, for rows the server writes after it has answered. */
+async function eventually(read, ok, { timeoutMs = 3000, stepMs = 50 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    let last = await read();
+    while (!ok(last) && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, stepMs));
+        last = await read();
+    }
+    return last;
+}
+
 function loginRaw(baseUrl, username, password) {
     return fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
@@ -132,8 +143,10 @@ describe('login, lockout and registration hardening', () => {
             await loginRaw(server.baseUrl, 'enum_disabled_count', 'WrongPassw0rd');
             const row = await get(db, 'SELECT failed_login_attempts FROM users WHERE id = ?', [id]);
             expect(row.failed_login_attempts).toBe(1);
-            const logs = await all(db,
-                `SELECT action FROM login_logs WHERE user_id = ? AND action = 'failed_login'`, [id]);
+            // The login_logs row is written fire-and-forget after the 401 is
+            // sent (the response must not wait on the log), so give it a moment.
+            const logs = await eventually(() => all(db,
+                `SELECT action FROM login_logs WHERE user_id = ? AND action = 'failed_login'`, [id]), (r) => r.length > 0);
             expect(logs.length).toBe(1);
         });
     });
@@ -173,8 +186,9 @@ describe('login, lockout and registration hardening', () => {
         it('caps the username written to login_logs for a failed attempt at 128 chars', async () => {
             const huge = `cap_${'x'.repeat(2000)}`;
             expect((await loginRaw(server.baseUrl, huge, 'WrongPassw0rd')).status).toBe(401);
-            const row = await get(db,
-                `SELECT username FROM login_logs WHERE username LIKE 'cap_x%' ORDER BY id DESC LIMIT 1`);
+            // Written fire-and-forget after the response; poll briefly.
+            const row = await eventually(() => get(db,
+                `SELECT username FROM login_logs WHERE username LIKE 'cap_x%' ORDER BY id DESC LIMIT 1`), (r) => Boolean(r));
             expect(row.username.length).toBe(128);
         });
     });

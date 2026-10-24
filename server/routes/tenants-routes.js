@@ -5,7 +5,6 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
     authenticateToken,
-    getRoleRank,
 } from '../middleware/auth.js';
 
 
@@ -87,11 +86,12 @@ router.post('/users/:id/tenant', authenticateToken, requirePlatformAdmin, (req, 
     dbAdapter.get('SELECT id, username, role, tenant_id FROM users WHERE id = ?', [targetUserId], (userErr, user) => {
         if (userErr) return res.status(500).json({ error: userErr.message });
         if (!user) return res.status(404).json({ error: 'User not found' });
-        // Nobody moves a peer or a superior: an admin cannot relocate another
-        // admin (or themselves) into a tenant where the move is irreversible
-        // for the person moved.
-        if (getRoleRank(user) >= getRoleRank(req.user)) {
-            return res.status(403).json({ error: 'Cannot move a user of equal or higher role', code: 'rank_not_lower' });
+        // Only a platform admin reaches this point (requirePlatformAdmin), and
+        // placing a new tenant's first admin IS the job — so any role may be
+        // moved, except the caller: moving yourself out of the default tenant
+        // would end your own platform-admin standing with no one left to undo it.
+        if (Number(user.id) === Number(req.user.id)) {
+            return res.status(403).json({ error: 'You cannot move your own account', code: 'self_move' });
         }
         dbAdapter.get('SELECT id, slug, name FROM tenants WHERE id = ?', [nextTenantId], (tenantErr, tenant) => {
             if (tenantErr) return res.status(500).json({ error: tenantErr.message });
