@@ -9,5 +9,5 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/tenants` | `authenticateToken` | `server/routes/tenants-routes.js:42` |
-| `POST` | `/api/users/:id/tenant` | `authenticateToken` | `server/routes/tenants-routes.js:80` |
+| `POST` | `/api/tenants` | `authenticateToken` | `server/routes/tenants-routes.js:41` |
+| `POST` | `/api/users/:id/tenant` | `authenticateToken` | `server/routes/tenants-routes.js:79` |

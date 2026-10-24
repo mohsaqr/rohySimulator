@@ -122,9 +122,16 @@ describe('security audit 2026-10-24 — route fixes', () => {
         expect((await get(db, 'SELECT tenant_id FROM users WHERE id = ?', [ids.student1])).tenant_id).toBe(1);
     });
 
-    it('#2 platform admin cannot move a peer admin, can move a student (Regression lock: no rank check on move)', async () => {
-        const peer = await as.admin1(`/api/users/${ids.admin2}/tenant`, { method: 'POST', json: { tenant_id: 1 } });
-        expect(peer.status).toBe(403);
+    it('#2 platform admin can place another admin or a student, never themselves (Regression lock: cross-tenant user grab)', async () => {
+        // Placing a new tenant's first admin is the job (tests/e2e/tenant.spec.js
+        // does exactly that), so another admin may be moved; the caller's own
+        // account may not, or the install could lose its last platform admin.
+        const self = await as.admin1(`/api/users/${ids.admin1}/tenant`, { method: 'POST', json: { tenant_id: 2 } });
+        expect(self.status).toBe(403);
+        expect((await self.json()).code).toBe('self_move');
+        expect((await get(db, 'SELECT tenant_id FROM users WHERE id = ?', [ids.admin1])).tenant_id).toBe(1);
+        const peer = await as.admin1(`/api/users/${ids.admin2}/tenant`, { method: 'POST', json: { tenant_id: 2 } });
+        expect(peer.status).toBe(200);
         const student = await as.admin1(`/api/users/${ids.mover}/tenant`, { method: 'POST', json: { tenant_id: 2 } });
         expect(student.status).toBe(200);
     });

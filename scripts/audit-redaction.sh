@@ -254,16 +254,28 @@ with open(sys.argv[1], 'w') as f:
         "monitor_settings": {"hr": 80}
     }, f)
 PYEOF
+# Since the 2026-10-24 security audit a STUDENT's llm_settings.apiKey/baseUrl/
+# provider are dropped on write (a learner may not route the hidden persona
+# prompt to a server of their own), so a student session has no secret to
+# redact. Check that drop first, then exercise the redaction with an educator+
+# session, which may carry a key.
 curl -s -X POST "${STUDENT_AUTH[@]}" "$API/api/sessions" \
+    -H 'Content-Type: application/json' --data-binary "@$OUT/session-create.json" > "$OUT/student-session-create-response.json"
+STUDENT_SESSION_ID=$(json_get "$OUT/student-session-create-response.json" "id")
+[ -n "$STUDENT_SESSION_ID" ] || { fail "student session create failed"; exit 1; }
+curl -s "${STUDENT_AUTH[@]}" "$API/api/sessions/$STUDENT_SESSION_ID" > "$OUT/student-session-get.json"
+assert_no_secret "GET /sessions/:id (student: apiKey dropped on write)" "$OUT/student-session-get.json" "$SECRET_SESSION"
+
+curl -s -X POST "${ADMIN_AUTH[@]}" "$API/api/sessions" \
     -H 'Content-Type: application/json' --data-binary "@$OUT/session-create.json" > "$OUT/session-create-response.json"
 SESSION_ID=$(json_get "$OUT/session-create-response.json" "id")
 [ -n "$SESSION_ID" ] || { fail "session create failed"; exit 1; }
 
-curl -s "${STUDENT_AUTH[@]}" "$API/api/sessions/$SESSION_ID" > "$OUT/session-get.json"
+curl -s "${ADMIN_AUTH[@]}" "$API/api/sessions/$SESSION_ID" > "$OUT/session-get.json"
 assert_no_secret "GET /sessions/:id" "$OUT/session-get.json" "$SECRET_SESSION"
 assert_has_redacted "GET /sessions/:id" "$OUT/session-get.json"
 
-curl -s "${STUDENT_AUTH[@]}" "$API/api/analytics/sessions/$SESSION_ID" > "$OUT/analytics-session-get.json"
+curl -s "${ADMIN_AUTH[@]}" "$API/api/analytics/sessions/$SESSION_ID" > "$OUT/analytics-session-get.json"
 assert_no_secret "GET /analytics/sessions/:id" "$OUT/analytics-session-get.json" "$SECRET_SESSION"
 assert_has_redacted "GET /analytics/sessions/:id" "$OUT/analytics-session-get.json"
 

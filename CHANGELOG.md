@@ -9,6 +9,14 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.79] — 2026-10-24
+
+- **CI follow-up to the security release.** A platform admin may again move another admin between tenants (placing a
+  new tenant's first admin is the job; `tests/e2e/tenant.spec.js` does exactly that) — only moving your own account
+  is refused (`403 self_move`). `scripts/audit-redaction.sh` creates its keyed test session as an admin, since a
+  student's `llm_settings.apiKey` is now dropped on write, and checks that drop separately. Two auth tests poll for
+  the `login_logs` row the server writes after it has answered.
+
 ## [3.0.0-rc.78] — 2026-10-24
 
 **Security release.** A full read-only audit of the repository (authentication, authorization and tenant isolation,
