@@ -15,9 +15,11 @@
 //   2. Per-sentence: VoiceService.beginSpeechSession({ voice, ... }) →
 //      session.enqueue(sentence) called repeatedly during the LLM stream,
 //      then session.flush() at the end. Each enqueue fires its own /tts
-//      request immediately, but audio is scheduled onto a single shared
-//      timeline cursor (`nextStartTime`) so playback is gapless across
-//      sentences and order is preserved via a Promise chain. This lets
+//      request immediately (at most 3 open per session; the rest queue)
+//      and buffers its audio until its turn. Audio is scheduled onto a
+//      single shared timeline cursor (`nextStartTime`) so playback is
+//      gapless across sentences, and order is preserved via a Promise
+//      chain that only does the scheduling. This lets
 //      the patient start talking as soon as the LLM finishes its first
 //      sentence, instead of after the whole reply is generated.
 //
@@ -361,12 +363,41 @@ function scheduleChunk(session, audioCtx, analyser, audioBuffer) {
     }
 }
 
-// Synthesise + schedule one sentence. Tries Kokoro streaming first, falls
-// back to Piper / Kokoro-non-streaming WAV per request. Each sentence is
-// independent at the network layer; ordering is enforced by the caller's
-// promise chain so audio plays in the order sentences were enqueued.
-async function speakOneSentence(session, text) {
-    if (session.aborted) return;
+// At most this many /tts requests per session are open at once. A sentence
+// fetch starts as soon as it is enqueued (so sentence N+1 is synthesizing
+// while N plays), but a long reply must not open a request per sentence at
+// once against a CPU-bound synthesizer.
+const MAX_INFLIGHT_SENTENCE_FETCHES = 3;
+
+// Buffer between a sentence's fetch (producer, started on enqueue) and its
+// playback step (consumer, run in enqueue order on the session chain). One
+// consumer; items are { pcm, sampleRate } frames or a { wav } ArrayBuffer.
+function createSentenceBuffer() {
+    const items = [];
+    let done = false;
+    let error = null;
+    let wake = null;
+    const notify = () => {
+        const w = wake;
+        wake = null;
+        w?.();
+    };
+    return {
+        push(item) { items.push(item); notify(); },
+        end() { done = true; notify(); },
+        fail(err) { error = err; done = true; notify(); },
+        async *[Symbol.asyncIterator]() {
+            while (true) {
+                if (items.length > 0) { yield items.shift(); continue; }
+                if (error) throw error;
+                if (done) return;
+                await new Promise((resolve) => { wake = resolve; });
+            }
+        }
+    };
+}
+
+function sentenceBody(session, text) {
     const body = { text, voice: session.voice };
     if (session.rate != null) body.rate = session.rate;
     if (session.pitch != null) body.pitch = session.pitch;
@@ -379,58 +410,95 @@ async function speakOneSentence(session, text) {
     // multilingual voices). Guarantees a de case never falls back to an
     // English default (docs/design/voice-2.0-plan.md §5.3).
     if (session.language) body.language = session.language;
+    return body;
+}
 
-    let res;
+// Fetch one sentence into `sink`. Tries the PCM stream first, falls back to
+// the WAV endpoint per request (Piper goes straight to WAV). Reads the whole
+// response, so a sentence holds its in-flight slot until fully downloaded.
+async function fetchSentence(session, text, sink) {
+    const body = sentenceBody(session, text);
+    const signal = session.abort.signal;
     const engine = session.provider || guessVoiceProvider(session.voice);
     let stream = engine !== 'piper';
+    let res;
     if (stream) {
         try {
-            res = await ttsFetch(true, body, session.abort.signal);
+            res = await ttsFetch(true, body, signal);
         } catch (err) {
-            if (err.name === 'AbortError') return;
-            if (err.message?.startsWith('expected pcm-stream')) {
-                stream = false;
-                res = await ttsFetch(false, body, session.abort.signal);
-            } else {
-                throw err;
-            }
+            if (!err.message?.startsWith('expected pcm-stream')) throw err;
+            stream = false;
+            res = await ttsFetch(false, body, signal);
         }
     } else {
-        res = await ttsFetch(false, body, session.abort.signal);
+        res = await ttsFetch(false, body, signal);
     }
 
+    if (!stream) {
+        sink.push({ wav: await res.arrayBuffer() });
+        return;
+    }
+    const sampleRateRef = { current: 24000 };
+    const reader = res.body.getReader();
+    try {
+        for await (const pcm of readPcmFrames(reader, sampleRateRef)) {
+            if (session.aborted) return;
+            sink.push({ pcm, sampleRate: sampleRateRef.current });
+        }
+    } finally {
+        try { reader.releaseLock(); } catch { /* noop */ }
+    }
+}
+
+// Start a sentence's fetch now, or as soon as an in-flight slot frees up.
+// Returns the buffer its playback step will read; a fetch error is carried
+// to that step (and so reported in enqueue order), never thrown here.
+function startSentenceFetch(session, text) {
+    const sink = createSentenceBuffer();
+    const run = () => {
+        if (session.aborted) {
+            sink.end();
+            return;
+        }
+        session.inFlight += 1;
+        fetchSentence(session, text, sink)
+            .then(() => sink.end(), (err) => sink.fail(err))
+            .finally(() => {
+                session.inFlight -= 1;
+                session.waiting.shift()?.();
+            });
+    };
+    if (session.inFlight < MAX_INFLIGHT_SENTENCE_FETCHES) run();
+    else session.waiting.push(run);
+    return sink;
+}
+
+// Schedule one sentence's audio onto the shared timeline as its frames
+// arrive. Runs on the session chain, so sentences play in enqueue order
+// whichever fetch finishes first.
+async function playSentence(session, sink) {
+    if (session.aborted) return;
     const lipsync = await ensureLipsync();
     const { audioContext: audioCtx, analyser } = lipsync;
 
-    // First chunk of the very first sentence anchors the timeline at "now".
-    if (session.nextStartTime === 0) {
-        session.nextStartTime = audioCtx.currentTime;
-    }
-
-    if (stream) {
-        const sampleRateRef = { current: 24000 };
-        const reader = res.body.getReader();
-        try {
-            for await (const pcmBytes of readPcmFrames(reader, sampleRateRef)) {
-                if (session.aborted) return;
-                const audioBuffer = int16BytesToAudioBuffer(audioCtx, pcmBytes, sampleRateRef.current);
-                scheduleChunk(session, audioCtx, analyser, audioBuffer);
-            }
-        } finally {
-            try { reader.releaseLock(); } catch { /* noop */ }
-        }
-    } else {
-        const arrayBuffer = await res.arrayBuffer();
+    for await (const item of sink) {
         if (session.aborted) return;
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+        // First audio of the session anchors the timeline at "now".
+        if (session.nextStartTime === 0) {
+            session.nextStartTime = audioCtx.currentTime;
+        }
+        const audioBuffer = item.wav
+            ? await audioCtx.decodeAudioData(item.wav.slice(0))
+            : int16BytesToAudioBuffer(audioCtx, item.pcm, item.sampleRate);
         if (session.aborted) return;
         scheduleChunk(session, audioCtx, analyser, audioBuffer);
     }
 }
 
 // Open a streaming speech session. Returned handle accepts sentences via
-// enqueue(), each of which fires its own /tts request and gets scheduled
-// onto the shared audio timeline. Call flush() when done to wait for all
+// enqueue(), each of which fires its own /tts request at once (up to
+// MAX_INFLIGHT_SENTENCE_FETCHES) and gets scheduled onto the shared audio
+// timeline in enqueue order. Call flush() when done to wait for all
 // audio to drain and fire onEnd. cancel() aborts everything immediately.
 function beginSpeechSession({ voice, rate, pitch, gender, provider, language, onStart, onVisemes, onEnd, onError }) {
     teardown();  // cancel any prior session/single-shot
@@ -442,6 +510,8 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, language, on
         endTime: 0,
         chain: Promise.resolve(),
         abort: new AbortController(),
+        inFlight: 0,        // sentence fetches currently open
+        waiting: [],        // fetch starters queued behind the in-flight cap
         voice, rate, pitch, gender, provider, language,
         emit: makeVisemeEmitter(onVisemes),
         onStart, onEnd, onError
@@ -453,11 +523,13 @@ function beginSpeechSession({ voice, rate, pitch, gender, provider, language, on
             if (session.aborted) return;
             const trimmed = (text || '').trim();
             if (!trimmed) return;
-            // Chain so sentences schedule in submission order, regardless of
-            // which fetch finishes first. Errors in one sentence don't break
-            // the chain — they're surfaced via onError and skipped.
+            // The fetch starts now; only scheduling is chained, so sentences
+            // play in submission order regardless of which fetch finishes
+            // first. Errors in one sentence don't break the chain — they're
+            // surfaced via onError (in order) and skipped.
+            const sink = startSentenceFetch(session, trimmed);
             session.chain = session.chain
-                .then(() => speakOneSentence(session, trimmed))
+                .then(() => playSentence(session, sink))
                 .catch(err => {
                     if (err?.name === 'AbortError' || session.aborted) return;
                     console.error('TTS sentence failed:', err);

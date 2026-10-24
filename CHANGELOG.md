@@ -9,6 +9,20 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.71] — 2026-10-24
+
+- **The patient starts speaking sooner.** The first spoken chunk of a reply may now end at a clause break
+  (`,` `;` `:` or an em dash, followed by a space) once it holds 6 words, instead of waiting for the whole first
+  sentence; every later chunk still waits for a full sentence, and "1,000", decimals and abbreviations never split.
+  `createSpeechChunker()` in `src/utils/sentenceSplit.js` (switch: `EARLY_FIRST_CHUNK`, threshold:
+  `FIRST_CHUNK_MIN_WORDS`), used by the patient chat and the debrief room.
+- **Sentences are fetched in parallel.** `voiceService` used to request sentence N+1 only after sentence N had
+  fully downloaded, which could leave gaps between sentences. Each sentence's `/tts` request now starts when it is
+  enqueued (at most 3 open per session) and its audio is buffered until its turn; playback order, the
+  one-failed-sentence-is-skipped behaviour and cancel are unchanged.
+- **Debrief room: every sentence in a chunk is spoken on time.** Its inline splitter took one sentence per LLM
+  delta, so a delta carrying two finished sentences held the second back until the next token arrived.
+
 ## [3.0.0-rc.70] — 2026-10-24
 
 - **Kokoro can synthesize on a remote GPU host** (opt-in, `ROHY_KOKORO_URL` + `ROHY_KOKORO_API_KEY`, optional

@@ -3,7 +3,7 @@
 // untouched — only the runner imports changed.
 
 import { describe, it, expect } from 'vitest';
-import { extractCompleteSentences } from './sentenceSplit.js';
+import { extractCompleteSentences, createSpeechChunker, FIRST_CHUNK_MIN_WORDS } from './sentenceSplit.js';
 
 describe('extractCompleteSentences', () => {
     it('empty buffer', () => {
@@ -96,5 +96,88 @@ describe('extractCompleteSentences', () => {
         const r = extractCompleteSentences('   \n  ');
         expect(r.sentences).toEqual([]);
         expect(r.remainder.trim()).toBe('');
+    });
+});
+
+describe('extractCompleteSentences — first-chunk mode', () => {
+    const first = (buf) => extractCompleteSentences(buf, { firstChunk: true });
+
+    it('ends the first chunk at a comma once it holds the minimum words', () => {
+        expect(FIRST_CHUNK_MIN_WORDS).toBe(6);
+        const r = first('Well, doctor, it started this morning, and then it got worse. ');
+        expect(r.sentences).toEqual(['Well, doctor, it started this morning,', 'and then it got worse.']);
+        expect(r.remainder).toBe('');
+    });
+
+    it('does not split before the minimum words', () => {
+        const r = first('Well, doctor, it started');
+        expect(r.sentences).toEqual([]);
+        expect(r.remainder).toBe('Well, doctor, it started');
+    });
+
+    it('splits only once: later commas wait for a sentence terminal', () => {
+        const r = first('My chest hurts a lot right now, it spreads to my arm, and I feel sick, honestly');
+        expect(r.sentences).toEqual(['My chest hurts a lot right now,']);
+        expect(r.remainder).toBe('it spreads to my arm, and I feel sick, honestly');
+    });
+
+    it('a short list does not split', () => {
+        const r = first('I take aspirin, metformin, and lisinopril every day');
+        expect(r.sentences).toEqual([]);
+    });
+
+    it('never splits inside a number like 1,000', () => {
+        const r = first('It cost me about 1,000 euros and 2,500 more for the scan');
+        expect(r.sentences).toEqual([]);
+    });
+
+    it('accepts ; : and an em dash as clause breaks', () => {
+        expect(first('I have had this pain for three days; it is worse now').sentences)
+            .toEqual(['I have had this pain for three days;']);
+        expect(first('Here is what happened to me this morning: I fell').sentences)
+            .toEqual(['Here is what happened to me this morning:']);
+        expect(first('It started in my chest after the run \u2014 then my arm').sentences)
+            .toEqual(['It started in my chest after the run \u2014']);
+    });
+
+    it('waits for the whitespace after the clause break (the next token may continue it)', () => {
+        expect(first('It started in my chest after the run,').sentences).toEqual([]);
+    });
+
+    it('keeps the decimal and abbreviation guards', () => {
+        const r = first('Dr. Smith said my temperature was 38.5 today. ');
+        expect(r.sentences).toEqual(['Dr. Smith said my temperature was 38.5 today.']);
+    });
+
+    it('a sentence that ends before the minimum is still a sentence', () => {
+        expect(first('Yes. It hurts, doctor, it really hurts a lot, please').sentences).toEqual(['Yes.']);
+    });
+
+    it('is off by default', () => {
+        expect(extractCompleteSentences('Well, doctor, it started this morning, and then').sentences).toEqual([]);
+    });
+});
+
+describe('createSpeechChunker', () => {
+    it('streams deltas: the first chunk ends early, the rest are whole sentences, flush returns the tail', () => {
+        const chunker = createSpeechChunker();
+        const deltas = ['Well, ', 'doctor, it ', 'started this ', 'morning, and ', 'then, later, it ', 'got worse. Okay, ', 'fine'];
+        const spoken = deltas.flatMap((d) => chunker.push(d));
+        expect(spoken).toEqual(['Well, doctor, it started this morning,', 'and then, later, it got worse.']);
+        expect(chunker.flush()).toBe('Okay, fine');
+        expect(chunker.flush()).toBe('');
+    });
+
+    it('earlyFirstChunk: false keeps sentence-only splitting', () => {
+        const chunker = createSpeechChunker({ earlyFirstChunk: false });
+        expect(chunker.push('Well, doctor, it started this morning, and then it got worse. ')).toEqual([
+            'Well, doctor, it started this morning, and then it got worse.',
+        ]);
+    });
+
+    it('returns every sentence completed by one delta', () => {
+        const chunker = createSpeechChunker({ earlyFirstChunk: false });
+        expect(chunker.push('One. Two. Three')).toEqual(['One.', 'Two.']);
+        expect(chunker.flush()).toBe('Three');
     });
 });
