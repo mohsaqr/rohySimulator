@@ -9,6 +9,28 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.70] — 2026-10-24
+
+- **Kokoro can synthesize on a remote GPU host** (opt-in, `ROHY_KOKORO_URL` + `ROHY_KOKORO_API_KEY`, optional
+  `ROHY_KOKORO_TIMEOUT_MS`, default 8000). Same model and voices, sent to an OpenAI-compatible
+  `POST <url>/audio/speech` with `response_format: pcm` (int16 mono 24 kHz, the format a local chunk already has),
+  one request per sentence with the next sentence requested ahead. Measured from a dev Mac against
+  `api.dynasite.org`: first audio of a 3-sentence reply at ~0.14 s warm (~0.35 s on a cold connection), the whole
+  reply (7.1 s of speech) by ~0.3 s; local CPU synthesis is ~1.3 s per sentence plus a reload after every idle
+  unload. Unset URL = today's local behaviour.
+- **The local model is only the fallback in remote mode.** It is not warmed at boot (saves ~400–600 MB on the
+  3.7 GB box) and loads the first time a remote request fails. Any remote failure (network, timeout, HTTP error,
+  malformed audio) speaks that request — or the rest of a stream from the failing sentence — locally. After 3
+  failures in a row the remote host is skipped for 60 s; then one trial request goes out while everyone else stays
+  local.
+- **Voices are validated before any request**, from the voice map bundled in kokoro-js (the 28 voices the local
+  engine can play), so remote mode never loads the model to check a voice and an unknown voice is the same
+  `UNKNOWN_VOICE` in both modes. The parser moved to `server/services/kokoroVoices.js`, shared with
+  `ttsProviders.js`. With a remote host configured, a local model that failed to load no longer marks Kokoro as
+  incapable.
+- `validateEnv`: a malformed `ROHY_KOKORO_URL` or `ROHY_KOKORO_TIMEOUT_MS` is fatal at boot; a URL without a key,
+  a key without a URL, or plain http to a non-local host in production is a warning.
+
 ## [3.0.0-rc.69] — 2026-10-14
 
 - **Two timing-dependent tests made deterministic** (rc.68's CI failed on both; no application change):

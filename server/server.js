@@ -23,7 +23,7 @@ import seedStemiCourse from './seedStemiCourse.js';
 import { seedLanguageCases } from './seedLanguageCases.js';
 import seedStemiCase from './seedStemiCase.js';
 import { seedLlmDefaults } from './seeders/llmSettings.js';
-import { loadKokoro, kokoroIdleUnloadMs } from './services/kokoroTts.js';
+import { loadKokoro, kokoroIdleUnloadMs, kokoroRemoteEnabled } from './services/kokoroTts.js';
 import { auditPersonaAndCaseVoices } from './healthChecks/voiceCatalogueAudit.js';
 import { configureSlowQueryThresholdFromDb, instrumentSqliteDb } from './observability.js';
 import requestIdMiddleware from './middleware/requestId.js';
@@ -272,8 +272,8 @@ function startHttpsServer(port) {
 // the seeded safety-net engine (en/it default voices) and the shipped
 // personas carry kokoro voices, so warm it whenever the admin hasn't
 // disabled it. Skipped on an explicit `tts_provider_enabled_kokoro=0`
-// (a deliberately kokoro-free deployment shouldn't pay the load) and
-// whenever idle-unload is active (see below).
+// (a deliberately kokoro-free deployment shouldn't pay the load), in
+// remote mode, and whenever idle-unload is active (see below).
 function maybeWarmupKokoro() {
     // Test servers run in parallel and exercise TTS through explicit fake
     // providers. Letting every worker warm/download the real ~330 MB model
@@ -281,6 +281,14 @@ function maybeWarmupKokoro() {
     // and makes unrelated route tests network-dependent. On-demand synthesis
     // remains available to dedicated service tests; only boot warmup is skipped.
     if (process.env.NODE_ENV === 'test') return;
+
+    // Remote synthesis (ROHY_KOKORO_URL): the local model is only a fallback,
+    // loaded the first time the remote host fails. Warming it would hold
+    // ~400–600 MB for a box that may never need it.
+    if (kokoroRemoteEnabled()) {
+        kokoroLog.info('boot warmup skipped: remote synthesis', { host: new URL(process.env.ROHY_KOKORO_URL).host });
+        return;
+    }
 
     // Idle-unload active (the default since 2.9.51): the model would load at
     // boot only to be dropped again after the idle window, so warming is
