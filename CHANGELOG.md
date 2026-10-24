@@ -9,6 +9,11 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.77] — 2026-10-24
+
+- **`npm run lint` ignores the local `tmp/` folder.** It is gitignored scratch space (Prova verification runs keep
+  whole copies of the repo there), and linting it reported ~1,100 errors that CI never sees, hiding the real result.
+
 ## [3.0.0-rc.76] — 2026-10-24
 
 - **The on-call specialists talk like colleagues, not tutors.** The cardiologist answered a learner's "Hello" with

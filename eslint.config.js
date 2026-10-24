@@ -14,6 +14,10 @@ export default defineConfig([
   // node_modules and coverage outputs are noise.
   globalIgnores([
     'dist/**',
+    // Local scratch (gitignored): checked-out copies of the repo for Prova
+    // verification runs live here, and linting them buried the real result
+    // under ~1,100 errors that CI never sees.
+    'tmp/**',
     'frontend/**',
     'OyonR/**',
     // Byte-identical vendored copy of ~/Documents/Github/Pathoyon/rohy-pathology/src
