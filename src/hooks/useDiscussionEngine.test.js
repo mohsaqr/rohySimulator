@@ -254,10 +254,9 @@ describe('useDiscussionEngine — voice resolution at session start', () => {
 
 describe('useDiscussionEngine — sentence streaming → enqueue', () => {
     it('enqueues each completed sentence to the speech session as deltas arrive', async () => {
-        // CONTRACT: the hook splits sentences using an INLINE regex
-        // (/^(.+?[.!?])\s+/s) — it does NOT import src/utils/sentenceSplit.js.
-        // If a future refactor moves to the shared splitter, update both
-        // this CONTRACT note and the assertion below.
+        // The hook uses the shared splitter (src/utils/sentenceSplit.js,
+        // createSpeechChunker) — the inline one-sentence-per-delta regex it
+        // had before is gone.
         let capturedOnDelta;
         LLMService.streamMessage.mockImplementation(async (_sid, _msgs, _sys, _mode, { onDelta }) => {
             capturedOnDelta = onDelta;
@@ -277,6 +276,32 @@ describe('useDiscussionEngine — sentence streaming → enqueue', () => {
         const enqueued = session.enqueue.mock.calls.map((c) => c[0]);
         expect(enqueued).toEqual(['Hello there.', 'How are you?', 'I am well!']);
         expect(capturedOnDelta).toBeTypeOf('function');
+    });
+
+    it('enqueues every sentence a single delta completes, not just the first', async () => {
+        // Regression lock: the old inline regex took one sentence per delta,
+        // so a delta carrying two finished sentences left the second unspoken
+        // until the next token arrived.
+        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, { onDelta }) => {
+            onDelta('Yes. Right. Maybe');
+            return 'Yes. Right. Maybe';
+        });
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('hi'); });
+        const enqueued = VoiceService.__sessions[0].enqueue.mock.calls.map((c) => c[0]);
+        expect(enqueued).toEqual(['Yes.', 'Right.', 'Maybe']);
+    });
+
+    it('ends the first spoken chunk at a clause break once it has enough words', async () => {
+        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, { onDelta }) => {
+            onDelta('Well, let us think about the ECG first, ');
+            onDelta('and then, briefly, the troponin. ');
+            return 'Well, let us think about the ECG first, and then, briefly, the troponin.';
+        });
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('hi'); });
+        const enqueued = VoiceService.__sessions[0].enqueue.mock.calls.map((c) => c[0]);
+        expect(enqueued).toEqual(['Well, let us think about the ECG first,', 'and then, briefly, the troponin.']);
     });
 
     it('flushes the speech session at end-of-stream', async () => {

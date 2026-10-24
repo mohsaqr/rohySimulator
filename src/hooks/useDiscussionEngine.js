@@ -4,6 +4,7 @@ import { LLMService } from '../services/llmService';
 import { VoiceService } from '../services/voiceService';
 import { apiPost } from '../services/apiClient';
 import { resolveVoice } from '../utils/voiceResolver';
+import { createSpeechChunker } from '../utils/sentenceSplit';
 import EventLogger, { COMPONENTS } from '../services/eventLogger';
 
 // Discussant voice — same shared resolver as the patient chat (Voice 2.0:
@@ -189,7 +190,9 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
         }
 
         let acc = '';
-        let speechBuffer = '';
+        // Same detector as patient chat: every finished sentence per delta,
+        // and a first chunk that may end at a clause break.
+        const speechChunker = createSpeechChunker();
         try {
             const responseText = await LLMService.streamMessage(
                 sessionId,
@@ -215,12 +218,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                                 : m
                         ));
                         if (!speech) return;
-                        speechBuffer += delta;
-                        const sentenceMatch = speechBuffer.match(/^(.+?[.!?])\s+/s);
-                        if (sentenceMatch) {
-                            speech.enqueue?.(sentenceMatch[1].trim());
-                            speechBuffer = speechBuffer.slice(sentenceMatch[0].length);
-                        }
+                        for (const sentence of speechChunker.push(delta)) speech.enqueue?.(sentence);
                     },
                 }
             );
@@ -230,7 +228,8 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     ? { role: 'assistant', content: finalText }
                     : m
             ));
-            if (speech && speechBuffer.trim()) speech.enqueue?.(speechBuffer.trim());
+            const speechTail = speechChunker.flush();
+            if (speech && speechTail) speech.enqueue?.(speechTail);
             // Drain the audio queue and fire onEnd → setSpeaking(false). The
             // session handle exposes flush/cancel/enqueue (NOT end) — calling
             // .end?.() silently no-ops because of the optional chaining, which
