@@ -9,6 +9,17 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.74] — 2026-10-24
+
+- **"Turn the model's thinking off"** (Settings → LLM, shown for a custom OpenAI-compatible server). A reasoning
+  model (e.g. Qwen3 behind a vLLM/SGLang gateway) thinks before it answers; rohy never shows or speaks that
+  thinking (only the answer text is read), but the patient's first word waits for it. With the setting on, every
+  patient/agent request — and Test Connection — carries `chat_template_kwargs: {"enable_thinking": false}`.
+  Measured on `qwen3.8-27b` at api.dynasite.org: first answer text at 0.24 s instead of 2.4 s. Off by default
+  (`llm_thinking` empty = the model decides), so no install changes behaviour until an admin ticks it. Sent only to
+  providers with a known switch (`THINKING_OFF_PARAMS` in `server/shared/llmCatalogue.js`: custom only) — an
+  OpenAI-style API rejects unknown parameters. Label and help text in all eight languages.
+
 ## [3.0.0-rc.73] — 2026-10-24
 
 - **A custom OpenAI-compatible LLM server can take an API key.** The "Custom OpenAI-Compatible API" provider was

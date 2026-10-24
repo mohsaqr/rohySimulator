@@ -689,3 +689,36 @@ describe('POST /proxy/llm — config.knowledge scopes', () => {
         expect(order).toEqual([...order].sort((a, b) => a - b));
     });
 });
+
+// "Thinking off" (platform llm_thinking = 'off'): a reasoning model behind a
+// custom OpenAI-compatible server is told to answer at once. The switch rides
+// on every proxied request for that provider and is absent otherwise.
+describe('POST /proxy/llm — thinking off', () => {
+    async function setThinking(value) {
+        const db = await openDb(server.dbPath);
+        await pRun(db, `INSERT INTO platform_settings (setting_key, setting_value) VALUES ('llm_thinking', ?)
+                        ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value`, [value]);
+        await closeDb(db);
+    }
+    const ask = () => proxyAs(studentToken, {
+        session_id: sessionId,
+        messages: [{ role: 'user', content: 'Is this an NSTEMI?' }],
+        agent_llm_config: { case_agent_id: consultantAgentId },
+    });
+
+    afterAll(async () => { await setThinking(''); });
+
+    it('sends chat_template_kwargs.enable_thinking=false to a custom server when it is off', async () => {
+        await setThinking('off');
+        const res = await ask();
+        expect(res.status).toBe(200);
+        expect(llm.bodies.at(-1).chat_template_kwargs).toEqual({ enable_thinking: false });
+    });
+
+    it('sends nothing extra when thinking is left to the model', async () => {
+        await setThinking('');
+        const res = await ask();
+        expect(res.status).toBe(200);
+        expect(llm.bodies.at(-1)).not.toHaveProperty('chat_template_kwargs');
+    });
+});

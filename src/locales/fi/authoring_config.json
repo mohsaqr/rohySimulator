@@ -451,6 +451,8 @@
   "llm_system_prompt_placeholder": "Jokaisen keskustelun mukana lähetettävät ohjeet (esim. 'Olet simuloitu potilas...')",
   "llm_system_prompt_template": "Järjestelmäkehotteen malli",
   "llm_temperature": "Lämpötila",
+  "llm_thinking_off": "Poista mallin päättely käytöstä",
+  "llm_thinking_off_help": "Malli vastaa heti eikä päättele ensin, joten vastaukset (ja potilaan ääni) alkavat sekunteja aiemmin. Poista valinta, jos vastaukset heikkenevät.",
   "llm_todays_usage": "Tämän päivän käyttö",
   "llm_tokens_per_user": "Tokenit käyttäjää kohti (Päivittäin)",
   "llm_tokens_per_user_help": "Enimmäistokenit, joita kukin käyttäjä voi käyttää päivässä (0 = rajoittamaton)",

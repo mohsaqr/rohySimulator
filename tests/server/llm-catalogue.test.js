@@ -17,7 +17,8 @@ import {
     modelsFor,
     defaultModelFor,
     isKnownModel,
-    pricingSeedRows
+    pricingSeedRows,
+    thinkingOffParams
 } from '../../server/shared/llmCatalogue.js';
 
 const PROVIDER_KEYS = Object.keys(LLM_PROVIDERS);
@@ -41,6 +42,13 @@ describe('LLM_PROVIDERS', () => {
         const optional = PROVIDER_KEYS.filter(k => LLM_PROVIDERS[k].optionalKey === true);
         expect(optional).toEqual(['custom']);
         for (const k of optional) expect(LLM_PROVIDERS[k].needsKey).toBe(false);
+    });
+
+    it('thinking off has a known switch only for the custom provider', () => {
+        expect(thinkingOffParams('custom')).toEqual({ chat_template_kwargs: { enable_thinking: false } });
+        // OpenAI-style APIs reject unknown parameters: nothing is sent there.
+        for (const k of PROVIDER_KEYS.filter(k => k !== 'custom')) expect(thinkingOffParams(k)).toBeNull();
+        expect(thinkingOffParams('no-such-provider')).toBeNull();
     });
 
     it('only anthropic uses the anthropic request shape', () => {

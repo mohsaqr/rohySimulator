@@ -48,7 +48,7 @@ import {
     enforceBudget,
     recordUsage
 } from '../usage-budget.js';
-import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor } from '../shared/llmCatalogue.js';
+import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor, thinkingOffParams } from '../shared/llmCatalogue.js';
 import { SQL_NOW } from '../shared/time.js';
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { buildSessionPatientPrompt, isSessionEnded } from '../services/patientPersona.js';
@@ -273,6 +273,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         const platformApiKey = await getPlatformLLMSetting('llm_api_key', '');
         const platformMaxTokens = await getPlatformLLMSetting('llm_max_output_tokens', '');
         const platformTemperature = await getPlatformLLMSetting('llm_temperature', '');
+        const platformThinking = await getPlatformLLMSetting('llm_thinking', '');
         const systemPromptTemplate = await getPlatformLLMSetting('llm_system_prompt_template', '');
 
         // Check if session has user-specific LLM settings (optional overrides).
@@ -1021,6 +1022,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (model && model.trim() !== '') {
                 requestPayload.model = model;
             }
+            // Thinking off: a reasoning model answers at once. Its thinking is
+            // never shown or spoken anyway (only delta.content is read), but it
+            // delays the first word by seconds — the whole voice turn waits.
+            const noThinking = platformThinking === 'off' ? thinkingOffParams(provider) : null;
+            if (noThinking) Object.assign(requestPayload, noThinking);
             endpoint = `${baseUrl}/chat/completions`;
         }
 
