@@ -63,8 +63,16 @@ describe('POST /api/upload', () => {
         createdUploads.push(filename);
         expect(fs.existsSync(path.join(uploadsDir, filename))).toBe(true);
 
+        // auditSuccess() appends to the chain after the response is sent, so
+        // poll briefly rather than read the table on the next tick.
         const db = await openDb(server.dbPath);
-        const rows = await all(db, `SELECT action, resource_type, resource_id FROM system_audit_log WHERE action = 'upload_media'`);
+        const read = () => all(db, `SELECT action, resource_type, resource_id FROM system_audit_log WHERE action = 'upload_media'`);
+        const deadline = Date.now() + 3000;
+        let rows = await read();
+        while (!rows.some((r) => r.resource_id === filename) && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 50));
+            rows = await read();
+        }
         await closeDb(db);
         expect(rows).toContainEqual({ action: 'upload_media', resource_type: 'upload', resource_id: filename });
     });
