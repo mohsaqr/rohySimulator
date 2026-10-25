@@ -2098,13 +2098,29 @@ router.put('/platform-settings/voice', authenticateToken, requirePlatformAdmin, 
         }
         // The synthesis path reads the remote values from memory; reload them
         // now so the next reply uses what was just saved.
+        let kokoroRemoteTest;
         if (writes.some(([k]) => k.startsWith('kokoro_remote_'))) {
-            await refreshKokoroRemoteSettings(getPlatformSetting);
+            const state = await refreshKokoroRemoteSettings(getPlatformSetting);
+            // Verify the pair the way the cloud keys are verified on save: one
+            // real synthesis against the host. A key the host refuses used to
+            // be "saved successfully" and every reply then fell back to local
+            // CPU synthesis with nothing on the card (production 2026-10-25,
+            // HTTP 403 "model not available for this API key"). Saved
+            // regardless — the warning tells the admin what will happen.
+            if (state.enabled) {
+                const probe = await testKokoroRemote();
+                kokoroRemoteTest = { ok: probe.ok, kind: probe.kind ?? null, status: probe.status ?? null, host: probe.host, latency_ms: probe.latencyMs };
+                if (!probe.ok) {
+                    warnings.push(`Remote Kokoro host ${probe.host} refused a test synthesis (${probe.status != null ? kokoroRemoteHttpMessage(probe.status) : `${probe.kind} error`}). Saved, but replies will be spoken on this server until the host accepts the key.`);
+                }
+                (req.log || routesLlmLog).info('kokoro remote verified on save', kokoroRemoteTest);
+            }
         }
 
         res.json({
             message: 'Voice settings updated successfully',
             updated: writes.map(w => w[0]),
+            ...(kokoroRemoteTest ? { kokoro_remote_test: kokoroRemoteTest } : {}),
             ...(warnings.length > 0 ? { warnings } : {})
         });
     } catch (err) {
@@ -2135,6 +2151,7 @@ function kokoroRemoteHttpMessage(status) {
 router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const result = await testKokoroRemote();
+        (req.log || routesLlmLog).info('kokoro remote test requested', { ok: result.ok, kind: result.kind || null, status: result.status ?? null, host: result.host, latency_ms: result.latencyMs });
         (req.log || routesLlmLog).info('kokoro remote test', {
             ok: result.ok, kind: result.kind || null, status: result.status ?? null, latency_ms: result.latencyMs, host: result.host,
         });

@@ -300,6 +300,37 @@ describe('remote Kokoro from Settings → Voice (live server)', () => {
         expect(JSON.stringify(rows)).not.toContain(SAVED_KEY);
     });
 
+    // Regression lock: production 2026-10-25 — a remote key the host refused
+    // (HTTP 403 "model not available for this API key") was "saved
+    // successfully"; every reply then fell back to local CPU synthesis and
+    // nothing on the Voice card said so. A save now verifies the pair with one
+    // real synthesis, like the cloud keys: still saved, but the response warns
+    // and the card remembers the failure.
+    it('saving a key the host refuses is saved but warned about, and the card shows the failure', async () => {
+        remoteStatus = 403;
+        remoteRequests = [];
+        const put = await call('PUT', '/platform-settings/voice', adminToken, { kokoro_remote_api_key: 'refused-key' });
+        remoteStatus = 200;
+        expect(put.status).toBe(200);
+        expect(put.json.kokoro_remote_test).toMatchObject({ ok: false, kind: 'http', status: 403, host: new URL(remoteUrl).host });
+        expect(put.json.warnings.join(' ')).toMatch(/Remote Kokoro host .* refused the API key \(HTTP 403\)/);
+        expect(put.text).not.toContain('refused-key');
+        expect(remoteRequests).toHaveLength(1); // the probe, with the key just saved
+        expect(remoteRequests[0].auth).toBe('Bearer refused-key');
+
+        const card = (await call('GET', '/platform-settings/voice', adminToken)).json.kokoro_remote;
+        expect(card).toMatchObject({ enabled: true, key_set: true, failures: 0, paused: false });
+        expect(card.last_error).toMatchObject({ kind: 'http', status: 403 });
+
+        // Saving a key the host accepts clears the warning and the card's error.
+        remoteRequests = [];
+        const ok = await call('PUT', '/platform-settings/voice', adminToken, { kokoro_remote_api_key: SAVED_KEY });
+        expect(ok.status).toBe(200);
+        expect(ok.json.kokoro_remote_test).toMatchObject({ ok: true });
+        expect(ok.json.warnings ?? []).toEqual([]);
+        expect((await call('GET', '/platform-settings/voice', adminToken)).json.kokoro_remote.last_error).toBeNull();
+    });
+
     it('the test endpoint speaks one sentence from the saved host', async () => {
         remoteStatus = 200;
         remoteRequests = [];

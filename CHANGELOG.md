@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.82] — 2026-10-25
+
+- **Saving a remote Kokoro key now verifies it.** A key the host refused (production 2026-10-25: HTTP 403 "model not
+  available for this API key") was "saved successfully", every reply then fell back to local CPU synthesis on the
+  server, and nothing on the Voice card said so. Saving the URL or key now runs one real synthesis against the host,
+  like the cloud TTS keys: the settings are still saved, but the response carries a warning the Voice tab shows as an
+  error, and the card remembers the failure (`last request failed`). Every remote test — on save or from the Test
+  button — is now logged with its outcome, so "the test passed" can be checked afterwards.
+
 ## [3.0.0-rc.81] — 2026-10-25
 
 - **Voice mode: a burst of sentences no longer 500s on the usage budget.** Since rc.70 the client synthesises sentences

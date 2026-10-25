@@ -574,6 +574,9 @@ function remoteSucceeded() {
     _breaker.failures = 0;
     _breaker.openUntil = 0;
     _breaker.trialUntil = 0;
+    // A success clears the remembered failure, so the card says "last request
+    // OK" again instead of showing a stale refusal next to a working host.
+    _breaker.lastError = null;
     _breaker.lastOkAt = new Date().toISOString();
 }
 
@@ -645,9 +648,17 @@ export async function testKokoroRemote() {
     try {
         const pcm = await remoteSpeech(cfg, { text: 'This is the remote Kokoro voice.', voice, speed: 1 });
         remoteSucceeded();
-        return { ok: true, latencyMs: Date.now() - t0, audioSeconds: Number((pcm.length / (REMOTE_SAMPLE_RATE * 2)).toFixed(2)), host };
+        const result = { ok: true, latencyMs: Date.now() - t0, audioSeconds: Number((pcm.length / (REMOTE_SAMPLE_RATE * 2)).toFixed(2)), host };
+        kokoroLog.info('remote test passed', { host, latency_ms: result.latencyMs, audio_seconds: result.audioSeconds });
+        return result;
     } catch (err) {
         if (!isRemoteFailure(err)) throw err;
+        // The failure is remembered on the card (last_error) but NOT counted
+        // toward the breaker: a test must never pause production synthesis.
+        // Logged too — a probe that leaves no trace cannot be reasoned about
+        // afterwards (2026-10-25: "the test passed" could not be checked).
+        _breaker.lastError = { kind: err.kind, status: err.status ?? null, at: new Date().toISOString() };
+        kokoroLog.warn('remote test failed', { host, kind: err.kind, status: err.status ?? null, error: err.message, latency_ms: Date.now() - t0 });
         return { ok: false, kind: err.kind, status: err.status ?? null, latencyMs: Date.now() - t0, host };
     }
 }

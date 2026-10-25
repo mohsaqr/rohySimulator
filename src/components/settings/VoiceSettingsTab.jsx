@@ -205,8 +205,14 @@ export default function VoiceSettingsTab() {
             const res = await apiPut('/platform-settings/voice', payload);
             toast.success?.('Voice settings saved');
             // Tolerant-validation warnings ("couldn't verify X; saved
-            // unverified") surface instead of vanishing.
-            for (const w of res?.warnings || []) toast.info?.(w);
+            // unverified") surface instead of vanishing. A remote Kokoro host
+            // that refused the saved key is an error, not a note: every reply
+            // will be spoken on the server until it is fixed.
+            const remoteRefused = res?.kokoro_remote_test && res.kokoro_remote_test.ok === false;
+            for (const w of res?.warnings || []) {
+                if (remoteRefused && /Remote Kokoro host/.test(w)) toast.error?.(w);
+                else toast.info?.(w);
+            }
             // After save, reload to pick up the *_set flags, refreshed
             // provider status (a new key flips capable), and clear inputs.
             await loadAll();
