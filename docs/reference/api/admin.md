@@ -38,10 +38,10 @@ model.
 | `GET` | `/api/master/search-aliases` | `(none)` | `server/routes/admin-routes.js:879` |
 | `GET` | `/api/master/vital-sign-definitions` | `(none)` | `server/routes/admin-routes.js:831` |
 | `GET` | `/api/platform-settings` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1138` |
-| `GET` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:2169` |
-| `PUT` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:2180` |
-| `GET` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:2245` |
-| `PUT` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:2265` |
+| `GET` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:2186` |
+| `PUT` | `/api/platform-settings/affect` | `authenticateToken` | `server/routes/admin-routes.js:2197` |
+| `GET` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:2262` |
+| `PUT` | `/api/platform-settings/avatars` | `authenticateToken` | `server/routes/admin-routes.js:2282` |
 | `GET` | `/api/platform-settings/chat` | `authenticateToken` | `server/routes/admin-routes.js:1816` |
 | `PUT` | `/api/platform-settings/chat` | `authenticateToken` | `server/routes/admin-routes.js:1831` |
 | `GET` | `/api/platform-settings/cohort-case-enforcement` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1216` |
@@ -63,7 +63,7 @@ model.
 | `PUT` | `/api/platform-settings/user-fields` | `authenticateToken` | `server/routes/admin-routes.js:1094` |
 | `GET` | `/api/platform-settings/voice` | `authenticateToken` | `server/routes/admin-routes.js:1878` |
 | `PUT` | `/api/platform-settings/voice` | `authenticateToken` | `server/routes/admin-routes.js:1946` |
-| `POST` | `/api/platform-settings/voice/kokoro-remote/test` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:2135` |
+| `POST` | `/api/platform-settings/voice/kokoro-remote/test` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:2151` |
 | `GET` | `/api/sessions/:sessionId/notes` | `authenticateToken` | `server/routes/admin-routes.js:110` |
 | `POST` | `/api/sessions/:sessionId/notes` | `authenticateToken` | `server/routes/admin-routes.js:88` |
 | `GET` | `/api/setup/status` | `authenticateToken, requireAdmin` | `server/routes/admin-routes.js:1324` |

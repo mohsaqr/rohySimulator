@@ -9,6 +9,11 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.83] — 2026-10-25
+
+- **Docs:** API reference regenerated after rc.82 (the voice-settings handler moved, and the reference records source
+  line anchors); no behaviour change.
+
 ## [3.0.0-rc.82] — 2026-10-25
 
 - **Saving a remote Kokoro key now verifies it.** A key the host refused (production 2026-10-25: HTTP 403 "model not
