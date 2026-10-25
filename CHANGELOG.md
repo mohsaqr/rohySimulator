@@ -9,6 +9,12 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.88] — 2026-10-25
+
+- **e2e:** the tablet-layout "examination room fits" test measures the body-map Examination room on a copy of the case
+  that chose it. The seeded case examines at the 3D Bedside since rc.87, and the WebGL scene stalls screenshots under
+  CI's software renderer. No product change.
+
 ## [3.0.0-rc.87] — 2026-10-25
 
 - **One examination room per case.** A case offers either the 2D Physical examination room (default) or the 3D

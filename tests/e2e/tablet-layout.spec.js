@@ -21,7 +21,8 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test, expect, apiAsAdmin } from './fixtures/index.js';
+import { test, expect, apiAsAdmin, waitForSeed } from './fixtures/index.js';
+import { enterLiveCase, pickExaminationRoomCase, room as roomButton } from './fixtures/liveCase.js';
 
 // A case has ONE examination room (server/shared/caseRooms.js): the body-map
 // Examination room or, when the case chose it, the 3D Bedside. The landing
@@ -171,8 +172,22 @@ for (const vp of VIEWPORTS) {
             }
         });
 
+        // The body-map Examination room is measured on a copy of the case that
+        // chose it: the seeded case examines at the 3D Bedside (one examination
+        // room per case, rc.87), and a WebGL scene under CI's software renderer
+        // stalls page.screenshot — it is not a layout this test can judge.
+        test('examination room fits', async ({ page, baseURL }) => {
+            await waitForSeed(baseURL);
+            const examCase = await pickExaminationRoomCase(baseURL, `e2e-tablet-exam-${vp.name}-${Date.now()}`);
+            await enterLiveCase(page, baseURL, `tablet-exam-${vp.name}-${Date.now()}`, examCase);
+            await roomButton(page, 'examination').click();
+            await expect(roomButton(page, 'examination')).toHaveAttribute('aria-pressed', 'true');
+            await page.waitForTimeout(1500);
+            await page.screenshot({ path: path.join(SHOTS, `${vp.name}-room-examination.png`) });
+            await expectNoHorizontalOverflow(page, `${vp.name} examination room`);
+        });
+
         for (const room of [
-            { label: EXAM_ROOM, slug: 'examination' },
             { label: /Laboratory/i, slug: 'lab' },
             { label: /Radiology/i, slug: 'radiology' },
         ]) {
