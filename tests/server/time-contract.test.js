@@ -381,8 +381,11 @@ describe('the client reads both shapes while deployments catch up', () => {
     it('timeMs reads the legacy shape as UTC, Date.parse does not', () => {
         const legacy = '2026-08-30 07:00:00';
         expect(timeMs(legacy)).toBe(Date.parse('2026-08-30T07:00:00.000Z'));
-        // The bug, stated as a test: these differ by the runner's UTC offset.
-        const offsetMs = new Date().getTimezoneOffset() * 60_000;
+        // The bug, stated as a test: these differ by the runner's UTC offset —
+        // the offset ON THAT DATE, not today's: on a DST switch day the two
+        // differ by an hour and the assertion failed on every non-UTC machine
+        // (2026-10-25, Europe/Helsinki).
+        const offsetMs = new Date(legacy).getTimezoneOffset() * 60_000;
         expect(Date.parse(legacy)).toBe(timeMs(legacy) + offsetMs);
     });
 

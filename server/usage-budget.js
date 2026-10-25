@@ -1,4 +1,5 @@
 import dbAdapter from './dbAdapter.js';
+import { withKeyedLock } from './lib/keyedLock.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -55,12 +56,13 @@ async function readLimit(provider, metric, scope) {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_LIMITS[key] ?? 0;
 }
 
-async function incrementBucket({ tenantId, userId, provider, metric, amount, window }) {
+// `tx` is the transaction's own runner (see recordUsage), never the shared handle.
+async function incrementBucket(tx, { tenantId, userId, provider, metric, amount, window }) {
     const userClause = userId == null ? 'user_id IS NULL' : 'user_id = ?';
     const params = userId == null
         ? [amount, tenantId, provider, metric, window.start]
         : [amount, tenantId, userId, provider, metric, window.start];
-    const updated = await dbAdapter.run(
+    const updated = await tx.run(
         `UPDATE usage_budget
          SET used = used + ?
          WHERE tenant_id = ? AND ${userClause} AND provider = ? AND metric = ? AND window_start = ?`,
@@ -68,7 +70,7 @@ async function incrementBucket({ tenantId, userId, provider, metric, amount, win
     );
     if (updated.changes > 0) return;
 
-    await dbAdapter.run(
+    await tx.run(
         `INSERT INTO usage_budget (tenant_id, user_id, provider, metric, window_start, window_end, used)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [tenantId, userId ?? null, provider, metric, window.start, window.end, amount]
@@ -95,12 +97,21 @@ async function readUsed({ tenantId, userId, provider, metric, window }) {
 export async function recordUsage({ tenantId, userId, provider, metric, amount }) {
     if (!tenantId || !provider || !metric || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return;
     const window = currentWindow();
-    await dbAdapter.transaction(async () => {
+    // A transaction on its OWN connection. `dbAdapter.transaction()` runs on the
+    // shared handle and its serialisation does not span awaits, so two usage
+    // writes in flight at once (voice mode synthesises sentences concurrently
+    // since rc.70) collided: the second BEGIN IMMEDIATE failed with "cannot
+    // start a transaction within a transaction" and the TTS request answered
+    // 500 (production, 2026-10-25). The isolated connection takes the database
+    // write lock instead and the other writer waits on its busy timeout.
+    // One budget writer at a time in this process, too: a burst of sentences
+    // would otherwise open a connection each and queue on the file lock.
+    await withKeyedLock('usage-budget', () => dbAdapter.isolatedTransaction(async (tx) => {
         if (userId != null) {
-            await incrementBucket({ tenantId, userId, provider, metric, amount: Number(amount), window });
+            await incrementBucket(tx, { tenantId, userId, provider, metric, amount: Number(amount), window });
         }
-        await incrementBucket({ tenantId, userId: null, provider, metric, amount: Number(amount), window });
-    });
+        await incrementBucket(tx, { tenantId, userId: null, provider, metric, amount: Number(amount), window });
+    }));
 }
 
 export async function getCurrentUsage({ tenantId, userId = null, provider, metric }) {

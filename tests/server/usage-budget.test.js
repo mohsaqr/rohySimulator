@@ -61,6 +61,11 @@ vi.mock('../../server/dbAdapter.js', () => ({
         async transaction(work) {
             return work();
         },
+        // The real one hands `work` a runner bound to its own connection; the
+        // mock hands back itself, which has the same run/get/all surface.
+        async isolatedTransaction(work) {
+            return work(this);
+        },
     },
 }));
 

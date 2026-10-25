@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.81] — 2026-10-25
+
+- **Voice mode: a burst of sentences no longer 500s on the usage budget.** Since rc.70 the client synthesises sentences
+  concurrently, so two `recordUsage()` writes could overlap. Both ran a transaction on the ONE shared sqlite
+  connection, whose serialisation does not span awaits, and the second `BEGIN IMMEDIATE` failed with "cannot start a
+  transaction within a transaction" — the `/api/tts` request answered 500 (seen in production right after the rc.80
+  deploy; never in the week before). Budget writes now run one at a time per process, each on its own connection
+  (`isolatedTransaction`), so concurrent sentences wait instead of colliding and no increment is lost. Regression lock:
+  `tests/server/usage-budget-concurrent.test.js` (reproduces the exact error against the old code).
+- **Test suite:** the legacy-timestamp contract test derived the UTC offset from *today*, so it failed on a DST
+  switch day for any runner outside UTC; it now uses the offset of the date it parses.
+
 ## [3.0.0-rc.80] — 2026-10-24
 
 - **A user purge no longer edits the audit chain.** Purging a learner used to set `system_audit_log.user_id = NULL` in
