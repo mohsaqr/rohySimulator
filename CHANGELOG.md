@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.85] — 2026-10-25
+
+- **New terms of use (agreement version 1.1).** The default agreement is rewritten as terms of use: Rohy is an
+  educational simulation designed for practice; permitted use (not a medical device, diagnostic or decision-support
+  tool, not an assessment instrument); the constraints of hardware, software and simulation and ongoing development;
+  the limitations of AI-generated and simulated clinical content; the optional learning measures (Oyon) named plainly
+  — webcam, microphone, keyboard, on-screen interaction — with their hardware and algorithmic limitations; opt-out and
+  self-service deletion; uses beyond these Terms need a separate agreement; demonstration material without personal
+  data; limitation of liability. Written in the third person throughout. The seven shipped translations are
+  regenerated for 1.1 (machine translation, no legal review). Where acceptance is required, everyone is asked to
+  accept 1.1 at their next sign-in.
+- **Learners can delete their own Oyon data.** Settings → Oyon shows how many Oyon records are stored for the account
+  and deletes all of them (emotion windows, typing and voice signal windows, voice events) after a second explicit
+  click. Own tenant and own rows only; consent records are kept; works even when the student view is switched off;
+  audited with counts only. `GET` / `DELETE /api/addons/oyon/student/me/data` (DELETE needs `{ "confirm": true }`).
+- **A fresh install starts with Oyon capture off.** The tenant capture switch used to default to on, so a new install
+  measured any learner who consented before an administrator had chosen to run Oyon. It now starts off until an admin
+  turns it on in Settings → Oyon; existing installs keep their setting. The consent option's help text no longer
+  claims "Default: on".
+
 ## [3.0.0-rc.84] — 2026-10-25
 
 - **Test suite:** the body-map audit test polls for the audit row the server appends after answering (the same

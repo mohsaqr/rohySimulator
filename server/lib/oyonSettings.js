@@ -57,13 +57,20 @@ export async function ensureSettings(currentTenantId) {
             -- learners to consent to voice capture that does not exist. Both
             -- flags that must start off are named rather than defaulted.
             ai_assist_enabled, voice_enabled,
+            -- Capture itself starts OFF on a fresh install (owner decision
+            -- 2026-10-25): the column DEFAULT from migration 0011 is 1, so a new
+            -- tenant used to start sensing as soon as a learner consented. Now an
+            -- administrator turns it on in Settings → Oyon first; this switch
+            -- gates every modality (camera, typing, interaction, voice) via
+            -- the "enabled" field of /addons/oyon/config. Existing rows keep their setting.
+            emotion_capture_enabled,
             -- Named, not left to the DEFAULT CURRENT_TIMESTAMP: that default
             -- writes sqlite's legacy naive shape, and PUT /addons/oyon/settings
             -- now stamps updated_at as UTC ISO. A column holding both shapes
             -- sorts as a string and parses as local time in a browser
             -- (RPS-1 section 17, migrations 0050-0052).
             created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ${SQL_NOW}, ${SQL_NOW})
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ${SQL_NOW}, ${SQL_NOW})
          ON CONFLICT(tenant_id) DO NOTHING`,
         [
             String(currentTenantId),

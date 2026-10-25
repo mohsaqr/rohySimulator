@@ -100,6 +100,8 @@ services:
       # Local-browser emotion capture add-on (Oyon). Defaults to ON to
       # match the source-install path. Set OYON_ENABLED=0 in .env to opt
       # out — Settings shows a friendly disabled panel rather than 404s.
+      # Loading it starts no sensing: capture is OFF on a fresh install until an
+      # admin turns it on in Settings → Oyon, and each learner must opt in.
       OYON_ENABLED: "${OYON_ENABLED:-1}"
       # Optional API keys. Fine to leave empty — admin can set them in
       # the in-app Settings tab once logged in.

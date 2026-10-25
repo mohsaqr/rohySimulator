@@ -88,12 +88,21 @@ describe('terms of use API', () => {
 
     afterAll(async () => { await server?.close(); });
 
+    // Regression lock: the 1.1 default (2026-10-25) must tell learners they can opt
+    // out of the optional learning measures and delete their records themselves.
+    it('the default agreement states opt-out and self-service deletion', async () => {
+        const { terms } = await (await call('/terms')).json();
+        expect(terms.version).toBe('1.1');
+        expect(terms.body).toMatch(/opt out at any time/);
+        expect(terms.body).toMatch(/delete all of them at any time, in Settings → Oyon/);
+    });
+
     it('serves the default agreement publicly, not required', async () => {
         const r = await call('/terms');
         expect(r.status).toBe(200);
         const { terms } = await r.json();
         expect(terms).toMatchObject({ required: false, title: DEFAULT_TERMS_TITLE, version: DEFAULT_TERMS_VERSION, is_default: true });
-        expect(terms.body).toMatch(/Your privacy is guaranteed/);
+        expect(terms.body).toMatch(/educational simulation designed for practice/);
     });
 
     it('is not pending while not required', async () => {
@@ -127,7 +136,7 @@ describe('terms of use API', () => {
             const rows = await pAll(db, 'SELECT user_id, version, title, body FROM terms_acceptances WHERE user_id = ?', [studentId]);
             expect(rows).toHaveLength(1);
             expect(rows[0]).toMatchObject({ version: DEFAULT_TERMS_VERSION, title: DEFAULT_TERMS_TITLE });
-            expect(rows[0].body).toMatch(/Your privacy is guaranteed/);
+            expect(rows[0].body).toMatch(/educational simulation designed for practice/);
             const audits = await pAll(db, "SELECT action FROM system_audit_log WHERE action LIKE 'terms.%'");
             expect(audits.map((a) => a.action)).toEqual(expect.arrayContaining(['terms.update', 'terms.accept']));
         } finally { await closeDb(db); }
@@ -145,20 +154,20 @@ describe('terms of use API', () => {
 
     it('asks again when a new version is published, and keeps the old acceptance', async () => {
         const put = await call('/platform-settings/terms', {
-            token: adminToken, method: 'PUT', body: { version: '1.1', title: 'Rohy terms, revised', body: '## 1. New\n\nNew text.' },
+            token: adminToken, method: 'PUT', body: { version: '2.0', title: 'Rohy terms, revised', body: '## 1. New\n\nNew text.' },
         });
         expect(put.status).toBe(200);
         const { terms } = await (await call('/terms/status', { token: studentToken })).json();
-        expect(terms).toMatchObject({ version: '1.1', title: 'Rohy terms, revised', accepted: false, pending: true, is_default: false });
+        expect(terms).toMatchObject({ version: '2.0', title: 'Rohy terms, revised', accepted: false, pending: true, is_default: false });
 
-        const acc = await call('/terms/accept', { token: studentToken, method: 'POST', body: { version: '1.1' } });
+        const acc = await call('/terms/accept', { token: studentToken, method: 'POST', body: { version: '2.0' } });
         expect(acc.status).toBe(200);
         const db = await openDb(server.dbPath);
         try {
             const rows = await pAll(db, 'SELECT version, body FROM terms_acceptances WHERE user_id = ? ORDER BY id', [studentId]);
-            expect(rows.map((r) => r.version)).toEqual([DEFAULT_TERMS_VERSION, '1.1']);
+            expect(rows.map((r) => r.version)).toEqual([DEFAULT_TERMS_VERSION, '2.0']);
             expect(rows[1].body).toBe('## 1. New\n\nNew text.');
-            expect(rows[0].body).toMatch(/Your privacy is guaranteed/);
+            expect(rows[0].body).toMatch(/educational simulation designed for practice/);
         } finally { await closeDb(db); }
     });
 

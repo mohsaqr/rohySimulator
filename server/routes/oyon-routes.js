@@ -6,6 +6,7 @@ import { validateEmotionBatch, isModalityOnlyEvent } from 'oyon/validation';
 import { OYON_EVENT_SOURCES, OYON_MODALITIES, OYON_STATE_VOCABULARIES, OYON_WINDOW_KINDS } from 'oyon/version';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
+import dbAdapter from '../dbAdapter.js';
 import { withLearnerCaseLabels } from '../services/caseProjection.js';
 
 // A learner reading their own Oyon records gets the case code where the stored
@@ -1003,6 +1004,73 @@ router.get('/student/me', authenticateToken, async (req, res) => {
     );
     oyonLog.debug('student self-records read', { user_id: req.user.id, returned: rows.length });
     res.json(await learnerLabels(req, { records: rows.map(hydrateRecord) }));
+});
+
+// ── A learner's own Oyon data: how much is stored, and erase it ─────────────
+//
+// GDPR Art. 17 in the product rather than by e-mail: every user may see how
+// many Oyon rows are stored under their account and delete all of them —
+// emotion windows, signal windows and signal events — at any time, whatever
+// the tenant's view flags say (the right to erasure does not depend on the
+// right to view). Consent rows are KEPT: they are the record that consent was
+// given or withdrawn, which the controller must be able to show, and they
+// hold no measurement. Deleting data does not change the learner's consent;
+// unticking the capture option does that.
+const OYON_OWN_DATA_TABLES = Object.freeze(['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events']);
+
+async function ownOyonCounts(tenant, userId) {
+    const counts = {};
+    for (const table of OYON_OWN_DATA_TABLES) {
+        const row = await dbGet(
+            `SELECT COUNT(*) AS n FROM ${table} WHERE tenant_id = ? AND CAST(user_id AS TEXT) = ?`,
+            [tenant, String(userId)]
+        );
+        counts[table] = Number(row?.n || 0);
+    }
+    return counts;
+}
+
+router.get('/student/me/data', authenticateToken, async (req, res) => {
+    const counts = await ownOyonCounts(tenantId(req), req.user.id);
+    res.json({
+        counts,
+        total: Object.values(counts).reduce((a, b) => a + b, 0),
+    });
+});
+
+router.delete('/student/me/data', authenticateToken, async (req, res) => {
+    // An explicit confirmation in the body, so a stray DELETE (a retried
+    // request, a prefetch) can never erase a learner's data on its own.
+    if (req.body?.confirm !== true) {
+        return res.status(400).json({ error: 'Send { "confirm": true } to delete your Oyon data', code: 'confirmation_required' });
+    }
+    const tenant = tenantId(req);
+    const userId = String(req.user.id);
+    const deleted = await dbAdapter.isolatedTransaction(async (tx) => {
+        const out = {};
+        for (const table of OYON_OWN_DATA_TABLES) {
+            const r = await tx.run(
+                `DELETE FROM ${table} WHERE tenant_id = ? AND CAST(user_id AS TEXT) = ?`,
+                [tenant, userId]
+            );
+            out[table] = r.changes;
+        }
+        return out;
+    });
+    const total = Object.values(deleted).reduce((a, b) => a + b, 0);
+    await logAuditAsync({
+        userId: req.user.id,
+        username: req.user.username,
+        action: 'oyon.own_data_deleted',
+        resourceType: 'oyon_data',
+        resourceId: userId,
+        tenantId: tenant,
+        // Counts only — what was erased is gone, and the audit row must not
+        // become a copy of it.
+        metadata: { deleted, total },
+    });
+    (req.log || oyonLog).info('learner deleted own oyon data', { user_id: req.user.id, total });
+    res.json({ deleted, total });
 });
 
 router.get('/admin/health', authenticateToken, async (req, res) => {

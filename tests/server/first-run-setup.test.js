@@ -142,7 +142,7 @@ describe('first-run setup backend', () => {
         // oyon_settings raw (no row → "Off") while the step body read through
         // ensureSettings() (lazy default → checkbox ON). On a tenant that has
         // never saved Oyon settings the two disagreed until the first toggle.
-        it('reports emotion capture ON for a tenant with no oyon_settings row (the lazy default)', async () => {
+        it('reports emotion capture OFF for a tenant with no oyon_settings row (the lazy default)', async () => {
             const db = await openDb(server.dbPath);
             try {
                 await pRun(db, 'DELETE FROM oyon_settings WHERE tenant_id = ?', ['1']);
@@ -152,9 +152,11 @@ describe('first-run setup backend', () => {
             const res = await admin('/api/setup/status');
             expect(res.status).toBe(200);
             const status = await res.json();
-            // The column default (migration 0011) and the lazily-inserted row
-            // both say ON; the pill must say the same thing the checkbox does.
-            expect(status.oyon.enabled).toBe(true);
+            // The lazily-inserted row starts with capture OFF since rc.85 (a fresh
+            // install must not start sensing; owner decision 2026-10-25). The pill
+            // still reads it through ensureSettings(), so it says what the
+            // checkbox says.
+            expect(status.oyon.enabled).toBe(false);
         });
     });
 

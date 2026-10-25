@@ -14,6 +14,83 @@ import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
 // happens through `onOpenAnalytics` (passed by ConfigPanel, educator/admin
 // only) which just switches the active settings tab.
 
+// The learner's own stored Oyon data: how many records there are, and a
+// two-step delete (no browser confirm() dialog — a second, explicit click).
+// Deleting data does not change consent; the checkbox above does that.
+export function OwnOyonData() {
+   const [total, setTotal] = useState(null);
+   const [confirming, setConfirming] = useState(false);
+   const [busy, setBusy] = useState(false);
+   const [message, setMessage] = useState(null);
+
+   const load = () => apiFetch('/addons/oyon/student/me/data')
+      .then(r => setTotal(Number(r?.total || 0)))
+      .catch(() => setTotal(null));
+
+   useEffect(() => { load(); }, []);
+
+   const erase = async () => {
+      setBusy(true);
+      setMessage(null);
+      try {
+         const r = await apiFetch('/addons/oyon/student/me/data', { method: 'DELETE', json: { confirm: true } });
+         setMessage({ ok: true, text: `Deleted ${Number(r?.total || 0)} stored record${Number(r?.total) === 1 ? '' : 's'}.` });
+         setConfirming(false);
+         await load();
+      } catch (e) {
+         setMessage({ ok: false, text: e?.message || 'Could not delete your Oyon data.' });
+      } finally {
+         setBusy(false);
+      }
+   };
+
+   return (
+      <div className="rounded-md border border-neutral-800 p-3 space-y-2" data-testid="oyon-own-data">
+         <div className="text-sm font-semibold text-neutral-100">Your stored Oyon data</div>
+         <p className="text-xs text-neutral-400">
+            {total === null
+               ? 'Could not load how many records are stored.'
+               : `${total} record${total === 1 ? '' : 's'} stored under your account.`}
+            {' '}Deleting removes every stored Oyon measurement for your account. It cannot be undone, and it
+            does not change your consent — untick the option above to stop new recording.
+         </p>
+         {!confirming ? (
+            <button
+               type="button"
+               disabled={busy || !total}
+               onClick={() => setConfirming(true)}
+               className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-800 text-red-300 hover:bg-red-950/40 disabled:opacity-40"
+            >
+               Delete my Oyon data
+            </button>
+         ) : (
+            <div className="flex items-center gap-2">
+               <span className="text-xs text-red-300">Delete all {total} records permanently?</span>
+               <button
+                  type="button"
+                  disabled={busy}
+                  onClick={erase}
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold bg-red-700 text-white hover:bg-red-600 disabled:opacity-40"
+               >
+                  {busy ? 'Deleting…' : 'Yes, delete'}
+               </button>
+               <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirming(false)}
+                  className="px-3 py-1.5 rounded-md text-xs border border-neutral-700 text-neutral-300"
+               >
+                  Cancel
+               </button>
+            </div>
+         )}
+         {message && (
+            <p className={`text-xs ${message.ok ? 'text-emerald-400' : 'text-red-400'}`} role="status">{message.text}</p>
+         )}
+      </div>
+   );
+}
+
 export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
    const { user, isAdmin } = useAuth();
    const admin = typeof isAdmin === 'function' ? isAdmin() : Boolean(isAdmin);
@@ -303,12 +380,14 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                      Capture emotions during my simulation sessions
                   </span>
                   <span className="block text-xs text-neutral-400 mt-0.5">
-                     Default: on. Records are stored server-side under your account when you start a session
-                     with the camera pill. Untick to disable — the live preview still runs (it stays on this
-                     device) but nothing is persisted. You can flip this any time.
+                     Default: off. When ticked, records are stored server-side under your account when you
+                     start a session with the camera pill. Untick to stop — the live preview still runs (it
+                     stays on this device) but nothing is persisted. You can change this any time.
                   </span>
                </span>
             </label>
+
+            <OwnOyonData />
          </section>
 
          {admin && (
