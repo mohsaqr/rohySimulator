@@ -19,7 +19,7 @@
 // the voice windows. Runs in the `chromium-voice` project for the microphone.
 
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin } from './fixtures/seed.js';
+import { enableOyonForLearners, restoreOyonSettings, apiAsAdmin } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 
 const STAMP = Date.now();
@@ -161,6 +161,8 @@ test.describe('oyon analytics journey', () => {
     // A real journey: welcome page, two typed messages with pauses, a voice turn.
     test.describe.configure({ mode: 'serial', timeout: 180_000 });
 
+    let originalOyon;
+
     test.beforeAll(async ({ baseURL }) => {
         await adminCall(baseURL, async (admin) => {
             await admin.put('/api/platform-settings/setup', { data: { completed: true } });
@@ -169,6 +171,9 @@ test.describe('oyon analytics journey', () => {
             });
             expect(created.ok(), await created.text()).toBeTruthy();
         });
+        // rc.85: a fresh install starts with capture OFF, and a learner is sensed
+        // only in a course that enables Oyon — turn both on (restored in afterAll).
+        originalOyon = await enableOyonForLearners(baseURL, [LEARNER.username]);
         await setTenantVoice(baseURL, true);
         await setPlatformVoiceMode(baseURL, true);
     });
@@ -176,6 +181,7 @@ test.describe('oyon analytics journey', () => {
     test.afterAll(async ({ baseURL }) => {
         await setTenantVoice(baseURL, false);
         await setPlatformVoiceMode(baseURL, false);
+        await restoreOyonSettings(baseURL, originalOyon);
     });
 
     test('a learner types and speaks to the patient, and capture stores windows and state events', async ({ browser, baseURL }) => {

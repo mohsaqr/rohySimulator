@@ -12,7 +12,7 @@
 // getting an episode from the composer to the table under the right consent.
 
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin } from './fixtures/seed.js';
+import { enableOyonForLearners, restoreOyonSettings, apiAsAdmin } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
 
@@ -76,8 +76,17 @@ function typingEventsPost(page) {
 }
 
 test.describe('oyon typing capture', () => {
+    let originalOyon;
+
     test.beforeAll(async ({ baseURL }) => {
         await completeSetup(baseURL);
+        // rc.85: a fresh install starts with capture OFF, and a learner is sensed
+        // only in a course that enables Oyon — turn both on (restored in afterAll).
+        originalOyon = await enableOyonForLearners(baseURL, ['student']);
+    });
+
+    test.afterAll(async ({ baseURL }) => {
+        await restoreOyonSettings(baseURL, originalOyon);
     });
 
     test('a message typed under consent v2 is stored as a typing window', async ({ studentPage, baseURL }) => {

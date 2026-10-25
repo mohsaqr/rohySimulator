@@ -37529,6 +37529,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "profile.my_classes_agreement": {
+    "src": "7ce662f5fbe1",
+    "tgt": "da8395503429",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "profile.my_classes_empty": {
     "src": "552fcb497683",
     "tgt": "9178dc4e7497",
@@ -37562,6 +37572,16 @@
   "profile.my_classes_loading": {
     "src": "1d2d603f8b62",
     "tgt": "2a7dff5ee85e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "profile.my_classes_oyon_on": {
+    "src": "fd9fc3b85482",
+    "tgt": "18ee2c67e75f",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -38989,6 +39009,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.btn_hide_agreement_preview": {
+    "src": "14425047311f",
+    "tgt": "85befde0d2db",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.btn_remove": {
     "src": "c3812fc4acb8",
     "tgt": "3828375a2d45",
@@ -39022,6 +39052,16 @@
   "teacher_cohorts.btn_select_all_shown": {
     "src": "1fd393ce57ce",
     "tgt": "99fc8ca53746",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.btn_show_agreement_preview": {
+    "src": "0208d9c94332",
+    "tgt": "5abf54aa6bc7",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39279,6 +39319,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.error_agreement_too_long": {
+    "src": "d65252f46df1",
+    "tgt": "891558bbc919",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.error_load_cases": {
     "src": "c69f7bf42528",
     "tgt": "5776003e7f20",
@@ -39359,6 +39409,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.heading_measures_agreement": {
+    "src": "f03a323d6fa6",
+    "tgt": "279490edfb74",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.heading_objectives": {
     "src": "d38eb0fca794",
     "tgt": "6de843bcc615",
@@ -39389,9 +39449,29 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.help_agreement_markdown": {
+    "src": "cfeb55303246",
+    "tgt": "1819dd7df409",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.help_allow_retakes": {
     "src": "11d2f0ce4ca5",
     "tgt": "26a7536601da",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.help_course_agreement": {
+    "src": "d4d6b5346ae7",
+    "tgt": "b6f691dd2c78",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39422,6 +39502,16 @@
   "teacher_cohorts.help_owner": {
     "src": "2e41d56aebe0",
     "tgt": "62d240a19372",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.help_oyon_sensing": {
+    "src": "ee96ff35c2b0",
+    "tgt": "d3b2110bfcb0",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39499,6 +39589,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.label_agreement_body": {
+    "src": "54f4bbcb6252",
+    "tgt": "955bfc0ca917",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.label_agreement_title": {
+    "src": "cb86251c8605",
+    "tgt": "35b9922e7d48",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.label_allow_retakes": {
     "src": "172865ae0e7a",
     "tgt": "16cafb796e21",
@@ -39542,6 +39652,16 @@
   "teacher_cohorts.label_coteachers": {
     "src": "1646173c70dc",
     "tgt": "ef37698f9901",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.label_course_agreement": {
+    "src": "2728cd2785b2",
+    "tgt": "529eee2e06f9",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39639,6 +39759,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.label_oyon_sensing": {
+    "src": "0b85eae4d259",
+    "tgt": "80fb8bb9b05f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.label_passing_score": {
     "src": "6c4400d76f79",
     "tgt": "3cca4ce79ec5",
@@ -39689,9 +39819,39 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.notice_teacher_responsibility": {
+    "src": "16b48f7a7575",
+    "tgt": "47607e4e4599",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.placeholder_add_student": {
     "src": "3cfa072342c3",
     "tgt": "363c5d6a9ea5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.placeholder_agreement_body": {
+    "src": "fb3ec63e1db2",
+    "tgt": "88e639b5dfd5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.placeholder_agreement_title": {
+    "src": "2ef32eaa760f",
+    "tgt": "745b1ca36a3b",
     "state": "machine",
     "origin": "machine",
     "locked": false,

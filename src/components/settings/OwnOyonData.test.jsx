@@ -5,7 +5,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { apiFetch } from '../../services/apiClient';
-import { OwnOyonData } from './OyonSettingsTab';
+import OyonSettingsTab, { OwnOyonData } from './OyonSettingsTab';
 
 vi.mock('../../services/apiClient', () => {
     class ApiError extends Error {}
@@ -40,5 +40,34 @@ describe('OwnOyonData', () => {
         render(<OwnOyonData />);
         expect(await screen.findByText(/0 records stored/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Delete my Oyon data' })).toBeDisabled();
+    });
+});
+
+// Sensing is per course (server/lib/oyonSensingGate.js). Regression lock: a
+// learner none of whose courses enables Oyon is told so beside the consent
+// checkbox, and the checkbox stays usable (it records their choice for later).
+describe('Settings → Oyon learner note when no course enables sensing', () => {
+    const routeApi = (config) => apiFetch.mockImplementation((url) => (
+        url === '/addons/oyon/config' ? Promise.resolve(config) : Promise.resolve({ total: 0 })
+    ));
+
+    it('shows the note and keeps the consent checkbox enabled', async () => {
+        routeApi({ enabled: false, course_sensing_required: true, course_sensing_enabled: false, consent_version: 'oyon-consent-v3' });
+        render(<OyonSettingsTab />);
+        expect(await screen.findByText('Optional learning measures are not enabled for any of your courses.')).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: /Capture emotions during my simulation sessions/ })).not.toBeDisabled();
+    });
+
+    it('shows no note once a course enables sensing, or for staff', async () => {
+        routeApi({ enabled: true, course_sensing_required: true, course_sensing_enabled: true });
+        const { unmount } = render(<OyonSettingsTab />);
+        await screen.findByText(/Capture emotions during my simulation sessions/);
+        await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/addons/oyon/config'));
+        expect(screen.queryByTestId('oyon-no-course-note')).toBeNull();
+        unmount();
+        routeApi({ enabled: true, course_sensing_required: false, course_sensing_enabled: null });
+        render(<OyonSettingsTab />);
+        await screen.findByText(/Capture emotions during my simulation sessions/);
+        expect(screen.queryByTestId('oyon-no-course-note')).toBeNull();
     });
 });

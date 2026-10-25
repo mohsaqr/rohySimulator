@@ -139,3 +139,36 @@ describe('JoinClassPanel', () => {
         expect(toast.success).not.toHaveBeenCalled();
     });
 });
+
+// A course may carry an informational agreement (owner decision 2026-10-25).
+// Regression lock: the learner can open it read-only, rendered by the terms
+// renderer, and a course without one shows no link.
+describe('JoinClassPanel — course agreement', () => {
+    it('lets the learner open a course agreement and shows no link for a course without one', async () => {
+        mockApi({
+            mine: {
+                cohorts: [
+                    {
+                        id: 1, name: 'Cardiology', joined_at: '2026-10-01 10:00:00',
+                        oyon_sensing_enabled: true,
+                        agreement: { title: 'Research information', body: '## Purpose\n\nWe study **learning**.' },
+                    },
+                    { id: 2, name: 'Plain course', joined_at: '2026-10-01 10:00:00', oyon_sensing_enabled: false, agreement: null },
+                ],
+            },
+        });
+        renderWithProviders(<JoinClassPanel />);
+        await waitFor(() => expect(screen.getByText('Cardiology')).toBeTruthy());
+        expect(screen.getAllByRole('button', { name: /Course agreement/ })).toHaveLength(1);
+        expect(screen.getByText(/Optional learning measures \(Oyon\) are enabled in this course/)).toBeTruthy();
+        expect(screen.queryByTestId('learner-course-agreement')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /Course agreement/ }));
+        const doc = await screen.findByTestId('learner-course-agreement');
+        expect(doc.querySelector('h4').textContent).toBe('Research information');
+        expect(doc.querySelector('h3').textContent).toBe('Purpose');
+        expect(doc.querySelector('strong').textContent).toBe('learning');
+        // Informational only: nothing to accept.
+        expect(screen.queryByRole('button', { name: /^(accept|i agree)/i })).toBeNull();
+    });
+});

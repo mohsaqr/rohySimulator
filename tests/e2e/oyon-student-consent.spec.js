@@ -1,7 +1,7 @@
 // PRV-22: pressing Start is never an affirmative camera-consent action,
 // including on a shared browser holding another person's previous grant.
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin } from './fixtures/seed.js';
+import { enrollInOyonCourse, apiAsAdmin } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { parseOnboardingSettings } from '../../src/utils/onboardingSettings.js';
 
@@ -43,6 +43,8 @@ test.describe('student camera consent', () => {
             });
             expect(created.ok(), await created.text()).toBeTruthy();
         } finally { await admin.dispose(); }
+        // A learner is sensed only in a course that enables Oyon (2026-10-25).
+        await enrollInOyonCourse(baseURL, [username]);
         const anonymous = await pwRequest.newContext({ baseURL });
         let token;
         try {

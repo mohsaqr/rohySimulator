@@ -24,7 +24,7 @@
 // speech. The metrics are Oyon's to test upstream.
 
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin } from './fixtures/seed.js';
+import { enableOyonForLearners, restoreOyonSettings, apiAsAdmin } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
 
@@ -98,7 +98,12 @@ const isVoicePost = (r) => r.url().includes('/api/addons/oyon/emotion-records')
     && (r.request().postData() || '').includes('"modality":"voice"');
 
 test.describe('oyon voice capture', () => {
+    let originalOyon;
+
     test.beforeAll(async ({ baseURL }) => {
+        // rc.85: a fresh install starts with capture OFF, and a learner is sensed
+        // only in a course that enables Oyon — turn both on (restored in afterAll).
+        originalOyon = await enableOyonForLearners(baseURL, ['student']);
         const admin = await apiAsAdmin(baseURL);
         try { await admin.put('/api/platform-settings/setup', { data: { completed: true } }); } finally { await admin.dispose(); }
         await setPlatformVoiceMode(baseURL, true);
@@ -109,6 +114,7 @@ test.describe('oyon voice capture', () => {
     test.afterAll(async ({ baseURL }) => {
         await setTenantVoice(baseURL, false);
         await setPlatformVoiceMode(baseURL, false);
+        await restoreOyonSettings(baseURL, originalOyon);
     });
 
     test('a spoken turn under consent v3 is measured by the speech detector and stored', async ({ studentPage, baseURL }) => {

@@ -11,6 +11,7 @@ import {
     hasRoleAtLeast,
 } from '../middleware/auth.js';
 import { auditSuccess, tenantId, cohortCaseEnforcementOn } from './_helpers.js';
+import { validateCourseSettings, learnerCourseSettings } from '../shared/courseSettings.js';
 import { pulseBucket, verbWithAliases, roomLabel, roomLabelKey } from '../shared/eventFacets.js';
 import {
     buildEventFilter,
@@ -176,7 +177,11 @@ router.post('/cohorts', authenticateToken, requireEducator, async (req, res, nex
             if (!isPlainObject(body.settings)) {
                 return res.status(400).json({ error: 'settings must be a plain object' });
             }
-            settingsJson = JSON.stringify(body.settings);
+            const checked = validateCourseSettings(body.settings);
+            if (!checked.ok) {
+                return res.status(400).json({ error: checked.error, code: 'invalid_course_settings' });
+            }
+            settingsJson = JSON.stringify(checked.settings);
         }
 
         // Validate case_ids / coteacher_identifiers BEFORE the insert so a
@@ -303,7 +308,7 @@ router.get('/cohorts', authenticateToken, requireEducator, async (req, res, next
 router.get('/cohorts/mine', authenticateToken, requireStudent, async (req, res, next) => {
     try {
         const rows = await dbAdapter.all(
-            `SELECT c.id, c.name, c.description, c.is_default, m.joined_at, m.status, m.member_role
+            `SELECT c.id, c.name, c.description, c.is_default, c.settings, m.joined_at, m.status, m.member_role
                FROM cohort_members m
                JOIN cohorts c ON c.id = m.cohort_id
               WHERE m.user_id = ? AND m.deleted_at IS NULL
@@ -311,7 +316,11 @@ router.get('/cohorts/mine', authenticateToken, requireStudent, async (req, res, 
               ORDER BY m.joined_at DESC, c.id DESC`,
             [req.user.id, tenantId(req)]
         );
-        res.json({ cohorts: rows });
+        // Learner-safe: the raw settings blob never leaves the server — only
+        // the course agreement and whether the course enables Oyon sensing.
+        res.json({
+            cohorts: rows.map(({ settings, ...row }) => ({ ...row, ...learnerCourseSettings(settings) })),
+        });
     } catch (err) {
         next(err);
     }
@@ -419,8 +428,12 @@ router.patch('/cohorts/:id', authenticateToken, requireEducator, async (req, res
             } else if (!isPlainObject(body.settings)) {
                 return res.status(400).json({ error: 'settings must be a plain object' });
             } else {
+                const checked = validateCourseSettings(body.settings);
+                if (!checked.ok) {
+                    return res.status(400).json({ error: checked.error, code: 'invalid_course_settings' });
+                }
                 sets.push('settings = ?');
-                params.push(JSON.stringify(body.settings));
+                params.push(JSON.stringify(checked.settings));
             }
         }
 

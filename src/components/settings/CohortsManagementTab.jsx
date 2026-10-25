@@ -20,6 +20,8 @@ import { getEnforcementFlag, setEnforcementFlag } from '../../services/userServi
 import CohortReports from './CohortReports';
 import { CasePicker, PeoplePicker } from './CohortPickers';
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
+import CourseMeasuresAgreementFields from './CourseMeasuresAgreementFields';
+import { applyCourseFields } from '../../../server/shared/courseSettings.js';
 
 // The tenant default course (cohorts.is_default) ships under the seeded English
 // literal "Basic course"; until an admin renames it we render the translated
@@ -112,6 +114,10 @@ export default function CohortsManagementTab() {
     const [caseSel, setCaseSel] = useState(() => new Set());
     const [coteacherIds, setCoteacherIds] = useState([]);
     const [studentIds, setStudentIds] = useState([]);
+    // Optional learning measures (Oyon) + course agreement — off / empty by default.
+    const [newSensing, setNewSensing] = useState(false);
+    const [newAgreementTitle, setNewAgreementTitle] = useState('');
+    const [newAgreementBody, setNewAgreementBody] = useState('');
     const [busyCodeId, setBusyCodeId] = useState(null);
     const [copiedCodeId, setCopiedCodeId] = useState(null);
 
@@ -138,6 +144,9 @@ export default function CohortsManagementTab() {
         setCaseSel(new Set());
         setCoteacherIds([]);
         setStudentIds([]);
+        setNewSensing(false);
+        setNewAgreementTitle('');
+        setNewAgreementBody('');
         setShowAdvanced(false);
     };
 
@@ -161,6 +170,13 @@ export default function CohortsManagementTab() {
                 if (withJoinCode) payload.join_code = true;
                 if (caseSel.size) payload.case_ids = [...caseSel];
                 if (coteacherIds.length) payload.coteacher_identifiers = coteacherIds;
+                // Only sent when the teacher set something, so an untouched
+                // panel still creates a course with no settings at all.
+                if (newSensing || newAgreementBody.trim()) {
+                    payload.settings = applyCourseFields({}, {
+                        sensing: newSensing, title: newAgreementTitle, body: newAgreementBody,
+                    });
+                }
             }
             const created = await createCohort(
                 Object.keys(payload).length === 1 ? name : payload,
@@ -368,6 +384,14 @@ export default function CohortsManagementTab() {
                             </div>
                             <PeoplePicker mode="students" onChange={setStudentIds} />
                         </div>
+                        <CourseMeasuresAgreementFields
+                            sensing={newSensing}
+                            onSensingChange={setNewSensing}
+                            agreementTitle={newAgreementTitle}
+                            onAgreementTitleChange={setNewAgreementTitle}
+                            agreementBody={newAgreementBody}
+                            onAgreementBodyChange={setNewAgreementBody}
+                        />
                     </div>
                 )}
             </form>
@@ -1028,6 +1052,15 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
     const [defaultCaseAccess, setDefaultCaseAccess] = useState(
         baseSettings.default_case_access === true, // default off
     );
+    // Optional learning measures (Oyon) for this course — absent = off — and
+    // the optional informational agreement shown to its learners.
+    const [sensing, setSensing] = useState(baseSettings.oyon_sensing_enabled === true);
+    const [agreementTitle, setAgreementTitle] = useState(
+        typeof baseSettings.agreement?.title === 'string' ? baseSettings.agreement.title : '',
+    );
+    const [agreementBody, setAgreementBody] = useState(
+        typeof baseSettings.agreement?.body === 'string' ? baseSettings.agreement.body : '',
+    );
     const [saving, setSaving] = useState(false);
 
     const [addCaseOpen, setAddCaseOpen] = useState(false);
@@ -1065,7 +1098,9 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
             // classroom fields over whatever the row already held so an
             // unrelated future key is never silently dropped. Empty
             // optional values are deleted, not stored as "".
-            const settings = { ...baseSettings };
+            const settings = applyCourseFields(baseSettings, {
+                sensing, title: agreementTitle, body: agreementBody,
+            });
             const setOrDrop = (key, val) => {
                 if (val === undefined || val === '' || val === null) delete settings[key];
                 else settings[key] = val;
@@ -1340,6 +1375,15 @@ function CohortSettings({ cohort, cases, teachers, onChanged }) {
                         {t('help_policy_info')}
                     </p>
                 </section>
+
+                <CourseMeasuresAgreementFields
+                    sensing={sensing}
+                    onSensingChange={setSensing}
+                    agreementTitle={agreementTitle}
+                    onAgreementTitleChange={setAgreementTitle}
+                    agreementBody={agreementBody}
+                    onAgreementBodyChange={setAgreementBody}
+                />
 
                 <button
                     type="submit"

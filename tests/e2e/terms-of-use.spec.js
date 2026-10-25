@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from './fixtures/index.js';
 import { apiAsAdmin } from './fixtures/seed.js';
+import { DEFAULT_TERMS_VERSION } from '../../server/shared/terms.js';
 import { request as pwRequest } from '@playwright/test';
 
 const STAMP = Date.now();
@@ -64,7 +65,7 @@ test.describe('terms of use', () => {
         await page.goto('/');
         await page.getByRole('button', { name: 'Terms of use' }).click();
         await expect(page.getByRole('heading', { name: /Learning Analytics Principles and Agreement/ })).toBeVisible();
-        await expect(page.getByText('Your privacy is guaranteed.', { exact: false })).toBeVisible();
+        await expect(page.getByText('It recreates selected aspects of clinical encounters', { exact: false })).toBeVisible();
         await page.getByRole('button', { name: 'Back' }).click();
         await expect(page.getByRole('button', { name: 'Terms of use' })).toBeVisible();
     });
@@ -101,7 +102,7 @@ test.describe('terms of use', () => {
             await expect(page.getByRole('heading', { name: /Learning Analytics Principles and Agreement/ })).toHaveCount(0, { timeout: 15_000 });
 
             const status = await (await page.request.get('/api/terms/status', { headers: { Authorization: `Bearer ${token}` } })).json();
-            expect(status.terms).toMatchObject({ accepted: true, pending: false, version: '1.0' });
+            expect(status.terms).toMatchObject({ accepted: true, pending: false, version: DEFAULT_TERMS_VERSION });
 
             await page.reload();
             await page.waitForLoadState('networkidle');
@@ -113,7 +114,7 @@ test.describe('terms of use', () => {
         // The requirement applies to admins too: accept first, as a real admin would.
         const admin = await apiAsAdmin(baseURL);
         try {
-            const res = await admin.post('/api/terms/accept', { data: { version: '1.0' } });
+            const res = await admin.post('/api/terms/accept', { data: { version: DEFAULT_TERMS_VERSION } });
             expect(res.ok(), await res.text()).toBeTruthy();
         } finally { await admin.dispose(); }
         await adminPage.addInitScript(() => {
@@ -126,7 +127,7 @@ test.describe('terms of use', () => {
         const heading = adminPage.getByRole('heading', { name: 'Terms of use' });
         await expect(heading).toBeVisible({ timeout: 15_000 });
         const panel = heading.locator('xpath=ancestor::div[contains(@class,"rounded-lg")][1]');
-        await expect(panel.getByText(/active accounts have accepted version 1\.0/)).toBeVisible();
+        await expect(panel.getByText(`active accounts have accepted version ${DEFAULT_TERMS_VERSION}`, { exact: false })).toBeVisible();
         await expect(panel.getByLabel('Require acceptance')).toBeChecked();
         await panel.scrollIntoViewIfNeeded();
         await panel.screenshot({ path: path.join(SHOTS, 'terms-settings.png') });

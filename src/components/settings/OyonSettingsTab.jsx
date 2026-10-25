@@ -386,6 +386,14 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                   </span>
                </span>
             </label>
+            {/* Sensing is per course (server/lib/oyonSensingGate.js). The
+                checkbox stays usable: it records the learner's choice for when
+                a course enables the measures. */}
+            {config?.course_sensing_required === true && config?.course_sensing_enabled === false && (
+               <p data-testid="oyon-no-course-note" className="text-xs text-amber-200/80 px-1">
+                  Optional learning measures are not enabled for any of your courses.
+               </p>
+            )}
 
             <OwnOyonData />
          </section>

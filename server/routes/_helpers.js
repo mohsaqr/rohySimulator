@@ -261,7 +261,7 @@ function liveUntil(column) {
  * because cohort windows are stored as ISO strings while CURRENT_TIMESTAMP
  * columns use 'YYYY-MM-DD HH:MM:SS' — the two are not lexically comparable.
  */
-const ACTIVE_MEMBERSHIP = `
+export const ACTIVE_MEMBERSHIP = `
            co.deleted_at IS NULL
            AND cm.deleted_at IS NULL
            AND cm.status = 'active'

@@ -18,6 +18,7 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import { mintToken } from '../utils/authHttp.js';
+import { enrollInSensingCourse } from '../utils/oyonCourse.js';
 
 const SECRET = 'oyon-routes-tests-secret';
 
@@ -77,6 +78,8 @@ describe('assertOyonReadAccess across Oyon read endpoints', () => {
         const admin = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oroute_admin']);
         const edu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oroute_edu']);
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['oroute_stu']);
+        // Oyon course gate: the student is in a course that enables sensing.
+        await enrollInSensingCourse(db, stu.id);
         await dbClose(db);
 
         adminTok = await tokenFor(server.dbPath, { id: admin.id, username: 'oroute_admin', role: 'admin', tenant_id: 1 }, 'a');

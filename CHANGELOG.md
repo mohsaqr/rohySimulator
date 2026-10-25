@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.86] — 2026-10-25
+
+- **Optional learning measures (Oyon) are switched on per course, by the teacher.** A learner is measured only when
+  the platform has Oyon enabled, they are an active member of a current course that enables it, and they opted in
+  themselves. Staff keep the platform switch alone. The server enforces it: emotion records, signal events and consent
+  grants from a learner without such a course get `403 sensing_not_enabled_for_course` and nothing is written;
+  consent withdrawal and self-service deletion are always allowed. `/addons/oyon/config` adds
+  `course_sensing_required` / `course_sensing_enabled`, and Settings → Oyon tells a learner when none of their courses
+  enables it.
+- **A course can carry an optional agreement** (licence, research information, course rules) in Markdown, with a
+  preview, shown to learners under "My classes". Rohy shows it and records no acceptance; the course form states that
+  obtaining agreements is the teacher's responsibility and may happen outside Rohy, including on paper.
+- Course settings are validated (`oyon_sensing_enabled` boolean; agreement title ≤ 200 chars, body ≤ 64 KB);
+  `GET /cohorts/mine` no longer returns the raw settings blob.
+- e2e: the Oyon specs turn capture on and enrol their learners in an Oyon-enabled course, and the terms spec follows
+  the 1.1 text — the CI failures of rc.85. New interface strings are machine-translated (unreviewed).
+
 ## [3.0.0-rc.85] — 2026-10-25
 
 - **New terms of use (agreement version 1.1).** The default agreement is rewritten as terms of use: Rohy is an

@@ -19,6 +19,7 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import { mintToken } from '../utils/authHttp.js';
+import { enrollInSensingCourse } from '../utils/oyonCourse.js';
 import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
 import { TYPING_MAX_INTERVALS } from '../../src/components/oyon/useSignalCapture.js';
 
@@ -164,6 +165,8 @@ describe('Oyon 3 modality-scoped window ingest', () => {
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['osw_stu']);
         const edu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['osw_edu']);
         const admin = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['osw_admin']);
+        // Oyon course gate: the student is in a course that enables sensing.
+        await enrollInSensingCourse(db, stu.id);
 
         // Session owned by the student — POST requires the session owner.
         await dbRun(db,
@@ -465,6 +468,8 @@ describe('consent v2 gate for host-driven modalities', () => {
             `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
              VALUES ('cg_stu', 'cg_stu', ?, 'cg@example.com', 'student', 'active', 1)`, [pwd]);
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['cg_stu']);
+        // Oyon course gate: the student is in a course that enables sensing.
+        await enrollInSensingCourse(db, stu.id);
         v1Session = await seedSession(db, stu.id, 'oyon-consent-v1');
         v2Session = await seedSession(db, stu.id, 'oyon-consent-v2');
         await dbClose(db);
@@ -595,6 +600,8 @@ describe('consent v3 gate for voice', () => {
             `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
              VALUES ('v3_stu', 'v3_stu', ?, 'v3@example.com', 'student', 'active', 1)`, [pwd]);
         const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['v3_stu']);
+        // Oyon course gate: the student is in a course that enables sensing.
+        await enrollInSensingCourse(db, stu.id);
         v2Session = await seedSession(db, stu.id, 'oyon-consent-v2');
         v3Session = await seedSession(db, stu.id, 'oyon-consent-v3');
         await dbClose(db);
@@ -779,6 +786,8 @@ describe('session consent row is server-authoritative', () => {
             `INSERT INTO users (username, name, password_hash, email, role, status, tenant_id)
              VALUES ('xd_stu', 'xd_stu', ?, 'xd@example.com', 'student', 'active', 1)`, [pwd]);
         userId = (await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['xd_stu'])).id;
+        // Oyon course gate: the student is in a course that enables sensing.
+        await enrollInSensingCourse(db, userId);
         await dbClose(db);
         tok = await tokenFor(server.dbPath, { id: userId, username: 'xd_stu', role: 'student', tenant_id: 1 }, 'xd-s');
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });

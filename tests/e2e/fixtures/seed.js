@@ -85,6 +85,86 @@ export async function offerCaseToStudents(baseURL, caseId) {
 }
 
 /**
+ * Make Oyon capture possible for the named learners, the way a deployment
+ * would after rc.85 / the per-course rule (server/lib/oyonSensingGate.js):
+ *
+ *  1. an admin turns tenant capture on — a fresh install starts with it OFF.
+ *     PUT /addons/oyon/settings REPLACES its booleans (an absent field becomes
+ *     0), so this is GET → spread → PUT, with any extra `flags` on top;
+ *  2. the DEFAULT course gets `settings.oyon_sensing_enabled: true` (merged —
+ *     PATCH replaces settings wholesale), and each learner is enrolled in it
+ *     explicitly. A learner is sensed only while an active member of a course
+ *     that enables it. The default course is used rather than a new one
+ *     because joining any other course would cost the learner the default
+ *     course's cases (studentCaseVisibility / ensureAutoEnrollMemberships).
+ *
+ * Returns the tenant Oyon settings as they were, for restoreOyonSettings().
+ * The default course keeps sensing on: without tenant capture it does nothing.
+ *
+ * @param {string} baseURL
+ * @param {string[]} usernames  learners to enrol (e.g. ['student'])
+ * @param {object} [flags]      extra Oyon setting overrides (e.g. { voice_enabled: true })
+ */
+export async function enableOyonForLearners(baseURL, usernames, flags = {}) {
+    const ctx = await apiAsAdmin(baseURL);
+    try {
+        const got = await ctx.get('/api/addons/oyon/settings');
+        if (!got.ok()) throw new Error(`GET /api/addons/oyon/settings failed (${got.status()}): ${await got.text()}`);
+        const original = (await got.json()).settings;
+        const put = await ctx.put('/api/addons/oyon/settings', {
+            data: { ...original, emotion_capture_enabled: true, ...flags },
+        });
+        if (!put.ok()) throw new Error(`PUT /api/addons/oyon/settings failed (${put.status()}): ${await put.text()}`);
+
+        await enrollInOyonCourse(baseURL, usernames);
+        return original;
+    } finally {
+        await ctx.dispose();
+    }
+}
+
+/**
+ * Turn on `oyon_sensing_enabled` in the DEFAULT course (merged into its
+ * settings) and enrol each learner in it explicitly. See enableOyonForLearners.
+ */
+export async function enrollInOyonCourse(baseURL, usernames) {
+    const ctx = await apiAsAdmin(baseURL);
+    try {
+        const listed = await ctx.get('/api/cohorts');
+        if (!listed.ok()) throw new Error(`GET /api/cohorts failed (${listed.status()}): ${await listed.text()}`);
+        const course = ((await listed.json()).cohorts || []).find((c) => c.is_default);
+        if (!course) throw new Error('no default course to enable Oyon in');
+        let settings = {};
+        try { settings = course.settings ? JSON.parse(course.settings) : {}; } catch { settings = {}; }
+        if (settings.oyon_sensing_enabled !== true) {
+            const res = await ctx.patch(`/api/cohorts/${course.id}`, {
+                data: { name: course.name, settings: { ...settings, oyon_sensing_enabled: true } },
+            });
+            if (!res.ok()) throw new Error(`PATCH /api/cohorts/${course.id} failed (${res.status()}): ${await res.text()}`);
+        }
+        for (const identifier of usernames) {
+            // Idempotent: an existing live membership is reported, not duplicated.
+            const res = await ctx.post(`/api/cohorts/${course.id}/members`, { data: { identifier } });
+            if (!res.ok()) throw new Error(`enrolling ${identifier} failed (${res.status()}): ${await res.text()}`);
+        }
+    } finally {
+        await ctx.dispose();
+    }
+}
+
+/** Put the tenant Oyon settings back as enableOyonForLearners() found them. */
+export async function restoreOyonSettings(baseURL, original) {
+    if (!original) return;
+    const ctx = await apiAsAdmin(baseURL);
+    try {
+        const res = await ctx.put('/api/addons/oyon/settings', { data: original });
+        if (!res.ok()) throw new Error(`PUT /api/addons/oyon/settings failed (${res.status()}): ${await res.text()}`);
+    } finally {
+        await ctx.dispose();
+    }
+}
+
+/**
  * Find the first case matching a predicate or name. Returns null if not
  * found — caller decides whether that's fatal.
  */

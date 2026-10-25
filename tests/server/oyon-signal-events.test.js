@@ -16,6 +16,7 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import { mintToken } from '../utils/authHttp.js';
+import { enrollInSensingCourse } from '../utils/oyonCourse.js';
 
 const SECRET = 'oyon-signal-events-tests-secret';
 
@@ -100,6 +101,8 @@ describe('Oyon signal events', () => {
             const stu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['ose_stu']);
             const other = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['ose_other']);
             const edu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['ose_edu']);
+            // Oyon course gate: the student is in a course that enables sensing.
+            await enrollInSensingCourse(db, stu.id);
 
             const session = async (version) => {
                 await dbRun(db,

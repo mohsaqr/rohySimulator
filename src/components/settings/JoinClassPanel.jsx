@@ -1,9 +1,44 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GraduationCap, Loader2, Users } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, FileText, GraduationCap, Loader2, Users } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
 import { joinCohort, getMyCohorts } from '../../services/cohortsService';
+import TermsDocument from '../terms/TermsDocument';
+
+// A course's optional agreement (licence, research information, course
+// rules), shown read-only with the terms page's renderer. Informational only:
+// Rohy records no acceptance — the teacher obtains any agreement needed,
+// possibly outside Rohy.
+function CourseAgreement({ agreement }) {
+    const { t } = useTranslation('profile');
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="mt-2">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1"
+            >
+                {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                <FileText className="w-3.5 h-3.5" />
+                {t('my_classes_agreement')}
+            </button>
+            {open && (
+                <div
+                    data-testid="learner-course-agreement"
+                    className="mt-2 p-3 bg-neutral-900 border border-neutral-700 rounded-lg max-h-80 overflow-y-auto"
+                >
+                    {agreement.title && (
+                        <h4 className="text-sm font-semibold text-neutral-100 mb-2">{agreement.title}</h4>
+                    )}
+                    <TermsDocument body={agreement.body} />
+                </div>
+            )}
+        </div>
+    );
+}
 
 // Minimal student self-join: enter a join code shared by a teacher.
 // Lives inside UserProfilePanel so every user (incl. students) can reach it
@@ -131,6 +166,13 @@ export default function JoinClassPanel() {
                                             {t('my_classes_joined', { date: joined })}
                                         </div>
                                     )}
+                                    {cls.oyon_sensing_enabled && (
+                                        <div className="text-xs text-neutral-400 mt-1 flex items-center gap-1">
+                                            <Activity className="w-3.5 h-3.5" />
+                                            {t('my_classes_oyon_on')}
+                                        </div>
+                                    )}
+                                    {cls.agreement?.body && <CourseAgreement agreement={cls.agreement} />}
                                 </li>
                             );
                         })}

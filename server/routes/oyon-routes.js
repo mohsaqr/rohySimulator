@@ -16,6 +16,7 @@ const learnerLabels = (req, payload) => withLearnerCaseLabels(payload, req.user.
 import { logger } from '../logger.js';
 import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
 import { DEFAULT_RUNTIME, ensureSettings } from '../lib/oyonSettings.js';
+import { SENSING_COURSE_ERROR_CODE, resolveSensingGate } from '../lib/oyonSensingGate.js';
 import { SQL_NOW } from '../shared/time.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -165,11 +166,36 @@ router.use('/assets', express.static(ASSET_ROOT, {
 // observes every Oyon response. Exposed via GET /admin/health below.
 router.use(rejectionMiddleware);
 
+// Refuse a learner whose courses do not enable sensing (server/lib/oyonSensingGate.js).
+// Returns true when it has answered the request. Called by every learner WRITE
+// endpoint before anything is written; never by the own-data read/delete.
+async function refuseWithoutSensingCourse(req, res, settings) {
+    const gate = await resolveSensingGate(req.user, tenantId(req), settings);
+    if (!gate.courseRule || gate.courseOpen) return false;
+    (req.log || oyonLog).warn('oyon write refused: no course enables sensing', {
+        user_id: req.user?.id,
+        path: req.path,
+    });
+    res.status(403).json({
+        error: 'Optional learning measures are not enabled for any of your courses',
+        code: SENSING_COURSE_ERROR_CODE,
+    });
+    return true;
+}
+
 router.get('/config', authenticateToken, async (req, res) => {
     const settings = await ensureSettings(tenantId(req));
     const runtime = runtimeFromSettings(settings);
+    const gate = await resolveSensingGate(req.user, tenantId(req), settings);
     res.json({
-        enabled: Boolean(settings.emotion_capture_enabled),
+        // For a learner: tenant switch AND an active course that enables
+        // sensing. For staff: the tenant switch alone.
+        enabled: gate.allowed,
+        // Whether the per-course rule applies to the caller (learners), and if
+        // so whether one of their courses enables sensing — lets the UI say
+        // why capture is unavailable. course_sensing_enabled is null for staff.
+        course_sensing_required: gate.courseRule,
+        course_sensing_enabled: gate.courseOpen,
         consent_version: requiredConsentVersion(settings),
         views: {
             admin: Boolean(settings.admin_emotion_view_enabled),
@@ -321,6 +347,9 @@ router.post('/consent', authenticateToken, async (req, res) => {
     }
 
     const granted = req.body?.consent_granted === true;
+    // A GRANT needs a course that enables sensing; a withdrawal is always
+    // recorded — refusing someone's "no" would be the wrong way round.
+    if (granted && await refuseWithoutSensingCourse(req, res, settings)) return;
     await dbRun(
         `INSERT INTO oyon_emotion_consents (
             tenant_id, user_id, student_id, session_id, case_id,
@@ -370,6 +399,7 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
     if (!settings.emotion_capture_enabled) {
         return res.status(403).json({ error: 'Oyon is disabled' });
     }
+    if (await refuseWithoutSensingCourse(req, res, settings)) return;
 
     const validation = validateEmotionBatch(req.body, {
         maxBatchEvents: 64,
@@ -681,6 +711,7 @@ router.post('/signal-events', authenticateToken, async (req, res) => {
     if (!settings.emotion_capture_enabled) {
         return res.status(403).json({ error: 'Oyon is disabled' });
     }
+    if (await refuseWithoutSensingCourse(req, res, settings)) return;
 
     const events = req.body?.events;
     if (!Array.isArray(events) || events.length === 0 || events.length > MAX_SIGNAL_EVENTS_PER_BATCH) {

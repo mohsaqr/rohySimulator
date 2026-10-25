@@ -35,7 +35,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from './fixtures/index.js';
-import { apiAsAdmin, offerCaseToStudents } from './fixtures/seed.js';
+import { enableOyonForLearners, restoreOyonSettings, apiAsAdmin, offerCaseToStudents } from './fixtures/seed.js';
 import { request as pwRequest } from '@playwright/test';
 import { loginAs } from './fixtures/auth.js';
 import { TypingAggregator } from '../../OyonR/src/aggregation/TypingAggregator.js';
@@ -259,6 +259,8 @@ async function openNetworkSource(page, source) {
 }
 
 test.describe('oyon signal analytics', () => {
+    let originalOyon;
+
     test.beforeAll(async ({ baseURL }) => {
         const admin = await apiAsAdmin(baseURL);
         try {
@@ -268,6 +270,9 @@ test.describe('oyon signal analytics', () => {
             });
             expect(created.ok(), await created.text()).toBeTruthy();
         } finally { await admin.dispose(); }
+        // rc.85: a fresh install starts with capture OFF, and a learner is sensed
+        // only in a course that enables Oyon — turn both on (restored in afterAll).
+        originalOyon = await enableOyonForLearners(baseURL, ['student', SECOND.username]);
         await setTenantVoice(baseURL, true);
 
         const admin2 = await apiAsAdmin(baseURL);
@@ -351,6 +356,7 @@ test.describe('oyon signal analytics', () => {
 
     test.afterAll(async ({ baseURL }) => {
         await setTenantVoice(baseURL, false);
+        await restoreOyonSettings(baseURL, originalOyon);
     });
 
     test('the Text tab summarises typing per learner, each learner counting once', async ({ adminPage }) => {
