@@ -9,6 +9,11 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.84] — 2026-10-25
+
+- **Test suite:** the body-map audit test polls for the audit row the server appends after answering (the same
+  fire-and-forget race the upload test already waited for); it failed on a slow CI runner.
+
 ## [3.0.0-rc.83] — 2026-10-25
 
 - **Docs:** API reference regenerated after rc.82 (the voice-settings handler moved, and the reference records source

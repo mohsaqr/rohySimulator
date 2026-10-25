@@ -140,8 +140,15 @@ describe('POST /api/bodymap-regions', () => {
         const res = await save('admin', { regions });
         expect(res.status).toBe(200);
         expect(JSON.parse(fs.readFileSync(regionsFile, 'utf8'))).toEqual({ regions });
+        // The audit row is appended after the response (see the upload test above): poll briefly.
         const db = await openDb(server.dbPath);
-        const rows = await all(db, `SELECT action FROM system_audit_log WHERE action = 'save_bodymap_regions'`);
+        const read = () => all(db, `SELECT action FROM system_audit_log WHERE action = 'save_bodymap_regions'`);
+        const deadline = Date.now() + 3000;
+        let rows = await read();
+        while (rows.length === 0 && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 50));
+            rows = await read();
+        }
         await closeDb(db);
         expect(rows.length).toBe(1);
     });
