@@ -14,16 +14,21 @@
 // guessing at a Start affordance that varies by build.
 
 import { test, expect, waitForSeed } from './fixtures/index.js';
-import { enterLiveCase, learnerApi, disposeLearnerApi, pickCase, room, readClock, expectClockMatchesSession, ageSession }
+import { enterLiveCase, learnerApi, disposeLearnerApi, pickCase, pickExaminationRoomCase, room, readClock, expectClockMatchesSession, ageSession }
     from './fixtures/liveCase.js';
 
 const RUN_TAG = `e2e-rooms-${Date.now()}`;
 
 let theCase;
+// The seeded case examines at the 3D bedside, and a case has ONE examination
+// room (server/shared/caseRooms.js): a test that needs the body-map
+// Examination room plays this copy of it.
+let examCase;
 
 test.beforeAll(async ({ baseURL }) => {
     await waitForSeed(baseURL);
     theCase = await pickCase(baseURL);
+    examCase = await pickExaminationRoomCase(baseURL, `${RUN_TAG} examination room`);
 });
 
 test.afterAll(disposeLearnerApi);
@@ -155,6 +160,9 @@ test.describe('the room bar', () => {
         const keys = await page.locator('[data-testid^="room-button-"]').evaluateAll(
             (els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
         expect(keys.length, 'the bar offers rooms').toBeGreaterThanOrEqual(5);
+        // One examination room per case: never the Examination room and the
+        // bedside side by side.
+        expect(keys.filter((key) => key === 'examination' || key === 'room3d'), 'one examination room').toHaveLength(1);
         for (const key of keys) {
             const btn = room(page, key);
             await expect(btn, `${key} is offered in the bar`).toBeVisible();
@@ -285,7 +293,7 @@ test.describe('coming back to a case', () => {
     test('a reload comes back to the same room, with the clock carrying on', async ({ page, baseURL }) => {
         const said = `${RUN_TAG} reload my left arm feels heavy`;
         const answered = `${RUN_TAG} reload since when`;
-        const sessionId = await enterLiveCase(page, baseURL, `${RUN_TAG}-reload`, theCase, {
+        const sessionId = await enterLiveCase(page, baseURL, `${RUN_TAG}-reload`, examCase, {
             beforeOpen: (id, ctx) => recordTurns(ctx, id, [said, answered]),
         });
         const { start_time: startTime } = await sessionRow(baseURL, sessionId);

@@ -1,7 +1,8 @@
 // The case wizard's Rooms step: switching a room off writes config.rooms, the
 // patient room cannot be switched off, material is kept, and the author is told
 // which specialists will not answer and what End & Debrief does without the
-// debrief room.
+// debrief room. The examination room and the 3D bedside are ONE radio group:
+// a case has one examination room (server/shared/caseRooms.js).
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { useEffect, useState } from 'react';
@@ -23,37 +24,77 @@ afterEach(() => {
 });
 
 describe('CaseRoomsStep', () => {
-    it('lists every room on by default but the bedside, with the patient room locked on', () => {
+    it('lists every other room on by default, with the patient room locked on', () => {
         render(<Harness initialConfig={{}} />);
         expect(screen.queryByTestId('room-toggle-chat')).toBeNull();
         expect(screen.getByText('Always on')).toBeInTheDocument();
-        for (const key of ['examination', 'lab', 'radiology', 'consultant']) {
+        for (const key of ['lab', 'radiology', 'consultant']) {
             expect(screen.getByTestId(`room-toggle-${key}`)).toHaveAttribute('aria-checked', 'true');
         }
-        // The bedside examines too, so it is off unless switched on.
-        expect(screen.getByTestId('room-toggle-room3d')).toHaveAttribute('aria-checked', 'false');
-        expect(screen.getByText(/it examines the patient too/)).toBeInTheDocument();
     });
 
-    it('switches the bedside on through rooms.enabled, and off again to no setting', () => {
-        render(<Harness initialConfig={{}} />);
-        fireEvent.click(screen.getByTestId('room-toggle-room3d'));
-        expect(latest.config.rooms).toEqual({ enabled: ['room3d'] });
-        expect(screen.getByTestId('room-toggle-room3d')).toHaveAttribute('aria-checked', 'true');
-        fireEvent.click(screen.getByTestId('room-toggle-room3d'));
-        expect(latest.config).not.toHaveProperty('rooms');
+    describe('the examination room', () => {
+        const choice = (value) => screen.getByTestId(`room-exam-${value}`);
+
+        it('is one radio group, not two switches, and defaults to the physical examination', () => {
+            render(<Harness initialConfig={{}} />);
+            // Regression lock: the examination room and the bedside were two
+            // independent switches, so a case could offer both.
+            expect(screen.queryByTestId('room-toggle-examination')).toBeNull();
+            expect(screen.queryByTestId('room-toggle-room3d')).toBeNull();
+            expect(screen.getByRole('group', { name: 'Examination room' })).toBeInTheDocument();
+            expect(screen.getByRole('radio', { name: 'Physical examination (default)' })).toBeChecked();
+            expect(screen.getByRole('radio', { name: '3D Bedside' })).not.toBeChecked();
+            expect(screen.getByRole('radio', { name: 'None' })).not.toBeChecked();
+            expect(screen.getByTestId('room-exam-choice')).toHaveAttribute('data-choice', 'examination');
+        });
+
+        it('choosing the 3D bedside removes the examination room; choosing the physical examination clears the bedside to no setting', () => {
+            render(<Harness initialConfig={{ patient_name: 'Ada' }} />);
+            fireEvent.click(choice('room3d'));
+            expect(latest.config.rooms).toEqual({ enabled: ['room3d'] });
+            expect(choice('room3d')).toBeChecked();
+            expect(choice('examination')).not.toBeChecked();
+            expect(screen.getByTestId('room-exam-choice')).toHaveAttribute('data-choice', 'room3d');
+
+            fireEvent.click(choice('examination'));
+            // Back at the defaults: no setting stored at all.
+            expect(latest.config).not.toHaveProperty('rooms');
+            expect(latest.config.patient_name).toBe('Ada');
+        });
+
+        it('reads an old bedside config as the bedside alone', () => {
+            render(<Harness initialConfig={{ rooms: { enabled: ['room3d'] } }} />);
+            expect(choice('room3d')).toBeChecked();
+            expect(choice('examination')).not.toBeChecked();
+        });
+
+        it('None switches the examination room off and keeps the bedside off, keeping other rooms', () => {
+            render(<Harness initialConfig={{ rooms: { enabled: ['room3d'], disabled: ['lab'] } }} />);
+            fireEvent.click(choice('none'));
+            expect(latest.config.rooms).toEqual({ disabled: ['examination', 'lab'] });
+            expect(choice('none')).toBeChecked();
+            expect(screen.getByTestId('room-exam-note')).toHaveTextContent('learners cannot examine the patient');
+            fireEvent.click(choice('examination'));
+            expect(latest.config.rooms).toEqual({ disabled: ['lab'] });
+        });
+
+        it('says examination material is kept when the case has no examination room', () => {
+            render(<Harness initialConfig={{ physical_exam: { chest: { auscultation: { finding: 'clear' } } }, rooms: { disabled: ['examination'] } }} />);
+            expect(screen.getByTestId('room-exam-note')).toHaveTextContent('Material configured for this room is kept');
+        });
     });
 
     it('switches a room off into config.rooms.disabled, and back on to no setting at all', () => {
         render(<Harness initialConfig={{ patient_name: 'Ada' }} />);
         fireEvent.click(screen.getByTestId('room-toggle-lab'));
-        fireEvent.click(screen.getByTestId('room-toggle-examination'));
-        expect(latest.config.rooms).toEqual({ disabled: ['examination', 'lab'] });
+        fireEvent.click(screen.getByTestId('room-toggle-radiology'));
+        expect(latest.config.rooms).toEqual({ disabled: ['lab', 'radiology'] });
         expect(latest.config.patient_name).toBe('Ada');
         expect(screen.getByTestId('room-toggle-lab')).toHaveAttribute('aria-checked', 'false');
 
         fireEvent.click(screen.getByTestId('room-toggle-lab'));
-        fireEvent.click(screen.getByTestId('room-toggle-examination'));
+        fireEvent.click(screen.getByTestId('room-toggle-radiology'));
         expect(latest.config).not.toHaveProperty('rooms');
     });
 

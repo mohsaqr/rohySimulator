@@ -25,10 +25,12 @@ import { createAssignedCase, enterLiveCase, disposeLearnerApi, pickCase, room } 
 const RUN_TAG = `e2e-oncall-${Date.now()}`;
 
 let theCase;
-// The bedside is off by default (it duplicates the examination room), and it
-// is the overlay that once hid the phone — so the every-room test plays a case
-// that switches it on.
+// The bedside is off by default, and it is the overlay that once hid the phone
+// — so the every-room test plays a case that chooses it. A case has ONE
+// examination room (server/shared/caseRooms.js), so the bedside case has no
+// Examination room: the test also plays a plain case for that one.
 let bedsideCase;
+let examCase;
 
 test.beforeAll(async ({ baseURL }) => {
     await waitForSeed(baseURL);
@@ -36,6 +38,10 @@ test.beforeAll(async ({ baseURL }) => {
     bedsideCase = await createAssignedCase(baseURL, {
         name: `${RUN_TAG} bedside on`,
         config: { patient_name: 'Phone Example', demographics: { age: 50, gender: 'Male' }, rooms: { enabled: ['room3d'] } },
+    });
+    examCase = await createAssignedCase(baseURL, {
+        name: `${RUN_TAG} examination room`,
+        config: { patient_name: 'Phone Example', demographics: { age: 50, gender: 'Male' } },
     });
 });
 
@@ -55,26 +61,33 @@ async function pressAtCentre(page, locator, what) {
 
 test.describe('the on-call phone', () => {
     test('opens from every room in the bar, the bedside overlay included', async ({ page, baseURL }) => {
-        // Six rooms, one of them a WebGL scene, after entering a case: past
+        // Two cases of five or six rooms, one a WebGL scene: past
         // the 30 s default on a busy runner.
-        test.setTimeout(120_000);
-        await enterLiveCase(page, baseURL, `${RUN_TAG}-rooms`, bedsideCase);
-        // Not vacuous: the bar must hold the core rooms and the bedside
-        // overlay — that is the one that hid the phone. Polled: the case's
-        // rooms are known once the session snapshot lands.
-        const readKeys = () => page.locator('[data-testid^="room-button-"]')
-            .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
-        await expect.poll(readKeys).toEqual(expect.arrayContaining(['chat', 'room3d', 'examination', 'lab', 'radiology', 'consultant']));
-        const keys = await readKeys();
+        test.setTimeout(180_000);
+        for (const [tag, theRoomsCase, examRoom, otherRoom] of [
+            ['rooms-bedside', bedsideCase, 'room3d', 'examination'],
+            ['rooms-exam', examCase, 'examination', 'room3d'],
+        ]) {
+            await enterLiveCase(page, baseURL, `${RUN_TAG}-${tag}`, theRoomsCase);
+            // Not vacuous: the bar must hold the core rooms and the case's
+            // examination room — the bedside overlay is the one that hid the
+            // phone. Polled: the case's rooms are known once the session snapshot
+            // lands.
+            const readKeys = () => page.locator('[data-testid^="room-button-"]')
+                .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
+            await expect.poll(readKeys).toEqual(expect.arrayContaining(['chat', examRoom, 'lab', 'radiology', 'consultant']));
+            const keys = await readKeys();
+            expect(keys, `${tag}: one examination room`).not.toContain(otherRoom);
 
-        for (const key of keys) {
-            await pressAtCentre(page, room(page, key), `the ${key} room button`);
-            await expect(room(page, key), key).toHaveAttribute('aria-pressed', 'true');
-            await expect(phoneButton(page), `one phone in ${key}`).toHaveCount(1);
-            await pressAtCentre(page, phoneButton(page), `the phone in ${key}`);
-            await expect(handset(page), `the handset opens from ${key}`).toBeVisible();
-            await pressAtCentre(page, phoneButton(page), `the phone in ${key}`);
-            await expect(handset(page), `the handset closes from ${key}`).toBeHidden();
+            for (const key of keys) {
+                await pressAtCentre(page, room(page, key), `the ${key} room button`);
+                await expect(room(page, key), key).toHaveAttribute('aria-pressed', 'true');
+                await expect(phoneButton(page), `one phone in ${key}`).toHaveCount(1);
+                await pressAtCentre(page, phoneButton(page), `the phone in ${key}`);
+                await expect(handset(page), `the handset opens from ${key}`).toBeVisible();
+                await pressAtCentre(page, phoneButton(page), `the phone in ${key}`);
+                await expect(handset(page), `the handset closes from ${key}`).toBeHidden();
+            }
         }
     });
 

@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { DoorOpen, Lock, Info } from 'lucide-react';
 import { ROOM_DEFS } from '../common/RoomNavigator';
-import { DEFAULT_OFF_ROOMS, FIXED_ROOMS, disabledRooms, specialistAnswers, withRoom } from '../../../server/shared/caseRooms.js';
+import {
+    BEDSIDE, EXAMINATION, FIXED_ROOMS, disabledRooms, examinationRoomOf, specialistAnswers, withExaminationRoom, withRoom,
+} from '../../../server/shared/caseRooms.js';
 import { SPECIALIST_TYPES } from '../../../server/shared/specialties.js';
 import { SPECIALTY_LABEL_KEYS } from '../oncall/onCallModel';
 
@@ -9,6 +11,10 @@ const SWITCH_ON = 'var(--rohy-accent, #0d9488)';
 const SWITCH_OFF = 'var(--rohy-border-strong, #737373)';
 
 const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// The pair a case chooses ONE of (caseRooms.js): shown as one radio group, not
+// as two switches that could both be on.
+const EXAM_PAIR = [EXAMINATION, BEDSIDE];
 
 // Whether the case carries material a switched-off room would have shown. Only
 // a hint for the author ("kept, hidden from learners"), never a rule: a
@@ -30,6 +36,11 @@ function hasMaterial(config, key) {
  *
  * Room names and icons are the room bar's own (ROOM_DEFS), so the switch an
  * author sees is the tab a learner would have seen.
+ *
+ * The examination room and the 3D bedside are ONE choice — a case has one
+ * examination room — so they are a radio group (Physical examination /
+ * 3D Bedside / None), written through withExaminationRoom(). The bedside
+ * option is offered only when its plugin is installed (it is in ROOM_DEFS).
  */
 export function CaseRoomsStep({ caseData, setCaseData }) {
     // One hook, three namespaces: the room bar's labels live in `common` and
@@ -50,7 +61,26 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
         });
     };
 
+    const chooseExamRoom = (choice) => {
+        setCaseData((prev) => {
+            const { rooms: previous, ...rest } = prev.config ?? {};
+            const rooms = withExaminationRoom(previous, choice);
+            return { ...prev, config: rooms ? { ...rest, rooms } : rest };
+        });
+    };
+
     const silent = SPECIALIST_TYPES.filter((type) => !specialistAnswers(type, config));
+    const examRoom = examinationRoomOf(config);
+    const bedsideInstalled = ROOM_DEFS.some((room) => room.key === BEDSIDE);
+    const examChoices = [
+        { value: EXAMINATION, label: t('rooms_exam_choice_examination') },
+        ...(bedsideInstalled ? [{ value: BEDSIDE, label: t('rooms_exam_choice_room3d') }] : []),
+        { value: null, label: t('rooms_exam_choice_none') },
+    ];
+    let examNote = t('rooms_exam_group_help');
+    if (examRoom === null) {
+        examNote = hasMaterial(config, EXAMINATION) ? t('rooms_material_kept') : t('rooms_exam_none_note');
+    }
 
     return (
         <div className="space-y-4" data-testid="case-rooms-step">
@@ -59,8 +89,37 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                 <p className="text-sm text-neutral-400">{t('rooms_step_help')}</p>
             </div>
 
+            <fieldset
+                data-testid="room-exam-choice"
+                data-choice={examRoom ?? 'none'}
+                className="px-4 py-3 rounded-lg border bg-neutral-800/60 border-neutral-700"
+            >
+                <legend className="sr-only">{t('rooms_exam_group_label')}</legend>
+                <div className="text-sm font-semibold text-neutral-100" aria-hidden="true">{t('rooms_exam_group_label')}</div>
+                <div data-testid="room-exam-note" className="text-xs text-neutral-400 mb-2">{examNote}</div>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                    {examChoices.map((choice) => {
+                        const id = `room-exam-${choice.value ?? 'none'}`;
+                        return (
+                            <label key={id} htmlFor={id} className="flex items-center gap-2 text-sm text-neutral-200 cursor-pointer">
+                                <input
+                                    id={id}
+                                    type="radio"
+                                    name="case-exam-room"
+                                    data-testid={id}
+                                    checked={examRoom === choice.value}
+                                    onChange={() => chooseExamRoom(choice.value)}
+                                    style={{ accentColor: SWITCH_ON }}
+                                />
+                                {choice.label}
+                            </label>
+                        );
+                    })}
+                </div>
+            </fieldset>
+
             <ul className="space-y-2">
-                {ROOM_DEFS.map((room) => {
+                {ROOM_DEFS.filter((room) => !EXAM_PAIR.includes(room.key)).map((room) => {
                     const fixed = FIXED_ROOMS.includes(room.key);
                     const on = fixed || !off.includes(room.key);
                     const Icon = room.icon;
@@ -68,8 +127,7 @@ export function CaseRoomsStep({ caseData, setCaseData }) {
                     let note = null;
                     if (fixed) note = t('rooms_fixed_note');
                     else if (!on && hasMaterial(config, room.key)) note = t('rooms_material_kept');
-                    else if (!on && DEFAULT_OFF_ROOMS.includes(room.key)) note = t('rooms_default_off_note');
-                    else if (on && room.isPlugin && room.key !== 'room3d' && !hasMaterial(config, room.key)) {
+                    else if (on && room.isPlugin && !hasMaterial(config, room.key)) {
                         note = t('rooms_needs_material');
                     }
                     return (

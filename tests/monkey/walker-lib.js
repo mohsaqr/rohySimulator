@@ -165,7 +165,8 @@ export function isDenied({ testid = '', name = '' } = {}, words = DENY_WORDS) {
  * Mirrors App.jsx's `enabledRooms` without importing the client plugin
  * registry (which is JSX): core rooms the case keeps, plus
  *   - room3d (the bedside) whenever it is switched on: its gate is "a case is
- *     running";
+ *     running" (and it replaces the examination room — disabledRooms() says
+ *     so, one examination room per case);
  *   - each plugin room the spec authored material for (`withMaterial`) — the
  *     spec knows what it put on the case, the walker should not re-derive the
  *     plugins' own document judgements;

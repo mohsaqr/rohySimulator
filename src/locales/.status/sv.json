@@ -2019,6 +2019,126 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.about_close": {
+    "src": "7d9eb7acb13e",
+    "tgt": "9a2f62767239",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_contact_label": {
+    "src": "2b5c3d26721a",
+    "tgt": "325eecf9d301",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_description": {
+    "src": "5b8889b1cfd9",
+    "tgt": "1337dd078f7c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_dialog_title": {
+    "src": "c3947234799b",
+    "tgt": "4b852ffb7c5c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_license_label": {
+    "src": "c011d6097bfb",
+    "tgt": "8a81b7338d6c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_load_failed": {
+    "src": "0a777d78d501",
+    "tgt": "1ee45cdd428b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_loading": {
+    "src": "ba3bbbe10d8b",
+    "tgt": "082106e13d30",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_tab_about": {
+    "src": "4efca0d10c5f",
+    "tgt": "3c815b477073",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_tab_license": {
+    "src": "c011d6097bfb",
+    "tgt": "8a81b7338d6c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_tab_notices": {
+    "src": "8fadbc8de273",
+    "tgt": "5d2a62d6c638",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_version_label": {
+    "src": "dd167905de0d",
+    "tgt": "dd167905de0d",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.about_version_unknown": {
+    "src": "b764cdc0eab7",
+    "tgt": "4ed8d2f1fc8f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.affect_consent_note": {
     "src": "1c1be1fe6260",
     "tgt": "df0eb311e6b1",
@@ -5739,6 +5859,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "authoring_config.header_about": {
+    "src": "4efca0d10c5f",
+    "tgt": "3c815b477073",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "authoring_config.header_back_to_sim": {
     "src": "e52e4d9464fd",
     "tgt": "2e6dbd5f6c00",
@@ -8499,9 +8629,59 @@
     "reviewer": null,
     "risk": "low"
   },
-  "authoring_config.rooms_default_off_note": {
-    "src": "78d27cd636a2",
-    "tgt": "dc74de441670",
+  "authoring_config.rooms_exam_choice_examination": {
+    "src": "306778d4b5be",
+    "tgt": "82f738f29868",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_exam_choice_none": {
+    "src": "dc937b598926",
+    "tgt": "e543b6175086",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_exam_choice_room3d": {
+    "src": "2a03ccef525a",
+    "tgt": "d5a291d40f82",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_exam_group_help": {
+    "src": "4c6ae6e1ddb8",
+    "tgt": "ab55b575c510",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_exam_group_label": {
+    "src": "54d70b33e140",
+    "tgt": "2d503c11990b",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "authoring_config.rooms_exam_none_note": {
+    "src": "ed3a84f8d99e",
+    "tgt": "b86378ff5480",
     "state": "machine",
     "origin": "machine",
     "locked": false,

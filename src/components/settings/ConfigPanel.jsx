@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut } from 'lucide-react';
+import { Settings, Save, Plus, Cpu, FileText, Database, Image, Loader2, Upload, Users, ClipboardList, X, FileDown, FileUp, Layers, Activity, User, Shield, Zap, Monitor, RefreshCw, Copy, Mic, Camera, ScanFace, Stethoscope, RotateCcw, LogOut, Info } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CasePluginsStep } from './CasePluginsStep.jsx';
 import { CaseRoomsStep } from './CaseRoomsStep.jsx';
@@ -32,6 +32,7 @@ import CasePackageSettings, { CasePackageExportButton, CasePackageImportButton }
 import useCasePackages from './useCasePackages.js';
 import { CaseFileError, readCaseJsonFile } from './caseImportFile.js';
 import TermsSettings from './TermsSettings';
+import AboutDialog from './AboutDialog';
 import MedicationManager from './MedicationManager';
 import TreatmentsLibraryManager from './TreatmentsLibraryManager';
 import AgentTemplateManager from './AgentTemplateManager';
@@ -446,6 +447,9 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
     const { t } = useTranslation('authoring_config');
     const { isAdmin, user } = useAuth();
     const casePackagesOn = useCasePackages(isAdmin());
+    // The About dialog (header button, full-page settings only).
+    const [showAbout, setShowAbout] = useState(false);
+    const closeAbout = useCallback(() => setShowAbout(false), []);
     // Words for a picked case file the JSON import cannot use (caseImportFile.js).
     // Never the browser's own text: FI0010.AUTHOR.03 showed Chrome's raw
     // NotReadableError, which blames "permission problems" for a file that
@@ -865,6 +869,16 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
+                            onClick={() => setShowAbout(true)}
+                            aria-haspopup="dialog"
+                            data-testid="settings-about-button"
+                            className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
+                        >
+                            <Info className="w-4 h-4" />
+                            {t('header_about')}
+                        </button>
+                        <button
+                            type="button"
                             onClick={onClose}
                             className="rohy-subtle-button px-3.5 py-2 rounded-lg flex items-center gap-2"
                         >
@@ -886,6 +900,7 @@ export default function ConfigPanel({ onClose, onLoadCase, fullPage = false, ini
                     </div>
                 )}
             </div>
+            {showAbout && <AboutDialog onClose={closeAbout} />}
 
             <div className="flex flex-1 overflow-hidden">
 

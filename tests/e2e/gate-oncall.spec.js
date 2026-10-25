@@ -7,7 +7,7 @@ import { createAssignedCase, enterLiveCase, disposeLearnerApi, room } from './fi
 const RUN_TAG = `e2e-gate-oncall-${Date.now()}`;
 const PATIENT = { patient_name: 'Phone Example', demographics: { age: 50, gender: 'Male' } };
 
-let bedsideCase;     // every room, the bedside included
+let bedsideCase;     // every room, the bedside as its examination room
 let slidesCase;      // pathology slides → a pathologist
 let ecgCase;         // an ECG record → a cardiologist
 let plainCase;       // neither
@@ -92,34 +92,45 @@ function phoneLayout(page) {
 test.describe('where the phone sits', () => {
     // ONCALL.PHONE.03
     test('in every room the phone sits in the top bar and covers nothing, at desktop and tablet width', async ({ page, baseURL }) => {
-        test.setTimeout(180_000);
-        await enterLiveCase(page, baseURL, `${RUN_TAG}-layout`, bedsideCase);
-        const keys = await page.locator('[data-testid^="room-button-"]')
-            .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
-        expect(keys).toEqual(expect.arrayContaining(['chat', 'room3d', 'examination', 'lab', 'radiology', 'consultant']));
+        test.setTimeout(300_000);
+        // A case has ONE examination room (server/shared/caseRooms.js): the
+        // bedside case shows the bedside and no Examination room, so the
+        // Examination room is toured on the plain case. Between them every
+        // room is visited.
+        for (const [tag, theCase, examRoom, otherRoom] of [
+            ['layout-bedside', bedsideCase, 'room3d', 'examination'],
+            ['layout-plain', plainCase, 'examination', 'room3d'],
+        ]) {
+            await page.setViewportSize({ width: 1280, height: 800 });
+            await enterLiveCase(page, baseURL, `${RUN_TAG}-${tag}`, theCase);
+            const keys = await page.locator('[data-testid^="room-button-"]')
+                .evaluateAll((els) => els.map((el) => el.dataset.testid.replace('room-button-', '')));
+            expect(keys).toEqual(expect.arrayContaining(['chat', examRoom, 'lab', 'radiology', 'consultant']));
+            expect(keys, `${tag}: one examination room`).not.toContain(otherRoom);
 
-        for (const viewport of [{ width: 1280, height: 800 }, { width: 768, height: 1024 }]) {
-            await page.setViewportSize(viewport);
-            for (const key of keys) {
-                await pressAtCentre(page, room(page, key), `the ${key} room button`);
-                await expect(room(page, key)).toHaveAttribute('aria-pressed', 'true');
-                await expect(phoneButton(page), `one phone in ${key}`).toHaveCount(1);
-                await expect(phoneButton(page)).toBeVisible();
-                const at = `${key} at ${viewport.width}px`;
-                const layout = await phoneLayout(page);
+            for (const viewport of [{ width: 1280, height: 800 }, { width: 768, height: 1024 }]) {
+                await page.setViewportSize(viewport);
+                for (const key of keys) {
+                    await pressAtCentre(page, room(page, key), `the ${key} room button`);
+                    await expect(room(page, key)).toHaveAttribute('aria-pressed', 'true');
+                    await expect(phoneButton(page), `one phone in ${key}`).toHaveCount(1);
+                    await expect(phoneButton(page)).toBeVisible();
+                    const at = `${key} at ${viewport.width}px`;
+                    const layout = await phoneLayout(page);
 
-                // In the room's own top bar.
-                expect(layout.phone.top, `${at}: the phone is in the top bar`).toBeLessThan(120);
-                // Beside Logout, or beside the Ready pill over the bedside.
-                const anchor = key === 'room3d' ? (layout.ready ?? layout.logout) : layout.logout;
-                expect(anchor, `${at}: ${key === 'room3d' ? 'the Ready pill' : 'Logout'} is on screen`).not.toBeNull();
-                const sameRow = Math.abs((anchor.top + anchor.bottom) / 2 - (layout.phone.top + layout.phone.bottom) / 2);
-                expect(sameRow, `${at}: the phone is on the same row as its neighbour`).toBeLessThan(30);
-                const gap = Math.min(Math.abs(layout.phone.left - anchor.right), Math.abs(anchor.left - layout.phone.right));
-                expect(gap, `${at}: the phone is beside its neighbour`).toBeLessThan(120);
+                    // In the room's own top bar.
+                    expect(layout.phone.top, `${at}: the phone is in the top bar`).toBeLessThan(120);
+                    // Beside Logout, or beside the Ready pill over the bedside.
+                    const anchor = key === 'room3d' ? (layout.ready ?? layout.logout) : layout.logout;
+                    expect(anchor, `${at}: ${key === 'room3d' ? 'the Ready pill' : 'Logout'} is on screen`).not.toBeNull();
+                    const sameRow = Math.abs((anchor.top + anchor.bottom) / 2 - (layout.phone.top + layout.phone.bottom) / 2);
+                    expect(sameRow, `${at}: the phone is on the same row as its neighbour`).toBeLessThan(30);
+                    const gap = Math.min(Math.abs(layout.phone.left - anchor.right), Math.abs(anchor.left - layout.phone.right));
+                    expect(gap, `${at}: the phone is beside its neighbour`).toBeLessThan(120);
 
-                // And it covers nothing.
-                expect(layout.covered, `${at}: the phone covers`).toEqual([]);
+                    // And it covers nothing.
+                    expect(layout.covered, `${at}: the phone covers`).toEqual([]);
+                }
             }
         }
     });

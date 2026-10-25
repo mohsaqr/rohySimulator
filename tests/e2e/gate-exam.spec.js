@@ -20,7 +20,7 @@
 // number CASE.EXAM.02 is about.
 
 import { test, expect, waitForSeed } from './fixtures/index.js';
-import { enterLiveCase, learnerApi, disposeLearnerApi, pickCase, room } from './fixtures/liveCase.js';
+import { enterLiveCase, learnerApi, disposeLearnerApi, pickExaminationRoomCase, room } from './fixtures/liveCase.js';
 
 const RUN_TAG = `e2e-exam-${Date.now()}`;
 
@@ -28,7 +28,9 @@ let theCase;
 
 test.beforeAll(async ({ baseURL }) => {
     await waitForSeed(baseURL);
-    theCase = await pickCase(baseURL);
+    // The seeded case examines at the 3D bedside, and a case has one
+    // examination room — so this spec plays a copy with the Examination room.
+    theCase = await pickExaminationRoomCase(baseURL, `${RUN_TAG} examination room`);
 });
 
 test.afterAll(disposeLearnerApi);

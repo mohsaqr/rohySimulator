@@ -9,6 +9,18 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.87] — 2026-10-25
+
+- **One examination room per case.** A case offers either the 2D Physical examination room (default) or the 3D
+  Bedside, never both. The case wizard's Rooms step replaces the two switches with one "Examination room" choice:
+  Physical examination, 3D Bedside (when installed) or None. A case that had switched the Bedside on now offers the
+  Bedside alone (no migration), and the server refuses the other room. New `examinationRoomOf()` /
+  `withExaminationRoom()` in `server/shared/caseRooms.js`.
+- **About and licence in Settings.** The Settings & Administration header has an About button: the running version,
+  the copyright, the licence name (read from `LICENSE`) and a contact link, with tabs for the full Carm Research
+  License and the third-party notices. New `GET /api/help/license`. The terms renderer also shows `#`/`###` headings,
+  tables, code blocks, rules, inline code and safe http(s)/mailto links — still text only, never HTML.
+
 ## [3.0.0-rc.86] — 2026-10-25
 
 - **Optional learning measures (Oyon) are switched on per course, by the teacher.** A learner is measured only when

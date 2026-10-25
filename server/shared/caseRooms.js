@@ -10,10 +10,18 @@
 // Most rooms are ON unless listed in `disabled`, deliberately: every case
 // written before this setting existed, every seeded case, and every room a
 // newly installed plugin adds are on with nothing stored at all. A few rooms
-// are OFF unless listed in `enabled` (DEFAULT_OFF_ROOMS): today the bedside,
-// which duplicates the examination room. The setting travels in the
-// session's case_snapshot like the rest of the config, so a running session
-// keeps the rooms it started with.
+// are OFF unless listed in `enabled` (DEFAULT_OFF_ROOMS): today the bedside.
+// The setting travels in the session's case_snapshot like the rest of the
+// config, so a running session keeps the rooms it started with.
+//
+// ONE examination room per case (owner decision 2026-10-25): the 2D
+// examination room (`examination`, the default) OR the 3D bedside (`room3d`),
+// never both. The rule lives in disabledRooms(), so every reader — the room
+// bar, the server's room gate, the learner projection, the phone — follows it
+// with no stored change: a case whose `enabled` lists the bedside (including
+// every config stored before this rule) gets the bedside and NOT the
+// examination room. examinationRoomOf() / withExaminationRoom() are the
+// explicit reader and writer for the choice.
 //
 // The patient room (`chat`, the history) is always on: it is where a case is
 // played, and where the learner lands when a room goes away.
@@ -29,9 +37,16 @@ import { roomKeysOf } from './specialties.js';
 export const FIXED_ROOMS = Object.freeze(['chat']);
 
 /** Rooms that are off unless a case switches them on (`rooms.enabled`). The
- *  bedside examines the patient too, so for now a case gets one examination
- *  room — the examination room — unless the educator asks for the bedside. */
+ *  bedside examines the patient too, so a case gets the examination room
+ *  unless the educator chooses the bedside instead. */
 export const DEFAULT_OFF_ROOMS = Object.freeze(['room3d']);
+
+/** The two examination rooms a case chooses between — one or the other, never
+ *  both (EXAMINATION is the default). */
+export const EXAMINATION = 'examination';
+export const BEDSIDE = 'room3d';
+/** What withExaminationRoom() takes: a room, or null for "no examination room". */
+export const EXAMINATION_ROOM_CHOICES = Object.freeze([EXAMINATION, BEDSIDE, null]);
 
 /** Every room an educator may switch off: the core rooms but the patient
  *  room, and every installed plugin room (a plugin room's key is its id). */
@@ -58,10 +73,12 @@ const listOf = (rooms, field) => (isPlainObject(rooms) && Array.isArray(rooms[fi
 
 /**
  * The rooms switched off on a case: those listed in `rooms.disabled`, plus
- * every default-off room not listed in `rooms.enabled`. Total: a missing,
- * malformed or unreadable setting leaves only the default-off rooms off, and a
- * key that is not switchable (the patient room, a plugin since uninstalled) is
- * ignored.
+ * every default-off room not listed in `rooms.enabled`, plus the examination
+ * room whenever the bedside is on (one examination room per case). Total: a
+ * missing, malformed or unreadable setting leaves only the default-off rooms
+ * off, and a key that is not switchable (the patient room, a plugin since
+ * uninstalled) is ignored — so a case that chose the bedside falls back to the
+ * examination room when the bedside plugin is not installed.
  *
  * @param {object|string|null} config  the case config, parsed or as stored
  * @returns {string[]} switchable room keys, sorted
@@ -72,15 +89,62 @@ export function disabledRooms(config) {
     const off = [
         ...listOf(rooms, 'disabled'),
         ...DEFAULT_OFF_ROOMS.filter((key) => !enabled.includes(key)),
-    ];
-    return [...new Set(off.filter((key) => SWITCHABLE_ROOM_KEYS.includes(key)))].sort();
+    ].filter((key) => SWITCHABLE_ROOM_KEYS.includes(key));
+    const bedsideOn = SWITCHABLE_ROOM_KEYS.includes(BEDSIDE) && !off.includes(BEDSIDE);
+    if (bedsideOn) off.push(EXAMINATION);
+    return [...new Set(off)].sort();
+}
+
+/**
+ * The case's examination room: 'examination' (the default), 'room3d' (the
+ * bedside, when the case chose it and the plugin is installed), or null when
+ * the educator switched the examination room off and did not choose the
+ * bedside.
+ *
+ * @param {object|string|null} config
+ * @returns {'examination'|'room3d'|null}
+ */
+export function examinationRoomOf(config) {
+    const off = disabledRooms(config);
+    if (SWITCHABLE_ROOM_KEYS.includes(BEDSIDE) && !off.includes(BEDSIDE)) return BEDSIDE;
+    return off.includes(EXAMINATION) ? null : EXAMINATION;
+}
+
+const compactRooms = (next) => {
+    const out = Object.fromEntries(Object.entries(next).filter(([, list]) => list.length > 0));
+    return Object.keys(out).length > 0 ? out : undefined;
+};
+
+/**
+ * The `rooms` value that gives the case this examination room, from the
+ * current one. Every other room's setting is kept. 'examination' stores
+ * nothing for the pair (the default), 'room3d' lists the bedside in `enabled`,
+ * and null lists the examination room in `disabled`. Returns undefined when
+ * nothing differs from the defaults, so a case back at its defaults stores no
+ * setting at all.
+ *
+ * @param {object|undefined} rooms  the current `config.rooms`
+ * @param {'examination'|'room3d'|null} choice
+ * @returns {{disabled?: string[], enabled?: string[]}|undefined}
+ */
+export function withExaminationRoom(rooms, choice) {
+    if (!EXAMINATION_ROOM_CHOICES.includes(choice)) {
+        throw new TypeError(`examination room must be one of examination, room3d or null; got ${String(choice)}`);
+    }
+    const pair = [EXAMINATION, BEDSIDE];
+    const disabled = listOf(rooms, 'disabled').filter((key) => !pair.includes(key));
+    const enabled = listOf(rooms, 'enabled').filter((key) => !pair.includes(key));
+    if (choice === BEDSIDE) enabled.push(BEDSIDE);
+    if (choice === null) disabled.push(EXAMINATION);
+    return compactRooms({ disabled: disabled.sort(), enabled: enabled.sort() });
 }
 
 /**
  * The `rooms` value that switches one room on or off, from the current one.
  * Shared by every writer (the case editor) so the two lists stay consistent:
  * a default-off room is switched through `enabled`, any other through
- * `disabled`. Returns undefined when nothing differs from the defaults, so a
+ * `disabled`. Switching the examination room or the bedside ON goes through
+ * withExaminationRoom(), so it switches the other one off. Returns undefined when nothing differs from the defaults, so a
  * case back at its defaults stores no setting at all.
  *
  * @param {object|undefined} rooms  the current `config.rooms`
@@ -89,13 +153,15 @@ export function disabledRooms(config) {
  * @returns {{disabled?: string[], enabled?: string[]}|undefined}
  */
 export function withRoom(rooms, roomKey, on) {
+    // Switching either examination room ON chooses it, which switches the
+    // other one off: no writer can produce both.
+    if (on && (roomKey === EXAMINATION || roomKey === BEDSIDE)) return withExaminationRoom(rooms, roomKey);
     const field = DEFAULT_OFF_ROOMS.includes(roomKey) ? 'enabled' : 'disabled';
     const add = field === 'enabled' ? on : !on;
     const current = listOf(rooms, field).filter((key) => key !== roomKey);
     const next = { disabled: listOf(rooms, 'disabled'), enabled: listOf(rooms, 'enabled') };
     next[field] = add ? [...current, roomKey].sort() : current;
-    const out = Object.fromEntries(Object.entries(next).filter(([, list]) => list.length > 0));
-    return Object.keys(out).length > 0 ? out : undefined;
+    return compactRooms(next);
 }
 
 /**

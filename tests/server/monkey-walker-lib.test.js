@@ -61,9 +61,11 @@ describe('the rooms a case must show', () => {
         });
     });
 
-    it('the bedside appears only when switched on; material adds its plugin room', () => {
+    it('the bedside appears only when switched on, in place of the examination room; material adds its plugin room', () => {
+        // One examination room per case (caseRooms.js): choosing the bedside
+        // takes the examination room away, so the walker must not demand it.
         const got = expectedRooms({ rooms: { enabled: ['room3d'] } }, { withMaterial: ['pathology'] });
-        expect(got.required).toEqual(['chat', 'consultant', 'examination', 'lab', 'pathology', 'radiology', 'room3d']);
+        expect(got.required).toEqual(['chat', 'consultant', 'lab', 'pathology', 'radiology', 'room3d']);
     });
 
     it('a switched-off room is not expected, even with material', () => {

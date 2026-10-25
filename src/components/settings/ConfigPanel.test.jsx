@@ -680,6 +680,45 @@ describe('ConfigPanel', () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    // CONTRACT: the full-page header carries an About button that opens a
+    // labelled dialog — About (version from /api/health, licence name from
+    // LICENSE's first heading), License and Third-party notices tabs showing
+    // the texts from /api/help/license — and Escape closes it.
+    it('opens the About dialog, switches to the License and notices tabs, and closes on Escape', async () => {
+        server.use(
+            http.get('*/api/health', () => HttpResponse.json({ status: 'ok', version: '9.8.7-test' })),
+            http.get('*/api/help/license', () => HttpResponse.json({
+                license: { title: 'Carm Research License v9', text: '# Carm Research License v9\n\n## GRANT\n\nLicence body sentence.' },
+                notice: { text: '# Third-party notices\n\n| Component | License |\n|---|---|\n| WebGazer.js | GPL |' },
+            })),
+        );
+        const onClose = vi.fn();
+        mount({ initialTab: 'voice', fullPage: true, onClose });
+        await waitForAdmin();
+        expect(screen.queryByRole('dialog')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /^About$/ }));
+        const dialog = screen.getByRole('dialog', { name: 'About Rohy' });
+        expect(within(dialog).getByText('Virtual patient simulation for clinical education')).toBeInTheDocument();
+        expect(await within(dialog).findByText('9.8.7-test')).toBeInTheDocument();
+        expect(await within(dialog).findByText('Carm Research License v9')).toBeInTheDocument();
+        expect(within(dialog).getByText('© 2025–2026 Professor Mohammed Saqr, PhD')).toBeInTheDocument();
+        expect(within(dialog).getByRole('link', { name: 'www.saqr.me' })).toHaveAttribute('href', 'https://www.saqr.me');
+
+        fireEvent.click(within(dialog).getByRole('tab', { name: 'License' }));
+        expect(within(dialog).getByRole('tab', { name: 'License' })).toHaveAttribute('aria-selected', 'true');
+        expect(within(dialog).getByRole('heading', { name: 'GRANT' })).toBeInTheDocument();
+        expect(within(dialog).getByText('Licence body sentence.')).toBeInTheDocument();
+
+        fireEvent.click(within(dialog).getByRole('tab', { name: 'Third-party notices' }));
+        expect(within(dialog).getByRole('heading', { name: 'Third-party notices' })).toBeInTheDocument();
+        expect(within(dialog).getByRole('cell', { name: 'WebGazer.js' })).toBeInTheDocument();
+
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
     // CONTRACT: the sidebar is flat — the accordion was retired (operator
     // feedback 2026-07-03: collapsing sections behind headers was
     // impractical). Every tab stays visible even when a stale

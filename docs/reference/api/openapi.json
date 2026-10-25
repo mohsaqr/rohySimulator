@@ -7507,7 +7507,42 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/help-routes.js:107",
+        "x-rohy-source": "server/routes/help-routes.js:153",
+        "x-rohy-auth": [
+          "authenticateToken",
+          "requireAuth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/help/license": {
+      "get": {
+        "summary": "Get /help/license",
+        "tags": [
+          "help"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/help-routes.js:136",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAuth"
@@ -7542,7 +7577,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/help-routes.js:88",
+        "x-rohy-source": "server/routes/help-routes.js:91",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAuth"

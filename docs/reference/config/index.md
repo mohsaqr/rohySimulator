@@ -51,8 +51,8 @@ The following variables carry credentials or signing material. Never commit them
 | `ROHY_PROVA_INSTALLATION_KEY` | No | `'' (empty string)` | An installation key minted in Prova (Installations ▸ Add a trusted installation) for an installation we run: its reports go straight to triage. Unset, rohy registers itself with Prova on first use (production: at start) and its reports wait in Prova's unverified queue until someone trusts the installation. **⚠ secret — see security note above.** | `server/routes/report-routes.js:57` |
 | `ROHY_TOKEN` | No | — | _see source_ **⚠ secret — see security note above.** | `scripts/llm-language-smoke.mjs:47`<br>`scripts/translate-locales.mjs:121` |
 | `ROHY_TRUST_PROXY` | No | `loopback` | Express `trust proxy` setting (proxy hop count / IP / preset). | `server/server.js:81` |
-| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:71` |
-| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:130`<br>`server/server.js:72` |
+| `TLS_CERT_PATH` | No | `'' (empty string)` | Path to TLS certificate; must be paired with `TLS_KEY_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:176`<br>`server/server.js:71` |
+| `TLS_KEY_PATH` | No | `'' (empty string)` | Path to TLS private key; must be paired with `TLS_CERT_PATH`. _Conditionally required: if either of TLS_CERT_PATH / TLS_KEY_PATH is set, both must be._ | `server/routes/help-routes.js:176`<br>`server/server.js:72` |
 
 ## Database
 
@@ -102,7 +102,7 @@ The following variables carry credentials or signing material. Never commit them
 
 | Variable | Required | Default | Purpose | Source |
 | --- | --- | --- | --- | --- |
-| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:45`<br>`server/routes/help-routes.js:129` |
+| `OYON_ENABLED` | No | — | Mounts the Oyon emotion-capture addon as a live router (vs 503 stub). | `server/routes.js:45`<br>`server/routes/help-routes.js:175` |
 
 ## Retention
 

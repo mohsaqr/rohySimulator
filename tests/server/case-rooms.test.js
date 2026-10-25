@@ -11,7 +11,10 @@
 //   room_disabled, the discussant is refused with the debrief room off, and a
 //   specialist whose rooms are all off is on the phone but does not answer
 //   (409 no_answer; `answers:false` on the session's agent list);
-// - the session snapshot's rooms win over the live case, and staff pass.
+// - the session snapshot's rooms win over the live case, and staff pass;
+// - ONE examination room per case: the examination room (default) or the
+//   bedside, never both — a case whose `enabled` lists the bedside (including
+//   a config stored before the rule) gets the bedside alone.
 //
 // Regression lock: nothing on the server knew about rooms — every room was on
 // every case, and every endpoint took orders whatever the room bar showed.
@@ -22,13 +25,17 @@ import bcrypt from 'bcrypt';
 import sqlite3 from 'sqlite3';
 import { startTestServer } from '../utils/startTestServer.js';
 import {
+    BEDSIDE,
     DEFAULT_OFF_ROOMS,
+    EXAMINATION,
     FIXED_ROOMS,
     SWITCHABLE_ROOM_KEYS,
     disabledRooms,
+    examinationRoomOf,
     isRoomEnabled,
     normaliseCaseRooms,
     specialistAnswers,
+    withExaminationRoom,
     withRoom,
 } from '../../server/shared/caseRooms.js';
 import { CORE_ROOM_KEYS } from '../../server/shared/pluginRegistry.js';
@@ -66,8 +73,9 @@ describe('the rooms registry', () => {
     it('switches a default-off room on only through rooms.enabled', () => {
         expect(isRoomEnabled({ rooms: { enabled: ['room3d'] } }, 'room3d')).toBe(true);
         // `enabled` means nothing for a room that is on anyway, and cannot
-        // override `disabled`.
-        expect(disabledRooms({ rooms: { enabled: ['room3d', 'lab'], disabled: ['lab'] } })).toEqual(['lab']);
+        // override `disabled`. (The examination room is off here because the
+        // bedside is on — one examination room per case, asserted below.)
+        expect(disabledRooms({ rooms: { enabled: ['room3d', 'lab'], disabled: ['lab'] } })).toEqual(['examination', 'lab']);
         expect(disabledRooms({ rooms: { enabled: ['room3d'], disabled: ['room3d'] } })).toEqual(['room3d']);
     });
 
@@ -76,6 +84,9 @@ describe('the rooms registry', () => {
         expect(withRoom({ disabled: ['lab'] }, 'lab', true)).toBeUndefined();
         expect(withRoom(undefined, 'room3d', true)).toEqual({ enabled: ['room3d'] });
         expect(withRoom({ enabled: ['room3d'], disabled: ['lab'] }, 'room3d', false)).toEqual({ disabled: ['lab'] });
+        // Switching the bedside OFF does not switch the examination room off
+        // too: an educator who stops choosing the bedside is back at the default.
+        expect(examinationRoomOf({ rooms: withRoom({ enabled: ['room3d'] }, 'room3d', false) })).toBe('examination');
         expect(withRoom({ disabled: ['radiology'] }, 'lab', false)).toEqual({ disabled: ['lab', 'radiology'] });
     });
 
@@ -105,6 +116,78 @@ describe('the rooms registry', () => {
         const enabled = normaliseCaseRooms({ rooms: { enabled: ['lab', 'room3d'] } });
         expect(enabled.rooms).toEqual({ enabled: ['room3d'] });
         expect(enabled.warnings).toEqual([expect.objectContaining({ field: 'config.rooms.enabled', received: 'lab' })]);
+    });
+
+    describe('one examination room per case', () => {
+        // Regression lock: switching the bedside on kept the examination room,
+        // so a case offered two examination rooms.
+        it('gives a case at the defaults the examination room only', () => {
+            for (const config of [{}, null, { rooms: { disabled: ['lab'] } }]) {
+                expect(examinationRoomOf(config)).toBe(EXAMINATION);
+                expect(isRoomEnabled(config, EXAMINATION)).toBe(true);
+                expect(isRoomEnabled(config, BEDSIDE)).toBe(false);
+            }
+        });
+
+        it('gives a case that switched the bedside on the bedside only, including a config stored before the rule', () => {
+            for (const rooms of [
+                { enabled: ['room3d'] }, // stored before the rule: no mention of the examination room
+                { enabled: ['room3d'], disabled: ['examination'] },
+                { enabled: ['room3d'], disabled: [] }, // the seeded STEMI case's shape
+            ]) {
+                expect(examinationRoomOf({ rooms }), JSON.stringify(rooms)).toBe(BEDSIDE);
+                expect(isRoomEnabled({ rooms }, BEDSIDE)).toBe(true);
+                expect(isRoomEnabled({ rooms }, EXAMINATION)).toBe(false);
+                expect(isRoomEnabled(JSON.stringify({ rooms }), EXAMINATION)).toBe(false);
+            }
+            expect(disabledRooms({ rooms: { enabled: ['room3d'] } })).toEqual(['examination']);
+            // An old config is still valid to store, unchanged.
+            expect(normaliseCaseRooms({ rooms: { enabled: ['room3d'] } })).toEqual({ rooms: { enabled: ['room3d'] }, problem: null, warnings: [] });
+            expect(normaliseCaseRooms({ rooms: { enabled: ['room3d'], disabled: ['examination'] } }).problem).toBeNull();
+        });
+
+        it('reports no examination room when the educator switched it off and did not choose the bedside', () => {
+            for (const rooms of [{ disabled: ['examination'] }, { disabled: ['examination', 'room3d'], enabled: ['room3d'] }]) {
+                expect(examinationRoomOf({ rooms }), JSON.stringify(rooms)).toBeNull();
+                expect(isRoomEnabled({ rooms }, EXAMINATION)).toBe(false);
+                expect(isRoomEnabled({ rooms }, BEDSIDE)).toBe(false);
+            }
+        });
+
+        it('writes the choice, keeping every other room, and nothing at the defaults', () => {
+            expect(withExaminationRoom(undefined, 'examination')).toBeUndefined();
+            expect(withExaminationRoom(undefined, 'room3d')).toEqual({ enabled: ['room3d'] });
+            expect(withExaminationRoom(undefined, null)).toEqual({ disabled: ['examination'] });
+            expect(withExaminationRoom({ enabled: ['room3d'], disabled: ['examination', 'lab'] }, 'examination'))
+                .toEqual({ disabled: ['lab'] });
+            expect(withExaminationRoom({ enabled: ['room3d'] }, null)).toEqual({ disabled: ['examination'] });
+            expect(withExaminationRoom({ disabled: ['examination', 'lab'] }, 'room3d'))
+                .toEqual({ disabled: ['lab'], enabled: ['room3d'] });
+            expect(() => withExaminationRoom(undefined, 'lab')).toThrow(TypeError);
+            // Each choice reads back as itself.
+            for (const choice of [EXAMINATION, BEDSIDE, null]) {
+                expect(examinationRoomOf({ rooms: withExaminationRoom({ disabled: ['radiology'] }, choice) })).toBe(choice);
+            }
+        });
+
+        it('never lets a writer produce both rooms on', () => {
+            const starts = [undefined, { enabled: ['room3d'] }, { disabled: ['examination'] },
+                { disabled: ['examination'], enabled: ['room3d'] }, { disabled: ['lab'] }];
+            const writes = [
+                ...[EXAMINATION, BEDSIDE].flatMap((key) => [true, false].map((on) => (r) => withRoom(r, key, on))),
+                ...[EXAMINATION, BEDSIDE, null].map((choice) => (r) => withExaminationRoom(r, choice)),
+            ];
+            for (const start of starts) {
+                for (const write of writes) {
+                    const config = { rooms: write(start) };
+                    const both = isRoomEnabled(config, EXAMINATION) && isRoomEnabled(config, BEDSIDE);
+                    expect(both, `${JSON.stringify(start)} -> ${JSON.stringify(config.rooms)}`).toBe(false);
+                }
+            }
+            // Switching one ON chooses it.
+            expect(withRoom({ enabled: ['room3d'] }, 'examination', true)).toBeUndefined();
+            expect(withRoom({ disabled: ['examination'] }, 'room3d', true)).toEqual({ enabled: ['room3d'] });
+        });
     });
 
     it('lets a specialist answer while any of its rooms is on', () => {
@@ -294,7 +377,7 @@ describe('the server', () => {
             await refused(await as(student, 'POST', `/api/sessions/${ids.offSession}/order-radiology`, { radiology_ids: ['cxr'] }), 'room_disabled');
         });
 
-        it('cannot examine with both the examination room and the bedside off, and can with the bedside switched on', async () => {
+        it('cannot examine with both the examination room and the bedside off, and can with the bedside chosen', async () => {
             const finding = { body_region: 'chest', exam_type: 'auscultation', finding: 'clear' };
             await refused(await as(student, 'POST', `/api/sessions/${ids.offSession}/exam-findings`, finding), 'room_disabled');
             const bedside = await as(student, 'POST', `/api/sessions/${ids.bedsideSession}/exam-findings`, finding);

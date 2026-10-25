@@ -16,6 +16,9 @@
 //   GET /api/help/release-notes  — parsed CHANGELOG.md (Keep a Changelog
 //                                  format) so the in-app "what's new" surface
 //                                  has one source of truth.
+//
+//   GET /api/help/license        — the repo-root LICENSE and NOTICE.md as
+//                                  text, for the About dialog in Settings.
 import express from 'express';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -101,6 +104,49 @@ router.get('/help/release-notes', authenticateToken, requireAuth, async (req, re
       return res.json({ releases: [], latest: null });
     }
     res.status(500).json({ error: 'release_notes_unavailable', message: err.message });
+  }
+});
+
+// LICENSE and NOTICE.md only change on deploy — read them once. Both are
+// tracked files (present in a systemd checkout) and COPYed into the Docker
+// runtime image (deploy/docker/Dockerfile; NOTICE.md re-included in
+// .dockerignore).
+let licenseCache = null;
+
+/** The licence's name: its first "# " heading, else its first non-empty line. */
+export function licenseTitle(text) {
+  const lines = String(text ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const heading = lines.find((l) => /^# /.test(l));
+  return (heading ? heading.slice(2) : (lines[0] ?? '')).trim();
+}
+
+async function readRepoFile(name) {
+  try {
+    return await readFile(join(REPO_ROOT, name), 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      const missing = new Error(`${name} is missing from this installation`);
+      missing.status = 404;
+      throw missing;
+    }
+    throw err;
+  }
+}
+
+router.get('/help/license', authenticateToken, requireAuth, async (req, res) => {
+  try {
+    if (!licenseCache) {
+      const [license, notice] = await Promise.all([readRepoFile('LICENSE'), readRepoFile('NOTICE.md')]);
+      licenseCache = {
+        license: { title: licenseTitle(license), text: license },
+        notice: { text: notice },
+      };
+    }
+    res.json(licenseCache);
+  } catch (err) {
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    req.log?.error('license text unavailable', { error: err.message });
+    res.status(500).json({ error: 'License text could not be read' });
   }
 });
 

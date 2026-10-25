@@ -148,26 +148,64 @@ export function termsVersionError(value) {
 
 /**
  * Parse the agreement's markdown subset into blocks:
- *   "## " heading → { type: 'heading', text }
- *   "- " lines    → { type: 'list', items: [text] }
- *   other lines   → { type: 'paragraph', text } (consecutive lines joined)
- * Inline `**bold**` is returned as segments by `inlineSegments`. Nothing else is
- * interpreted — the text is rendered as text, never as HTML.
+ *   "# " line       → { type: 'title', text }
+ *   "## " heading   → { type: 'heading', text }
+ *   "### " (and deeper) → { type: 'subheading', text }
+ *   "- " lines      → { type: 'list', items: [text] }
+ *   "---" alone     → { type: 'rule' }
+ *   "| a | b |" rows → { type: 'table', header: [cells] | null, rows: [[cells]] }
+ *                      (a "|---|" separator after the first row makes it the header)
+ *   "```" fences    → { type: 'code', text } (lines kept verbatim)
+ *   other lines     → { type: 'paragraph', text } (consecutive lines joined)
+ * Inline markup is returned as segments by `inlineSegments`. Nothing else is
+ * interpreted — the text is rendered as text, never as HTML. The same parser
+ * renders the repo's LICENSE and NOTICE.md in the About dialog, which is why it
+ * knows about titles, tables and fences.
  */
 export function parseTermsBody(body) {
     const blocks = [];
     let paragraph = [];
     let list = null;
+    let table = null;
+    let code = null;
     const flush = () => {
         if (paragraph.length) blocks.push({ type: 'paragraph', text: paragraph.join(' ') });
         paragraph = [];
         if (list) blocks.push(list);
         list = null;
+        if (table) blocks.push(table);
+        table = null;
     };
     for (const raw of String(body ?? '').split(/\r?\n/)) {
         const line = raw.trim();
+        if (code) {
+            if (line.startsWith('```')) { blocks.push({ type: 'code', text: code.lines.join('\n') }); code = null; continue; }
+            code.lines.push(raw.replace(/\s+$/, ''));
+            continue;
+        }
+        if (line.startsWith('```')) { flush(); code = { lines: [] }; continue; }
         if (!line) { flush(); continue; }
-        if (line.startsWith('## ')) { flush(); blocks.push({ type: 'heading', text: line.slice(3).trim() }); continue; }
+        if (line.startsWith('|')) {
+            if (paragraph.length || list) flush();
+            const cells = tableCells(line);
+            if (!table) table = { type: 'table', header: null, rows: [] };
+            if (cells.every((c) => /^:?-{3,}:?$/.test(c))) {
+                if (!table.header && table.rows.length === 1) table.header = table.rows.pop();
+                continue;
+            }
+            table.rows.push(cells);
+            continue;
+        }
+        if (table) { blocks.push(table); table = null; }
+        const heading = /^(#{1,6}) +(.*)$/.exec(line);
+        if (heading) {
+            flush();
+            const level = heading[1].length;
+            const type = level === 1 ? 'title' : level === 2 ? 'heading' : 'subheading';
+            blocks.push({ type, text: heading[2].trim() });
+            continue;
+        }
+        if (/^-{3,}$/.test(line)) { flush(); blocks.push({ type: 'rule' }); continue; }
         if (/^[-*] /.test(line)) {
             if (paragraph.length) { blocks.push({ type: 'paragraph', text: paragraph.join(' ') }); paragraph = []; }
             if (!list) list = { type: 'list', items: [] };
@@ -177,21 +215,51 @@ export function parseTermsBody(body) {
         if (list) { blocks.push(list); list = null; }
         paragraph.push(line);
     }
+    // An unterminated fence still shows its text rather than swallowing it.
+    if (code) blocks.push({ type: 'code', text: code.lines.join('\n') });
     flush();
     return blocks;
 }
 
-/** Split text on `**bold**` into [{ text, bold }] segments. */
+function tableCells(line) {
+    return line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+}
+
+/** Only these link targets become clickable; anything else (a relative repo
+ *  path, `javascript:`) is shown as its label text alone. */
+const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
+
+/**
+ * Split text into inline segments:
+ *   `**bold**`      → { text, bold: true }
+ *   `` `code` ``    → { text, bold: false, code: true }
+ *   `[label](url)`  → { text: label, bold: false, href } for http(s)/mailto
+ *                     targets; other targets yield the label as plain text
+ *                     (or code, when the label is a `code` span)
+ *   anything else   → { text, bold: false }
+ */
 export function inlineSegments(text) {
+    const src = String(text ?? '');
     const out = [];
-    const re = /\*\*(.+?)\*\*/g;
+    const re = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
     let last = 0;
     let m;
-    while ((m = re.exec(String(text ?? ''))) !== null) {
-        if (m.index > last) out.push({ text: text.slice(last, m.index), bold: false });
-        out.push({ text: m[1], bold: true });
+    while ((m = re.exec(src)) !== null) {
+        if (m.index > last) out.push({ text: src.slice(last, m.index), bold: false });
+        if (m[1] !== undefined) {
+            out.push({ text: m[1], bold: true });
+        } else if (m[2] !== undefined) {
+            out.push({ text: m[2], bold: false, code: true });
+        } else {
+            const codeLabel = /^`([^`]+)`$/.exec(m[3]);
+            const label = codeLabel ? codeLabel[1] : m[3];
+            const seg = { text: label, bold: false };
+            if (codeLabel) seg.code = true;
+            if (SAFE_HREF.test(m[4])) seg.href = m[4];
+            out.push(seg);
+        }
         last = m.index + m[0].length;
     }
-    if (last < String(text ?? '').length) out.push({ text: text.slice(last), bold: false });
+    if (last < src.length) out.push({ text: src.slice(last), bold: false });
     return out;
 }

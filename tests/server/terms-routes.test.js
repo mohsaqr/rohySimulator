@@ -42,6 +42,39 @@ describe('terms parser', () => {
         expect(inlineSegments('**a** item')).toEqual([{ text: 'a', bold: true }, { text: ' item', bold: false }]);
     });
 
+    it('parses the LICENSE / NOTICE.md constructs: titles, subheadings, rules, tables, fences', () => {
+        const blocks = parseTermsBody([
+            '# Licence v1', '', 'Intro', '', '---', '', '### Sub', '',
+            '| A | B |', '|---|:---:|', '| `x` | **y** |', '| z | w |', '',
+            '```bash', '  npm run a   # keep spacing', '## not a heading', '```', 'after',
+        ].join('\n'));
+        expect(blocks).toEqual([
+            { type: 'title', text: 'Licence v1' },
+            { type: 'paragraph', text: 'Intro' },
+            { type: 'rule' },
+            { type: 'subheading', text: 'Sub' },
+            { type: 'table', header: ['A', 'B'], rows: [['`x`', '**y**'], ['z', 'w']] },
+            { type: 'code', text: '  npm run a   # keep spacing\n## not a heading' },
+            { type: 'paragraph', text: 'after' },
+        ]);
+        // A table with no separator row has no header; an unterminated fence keeps its text.
+        expect(parseTermsBody('| a | b |\n| c | d |')).toEqual([{ type: 'table', header: null, rows: [['a', 'b'], ['c', 'd']] }]);
+        expect(parseTermsBody('```\nleft open')).toEqual([{ type: 'code', text: 'left open' }]);
+    });
+
+    it('turns only http(s)/mailto links into hrefs and marks code spans', () => {
+        expect(inlineSegments('see [`LICENSE`](LICENSE), [repo](https://x.test/r) and `npm`')).toEqual([
+            { text: 'see ', bold: false },
+            { text: 'LICENSE', bold: false, code: true },
+            { text: ', ', bold: false },
+            { text: 'repo', bold: false, href: 'https://x.test/r' },
+            { text: ' and ', bold: false },
+            { text: 'npm', bold: false, code: true },
+        ]);
+        expect(inlineSegments('[click](javascript:alert(1))')[0]).not.toHaveProperty('href');
+        expect(inlineSegments('[mail](mailto:a@b.c)')[0].href).toBe('mailto:a@b.c');
+    });
+
     it('validates versions', () => {
         expect(termsVersionError('')).toMatch(/required/);
         expect(termsVersionError('1.1')).toBeNull();

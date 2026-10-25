@@ -51,12 +51,21 @@ imaging, exam and treatments.
 
 ## Choosing the rooms
 
-Every room is on by default except **Bedside**, the immersive 3D room. Bedside
-examines the patient too, which duplicates the **Examination** room, so for now
-a case gets it only when you switch it on. In the **Rooms** step you can switch
-any room on or off except **Patient**, where the case is played. A case built around the
-history and a set of slides, for example, can keep Patient and Pathology and
-switch off everything else.
+A case has one examination room. Under **Examination room** in the **Rooms**
+step, choose one:
+
+- **Physical examination (default)**: the body-map **Examination** room.
+- **3D Bedside**: the immersive 3D room, in place of the Examination room.
+  It is offered only when the Bedside package is installed.
+- **None**: no examination room on this case.
+
+A case never has both. A case saved before this choice existed, with Bedside
+switched on, now has Bedside and no Examination room.
+
+Every other room is on by default, and you can switch any of them off except
+**Patient**, where the case is played. A case built around the history and a
+set of slides, for example, can keep Patient and Pathology and switch off
+everything else.
 
 A room you switch off is hidden and locked for learners:
 

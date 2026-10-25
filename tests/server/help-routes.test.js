@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import sqlite3 from 'sqlite3';
 import bcrypt from 'bcrypt';
 import { startTestServer } from '../utils/startTestServer.js';
-import { parseChangelog } from '../../server/routes/help-routes.js';
+import { licenseTitle, parseChangelog } from '../../server/routes/help-routes.js';
 
 const PASSWORD = 'HelpT3sts!';
 
@@ -133,5 +133,32 @@ describe('Help & Support API', () => {
     expect(Array.isArray(body.releases)).toBe(true);
     expect(body.releases.length).toBeGreaterThan(0);
     expect(body.latest).toBe(body.releases[0].version);
+  });
+
+  it('rejects unauthenticated license requests', async () => {
+    const r = await fetch(`${server.baseUrl}/api/help/license`);
+    expect(r.status).toBe(401);
+  });
+
+  it('returns LICENSE and NOTICE.md for the About dialog', async () => {
+    const r = await fetch(`${server.baseUrl}/api/help/license`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.license.title).toMatch(/^Carm Research License/);
+    expect(body.license.text.length).toBeGreaterThan(100);
+    expect(body.license.text).toContain(body.license.title);
+    expect(body.notice.text).toMatch(/^# Third-party notices/);
+  });
+});
+
+describe('licenseTitle', () => {
+  it('takes the first level-1 heading, not a ## heading', () => {
+    expect(licenseTitle('\n## Not this\n# Carm Research License v9.9\ntext')).toBe('Carm Research License v9.9');
+  });
+  it('falls back to the first non-empty line, and to empty text', () => {
+    expect(licenseTitle('\n  Plain Licence  \nmore')).toBe('Plain Licence');
+    expect(licenseTitle('')).toBe('');
   });
 });

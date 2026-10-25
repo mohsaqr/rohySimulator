@@ -23,6 +23,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, apiAsAdmin } from './fixtures/index.js';
 
+// A case has ONE examination room (server/shared/caseRooms.js): the body-map
+// Examination room or, when the case chose it, the 3D Bedside. The landing
+// case decides which, so these checks take whichever the case has.
+const EXAM_ROOM = /Examination|Bedside/i;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SHOTS = path.join(__dirname, '..', '..', 'test-results', 'tablet-layout');
@@ -92,7 +97,7 @@ async function enterRoom(page, baseURL) {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     // The room navigator is the last thing to mount (it needs a session).
-    await page.getByRole('button', { name: /Examination/i })
+    await page.getByRole('button', { name: EXAM_ROOM })
         .first()
         .waitFor({ state: 'visible', timeout: 20_000 });
     // OnboardingTour is a modal overlay that covers the room navigator. It
@@ -155,7 +160,7 @@ for (const vp of VIEWPORTS) {
         test('room navigator keeps every room reachable', async ({ adminPage, baseURL }) => {
             await enterRoom(adminPage, baseURL);
 
-            for (const label of [/Examination/i, /Laboratory/i, /Radiology/i, /Patient/i]) {
+            for (const label of [EXAM_ROOM, /Laboratory/i, /Radiology/i, /Patient/i]) {
                 const btn = adminPage.getByRole('button', { name: label }).first();
                 await expect(btn, `${vp.name}: "${label}" room button is not visible`).toBeVisible();
                 const box = await btn.boundingBox();
@@ -167,7 +172,7 @@ for (const vp of VIEWPORTS) {
         });
 
         for (const room of [
-            { label: /Examination/i, slug: 'examination' },
+            { label: EXAM_ROOM, slug: 'examination' },
             { label: /Laboratory/i, slug: 'lab' },
             { label: /Radiology/i, slug: 'radiology' },
         ]) {

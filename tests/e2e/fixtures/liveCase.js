@@ -17,6 +17,7 @@ import { apiAsAdmin, findCase } from './seed.js';
 // 'YYYY-MM-DD HH:MM:SS' with no zone marker and JS would read that as local
 // time. Parsing it a second way here would test this file against itself.
 import { parseUtcTimestamp } from '../../../src/utils/sessionAnchors.js';
+import { withExaminationRoom } from '../../../server/shared/caseRooms.js';
 
 let _ctx;
 let _token;
@@ -97,6 +98,22 @@ export async function pickCase(baseURL) {
     const found = await findCase(baseURL, (c) => c.is_default === 1) || await findCase(baseURL, () => true);
     expect(found, 'a seeded case').toBeTruthy();
     return found;
+}
+
+/**
+ * A copy of the default seeded case whose examination room is the 2D
+ * Examination room.
+ *
+ * A case has ONE examination room (server/shared/caseRooms.js), and the seeded
+ * STEMI case chose the 3D bedside — so a spec about the body-map Examination
+ * room plays this copy: same patient, same findings, the examination room in
+ * place of the bedside.
+ */
+export async function pickExaminationRoomCase(baseURL, name) {
+    const base = await pickCase(baseURL);
+    const config = typeof base.config === 'string' ? JSON.parse(base.config) : (base.config || {});
+    const rooms = withExaminationRoom(config.rooms, 'examination');
+    return createAssignedCase(baseURL, { name, config: { ...config, rooms } });
 }
 
 /**
