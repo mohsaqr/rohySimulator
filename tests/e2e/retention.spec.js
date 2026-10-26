@@ -215,7 +215,7 @@ test.describe.serial('retention + soft-delete (Stage E7)', () => {
         ).toBeFalsy();
         const found = list.find((u) => u.id === target.id);
         if (found) {
-            expect(found.username).toBe(`deleted_user_${target.id}`);
+            expect(found.username).toMatch(/^deleted_user_[0-9a-f]{16}$/);
         }
     });
 

@@ -19,7 +19,14 @@ import path from 'node:path';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rohy-sec2c-limiters-'));
 process.env.ROHY_DB = path.join(tmpDir, 'limiters.sqlite');
 process.env.ROHY_NO_AUTO_SEED = '1';
-afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+// db.js migrates ROHY_DB in the background the moment it is imported. Wait for
+// that to finish before the directory goes, or the writer hits SQLITE_IOERR
+// after the tests have already passed (seen in CI on rc.90).
+afterAll(async () => {
+    const { dbReady } = await import('../../server/db.js');
+    await dbReady.catch(() => {});
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'sec2-c-limiters-secret';
 process.env.ROHY_GENERAL_USER_RATE_PER_MIN = '5';

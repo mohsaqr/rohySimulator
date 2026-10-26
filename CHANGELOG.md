@@ -9,6 +9,15 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.91] — 2026-10-26
+
+### Fixes (CI only, no behaviour change)
+- `tests/e2e/retention.spec.js` still asserted the old `deleted_user_<id>` pseudonym in a second place; it now expects the
+  random rc.89 form.
+- `tests/server/sec2-c-limiters.test.js` removed its temporary database directory while `db.js` was still migrating it in
+  the background, which surfaced as an unhandled `SQLITE_IOERR` after every test had passed. The teardown now waits for
+  `dbReady` first.
+
 ## [3.0.0-rc.90] — 2026-10-26
 
 ### One camera consent, heart rate and breathing as a learner preference
