@@ -125,7 +125,7 @@ describe('terms of use API', () => {
     // out of the optional learning measures and delete their records themselves.
     it('the default agreement states opt-out and self-service deletion', async () => {
         const { terms } = await (await call('/terms')).json();
-        expect(terms.version).toBe('1.1');
+        expect(terms.version).toBe('1.2');
         expect(terms.body).toMatch(/opt out at any time/);
         expect(terms.body).toMatch(/delete all of them at any time, in Settings → Oyon/);
     });
@@ -206,6 +206,6 @@ describe('terms of use API', () => {
 
     it('requires sign-in to see status or accept', async () => {
         expect((await call('/terms/status')).status).toBe(401);
-        expect((await call('/terms/accept', { method: 'POST', body: { version: '1.1' } })).status).toBe(401);
+        expect((await call('/terms/accept', { method: 'POST', body: { version: '1.2' } })).status).toBe(401);
     });
 });

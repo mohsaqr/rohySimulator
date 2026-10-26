@@ -50,7 +50,7 @@ describe('OyonConsentUpdate', () => {
     });
 
     it('stays silent once the learner is on the current contract', async () => {
-        mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v2' } });
+        mockApi({ onboarding: { oyon_consent: true, oyon_consent_version: 'oyon-consent-v2', oyon_consent_physio: false } });
         render(<OyonConsentUpdate />);
         await waitFor(() => expect(apiFetch).toHaveBeenCalled());
         expect(screen.queryByText('reconsent_title')).not.toBeInTheDocument();
@@ -91,6 +91,7 @@ describe('OyonConsentUpdate', () => {
         expect(put[1].json.onboarding_settings).toEqual({
             oyon_consent: true,
             oyon_consent_version: 'oyon-consent-v2',
+            oyon_consent_physio: false,
         });
         expect(localStorage.getItem('oyon.consentVersion')).toBe('oyon-consent-v2');
     });

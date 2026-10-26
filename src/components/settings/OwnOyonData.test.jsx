@@ -55,19 +55,19 @@ describe('Settings → Oyon learner note when no course enables sensing', () => 
         routeApi({ enabled: false, course_sensing_required: true, course_sensing_enabled: false, consent_version: 'oyon-consent-v3' });
         render(<OyonSettingsTab />);
         expect(await screen.findByText('Optional learning measures are not enabled for any of your courses.')).toBeInTheDocument();
-        expect(screen.getByRole('checkbox', { name: /Capture emotions during my simulation sessions/ })).not.toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: /Allow camera-based learning measures during my sessions/ })).not.toBeDisabled();
     });
 
     it('shows no note once a course enables sensing, or for staff', async () => {
         routeApi({ enabled: true, course_sensing_required: true, course_sensing_enabled: true });
         const { unmount } = render(<OyonSettingsTab />);
-        await screen.findByText(/Capture emotions during my simulation sessions/);
+        await screen.findByText(/Allow camera-based learning measures during my sessions/);
         await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/addons/oyon/config'));
         expect(screen.queryByTestId('oyon-no-course-note')).toBeNull();
         unmount();
         routeApi({ enabled: true, course_sensing_required: false, course_sensing_enabled: null });
         render(<OyonSettingsTab />);
-        await screen.findByText(/Capture emotions during my simulation sessions/);
+        await screen.findByText(/Allow camera-based learning measures during my sessions/);
         expect(screen.queryByTestId('oyon-no-course-note')).toBeNull();
     });
 });

@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Camera, BarChart3, ShieldCheck, Loader2, Save, LineChart, Cpu, AlertTriangle, Activity } from 'lucide-react';
 import { apiFetch, ApiError } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { VALENCE_GRAPH_PREF_KEY, CONSENT_PREF_KEY } from '../oyon/OyonCaptureWidget';
-import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_PHYSIO_KEY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import { parseOnboardingSettings } from '../../utils/onboardingSettings';
+import OyonPhysioSwitch from '../oyon/OyonPhysioSwitch';
 import { modelProfileList, DEFAULT_MODEL_PROFILE } from '../oyon/modelProfiles';
 
 // Analytics is an in-app surface: ConfigPanel's "Oyon — Learning Analytics"
@@ -92,6 +95,7 @@ export function OwnOyonData() {
 }
 
 export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
+   const { t } = useTranslation('oyon');
    const { user, isAdmin } = useAuth();
    const admin = typeof isAdmin === 'function' ? isAdmin() : Boolean(isAdmin);
 
@@ -111,6 +115,12 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
       // without consent.
       try { return localStorage.getItem(CONSENT_PREF_KEY) === '1'; } catch { return false; }
    });
+   // Heart rate and breathing: the switch under the camera consent. Its value
+   // lives only in the server record (the server is the authority at ingest),
+   // so it starts off and is filled from /users/preferences — unless the
+   // learner has already flipped it, in which case their click wins.
+   const [physio, setPhysio] = useState(false);
+   const physioTouchedRef = useRef(false);
    const [showValenceGraph, setShowValenceGraph] = useState(() => {
       try { return localStorage.getItem(VALENCE_GRAPH_PREF_KEY) === '1'; } catch { return false; }
    });
@@ -130,6 +140,12 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                setError(e?.message || 'Could not load Oyon config');
             }
          });
+      apiFetch('/users/preferences')
+         .then(prefs => {
+            if (cancelled || physioTouchedRef.current) return;
+            setPhysio(parseOnboardingSettings(prefs)[OYON_CONSENT_PHYSIO_KEY] === true);
+         })
+         .catch(() => { /* unreadable: the switch stays off, which grants nothing */ });
       if (admin) {
          apiFetch('/addons/oyon/settings')
             .then(r => { if (!cancelled) setSettings(r?.settings || null); })
@@ -140,6 +156,10 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
 
    const toggleDefaultConsent = (next) => {
       setDefaultConsent(next);
+      // The heart-rate and breathing switch is off whenever the consent is
+      // given or withdrawn here; the learner turns it on separately below.
+      physioTouchedRef.current = true;
+      setPhysio(false);
       // ISSUE-0019: record WHICH contract was accepted, not just that one was.
       // A grant stored without any version reads as v1 everywhere downstream
       // AND told needsConsentUpgrade nobody had answered, so the state was
@@ -147,9 +167,8 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
       // only repair path, stayed silent.
       //
       // The version recorded here is the CAMERA-ONLY contract, deliberately,
-      // and never the tenant's current one. This checkbox says "capture
-      // emotions during my simulation sessions ... with the camera pill" and
-      // describes nothing else; typing rhythm, interaction and discourse are
+      // and never the tenant's current one. This checkbox names the
+      // camera-based measures (oyon:card_toggle) and describes nothing else; typing rhythm, interaction and discourse are
       // named only by the re-consent prompt, which exists precisely so those
       // are asked about rather than assumed. Stamping the tenant's current
       // version here would record agreement to a scope this control never
@@ -171,10 +190,21 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
             onboarding_settings: {
                oyon_consent: next,
                oyon_consent_version: next ? version : null,
+               [OYON_CONSENT_PHYSIO_KEY]: false,
             },
          },
       }).catch(() => { /* local flag still applies on this device */ })
          // After the save settles, so a reader re-fetching preferences sees it.
+         .finally(announceOyonConsentChanged);
+   };
+
+   const togglePhysio = (next) => {
+      physioTouchedRef.current = true;
+      setPhysio(next);
+      apiFetch('/users/preferences', {
+         method: 'PUT',
+         json: { onboarding_settings: { [OYON_CONSENT_PHYSIO_KEY]: next } },
+      }).catch(() => { /* not saved: the server keeps storing no heart rate or breathing */ })
          .finally(announceOyonConsentChanged);
    };
 
@@ -377,7 +407,7 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                />
                <span>
                   <span className="block text-sm font-semibold text-neutral-100">
-                     Capture emotions during my simulation sessions
+                     {t('card_toggle')}
                   </span>
                   <span className="block text-xs text-neutral-400 mt-0.5">
                      Default: off. When ticked, records are stored server-side under your account when you
@@ -386,6 +416,13 @@ export default function OyonSettingsTab({ onOpenAnalytics } = {}) {
                   </span>
                </span>
             </label>
+            {defaultConsent && (
+               <OyonPhysioSwitch
+                  checked={physio}
+                  onChange={togglePhysio}
+                  className="ml-6 p-3 rounded-md border border-neutral-800"
+               />
+            )}
             {/* Sensing is per course (server/lib/oyonSensingGate.js). The
                 checkbox stays usable: it records the learner's choice for when
                 a course enables the measures. */}

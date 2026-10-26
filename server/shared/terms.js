@@ -17,7 +17,10 @@ export const DEFAULT_TERMS_TITLE = "Rohy – Terms of Use, Learning Analytics Pr
 // hardware, software and simulation, limits of AI and clinical content, the
 // optional learning measures named plainly, opt-out and self-service deletion,
 // uses beyond these Terms, demonstration material, limitation of liability.
-export const DEFAULT_TERMS_VERSION = '1.1';
+// 1.2 (2026-10-26): the webcam measures name the optional heart-rate and
+// breathing-rate estimates (one consent, a switch the learner turns on), and §8
+// says every estimate, these included, is rough and not medical-grade.
+export const DEFAULT_TERMS_VERSION = '1.2';
 
 export const DEFAULT_TERMS_BODY = [
     "This agreement sets out what Rohy is, the purposes for which it may be used, the limitations that apply to it, and the principles that govern the data it collects. Access to and use of Rohy is conditional on acceptance of this agreement. Continuing to use Rohy constitutes acceptance.",
@@ -70,7 +73,7 @@ export const DEFAULT_TERMS_BODY = [
     "",
     "Rohy records simulation sessions, including conversations with the virtual characters, the simulated examinations, tests and treatments selected, the timing of actions, and the notes and reports written.",
     "",
-    "**Optional learning measures (Oyon).** With the learner's agreement, Rohy can derive summary measures from the webcam (facial-expression estimates and gaze), the microphone (speech activity), the keyboard (typing timing) and on-screen interaction (clicks, mouse movement and window focus). This processing takes place in the learner's browser. No video or audio is stored or transmitted; only summary measures are retained.",
+    "**Optional learning measures (Oyon).** With the learner's agreement, Rohy can derive summary measures from the webcam (facial-expression estimates, gaze, and — if the learner switches it on — rough estimates of heart rate and breathing rate derived from the camera image), the microphone (speech activity), the keyboard (typing timing) and on-screen interaction (clicks, mouse movement and window focus). This processing takes place in the learner's browser. No video or audio is stored or transmitted; only summary measures are retained.",
     "",
     "## 8. Limitations of the Optional Learning Measures and Learning Analytics",
     "",
@@ -78,7 +81,7 @@ export const DEFAULT_TERMS_BODY = [
     "",
     "The software that derives these measures is experimental research software. It is limited by the algorithms on which it is based and produces estimates rather than measurements. It is continuously developed and improved, and its outputs may change between versions; such development does not remove the constraints of the underlying hardware and conditions of use.",
     "",
-    "The optional learning measures are not psychological, medical or physiological assessments and are not used as such.",
+    "The optional learning measures, including any heart-rate and breathing-rate estimates, are rough estimates for learning feedback only. They are not psychological or medical assessments, are not medical-grade measurements, and are not used as such.",
     "",
     "Learning analytics are limited by design to the data Rohy records and by the methods used to analyse it. They are not a representation of a learner's learning, circumstances, abilities or needs, and are not used as the sole basis for any decision concerning a learner.",
     "",

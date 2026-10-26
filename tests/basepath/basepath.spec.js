@@ -139,15 +139,19 @@ test('under a base path, every room and the pathology slide load without leaving
     }
 
     // The slide: its descriptor is fetched under the base path, and found.
-    const slide = page.waitForResponse((res) => /\/slide\.dzi(\?|$)/.test(new URL(res.url()).pathname), { timeout: 60_000 });
+    // A learner's slide reference arrives sealed (rc.89, lib/pluginOpaqueRefs.js):
+    // `…/pathology/_o/<token>.dzi` instead of `…/library/<id>/slide.dzi`.
+    const slide = page.waitForResponse((res) => /\.dzi(\?|$)/.test(new URL(res.url()).pathname), { timeout: 60_000 });
     const btn = page.getByTestId('room-button-pathology');
     const box = await btn.boundingBox();
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     const opener = page.getByText('A1 — HE').first();
     if (await opener.isVisible().catch(() => false)) await opener.click().catch(() => {});
     const dzi = await slide;
-    expect(new URL(dzi.url()).pathname, 'the slide is requested under the base path')
-        .toBe(`${BASE}api/plugins/pathology/library/${LIB_ASSET}/slide.dzi`);
+    const dziPath = new URL(dzi.url()).pathname;
+    expect(dziPath, 'the slide is requested under the base path')
+        .toMatch(new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}api/plugins/pathology/_o/[^/]+\\.dzi$`));
+    expect(dziPath, 'the learner never sees the library id').not.toContain(LIB_ASSET);
     expect(dzi.status(), 'and found').toBe(200);
     await page.waitForTimeout(2_000);
 

@@ -189,7 +189,12 @@ CODE=$(curl -s -o "$OUT/purge-run.json" -w "%{http_code}" -X POST "${ADMIN_AUTH[
 assert_eq "purge executes" "200" "$CODE"
 
 ANON_USER=$(sqlite3 "$DB_PATH" "SELECT username || '|' || COALESCE(email, 'NULL') || '|' || status FROM users WHERE id=$PURGE_USER_ID;")
-assert_eq "user row anonymized" "deleted_user_${PURGE_USER_ID}|NULL|inactive" "$ANON_USER"
+# rc.89: the pseudonym is random and never embeds the original id.
+case "$ANON_USER" in
+    deleted_user_[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]"|NULL|inactive")
+        pass "user row anonymized (random pseudonym, e-mail cleared, inactive)" ;;
+    *)  fail "user row anonymized expected 'deleted_user_<16 hex>|NULL|inactive' got '$ANON_USER'" ;;
+esac
 PREFS_LEFT=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM user_preferences WHERE user_id=$PURGE_USER_ID;")
 assert_eq "user_preferences hard-deleted" "0" "$PREFS_LEFT"
 AUTHORED_CASE=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM cases WHERE id=$PURGE_CASE_ID AND deleted_at IS NOT NULL AND created_by IS NULL;")

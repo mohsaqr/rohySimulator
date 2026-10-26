@@ -132,3 +132,42 @@ export function needsConsentUpgrade({ granted, acceptedVersion, requiredVersion 
 export function acceptableVersion(requiredVersion) {
     return consentRank(requiredVersion) === -1 ? OYON_CONSENT_CAMERA_ONLY : requiredVersion;
 }
+
+/**
+ * The onboarding_settings key for the heart-rate and breathing-rate PREFERENCE.
+ * Mirrors PHYSIOLOGICAL_CONSENT_KEY in server/routes/oyon-routes.js, which is
+ * the authority: ingest stores a heart-rate or respiration block only when the
+ * tenant switch is on AND this key is `true`.
+ *
+ * It is not a second consent. The one camera consent names facial expression,
+ * gaze and these estimates (terms 1.2, §7); this key is the switch under it,
+ * off unless the learner turns it on. Every surface that shows the camera
+ * consent writes it — `false` when the camera consent is given or withdrawn
+ * without the switch — so a stored boolean means "has seen the card that
+ * offers it".
+ */
+export const OYON_CONSENT_PHYSIO_KEY = 'oyon_consent_physio';
+
+/** The tenant switches (GET /addons/oyon/config `runtime`) the key gates. */
+export const OYON_PHYSIO_RUNTIME_FLAGS = Object.freeze(['heart_rate_enabled', 'respiration_enabled']);
+
+/**
+ * Should the re-consent card show the camera consent again for the
+ * heart-rate and breathing-rate switch?
+ *
+ * Only for a learner who said YES to the camera before the card offered the
+ * switch — their record holds the grant but no boolean under
+ * OYON_CONSENT_PHYSIO_KEY — AND only while the tenant actually runs heart rate
+ * or respiration (`runtime` from GET /addons/oyon/config). With both tenant
+ * switches off, the default, nobody is asked about a measure that cannot run;
+ * when an admin turns one on, those learners get the card. Whatever they
+ * answer writes the boolean, so the card is shown once. A learner who
+ * declined, or never answered, is not asked here — the first-run card and
+ * Settings → Oyon offer the switch with the consent itself.
+ */
+export function needsPhysioChoice(onboarding, runtime) {
+    const tenantRunsPhysio = OYON_PHYSIO_RUNTIME_FLAGS.some((flag) => runtime?.[flag] === true);
+    return tenantRunsPhysio
+        && onboarding?.oyon_consent === true
+        && typeof onboarding?.[OYON_CONSENT_PHYSIO_KEY] !== 'boolean';
+}

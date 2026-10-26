@@ -599,6 +599,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.error_bootstrap_claimed": {
+    "src": "61bb4b5e8ac0",
+    "tgt": "def33e3390d2",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.error_cannot_connect": {
     "src": "00e1f31f3ba7",
     "tgt": "b310f622a084",
@@ -662,6 +672,16 @@
   "auth.error_registration_closed": {
     "src": "5d65715cd849",
     "tgt": "47cff5d0a9af",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_setup_token_required": {
+    "src": "f07429b1d525",
+    "tgt": "ae543d219fad",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -33599,6 +33619,26 @@
     "reviewer": null,
     "risk": "low"
   },
+  "oyon.card_physio_note": {
+    "src": "bd43ff03e370",
+    "tgt": "aa26a2a93df7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.card_physio_toggle": {
+    "src": "29fb72519a63",
+    "tgt": "d3064c142774",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "oyon.card_title": {
     "src": "1c01a3612095",
     "tgt": "e6cc938efd12",
@@ -36032,6 +36072,26 @@
   "oyon.reconsent_note_voice": {
     "src": "a613cffb7f02",
     "tgt": "8ae476c755c5",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.reconsent_physio_body": {
+    "src": "c578f6c918c5",
+    "tgt": "f060bb62f067",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oyon.reconsent_physio_save": {
+    "src": "d242a3a5ecdd",
+    "tgt": "43420035ec21",
     "state": "machine",
     "origin": "machine",
     "locked": false,

@@ -207,12 +207,15 @@ export async function recoverInterruptedJobs() {
     return { requeued, failed };
 }
 
-// tenant id → when the worker last took one of its jobs (ms). In memory: it
+// tenant id → the claim sequence number at which the worker last took one of
+// its jobs. A counter, not a clock: two claims inside one millisecond would tie
+// on Date.now() and hand the older tenant two turns in a row. In memory: it
 // only orders the queue, and after a restart every tenant starts level.
 const lastClaimedAt = new Map();
+let claimSeq = 0;
 
 /** Test seam — forget the fairness history. */
-export function resetJobFairness() { lastClaimedAt.clear(); }
+export function resetJobFairness() { lastClaimedAt.clear(); claimSeq = 0; }
 
 /**
  * Claim the next queued job, or null.
@@ -249,7 +252,7 @@ async function claimNext() {
         [job.id]
     );
     if ((res?.changes ?? 0) === 0) return null;
-    lastClaimedAt.set(Number(job.tenant_id), Date.now());
+    lastClaimedAt.set(Number(job.tenant_id), ++claimSeq);
     return { ...job, attempts: job.attempts + 1 };
 }
 

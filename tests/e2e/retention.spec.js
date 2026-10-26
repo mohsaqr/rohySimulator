@@ -194,7 +194,9 @@ test.describe.serial('retention + soft-delete (Stage E7)', () => {
         const body = await purge.json();
         expect(body.purged).toBe(true);
         expect(body.dry_run).toBe(false);
-        expect(body.anonymized_username).toBe(`deleted_user_${target.id}`);
+        // rc.89: the pseudonym is random (no original id inside it).
+        expect(body.anonymized_username).toMatch(/^deleted_user_[0-9a-f]{16}$/);
+        expect(body.anonymized_username).not.toBe(`deleted_user_${target.id}`);
 
         const auditAfter = await countPurgeAuditRows(target.id);
         expect(auditAfter, 'real purge writes exactly one audit row').toBe(auditBefore + 1);

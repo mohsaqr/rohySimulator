@@ -96,7 +96,7 @@ describe('StudentFirstRun — emotion-capture consent', () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
 
-        expect(await screen.findByLabelText(/Allow camera-based emotion capture/i)).not.toBeChecked();
+        expect(await screen.findByLabelText(/Allow camera-based learning measures/i)).not.toBeChecked();
         fireEvent.click(screen.getByRole('button', { name: /Start/i }));
 
         await waitFor(() => expect(apiPut).toHaveBeenCalled());
@@ -110,7 +110,7 @@ describe('StudentFirstRun — emotion-capture consent', () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
 
-        const box = await screen.findByLabelText(/Allow camera-based emotion capture/i);
+        const box = await screen.findByLabelText(/Allow camera-based learning measures/i);
         expect(box).not.toBeChecked();
 
         fireEvent.click(screen.getByRole('button', { name: /Start/i }));
@@ -125,7 +125,7 @@ describe('StudentFirstRun — emotion-capture consent', () => {
         routeFetches({ oyon: { enabled: true, consent_version: 'oyon-consent-v3' } });
         render(<StudentFirstRun onDone={() => {}} />);
 
-        fireEvent.click(await screen.findByLabelText(/Allow camera-based emotion capture/i));
+        fireEvent.click(await screen.findByLabelText(/Allow camera-based learning measures/i));
         fireEvent.click(screen.getByRole('button', { name: /Start/i }));
 
         await waitFor(() => expect(apiPut).toHaveBeenCalled());

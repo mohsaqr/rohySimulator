@@ -15,7 +15,8 @@ import { useTranslation } from 'react-i18next';
 import {
     BookOpen, Check, Languages, Loader2, Mic, ScanFace, Stethoscope, Volume2
 } from 'lucide-react';
-import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CAMERA_ONLY, OYON_CONSENT_PHYSIO_KEY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import OyonPhysioSwitch from '../oyon/OyonPhysioSwitch';
 import { apiFetch, apiPut } from '../../services/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -60,6 +61,13 @@ export default function StudentFirstRun({ onDone }) {
     // consent. Browser storage may hold another account's grant on a shared
     // device, so it must never pre-fill this new account's welcome screen.
     const [oyonConsent, setOyonConsent] = useState(false);
+    // Heart rate and breathing: a switch under the camera consent, off until
+    // the student turns it on, and off again whenever the consent is.
+    const [oyonPhysio, setOyonPhysio] = useState(false);
+    const changeOyonConsent = (next) => {
+        setOyonConsent(next);
+        if (!next) setOyonPhysio(false);
+    };
     const [micStatus, setMicStatus] = useState(null); // null | 'ok' | 'blocked'
     const [casesFailed, setCasesFailed] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -118,6 +126,7 @@ export default function StudentFirstRun({ onDone }) {
                     // discourse capture the card never mentioned. Those are
                     // asked for by OyonConsentUpdate, which names them.
                     oyon_consent_version: oyonConsent ? OYON_CONSENT_CAMERA_ONLY : null,
+                    [OYON_CONSENT_PHYSIO_KEY]: oyonConsent && oyonPhysio,
                 }
             });
         } catch (err) {
@@ -223,7 +232,7 @@ export default function StudentFirstRun({ onDone }) {
                     </section>
                 )}
 
-                {/* Emotion-capture consent — only when the tenant runs Oyon */}
+                {/* Camera consent — only when the tenant runs Oyon */}
                 {oyonConfig && (
                     <section className={cardClass}>
                         <CardTitle icon={ScanFace}>{t('oyon:card_title')}</CardTitle>
@@ -231,11 +240,18 @@ export default function StudentFirstRun({ onDone }) {
                             <input
                                 type="checkbox"
                                 checked={oyonConsent}
-                                onChange={e => setOyonConsent(e.target.checked)}
+                                onChange={e => changeOyonConsent(e.target.checked)}
                                 className="w-4 h-4 mt-0.5 accent-blue-500"
                             />
                             <span className="text-sm text-neutral-200">{t('oyon:card_toggle')}</span>
                         </label>
+                        {oyonConsent && (
+                            <OyonPhysioSwitch
+                                checked={oyonPhysio}
+                                onChange={setOyonPhysio}
+                                className="mt-3 ml-7"
+                            />
+                        )}
                         <p className="text-xs text-neutral-500 mt-2">
                             {t('oyon:card_note')}
                         </p>

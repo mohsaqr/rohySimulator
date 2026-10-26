@@ -81,7 +81,7 @@ test.describe('student camera consent', () => {
             await page.goto('/');
             const welcome = page.getByRole('heading', { name: 'Welcome to Rohy', level: 1 });
             await expect(welcome).toBeVisible();
-            const consent = page.getByRole('checkbox', { name: /Allow camera-based emotion capture/i });
+            const consent = page.getByRole('checkbox', { name: /Allow camera-based learning measures/i });
             await expect(consent).toBeVisible();
             await expect(consent).not.toBeChecked();
             await test.info().attach('welcome-consent-starts-unchecked', {

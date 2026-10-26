@@ -91,7 +91,7 @@ describe('user purge (lane D)', () => {
         expect((await g(`SELECT COUNT(*) AS n FROM learning_events_rejected WHERE user_id = ?`, [USER])).n).toBe(0);
         const user = await g('SELECT username, email, name FROM users WHERE id = ?', [USER]);
         expect(user.username).toMatch(/^deleted_user_[0-9a-f]{16}$/);
-        expect(user.username).not.toContain(String(USER));
+        expect(user.username).not.toBe(`deleted_user_${USER}`);
         expect(user.email).toBeNull();
     });
 

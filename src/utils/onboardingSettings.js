@@ -3,7 +3,8 @@
 // Single parser shared by FirstRunGate, ChatInterface and OyonCaptureWidget
 // so the tolerant-parse rule lives in one place.
 //
-// Shape (all keys optional): { first_run_done, voice_mode, oyon_consent }.
+// Shape (all keys optional): { first_run_done, voice_mode, oyon_consent,
+// oyon_consent_version, oyon_consent_physio }.
 
 export function parseOnboardingSettings(prefs) {
     const raw = prefs?.onboarding_settings;

@@ -3,8 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { ScanFace, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../services/apiClient';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { needsConsentUpgrade, acceptableVersion, consentRank, OYON_CONSENT_VOICE, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged } from '../../utils/oyonConsent';
+import {
+   needsConsentUpgrade, needsPhysioChoice, acceptableVersion, consentRank,
+   OYON_CONSENT_VOICE, OYON_CONSENT_PHYSIO_KEY, OYON_CONSENT_VERSION_LS_KEY, announceOyonConsentChanged,
+} from '../../utils/oyonConsent';
 import { CONSENT_PREF_KEY } from './OyonCaptureWidget';
+import OyonPhysioSwitch from './OyonPhysioSwitch';
 import EventLogger from '../../services/eventLogger';
 
 /*
@@ -23,10 +27,21 @@ import EventLogger from '../../services/eventLogger';
  * the prompt does not return. Camera-derived capture is unaffected either way —
  * it is covered by the contract the learner already accepted, and the server
  * gates only the newly-described signals on the newer version.
+ *
+ * The card also shows the camera consent again, ONCE, to a learner who said
+ * yes before it offered the heart-rate and breathing-rate switch, while the
+ * tenant has heart rate or respiration switched on (terms 1.2, 2026-10-26;
+ * utils/oyonConsent needsPhysioChoice). That is the same consent
+ * with a switch under it, not a new contract: when no contract upgrade is due
+ * the card asks only for the switch, leaves the camera choice and its version
+ * exactly as they are, and saving with the switch off records "off".
  */
 export default function OyonConsentUpdate() {
    const { t } = useTranslation('oyon');
-   const [state, setState] = useState(null); // { requiredVersion } once needed
+   // { requiredVersion, upgrade } once needed; `upgrade` false means only the
+   // heart-rate and breathing switch is being asked about.
+   const [state, setState] = useState(null);
+   const [physio, setPhysio] = useState(false);
    const [busy, setBusy] = useState(false);
 
    useEffect(() => {
@@ -40,12 +55,14 @@ export default function OyonConsentUpdate() {
             if (cancelled) return;
             if (!config?.enabled) return;              // tenant runs no Oyon
             const onboarding = parseOnboardingSettings(prefs);
-            if (needsConsentUpgrade({
+            const upgrade = needsConsentUpgrade({
                granted: onboarding.oyon_consent,
                acceptedVersion: onboarding.oyon_consent_version,
                requiredVersion: config.consent_version,
-            })) {
-               setState({ requiredVersion: config.consent_version });
+            });
+            if (upgrade || needsPhysioChoice(onboarding, config.runtime)) {
+               setPhysio(onboarding[OYON_CONSENT_PHYSIO_KEY] === true);
+               setState({ requiredVersion: config.consent_version, upgrade });
             }
          } catch {
             // Oyon gated off, offline, or preferences unavailable — never block
@@ -54,6 +71,27 @@ export default function OyonConsentUpdate() {
       })();
       return () => { cancelled = true; };
    }, []);
+
+   // Only the switch is due: record it and nothing else, so the camera consent
+   // and the version it was given under stay exactly as they are. "No, keep it
+   // as it is" records the switch as off.
+   const savePhysio = async (value) => {
+      if (busy || !state) return;
+      setBusy(true);
+      EventLogger.consentRecorded(OYON_CONSENT_PHYSIO_KEY, value ? 'granted' : 'declined', 'OyonConsentUpdate');
+      try {
+         await apiFetch('/users/preferences', {
+            method: 'PUT',
+            json: { onboarding_settings: { [OYON_CONSENT_PHYSIO_KEY]: value } },
+         });
+      } catch {
+         // Not saved: the card returns next load, and the server keeps storing
+         // no heart rate or breathing until a `true` is on record.
+      }
+      setState(null);
+      setBusy(false);
+      announceOyonConsentChanged();
+   };
 
    const answer = async (granted) => {
       if (busy || !state) return;
@@ -69,6 +107,8 @@ export default function OyonConsentUpdate() {
                onboarding_settings: {
                   oyon_consent: granted,
                   oyon_consent_version: granted ? version : null,
+                  // Declining the consent turns the switch under it off too.
+                  [OYON_CONSENT_PHYSIO_KEY]: granted && physio,
                },
             },
          });
@@ -101,28 +141,39 @@ export default function OyonConsentUpdate() {
                <h2 className="text-base font-semibold text-neutral-100">{t('reconsent_title')}</h2>
             </div>
 
-            <p className="text-sm text-neutral-300">{t('reconsent_body')}</p>
+            {state.upgrade ? (
+               <>
+                  <p className="text-sm text-neutral-300">{t('reconsent_body')}</p>
 
-            <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-1">
-               <li>{t('reconsent_item_typing')}</li>
-               <li>{t('reconsent_item_interaction')}</li>
-               <li>{t('reconsent_item_discourse')}</li>
-               {asksForVoice && <li>{t('reconsent_item_voice')}</li>}
-               {asksForVoice && <li>{t('reconsent_item_ai_assist')}</li>}
-            </ul>
+                  <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-1">
+                     <li>{t('reconsent_item_typing')}</li>
+                     <li>{t('reconsent_item_interaction')}</li>
+                     <li>{t('reconsent_item_discourse')}</li>
+                     {asksForVoice && <li>{t('reconsent_item_voice')}</li>}
+                     {asksForVoice && <li>{t('reconsent_item_ai_assist')}</li>}
+                  </ul>
+               </>
+            ) : (
+               <p className="text-sm text-neutral-300">{t('reconsent_physio_body')}</p>
+            )}
 
-            <p className="text-xs text-neutral-500">
-               {/* Voice keeps a per-frame series of measurements, not only a
-                   summary, so the typing-era note ("only summaries are stored")
-                   would be untrue once voice is in scope. */}
-               {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note')}
-            </p>
+            <p className="text-sm text-neutral-300">{t('card_toggle')}</p>
+            <OyonPhysioSwitch checked={physio} onChange={setPhysio} disabled={busy} className="ml-1" />
+
+            {state.upgrade && (
+               <p className="text-xs text-neutral-500">
+                  {/* Voice keeps a per-frame series of measurements, not only a
+                      summary, so the typing-era note ("only summaries are stored")
+                      would be untrue once voice is in scope. */}
+                  {t(asksForVoice ? 'reconsent_note_voice' : 'reconsent_note')}
+               </p>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-1">
                <button
                   type="button"
                   disabled={busy}
-                  onClick={() => answer(false)}
+                  onClick={state.upgrade ? () => answer(false) : () => savePhysio(false)}
                   className="px-3 py-1.5 rounded text-sm text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
                >
                   {t('reconsent_decline')}
@@ -130,11 +181,11 @@ export default function OyonConsentUpdate() {
                <button
                   type="button"
                   disabled={busy}
-                  onClick={() => answer(true)}
+                  onClick={state.upgrade ? () => answer(true) : () => savePhysio(physio)}
                   className="px-3 py-1.5 rounded text-sm bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 flex items-center gap-2"
                >
                   {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {t('reconsent_accept')}
+                  {t(state.upgrade ? 'reconsent_accept' : 'reconsent_physio_save')}
                </button>
             </div>
          </div>

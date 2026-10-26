@@ -5,11 +5,11 @@ import { apiFetch } from '../../services/apiClient';
 import { oyonClientLog } from './clientLogger';
 import { liveAnxiousIndex, ANXIOUS_FLAG_THRESHOLD } from './anxiousIndex';
 import { loadOyonElement } from './loadOyonElement';
-import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge';
+import { elementSettings, maskPhysiological, persistBody, OYON_ASSET_BASE } from './captureBridge';
 import { getAois, onAois } from './screenAois';
 import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
-import { OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
+import { OYON_CONSENT_CHANGED_EVENT, OYON_CONSENT_PHYSIO_KEY, OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { ensureSessionConsent } from './ensureSessionConsent';
 import EventLogger from '../../services/eventLogger';
 
@@ -99,11 +99,32 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
    // can start before it resolves and must not read the stale flag meanwhile.
    const consentLookupFailedRef = useRef(false);
    const consentLookupRef = useRef(null);
+   // Heart rate and respiration run only when the learner turned on the switch
+   // under the camera consent (oyon_consent_physio, terms 1.2) — whatever the
+   // tenant switch says. Off until the record says otherwise, so an element
+   // created before the lookup lands, or after it fails, never estimates them.
+   const physioAllowedRef = useRef(false);
+   const runtimeConfigRef = useRef(null);
+   const settingsAttribute = useCallback(
+      (runtime) => JSON.stringify(elementSettings(maskPhysiological(runtime, physioAllowedRef.current))),
+      [],
+   );
+   // The element snapshots `settings` at start(), so a change applies from the
+   // next capture start; the running one keeps what it started with.
+   const applyPhysioChoice = useCallback((onboarding) => {
+      physioAllowedRef.current = onboarding.oyon_consent === true
+         && onboarding[OYON_CONSENT_PHYSIO_KEY] === true;
+      if (elRef.current && runtimeConfigRef.current) {
+         elRef.current.setAttribute('settings', settingsAttribute(runtimeConfigRef.current));
+      }
+   }, [settingsAttribute]);
    useEffect(() => {
       consentLookupRef.current = apiFetch('/users/preferences')
          .then(prefs => {
             consentLookupFailedRef.current = false;
-            const consent = parseOnboardingSettings(prefs).oyon_consent;
+            const onboarding = parseOnboardingSettings(prefs);
+            applyPhysioChoice(onboarding);
+            const consent = onboarding.oyon_consent;
             try {
                if (typeof consent === 'boolean') {
                   localStorage.setItem(CONSENT_PREF_KEY, consent ? '1' : '0');
@@ -120,7 +141,19 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
                error: err?.message || String(err),
             });
          });
-   }, []);
+   }, [applyPhysioChoice]);
+
+   // A choice saved in Settings → Oyon or the re-consent card while this
+   // widget is mounted: re-read the switch so the next start honours it.
+   useEffect(() => {
+      const onChange = () => {
+         apiFetch('/users/preferences')
+            .then(prefs => applyPhysioChoice(parseOnboardingSettings(prefs)))
+            .catch(() => applyPhysioChoice({})); // unreadable → off
+      };
+      window.addEventListener(OYON_CONSENT_CHANGED_EVENT, onChange);
+      return () => window.removeEventListener(OYON_CONSENT_CHANGED_EVENT, onChange);
+   }, [applyPhysioChoice]);
 
    const ensureConsent = useCallback(async () => {
       // Never decide on the local flag before the server's record replaced it.
@@ -275,7 +308,8 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
             el.setAttribute('gaze-engine', 'mediapipe');
             // Same-origin models + WASM (air-gap contract) — see captureBridge.
             el.setAttribute('asset-base', OYON_ASSET_BASE);
-            el.setAttribute('settings', JSON.stringify(elementSettings(runtimeConfig)));
+            runtimeConfigRef.current = runtimeConfig;
+            el.setAttribute('settings', settingsAttribute(runtimeConfig));
             el.setAttribute('lang', languageRef.current);
             if (sessionRef.current) el.setAttribute('session-id', String(sessionRef.current));
             el.addEventListener('oyon:status', onStatus);
@@ -317,7 +351,7 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
          runningRef.current = false;
          persistGateRef.current = false;
       };
-   }, [tenantEnabled, runtimeConfig, ensureConsent]);
+   }, [tenantEnabled, runtimeConfig, ensureConsent, settingsAttribute]);
 
    // Language applies LIVE too: the element re-renders the pill's text on a
    // `lang` change and leaves the capture running (Oyon 3.3.3).

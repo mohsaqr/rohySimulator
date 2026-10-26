@@ -113,9 +113,12 @@ async function recordedAcceptedVersion(req) {
  * consent, whose card ("camera-based emotion capture") and terms (§7: facial
  * expression and gaze) name neither, and heart rate is likely special-category
  * data. Ingest now stores a heart-rate or respiration block only when the
- * tenant switch is on AND this key is `true`. No surface writes it yet: the
- * card text is the owner's to write, so until then nothing physiological is
- * stored.
+ * tenant switch is on AND this key is `true`. Since terms 1.2 (2026-10-26) it
+ * is a switch under the one camera consent, not a second consent: the
+ * first-run card, Settings → Oyon and OyonConsentUpdate write it (off by
+ * default, and back to false whenever the camera consent is given or
+ * withdrawn without it). Mirrored as OYON_CONSENT_PHYSIO_KEY in
+ * src/utils/oyonConsent.js.
  */
 const PHYSIOLOGICAL_CONSENT_KEY = 'oyon_consent_physio';
 const PHYSIOLOGICAL_MODALITIES = new Set(['heart_rate', 'respiration']);

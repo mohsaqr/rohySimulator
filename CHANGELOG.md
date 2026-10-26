@@ -9,6 +9,26 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.90] — 2026-10-26
+
+### One camera consent, heart rate and breathing as a learner preference
+- The Oyon camera consent now names everything the camera may be used for: facial expression, gaze, and, only if the
+  learner switches it on, rough estimates of heart rate and breathing rate. There is no second consent. **(change)**
+- A switch under the consent (first-run card, Settings → Oyon, consent-update card) lets the learner turn the heart-rate
+  and breathing estimates on; it is off by default, turning the camera consent off resets it, and the browser never runs
+  those two estimators unless it is on. Existing camera consenters see the updated card once, and only on tenants where an
+  admin has switched heart rate or respiration on. Card title is now "Camera-based learning measures".
+- Terms of use **v1.2**: §7 lists the optional estimates in the same sentence as gaze; §8 no longer claims the measures are
+  not physiological and calls them rough learning-feedback estimates, never medical measurements. The seven shipped
+  translations carry the same two sentences. Nobody is re-prompted while `terms_required` is off.
+
+### Fixes
+- Plugin import queue: fairness between tenants is keyed by a claim counter instead of the millisecond clock, so two claims
+  in the same millisecond no longer hand the older tenant two turns (rc.89 regression caught by its own test).
+- Tests and audit script updated for rc.89 behaviour: random purge pseudonyms (`scripts/audit-retention.sh`,
+  `tests/e2e/retention.spec.js`), sealed learner slide references under a base path (`tests/basepath`), translation status
+  entries for the new auth strings.
+
 ## [3.0.0-rc.89] — 2026-10-26
 
 **Security release (audit #2).** A second read-only audit of rc.88 by nine independent reviewers (authentication,

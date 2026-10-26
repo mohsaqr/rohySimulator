@@ -53,6 +53,27 @@ export function elementSettings(runtimeConfig) {
     return out;
 }
 
+/**
+ * The runtime config with heart rate and respiration switched OFF unless the
+ * learner turned on the switch under the camera consent
+ * (onboarding_settings.oyon_consent_physio === true, terms 1.2).
+ *
+ * Off is written explicitly, as `false`, never by omission: the element's
+ * own defaults turn both estimators on, so a missing key would run them. The
+ * tenant switch still applies on top — a learner's "on" cannot enable what the
+ * tenant left off, and a tenant flag that is missing reads as off. The server drops these blocks at ingest either way; this
+ * keeps the browser from estimating them at all.
+ */
+export function maskPhysiological(runtimeConfig, physioAllowed) {
+    const cfg = runtimeConfig && typeof runtimeConfig === 'object' ? runtimeConfig : {};
+    const allowed = physioAllowed === true;
+    return {
+        ...cfg,
+        heart_rate_enabled: allowed && cfg.heart_rate_enabled === true,
+        respiration_enabled: allowed && cfg.respiration_enabled === true,
+    };
+}
+
 // EditableSettings booleans the server owns. Names match the element's keys
 // exactly — the server already fans `signal_window_share` out into the
 // per-modality `*_window_share` fields, so this is a straight pass-through.

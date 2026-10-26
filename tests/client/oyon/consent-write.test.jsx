@@ -53,7 +53,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('Settings → Oyon consent toggle records WHICH contract was accepted', () => {
     it('sends the accepted version alongside the grant', async () => {
         const { findByRole } = renderWithProviders(<OyonSettingsTab />);
-        const box = await findByRole('checkbox', { name: /Capture emotions during my simulation sessions/i });
+        const box = await findByRole('checkbox', { name: /Allow camera-based learning measures during my sessions/i });
 
         // Regression lock: the switch defaulted to ticked for a learner who never chose; it starts OFF, so one tick is the grant.
         expect(box.checked).toBe(false);
@@ -64,6 +64,8 @@ describe('Settings → Oyon consent toggle records WHICH contract was accepted',
         expect(opts.json.onboarding_settings).toEqual({
             oyon_consent: true,
             oyon_consent_version: 'oyon-consent-v1',
+            // The heart-rate and breathing switch starts off with the grant.
+            oyon_consent_physio: false,
         });
         expect(localStorage.getItem(OYON_CONSENT_VERSION_LS_KEY)).toBe('oyon-consent-v1');
     });
@@ -77,7 +79,7 @@ describe('Settings → Oyon consent toggle records WHICH contract was accepted',
             return {};
         });
         const { findByRole } = renderWithProviders(<OyonSettingsTab />);
-        const box = await findByRole('checkbox', { name: /Capture emotions during my simulation sessions/i });
+        const box = await findByRole('checkbox', { name: /Allow camera-based learning measures during my sessions/i });
         fireEvent.click(box);
         fireEvent.click(box);
         await waitFor(() => expect(consentPut()).toBeTruthy());
@@ -91,7 +93,7 @@ describe('Settings → Oyon consent toggle records WHICH contract was accepted',
         localStorage.setItem('oyon.defaultConsent', '1'); // a choice made earlier
         localStorage.setItem(OYON_CONSENT_VERSION_LS_KEY, 'oyon-consent-v2');
         const { findByRole } = renderWithProviders(<OyonSettingsTab />);
-        const box = await findByRole('checkbox', { name: /Capture emotions during my simulation sessions/i });
+        const box = await findByRole('checkbox', { name: /Allow camera-based learning measures during my sessions/i });
 
         fireEvent.click(box);
         await waitFor(() => expect(consentPut()).toBeTruthy());
