@@ -9,8 +9,8 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `DELETE` | `/api/patient-record/:sessionId` | `authenticateToken` | `server/routes/patient-record-routes.js:190` |
-| `GET` | `/api/patient-record/:sessionId` | `authenticateToken` | `server/routes/patient-record-routes.js:113` |
-| `GET` | `/api/patient-record/:sessionId/events` | `authenticateToken` | `server/routes/patient-record-routes.js:151` |
-| `GET` | `/api/patient-record/:sessionId/summary` | `authenticateToken` | `server/routes/patient-record-routes.js:220` |
-| `POST` | `/api/patient-record/sync` | `authenticateToken` | `server/routes/patient-record-routes.js:38` |
+| `DELETE` | `/api/patient-record/:sessionId` | `authenticateToken` | `server/routes/patient-record-routes.js:201` |
+| `GET` | `/api/patient-record/:sessionId` | `authenticateToken` | `server/routes/patient-record-routes.js:124` |
+| `GET` | `/api/patient-record/:sessionId/events` | `authenticateToken` | `server/routes/patient-record-routes.js:162` |
+| `GET` | `/api/patient-record/:sessionId/summary` | `authenticateToken` | `server/routes/patient-record-routes.js:233` |
+| `POST` | `/api/patient-record/sync` | `authenticateToken` | `server/routes/patient-record-routes.js:40` |

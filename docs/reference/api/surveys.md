@@ -9,21 +9,21 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/surveys` | `authenticateToken` | `server/routes/surveys-routes.js:117` |
-| `POST` | `/api/surveys` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:170` |
-| `DELETE` | `/api/surveys/:id` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:242` |
-| `GET` | `/api/surveys/:id` | `authenticateToken` | `server/routes/surveys-routes.js:190` |
-| `PUT` | `/api/surveys/:id` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:212` |
-| `GET` | `/api/surveys/:id/export` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:662` |
-| `GET` | `/api/surveys/:id/my-response` | `authenticateToken` | `server/routes/surveys-routes.js:536` |
-| `POST` | `/api/surveys/:id/publish` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:256` |
-| `POST` | `/api/surveys/:id/questions` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:291` |
-| `DELETE` | `/api/surveys/:id/questions/:questionId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:360` |
-| `PUT` | `/api/surveys/:id/questions/:questionId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:322` |
-| `POST` | `/api/surveys/:id/questions/:questionId/duplicate` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:387` |
-| `POST` | `/api/surveys/:id/questions/reorder` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:432` |
-| `GET` | `/api/surveys/:id/responses` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:573` |
-| `POST` | `/api/surveys/:id/submit` | `authenticateToken` | `server/routes/surveys-routes.js:462` |
-| `GET` | `/api/surveys/module/:moduleId` | `authenticateToken` | `server/routes/surveys-routes.js:706` |
-| `POST` | `/api/surveys/module/:moduleId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:748` |
-| `DELETE` | `/api/surveys/module/:moduleId/:surveyId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:786` |
+| `GET` | `/api/surveys` | `authenticateToken` | `server/routes/surveys-routes.js:183` |
+| `POST` | `/api/surveys` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:236` |
+| `DELETE` | `/api/surveys/:id` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:308` |
+| `GET` | `/api/surveys/:id` | `authenticateToken` | `server/routes/surveys-routes.js:256` |
+| `PUT` | `/api/surveys/:id` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:278` |
+| `GET` | `/api/surveys/:id/export` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:759` |
+| `GET` | `/api/surveys/:id/my-response` | `authenticateToken` | `server/routes/surveys-routes.js:620` |
+| `POST` | `/api/surveys/:id/publish` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:322` |
+| `POST` | `/api/surveys/:id/questions` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:357` |
+| `DELETE` | `/api/surveys/:id/questions/:questionId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:426` |
+| `PUT` | `/api/surveys/:id/questions/:questionId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:388` |
+| `POST` | `/api/surveys/:id/questions/:questionId/duplicate` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:453` |
+| `POST` | `/api/surveys/:id/questions/reorder` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:498` |
+| `GET` | `/api/surveys/:id/responses` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:670` |
+| `POST` | `/api/surveys/:id/submit` | `authenticateToken` | `server/routes/surveys-routes.js:528` |
+| `GET` | `/api/surveys/module/:moduleId` | `authenticateToken` | `server/routes/surveys-routes.js:803` |
+| `POST` | `/api/surveys/module/:moduleId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:845` |
+| `DELETE` | `/api/surveys/module/:moduleId/:surveyId` | `authenticateToken, requireEducator` | `server/routes/surveys-routes.js:883` |

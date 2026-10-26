@@ -9,5 +9,5 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/sessions/:sessionId/discussion-notes` | `authenticateToken` | `server/routes/notes-routes.js:36` |
-| `PUT` | `/api/sessions/:sessionId/discussion-notes` | `authenticateToken` | `server/routes/notes-routes.js:53` |
+| `GET` | `/api/sessions/:sessionId/discussion-notes` | `authenticateToken` | `server/routes/notes-routes.js:37` |
+| `PUT` | `/api/sessions/:sessionId/discussion-notes` | `authenticateToken` | `server/routes/notes-routes.js:54` |

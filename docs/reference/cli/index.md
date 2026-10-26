@@ -31,6 +31,7 @@ Operator-driven, backup-first upgrade path. One CLI, 5 subcommands. Never execut
 | Variable | Default | Description |
 | --- | --- | --- |
 | `ROHY_BACKUP_DIR` | `/var/backups/rohy` | where snapshots live |
+| `ROHY_BACKUP_ENV_DIR` | `/var/backups/rohy-env` | env-file snapshots (kept apart from the DB) |
 | `ROHY_DB` | `/opt/data/rohy/database.sqlite` | where the DB lives |
 | `ROHY_ENV_FILE` | `/etc/rohy/env` | systemd EnvironmentFile |
 | `ROHY_INSECURE` | `0` | accept self-signed in verify |

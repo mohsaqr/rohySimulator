@@ -18,6 +18,7 @@ export default defineConfig([
     // verification runs live here, and linting them buried the real result
     // under ~1,100 errors that CI never sees.
     'tmp/**',
+    'audit/**',
     'frontend/**',
     'OyonR/**',
     // Byte-identical vendored copy of ~/Documents/Github/Pathoyon/rohy-pathology/src

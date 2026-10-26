@@ -9,6 +9,123 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.0.0-rc.89] — 2026-10-26
+
+**Security release (audit #2).** A second read-only audit of rc.88 by nine independent reviewers (authentication,
+authorization and tenancy, the LLM and TTS proxies, files and plugins, the client, deployment and CI, the data layer and
+privacy, abuse and availability, plus a live probe) found 9 high and about 30 medium issues, and showed that 14 of the
+rc.78 fixes were only partial. Every code-level finding is fixed here, each with a regression-lock test
+(`tests/server/sec2-*.test.js`, `src/**/*.sec2.test.*`). The audit report stays out of the repository. Behaviour
+changes operators and educators will notice are marked **(change)**.
+
+### Authentication and sessions
+- A locked account answers every password with the same generic 401; a wrong password during a lock no longer extends
+  it. Unlock by setting the status to active, resetting the password, or `node scripts/unlock-user.js`. **(change)**
+- The CSRF token is bound to the session (HMAC over the session hash); a stale token gets `csrf_stale` plus a fresh
+  cookie and the client retries once. Body `_csrf` is ignored for form-encoded, multipart and text bodies.
+- Login, register and refresh return the JWT in the body only to bearer clients (`X-Rohy-Auth: bearer`, a bearer
+  refresh, or a non-browser caller). Browsers use the cookie. **(change)**
+- First-admin bootstrap is an atomic conditional insert (one winner, others get `bootstrap_claimed`); optional
+  `ROHY_SETUP_TOKEN` gates it. Suspending, deactivating or moving a user revokes or re-tags their sessions; password
+  changes revoke by user id across tenants. `PUT /user/password` has a per-user attempt limit; failed logins take at
+  least 250 ms. Usernames are compared case-insensitively on every admin path; e-mails are normalised.
+- Invites die when their creator is deleted, deactivated, moved or demoted below the invite's role. Approval-mode
+  registration always answers 202. Invite/join/key query values and any JWT are redacted from request logs.
+
+### Authorization and tenant isolation
+- Writes to install-wide data (master catalogues, platform-scope catalogue rows and promotion, platform treatment
+  effects, `/labs/*`, model pricing, install-level settings reads) require a platform admin (tenant 1). A tenant
+  admin's new treatment defaults to tenant scope. `DELETE /master/medications/all` is reachable again. **(change)**
+- `tenant_id` is stamped on `session_notes`, `patient_record_*`, `active_treatments`, `clinical_notes`, `llm_usage`
+  and `tts_usage`; migrations 0072 and 0074 backfill existing rows from the owning session or user. Audit rows take
+  the tenant from the request instead of defaulting to 1; agent-template audit rows store a prompt hash, not the prompt.
+- Case labs (`POST`/`PUT /cases/:id/labs` and their readers) are tenant-checked. Questionnaire, emotion-log and
+  settings-log writes validate the session and take the case from it. Learner analytics (seven routes and the
+  complete-session export) carry the case code, never the authoring title or description. `GET /cases/:id/agents`
+  honours case visibility.
+- Cohort staff roles require educator rank (`resolveManageableCohort`, `POST /cohorts/:id/teachers`), closing the
+  staff lesson view (MCQ keys, unpublished lessons) to student-rank co-teachers. A co-teacher cannot delete the
+  owner's course; `POST /scenarios` needs educator. **(change)**
+- `/interactions` and the patient record are owner-only and close two minutes after the session ends; staff can no
+  longer order, administer or discontinue inside a learner's session. **(change)**
+- Oyon affect data read from analytics (moments, chat-log turns, case insights, feeds, CSV, system log) goes through one
+  read-scope helper: role, per-role view switches, per-row `*_can_view`, and educators see only learners in courses they
+  own or co-teach. **(change)**
+
+### LLM and TTS proxies
+- The outbound-URL guard classifies addresses by bytes (`net.BlockList`): IPv4-mapped/compatible IPv6, NAT64, 6to4,
+  Teredo, site-local, 198.18/15 and 192.0.0/24 are refused; hostnames are checked again at connect time
+  (`secureFetch`), redirects are never followed. Link-local and metadata stay blocked even with
+  `ROHY_ALLOW_PRIVATE_LLM_HOSTS=1`.
+- `/proxy/llm`: per-user rate limit (60/min) and in-flight cap (3), both env-tunable; a 6-minute streaming backstop;
+  budgets reserve estimated input and output atomically and settle afterwards; new per-tenant daily caps; streams
+  request `include_usage` and fall back to a character estimate so no reply is metered as zero. **(change)**
+- `/tts`: per-user rate limit, bounded synthesis queue (`tts_busy`), 120 s deadline, atomic character reservation.
+- Non-streamed replies are rebuilt as `{choices, usage, model}`; `<think>` blocks and reasoning fields are stripped;
+  upstream bodies are capped; learners get a generic upstream error. Changing a template's provider or endpoint clears
+  its stored key unless a new key is supplied. Agent temperature and max-tokens are clamped.
+- A learner can store an `assistant` turn only when the proxy produced it (`reply_not_attested`); the specialist
+  "after effort" gate counts only turns the agent was asked. The LLM-test fingerprint is HMAC-keyed and never sent to
+  clients. The general limiter is keyed by signed-in user (600/min), anonymous traffic per IP (1200/min). Plugin
+  slot/settings routes and the report relay are rate-limited. Large JSON parsers run behind a signed token.
+- Kokoro model files are verified by SHA-256 before loading (`KOKORO_INTEGRITY` disables local Kokoro on mismatch;
+  `ROHY_KOKORO_MODEL_SHA256` overrides deliberately).
+
+### Privacy and data
+- Heart-rate and respiration estimation default **off**; migration 0073 turns them off on tenants where nobody ever
+  saved the signal settings. Ingest stores physiological blocks only when the tenant switch is on and the person holds
+  the separate `oyon_consent_physio` consent. Every per-modality switch is enforced at ingest; the course sensing gate
+  derives the course from the session; a consent grant needs the stored account consent and withdrawal is honoured.
+  **(change)** Terms wording for the new consent is pending the owner's approval.
+- Deleting a user no longer breaks the audit hash chain. Audit rows now hash username, status, error message and
+  session id too (`hash_version` 2; older rows still verify). New audit rows store e-mails as an HMAC digest and IPs
+  truncated to /24 or /48; terms-acceptance IPs are truncated; unknown login names are stored as a digest.
+- The GDPR purge covers both Oyon signal tables, registration requests and invite uses, terms acceptances (IP and UA
+  dropped), cohort membership, lesson progress, survey responses and usage budgets; client logs and rejected events are
+  actually anonymised; the pseudonym is random and the purge audit row carries it, not the real name. Dry-run plan and
+  purge come from one step list.
+- A daily retention sweep applies Oyon `retention_days` to all three Oyon tables; opt-in retention for login logs,
+  expired sessions, terms acceptances and registration rows via `ROHY_RETENTION_*`.
+- Learning-event ingest writes one audit row per batch, refuses a batch with more than one forged event or more than five
+  sessions, counts events against a per-user budget, and always stores session-less events under the caller. The audit
+  queue is capped. Client timestamps may be at most 10 minutes old and never before the session start.
+- Surveys: one response per person (unique `dedupe_key`, migration 0073; anonymous surveys keyed by digest, hour-level
+  timestamps); submits run in an isolated transaction. Legacy questionnaire responses: one per session or case.
+  Pathology reads are verified server-side against the slides actually served.
+- `scripts/migrate.js` takes a 0600 pre-migration backup. Backups are written under `umask 077` and the env file goes to
+  a separate `ROHY_BACKUP_ENV_DIR`.
+
+### Files, plugins, client
+- Learners receive sealed, opaque PACS/pathology references (`pluginOpaqueRefs`) in the catalogue and in their case
+  document; the proxy unseals them. Catalogue descriptions and bundle paths no longer reach learners. **(change)**
+- `/uploads/*` requires sign-in; the lesson-file guard normalises paths and refuses dot segments; stale `frontend/uploads`
+  copies are never served and the build no longer snapshots `public/uploads`. Upload names use `randomUUID`.
+- The pathology library is tenant-checked and refuses `source/` originals and staging directories; `.webp` is served
+  as `image/webp`; symlinks cannot escape the content root. Import jobs are deduplicated and capped per tenant.
+- The server-side lesson sanitiser parses tags like the HTML spec, iterates to a fixpoint, drops `script`, `base`,
+  `meta` and SVG animation elements; the client DOMPurify config drops `id` and allowlists classes. The lesson video
+  iframe is sandboxed and limited to YouTube/Vimeo; CSP gains `frame-src 'self'`.
+- Body silhouettes and bodymap regions are platform-admin writes and audited. `remote:` plugin references reject dot
+  segments. The vendored 3D Bedside room (v1.0.0-beta.3) escapes every host-supplied string. `public/case.html` and
+  `public/dashboard/oyon.html` are removed.
+- All client CSV exports use one formula-safe cell escaper. A previous person's Oyon consent flag is cleared on a shared
+  browser, and signing in as a different user purges the previous user's parked browser state.
+
+### Deployment, CI, supply chain
+- `.dockerignore` excludes databases, backups, logs, env files, audit material and e2e tokens at any depth (contract
+  test). Production refuses placeholder or low-entropy `JWT_SECRET` values; `preflight.sh` applies the same rule.
+- The air-gap bundle is built from `git archive`. The release workflow validates the tag, passes it via `env:`, requires
+  the version to match and moves `:latest` only for commits on `main`. CI pins the dynajs clone and runs `vendor:check`.
+- Production binds `127.0.0.1` unless `ROHY_BIND` is set (Docker sets `0.0.0.0`). Dev CORS origins are dev-only;
+  `ROHY_EXTRA_ORIGINS` adds operator origins. HSTS (one day) behind a trusted TLS proxy. Boot warnings for disabled
+  limiters and `ROHY_TRUST_PROXY=true`. `/api/ready` and `/health/plugins` give anonymous callers verdicts only.
+  **(change)**
+- Unit tests default `ROHY_DB` to a temp file so an in-process import can never migrate a developer's database.
+
+### Deferred (documented, not fixed here)
+- `PRAGMA foreign_keys` stays off (boot warning only); `__Host-` cookie prefix; absolute session lifetime; patient and
+  debrief history still client-supplied; `sqlite3` 5→6 major bump (npm audit); existing heart-rate rows are kept.
+
 ## [3.0.0-rc.88] — 2026-10-25
 
 - **e2e:** the tablet-layout "examination room fits" test measures the body-map Examination room on a copy of the case

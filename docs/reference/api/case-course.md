@@ -9,6 +9,6 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/cases/:caseId/course-state` | `authenticateToken, requireStudent` | `server/routes/case-course-routes.js:136` |
-| `GET` | `/api/cases/:caseId/questionnaire-responses` | `authenticateToken, requireEducator` | `server/routes/case-course-routes.js:262` |
-| `POST` | `/api/cases/:caseId/questionnaires/:questionnaireId/responses` | `authenticateToken, requireStudent` | `server/routes/case-course-routes.js:182` |
+| `GET` | `/api/cases/:caseId/course-state` | `authenticateToken, requireStudent` | `server/routes/case-course-routes.js:110` |
+| `GET` | `/api/cases/:caseId/questionnaire-responses` | `authenticateToken, requireEducator` | `server/routes/case-course-routes.js:236` |
+| `POST` | `/api/cases/:caseId/questionnaires/:questionnaireId/responses` | `authenticateToken, requireStudent` | `server/routes/case-course-routes.js:156` |

@@ -2085,6 +2085,7 @@ Stores survey responses records.
 | `context` | TEXT | NOT NULL DEFAULT 'standalone' | — |
 | `context_id` | INTEGER | — | — |
 | `completed_at` | DATETIME | DEFAULT CURRENT_TIMESTAMP | — |
+| `dedupe_key` | TEXT | — | `0073_privacy_audit_hash_v2_survey_dedupe.sql` |
 
 ## `surveys`
 
@@ -2135,6 +2136,7 @@ Stores system audit log records.
 | `metadata` | JSON | — | — |
 | `tenant_id` | INTEGER | NOT NULL DEFAULT 1 | `0004_tenants.sql` |
 | `ts_utc` | TEXT | GENERATED ALWAYS AS (strftime('%Y-%m-%dT%H:%M:%fZ', timestamp)) VIRTUAL | `0050_utc_iso_timestamps.sql` |
+| `hash_version` | INTEGER | — | `0073_privacy_audit_hash_v2_survey_dedupe.sql` |
 
 ## `team_communications_log`
 

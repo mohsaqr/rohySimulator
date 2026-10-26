@@ -9,7 +9,7 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `POST` | `/api/treatment-effects` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:193` |
-| `DELETE` | `/api/treatment-effects/:id` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:323` |
-| `PUT` | `/api/treatment-effects/:id` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:238` |
-| `PUT` | `/api/treatment-effects/:id/restore` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:326` |
+| `POST` | `/api/treatment-effects` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:199` |
+| `DELETE` | `/api/treatment-effects/:id` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:333` |
+| `PUT` | `/api/treatment-effects/:id` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:248` |
+| `PUT` | `/api/treatment-effects/:id/restore` | `authenticateToken, requireEducator` | `server/routes/treatments-library-routes.js:336` |

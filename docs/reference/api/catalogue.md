@@ -9,22 +9,22 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:560` |
-| `POST` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:581` |
-| `DELETE` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:630` |
-| `PUT` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:609` |
-| `GET` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:647` |
-| `POST` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:666` |
-| `DELETE` | `/api/catalogue/:id/items/:itemId` | `authenticateToken` | `server/routes/catalogue.js:688` |
-| `GET` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:378` |
-| `POST` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:406` |
-| `DELETE` | `/api/catalogue/lab-tests/:id` | `authenticateToken` | `server/routes/catalogue.js:480` |
-| `PUT` | `/api/catalogue/lab-tests/:id` | `authenticateToken` | `server/routes/catalogue.js:448` |
-| `POST` | `/api/catalogue/lab-tests/:id/promote` | `authenticateToken, requireAdmin` | `server/routes/catalogue.js:500` |
-| `GET` | `/api/catalogue/lab-tests/search` | `authenticateToken` | `server/routes/catalogue.js:520` |
-| `GET` | `/api/catalogue/medications` | `authenticateToken` | `server/routes/catalogue.js:193` |
-| `POST` | `/api/catalogue/medications` | `authenticateToken` | `server/routes/catalogue.js:223` |
-| `DELETE` | `/api/catalogue/medications/:id` | `authenticateToken` | `server/routes/catalogue.js:305` |
-| `PUT` | `/api/catalogue/medications/:id` | `authenticateToken` | `server/routes/catalogue.js:269` |
-| `POST` | `/api/catalogue/medications/:id/promote` | `authenticateToken, requireAdmin` | `server/routes/catalogue.js:326` |
-| `GET` | `/api/catalogue/medications/search` | `authenticateToken` | `server/routes/catalogue.js:351` |
+| `GET` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:587` |
+| `POST` | `/api/catalogue/` | `authenticateToken` | `server/routes/catalogue.js:608` |
+| `DELETE` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:657` |
+| `PUT` | `/api/catalogue/:id` | `authenticateToken` | `server/routes/catalogue.js:636` |
+| `GET` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:674` |
+| `POST` | `/api/catalogue/:id/items` | `authenticateToken` | `server/routes/catalogue.js:693` |
+| `DELETE` | `/api/catalogue/:id/items/:itemId` | `authenticateToken` | `server/routes/catalogue.js:715` |
+| `GET` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:401` |
+| `POST` | `/api/catalogue/lab-tests` | `authenticateToken` | `server/routes/catalogue.js:430` |
+| `DELETE` | `/api/catalogue/lab-tests/:id` | `authenticateToken` | `server/routes/catalogue.js:504` |
+| `PUT` | `/api/catalogue/lab-tests/:id` | `authenticateToken` | `server/routes/catalogue.js:472` |
+| `POST` | `/api/catalogue/lab-tests/:id/promote` | `authenticateToken, requireAdmin` | `server/routes/catalogue.js:524` |
+| `GET` | `/api/catalogue/lab-tests/search` | `authenticateToken` | `server/routes/catalogue.js:547` |
+| `GET` | `/api/catalogue/medications` | `authenticateToken` | `server/routes/catalogue.js:212` |
+| `POST` | `/api/catalogue/medications` | `authenticateToken` | `server/routes/catalogue.js:243` |
+| `DELETE` | `/api/catalogue/medications/:id` | `authenticateToken` | `server/routes/catalogue.js:325` |
+| `PUT` | `/api/catalogue/medications/:id` | `authenticateToken` | `server/routes/catalogue.js:289` |
+| `POST` | `/api/catalogue/medications/:id/promote` | `authenticateToken, requireAdmin` | `server/routes/catalogue.js:346` |
+| `GET` | `/api/catalogue/medications/search` | `authenticateToken` | `server/routes/catalogue.js:374` |

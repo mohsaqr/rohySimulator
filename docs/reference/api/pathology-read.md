@@ -9,5 +9,5 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/sessions/:sessionId/pathology-reads` | `authenticateToken, requireEducator` | `server/routes/pathology-read-routes.js:186` |
-| `POST` | `/api/sessions/:sessionId/pathology-reads` | `authenticateToken` | `server/routes/pathology-read-routes.js:82` |
+| `GET` | `/api/sessions/:sessionId/pathology-reads` | `authenticateToken, requireEducator` | `server/routes/pathology-read-routes.js:249` |
+| `POST` | `/api/sessions/:sessionId/pathology-reads` | `authenticateToken` | `server/routes/pathology-read-routes.js:136` |

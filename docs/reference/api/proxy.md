@@ -9,16 +9,16 @@ model.
 
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
-| `GET` | `/api/llm/models` | `authenticateToken` | `server/routes/proxy-routes.js:1541` |
-| `GET` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2359` |
-| `PUT` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2375` |
-| `GET` | `/api/llm/usage` | `authenticateToken` | `server/routes/proxy-routes.js:2251` |
-| `GET` | `/api/llm/usage/all` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2289` |
-| `GET` | `/api/llm/usage/platform` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2315` |
-| `POST` | `/api/proxy/llm` | `authenticateToken` | `server/routes/proxy-routes.js:173` |
-| `GET` | `/api/sessions/:id/patient-prompt` | `authenticateToken, requireReviewer` | `server/routes/proxy-routes.js:149` |
-| `POST` | `/api/tts` | `authenticateToken` | `server/routes/proxy-routes.js:1780` |
-| `POST` | `/api/tts/preview` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1787` |
-| `GET` | `/api/tts/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1552` |
-| `GET` | `/api/tts/voice-usage` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1649` |
-| `GET` | `/api/tts/voices` | `authenticateToken` | `server/routes/proxy-routes.js:1618` |
+| `GET` | `/api/llm/models` | `authenticateToken` | `server/routes/proxy-routes.js:1611` |
+| `GET` | `/api/llm/pricing` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2465` |
+| `PUT` | `/api/llm/pricing` | `authenticateToken` | `server/routes/proxy-routes.js:2483` |
+| `GET` | `/api/llm/usage` | `authenticateToken` | `server/routes/proxy-routes.js:2361` |
+| `GET` | `/api/llm/usage/all` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2397` |
+| `GET` | `/api/llm/usage/platform` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:2426` |
+| `POST` | `/api/proxy/llm` | `authenticateToken` | `server/routes/proxy-routes.js:239` |
+| `GET` | `/api/sessions/:id/patient-prompt` | `authenticateToken, requireReviewer` | `server/routes/proxy-routes.js:215` |
+| `POST` | `/api/tts` | `authenticateToken` | `server/routes/proxy-routes.js:1859` |
+| `POST` | `/api/tts/preview` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1866` |
+| `GET` | `/api/tts/usage` | `authenticateToken` | `server/routes/proxy-routes.js:1622` |
+| `GET` | `/api/tts/voice-usage` | `authenticateToken, requireAdmin` | `server/routes/proxy-routes.js:1723` |
+| `GET` | `/api/tts/voices` | `authenticateToken` | `server/routes/proxy-routes.js:1692` |
