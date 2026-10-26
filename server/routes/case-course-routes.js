@@ -23,16 +23,10 @@ import { authenticateToken, requireEducator, requireStudent } from '../middlewar
 import {
     tenantId,
     auditSuccess,
-    caseAccessEnforcedFor,
-    canReadAcrossUsers,
-    studentCaseVisibility,
     resolveSessionTrinity,
 } from './_helpers.js';
-
-// What a student may see while course access is enforced (one rule, shared
-// with every other case-visibility site — see studentCaseVisibility).
-const studentCase = studentCaseVisibility('c');
 import { logger } from '../logger.js';
+import { readableCase } from '../lib/caseReadAccess.js';
 import { courseGateState } from '../services/courseGate.js';
 import {
     normaliseQuestionnaires,
@@ -54,29 +48,9 @@ function parseJson(value, fallback) {
     try { return JSON.parse(value); } catch { return fallback; }
 }
 
-// The case row if the caller may open the case — the same rule as
-// GET /cases/:id, so a learner reads the course side of exactly the cases
-// they can play. A case they cannot see is "not found".
-async function readableCase(req, caseId) {
-    if (canReadAcrossUsers(req.user)) {
-        return dbAdapter.get(
-            'SELECT id, config FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
-            [caseId, tenantId(req)]
-        );
-    }
-    if (await caseAccessEnforcedFor(req.user)) {
-        return dbAdapter.get(
-            `SELECT c.id, c.config FROM cases c
-              WHERE c.id = ? AND c.tenant_id = ? AND c.is_available = 1 AND c.deleted_at IS NULL
-                AND ${studentCase.sql}`,
-            [caseId, tenantId(req), ...studentCase.binds(req.user.id)]
-        );
-    }
-    return dbAdapter.get(
-        'SELECT id, config FROM cases WHERE id = ? AND tenant_id = ? AND is_available = 1 AND deleted_at IS NULL',
-        [caseId, tenantId(req)]
-    );
-}
+// readableCase (lib/caseReadAccess.js): the case row if the caller may open the
+// case — the same rule as GET /cases/:id, so a learner reads the course side of
+// exactly the cases they can play. A case they cannot see is "not found".
 
 // A questionnaire the learner cannot answer yet and has not answered: no
 // title, instructions or questions.

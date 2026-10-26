@@ -24,6 +24,7 @@ import { SQL_NOW, sqlNowPlus, timeMs } from '../shared/time.js';
 import { recordServerEvent } from '../lib/learningEventIngest.js';
 import {
     auditSuccess,
+    isPlatformAdmin,
     logAudit,
     resolveSessionCaseConfig,
     requireSessionRoom,
@@ -122,7 +123,7 @@ router.post('/sessions/:id/order', authenticateToken, async (req, res) => {
     // can be ordered. The ids used to be inserted as sent, so a learner could
     // order (and then read the result of) any case's investigation on the
     // install, including another tenant's (security audit 2026-10-24, #5).
-    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)]);
+    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)]);
     if (!session) return res.status(404).json({ error: 'Session not found' });
     const matching = await dbAdapter.all(
         `SELECT id, investigation_type FROM case_investigations
@@ -435,10 +436,18 @@ router.get('/labs/stats', authenticateToken, requireReviewer, (req, res) => {
 });
 
 // The lab catalogue (data/lab_database.json) is one file shared by every
-// tenant on the install, so its writes are admin-only; an educator's
+// tenant on the install, so its writes are PLATFORM-admin-only (an admin of
+// the default tenant; audit 2026-10-26, F-02); an educator's
 // per-case lab rows live in case_investigations (security audit 2026-10-24, #6).
+function requireLabCatalogueAdmin(req, res, next) {
+    if (!isPlatformAdmin(req.user)) {
+        return res.status(403).json({ error: 'Platform administrator required', code: 'platform_admin_required' });
+    }
+    next();
+}
+
 // POST /api/labs/test - Add a new lab test (Admin only)
-router.post('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/test', authenticateToken, requireAdmin, requireLabCatalogueAdmin, (req, res) => {
     try {
         const result = labDb.addTest(req.body);
         if (!result.success) {
@@ -458,7 +467,7 @@ router.post('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // PUT /api/labs/test - Update a lab test (Admin only)
-router.put('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.put('/labs/test', authenticateToken, requireAdmin, requireLabCatalogueAdmin, (req, res) => {
     const { test_name, category, ...updates } = req.body;
 
     if (!test_name || !category) {
@@ -486,7 +495,7 @@ router.put('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // DELETE /api/labs/test - Delete a lab test (Admin only)
-router.delete('/labs/test', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/labs/test', authenticateToken, requireAdmin, requireLabCatalogueAdmin, (req, res) => {
     const { test_name, category } = req.body;
 
     if (!test_name || !category) {
@@ -513,7 +522,7 @@ router.delete('/labs/test', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/labs/import - Import lab tests from CSV (Admin only)
-router.post('/labs/import', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/import', authenticateToken, requireAdmin, requireLabCatalogueAdmin, (req, res) => {
     const { tests, overwrite = false } = req.body;
 
     if (!tests || !Array.isArray(tests) || tests.length === 0) {
@@ -538,7 +547,7 @@ router.post('/labs/import', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/labs/reload - Force reload the lab database (Admin only)
-router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
+router.post('/labs/reload', authenticateToken, requireAdmin, requireLabCatalogueAdmin, (req, res) => {
     try {
         labDb.clearCache();
         const tests = labDb.loadLabDatabase();
@@ -561,7 +570,23 @@ router.post('/labs/reload', authenticateToken, requireAdmin, (req, res) => {
 // which let ConfigPanel's per-row save loop quietly accumulate duplicates
 // every time an admin saved a case. Single-row admin adds and the bulk PUT
 // below both rely on this dedup behavior.
-router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res) => {
+// The case must be the caller's tenant's: the row is stamped with the
+// caller's tenant, so a case id from another tenant planted lab values that
+// tenant's learners then saw and nobody there could edit (audit 2026-10-26, F-15).
+async function caseInCallerTenant(req, res, caseId) {
+    try {
+        const row = await dbAdapter.get('SELECT id FROM cases WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [caseId, tenantId(req)]);
+        if (row) return true;
+        res.status(404).json({ error: 'Case not found' });
+        return false;
+    } catch (err) {
+        (req.log || routesOrdersLog).error('case tenant check failed', { error: err.message });
+        res.status(500).json({ error: 'Could not load the case' });
+        return false;
+    }
+}
+
+router.post('/cases/:caseId/labs', authenticateToken, requireEducator, async (req, res) => {
     const { caseId } = req.params;
     const {
         test_name,
@@ -582,6 +607,7 @@ router.post('/cases/:caseId/labs', authenticateToken, requireEducator, (req, res
     if (!test_name) {
         return res.status(400).json({ error: 'test_name is required' });
     }
+    if (!await caseInCallerTenant(req, res, caseId)) return;
 
     const findSql = `SELECT id FROM case_investigations WHERE case_id = ? AND tenant_id = ? AND investigation_type = 'lab' AND test_name = ? AND deleted_at IS NULL`;
     dbAdapter.get(findSql, [caseId, tenantId(req), test_name], (findErr, existing) => {
@@ -670,6 +696,7 @@ router.put('/cases/:caseId/labs', authenticateToken, requireEducator, async (req
     if (labs.some(lab => !lab?.test_name)) {
         return res.status(400).json({ error: 'each lab requires test_name' });
     }
+    if (!await caseInCallerTenant(req, res, caseId)) return;
     const tenant = tenantId(req);
 
     try {
@@ -865,7 +892,7 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req,
     // Get session + case_snapshot (preferred) + live config (fallback for
     // sessions written before the snapshot column existed). Tenant-scoped so
     // a session id from another tenant can't leak its case config.
-    const sessionSql = `SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ?`;
+    const sessionSql = `SELECT s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL`;
 
     dbAdapter.get(sessionSql, [sessionId, tenantId(req)], (err, session) => {
         if (err) {
@@ -892,11 +919,11 @@ router.get('/sessions/:sessionId/available-labs', authenticateToken, async (req,
                 min_value, max_value, current_value, unit,
                 normal_samples, is_abnormal, turnaround_minutes
             FROM case_investigations 
-            WHERE case_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
+            WHERE case_id = ? AND tenant_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
             ORDER BY test_group, test_name
         `;
         
-        dbAdapter.all(labsSql, [session.case_id], (err, dbConfiguredLabs) => {
+        dbAdapter.all(labsSql, [session.case_id, tenantId(req)], (err, dbConfiguredLabs) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -1066,15 +1093,19 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
     // Verify session exists and user has access; pull snapshot in same query.
     // The tenant predicate is not optional: without it, an educator in tenant B
     // reached a tenant-A learner's live session and could order into it.
-    dbAdapter.get('SELECT user_id, case_id, case_snapshot FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT user_id, case_id, case_snapshot FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
         if (!session) {
             return res.status(404).json({ error: 'Session not found' });
         }
-        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
+        // Only the session's owner orders into it. Staff used to pass here too, and
+        // their orders — points, learning events, administered drugs — were
+        // recorded as the learner's own work (audit 2026-10-26, L2-13). Staff
+        // run their own sessions to try a case.
+        if (Number(session.user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Access denied', code: 'NOT_SESSION_OWNER' });
         }
 
         // Separate IDs by type
@@ -1088,7 +1119,7 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
         const configuredIds = [...numericIds.map(id => parseInt(id, 10))];
 
         // Get case config (snapshot-preferred) to determine patient gender and find config-based labs
-        dbAdapter.get('SELECT config FROM cases WHERE id = ?', [session.case_id], async (err, caseRow) => {
+        dbAdapter.get('SELECT config FROM cases WHERE id = ? AND tenant_id = ?', [session.case_id, tenantId(req)], async (err, caseRow) => {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -1113,9 +1144,9 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                 try {
                     caseLabRows = await dbAdapter.all(
                         `SELECT id, test_name FROM case_investigations
-                         WHERE case_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
+                         WHERE case_id = ? AND tenant_id = ? AND deleted_at IS NULL AND investigation_type = 'lab'
                          ORDER BY id`,
-                        [session.case_id],
+                        [session.case_id, tenantId(req)],
                     );
                 } catch (rowsErr) {
                     (req.log || routesOrdersLog).error('case lab rows fetch failed', { error: rowsErr.message });
@@ -1180,10 +1211,10 @@ router.post('/sessions/:sessionId/order-labs', authenticateToken, async (req, re
                     // after which the results were readable back out. A session may
                     // only order the investigations configured for its own case.
                     const labsSql = `SELECT id, turnaround_minutes, test_name FROM case_investigations
-                                     WHERE deleted_at IS NULL AND case_id = ?
+                                     WHERE deleted_at IS NULL AND case_id = ? AND tenant_id = ?
                                        AND id IN (${configuredIds.map(() => '?').join(',')})`;
 
-                    dbAdapter.all(labsSql, [session.case_id, ...configuredIds], (err, labs) => {
+                    dbAdapter.all(labsSql, [session.case_id, tenantId(req), ...configuredIds], (err, labs) => {
                         if (err) {
                             (req.log || routesOrdersLog).error('labs fetch failed', { error: err.message });
                             failed = configuredIds.length;
@@ -1465,7 +1496,7 @@ router.put('/sessions/:sessionId/labs/:labId', authenticateToken, requireEducato
     // before any check, so an educator could rewrite any case's result on
     // the install (security audit 2026-10-24, #5).
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
-    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)]);
+    const session = await dbAdapter.get('SELECT case_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)]);
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
     // Update the lab value in case_investigations
@@ -1713,11 +1744,15 @@ router.post('/sessions/:sessionId/order-radiology', authenticateToken, async (re
     if (!await requireSessionRoom(req, res, sessionId, ['radiology'])) return;
 
     // Verify session exists and get case config (snapshot-preferred)
-    dbAdapter.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ? AND s.tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT s.user_id, s.case_id, s.case_snapshot, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
+        // Only the session's owner orders into it. Staff used to pass here too, and
+        // their orders — points, learning events, administered drugs — were
+        // recorded as the learner's own work (audit 2026-10-26, L2-13). Staff
+        // run their own sessions to try a case.
+        if (Number(session.user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Access denied', code: 'NOT_SESSION_OWNER' });
         }
 
         const caseConfig = resolveSessionCaseConfig(session);
@@ -2122,12 +2157,16 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
     try {
         // Verify session and access (snapshot-aware select for downstream config)
         const session = await dbAdapter.get(
-            'SELECT s.user_id, s.case_id, s.case_snapshot, s.status, s.end_time, c.config FROM sessions s JOIN cases c ON s.case_id = c.id WHERE s.id = ? AND s.tenant_id = ?',
+            'SELECT s.user_id, s.case_id, s.case_snapshot, s.status, s.end_time, c.config FROM sessions s JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL',
             [sessionId, tenantId(req)]
         );
         if (!session) return res.status(404).json({ error: 'Session not found' });
-        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
+        // Only the session's owner orders into it. Staff used to pass here too, and
+        // their orders — points, learning events, administered drugs — were
+        // recorded as the learner's own work (audit 2026-10-26, L2-13). Staff
+        // run their own sessions to try a case.
+        if (Number(session.user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Access denied', code: 'NOT_SESSION_OWNER' });
         }
         // An ended session takes no more orders. Without this, End & Debrief
         // became a cheat flow: end the session, read the missed-expected
@@ -2213,6 +2252,7 @@ router.post('/sessions/:sessionId/order-treatment', authenticateToken, async (re
         logAudit({
             userId: req.user.id,
             username: req.user.username,
+            tenantId: tenantId(req),
             action: 'ORDERED_TREATMENT',
             resourceType: 'treatment_order',
             resourceId: orderId,
@@ -2286,11 +2326,12 @@ router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req,
     // from the session it belongs to, not the other way round.
     dbAdapter.get(`SELECT t.*, s.user_id, s.case_id FROM treatment_orders t
             JOIN sessions s ON t.session_id = s.id
-            WHERE t.id = ? AND t.session_id = ? AND s.tenant_id = ?`, [orderId, sessionId, tenantId(req)], (err, order) => {
+            WHERE t.id = ? AND t.session_id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL`, [orderId, sessionId, tenantId(req)], (err, order) => {
         try {
             if (err) return sendError(500, err);
             if (!order) return sendError(404, 'Order not found');
-            if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
+            // Owner only — see order-labs (audit 2026-10-26, L2-13).
+            if (Number(order.user_id) !== Number(req.user.id)) {
                 return sendError(403, 'Access denied');
             }
             if (order.status !== 'ordered') {
@@ -2392,16 +2433,19 @@ router.post('/sessions/:sessionId/administer/:orderId', authenticateToken, (req,
                         phase, current_effect_strength, dose_multiplier,
                         peak_hr_effect, peak_bp_sys_effect, peak_bp_dia_effect,
                         peak_rr_effect, peak_spo2_effect, peak_temp_effect,
-                        expires_at, is_continuous
-                    ) VALUES (?, ?, ?, ?, 'onset', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        expires_at, is_continuous, tenant_id
+                    ) VALUES (?, ?, ?, ?, 'onset', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
+                // tenant_id: the active-effects reader filters on it, so a
+                // row filed under the column default (1) never took effect
+                // for a session of any other tenant (audit 2026-10-26, F-18).
                 dbAdapter.run(insertEffectSql, [
                     payload.sessionId, payload.orderId, payload.effectId, payload.now,
                     payload.doseMultiplier,
                     payload.peak_hr, payload.peak_bp_sys, payload.peak_bp_dia,
                     payload.peak_rr, payload.peak_spo2, payload.peak_temp,
-                    payload.expiresAt, payload.isContinuous,
+                    payload.expiresAt, payload.isContinuous, tenantId(req),
                 ], function(err) {
                     // active_treatments insert failure is non-fatal — the
                     // order is already marked administered. Log and respond
@@ -2449,11 +2493,12 @@ router.put('/sessions/:sessionId/discontinue/:orderId', authenticateToken, (req,
 
     dbAdapter.get(`SELECT t.*, s.user_id FROM treatment_orders t
             JOIN sessions s ON t.session_id = s.id
-            WHERE t.id = ? AND t.session_id = ? AND s.tenant_id = ?`, [orderId, sessionId, tenantId(req)], (err, order) => {
+            WHERE t.id = ? AND t.session_id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL`, [orderId, sessionId, tenantId(req)], (err, order) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!order) return res.status(404).json({ error: 'Order not found' });
-        if (order.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
+        // Owner only — see order-labs (audit 2026-10-26, L2-13).
+        if (Number(order.user_id) !== Number(req.user.id)) {
+            return res.status(403).json({ error: 'Access denied', code: 'NOT_SESSION_OWNER' });
         }
 
         const now = new Date().toISOString();
@@ -2484,7 +2529,7 @@ router.get('/sessions/:sessionId/treatment-orders', authenticateToken, async (re
     const { status } = req.query;
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -2525,7 +2570,7 @@ router.get('/sessions/:sessionId/treatment-debrief', authenticateToken, async (r
     const { sessionId } = req.params;
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get('SELECT case_id, status, end_time FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT case_id, status, end_time FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -2590,7 +2635,7 @@ router.get('/sessions/:sessionId/active-effects', authenticateToken, async (req,
     const { sessionId } = req.params;
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
 

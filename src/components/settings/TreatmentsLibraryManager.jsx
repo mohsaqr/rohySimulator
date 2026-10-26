@@ -21,9 +21,17 @@ import { ApiError, apiDelete, apiFetch, apiPost, apiPut } from '../../services/a
 const ROLE_RANKS = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, admin: 4 };
 const rankOf = (user) => ROLE_RANKS[user?.role] ?? 0;
 
+// Platform rows belong to the install: only an administrator of the platform
+// tenant (tenant 1) may change them — server isPlatformAdmin (routes/_helpers.js).
+// A tenant admin used to be offered Edit and then refused with a 403
+// (lane B, security audit 2026-10-26, F-02).
+const PLATFORM_TENANT_ID = 1;
+const isPlatformAdminUser = (user) =>
+    rankOf(user) >= ROLE_RANKS.admin && Number(user?.tenant_id ?? PLATFORM_TENANT_ID) === PLATFORM_TENANT_ID;
+
 export function canEditRow(user, row) {
     if (!user || !row) return false;
-    if (row.scope === 'platform') return rankOf(user) >= ROLE_RANKS.admin;
+    if (row.scope === 'platform') return isPlatformAdminUser(user);
     if (row.scope === 'tenant') {
         return row.tenant_id === (user.tenant_id ?? 1) && rankOf(user) >= ROLE_RANKS.educator;
     }
@@ -246,7 +254,9 @@ function NumberInput({ value, onChange, min, step = 'any', disabled, name }) {
 function TreatmentEditor({ row, prefill, currentUser, onClose, onSaved }) {
     const { t } = useTranslation('authoring_meds');
     const toast = useToast();
-    const isAdmin = rankOf(currentUser) >= ROLE_RANKS.admin;
+    // Only a platform admin may choose (or default to) platform scope; the
+    // server makes every other caller's new row a tenant row.
+    const isAdmin = isPlatformAdminUser(currentUser);
     const [draft, setDraft] = useState(() => (row
         ? draftFromRow(row)
         : { ...EMPTY_DRAFT, scope: isAdmin ? 'platform' : 'tenant', ...(prefill || {}) }));

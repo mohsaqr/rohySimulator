@@ -19,6 +19,7 @@
 
 import { projectPluginDocumentsForRole, DOCUMENT_FULL_READ_ROLE } from '../shared/pluginDocument.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
+import { opaqueLearnerDocument } from '../lib/pluginOpaqueRefs.js';
 
 /** Top-level case columns a learner's client reads. */
 const LEARNER_CASE_COLUMNS = Object.freeze([
@@ -87,7 +88,12 @@ export function projectCaseConfigForRole(config, manifests, role) {
     }
     for (const manifest of manifests ?? []) {
         const id = manifest?.id;
-        if (id && Object.hasOwn(documents, id)) out[id] = documents[id];
+        if (!id || !Object.hasOwn(documents, id)) continue;
+        // A learner's plugin document addresses content by SEALED reference
+        // (security audit 2026-10-26, F-25): the real paths name the finding
+        // (`remote:dicom/abnormal/rul_nodule/…`). The plugin content proxy
+        // opens them again (lib/pluginOpaqueRefs.js); authors keep the real ones.
+        out[id] = manifest?.remote ? opaqueLearnerDocument(id, documents[id]) : documents[id];
     }
     return out;
 }
@@ -164,6 +170,13 @@ export function projectCaseSnapshotForRole(snapshot, manifests, role) {
 export const CASE_TITLE_KEYS = Object.freeze(['case_name', 'case_title', 'case_title_snapshot', 'caseTitle', 'live_case_name']);
 
 /**
+ * Keys that carry a case's authoring DESCRIPTION. A learner never receives
+ * one through an analytics payload (it is authoring prose and often states
+ * the diagnosis): the value is nulled below reviewer (audit 2026-10-26, F-21).
+ */
+export const CASE_DESCRIPTION_KEYS = Object.freeze(['case_description', 'caseDescription']);
+
+/**
  * Replace every case title in `payload` with the case's code (EN-0001) for a
  * caller below reviewer. The authoring title often names the diagnosis, and
  * these routes answer a learner about their OWN sessions, events and Oyon
@@ -204,6 +217,7 @@ export async function withLearnerCaseLabels(payload, role, tenant, store) {
         if (Array.isArray(node)) return node.map(relabel);
         if (!isPlainObject(node)) return node;
         const out = Object.fromEntries(Object.entries(node).map(([key, value]) => [key, relabel(value)]));
+        CASE_DESCRIPTION_KEYS.forEach((key) => { if (Object.hasOwn(out, key)) out[key] = null; });
         if (titled(node)) {
             const id = caseIdOf(node);
             const label = id == null ? null : (codes.get(Number(id)) ?? `Case ${id}`);

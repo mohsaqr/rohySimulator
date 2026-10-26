@@ -5,7 +5,8 @@
 // `case_treatments`) and the case editor's CaseTreatmentConfig. Until 0046 it
 // was a read-only seed; these routes make it a scoped library:
 //
-//   scope 'platform' — visible to every tenant, editable by admins only.
+//   scope 'platform' — visible to every tenant, editable by PLATFORM admins
+//                      only (admins of the default tenant; audit 2026-10-26, F-02).
 //   scope 'tenant'   — visible to users of `tenant_id`, editable by that
 //                      tenant's educator+.
 //
@@ -21,7 +22,7 @@
 
 import express from 'express';
 import { authenticateToken, requireEducator, ROLE_RANKS, hasRoleAtLeast } from '../middleware/auth.js';
-import { auditSuccess, dbGet, dbRun, tenantId } from './_helpers.js';
+import { auditSuccess, dbGet, dbRun, isPlatformAdmin, tenantId } from './_helpers.js';
 import { logger } from '../logger.js';
 
 const router = express.Router();
@@ -159,10 +160,14 @@ export function validateTreatmentBody(body, existing = null) {
     return out;
 }
 
-/** Who may change a row: admins for platform rows; educator+ of the same tenant for tenant rows. */
+/**
+ * Who may change a row: platform admins for platform rows (a platform row's
+ * doses and vital effects drive every tenant's simulations, so a tenant
+ * admin may not rewrite them); educator+ of the same tenant for tenant rows.
+ */
 export function canMutateTreatment(user, row) {
     if (!user || !row) return false;
-    if (row.scope === 'platform') return hasRoleAtLeast(user, ROLE_RANKS.admin);
+    if (row.scope === 'platform') return isPlatformAdmin(user);
     if (row.scope === 'tenant') {
         return row.tenant_id === (user.tenant_id || 1) && hasRoleAtLeast(user, ROLE_RANKS.educator);
     }
@@ -187,9 +192,10 @@ function sendValidation(res, err) {
     return res.status(400).json({ error: err.message, code: err.code });
 }
 
-// POST /api/treatment-effects — create. Admins choose 'platform' (default) or
-// 'tenant'; educators always create 'tenant' rows in their own tenant, whatever
-// the body says.
+// POST /api/treatment-effects — create. Platform admins choose 'platform'
+// (default) or 'tenant'; a tenant admin creates 'tenant' rows by default and is
+// refused 'platform'; educators always create 'tenant' rows in their own
+// tenant, whatever the body says.
 router.post('/treatment-effects', authenticateToken, requireEducator, async (req, res) => {
     let fields;
     try {
@@ -203,7 +209,11 @@ router.post('/treatment-effects', authenticateToken, requireEducator, async (req
     if (requested !== undefined && !SCOPES.includes(requested)) {
         return res.status(400).json({ error: `scope must be one of ${SCOPES.join(', ')}`, code: 'invalid_scope' });
     }
-    const scope = isAdmin ? (requested || 'platform') : 'tenant';
+    const platformAdmin = isPlatformAdmin(req.user);
+    if (requested === 'platform' && isAdmin && !platformAdmin) {
+        return res.status(403).json({ error: 'Platform administrator required', code: 'platform_admin_required' });
+    }
+    const scope = platformAdmin ? (requested || 'platform') : 'tenant';
     const tenant = tenantId(req);
 
     const cols = Object.keys(fields);
@@ -242,7 +252,7 @@ router.put('/treatment-effects/:id', authenticateToken, requireEducator, async (
     if (!canMutateTreatment(req.user, existing)) {
         return res.status(403).json({
             error: existing.scope === 'platform'
-                ? 'Platform treatments can only be edited by an administrator'
+                ? 'Platform treatments can only be edited by a platform administrator'
                 : 'Not authorized to edit this treatment',
             code: 'treatment_forbidden',
         });
@@ -291,7 +301,7 @@ async function setActive(req, res, active) {
     if (!canMutateTreatment(req.user, existing)) {
         return res.status(403).json({
             error: existing.scope === 'platform'
-                ? 'Platform treatments can only be changed by an administrator'
+                ? 'Platform treatments can only be changed by a platform administrator'
                 : 'Not authorized to change this treatment',
             code: 'treatment_forbidden',
         });

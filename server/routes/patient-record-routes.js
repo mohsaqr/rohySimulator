@@ -12,8 +12,10 @@ import {
 
 import { logger } from '../logger.js';
 import {
+    tenantId,
     verifySessionOwnership
 } from './_helpers.js';
+import { loadOwnSessionForWrite } from '../lib/sessionWriteGuard.js';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
@@ -43,14 +45,18 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'session_id and record_id are required' });
         }
 
-        if (!await verifySessionOwnership(session_id, req.user, res)) return;
+        // Owner only, and closed once the session ended (+ a short grace for
+        // the last periodic sync): see lib/sessionWriteGuard.js (audit
+        // 2026-10-26, L8-12 / L2-13).
+        if (!await loadOwnSessionForWrite(req, res, session_id, tenantId(req))) return;
+        const tenant = tenantId(req);
 
         // Insert new events
         if (events && events.length > 0) {
             const insertEvent = dbAdapter.prepare(`
                 INSERT OR IGNORE INTO patient_record_events
-                (session_id, record_id, event_id, verb, time_elapsed, category, region, source, item, content, finding, value, unit, abnormal, details)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (session_id, record_id, event_id, verb, time_elapsed, category, region, source, item, content, finding, value, unit, abnormal, details, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             for (const event of events) {
@@ -69,7 +75,11 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
                     event.value || null,
                     event.unit || null,
                     event.abnormal ? 1 : 0,
-                    JSON.stringify(event)
+                    JSON.stringify(event),
+                    // tenant_id: persona and agent-situation readers filter
+                    // on it, so a row filed under the column default (1) was
+                    // invisible to every other tenant's session (F-18).
+                    tenant
                 ]);
             }
             insertEvent.finalize();
@@ -78,8 +88,8 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
         // Upsert document
         await new Promise((resolve, reject) => {
             dbAdapter.run(`
-                INSERT INTO patient_record_documents (session_id, record_id, patient_info, current_state, events_count, document, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO patient_record_documents (session_id, record_id, patient_info, current_state, events_count, document, tenant_id, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(session_id) DO UPDATE SET
                     current_state = excluded.current_state,
                     events_count = excluded.events_count,
@@ -91,7 +101,8 @@ router.post('/patient-record/sync', authenticateToken, async (req, res) => {
                 JSON.stringify(patient_info),
                 JSON.stringify(current_state),
                 events_count || 0,
-                JSON.stringify(document)
+                JSON.stringify(document),
+                tenant
             ], function(err) {
                 if (err) reject(err);
                 else resolve(this.changes);
@@ -191,7 +202,9 @@ router.delete('/patient-record/:sessionId', authenticateToken, async (req, res) 
     try {
         const { sessionId } = req.params;
 
-        if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
+        // The record is the evidence the debrief and analytics read: only its
+        // owner may clear it, and not once the session has ended (L8-12).
+        if (!await loadOwnSessionForWrite(req, res, sessionId, tenantId(req))) return;
 
         // Delete events
         await new Promise((resolve, reject) => {

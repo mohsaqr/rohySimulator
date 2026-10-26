@@ -1,5 +1,5 @@
 import express from 'express';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import dbAdapter from '../dbAdapter.js';
 import { dbPath } from '../db.js';
 import path from 'path';
@@ -21,6 +21,7 @@ import { validateOutboundUrl, OUTBOUND_FETCH_OPTIONS } from '../lib/outboundUrl.
 import { fetchWithTimeout, FetchTimeoutError } from '../services/fetchWithTimeout.js';
 import { logger } from '../logger.js';
 import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
+import { readLlmLimits, LLM_LIMIT_SETTINGS } from '../lib/llmLimits.js';
 import { ensureSettings } from '../lib/oyonSettings.js';
 import { TTS_PROVIDERS, voiceMatchesLanguage } from '../shared/voiceIdentity.js';
 import { LANGUAGES } from '../shared/languages.js';
@@ -51,10 +52,11 @@ import {
     auditSuccess,
     clampLimit,
     clampOffset,
-    commitThen,
     dbAll,
     escapeLikeTerm,
+    isPlatformAdmin,
     parseCohortCaseEnforcement,
+    PLATFORM_TENANT_ID,
     redactAuditSetting,
     redactRows,
     REGISTRATION_MODES,
@@ -96,9 +98,9 @@ router.post('/sessions/:sessionId/notes', authenticateToken, async (req, res) =>
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
 
     dbAdapter.run(
-        `INSERT INTO clinical_notes (session_id, user_id, note_type, content)
-         VALUES (?, ?, ?, ?)`,
-        [sessionId, req.user.id, note_type || 'general', content],
+        `INSERT INTO clinical_notes (session_id, user_id, note_type, content, tenant_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [sessionId, req.user.id, note_type || 'general', content, tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, message: 'Note added' });
@@ -116,9 +118,9 @@ router.get('/sessions/:sessionId/notes', authenticateToken, async (req, res) => 
         `SELECT cn.*, u.username
          FROM clinical_notes cn
          LEFT JOIN users u ON cn.user_id = u.id
-         WHERE cn.session_id = ? AND cn.deleted_at IS NULL
+         WHERE cn.session_id = ? AND cn.tenant_id = ? AND cn.deleted_at IS NULL
          ORDER BY cn.created_at`,
-        [sessionId],
+        [sessionId, tenantId(req)],
         (err, notes) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ notes });
@@ -179,8 +181,13 @@ router.get('/admin/export-records', authenticateToken, requireAdmin, (req, res) 
 
 // GET /api/admin/active-sessions - Get currently active sessions (Admin only)
 
+// Row counts are install-wide only for a platform admin; a tenant admin sees
+// their own tenant's rows (every table listed carries tenant_id), and the
+// database file size — a property of the install — is a platform figure
+// (security audit 2026-10-26, L7-18).
 router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) => {
     const stats = {};
+    const platform = isPlatformAdmin(req.user);
 
     const tables = [
         'users', 'cases', 'sessions', 'interactions', 'learning_events',
@@ -190,7 +197,10 @@ router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) 
 
     let completed = 0;
     tables.forEach(table => {
-        dbAdapter.get(`SELECT COUNT(*) as count FROM ${table}`, (err, row) => {
+        const countSql = platform
+            ? `SELECT COUNT(*) as count FROM ${table}`
+            : `SELECT COUNT(*) as count FROM ${table} WHERE tenant_id = ?`;
+        dbAdapter.get(countSql, platform ? [] : [tenantId(req)], (err, row) => {
             stats[table] = err ? 'error' : row.count;
             completed++;
             if (completed === tables.length) {
@@ -198,6 +208,10 @@ router.get('/admin/database-stats', authenticateToken, requireAdmin, (req, res) 
                 // Pre-F-015 this was hardcoded to `server/database.sqlite`,
                 // so deploys that pointed ROHY_DB elsewhere reported
                 // "unknown" or stale sizes.
+                if (!platform) {
+                    res.json({ stats });
+                    return;
+                }
                 try {
                     const dbStats = fs.statSync(dbPath);
                     stats.database_size_mb = (dbStats.size / (1024 * 1024)).toFixed(2);
@@ -240,7 +254,7 @@ router.get('/master/body-regions', (req, res) => {
 // tenant must not be able to add to them or (DELETE /master/medications/all)
 // soft-delete every medication platform-wide (security audit 2026-10-24, #6).
 // POST /api/master/body-regions - Create body region (Admin)
-router.post('/master/body-regions', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/body-regions', authenticateToken, requirePlatformAdmin, (req, res) => {
     const missing = missingField(req.body, ['region_id', 'name']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { region_id, name, anatomical_view, description, parent_region_id, display_order } = req.body;
@@ -364,7 +378,7 @@ router.get('/master/scenario-templates/:id', (req, res) => {
 });
 
 // POST /api/master/scenario-templates - Create scenario template (Admin)
-router.post('/master/scenario-templates', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/scenario-templates', authenticateToken, requirePlatformAdmin, (req, res) => {
     const missing = missingField(req.body, ['template_id', 'name', 'duration_minutes']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { template_id, name, description, category, duration_minutes, difficulty_level, clinical_condition, timeline } = req.body;
@@ -430,7 +444,10 @@ router.get('/master/lab-tests', (req, res) => {
     const limit = clampLimit(req.query.limit, MASTER_PAGE_MAX, MASTER_PAGE_MAX);
     const offset = clampOffset(req.query.offset);
 
-    let sql = `SELECT * FROM lab_tests WHERE is_active = 1`;
+    // Anonymous route: platform-scope rows only. Tenant- and user-scope rows
+    // (with created_by / tenant_id) are served by the authenticated
+    // /api/catalogue/* routes and their visibility rules (audit 2026-10-26, L2-09).
+    let sql = `SELECT * FROM lab_tests WHERE is_active = 1 AND scope = 'platform'`;
     const params = [];
 
     if (group) {
@@ -459,7 +476,7 @@ router.get('/master/lab-tests', (req, res) => {
 // GET /api/master/lab-tests/groups - Get lab test groups
 router.get('/master/lab-tests/groups', (req, res) => {
     dbAdapter.all(
-        `SELECT DISTINCT test_group, COUNT(*) as count FROM lab_tests WHERE is_active = 1 GROUP BY test_group ORDER BY test_group`,
+        `SELECT DISTINCT test_group, COUNT(*) as count FROM lab_tests WHERE is_active = 1 AND scope = 'platform' GROUP BY test_group ORDER BY test_group`,
         [],
         (err, groups) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -469,7 +486,7 @@ router.get('/master/lab-tests/groups', (req, res) => {
 });
 
 // POST /api/master/lab-tests - Create lab test (Admin)
-router.post('/master/lab-tests', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/lab-tests', authenticateToken, requirePlatformAdmin, (req, res) => {
     const missing = missingField(req.body, ['test_name', 'test_group', 'unit']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { test_code, test_name, test_group, category, specimen_type, min_value, max_value, unit, critical_low, critical_high, normal_samples, description, turnaround_minutes } = req.body;
@@ -547,7 +564,8 @@ router.get('/master/medications', (req, res) => {
     const limit = clampLimit(req.query.limit, MASTER_PAGE_MAX, MASTER_PAGE_MAX);
     const offset = clampOffset(req.query.offset);
 
-    let sql = `SELECT * FROM medications WHERE is_active = 1 AND deleted_at IS NULL`;
+    // Anonymous route: platform-scope rows only (see /master/lab-tests).
+    let sql = `SELECT * FROM medications WHERE is_active = 1 AND deleted_at IS NULL AND scope = 'platform'`;
     const params = [];
 
     if (drug_class) {
@@ -574,7 +592,7 @@ router.get('/master/medications', (req, res) => {
 });
 
 // POST /api/master/medications - Create medication (Admin)
-router.post('/master/medications', authenticateToken, requireAdmin, (req, res) => {
+router.post('/master/medications', authenticateToken, requirePlatformAdmin, (req, res) => {
     const missing = missingField(req.body, ['generic_name']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
     const { medication_code, generic_name, brand_names, drug_class, category, route, typical_dose, dose_unit, frequency, indications, contraindications, side_effects, is_controlled, is_high_alert } = req.body;
@@ -597,206 +615,139 @@ router.post('/master/medications', authenticateToken, requireAdmin, (req, res) =
     );
 });
 
-// POST /api/master/medications/bulk - Bulk import medications (Admin)
-router.post('/master/medications/bulk', authenticateToken, requireAdmin, (req, res) => {
+// POST /api/master/medications/bulk - Bulk import medications (platform admin)
+//
+// The three multi-statement medication writes below run on a connection of
+// their own (`dbAdapter.isolatedTransaction`). They used to issue a
+// fire-and-forget `BEGIN IMMEDIATE` on the shared handle, which fails silently
+// when another request holds a transaction there — the statements then ran
+// inside THAT request's transaction and this route's COMMIT committed its
+// half-finished work (security audit 2026-10-26, L7-11).
+router.post('/master/medications/bulk', authenticateToken, requirePlatformAdmin, async (req, res) => {
     const { medications } = req.body; // Array of { name, uses, side_effects, description }
 
     if (!Array.isArray(medications) || medications.length === 0) {
         return res.status(400).json({ error: 'medications array is required' });
     }
 
-    const stmt = dbAdapter.prepare(
-        `INSERT OR IGNORE INTO medications (generic_name, indications, side_effects, category) VALUES (?, ?, ?, ?)`
-    );
-
-    let inserted = 0;
-    let skipped = 0;
-
-    dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN IMMEDIATE TRANSACTION');
-
-        for (const med of medications) {
-            const name = med.name || med.medicine_name || med.generic_name;
-            if (!name) {
-                skipped++;
-                continue;
-            }
-
-            stmt.run(
-                [
-                    name.trim(),
-                    JSON.stringify(med.uses || []),
-                    JSON.stringify(med.side_effects || []),
-                    'General'
-                ],
-                function(err) {
-                    if (!err && this.changes > 0) inserted++;
-                    else skipped++;
+    try {
+        const { inserted, skipped } = await dbAdapter.isolatedTransaction(async (tx) => {
+            let insertedCount = 0;
+            let skippedCount = 0;
+            // Sequential on purpose: one transaction, one connection.
+            for (const med of medications) {
+                const name = med?.name || med?.medicine_name || med?.generic_name;
+                if (!name || typeof name !== 'string') {
+                    skippedCount++;
+                    continue;
                 }
-            );
-        }
-
-        dbAdapter.run('COMMIT', () => {
-            stmt.finalize();
-            auditSuccess(req, {
-                action: 'bulk_import_master_medications',
-                resourceType: 'medication_catalog',
-                resourceId: 'medications',
-                newValue: { inserted, skipped, total: medications.length }
-            });
-            res.json({
-                message: 'Bulk import completed',
-                inserted,
-                skipped,
-                total: medications.length
-            });
+                const result = await tx.run(
+                    `INSERT OR IGNORE INTO medications (generic_name, indications, side_effects, category) VALUES (?, ?, ?, ?)`,
+                    [name.trim(), JSON.stringify(med.uses || []), JSON.stringify(med.side_effects || []), 'General']
+                );
+                if (result.changes > 0) insertedCount++;
+                else skippedCount++;
+            }
+            return { inserted: insertedCount, skipped: skippedCount };
         });
-    });
+        auditSuccess(req, {
+            action: 'bulk_import_master_medications',
+            resourceType: 'medication_catalog',
+            resourceId: 'medications',
+            newValue: { inserted, skipped, total: medications.length }
+        });
+        res.json({ message: 'Bulk import completed', inserted, skipped, total: medications.length });
+    } catch (err) {
+        req.log.error('bulk medication import failed', { error: err.message });
+        res.status(500).json({ error: 'Bulk import failed' });
+    }
 });
 
-// DELETE /api/master/medications/:id - Delete single medication (Admin)
-router.delete('/master/medications/:id', authenticateToken, requireAdmin, (req, res) => {
-    const { id } = req.params;
+// Detach medications from everything that references them, then soft-delete
+// them: one medication when `id` is given, every live one when it is null.
+async function detachAndDeleteMedications(tx, id) {
+    const one = id !== null && id !== undefined;
+    const params = one ? [id] : [];
+    const doses = await tx.run(one
+        ? 'DELETE FROM medication_doses WHERE medication_id = ?'
+        : 'DELETE FROM medication_doses WHERE medication_id IN (SELECT id FROM medications WHERE deleted_at IS NULL)', params);
+    const effects = await tx.run(one
+        ? 'UPDATE treatment_effects SET medication_id = NULL WHERE medication_id = ?'
+        : 'UPDATE treatment_effects SET medication_id = NULL WHERE medication_id IN (SELECT id FROM medications WHERE deleted_at IS NULL)', params);
+    const orders = await tx.run(one
+        ? 'UPDATE treatment_orders SET medication_id = NULL WHERE medication_id = ?'
+        : 'UPDATE treatment_orders SET medication_id = NULL WHERE medication_id IN (SELECT id FROM medications WHERE deleted_at IS NULL)', params);
+    const caseRows = await tx.run(one
+        ? 'UPDATE case_treatments SET medication_id = NULL WHERE medication_id = ?'
+        : 'UPDATE case_treatments SET medication_id = NULL WHERE medication_id IN (SELECT id FROM medications WHERE deleted_at IS NULL)', params);
+    const deleted = await tx.run(one
+        ? 'UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE id = ? AND deleted_at IS NULL'
+        : 'UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE deleted_at IS NULL', params);
+    return {
+        deleted: deleted.changes ?? 0,
+        medication_doses_removed: doses.changes ?? 0,
+        treatment_effects_detached: effects.changes ?? 0,
+        treatment_orders_detached: orders.changes ?? 0,
+        case_treatments_detached: caseRows.changes ?? 0,
+    };
+}
 
-    dbAdapter.get('SELECT * FROM medications WHERE id = ? AND deleted_at IS NULL', [id], (readErr, oldMedication) => {
-        if (readErr) return res.status(500).json({ error: readErr.message });
-        if (!oldMedication) return res.status(404).json({ error: 'Medication not found' });
-
-    dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN IMMEDIATE');
-        dbAdapter.run('DELETE FROM medication_doses WHERE medication_id = ?', [id], function(doseErr) {
-            if (doseErr) {
-                dbAdapter.run('ROLLBACK');
-                return res.status(500).json({ error: doseErr.message });
-            }
-            const medicationDosesRemoved = this.changes ?? 0;
-            dbAdapter.run('UPDATE treatment_effects SET medication_id = NULL WHERE medication_id = ?', [id], function(effectErr) {
-                if (effectErr) {
-                    dbAdapter.run('ROLLBACK');
-                    return res.status(500).json({ error: effectErr.message });
-                }
-                const treatmentEffectsDetached = this.changes ?? 0;
-                dbAdapter.run('UPDATE treatment_orders SET medication_id = NULL WHERE medication_id = ?', [id], function(orderErr) {
-                    if (orderErr) {
-                        dbAdapter.run('ROLLBACK');
-                        return res.status(500).json({ error: orderErr.message });
-                    }
-                    const treatmentOrdersDetached = this.changes ?? 0;
-                    dbAdapter.run('UPDATE case_treatments SET medication_id = NULL WHERE medication_id = ?', [id], function(caseErr) {
-                        if (caseErr) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(500).json({ error: caseErr.message });
-                        }
-                        const caseTreatmentsDetached = this.changes ?? 0;
-                        dbAdapter.run('UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE id = ? AND deleted_at IS NULL', [id], function(err) {
-                            if (err) {
-                                dbAdapter.run('ROLLBACK');
-                                return res.status(500).json({ error: err.message });
-                            }
-                            if (this.changes === 0) {
-                                dbAdapter.run('ROLLBACK');
-                                return res.status(404).json({ error: 'Medication not found' });
-                            }
-                            commitThen(req, res, () => {
-                                auditSuccess(req, {
-                                    action: 'delete_master_medication',
-                                    resourceType: 'medication',
-                                    resourceId: id,
-                                    resourceName: oldMedication.generic_name,
-                                    oldValue: oldMedication,
-                                    metadata: {
-                                        medication_doses_removed: medicationDosesRemoved,
-                                        treatment_effects_detached: treatmentEffectsDetached,
-                                        treatment_orders_detached: treatmentOrdersDetached,
-                                        case_treatments_detached: caseTreatmentsDetached
-                                    }
-                                });
-                                res.json({
-                                    message: 'Medication deleted',
-                                    medication_doses_removed: medicationDosesRemoved,
-                                    treatment_effects_detached: treatmentEffectsDetached,
-                                    treatment_orders_detached: treatmentOrdersDetached,
-                                    case_treatments_detached: caseTreatmentsDetached
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    });
-    });
-});
-
-// DELETE /api/master/medications/all - Clear all medications (Admin)
-router.delete('/master/medications/all', authenticateToken, requireAdmin, (req, res) => {
-    dbAdapter.get('SELECT COUNT(*) AS count FROM medications WHERE deleted_at IS NULL', [], (readErr, row) => {
-        if (readErr) return res.status(500).json({ error: readErr.message });
+// DELETE /api/master/medications/all - Clear all medications (platform admin)
+//
+// Registered BEFORE `/master/medications/:id`: Express matches in order, and
+// with `/:id` first this route was unreachable — `all` was taken as an id and
+// answered 404 (security audit 2026-10-26, F-02).
+router.delete('/master/medications/all', authenticateToken, requirePlatformAdmin, async (req, res) => {
+    try {
+        const row = await dbAdapter.get('SELECT COUNT(*) AS count FROM medications WHERE deleted_at IS NULL', []);
         const oldCount = row?.count || 0;
-
-    dbAdapter.serialize(() => {
-        dbAdapter.run('BEGIN IMMEDIATE');
-        dbAdapter.run('DELETE FROM medication_doses', [], function(doseErr) {
-            if (doseErr) {
-                dbAdapter.run('ROLLBACK');
-                return res.status(500).json({ error: doseErr.message });
-            }
-            const medicationDosesRemoved = this.changes ?? 0;
-            dbAdapter.run('UPDATE treatment_effects SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(effectErr) {
-                if (effectErr) {
-                    dbAdapter.run('ROLLBACK');
-                    return res.status(500).json({ error: effectErr.message });
-                }
-                const treatmentEffectsDetached = this.changes ?? 0;
-                dbAdapter.run('UPDATE treatment_orders SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(orderErr) {
-                    if (orderErr) {
-                        dbAdapter.run('ROLLBACK');
-                        return res.status(500).json({ error: orderErr.message });
-                    }
-                    const treatmentOrdersDetached = this.changes ?? 0;
-                    dbAdapter.run('UPDATE case_treatments SET medication_id = NULL WHERE medication_id IS NOT NULL', [], function(caseErr) {
-                        if (caseErr) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(500).json({ error: caseErr.message });
-                        }
-                        const caseTreatmentsDetached = this.changes ?? 0;
-                        dbAdapter.run('UPDATE medications SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE deleted_at IS NULL', function(err) {
-                            if (err) {
-                                dbAdapter.run('ROLLBACK');
-                                return res.status(500).json({ error: err.message });
-                            }
-                            const deleted = this.changes ?? 0;
-                            commitThen(req, res, () => {
-                                auditSuccess(req, {
-                                    action: 'delete_all_master_medications',
-                                    resourceType: 'medication_catalog',
-                                    resourceId: 'medications',
-                                    oldValue: { medication_count: oldCount },
-                                    newValue: { medication_count: 0 },
-                                    metadata: {
-                                        deleted,
-                                        medication_doses_removed: medicationDosesRemoved,
-                                        treatment_effects_detached: treatmentEffectsDetached,
-                                        treatment_orders_detached: treatmentOrdersDetached,
-                                        case_treatments_detached: caseTreatmentsDetached
-                                    }
-                                });
-                                res.json({
-                                    message: 'All medications deleted',
-                                    deleted,
-                                    medication_doses_removed: medicationDosesRemoved,
-                                    treatment_effects_detached: treatmentEffectsDetached,
-                                    treatment_orders_detached: treatmentOrdersDetached,
-                                    case_treatments_detached: caseTreatmentsDetached
-                                });
-                            });
-                        });
-                    });
-                });
-            });
+        const counts = await dbAdapter.isolatedTransaction((tx) =>
+            detachAndDeleteMedications(tx, null));
+        auditSuccess(req, {
+            action: 'delete_all_master_medications',
+            resourceType: 'medication_catalog',
+            resourceId: 'medications',
+            oldValue: { medication_count: oldCount },
+            newValue: { medication_count: 0 },
+            metadata: counts
         });
-    });
-    });
+        res.json({ message: 'All medications deleted', ...counts });
+    } catch (err) {
+        req.log.error('delete all medications failed', { error: err.message });
+        res.status(500).json({ error: 'Could not delete the medications' });
+    }
+});
+
+// DELETE /api/master/medications/:id - Delete single medication (platform admin)
+router.delete('/master/medications/:id', authenticateToken, requirePlatformAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const oldMedication = await dbAdapter.get('SELECT * FROM medications WHERE id = ? AND deleted_at IS NULL', [id]);
+        if (!oldMedication) return res.status(404).json({ error: 'Medication not found' });
+        const counts = await dbAdapter.isolatedTransaction(async (tx) => {
+            const result = await detachAndDeleteMedications(tx, id);
+            if (result.deleted === 0) {
+                const gone = new Error('Medication not found');
+                gone.status = 404;
+                throw gone;
+            }
+            return result;
+        });
+        const { deleted: _deleted, ...metadata } = counts;
+        auditSuccess(req, {
+            action: 'delete_master_medication',
+            resourceType: 'medication',
+            resourceId: id,
+            resourceName: oldMedication.generic_name,
+            oldValue: oldMedication,
+            metadata
+        });
+        res.json({ message: 'Medication deleted', ...metadata });
+    } catch (err) {
+        if (err.status === 404) return res.status(404).json({ error: 'Medication not found' });
+        req.log.error('delete medication failed', { error: err.message });
+        res.status(500).json({ error: 'Could not delete the medication' });
+    }
 });
 
 // --- INVESTIGATION TEMPLATES ---
@@ -900,7 +851,7 @@ router.get('/master/search-aliases', (req, res) => {
 // ============================================
 
 // POST /api/admin/seed/exam-techniques - Seed exam techniques
-router.post('/admin/seed/exam-techniques', authenticateToken, requireAdmin, (req, res) => {
+router.post('/admin/seed/exam-techniques', authenticateToken, requirePlatformAdmin, (req, res) => {
     const techniques = [
         { technique_id: 'inspection', name: 'Inspection', icon: 'Eye', description: 'Visual examination', display_order: 1 },
         { technique_id: 'palpation', name: 'Palpation', icon: 'Hand', description: 'Examination by touch', display_order: 2 },
@@ -926,7 +877,7 @@ router.post('/admin/seed/exam-techniques', authenticateToken, requireAdmin, (req
 });
 
 // POST /api/admin/seed/vital-definitions - Seed vital sign definitions
-router.post('/admin/seed/vital-definitions', authenticateToken, requireAdmin, (req, res) => {
+router.post('/admin/seed/vital-definitions', authenticateToken, requirePlatformAdmin, (req, res) => {
     const vitals = [
         { vital_id: 'hr', name: 'Heart Rate', abbreviation: 'HR', unit: 'bpm', normal_min: 60, normal_max: 100, critical_low: 40, critical_high: 150, alarm_low: 50, alarm_high: 120, display_order: 1, color_code: '#ef4444' },
         { vital_id: 'spo2', name: 'Oxygen Saturation', abbreviation: 'SpO2', unit: '%', normal_min: 95, normal_max: 100, critical_low: 88, critical_high: null, alarm_low: 90, alarm_high: null, display_order: 2, color_code: '#3b82f6' },
@@ -955,7 +906,7 @@ router.post('/admin/seed/vital-definitions', authenticateToken, requireAdmin, (r
 });
 
 // POST /api/admin/seed/lab-tests - Seed lab tests from file
-router.post('/admin/seed/lab-tests', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/admin/seed/lab-tests', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         // Was `../../Lab_database.txt` — a file that has never existed, so
         // this endpoint always 404'd. The catalogue it wants is the JSON one
@@ -996,7 +947,7 @@ router.post('/admin/seed/lab-tests', authenticateToken, requireAdmin, async (req
 });
 
 // POST /api/admin/seed/body-regions - Seed body regions from examRegions.js data
-router.post('/admin/seed/body-regions', authenticateToken, requireAdmin, (req, res) => {
+router.post('/admin/seed/body-regions', authenticateToken, requirePlatformAdmin, (req, res) => {
     // Basic body regions - can be expanded
     const regions = [
         { region_id: 'headNeck', name: 'Head & Neck', anatomical_view: 'anterior', display_order: 1 },
@@ -1035,7 +986,7 @@ router.post('/admin/seed/body-regions', authenticateToken, requireAdmin, (req, r
 // POST /api/admin/seed/all - Documentation-only endpoint that lists the
 // per-domain seed routes. Actual seeding is fan-out, run by the operator
 // against the individual endpoints (no per-call results aggregation here).
-router.post('/admin/seed/all', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/admin/seed/all', authenticateToken, requirePlatformAdmin, async (req, res) => {
     res.json({
         message: 'To seed all data, call individual seed endpoints:',
         endpoints: [
@@ -1130,12 +1081,13 @@ router.put('/platform-settings/user-fields', authenticateToken, requirePlatformA
 });
 
 // platform_settings has no tenant_id: one row of each key for the whole
-// install. Reads stay open to every tenant's admin (they are redacted), but
-// every write below is `requirePlatformAdmin` — an admin of the default
+// install. The raw dump of every row is a platform admin's (it names internal
+// hosts, prompt templates and who changed what — audit 2026-10-26, L2-11); the
+// per-area GETs below serve tenant admins what their screens need. Every write below is `requirePlatformAdmin` — an admin of the default
 // tenant — so a tenant admin cannot repoint the LLM provider, swap the voice
 // keys or change who may register (security audit 2026-10-24, #9).
 // GET /api/platform-settings - Get all platform settings (Admin only)
-router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => {
+router.get('/platform-settings', authenticateToken, requirePlatformAdmin, (req, res) => {
     dbAdapter.all(
         `SELECT ps.*, u.username as updated_by_username
          FROM platform_settings ps
@@ -1145,7 +1097,9 @@ router.get('/platform-settings', authenticateToken, requireAdmin, (req, res) => 
         (err, settings) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            res.json({ settings: redactPlatformSettingRows(settings) });
+            // The LLM-test fingerprint is server-internal (only /setup/status
+            // reads it, as a boolean).
+            res.json({ settings: redactPlatformSettingRows(settings.filter((row) => row.setting_key !== 'llm_last_test_ok')) });
         }
     );
 });
@@ -1169,11 +1123,18 @@ const getPlatformSetting = (key) => {
 // so GET /setup/status can say "Tested" after the wizard is closed and
 // reopened — and stops saying it the moment any of the four changes (QA
 // 2026-10-04, PRV-34: the result lived in component state and was forgotten).
-// Hashed rather than stored raw so the key does not land in a second row.
+// Hashed rather than stored raw so the key does not land in a second row —
+// and KEYED with a server secret: a plain SHA-256 over provider, model, URL
+// and key, stored beside the first three, was an offline guess oracle for a
+// short or self-hosted key (security audit 2026-10-26, L2-11). A fingerprint
+// stored before this change simply stops matching once ("not tested" until
+// the next test). The row never leaves the server (GET /platform-settings
+// drops it).
 const LLM_LAST_TEST_KEY = 'llm_last_test_ok';
 const llmConfigFingerprint = async () => {
     const parts = await Promise.all(['llm_provider', 'llm_model', 'llm_base_url', 'llm_api_key'].map(getPlatformSetting));
-    return createHash('sha256').update(JSON.stringify(parts.map(v => v ?? ''))).digest('hex');
+    return createHmac('sha256', `${process.env.JWT_SECRET}:llm-test-fingerprint`)
+        .update(JSON.stringify(parts.map(v => v ?? ''))).digest('hex');
 };
 
 // Helper function to set a platform setting
@@ -1364,7 +1325,9 @@ router.get('/setup/status', authenticateToken, requireAdmin, async (req, res) =>
             llm: {
                 provider: provider || 'lmstudio',
                 model: model || '',
-                base_url: baseUrl || '',
+                // The base URL can be an internal host:port; it describes the
+                // install, so only a platform admin reads it (L2-11).
+                ...(isPlatformAdmin(req.user) ? { base_url: baseUrl || '' } : {}),
                 key_present: Boolean(apiKey),
                 enabled: llmEnabled !== 'false',
                 tested: llmTested
@@ -1430,14 +1393,6 @@ const DEFAULT_LLM_SETTINGS = {
     systemPromptTemplate: ''
 };
 
-// Default rate limit settings (0 = unlimited/disabled)
-const DEFAULT_RATE_LIMITS = {
-    tokensPerUserDaily: 0,
-    costPerUserDaily: 0,
-    tokensPlatformDaily: 0,
-    costPlatformDaily: 0,
-    requestsPerUserHourly: 0
-};
 
 // GET /api/platform-settings/llm - Get LLM configuration
 router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
@@ -1482,6 +1437,12 @@ router.get('/platform-settings/llm', authenticateToken, async (req, res) => {
             delete response.baseUrl;
             delete response.apiKey;
             delete response.apiKeySet;
+        }
+        // Staff of another tenant do not learn the install's LLM host
+        // (an internal host:port for a self-hosted model; audit 2026-10-26,
+        // L2-11). The default tenant's staff configure it and keep it.
+        if (Number(req.user?.tenant_id ?? PLATFORM_TENANT_ID) !== PLATFORM_TENANT_ID) {
+            delete response.baseUrl;
         }
 
         res.json(response);
@@ -1723,17 +1684,12 @@ router.post('/platform-settings/llm/models/detect', authenticateToken, requirePl
 });
 
 // GET /api/platform-settings/rate-limits - Get rate limit configuration
+// One truth for the limits: the same reader the LLM proxy enforces with
+// (lib/llmLimits.js; 0 = no limit), so the page cannot show a cap the proxy
+// does not apply (security audit 2026-10-26, F-24).
 router.get('/platform-settings/rate-limits', authenticateToken, async (req, res) => {
     try {
-        const settings = {
-            tokensPerUserDaily: parseInt(await getPlatformSetting('rate_limit_tokens_per_user_daily')) || DEFAULT_RATE_LIMITS.tokensPerUserDaily,
-            costPerUserDaily: parseFloat(await getPlatformSetting('rate_limit_cost_per_user_daily')) || DEFAULT_RATE_LIMITS.costPerUserDaily,
-            tokensPlatformDaily: parseInt(await getPlatformSetting('rate_limit_tokens_platform_daily')) || DEFAULT_RATE_LIMITS.tokensPlatformDaily,
-            costPlatformDaily: parseFloat(await getPlatformSetting('rate_limit_cost_platform_daily')) || DEFAULT_RATE_LIMITS.costPlatformDaily,
-            requestsPerUserHourly: parseInt(await getPlatformSetting('rate_limit_requests_per_user_hourly')) || DEFAULT_RATE_LIMITS.requestsPerUserHourly
-        };
-
-        res.json(settings);
+        res.json(await readLlmLimits(getPlatformSetting));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1742,13 +1698,17 @@ router.get('/platform-settings/rate-limits', authenticateToken, async (req, res)
 // PUT /api/platform-settings/rate-limits - Update rate limit configuration (Admin only)
 router.put('/platform-settings/rate-limits', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
-        const { tokensPerUserDaily, costPerUserDaily, tokensPlatformDaily, costPlatformDaily, requestsPerUserHourly } = req.body;
-
-        if (tokensPerUserDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_tokens_per_user_daily', String(tokensPerUserDaily), 'update_platform_rate_limits');
-        if (costPerUserDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_cost_per_user_daily', String(costPerUserDaily), 'update_platform_rate_limits');
-        if (tokensPlatformDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_tokens_platform_daily', String(tokensPlatformDaily), 'update_platform_rate_limits');
-        if (costPlatformDaily !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_cost_platform_daily', String(costPlatformDaily), 'update_platform_rate_limits');
-        if (requestsPerUserHourly !== undefined) await setAuditedPlatformSetting(req, 'rate_limit_requests_per_user_hourly', String(requestsPerUserHourly), 'update_platform_rate_limits');
+        const body = req.body || {};
+        // Every field the proxy enforces (LLM_LIMIT_SETTINGS), including the
+        // per-tenant caps; a limit is a finite number ≥ 0 (0 = no limit).
+        const updates = Object.entries(LLM_LIMIT_SETTINGS).filter(([field]) => body[field] !== undefined && body[field] !== null && body[field] !== '');
+        const invalid = updates.find(([field]) => !(Number.isFinite(Number(body[field])) && Number(body[field]) >= 0));
+        if (invalid) {
+            return res.status(400).json({ error: `${invalid[0]} must be a number ≥ 0 (0 = no limit)`, code: 'invalid_rate_limit' });
+        }
+        for (const [field, key] of updates) {
+            await setAuditedPlatformSetting(req, key, String(Number(body[field])), 'update_platform_rate_limits');
+        }
 
         res.json({ message: 'Rate limits updated successfully' });
     } catch (err) {
@@ -1916,7 +1876,9 @@ router.get('/platform-settings/voice', authenticateToken, async (req, res) => {
         // Remote Kokoro names an operator's host, and its key state is no
         // learner's business: admins only (this GET serves every authed
         // user). The key itself is never returned, as for the cloud keys.
-        if (hasRoleAtLeast(req.user, ROLE_RANKS.admin)) {
+        // Platform admins only: the remote host is the install's, not a
+        // tenant's (audit 2026-10-26, L2-11).
+        if (isPlatformAdmin(req.user)) {
             const remote = kokoroRemoteState();
             const storedKey = await getPlatformSetting('kokoro_remote_api_key');
             out.kokoro_remote_url = (await getPlatformSetting('kokoro_remote_url')) || '';
@@ -2148,7 +2110,7 @@ function kokoroRemoteHttpMessage(status) {
     return `The remote host returned HTTP ${status}.`;
 }
 
-router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/platform-settings/voice/kokoro-remote/test', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const result = await testKokoroRemote();
         (req.log || routesLlmLog).info('kokoro remote test requested', { ok: result.ok, kind: result.kind || null, status: result.status ?? null, host: result.host, latency_ms: result.latencyMs });

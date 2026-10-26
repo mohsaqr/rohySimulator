@@ -31,6 +31,9 @@ import { LEARNING_VERBS, VERB_FACETS, VERB_ALIASES, normalizeVerb, verbWithAlias
 import { roomLabel, roomLabelKey } from '../shared/rooms.js';
 import { ingestEvents, recordServerEvent, statusForReason, MAX_BATCH_EVENTS, DROP_REASONS } from '../lib/learningEventIngest.js';
 import { reconcileSession, RECORD_VERB_EXPECTATIONS } from '../lib/sessionReconcile.js';
+import { oyonReadScope } from '../lib/oyonReadScope.js';
+import { readableCase } from '../lib/caseReadAccess.js';
+import { loadOwnSessionForWrite } from '../lib/sessionWriteGuard.js';
 
 
 
@@ -46,6 +49,7 @@ import {
     dbRun,
     redactRow,
     redactRows,
+    resolveSessionTrinity,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
@@ -162,24 +166,38 @@ export function interactionSource(value) {
     return typeof value === 'string' && INTERACTION_SOURCE.test(value) ? value : null;
 }
 
-router.post('/interactions', authenticateToken, (req, res) => {
+// The two turn roles the chat writes. The browser relays both: the server's
+// LLM proxy streams the reply but does not persist it, so an 'assistant' row
+// is the reply the client was shown — what is SAFE to rely on is that it was
+// written by the session's owner, while the session was open. Anything else
+// ('system', a forged 'tool' row) is refused (audit 2026-10-26, L8-12).
+export const INTERACTION_ROLES = Object.freeze(['user', 'assistant']);
+
+router.post('/interactions', authenticateToken, async (req, res) => {
     const { session_id, role, content } = req.body;
     const source = interactionSource(req.body.source);
-    
-    // Verify user owns the session
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [session_id, tenantId(req)], (err, session) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!session) return res.status(404).json({ error: 'Session not found' });
-        
-        if (session.user_id !== req.user.id && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
+    if (!INTERACTION_ROLES.includes(role)) {
+        return res.status(400).json({ error: `role must be one of ${INTERACTION_ROLES.join(', ')}`, code: 'invalid_role' });
+    }
+    if (typeof content !== 'string') {
+        return res.status(400).json({ error: 'content must be a string' });
+    }
 
-        const sql = `INSERT INTO interactions (session_id, role, content, source, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`;
-        dbAdapter.run(sql, [session_id, role, content, source, tenantId(req)], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, session_id, role, content, source });
-        });
+    // Owner only, and closed once the session ended (+ a short grace for the
+    // reply that was streaming when End was pressed): a turn written by staff,
+    // or after the debrief was read, is not the learner's conversation
+    // (lib/sessionWriteGuard.js; L8-12 / L2-13).
+    try {
+        if (!await loadOwnSessionForWrite(req, res, session_id, tenantId(req))) return;
+    } catch (err) {
+        (req.log || feedLog).error('interaction session check failed', { error: err.message });
+        return res.status(500).json({ error: 'Could not record the turn' });
+    }
+
+    const sql = `INSERT INTO interactions (session_id, role, content, source, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`;
+    dbAdapter.run(sql, [session_id, role, content, source, tenantId(req)], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID, session_id, role, content, source });
     });
 });
 
@@ -306,7 +324,7 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
             AVG(duration) as avg_duration,
             COUNT(DISTINCT case_id) as unique_cases
         FROM sessions
-        WHERE tenant_id = ? AND user_id = ?
+        WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL
     `;
 
     dbAdapter.get(sql, [tenantId(req), userId], (err, stats) => {
@@ -317,7 +335,7 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
             SELECT COUNT(*) as total_interactions
             FROM interactions i
             JOIN sessions s ON i.session_id = s.id
-            WHERE s.tenant_id = ? AND s.user_id = ?
+            WHERE s.tenant_id = ? AND s.user_id = ? AND s.deleted_at IS NULL
         `;
 
         dbAdapter.get(interactionSql, [tenantId(req), userId], (err, interactionStats) => {
@@ -333,10 +351,53 @@ router.get('/analytics/user-stats/:userId', authenticateToken, (req, res) => {
 // --- SETTINGS LOGGING ---
 
 // POST /api/settings/log - Log settings changes
-router.post('/settings/log', authenticateToken, (req, res) => {
+// The session and case a caller-filed row (settings change, emotion
+// self-report, reflection questionnaire) names are checked, not taken on
+// trust: a session must be one the caller may reach — their own, or (staff)
+// any live session of their tenant — and its case is taken from it; a case
+// named without a session must be one the caller may open. The row itself is
+// always the CALLER's (user_id = caller). The settings route's mirrored
+// learning event carries the caller as principal, so it can never land in
+// another learner's session under their name (audit 2026-10-26, F-17 / L2-04).
+async function resolveCallerSessionCase(req, res, { session_id, case_id }) {
+    if (session_id !== undefined && session_id !== null && session_id !== '') {
+        const session = await dbAdapter.get(
+            'SELECT user_id, case_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+            [session_id, tenantId(req)]
+        );
+        if (!session) {
+            res.status(404).json({ error: 'Session not found' });
+            return null;
+        }
+        if (Number(session.user_id) !== Number(req.user.id) && !hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
+            res.status(403).json({ error: 'Access denied: session not owned by user' });
+            return null;
+        }
+        return { session_id, case_id: session.case_id };
+    }
+    if (case_id !== undefined && case_id !== null && case_id !== '') {
+        if (!await readableCase(req, case_id)) {
+            res.status(404).json({ error: 'Case not found' });
+            return null;
+        }
+        return { session_id: null, case_id };
+    }
+    return { session_id: null, case_id: null };
+}
+
+router.post('/settings/log', authenticateToken, async (req, res) => {
     const missing = missingField(req.body, ['setting_type']);
     if (missing) return res.status(400).json({ error: `${missing} is required` });
-    const { session_id, case_id, setting_type, setting_name, old_value, new_value, settings_json } = req.body;
+    const { setting_type, setting_name, old_value, new_value, settings_json } = req.body;
+    let scope;
+    try {
+        scope = await resolveCallerSessionCase(req, res, req.body);
+    } catch (err) {
+        (req.log || feedLog).error('settings log scope check failed', { error: err.message });
+        return res.status(500).json({ error: 'Could not log the setting change' });
+    }
+    if (!scope) return;
+    const { session_id, case_id } = scope;
 
     const sql = `INSERT INTO settings_logs (
         user_id, session_id, case_id, setting_type, setting_name,
@@ -366,7 +427,7 @@ router.post('/settings/log', authenticateToken, (req, res) => {
             component: 'CONFIG_PANEL',
             result: new_value != null ? `${old_value ?? ''} → ${new_value}` : null,
             context: { setting_type, setting_name, old_value, new_value },
-        }, { tenantId: tenantId(req) }).catch((eventErr) => {
+        }, { tenantId: tenantId(req), principal: req.user }).catch((eventErr) => {
             (req.log || feedLog).warn('settings change not mirrored to learning_events', { error: eventErr.message });
         }).then(() => {
             res.json({ id: this.lastID, message: 'Setting change logged' });
@@ -387,7 +448,7 @@ router.get('/analytics/login-logs', authenticateToken, requireAdmin, (req, res) 
         LIMIT ?
     `;
     
-    dbAdapter.all(sql, [tenantId(req), limit], (err, rows) => {
+    dbAdapter.all(sql, [tenantId(req), clampLimit(limit, 100, 1000)], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
@@ -401,13 +462,13 @@ router.get('/analytics/settings-logs', authenticateToken, requireAdmin, (req, re
         SELECT sl.*, u.username, c.name as case_name
         FROM settings_logs sl
         LEFT JOIN users u ON sl.user_id = u.id
-        LEFT JOIN cases c ON sl.case_id = c.id
+        LEFT JOIN cases c ON sl.case_id = c.id AND c.tenant_id = sl.tenant_id
         WHERE sl.tenant_id = ?
         ORDER BY sl.timestamp DESC
         LIMIT ?
     `;
     
-    dbAdapter.all(sql, [tenantId(req), limit], (err, rows) => {
+    dbAdapter.all(sql, [tenantId(req), clampLimit(limit, 100, 1000)], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ logs: redactRows(rows, { pii: 'allow', internal: 'allow' }) });
     });
@@ -438,7 +499,7 @@ router.get('/export/complete-session/:sessionId', authenticateToken, async (req,
         // Get complete session data
         const sql = `
             SELECT 
-                s.id as session_id, s.start_time, s.end_time, s.duration,
+                s.id as session_id, s.case_id, s.start_time, s.end_time, s.duration,
                 s.llm_settings, s.monitor_settings,
                 u.username, u.email,
                 c.name as case_name, c.description as case_description,
@@ -446,7 +507,7 @@ router.get('/export/complete-session/:sessionId', authenticateToken, async (req,
                 ss.monitor_spo2, ss.monitor_bp_sys, ss.monitor_bp_dia, ss.monitor_rr
             FROM sessions s
             JOIN users u ON s.user_id = u.id
-            JOIN cases c ON s.case_id = c.id
+            JOIN cases c ON s.case_id = c.id AND c.tenant_id = s.tenant_id
             LEFT JOIN session_settings ss ON s.id = ss.session_id
             WHERE s.id = ? AND s.tenant_id = ? AND s.deleted_at IS NULL
         `;
@@ -472,12 +533,14 @@ router.get('/export/complete-session/:sessionId', authenticateToken, async (req,
                         return res.status(500).json({ error: reportErr.message });
                     }
 
-                    // Combine data
-                    const completeData = redactRow({
+                    // Combine data. A learner exporting their own session gets
+                    // the case code, never the authoring title or description
+                    // (audit 2026-10-26, F-21).
+                    const completeData = await withLearnerCaseLabels(redactRow({
                         ...sessionData,
                         interactions,
                         reports
-                    }, { pii: hasRoleAtLeast(req.user, ROLE_RANKS.educator) ? 'allow' : 'redact' });
+                    }, { pii: hasRoleAtLeast(req.user, ROLE_RANKS.educator) ? 'allow' : 'redact' }), req.user.role, tenantId(req), dbAdapter);
 
                     // Convert to CSV format
                     const csv = convertCompleteSessionToCSV(completeData);
@@ -713,6 +776,13 @@ router.post('/client-logs/batch', authenticateToken, clientLogLimiter, async (re
 
     const session = parseOptionalSessionHeader(req);
     if (!session.ok) return res.status(400).json({ error: session.error });
+    // The header is the client's claim. A log line is filed against the
+    // session only when it is the caller's own live session in their tenant;
+    // otherwise it keeps the line but not the claim (audit 2026-10-26, L8-17).
+    if (session.value !== null) {
+        const owned = await resolveSessionTrinity(session.value, tenantId(req), { principal: req.user });
+        if (!owned.found) session.value = null;
+    }
 
     for (let i = 0; i < entries.length; i += 1) {
         const error = validateClientLogEntry(entries[i], i);
@@ -789,7 +859,7 @@ router.get('/learning-events/session/:id', authenticateToken, (req, res) => {
     const userId = req.user.id;
 
     // Verify user owns session or is admin
-    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, session) => {
+    dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, session) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (session.user_id !== userId && !canReadAcrossUsers(req.user)) {
@@ -799,14 +869,14 @@ router.get('/learning-events/session/:id', authenticateToken, (req, res) => {
         const sql = `
             SELECT le.*, c.name as case_name
             FROM learning_events le
-            LEFT JOIN cases c ON le.case_id = c.id
+            LEFT JOIN cases c ON le.case_id = c.id AND c.tenant_id = le.tenant_id
             WHERE le.session_id = ? AND le.tenant_id = ?
             ORDER BY le.timestamp ASC
         `;
 
-        dbAdapter.all(sql, [sessionId, tenantId(req)], (err, events) => {
+        dbAdapter.all(sql, [sessionId, tenantId(req)], async (err, events) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ events });
+            res.json(await withLearnerCaseLabels({ events }, req.user.role, tenantId(req), dbAdapter));
         });
     });
 });
@@ -828,7 +898,7 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
         SELECT le.*, s.start_time as session_start, c.name as case_name
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
-        LEFT JOIN cases c ON le.case_id = c.id
+        LEFT JOIN cases c ON le.case_id = c.id AND c.tenant_id = le.tenant_id
         WHERE le.tenant_id = ? AND le.user_id = ?
     `;
     const params = [tenantId(req), targetUserId];
@@ -853,9 +923,9 @@ router.get('/learning-events/user/:id', authenticateToken, (req, res) => {
     sql += ` ORDER BY le.timestamp DESC LIMIT ?`;
     params.push(limit);
 
-    dbAdapter.all(sql, params, (err, events) => {
+    dbAdapter.all(sql, params, async (err, events) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ events });
+        res.json(await withLearnerCaseLabels({ events }, req.user.role, tenantId(req), dbAdapter));
     });
 });
 
@@ -876,7 +946,7 @@ router.get('/learning-events/analytics/summary', authenticateToken, async (req, 
     if (session_id) {
         // Verify the requester owns the session (or can review) before exposing summary.
         const session = await new Promise((resolve) => {
-            dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [session_id, tenantId(req)], (err, row) => {
+            dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [session_id, tenantId(req)], (err, row) => {
                 if (err) return resolve(null);
                 resolve(row);
             });
@@ -1003,19 +1073,20 @@ router.get('/analytics/sessions/:id/reconcile', authenticateToken, requireEducat
 // GET /api/learning-events/recent - Get recent events across all sessions (for current user)
 router.get('/learning-events/recent', authenticateToken, (req, res) => {
     const userId = req.user.id;
-    const limit = parseInt(req.query.limit) || 200;
+    // `limit=-1` used to reach LIMIT unchanged and mean "everything" (L8-10).
+    const limit = clampLimit(req.query.limit, 200, 1000);
 
     const sql = `
         SELECT le.*, s.case_id, c.name as case_name
         FROM learning_events le
         LEFT JOIN sessions s ON le.session_id = s.id
-        LEFT JOIN cases c ON s.case_id = c.id
+        LEFT JOIN cases c ON s.case_id = c.id AND c.tenant_id = le.tenant_id
         WHERE le.tenant_id = ? AND le.user_id = ?
         ORDER BY le.timestamp DESC
         LIMIT ?
     `;
 
-    dbAdapter.all(sql, [tenantId(req), userId, limit], (err, rows) => {
+    dbAdapter.all(sql, [tenantId(req), userId, limit], async (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Parse JSON fields
@@ -1024,7 +1095,8 @@ router.get('/learning-events/recent', authenticateToken, (req, res) => {
             context: row.context ? JSON.parse(row.context) : null
         }));
 
-        res.json({ events });
+        // Learners get the case code, never the authoring title (F-21).
+        res.json(await withLearnerCaseLabels({ events }, req.user.role, tenantId(req), dbAdapter));
     });
 });
 
@@ -1035,7 +1107,7 @@ router.get('/learning-events/all', authenticateToken, (req, res) => {
     res.setHeader('Deprecation', 'true');
     res.setHeader('Link', '</api/analytics/events>; rel="successor-version"');
     const canReview = canReadAcrossUsers(req.user);
-    const limit = parseInt(req.query.limit) || 500;
+    const limit = clampLimit(req.query.limit, 500, 5000);
 
     // Reviewer+ sees all events, regular users see only their own
     const sql = canReview ? `
@@ -1118,6 +1190,10 @@ const MOMENTS_MAX_LIMIT = 10000;
 // caller when not reviewer+), joins via joinMoments, and shapes the
 // moment rows. Resolves to the moments array; rejects on DB error.
 function fetchEnrichedMoments(req, limit) {
+    // Which affect windows the caller may see: one policy for every Oyon
+    // read (lib/oyonReadScope.js; audit 2026-10-26, F-03). Started now,
+    // awaited where the windows are joined.
+    const oyonScopeP = oyonReadScope(req);
     return new Promise((resolve, reject) => {
         const canReview = canReadAcrossUsers(req.user);
 
@@ -1305,24 +1381,24 @@ function fetchEnrichedMoments(req, limit) {
 
             // Only the aggregate columns the join needs — raw gaze point streams
             // are never stored, and nothing beyond these fields leaves this route.
-            const markers = sessionIds.map(() => '?').join(',');
-            const windowsSql = `
-                SELECT session_id, window_start, window_end,
-                       dominant_emotion, valence, arousal,
-                       engagement_json, gaze_json,
-                       attempt_number, case_title_snapshot, student_name_snapshot
-                FROM oyon_emotion_records
-                WHERE tenant_id = ? AND session_id IN (${markers})
-                ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
-            `;
-            const windowParams = canReview
-                ? [tenantId(req), ...sessionIds]
-                : [tenantId(req), ...sessionIds, req.user.id];
-
-            dbAdapter.all(windowsSql, windowParams, (wErr, windows) => {
-                if (wErr) return reject(wErr);
-                finish(windows || []);
-            });
+            oyonScopeP.then((oyon) => {
+                // No Oyon view: the moments come back without affect fields.
+                if (!oyon) return finish([]);
+                const markers = sessionIds.map(() => '?').join(',');
+                const windowsSql = `
+                    SELECT session_id, window_start, window_end,
+                           dominant_emotion, valence, arousal,
+                           engagement_json, gaze_json,
+                           attempt_number, case_title_snapshot, student_name_snapshot
+                    FROM oyon_emotion_records
+                    WHERE tenant_id = ? AND session_id IN (${markers})
+                      AND ${oyon.sql}
+                `;
+                dbAdapter.all(windowsSql, [tenantId(req), ...sessionIds, ...oyon.params], (wErr, windows) => {
+                    if (wErr) return reject(wErr);
+                    finish(windows || []);
+                });
+            }, reject);
             });
         });
     });
@@ -1394,24 +1470,27 @@ router.get('/chat-log/turns', authenticateToken, (req, res) => {
         const sessionIds = [...new Set(messages.map(m => m.session_id).filter(id => id != null))];
         if (sessionIds.length === 0) return res.json({ events: [], total: 0 });
 
-        // Aggregate sensing fields only — never raw gaze points.
-        const markers = sessionIds.map(() => '?').join(',');
-        const winSql = `
-            SELECT session_id, window_end, dominant_emotion, valence, arousal,
-                   engagement_json, gaze_json
-            FROM oyon_emotion_records
-            WHERE tenant_id = ? AND session_id IN (${markers})
-            ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
-        `;
-        const winParams = canReview
-            ? [tenantId(req), ...sessionIds]
-            : [tenantId(req), ...sessionIds, req.user.id];
-
-        dbAdapter.all(winSql, winParams, async (wErr, winRows) => {
-            if (wErr) return res.status(500).json({ error: wErr.message });
+        // Aggregate sensing fields only — never raw gaze points — and only
+        // the windows the Oyon read policy gives this caller (F-03).
+        const sendTurns = async (winRows) => {
             const rows = turnRowsFrom(messages, winRows || []);
             res.json(await withLearnerCaseLabels({ events: rows.slice(0, limit), total: rows.length }, req.user.role, tenantId(req), dbAdapter));
-        });
+        };
+        oyonReadScope(req).then((oyon) => {
+            if (!oyon) return sendTurns([]);
+            const markers = sessionIds.map(() => '?').join(',');
+            const winSql = `
+                SELECT session_id, window_end, dominant_emotion, valence, arousal,
+                       engagement_json, gaze_json
+                FROM oyon_emotion_records
+                WHERE tenant_id = ? AND session_id IN (${markers})
+                  AND ${oyon.sql}
+            `;
+            dbAdapter.all(winSql, [tenantId(req), ...sessionIds, ...oyon.params], (wErr, winRows) => {
+                if (wErr) return res.status(500).json({ error: wErr.message });
+                sendTurns(winRows).catch((e) => res.status(500).json({ error: e.message }));
+            });
+        }, (e) => res.status(500).json({ error: e.message }));
     });
 });
 
@@ -1544,20 +1623,20 @@ router.get('/analytics/case-insights', authenticateToken, async (req, res) => {
     // Aggregate sensing windows for the trigger sessions — same column set
     // and caller scoping as the moments pipeline (aggregates only, never a
     // raw gaze point stream).
-    const fetchWindows = (sessionIds) => {
-        if (sessionIds.length === 0) return Promise.resolve([]);
+    // Windows through the one Oyon read policy (lib/oyonReadScope.js, F-03).
+    const fetchWindows = async (sessionIds) => {
+        if (sessionIds.length === 0) return [];
+        const oyon = await oyonReadScope(req);
+        if (!oyon) return [];
         const markers = sessionIds.map(() => '?').join(',');
-        const params = canReview
-            ? [tenant, ...sessionIds]
-            : [tenant, ...sessionIds, req.user.id];
         return allP(`
             SELECT session_id, window_start, window_end,
                    dominant_emotion, valence, arousal,
                    engagement_json, gaze_json, student_name_snapshot
             FROM oyon_emotion_records
             WHERE tenant_id = ? AND session_id IN (${markers})
-            ${canReview ? '' : 'AND CAST(user_id AS INTEGER) = ?'}
-        `, params);
+              AND ${oyon.sql}
+        `, [tenant, ...sessionIds, ...oyon.params]);
     };
 
     const parseVitalChanges = (raw) => {
@@ -1642,7 +1721,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
     const canReview = canReadAcrossUsers(req.user);
 
     const session = await new Promise((resolve) => {
-        dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ?', [sessionId, tenantId(req)], (err, row) => {
+        dbAdapter.get('SELECT user_id FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [sessionId, tenantId(req)], (err, row) => {
             if (err) return resolve(null);
             resolve(row);
         });
@@ -1669,7 +1748,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
         FROM learning_events le
         LEFT JOIN users u ON le.user_id = u.id
         LEFT JOIN sessions s ON le.session_id = s.id
-        LEFT JOIN cases c ON s.case_id = c.id
+        LEFT JOIN cases c ON s.case_id = c.id AND c.tenant_id = le.tenant_id
         WHERE le.session_id = ? AND le.tenant_id = ?
         ORDER BY le.timestamp ASC
     `;
@@ -1698,7 +1777,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
         dbAdapter.all(labOrdersSql, [sessionId, tenantId(req)], (err, labOrders) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            dbAdapter.all(chatSql, [sessionId, tenantId(req)], (err, chatMessages) => {
+            dbAdapter.all(chatSql, [sessionId, tenantId(req)], async (err, chatMessages) => {
                 if (err) return res.status(500).json({ error: err.message });
 
                 // Parse JSON fields in events
@@ -1707,7 +1786,8 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
                     context: row.context ? JSON.parse(row.context) : null
                 }));
 
-                res.json({
+                // Learners get the case code, never the authoring title (F-21).
+                res.json(await withLearnerCaseLabels({
                     events: parsedEvents,
                     labOrders,
                     chatMessages,
@@ -1720,7 +1800,7 @@ router.get('/learning-events/detailed/:sessionId', authenticateToken, async (req
                             ? (labOrders.reduce((sum, l) => sum + (l.wait_minutes || 0), 0) / labOrders.length).toFixed(1)
                             : 0
                     }
-                });
+                }, req.user.role, tenantId(req), dbAdapter));
             });
         });
     });
@@ -1886,7 +1966,8 @@ router.get('/export/learning-events', authenticateToken, (req, res) => {
 //     role, content, tokens_in, tokens_out, latency_ms, model, extra }
 router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
     const tenant = tenantId(req);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 10000);
+    // clampLimit: `limit=-1` used to pass Math.min and mean "no limit" (L8-10).
+    const limit = clampLimit(req.query.limit, 100, 10000);
     const sessionId = req.query.session_id || null;
 
     const dateFrom = req.query.from || null;
@@ -2090,6 +2171,10 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
     // 5b. oyon_emotion_records → camera-based facial emotion samples.
     queries.push(async () => {
         if (!await tableExists('oyon_emotion_records')) return [];
+        // Admin route, admin policy: the tenant's admin view switch and the
+        // row's admin_can_view (F-03).
+        const oyon = await oyonReadScope(req, { alias: 'oer', staffOnly: true });
+        if (!oyon) return [];
         const f = dateFilter('oer.window_start');
         return allP(`
             SELECT oer.window_start AS ts,
@@ -2106,8 +2191,9 @@ router.get('/chat-log/feed', authenticateToken, requireAdmin, (req, res) => {
             FROM oyon_emotion_records oer
             WHERE oer.tenant_id = ? ${f.clause}
                   ${sessionId ? 'AND oer.session_id = ?' : ''}
+                  AND ${oyon.sql}
             ORDER BY oer.window_start DESC LIMIT ?
-        `, [String(tenant), ...f.params, ...(sessionId ? [String(sessionId)] : []), limit]);
+        `, [String(tenant), ...f.params, ...(sessionId ? [String(sessionId)] : []), ...oyon.params, limit]);
     });
 
     // 5. emotion_logs → student emotion samples (self-report).
@@ -2257,18 +2343,31 @@ router.get('/export/system-log/:source', authenticateToken, requireAdmin, async 
     if (!exists) return res.status(404).json({ error: `Table not in this DB: ${cfg.table}` });
 
     // Discover columns dynamically — schema varies across migrations.
-    const cols = await new Promise((resolve, reject) => {
+    const tableCols = await new Promise((resolve, reject) => {
         dbAdapter.all(`PRAGMA table_info("${cfg.table}")`, [], (err, rows) => {
             err ? reject(err) : resolve((rows || []).map(r => r.name));
         });
     });
+    // The same response redaction policy as the table view below: a hash,
+    // token or secret column is never written to the file, PII stays (this
+    // is the admin's own tenant's log). Audit 2026-10-26, L7-18.
+    const classification = { pii: 'allow', internal: 'allow' };
+    const cols = Object.keys(redactRow(Object.fromEntries(tableCols.map((c) => [c, 'x'])), classification));
 
     // Build the WHERE clause.
     const where = [];
     const params = [];
-    if (cfg.tenant && cols.includes('tenant_id')) {
+    if (cfg.tenant && tableCols.includes('tenant_id')) {
         where.push('tenant_id = ?');
         params.push(tenantId(req));
+    }
+    // Oyon rows follow the Oyon read policy: the tenant's admin view switch
+    // and each row's admin_can_view (F-03).
+    if (cfg.table.startsWith('oyon_')) {
+        const oyon = await oyonReadScope(req, { staffOnly: true });
+        if (!oyon) return res.status(403).json({ error: 'Oyon view disabled for this role', code: 'oyon_view_disabled' });
+        where.push(oyon.sql);
+        params.push(...oyon.params);
     }
     if (req.query.from) {
         where.push(`"${cfg.dateCol}" >= ?`);
@@ -2300,7 +2399,7 @@ router.get('/export/system-log/:source', authenticateToken, requireAdmin, async 
                 dbAdapter.all(sql, [...params, PAGE, offset], (err, r) => err ? reject(err) : resolve(r || []));
             });
             if (rows.length === 0) break;
-            for (const r of rows) {
+            for (const r of redactRows(rows, classification)) {
                 res.write(cols.map(c => csvCellEscape(r[c])).join(',') + '\n');
             }
             total += rows.length;
@@ -2313,6 +2412,14 @@ router.get('/export/system-log/:source', authenticateToken, requireAdmin, async 
         res.end();
         logger('analytics-routes').info('system-log export complete', {
             source, table: cfg.table, rows: total,
+        });
+        // A bulk export of log rows (login IPs, transcripts, the audit log) is
+        // itself an audited act.
+        auditSuccess(req, {
+            action: 'EXPORT_SYSTEM_LOG',
+            resourceType: 'system_log',
+            resourceId: source,
+            metadata: { table: cfg.table, rows: total, from: req.query.from || null, to: req.query.to || null },
         });
     } catch (err) {
         // Headers already sent; we can't switch to a JSON error. Log and
@@ -2332,12 +2439,12 @@ router.get('/export/system-log/:source', authenticateToken, requireAdmin, async 
 //     origin, ip, ref_type, ref_id, status }
 router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
     const tenant = tenantId(req);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 1000, 10000);
+    const limit = clampLimit(req.query.limit, 1000, 10000);
     // Per-source cap defaults to the total cap so we never artificially
     // drop a recent row from one source to make room for an older row
     // from another. Override with ?per_source=N if you want the old
     // "fair representation across sources" behaviour.
-    const perSource = Math.min(parseInt(req.query.per_source, 10) || limit, limit);
+    const perSource = clampLimit(req.query.per_source, limit, limit);
     const dateFrom = req.query.from || null;
     const dateTo = req.query.to || null;
 
@@ -2570,6 +2677,8 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
     // 11. oyon_emotion_records → 'oyon'
     queries.push(async () => {
         if (!await tableExists('oyon_emotion_records')) return [];
+        const oyon = await oyonReadScope(req, { alias: 'oer', staffOnly: true });
+        if (!oyon) return [];
         const f = dateFilter('oer.window_start');
         return allP(`
             SELECT oer.window_start AS ts, oer.user_id, u.username,
@@ -2583,8 +2692,9 @@ router.get('/system-log/feed', authenticateToken, requireAdmin, (req, res) => {
             FROM oyon_emotion_records oer
             LEFT JOIN users u ON oer.user_id = u.id
             WHERE oer.tenant_id = ? ${f.clause}
+              AND ${oyon.sql}
             ORDER BY oer.window_start DESC LIMIT ?
-        `, [tenant, ...f.params, perSource]);
+        `, [tenant, ...f.params, ...oyon.params, perSource]);
     });
 
     // 12. session_vitals → 'vitals' (every monitor sample)
@@ -2722,10 +2832,22 @@ router.get('/system-log/table/:name', authenticateToken, requireAdmin, async (re
         const cols = await dbAdapter.all(`PRAGMA table_info("${cfg.table}")`, []);
         const colNames = cols.map((c) => c.name);
         const orderCol = colNames.includes('id') ? 'id' : cfg.dateCol;
-        const rows = await dbAdapter.all(
-            `SELECT * FROM "${cfg.table}" WHERE tenant_id = ? ORDER BY "${orderCol}" DESC LIMIT ? OFFSET ?`,
-            [tenantId(req), limit, offset]
-        );
+        let rows;
+        if (cfg.table === 'oyon_emotion_records') {
+            // Oyon rows follow the Oyon read policy (F-03): admin view switch
+            // on, and only rows captured with admin_can_view.
+            const oyon = await oyonReadScope(req, { staffOnly: true });
+            if (!oyon) return res.status(403).json({ error: 'Oyon view disabled for this role', code: 'oyon_view_disabled' });
+            rows = await dbAdapter.all(
+                'SELECT * FROM oyon_emotion_records WHERE tenant_id = ? AND admin_can_view = 1 ORDER BY id DESC LIMIT ? OFFSET ?',
+                [tenantId(req), limit, offset]
+            );
+        } else {
+            rows = await dbAdapter.all(
+                `SELECT * FROM "${cfg.table}" WHERE tenant_id = ? ORDER BY "${orderCol}" DESC LIMIT ? OFFSET ?`,
+                [tenantId(req), limit, offset]
+            );
+        }
         const classification = { pii: 'allow', internal: 'allow' };
         const redacted = redactRows(rows, classification);
         // Column list after the same policy, so a hidden column (token_hash,
@@ -2959,7 +3081,7 @@ router.get('/analytics/events', authenticateToken, async (req, res) => {
                         ${COURSE_META_SQL('le.user_id', 'le.tenant_id')}
                    FROM learning_events le
                    LEFT JOIN sessions s ON le.session_id = s.id
-                   LEFT JOIN cases c ON COALESCE(s.case_id, le.case_id) = c.id
+                   LEFT JOIN cases c ON COALESCE(s.case_id, le.case_id) = c.id AND c.tenant_id = le.tenant_id
                    LEFT JOIN users u ON le.user_id = u.id
                    ${filter.where}
                   ORDER BY le.timestamp DESC, le.id DESC
@@ -2969,12 +3091,13 @@ router.get('/analytics/events', authenticateToken, async (req, res) => {
             dbAdapter.get(`SELECT COUNT(*) AS n FROM learning_events le
                 ${filter.where}`, filter.params),
         ]);
-        res.json({
+        // Learners get the case code, never the authoring title (F-21).
+        res.json(await withLearnerCaseLabels({
             events: redactRows(rows || []),
             total: totalRow?.n ?? 0,
             limit,
             offset,
-        });
+        }, req.user.role, tenantId(req), dbAdapter));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -3153,12 +3276,20 @@ router.post('/emotion-logs', authenticateToken, async (req, res) => {
     if (!emotion || typeof emotion !== 'string' || !emotion.trim()) {
         return res.status(400).json({ error: 'emotion is required' });
     }
-    // A log may be filed against a session only by someone who may reach it.
-    if (!await verifySessionOwnership(session_id, req.user, res)) return;
+    // A self-report is filed against the caller's own session (its case comes
+    // from the session), or a case the caller may open (F-16).
+    let scope;
+    try {
+        scope = await resolveCallerSessionCase(req, res, { session_id, case_id });
+    } catch (err) {
+        (req.log || feedLog).error('emotion log scope check failed', { error: err.message });
+        return res.status(500).json({ error: 'Could not save the emotion log' });
+    }
+    if (!scope) return;
 
     dbAdapter.run(
         `INSERT INTO emotion_logs (session_id, user_id, case_id, emotion, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ${SQL_NOW})`,
-        [session_id || null, user_id, case_id || null, emotion.trim(), tenantId(req)],
+        [scope.session_id || null, user_id, scope.case_id || null, emotion.trim(), tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID });
@@ -3181,7 +3312,7 @@ router.get('/emotion-logs', authenticateToken, requireAdmin, (req, res) => {
             c.name AS case_name
         FROM emotion_logs el
         LEFT JOIN users u ON el.user_id = u.id
-        LEFT JOIN cases c ON el.case_id = c.id
+        LEFT JOIN cases c ON el.case_id = c.id AND c.tenant_id = el.tenant_id
         WHERE el.tenant_id = ?
         ORDER BY el.timestamp DESC
         LIMIT 2000
@@ -3211,7 +3342,7 @@ router.get('/export/questionnaire-responses', authenticateToken, requireAdmin, (
             qr.responses
         FROM questionnaire_responses qr
         LEFT JOIN users u ON qr.user_id = u.id
-        LEFT JOIN cases c ON qr.case_id = c.id
+        LEFT JOIN cases c ON qr.case_id = c.id AND c.tenant_id = qr.tenant_id
         WHERE qr.tenant_id = ?
     `;
     const params = [tenantId(req)];
@@ -3269,17 +3400,47 @@ router.post('/questionnaire-responses', authenticateToken, async (req, res) => {
     if (!responses || typeof responses !== 'object') {
         return res.status(400).json({ error: 'responses is required and must be an object' });
     }
-    // The row is the caller's reflection on a session they may reach; a
-    // session id from another tenant (or another learner) is refused, and the
-    // row carries the caller's tenant so the exports above can find it.
-    if (!await verifySessionOwnership(session_id, req.user, res)) return;
+    // The row is the caller's reflection on their OWN session (its case is
+    // taken from the session) or on a case they may open. A client-supplied
+    // case_id used to be stored as sent and read back joined to `cases` with
+    // no tenant check, so any student could list every case title on the
+    // install, other tenants' and deleted ones included (F-16 / L2-03).
+    let scope;
+    try {
+        scope = await resolveCallerSessionCase(req, res, { session_id, case_id });
+    } catch (err) {
+        (req.log || feedLog).error('questionnaire scope check failed', { error: err.message });
+        return res.status(500).json({ error: 'Could not save the questionnaire' });
+    }
+    if (!scope) return;
 
+    // One reflection per learner and session (or per case, without a
+    // session): the route used to store unlimited rows (audit 2026-10-26,
+    // F-39). The existence check is inside the INSERT — one statement — so two
+    // identical requests arriving together cannot both pass it.
+    if (!scope.session_id && !scope.case_id) {
+        return res.status(400).json({ error: 'session_id or case_id is required' });
+    }
     const sql = `
         INSERT INTO questionnaire_responses (session_id, user_id, case_id, responses, tenant_id)
-        VALUES (?, ?, ?, ?, ?)
+        SELECT ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM questionnaire_responses
+             WHERE tenant_id = ? AND user_id = ?
+               AND ((? IS NOT NULL AND session_id = ?) OR (? IS NULL AND session_id IS NULL AND case_id = ?))
+        )
     `;
-    dbAdapter.run(sql, [session_id || null, user_id, case_id || null, JSON.stringify(responses), tenantId(req)], function(err) {
+    const sessionId = scope.session_id || null;
+    const caseId = scope.case_id || null;
+    const tenant = tenantId(req);
+    dbAdapter.run(sql, [
+        sessionId, user_id, caseId, JSON.stringify(responses), tenant,
+        tenant, user_id, sessionId, sessionId, sessionId, caseId,
+    ], function(err) {
         if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) {
+            return res.status(409).json({ error: 'This questionnaire has already been submitted', code: 'already_submitted' });
+        }
         res.json({ id: this.lastID });
     });
 });
@@ -3295,7 +3456,7 @@ router.get('/questionnaire-responses', authenticateToken, (req, res) => {
                    c.name as case_name
             FROM questionnaire_responses qr
             LEFT JOIN users u ON qr.user_id = u.id
-            LEFT JOIN cases c ON qr.case_id = c.id
+            LEFT JOIN cases c ON qr.case_id = c.id AND c.tenant_id = qr.tenant_id AND c.deleted_at IS NULL
             WHERE qr.tenant_id = ?
             ORDER BY qr.submitted_at DESC
         `;
@@ -3305,20 +3466,21 @@ router.get('/questionnaire-responses', authenticateToken, (req, res) => {
             SELECT qr.id, qr.session_id, qr.case_id, qr.submitted_at, qr.responses,
                    c.name as case_name
             FROM questionnaire_responses qr
-            LEFT JOIN cases c ON qr.case_id = c.id
+            LEFT JOIN cases c ON qr.case_id = c.id AND c.tenant_id = qr.tenant_id AND c.deleted_at IS NULL
             WHERE qr.tenant_id = ? AND qr.user_id = ?
             ORDER BY qr.submitted_at DESC
         `;
         params = [tenantId(req), req.user.id];
     }
 
-    dbAdapter.all(sql, params, (err, rows) => {
+    dbAdapter.all(sql, params, async (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         const parsed = rows.map(r => ({
             ...r,
             responses: typeof r.responses === 'string' ? JSON.parse(r.responses) : r.responses,
         }));
-        res.json({ responses: parsed });
+        // Learners see the case code, never the authoring title (F-21).
+        res.json(await withLearnerCaseLabels({ responses: parsed }, req.user.role, tenantId(req), dbAdapter));
     });
 });
 

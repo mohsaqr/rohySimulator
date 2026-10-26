@@ -505,7 +505,8 @@ router.post('/cases', authenticateToken, requireEducator, (req, res) => {
                 status: 'failure',
                 errorMessage: err.message,
                 ipAddress,
-                userAgent
+                userAgent,
+                tenantId: tenantId(req)
             });
             return res.status(500).json({ error: err.message });
         }
@@ -627,7 +628,8 @@ router.put('/cases/:id', authenticateToken, requireEducator, (req, res) => {
                     status: 'failure',
                     errorMessage: err.message,
                     ipAddress,
-                    userAgent
+                    userAgent,
+                    tenantId: tenantId(req)
                 });
                 return res.status(500).json({ error: err.message });
             }
@@ -972,7 +974,10 @@ function validateScenarioTimeline(timeline) {
     return null;
 }
 
-router.post('/scenarios', authenticateToken, (req, res) => {
+// Educator+: a scenario saved here is offered to every educator of the tenant
+// in the repository picker (is_public), so a learner may not add to it
+// (audit 2026-10-26, L2-17). The repository UI is an authoring screen.
+router.post('/scenarios', authenticateToken, requireEducator, (req, res) => {
     const { name, description, duration_minutes, timeline, is_public } = req.body;
     const created_by = req.user.id;
 

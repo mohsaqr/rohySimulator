@@ -12,6 +12,7 @@ import {
 
 import { logger } from '../logger.js';
 import {
+    tenantId,
     verifySessionOwnership
 } from './_helpers.js';
 
@@ -58,12 +59,15 @@ router.put('/sessions/:sessionId/discussion-notes', authenticateToken, async (re
     if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
     const noteText = typeof req.body?.note_text === 'string' ? req.body.note_text : '';
     dbAdapter.run(
-        `INSERT INTO session_notes (session_id, user_id, note_text, updated_at)
-         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        // tenant_id: the user purge deletes `WHERE tenant_id = ? AND user_id = ?`,
+        // so a note filed under the column default (1) outlived the erasure of
+        // a learner in any other tenant (audit 2026-10-26, F-18).
+        `INSERT INTO session_notes (session_id, user_id, note_text, tenant_id, updated_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(session_id, user_id) DO UPDATE SET
             note_text = excluded.note_text,
             updated_at = CURRENT_TIMESTAMP`,
-        [sessionId, req.user.id, noteText],
+        [sessionId, req.user.id, noteText, tenantId(req)],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ ok: true, note_text: noteText });

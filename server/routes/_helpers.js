@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import dbAdapter from '../dbAdapter.js';
 import {
     resolveTenant,
@@ -15,7 +16,7 @@ import {
     redactRows
 } from '../redaction.js';
 import { logger } from '../logger.js';
-import { appendAuditEntry } from '../audit-chain.js';
+import { appendAuditEntry, auditDigest } from '../audit-chain.js';
 import { isRoomEnabled } from '../shared/caseRooms.js';
 
 const auditLog = logger('audit');
@@ -545,6 +546,38 @@ export function validatePassword(password) {
 }
 
 /**
+ * The tenant an audit row belongs to. A caller should pass `tenantId` (or use
+ * `auditSuccess(req, …)`, which does). When it does not, the row used to be
+ * filed under tenant 1 — so another tenant's privileged changes landed in the
+ * default tenant's audit log, persona prompts included, and their own admins
+ * never saw them (security audit 2026-10-26, F-19 / L2-06). Now the tenant is
+ * taken from `req` when one is passed, else from the acting user's row; only
+ * an event with no acting user at all (a failed login for an unknown name) is
+ * the install's, i.e. the platform tenant's.
+ *
+ * @param {Object} params
+ * @returns {Promise<number>}
+ */
+export async function resolveAuditTenant(params) {
+    const explicit = params.tenantId ?? params.tenant_id;
+    if (explicit !== undefined && explicit !== null && explicit !== '') return Number(explicit);
+    if (params.req?.user) return Number(tenantId(params.req));
+    const userId = params.userId ?? null;
+    if (userId !== null && userId !== undefined) {
+        try {
+            const row = await dbAdapter.get('SELECT tenant_id FROM users WHERE id = ?', [userId]);
+            if (row?.tenant_id !== undefined && row?.tenant_id !== null) {
+                auditLog.debug('audit row without tenant; derived from the acting user', { action: params.action, user_id: userId });
+                return Number(row.tenant_id);
+            }
+        } catch (err) {
+            auditLog.warn('audit tenant lookup failed', { action: params.action, user_id: userId, error: err.message });
+        }
+    }
+    return PLATFORM_TENANT_ID;
+}
+
+/**
  * Log an action to the system audit log
  * @param {Object} params - Audit log parameters
  */
@@ -568,9 +601,8 @@ export function logAudit(params) {
         errorMessage = null,
         metadata = null
     } = params;
-    const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
 
-    void appendAuditEntry({
+    void resolveAuditTenant(params).then((tenant_id) => appendAuditEntry({
         userId,
         username,
         action,
@@ -586,12 +618,11 @@ export function logAudit(params) {
         errorMessage,
         metadata: metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
         tenantId: tenant_id
-    }).catch((err) => {
+    })).catch((err) => {
         auditLog.warn('audit log write failed', {
             action,
             resource_type: resourceType ?? targetType ?? null,
             resource_id: resourceId ?? targetId ?? null,
-            tenant_id,
             error: err.message
         });
     });
@@ -617,9 +648,8 @@ export function logAuditAsync(params) {
         errorMessage = null,
         metadata = null
     } = params;
-    const tenant_id = params.tenantId ?? params.tenant_id ?? 1;
 
-    return appendAuditEntry({
+    return resolveAuditTenant(params).then((tenant_id) => appendAuditEntry({
         userId,
         username,
         action,
@@ -635,7 +665,7 @@ export function logAuditAsync(params) {
         errorMessage,
         metadata: metadata ? JSON.stringify(redactAuditPayload(metadata)) : null,
         tenantId: tenant_id
-    });
+    }));
 }
 
 /**
@@ -692,6 +722,219 @@ export function redactAuditSetting(key, value) {
     return redactJsonColumn(parseAuditJson(value));
 }
 
+// ---------------------------------------------------------------------------
+// User purge (GDPR erasure)
+//
+// ONE list of steps drives both the dry-run plan an admin reads and the purge
+// itself, so the plan can no longer claim what the purge does not do (security
+// audit 2026-10-26, L7-04: client_logs and learning_events_rejected were
+// reported "anonymised" and never touched, and seven tables holding the
+// person's data — the two Oyon signal tables, registration requests, terms
+// acceptances, course memberships, lesson progress, survey responses and the
+// usage budget — were missed outright). Each step names its category, its
+// table, how its rows are counted, and the statement that handles them; the
+// plan runs the counts, the purge runs the statements, in this order.
+//
+// Category meanings (the plan's keys):
+//   soft_delete         domain rows the user authored: hidden (deleted_at) and
+//                       detached from the user;
+//   hard_delete         the person's own rows with nothing worth keeping
+//                       anonymised: deleted;
+//   anonymize_retained  operational / aggregate rows kept with the person
+//                       removed (user id NULLed, name -> pseudonym, IP/UA NULL);
+//   detach              catalogue rows that merely record who last touched them.
+// The user row itself is retained, deactivated, renamed to the pseudonym and
+// stripped of PII (`anonymize_user`).
+// ---------------------------------------------------------------------------
+
+/**
+ * A fresh pseudonym for a purged account. Random — the earlier
+ * `deleted_user_<id>` kept the original id, and every retained row still
+ * carries that id, so the pseudonym re-identified the person to anyone who
+ * could read the audit log or registration requests. Generated once per purge
+ * and stored (users.username, sessions.student_name, …); never derived.
+ * @returns {string} `deleted_user_<16 hex>`
+ */
+export function newPurgePseudonym() {
+    return `deleted_user_${crypto.randomBytes(8).toString('hex')}`;
+}
+
+/**
+ * What the purge's own audit row may say about who was erased: the pseudonym
+ * and a keyed digest of the former username (so an operator who is asked
+ * "was X erased?" can check), never the username itself — the audit chain
+ * cannot be edited later, so a clear name there would outlive the erasure.
+ * @param {{username?: string|null}} targetUser
+ * @param {string} pseudonym
+ * @returns {{pseudonym: string, former_username_digest: string|null}}
+ */
+export function purgeAuditIdentity(targetUser, pseudonym) {
+    return {
+        pseudonym,
+        former_username_digest: targetUser?.username ? auditDigest(String(targetUser.username)) : null,
+    };
+}
+
+const inMarks = (ids) => ids.map(() => '?').join(',');
+
+/**
+ * The purge steps for one user. `ctx` = { userId, tenant_id, authoredCaseIds,
+ * pseudonym, email }. Oyon tables hold tenant_id and user_id as TEXT, and
+ * sqlite does not coerce TEXT '1' = INTEGER 1, so those binds are strings.
+ */
+function purgeSteps(ctx) {
+    const { userId, tenant_id: tenant, authoredCaseIds = [], pseudonym = null, email = null } = ctx;
+    const uid = userId;
+    const sTenant = String(tenant);
+    const sUid = String(userId);
+    const steps = [];
+    const step = (category, table, count, exec) => steps.push({ category, table, count, exec });
+
+    // --- soft_delete -------------------------------------------------------
+    step('soft_delete', 'cases',
+        [`SELECT COUNT(*) AS count FROM cases WHERE tenant_id = ? AND (created_by = ? OR last_modified_by = ?)`, [tenant, uid, uid]],
+        [`UPDATE cases SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL, last_modified_by = NULL
+          WHERE tenant_id = ? AND (created_by = ? OR last_modified_by = ?)`, [tenant, uid, uid]]);
+    if (authoredCaseIds.length > 0) {
+        const marks = inMarks(authoredCaseIds);
+        step('soft_delete', 'case_investigations',
+            [`SELECT COUNT(*) AS count FROM case_investigations
+              WHERE tenant_id = ? AND deleted_at IS NULL AND case_id IN (${marks})`, [tenant, ...authoredCaseIds]],
+            [`UPDATE case_investigations SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+              WHERE tenant_id = ? AND case_id IN (${marks})`, [tenant, ...authoredCaseIds]]);
+    } else {
+        step('soft_delete', 'case_investigations', null, null);
+    }
+    step('soft_delete', 'sessions',
+        [`SELECT COUNT(*) AS count FROM sessions WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+        [`UPDATE sessions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), user_id = NULL, student_name = ?
+          WHERE tenant_id = ? AND user_id = ?`, [pseudonym, tenant, uid]]);
+    step('soft_delete', 'agent_templates',
+        [`SELECT COUNT(*) AS count FROM agent_templates WHERE tenant_id = ? AND created_by = ?`, [tenant, uid]],
+        [`UPDATE agent_templates SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+          WHERE tenant_id = ? AND created_by = ?`, [tenant, uid]]);
+    step('soft_delete', 'scenarios',
+        [`SELECT COUNT(*) AS count FROM scenarios WHERE tenant_id = ? AND created_by = ?`, [tenant, uid]],
+        [`UPDATE scenarios SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+          WHERE tenant_id = ? AND created_by = ?`, [tenant, uid]]);
+    // lab_definitions is a global master catalog (no tenant_id column);
+    // detach by created_by only.
+    step('soft_delete', 'lab_definitions',
+        [`SELECT COUNT(*) AS count FROM lab_definitions WHERE created_by = ?`, [uid]],
+        [`UPDATE lab_definitions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
+          WHERE created_by = ?`, [uid]]);
+    step('soft_delete', 'clinical_notes',
+        [`SELECT COUNT(*) AS count FROM clinical_notes WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+        [`UPDATE clinical_notes SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
+          WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]]);
+
+    // --- hard_delete -------------------------------------------------------
+    for (const table of HARD_DELETE_ON_PURGE_TABLES) {
+        step('hard_delete', table,
+            [`SELECT COUNT(*) AS count FROM ${table} WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+            [`DELETE FROM ${table} WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]]);
+    }
+    // Consents are personal acts with no aggregate value once the user is gone.
+    step('hard_delete', 'oyon_emotion_consents',
+        [`SELECT COUNT(*) AS count FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
+        [`DELETE FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]]);
+    // Keystroke timing, pointer, voice and heart-rate-only windows, and the
+    // typing / voice state sequences: deleted like the learner's own
+    // self-service deletion does (their user_id is NOT NULL, so they cannot be
+    // anonymised in place).
+    step('hard_delete', 'oyon_signal_windows',
+        [`SELECT COUNT(*) AS count FROM oyon_signal_windows WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
+        [`DELETE FROM oyon_signal_windows WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]]);
+    step('hard_delete', 'oyon_signal_events',
+        [`SELECT COUNT(*) AS count FROM oyon_signal_events WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
+        [`DELETE FROM oyon_signal_events WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]]);
+    // Course membership and lesson progress have no tenant column of their
+    // own; the course's tenant scopes them.
+    step('hard_delete', 'cohort_members',
+        [`SELECT COUNT(*) AS count FROM cohort_members
+          WHERE user_id = ? AND cohort_id IN (SELECT id FROM cohorts WHERE tenant_id = ?)`, [uid, tenant]],
+        [`DELETE FROM cohort_members
+          WHERE user_id = ? AND cohort_id IN (SELECT id FROM cohorts WHERE tenant_id = ?)`, [uid, tenant]]);
+    step('hard_delete', 'lesson_progress',
+        [`SELECT COUNT(*) AS count FROM lesson_progress
+          WHERE user_id = ? AND cohort_id IN (SELECT id FROM cohorts WHERE tenant_id = ?)`, [uid, tenant]],
+        [`DELETE FROM lesson_progress
+          WHERE user_id = ? AND cohort_id IN (SELECT id FROM cohorts WHERE tenant_id = ?)`, [uid, tenant]]);
+    step('hard_delete', 'usage_budget',
+        [`SELECT COUNT(*) AS count FROM usage_budget WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+        [`DELETE FROM usage_budget WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]]);
+
+    // --- anonymize_retained -----------------------------------------------
+    // system_audit_log is deliberately NOT here: every row's entry_hash
+    // covers user_id, so nulling it in place made verifyAuditChain report
+    // tampering after every purge (security audit 2026-10-24, SEC-41). The
+    // purge_user entry the route appends records the erasure in the chain.
+    for (const table of ['event_log', 'learning_events', 'llm_request_log', 'settings_logs',
+        'session_settings', 'physical_exam_findings', 'emotion_logs', 'learning_events_rejected', 'client_logs']) {
+        step('anonymize_retained', table,
+            [`SELECT COUNT(*) AS count FROM ${table} WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+            // Table name from the literal list above, never a request value.
+            [`UPDATE ${table}
+                 SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]]);
+    }
+    step('anonymize_retained', 'login_logs',
+        [`SELECT COUNT(*) AS count FROM login_logs WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+        [`UPDATE login_logs SET user_id = NULL, username = ? WHERE tenant_id = ? AND user_id = ?`, [pseudonym, tenant, uid]]);
+    // Records kept for aggregate analytics; the person and the name snapshot go.
+    step('anonymize_retained', 'oyon_emotion_records',
+        [`SELECT COUNT(*) AS count FROM oyon_emotion_records WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
+        [`UPDATE oyon_emotion_records
+             SET user_id = NULL, student_id = NULL, student_name_snapshot = ?, student_role_snapshot = NULL
+           WHERE tenant_id = ? AND user_id = ?`, [pseudonym, sTenant, sUid]]);
+    // The fact of acceptance (version, title, body, time) is kept — it is the
+    // record that the terms were accepted. Where it was accepted from is not.
+    step('anonymize_retained', 'terms_acceptances',
+        [`SELECT COUNT(*) AS count FROM terms_acceptances WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]],
+        [`UPDATE terms_acceptances SET ip_address = NULL, user_agent = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant, uid]]);
+    // The application that created the account, and any other request from
+    // the same address: kept as a decided request, with nothing of the person.
+    step('anonymize_retained', 'registration_requests',
+        [`SELECT COUNT(*) AS count FROM registration_requests
+          WHERE tenant_id = ? AND (user_id = ? OR (? IS NOT NULL AND lower(email) = lower(?)))`, [tenant, uid, email, email]],
+        [`UPDATE registration_requests
+             SET username = ?, name = NULL, email = '', ip_address = NULL, decision_note = NULL,
+                 password_hash = '', user_id = NULL
+           WHERE tenant_id = ? AND (user_id = ? OR (? IS NOT NULL AND lower(email) = lower(?)))`, [pseudonym, tenant, uid, email, email]]);
+    step('anonymize_retained', 'registration_invite_uses',
+        [`SELECT COUNT(*) AS count FROM registration_invite_uses
+          WHERE user_id = ? AND invite_id IN (SELECT id FROM registration_invites WHERE tenant_id = ?)`, [uid, tenant]],
+        [`UPDATE registration_invite_uses SET user_id = NULL, ip_address = NULL
+          WHERE user_id = ? AND invite_id IN (SELECT id FROM registration_invites WHERE tenant_id = ?)`, [uid, tenant]]);
+    // Answers stay in the survey's results, unattributed. The dedupe key of a
+    // named response embeds the user id, so it goes too.
+    step('anonymize_retained', 'survey_responses',
+        [`SELECT COUNT(*) AS count FROM survey_responses
+          WHERE user_id = ? AND survey_id IN (SELECT id FROM surveys WHERE tenant_id = ?)`, [uid, tenant]],
+        [`UPDATE survey_responses SET user_id = NULL, dedupe_key = NULL
+          WHERE user_id = ? AND survey_id IN (SELECT id FROM surveys WHERE tenant_id = ?)`, [uid, tenant]]);
+
+    // --- detach -------------------------------------------------------------
+    step('detach', 'platform_settings',
+        [`SELECT COUNT(*) AS count FROM platform_settings WHERE updated_by = ?`, [uid]],
+        [`UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?`, [uid]]);
+    step('detach', 'scenario_templates',
+        [`SELECT COUNT(*) AS count FROM scenario_templates WHERE created_by = ?`, [uid]],
+        [`UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?`, [uid]]);
+    step('detach', 'scenario_events',
+        [`SELECT COUNT(*) AS count FROM scenario_events WHERE tenant_id = ? AND acknowledged_by = ?`, [tenant, uid]],
+        [`UPDATE scenario_events SET acknowledged_by = NULL WHERE tenant_id = ? AND acknowledged_by = ?`, [tenant, uid]]);
+    return steps;
+}
+
+/** `{ category: [table, …] }` for every table the purge touches — the plan's shape. */
+export function purgeTablesByCategory() {
+    const out = { soft_delete: [], hard_delete: [], anonymize_retained: [], detach: [] };
+    for (const s of purgeSteps({ userId: 0, tenant_id: 0, authoredCaseIds: [0] })) {
+        if (!out[s.category].includes(s.table)) out[s.category].push(s.table);
+    }
+    return out;
+}
+
 export async function buildUserPurgePlan(userId, tenant_id) {
     const authoredCaseIds = (await dbAll(
         `SELECT id FROM cases WHERE tenant_id = ? AND deleted_at IS NULL
@@ -702,137 +945,36 @@ export async function buildUserPurgePlan(userId, tenant_id) {
         `SELECT id FROM sessions WHERE tenant_id = ? AND deleted_at IS NULL AND user_id = ?`,
         [tenant_id, userId]
     )).map(r => r.id);
+    const user = await dbGet('SELECT email FROM users WHERE id = ? AND tenant_id = ?', [userId, tenant_id]);
 
-    const plan = {
-        soft_delete: {
-            cases: authoredCaseIds.length,
-            sessions: sessionIds.length,
-            agent_templates: await dbScalar(`SELECT COUNT(*) AS count FROM agent_templates WHERE tenant_id = ? AND created_by = ? AND deleted_at IS NULL`, [tenant_id, userId]),
-            scenarios: await dbScalar(`SELECT COUNT(*) AS count FROM scenarios WHERE tenant_id = ? AND created_by = ? AND deleted_at IS NULL`, [tenant_id, userId]),
-            // lab_definitions is a global master catalog (no tenant_id),
-            // but per-user authorship exists via created_by. Stage E6 didn't
-            // tenant-scope this table. Filter by created_by only.
-            lab_definitions: await dbScalar(`SELECT COUNT(*) AS count FROM lab_definitions WHERE created_by = ? AND deleted_at IS NULL`, [userId]),
-            clinical_notes: await dbScalar(`SELECT COUNT(*) AS count FROM clinical_notes WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL`, [tenant_id, userId]),
-            case_investigations: authoredCaseIds.length
-                ? await dbScalar(
-                    `SELECT COUNT(*) AS count FROM case_investigations
-                     WHERE tenant_id = ? AND deleted_at IS NULL AND case_id IN (${authoredCaseIds.map(() => '?').join(',')})`,
-                    [tenant_id, ...authoredCaseIds]
-                )
-                : 0
-        },
-        hard_delete: {},
-        anonymize_retained: {},
-        anonymize_user: 1
-    };
-
-    for (const table of HARD_DELETE_ON_PURGE_TABLES) {
-        plan.hard_delete[table] = await dbScalar(
-            `SELECT COUNT(*) AS count FROM ${table} WHERE tenant_id = ? AND user_id = ?`,
-            [tenant_id, userId]
-        );
+    const plan = { soft_delete: {}, hard_delete: {}, anonymize_retained: {}, detach: {}, anonymize_user: 1 };
+    for (const s of purgeSteps({ userId, tenant_id, authoredCaseIds, email: user?.email ?? null })) {
+        plan[s.category][s.table] = s.count ? await dbScalar(s.count[0], s.count[1]) : 0;
     }
-
-    plan.hard_delete.alarm_config = await dbScalar(
-        `SELECT COUNT(*) AS count FROM alarm_config WHERE tenant_id = ? AND user_id = ?`,
-        [tenant_id, userId]
-    );
-
-    plan.anonymize_retained.sessions = sessionIds.length;
-    plan.anonymize_retained.login_logs = await dbScalar(`SELECT COUNT(*) AS count FROM login_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-    plan.anonymize_retained.settings_logs = await dbScalar(`SELECT COUNT(*) AS count FROM settings_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-    plan.anonymize_retained.session_settings = await dbScalar(`SELECT COUNT(*) AS count FROM session_settings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-    plan.anonymize_retained.physical_exam_findings = await dbScalar(`SELECT COUNT(*) AS count FROM physical_exam_findings WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-    plan.anonymize_retained.emotion_logs = await dbScalar(`SELECT COUNT(*) AS count FROM emotion_logs WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-    // Oyon tables store tenant_id and user_id as TEXT, so cast explicitly to
-    // string when comparing — sqlite does NOT auto-coerce TEXT='1' to
-    // INTEGER 1 in equality. Records get anonymised (preserves aggregate
-    // analytics value), consents get hard-deleted (consents are personal
-    // acts, not aggregates).
-    plan.anonymize_retained.oyon_emotion_records = await dbScalar(
-        `SELECT COUNT(*) AS count FROM oyon_emotion_records WHERE tenant_id = ? AND user_id = ?`,
-        [String(tenant_id), String(userId)]
-    );
-    plan.hard_delete.oyon_emotion_consents = await dbScalar(
-        `SELECT COUNT(*) AS count FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`,
-        [String(tenant_id), String(userId)]
-    );
-    for (const retention of RETENTION_TABLES.filter(t => t.userColumn)) {
-        plan.anonymize_retained[retention.table] = await dbScalar(
-            `SELECT COUNT(*) AS count FROM ${retention.table} WHERE tenant_id = ? AND ${retention.userColumn} = ?`,
-            [tenant_id, userId]
-        );
-    }
-
     return { plan, authoredCaseIds, sessionIds };
 }
 
+/**
+ * Run the purge: every step of purgeSteps, then the user row, in ONE
+ * transaction on a connection of its own (dbAdapter.isolatedTransaction) — the
+ * shared-handle BEGIN this used could take in another request's half-finished
+ * writes and commit or roll them back with the purge (security audit
+ * 2026-10-26, L7-11).
+ *
+ * @returns {Promise<{touched: {category: string, table: string, changes: number}[]}>}
+ *          one entry per step, in plan order — the same tables the plan lists
+ */
 export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, passwordHash, authoredCaseIds }) {
-    await dbRun('BEGIN IMMEDIATE');
-    try {
-        await dbRun(`UPDATE cases SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL, last_modified_by = NULL
-                     WHERE tenant_id = ? AND (created_by = ? OR last_modified_by = ?)`, [tenant_id, userId, userId]);
-        if (authoredCaseIds.length > 0) {
-            await dbRun(
-                `UPDATE case_investigations SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
-                 WHERE tenant_id = ? AND case_id IN (${authoredCaseIds.map(() => '?').join(',')})`,
-                [tenant_id, ...authoredCaseIds]
-            );
+    return dbAdapter.isolatedTransaction(async (tx) => {
+        const user = await tx.get('SELECT email FROM users WHERE id = ? AND tenant_id = ?', [userId, tenant_id]);
+        const touched = [];
+        for (const s of purgeSteps({
+            userId, tenant_id, authoredCaseIds: authoredCaseIds || [], pseudonym: anonymizedUsername, email: user?.email ?? null,
+        })) {
+            const result = s.exec ? await tx.run(s.exec[0], s.exec[1]) : { changes: 0 };
+            touched.push({ category: s.category, table: s.table, changes: result.changes || 0 });
         }
-        await dbRun(`UPDATE sessions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), user_id = NULL, student_name = ?
-                     WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
-        await dbRun(`UPDATE agent_templates SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
-                     WHERE tenant_id = ? AND created_by = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE scenarios SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
-                     WHERE tenant_id = ? AND created_by = ?`, [tenant_id, userId]);
-        // lab_definitions is a global master catalog (no tenant_id column);
-        // detach by created_by only.
-        await dbRun(`UPDATE lab_definitions SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), created_by = NULL
-                     WHERE created_by = ?`, [userId]);
-        await dbRun(`UPDATE clinical_notes SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP)
-                     WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-
-        for (const table of HARD_DELETE_ON_PURGE_TABLES) {
-            await dbRun(`DELETE FROM ${table} WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        }
-
-        await dbRun(`UPDATE event_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE learning_events SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        // system_audit_log is deliberately NOT touched: every row's entry_hash
-        // covers user_id, so nulling it in place made verifyAuditChain report
-        // tampering after every purge (security audit 2026-10-24, SEC-41). The
-        // user row itself is purged above — an orphan integer id no longer
-        // identifies anyone — and the purge_user entry appended below records
-        // the erasure in the chain itself.
-        await dbRun(`UPDATE llm_request_log SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE login_logs SET user_id = NULL, username = ? WHERE tenant_id = ? AND user_id = ?`, [anonymizedUsername, tenant_id, userId]);
-        await dbRun(`UPDATE settings_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE session_settings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE physical_exam_findings SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        await dbRun(`UPDATE emotion_logs SET user_id = NULL WHERE tenant_id = ? AND user_id = ?`, [tenant_id, userId]);
-        // Oyon: anonymise records (rows kept for aggregate analytics, but
-        // the user pointer + name snapshot are scrubbed), then hard-delete
-        // consents (a personal act with no aggregate value once the user is
-        // gone). String-cast required: oyon tables hold TEXT ids.
-        await dbRun(
-            `UPDATE oyon_emotion_records
-             SET user_id = NULL,
-                 student_id = NULL,
-                 student_name_snapshot = ?,
-                 student_role_snapshot = NULL
-             WHERE tenant_id = ? AND user_id = ?`,
-            [anonymizedUsername, String(tenant_id), String(userId)]
-        );
-        await dbRun(
-            `DELETE FROM oyon_emotion_consents WHERE tenant_id = ? AND user_id = ?`,
-            [String(tenant_id), String(userId)]
-        );
-        await dbRun(`UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?`, [userId]);
-        await dbRun(`UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?`, [userId]);
-        await dbRun(`UPDATE scenario_events SET acknowledged_by = NULL WHERE tenant_id = ? AND acknowledged_by = ?`, [tenant_id, userId]);
-
-        await dbRun(
+        await tx.run(
             `UPDATE users SET
                 username = ?, name = NULL, email = NULL, password_hash = ?, role = 'student',
                 department = NULL, status = 'inactive', last_login = NULL, failed_login_attempts = 0,
@@ -842,11 +984,8 @@ export async function executeUserPurge({ userId, tenant_id, anonymizedUsername, 
              WHERE id = ? AND tenant_id = ?`,
             [anonymizedUsername, passwordHash, userId, tenant_id]
         );
-        await dbRun('COMMIT');
-    } catch (err) {
-        await dbRun('ROLLBACK').catch(() => {});
-        throw err;
-    }
+        return { touched };
+    });
 }
 
 /**

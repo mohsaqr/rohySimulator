@@ -18,7 +18,9 @@
 //
 // Authorization for edit/delete: row.created_by === user.id, OR
 // (row.scope === 'tenant' AND user is educator+ in same tenant), OR
-// (row.scope === 'platform' AND user is admin). Enforced in canMutate().
+// (row.scope === 'platform' AND user is a PLATFORM admin — an admin of the
+// default tenant; a platform row is every tenant's, so a tenant admin may not
+// rewrite it — security audit 2026-10-26, F-02). Enforced in canMutate().
 
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
@@ -37,6 +39,7 @@ import { perUserRateLimit } from '../middleware/perUserRateLimit.js';
 import { logger } from '../logger.js';
 import { appendAuditEntry } from '../audit-chain.js';
 import { DEFAULT_TURNAROUND_MINUTES } from '../lib/turnaround.js';
+import { clampLimit, clampOffset, escapeLikeTerm, isPlatformAdmin } from './_helpers.js';
 
 const router = express.Router();
 const catalogueLog = logger('catalogue');
@@ -155,11 +158,27 @@ function visibilityClause(user, { hasDeletedAt = false, alias = '' } = {}) {
 
 function canMutate(user, row) {
     if (!user || !row) return false;
+    // Platform rows first: who created one does not matter once it is shared
+    // with every tenant.
+    if (row.scope === 'platform') return isPlatformAdmin(user);
     if (row.created_by === user.id) return true;
     if (row.scope === 'tenant' && row.tenant_id === (user.tenant_id ?? 1)
         && hasRoleAtLeast(user, ROLE_RANKS.educator)) return true;
-    if (row.scope === 'platform' && hasRoleAtLeast(user, ROLE_RANKS.admin)) return true;
     return false;
+}
+
+// Page size + offset for the catalogue lists: `limit=-1` / `limit=abc` used
+// to reach LIMIT unchanged and mean "everything" (audit 2026-10-26, L7-18).
+const CATALOGUE_PAGE_MAX = 500;
+function pageOf(query) {
+    return [clampLimit(query.limit, 200, CATALOGUE_PAGE_MAX), clampOffset(query.offset)];
+}
+
+// Promotion to platform scope publishes a row to every tenant on the install:
+// a platform admin's act. A tenant admin may still widen a row to their own
+// tenant (audit 2026-10-26, F-02).
+function canPromoteTo(user, target) {
+    return target === 'platform' ? isPlatformAdmin(user) : hasRoleAtLeast(user, ROLE_RANKS.admin);
 }
 
 // Determine the data_sources row to attribute new rows to, based on the
@@ -191,7 +210,7 @@ function asyncHandler(fn) {
 //   Query params: scope (filter), q (substring), limit, offset.
 //   Returns rows visible to the caller per visibility clause.
 router.get('/medications', authenticateToken, asyncHandler(async (req, res) => {
-    const { scope, q, limit = 200, offset = 0 } = req.query;
+    const { scope, q } = req.query;
     const { where, params } = visibilityClause(req.user, { hasDeletedAt: true });
 
     let sql = `SELECT m.*, s.source_key AS data_source_key
@@ -208,11 +227,12 @@ router.get('/medications', authenticateToken, asyncHandler(async (req, res) => {
         sqlParams.push(scope);
     }
     if (q) {
-        sql += ` AND (m.generic_name LIKE ? OR m.brand_names LIKE ? OR m.medication_code LIKE ?)`;
-        sqlParams.push(`%${q}%`, `%${q}%`, `%${q}%`);
+        const term = `%${escapeLikeTerm(q)}%`;
+        sql += ` AND (m.generic_name LIKE ? ESCAPE '\\' OR m.brand_names LIKE ? ESCAPE '\\' OR m.medication_code LIKE ? ESCAPE '\\')`;
+        sqlParams.push(term, term, term);
     }
     sql += ` ORDER BY m.is_curated DESC, m.generic_name LIMIT ? OFFSET ?`;
-    sqlParams.push(parseInt(limit), parseInt(offset));
+    sqlParams.push(...pageOf(req.query));
 
     const rows = await dbAll(sql, sqlParams);
     res.json({ medications: rows, count: rows.length });
@@ -333,6 +353,9 @@ router.post('/medications/:id/promote', authenticateToken, requireAdmin, asyncHa
     // platform scope would publish it to everyone (security audit 2026-10-24, #11).
     const row = await dbGet('SELECT * FROM medications WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [id, req.user.tenant_id ?? 1]);
     if (!row) return res.status(404).json({ error: 'Medication not found' });
+    if (!canPromoteTo(req.user, target)) {
+        return res.status(403).json({ error: 'Platform administrator required', code: 'platform_admin_required' });
+    }
 
     await dbRun('UPDATE medications SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [target, id, req.user.tenant_id ?? 1]);
     await audit(req, {
@@ -376,7 +399,7 @@ router.get('/medications/search', authenticateToken, searchLimiter, asyncHandler
 // =========================================================================
 
 router.get('/lab-tests', authenticateToken, asyncHandler(async (req, res) => {
-    const { scope, q, limit = 200, offset = 0 } = req.query;
+    const { scope, q } = req.query;
     const { where, params } = visibilityClause(req.user, { hasDeletedAt: false });
 
     let sql = `SELECT lt.*, s.source_key AS data_source_key
@@ -393,11 +416,12 @@ router.get('/lab-tests', authenticateToken, asyncHandler(async (req, res) => {
         sqlParams.push(scope);
     }
     if (q) {
-        sql += ` AND (lt.test_name LIKE ? OR lt.test_code LIKE ? OR lt.loinc_code LIKE ?)`;
-        sqlParams.push(`%${q}%`, `%${q}%`, `%${q}%`);
+        const term = `%${escapeLikeTerm(q)}%`;
+        sql += ` AND (lt.test_name LIKE ? ESCAPE '\\' OR lt.test_code LIKE ? ESCAPE '\\' OR lt.loinc_code LIKE ? ESCAPE '\\')`;
+        sqlParams.push(term, term, term);
     }
     sql += ` ORDER BY lt.is_curated DESC, lt.test_name LIMIT ? OFFSET ?`;
-    sqlParams.push(parseInt(limit), parseInt(offset));
+    sqlParams.push(...pageOf(req.query));
 
     const rows = await dbAll(sql, sqlParams);
     res.json({ lab_tests: rows, count: rows.length });
@@ -505,6 +529,9 @@ router.post('/lab-tests/:id/promote', authenticateToken, requireAdmin, asyncHand
     }
     const row = await dbGet('SELECT * FROM lab_tests WHERE id = ? AND tenant_id = ?', [id, req.user.tenant_id ?? 1]);
     if (!row) return res.status(404).json({ error: 'Lab test not found' });
+    if (!canPromoteTo(req.user, target)) {
+        return res.status(403).json({ error: 'Platform administrator required', code: 'platform_admin_required' });
+    }
     await dbRun('UPDATE lab_tests SET scope = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [target, id, req.user.tenant_id ?? 1]);
     await audit(req, {
         action: 'promote_catalogue_lab_test',

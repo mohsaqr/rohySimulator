@@ -46,6 +46,13 @@ const isAdmin = (req) => hasRoleAtLeast(req.user, ROLE_RANKS.admin);
 // here — only 'teacher' (or owner/admin) does — so an educator-rank user
 // enrolled as a plain student of someone else's cohort still gets 404.
 async function loadOwnedCohort(req, res) {
+    // Rank first, in the helper itself, not only in each route's
+    // requireEducator: an owner demoted to student, or a student added as a
+    // co-teacher, must not manage the course (audit 2026-10-26, F-20).
+    if (!hasRoleAtLeast(req.user, ROLE_RANKS.educator)) {
+        res.status(404).json({ error: 'Cohort not found' });
+        return null;
+    }
     const cohort = await dbAdapter.get(
         `SELECT * FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
         [req.params.id, tenantId(req)]
@@ -75,6 +82,7 @@ async function loadOwnedCohort(req, res) {
 // report per-cohort (skip a denied/missing one) rather than 404 the whole
 // request. Returns the cohort row when the caller can manage it, else null.
 async function resolveManageableCohort(cohortId, req) {
+    if (!hasRoleAtLeast(req.user, ROLE_RANKS.educator)) return null;
     const cohort = await dbAdapter.get(
         `SELECT * FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
         [cohortId, tenantId(req)]
@@ -105,6 +113,12 @@ function parseDateInput(v) {
 function isPlainObject(v) {
     return v != null && typeof v === 'object' && !Array.isArray(v);
 }
+
+// A co-teacher manages the course: MCQ keys, unpublished lessons, the
+// course gate. Only an educator-rank account may hold that membership —
+// a teacher row never elevates a student (audit 2026-10-26, F-20).
+const canCoTeach = (user) => hasRoleAtLeast({ role: user?.role }, ROLE_RANKS.educator);
+const COTEACHER_RANK_ERROR = 'A co-teacher must have an educator or administrator account';
 
 // Resolve a username/email to a live user in the caller's tenant.
 async function resolveTenantUser(identifier, req) {
@@ -215,6 +229,9 @@ router.post('/cohorts', authenticateToken, requireEducator, async (req, res, nex
                 const u = await resolveTenantUser(identifier, req);
                 if (!u) {
                     return res.status(400).json({ error: `co-teacher not found in this tenant: ${identifier}` });
+                }
+                if (!canCoTeach(u)) {
+                    return res.status(400).json({ error: `${COTEACHER_RANK_ERROR}: ${identifier}`, code: 'coteacher_rank' });
                 }
                 coteachers.push(u);
             }
@@ -457,6 +474,11 @@ router.delete('/cohorts/:id', authenticateToken, requireEducator, async (req, re
     try {
         const cohort = await loadOwnedCohort(req, res);
         if (!cohort) return;
+        // A co-teacher manages the course but does not get to delete it: that
+        // is the owner's (or an admin's) decision (audit 2026-10-26, L2-17).
+        if (Number(cohort.owner_user_id) !== Number(req.user.id) && !isAdmin(req)) {
+            return res.status(403).json({ error: 'Only the course owner or an administrator can delete this course', code: 'owner_required' });
+        }
         await dbAdapter.run(
             `UPDATE cohorts SET deleted_at = ${dbAdapter.now()} WHERE id = ? AND deleted_at IS NULL`,
             [cohort.id]
@@ -960,6 +982,9 @@ router.post('/cohorts/:id/teachers', authenticateToken, requireEducator, async (
         const target = await resolveTenantUser(identifier, req);
         if (!target) {
             return res.status(404).json({ error: 'User not found in this tenant' });
+        }
+        if (!canCoTeach(target)) {
+            return res.status(400).json({ error: COTEACHER_RANK_ERROR, code: 'coteacher_rank' });
         }
         const { membership, created, revived, promoted } = await upsertMember(cohort.id, target.id, 'teacher');
         if (created || revived || promoted) {

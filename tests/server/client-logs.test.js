@@ -116,7 +116,10 @@ describe('/api/client-logs', () => {
         expect(rows[0]).toMatchObject({
             tenant_id: 1,
             user_id: studentId,
-            session_id: 44,
+            // Session 44 does not exist (and is not this student's): since the
+            // 2026-10-26 audit (L8-17) an unowned X-Rohy-Session-Id is dropped, not
+            // stored. An owned one is kept — tests/server/sec2-b-tenant-rows.test.js.
+            session_id: null,
             level: 'info',
             component: 'DiagnosticBar',
             msg: 'client log message',

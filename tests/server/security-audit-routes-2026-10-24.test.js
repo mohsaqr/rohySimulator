@@ -243,8 +243,9 @@ describe('security audit 2026-10-24 — route fixes', () => {
         expect(voice.status).toBe(403);
         const ok = await as.admin1('/api/platform-settings/llm', { method: 'PUT', json: { model: 'audit-model' } });
         expect(ok.status).toBe(200);
-        // Reads stay open to tenant admins.
-        expect((await as.admin2('/api/platform-settings')).status).toBe(200);
+        // The raw dump of every install setting is a platform admin's since the
+        // 2026-10-26 audit (L2-11, tests/server/sec2-b-platform-writes.test.js).
+        expect((await as.admin2('/api/platform-settings')).status).toBe(403);
     });
 
     // --- #10 --------------------------------------------------------------
