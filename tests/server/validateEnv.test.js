@@ -3,7 +3,10 @@ import { validateEnv, validateEnvOrExit } from '../../server/config/validateEnv.
 
 const baseProdEnv = () => ({
     NODE_ENV: 'production',
-    JWT_SECRET: 'a'.repeat(64),
+    // Was 'a'.repeat(64): production now refuses a one-symbol secret
+    // (sec2-e2-env-validation.test.js), so the production fixture needs a
+    // secret that looks random.
+    JWT_SECRET: 'q7R2vX9mKp4LwZ8sT1nB6yH3cF5dJ0gUeA',
     FRONTEND_URL: 'https://example.com/rohy',
     ROHY_DB: '/opt/data/rohy/database.sqlite',
     TRANSFORMERS_CACHE: '/var/cache/rohy-hf',

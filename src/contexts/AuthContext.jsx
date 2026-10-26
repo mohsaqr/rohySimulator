@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthService } from '../services/authService';
 import { apiPost } from '../services/apiClient';
 import { announceIdentity, isTabStale, watchIdentity } from '../services/tabIdentity';
+import { adoptBrowserStateFor } from '../utils/browserStateOwner';
 import { STORAGE_REGISTRY } from '../storage/registry';
 
 const AuthContext = createContext(null);
@@ -31,7 +32,11 @@ export const AuthProvider = ({ children }) => {
             try {
                 const userData = await AuthService.verifyToken();
                 setUser(userData);
-                if (userData) announceIdentity(userData);
+                if (userData) {
+                    // Shared browser: purge the previous person's parked state first.
+                    adoptBrowserStateFor(userData.id);
+                    announceIdentity(userData);
+                }
             } catch (error) {
                 console.error('Token verification failed:', error);
                 setUser(null);
@@ -178,6 +183,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (username, password) => {
         const data = await AuthService.login(username, password);
         setUser(data.user);
+        adoptBrowserStateFor(data.user.id);
         announceIdentity(data.user);
         return data;
     };
@@ -189,6 +195,7 @@ export const AuthProvider = ({ children }) => {
         const data = await AuthService.register(username, email, password, extra);
         if (data?.user) {
             setUser(data.user);
+            adoptBrowserStateFor(data.user.id);
             announceIdentity(data.user);
         }
         return data;

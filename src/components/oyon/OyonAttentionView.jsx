@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, Eye } from 'lucide-react';
 import { engagementAnalytics } from './engagementAnalytics';
 import { emotionColor } from './emotionLogShared';
+import { csvEscape } from '../analytics/csvExport';
 
 /*
  * Attention & engagement deep-dive over the filtered server records — the
@@ -280,14 +281,9 @@ function fixOrDash(v) {
 
 function downloadCsv(rows) {
    const header = CROSS_TAB_COLUMNS.map(([key]) => key);
-   const escape = (v) => {
-      if (v == null) return '';
-      const s = String(v);
-      return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-   };
    const lines = [
       header.join(','),
-      ...rows.map((row) => header.map((key) => escape(row[key])).join(',')),
+      ...rows.map((row) => header.map((key) => csvEscape(row[key])).join(',')),
    ];
    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
    const url = URL.createObjectURL(blob);

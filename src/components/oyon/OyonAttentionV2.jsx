@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { engagementAnalytics } from './engagementAnalytics';
 import { emotionColor } from './emotionLogShared';
+import { csvEscape } from '../analytics/csvExport';
 
 // Explicit key map: CSV field name → catalogue key for its column header.
 // The exported CSV keeps the raw field names in every language.
@@ -344,12 +345,7 @@ const focusBand = (v) => {
 
 function downloadCsv(rows) {
    const header = CROSS_TAB_COLUMNS.map(([key]) => key);
-   const escape = (v) => {
-      if (v == null) return '';
-      const s = String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-   };
-   const body = rows.map((r) => header.map((k) => escape(r[k])).join(','));
+   const body = rows.map((r) => header.map((k) => csvEscape(r[k])).join(','));
    const blob = new Blob([[header.join(','), ...body].join('\n')], { type: 'text/csv;charset=utf-8' });
    const url = URL.createObjectURL(blob);
    const a = document.createElement('a');

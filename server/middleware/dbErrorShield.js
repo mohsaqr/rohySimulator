@@ -28,6 +28,16 @@ const BUSY_TEXT = /^SQLITE_(BUSY|LOCKED)\b/;
 
 export const GENERIC_SERVER_ERROR = 'Internal server error';
 
+// 5xx answers whose words are the route's own fixed text, written for the
+// person reading them, never an error's message. The production blanking
+// below erased them: with Oyon switched off every settings tab showed
+// "Internal server error" instead of "Oyon is disabled on this server. Set
+// OYON_ENABLED=1 …" (server/routes.js buildOyonDisabledStub; security audit
+// 2026-10-26, L9). Only these fields of such a body survive. OYON_IMPORT_FAILED
+// is deliberately absent: its message embeds the import error's own text.
+export const PASSTHROUGH_5XX_CODES = Object.freeze(new Set(['OYON_DISABLED', 'oyon_unavailable']));
+const PASSTHROUGH_FIELDS = ['error', 'code', 'message', 'retryable'];
+
 function isProduction(env = process.env) {
     return env.NODE_ENV === 'production';
 }
@@ -60,6 +70,13 @@ export function shieldErrorBody({ status, body, req, env = process.env }) {
     }
 
     if (!isProduction(env) || text === GENERIC_SERVER_ERROR) return { status, body };
+
+    if (typeof body.code === 'string' && PASSTHROUGH_5XX_CODES.has(body.code)) {
+        const kept = Object.fromEntries(
+            PASSTHROUGH_FIELDS.filter((k) => body[k] !== undefined && typeof body[k] !== 'object').map((k) => [k, body[k]]),
+        );
+        return { status, body: kept };
+    }
 
     reqLog.error('server error answered generically', { path: req?.path, status, error: text });
     // Only the machine-readable code survives: any other field (`details`,

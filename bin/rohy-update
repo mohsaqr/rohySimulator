@@ -20,6 +20,7 @@
 #   ROHY_DB=/opt/data/rohy/database.sqlite    where the DB lives
 #   ROHY_ENV_FILE=/etc/rohy/env               systemd EnvironmentFile
 #   ROHY_BACKUP_DIR=/var/backups/rohy         where snapshots live
+#   ROHY_BACKUP_ENV_DIR=/var/backups/rohy-env  env-file snapshots (kept apart from the DB)
 #   ROHY_SERVICE=rohy                          systemd service name
 #   ROHY_VERIFY_URL=https://localhost:4001/rohy
 #                                             URL POST_VERIFY tests against
@@ -52,6 +53,8 @@ ROHY_REPO_DIR="${ROHY_REPO_DIR:-$REPO_DEFAULT}"
 ROHY_DB="${ROHY_DB:-/opt/data/rohy/database.sqlite}"
 ROHY_ENV_FILE="${ROHY_ENV_FILE:-/etc/rohy/env}"
 ROHY_BACKUP_DIR="${ROHY_BACKUP_DIR:-/var/backups/rohy}"
+# Env-file snapshots live apart from the DB snapshots (scripts/rohy-backup.sh).
+ROHY_BACKUP_ENV_DIR="${ROHY_BACKUP_ENV_DIR:-${ROHY_BACKUP_DIR%/}-env}"
 ROHY_SERVICE="${ROHY_SERVICE:-rohy}"
 ROHY_VERIFY_URL="${ROHY_VERIFY_URL:-}"
 ROHY_INSECURE="${ROHY_INSECURE:-0}"
@@ -140,8 +143,20 @@ classify_pending() {
 take_snapshot() {
   local label="$1"
   ROHY_DB="$ROHY_DB" ROHY_ENV_FILE="$ROHY_ENV_FILE" \
-  ROHY_BACKUP_DIR="$ROHY_BACKUP_DIR" REPO_DIR="$ROHY_REPO_DIR" \
+  ROHY_BACKUP_DIR="$ROHY_BACKUP_DIR" ROHY_BACKUP_ENV_DIR="$ROHY_BACKUP_ENV_DIR" \
+  REPO_DIR="$ROHY_REPO_DIR" \
     bash "$SELF_DIR/../scripts/rohy-backup.sh" --label "$label"
+}
+
+# The env file saved with a snapshot, or nothing. Current snapshots keep it in
+# $ROHY_BACKUP_ENV_DIR/<name>.env; snapshots taken before 2026-10-26 kept it
+# inside the snapshot directory as `env`.
+snapshot_env_file() {
+  local snapshot="$1" candidate
+  candidate="$ROHY_BACKUP_ENV_DIR/$(basename "$snapshot").env"
+  if [[ -f "$candidate" ]]; then printf '%s' "$candidate"; return 0; fi
+  if [[ -f "$snapshot/env" ]]; then printf '%s' "$snapshot/env"; return 0; fi
+  return 0
 }
 
 # Path to the most recent snapshot directory.
@@ -393,8 +408,10 @@ rollback_to() {
     cp "$snapshot/database.sqlite" "$ROHY_DB"
     ok "DB restored from $snapshot"
   fi
-  if [[ -f "$snapshot/env" && -w "$ROHY_ENV_FILE" ]]; then
-    cp "$snapshot/env" "$ROHY_ENV_FILE"
+  local saved_env
+  saved_env="$(snapshot_env_file "$snapshot")"
+  if [[ -n "$saved_env" && -w "$ROHY_ENV_FILE" ]]; then
+    cp "$saved_env" "$ROHY_ENV_FILE"
     chmod 600 "$ROHY_ENV_FILE"
     ok "env restored"
   fi
@@ -438,8 +455,10 @@ cmd_rollback() {
     || die "npm install failed during rollback"
   ( cd "$ROHY_REPO_DIR" && npm run build ) || die "npm run build failed during rollback"
   cp "$snapshot/database.sqlite" "$ROHY_DB"
-  if [[ -f "$snapshot/env" && -w "$ROHY_ENV_FILE" ]]; then
-    cp "$snapshot/env" "$ROHY_ENV_FILE"
+  local saved_env
+  saved_env="$(snapshot_env_file "$snapshot")"
+  if [[ -n "$saved_env" && -w "$ROHY_ENV_FILE" ]]; then
+    cp "$saved_env" "$ROHY_ENV_FILE"
     chmod 600 "$ROHY_ENV_FILE"
   fi
   service_start
@@ -490,11 +509,13 @@ cmd_restore_backup() {
   service_stop
   cp "$d/database.sqlite" "$ROHY_DB"
   ok "DB restored"
-  if [[ -f "$d/env" ]]; then
-    say "snapshot also contains an env file. Restore it too? [y/N] "
+  local saved_env
+  saved_env="$(snapshot_env_file "$d")"
+  if [[ -n "$saved_env" ]]; then
+    say "snapshot also has an env file ($saved_env). Restore it too? [y/N] "
     read -r REPLY
     if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-      cp "$d/env" "$ROHY_ENV_FILE"
+      cp "$saved_env" "$ROHY_ENV_FILE"
       chmod 600 "$ROHY_ENV_FILE"
       ok "env restored"
     fi

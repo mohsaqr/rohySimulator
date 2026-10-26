@@ -11,20 +11,32 @@ test-results.junit.xml
 playwright-report
 .vitest-cache
 
-# Runtime / local state — must not bake into images
-*.log
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-*.sqlite-shm
-*.sqlite.bak.*
+# Runtime / local state — must not bake into images.
+# Every pattern is `**/`-prefixed: Docker matches .dockerignore from the
+# context root and `*` never crosses `/`, so the old root-only `*.sqlite`
+# let server/database.sqlite (+ its -wal/-shm, a dozen .bak.* backups and
+# server/rohy.db) into any image built from a working checkout — password
+# hashes, PII, provider keys (security audit 2026-10-26, F-27). Pinned by
+# tests/server/sec2-e2-dockerignore.test.js.
+**/*.log
+**/*.sqlite
+**/*.sqlite-*
+**/*.sqlite.bak.*
+**/*.sqlite.backup-*
+**/*.db
+**/*.db-*
+# Runtime uploads are a deployment's own data (the upload mount), never
+# part of an image; `vite build` would otherwise also copy them into
+# frontend/ (L6-12).
+public/uploads
 # Every .env, not only the root one: a bare `.env` matches the build-context
 # root alone, so server/.env (JWT_SECRET, local paths) was copied into the
 # image. Configuration reaches a container through compose's environment.
 **/.env
-**/.env.local
-**/.env.development.local
-**/.env.production.local
+**/.env.*
+# …except the server's documented template, which holds no secret (the
+# compose template deploy/docker/.env.example stays out: see the end of file).
+!server/.env.example
 
 # Server-local state directories
 server/data/piper/venv
@@ -73,7 +85,11 @@ e2e
 
 # Agent + scratch directories
 codexIntmep
-AGENT-NOTE-*.md
+**/AGENT-NOTE-*.md
+# Security audit material (exploit roadmaps) and the e2e auth tokens.
+audit
+sec*.md
+tests/e2e/.auth
 # Named explicitly as well: these hold live credentials (the Prova tokens, a
 # Google service key), so they must stay out even if the patterns above are
 # ever narrowed. `*.md` and `AGENT-NOTE-*.md` already cover the first today.

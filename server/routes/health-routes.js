@@ -24,6 +24,7 @@ import { originRequestHeaders } from '../lib/pluginOriginTokens.js';
 import { pluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
+import { probeDetailAllowed } from '../lib/probeDetailAccess.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,8 @@ const ISO_Z_GLOB = '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][
 
 router.get('/ready', async (req, res) => {
     const checks = { db: 'unknown', migrations: 'unknown', ingest: 'unknown', timestamps: 'unknown' };
+    // Per-probe verdicts, for the anonymous production answer (see below).
+    const verdicts = { db: false, migrations: false, ingest: false, timestamps: false };
     let healthy = true;
 
     const probes = Promise.all([
@@ -118,6 +121,7 @@ router.get('/ready', async (req, res) => {
         const results = await Promise.race([probes, timeout]);
         for (const r of results) {
             checks[r.key] = r.value;
+            verdicts[r.key] = Boolean(r.ok);
             if (!r.ok) healthy = false;
         }
     } catch (err) {
@@ -130,7 +134,20 @@ router.get('/ready', async (req, res) => {
         clearTimeout(timeoutId);
     }
 
-    res.status(healthy ? 200 : 503).json({
+    // In production an anonymous caller learns each probe's verdict and
+    // nothing else: no build version, no uptime, no migration level, no
+    // rejected-event count, no error text. An administrator's token (or any
+    // caller outside production) gets the full detail, as before. The
+    // verdicts keep the old spelling ('ok'), so `"status":"ok"` probes and
+    // `checks.db === 'ok'` keep working unchanged.
+    const status = healthy ? 200 : 503;
+    if (!(await probeDetailAllowed(req))) {
+        return res.status(status).json({
+            status: healthy ? 'ok' : 'not_ready',
+            checks: Object.fromEntries(Object.entries(verdicts).map(([k, ok]) => [k, ok ? 'ok' : 'fail'])),
+        });
+    }
+    res.status(status).json({
         status: healthy ? 'ok' : 'not_ready',
         version: APP_VERSION,
         started_at: STARTED_AT,
@@ -328,6 +345,18 @@ router.get('/health/plugins', async (req, res) => {
     }));
     const plugins = Object.fromEntries(entries);
     const unreachable = entries.filter(([, v]) => !v.reachable).map(([id]) => id);
+    // Anonymous in production: which configured plugins answer, nothing more
+    // (no content versions, file or asset counts, error text, or which
+    // directories are writable). Plugin ids are the public manifest list.
+    // scripts/tech-test.sh reads `configured` and `unreachable`, both kept.
+    if (!(await probeDetailAllowed(req))) {
+        return res.status(unreachable.length ? 503 : 200).json({
+            status: unreachable.length ? 'degraded' : 'ok',
+            configured: configured.length,
+            unreachable,
+            plugins: Object.fromEntries(entries.map(([id, v]) => [id, { reachable: Boolean(v.reachable) }])),
+        });
+    }
     res.status(unreachable.length ? 503 : 200).json({
         status: unreachable.length ? 'degraded' : 'ok',
         configured: configured.length,

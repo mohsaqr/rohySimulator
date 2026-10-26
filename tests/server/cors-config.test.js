@@ -88,11 +88,10 @@ describe('buildCorsOptions — production allowlist gate', () => {
         // should pass (it's on the list) — confirm that's the actual
         // contract and lock it.
         const opts = prodOptions();
-        // Locking the observed behaviour: in production, loopback origins
-        // ARE on the static allowlist and DO pass. If you tighten this
-        // (e.g. remove STATIC_DEV_ORIGINS from the prod allowlist), this
-        // test will fail and prompt the call site to be updated.
-        await expect(checkOrigin(opts, 'http://localhost:3000')).resolves.toBe(true);
+        // Tightened 2026-10-26 (sec2-e2-cors.test.js): STATIC_DEV_ORIGINS are
+        // no longer on the production allowlist, so a loopback Origin is
+        // refused like any other unlisted origin.
+        await expect(checkOrigin(opts, 'http://localhost:3000')).rejects.toThrow('Not allowed by CORS');
     });
 
     it('logs to the supplied logger when rejecting (observability)', async () => {
@@ -134,7 +133,8 @@ describe('buildCorsOptions — header allowlist + credentials', () => {
         // (F-006). Without it on the preflight allowlist, split-origin
         // cookie-auth state-changing requests get blocked client-side
         // before they ever reach the CSRF middleware.
-        expect(opts.allowedHeaders).toEqual(['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token']);
+        // X-Rohy-Auth added 2026-10-26 (lane A F-14 rememberToken opt-in).
+        expect(opts.allowedHeaders).toEqual(['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token', 'X-Rohy-Auth']);
         expect(opts.exposedHeaders).toEqual(['X-Request-Id']);
         expect(opts.methods).toEqual(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
     });

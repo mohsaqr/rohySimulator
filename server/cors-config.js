@@ -9,10 +9,17 @@
  *   - Development (NODE_ENV !== 'production'): every Origin is accepted.
  *     This is the dev convenience the audit flagged — pre-prod smoke
  *     should run with NODE_ENV=production to catch drift.
- *   - Production: only origins in the static allowlist + FRONTEND_URL
- *     + EXTRA_CORS_ORIGINS (comma-separated, for first-party tools such as
- *     Prova reading /api/health) are accepted; unknown origins are rejected
- *     with a console warning so the rejection is observable in logs.
+ *   - Production: only FRONTEND_URL + EXTRA_CORS_ORIGINS / ROHY_EXTRA_ORIGINS
+ *     (comma-separated, for first-party tools such as Prova reading
+ *     /api/health, or an operator's own tooling) are accepted, plus a
+ *     same-origin request (Origin's host equals the Host header — the page
+ *     the server itself served). Unknown origins are rejected with a warning
+ *     so the rejection is observable in logs.
+ *   - The static localhost origins are a DEVELOPMENT list only. They used to
+ *     sit in the production allowlist too, with `credentials: true`, so any
+ *     page served from http://localhost:3000 on a user's machine — another
+ *     dev server, a local tool — was a trusted origin for a production
+ *     instance (security audit 2026-10-26, L9/L6-15).
  */
 
 const STATIC_DEV_ORIGINS = [
@@ -44,13 +51,27 @@ function extraOrigins(value) {
         .filter(Boolean);
 }
 
-export function buildAllowedOrigins({ frontendUrl, extraOrigins: extra } = {}) {
-    return [...STATIC_DEV_ORIGINS, toOrigin(frontendUrl), ...extraOrigins(extra)].filter(Boolean);
+export function buildAllowedOrigins({ nodeEnv, frontendUrl, extraOrigins: extra, rohyExtraOrigins } = {}) {
+    const devOrigins = nodeEnv === 'production' ? [] : STATIC_DEV_ORIGINS;
+    return [...devOrigins, toOrigin(frontendUrl), ...extraOrigins(extra), ...extraOrigins(rohyExtraOrigins)].filter(Boolean);
 }
 
-export function buildCorsOptions({ nodeEnv, frontendUrl, extraOrigins: extra, logger = console } = {}) {
+/**
+ * True when the browser's Origin names the host this request was sent to —
+ * the page was served by this server, so it is not a cross-origin caller.
+ *
+ * @param {string|undefined} origin  the Origin header
+ * @param {string|undefined} host    the Host header
+ * @returns {boolean}
+ */
+export function isSameOrigin(origin, host) {
+    if (!origin || !host) return false;
+    try { return new URL(origin).host === String(host).toLowerCase(); } catch { return false; }
+}
+
+export function buildCorsOptions({ nodeEnv, frontendUrl, extraOrigins: extra, rohyExtraOrigins, logger = console } = {}) {
     const isDev = nodeEnv !== 'production';
-    const allowed = buildAllowedOrigins({ frontendUrl, extraOrigins: extra });
+    const allowed = buildAllowedOrigins({ nodeEnv, frontendUrl, extraOrigins: extra, rohyExtraOrigins });
 
     return {
         origin: (origin, callback) => {
@@ -68,7 +89,26 @@ export function buildCorsOptions({ nodeEnv, frontendUrl, extraOrigins: extra, lo
         // cookie. Without it in the preflight allowlist, split-origin
         // cookie-auth state-changing requests get blocked by the browser
         // before reaching the CSRF middleware (F-006).
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token'],
+        // X-Rohy-Auth: authService's rememberToken opt-in asks for the JWT in
+        // the response body (lane A, F-14); only a cross-origin caller needs
+        // it in the preflight list.
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token', 'X-Rohy-Auth'],
         exposedHeaders: ['X-Request-Id'],
+    };
+}
+
+/**
+ * The `cors()` options delegate the server mounts: buildCorsOptions, plus the
+ * same-origin pass that needs the request's Host header.
+ *
+ * @param {object} config  as for buildCorsOptions
+ * @returns {(req: object, cb: Function) => void}
+ */
+export function buildCorsOptionsDelegate(config = {}) {
+    const base = buildCorsOptions(config);
+    return (req, callback) => {
+        const origin = req.headers?.origin;
+        if (isSameOrigin(origin, req.headers?.host)) return callback(null, { ...base, origin: true });
+        return callback(null, base);
     };
 }

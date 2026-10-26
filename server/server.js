@@ -33,6 +33,8 @@ import errorHandler from './middleware/errorHandler.js';
 import { logger } from './logger.js';
 import { validateEnvOrExit } from './config/validateEnv.js';
 import { applyKeepAliveTimeouts } from './config/keepAlive.js';
+import { resolveBindHost } from './lib/bindHost.js';
+import { startRetentionScheduler } from './lib/retention.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,12 +56,18 @@ validateEnvOrExit();
 app.disable('x-powered-by');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
-// Interface the listeners bind to. Behind a same-host reverse proxy (the
-// systemd + nginx path) set ROHY_BIND=127.0.0.1 so the Node port is never
-// reachable from the LAN directly; in a container it must stay 0.0.0.0 because
-// the proxy is another container.
-const BIND_HOST = process.env.ROHY_BIND || '0.0.0.0';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+// Interface the listeners bind to. In production the default is loopback:
+// every supported production path puts a proxy on the same host in front
+// (cloudflared, nginx, Caddy), and a 0.0.0.0 default left the plain-HTTP Node
+// port reachable from the LAN beside it (security audit 2026-10-26). A
+// container must listen on its bridge interface because the proxy is another
+// container, so the Docker image and compose.yml set ROHY_BIND=0.0.0.0
+// explicitly. Outside production the old 0.0.0.0 default stays (LAN testing
+// from a phone or tablet). See server/lib/bindHost.js.
+const BIND_HOST = resolveBindHost(process.env);
+// The retention sweep's handle (started in initializeAndStart, stopped on shutdown).
+let retentionScheduler = null;
 // Optional HTTPS listener — needed in any deployment that isn't
 // localhost/127.0.0.1, because Chrome blocks getUserMedia and
 // SpeechRecognition on insecure origins (private LAN IPs included).
@@ -83,11 +91,12 @@ app.set('trust proxy', process.env.ROHY_TRUST_PROXY || 'loopback');
 instrumentSqliteDb(db);
 
 // CORS Configuration - restrict to allowed origins
-import { buildCorsOptions } from './cors-config.js';
+import { buildCorsOptionsDelegate } from './cors-config.js';
 import { securityHeaders } from './security-headers.js';
 import { lessonFileGuard } from './routes/lessons-routes.js';
 import { MAX_BODY as REPORT_MAX_BODY, MESSAGE_BODY_MAX as REPORT_MESSAGE_BODY_MAX } from './lib/prova-relay.js';
 import { PATHOLOGY_READ_MAX_BODY } from './routes/pathology-read-routes.js';
+import { requireSignedToken } from './lib/requestPrincipal.js';
 
 app.use(requestIdMiddleware);
 app.use(dbErrorShield);
@@ -99,10 +108,12 @@ app.use((req, res, next) => {
     next();
 });
 app.use(securityHeaders({ nodeEnv: process.env.NODE_ENV }));
-app.use(cors(buildCorsOptions({
+app.use(cors(buildCorsOptionsDelegate({
     nodeEnv: process.env.NODE_ENV,
     frontendUrl: process.env.FRONTEND_URL,
     extraOrigins: process.env.EXTRA_CORS_ORIGINS,
+    rohyExtraOrigins: process.env.ROHY_EXTRA_ORIGINS,
+    logger: logger('cors'),
 })));
 app.use(requestLoggerMiddleware());
 // Body-size limits: most JSON endpoints carry small payloads. The 10mb
@@ -115,13 +126,20 @@ app.use(requestLoggerMiddleware());
 // Report a problem (routes/report-routes.js) carries up to five screenshots (each ≤ 2 MB, 6 MB together),
 // base64 in JSON: that one path gets the vendored relay's own cap (MAX_BODY, 8.5 MB), so the relay and this
 // parser can never disagree. It parses first, so the general parser below sees the body as already read.
-app.use('/api/report', express.json({ limit: REPORT_MAX_BODY }));
+//
+// Each large parser sits behind requireSignedToken (lib/requestPrincipal.js: JWT
+// signature + expiry, no DB read): these parsers run before the /api router and
+// its limiters, so an anonymous caller could otherwise make the server buffer
+// and JSON.parse 8.5 MB per request before the route's own authenticateToken
+// refused it (security audit 2026-10-26, L6-10/L8-08). The route still runs the
+// full authenticateToken; this only decides whether the body is worth reading.
+app.use('/api/report', requireSignedToken, express.json({ limit: REPORT_MAX_BODY }));
 // Writing back on one's own report (relay 1.3.0): a short message, so the relay's MESSAGE_BODY_MAX (16 KiB).
-app.post('/api/reports/:id/messages', express.json({ limit: REPORT_MESSAGE_BODY_MAX }));
+app.post('/api/reports/:id/messages', requireSignedToken, express.json({ limit: REPORT_MESSAGE_BODY_MAX }));
 // A pathology read submitted for scoring (routes/pathology-read-routes.js): the
 // packed viewport track of a whole read, which outgrows 256 KB on a long one.
 // The package caps the sample count itself (MAX_READ_SAMPLES).
-app.post('/api/sessions/:sessionId/pathology-reads', express.json({ limit: PATHOLOGY_READ_MAX_BODY }));
+app.post('/api/sessions/:sessionId/pathology-reads', requireSignedToken, express.json({ limit: PATHOLOGY_READ_MAX_BODY }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request
@@ -216,8 +234,9 @@ function serveAppShell(req, res) {
 app.get('/', serveAppShell);
 app.get('/register', serveAppShell);
 
-// A file a locked lesson uses is held back like the lesson (lessonFileGuard);
-// every other upload is served as before.
+// Every upload needs a sign-in, and a file a locked lesson uses is held back
+// like the lesson (lessonFileGuard, which also 404s a file that is not in the
+// live directory, so nothing falls through to a stale copy under frontend/).
 app.use('/uploads', lessonFileGuard, express.static(path.join(__dirname, "..", "public","uploads")));
 
 // VitePress documentation site (Stage 4 — Help & Support links here).
@@ -449,6 +468,19 @@ async function initializeAndStart() {
         bootLog.error('plugin server slot boot failed', { error: err.message, fatal: false });
     }
 
+    // Retention (security audit 2026-10-26, F-33 / L7-06; server/lib/retention.js):
+    // the daily in-process sweep of Oyon measurements past each tenant's
+    // retention_days and of identifier logs past their ROHY_RETENTION_*_DAYS.
+    // After migrations, because it deletes from migration-created tables. Its
+    // timers are unref'd; ROHY_RETENTION_SCHEDULER=0 leaves retention to an
+    // external job. Non-fatal: a scheduler that will not start must not stop
+    // rohy from serving.
+    try {
+        retentionScheduler = startRetentionScheduler();
+    } catch (err) {
+        bootLog.error('retention scheduler failed to start', { error: err.message, fatal: false });
+    }
+
     // Voice 2.0 seeding (docs/design/voice-2.0-plan.md §5.5). There is no platform engine
     // setting anymore — each voice plays on its own (derived) engine. What
     // gets seeded is the never-mute safety net: one default voice per
@@ -529,6 +561,7 @@ function installGracefulShutdown(servers) {
         if (shuttingDown) return;
         shuttingDown = true;
         bootLog.info('graceful shutdown initiated', { signal, grace_ms: SHUTDOWN_GRACE_MS, exit_code: exitCode });
+        retentionScheduler?.stop();
 
         // Hard deadline — if anything wedges, exit anyway.
         const hardKill = setTimeout(() => {

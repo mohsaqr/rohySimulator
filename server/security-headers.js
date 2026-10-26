@@ -63,6 +63,12 @@ export function buildCsp({ nodeEnv } = {}) {
         `font-src 'self' data:`,
         `connect-src 'self' blob: data:`,
         `worker-src 'self' blob:`,
+        // Explicit rather than inherited from default-src (L5-05): the lesson
+        // embed and video iframes are sandboxed, and this states in one place
+        // that no third-party document can be framed into the app. Loosening
+        // it for video hosts must come with a host allowlist in
+        // VideoNodeView/EmbedNodeView, not instead of one.
+        `frame-src 'self'`,
         `frame-ancestors 'none'`,
         `form-action 'self'`,
         `base-uri 'self'`,
@@ -71,9 +77,40 @@ export function buildCsp({ nodeEnv } = {}) {
     return directives.join('; ');
 }
 
-export function securityHeaders({ nodeEnv } = {}) {
+// HSTS (L6-15): the app sent none — only the Docker Caddyfile did, so the
+// cloudflared and nginx paths relied on an edge setting nobody could see.
+// Sent only in production and only when the request arrived over HTTPS
+// through a TRUSTED proxy (req.secure is derived from X-Forwarded-Proto under
+// `trust proxy`, and the socket itself is plain HTTP). The direct TLS listener
+// (TLS_CERT_PATH) is left out on purpose: that is the self-signed LAN path
+// (scripts/gen-self-signed-tls.sh), and HSTS on a self-signed host removes
+// the browser's click-through for the whole max-age. Short max-age, no
+// includeSubDomains, no preload: easy to back out. ROHY_HSTS_MAX_AGE=0 turns
+// it off; any other integer replaces the default.
+export const DEFAULT_HSTS_MAX_AGE = 86_400;
+
+export function hstsHeaderValue(env = process.env) {
+    const raw = env.ROHY_HSTS_MAX_AGE;
+    let maxAge = DEFAULT_HSTS_MAX_AGE;
+    if (raw != null && String(raw).trim() !== '') {
+        const parsed = Number(String(raw).trim());
+        if (Number.isInteger(parsed) && parsed >= 0) maxAge = parsed;
+    }
+    return maxAge > 0 ? `max-age=${maxAge}` : null;
+}
+
+export function shouldSendHsts(req, { nodeEnv } = {}) {
+    if (nodeEnv !== 'production') return false;
+    if (!req?.secure) return false;
+    // Proxy-terminated TLS only: an encrypted socket means our own listener.
+    return !req.socket?.encrypted;
+}
+
+export function securityHeaders({ nodeEnv, env = process.env } = {}) {
     const csp = buildCsp({ nodeEnv });
+    const hsts = hstsHeaderValue(env);
     return (req, res, next) => {
+        if (hsts && shouldSendHsts(req, { nodeEnv })) res.setHeader('Strict-Transport-Security', hsts);
         res.setHeader('Content-Security-Policy', csp);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');

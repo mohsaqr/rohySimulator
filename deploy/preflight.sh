@@ -22,7 +22,7 @@
 #   - Repo dir + .git present
 #   - Local commits not divergent from origin (warn, not fail)
 #   - Env file readable + perm 0600 (warn if looser)
-#   - JWT_SECRET set and ≥32 chars
+#   - JWT_SECRET set, ≥32 chars, not a placeholder (same rule as validateEnv)
 #   - NODE_ENV=production (warn if other)
 #   - FRONTEND_URL set + parseable
 #   - ROHY_DB absolute path; parent dir exists + writable
@@ -168,9 +168,31 @@ JWT_SECRET=$(read_env_var JWT_SECRET || true)
 if [[ -z "$JWT_SECRET" ]]; then
     fail "JWT_SECRET not set in $ENV_FILE — server will refuse to start"
 elif [[ "${#JWT_SECRET}" -lt 32 ]]; then
-    warn "JWT_SECRET is only ${#JWT_SECRET} chars; recommend ≥32 for prod entropy"
+    # The server refuses this in production (validateEnv), so it is a failure
+    # here too, not advice.
+    fail "JWT_SECRET is only ${#JWT_SECRET} chars; the server refuses <32 in production"
 else
-    ok "JWT_SECRET set (${#JWT_SECRET} chars)"
+    # Same rule the server applies at boot (validateEnv → jwtSecretWeakness):
+    # the shipped placeholder is 36 chars and used to print "ok" here. The
+    # secret travels in the environment, never argv. jwtSecretPolicy.js has no
+    # imports — do NOT point this at validateEnv.js, whose imports open (and
+    # migrate) a database.
+    jwt_weakness=$(JWT_CHECK="$JWT_SECRET" node --input-type=module -e "
+        const { jwtSecretWeakness } = await import(process.argv[1]);
+        process.stdout.write(jwtSecretWeakness(process.env.JWT_CHECK) || '');
+    " "$REPO_DIR/server/lib/jwtSecretPolicy.js" 2>/dev/null) || jwt_weakness="__unchecked__"
+    if [[ "$jwt_weakness" == "__unchecked__" ]]; then
+        # Fallback when the validator cannot load (no node_modules yet).
+        if printf '%s' "$JWT_SECRET" | grep -qiE 'replace|change|example|your[_-]|placeholder'; then
+            fail "JWT_SECRET is still a placeholder — the server refuses it in production"
+        else
+            warn "JWT_SECRET set (${#JWT_SECRET} chars); could not run the server's secret check (npm install first)"
+        fi
+    elif [[ -n "$jwt_weakness" ]]; then
+        fail "JWT_SECRET is not a usable secret: $jwt_weakness — the server refuses it in production"
+    else
+        ok "JWT_SECRET set (${#JWT_SECRET} chars)"
+    fi
 fi
 
 # -- 5. NODE_ENV / FRONTEND_URL --------------------------------------------

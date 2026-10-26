@@ -41,6 +41,14 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
+# dynajs is cloned at a pinned commit, the SAME one deploy/docker/Dockerfile
+# builds the image from (DYNAJS_GIT_REF there; tests/server/sec2-e2-supply-chain
+# .test.js fails when the two drift). An unpinned `main` meant CI tested a
+# different dynajs from the image, and a compromised main ran code in jobs
+# that later hold the Prova tokens (security audit 2026-10-26, L6-14).
+env:
+  DYNAJS_GIT_REF: 0dbc6bb1fc8a1d33c8b91f7de38670fd61df6798
+
 jobs:
   monkey:
     name: Monkey walk
@@ -60,7 +68,9 @@ jobs:
       # The same sibling clones as ci.yml's e2e job; see its Build job for why.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       - name: Clone 3D patient room sibling
         env:

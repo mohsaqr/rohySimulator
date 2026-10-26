@@ -9,6 +9,7 @@ import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge';
 import { getAois, onAois } from './screenAois';
 import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
+import { OYON_CONSENT_VERSION_LS_KEY } from '../../utils/oyonConsent';
 import { ensureSessionConsent } from './ensureSessionConsent';
 import EventLogger from '../../services/eventLogger';
 
@@ -86,15 +87,31 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
    // the choice follows the user across devices. When that record cannot be
    // read, nothing is persisted this mount: the local flag may be another
    // account's, or stale, and a failed lookup must not become consent.
+   //
+   // No stored choice clears the local flag rather than leaving it: on a
+   // shared browser it was the PREVIOUS person's '1', and capture persisted
+   // under a consent row the person signed in now never gave (security audit
+   // 2026-10-26, L5-03). Every consent control writes the server record, so
+   // "none on the server" means "not consented" — at worst a choice whose
+   // server write failed is asked again, never assumed.
+   //
+   // The lookup is kept as a promise: ensureConsent awaits it, because capture
+   // can start before it resolves and must not read the stale flag meanwhile.
    const consentLookupFailedRef = useRef(false);
+   const consentLookupRef = useRef(null);
    useEffect(() => {
-      apiFetch('/users/preferences')
+      consentLookupRef.current = apiFetch('/users/preferences')
          .then(prefs => {
             consentLookupFailedRef.current = false;
             const consent = parseOnboardingSettings(prefs).oyon_consent;
-            if (typeof consent === 'boolean') {
-               try { localStorage.setItem(CONSENT_PREF_KEY, consent ? '1' : '0'); } catch { /* private mode */ }
-            }
+            try {
+               if (typeof consent === 'boolean') {
+                  localStorage.setItem(CONSENT_PREF_KEY, consent ? '1' : '0');
+               } else {
+                  localStorage.removeItem(CONSENT_PREF_KEY);
+                  localStorage.removeItem(OYON_CONSENT_VERSION_LS_KEY);
+               }
+            } catch { /* private mode */ }
          })
          .catch((err) => {
             consentLookupFailedRef.current = true;
@@ -106,6 +123,8 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
    }, []);
 
    const ensureConsent = useCallback(async () => {
+      // Never decide on the local flag before the server's record replaced it.
+      if (consentLookupRef.current) await consentLookupRef.current;
       const sid = sessionRef.current;
       if (!sid || consentLookupFailedRef.current || !readConsentPref()) {
          persistGateRef.current = false;

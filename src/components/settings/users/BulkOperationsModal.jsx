@@ -10,6 +10,7 @@ import { ApiError } from '../../../services/apiClient';
 import { roleLabel } from '../../../constants/roleLabels';
 import * as userService from '../../../services/userService';
 import { initials, avatarClass, roleBadgeClass } from './usersUi';
+import { csvEscape } from '../../analytics/csvExport';
 
 const ROLE_RANK = { guest: 0, student: 1, user: 1, reviewer: 2, educator: 3, admin: 4 };
 const rank = (r) => ROLE_RANK[r] ?? 0;
@@ -527,10 +528,8 @@ function ReportView({ report, onDownload, onRunAnother, onClose, t }) {
     );
 }
 
-function csvCell(v) {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+// Shared guarded cell: usernames and server error text land in a spreadsheet.
+const csvCell = csvEscape;
 function downloadCsv(filename, content) {
     const blob = new Blob([content], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

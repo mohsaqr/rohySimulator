@@ -12,11 +12,40 @@ export const withBasePath = (html) => (typeof html === 'string'
   ? html.replace(/(\s(?:src|href)=["'])\/(uploads|api)\//g, (match, attr, kind) => `${attr}${baseUrl(`/${kind}/`)}`)
   : html);
 
+// Host edit (security audit 2026-10-26, L5-08). `class` used to pass
+// untouched, so an author could paste `<div class="fixed inset-0 z-50">` and
+// let the app's own Tailwind build cover the room with a fake link; `id` let
+// lesson HTML collide with (or clobber) the app's own element ids. `id` is
+// gone; a class token survives only when it is one lesson content actually
+// uses: the `rohy-` namespace (seeded lessons), `language-*` / `hljs*` (code
+// blocks), and the two utilities Tiptap's Link mark writes.
+const LESSON_CLASS_TOKENS = new Set(['underline', 'text-cyan-600']);
+export const isAllowedLessonClass = (token) => LESSON_CLASS_TOKENS.has(token)
+  || /^rohy-[a-z0-9-]+$/.test(token)
+  || /^language-[a-z0-9+#_-]+$/i.test(token)
+  || /^hljs(?:-[a-z0-9_-]+)?$/.test(token);
+
+// A private DOMPurify instance, so the class hook below never applies to the
+// rest of the app's sanitising (DOMPurify's default export is shared).
+let lessonPurifier = null;
+const purifier = () => {
+  if (lessonPurifier) return lessonPurifier;
+  if (typeof window === 'undefined') return DOMPurify;
+  lessonPurifier = DOMPurify(window);
+  lessonPurifier.addHook('uponSanitizeAttribute', (_node, data) => {
+    if (data.attrName !== 'class') return;
+    const kept = String(data.attrValue || '').split(/\s+/).filter(Boolean).filter(isAllowedLessonClass);
+    if (kept.length) data.attrValue = kept.join(' ');
+    else data.keepAttr = false;
+  });
+  return lessonPurifier;
+};
+
 /**
  * Sanitize HTML content to prevent XSS attacks.
  * Uses DOMPurify with a safe default configuration.
  */
-export const sanitizeHtml = (dirty) => withBasePath(DOMPurify.sanitize(dirty, {
+export const sanitizeHtml = (dirty) => withBasePath(purifier().sanitize(dirty, {
     ALLOWED_TAGS: [
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'p', 'br', 'hr',
@@ -29,7 +58,7 @@ export const sanitizeHtml = (dirty) => withBasePath(DOMPurify.sanitize(dirty, {
       'div', 'span',
     ],
     ALLOWED_ATTR: [
-      'href', 'src', 'alt', 'title', 'class', 'id',
+      'href', 'src', 'alt', 'title', 'class',
       'target', 'rel', 'width', 'height',
     ],
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,

@@ -44,6 +44,11 @@ describe('OyonCaptureWidget persistence gate', () => {
             if (url === '/addons/oyon/config') return Promise.resolve({ enabled: true, runtime: {} });
             if (url === '/addons/oyon/consent') return Promise.resolve({});
             if (url === '/addons/oyon/emotion-records') return Promise.resolve({});
+            // The server holds the learner's choice: with no stored choice the
+            // widget now clears a local '1' (it may be the previous person's,
+            // L5-03 — OyonCaptureWidget.sec2.test.jsx), so the persisting
+            // cases below say "consented" where the truth lives.
+            if (url === '/users/preferences') return Promise.resolve({ onboarding_settings: { oyon_consent: true } });
             return Promise.resolve({});
         });
         localStorage.setItem('oyon.defaultConsent', '1');
@@ -131,6 +136,9 @@ describe('OyonCaptureWidget persistence gate', () => {
 
         it('persists nothing when no choice was ever stored', async () => {
             localStorage.removeItem('oyon.defaultConsent');
+            const base = mocks.apiFetch.getMockImplementation();
+            mocks.apiFetch.mockImplementation((url, ...rest) => (url === '/users/preferences'
+                ? Promise.resolve({}) : base(url, ...rest)));
             const { container } = render(<OyonCaptureWidget sessionId="s-1" caseId="case-1" room="chat" />);
             await runAndEmitWindow(container);
             expect(apiCalls('/addons/oyon/consent')).toHaveLength(0);

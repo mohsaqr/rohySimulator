@@ -270,7 +270,14 @@ VOLUME ["/var/lib/rohy", "/var/lib/rohy-secrets", "/var/cache/rohy-hf", "/opt/ro
 # IP. `uniquelocal` is safe because rohy:4000 is not published to the host and
 # Caddy REPLACES X-Forwarded-For with {remote_host} (header_up in Caddyfile),
 # so a client cannot smuggle its own value through.
+#
+# ROHY_BIND=0.0.0.0, explicitly: in production the server binds 127.0.0.1
+# unless ROHY_BIND says otherwise (security audit 2026-10-26), and inside a
+# container loopback is unreachable from Caddy, which is another container.
+# The port is still not published to the host (compose.yml), so 0.0.0.0 here
+# means "the bridge network", not "the internet".
 ENV NODE_ENV=production \
+    ROHY_BIND=0.0.0.0 \
     PORT=4000 \
     ROHY_DB=/var/lib/rohy/database.sqlite \
     ROHY_SECRETS_DIR=/var/lib/rohy-secrets \

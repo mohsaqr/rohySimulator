@@ -59,6 +59,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      # Production binds 127.0.0.1 unless told otherwise; Caddy reaches rohy
+      # over the bridge network, so the container must listen on all of its
+      # interfaces. Port 4000 is still not published to the host.
+      ROHY_BIND: "0.0.0.0"
       # FRONTEND_URL is the public origin browsers use. Behind Caddy with
       # auto-TLS, that's https://<your-hostname>/rohy.
       #

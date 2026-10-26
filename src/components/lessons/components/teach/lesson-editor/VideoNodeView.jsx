@@ -10,7 +10,13 @@ import {
   withJsApi,
 } from '../../../services/videoXapi';
 import { LessonMediaContext } from './LessonMediaContext';
-import { safeEmbedSrc } from './EmbedNodeView';
+import { safeVideoEmbedSrc } from '../../../utils/safeUrl';
+
+// Host edit (security audit 2026-10-26, L5-05): the video iframe is sandboxed.
+// allow-same-origin is required by the YouTube player and IFrame API, and is
+// safe only because safeVideoEmbedSrc admits nothing but the cross-origin
+// providers in VIDEO_EMBED_HOSTS. allow-popups: "Watch on YouTube".
+export const VIDEO_IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-presentation allow-popups';
 
 /** Filename (without uuid noise) for a friendlier log title. */
 const titleFromSrc = (src) => {
@@ -45,12 +51,11 @@ export const VideoNodeView = ({ node, deleteNode, editor }) => {
   const iframeRef = useRef(null);
   const isYouTube = mode === 'embed' && isYouTubeEmbed(src);
   // VideoNodeView is the shared render path for lecture-video nodes, so the
-  // http(s) scheme allow-list must live here (not only at the authoring call
-  // sites) to keep a javascript:/data: src out of a student's iframe. Empty
-  // means the stored URL was rejected -> render a fallback instead. (No
-  // sandbox here, unlike EmbedNodeView, because the YouTube IFrame API used
-  // for watch tracking attaches to this iframe.)
-  const safeSrc = mode === 'embed' ? safeEmbedSrc(src) : src;
+  // allow-list must live here (not only at the authoring call sites) to keep
+  // a javascript:/data: src — or any page that is not a video provider — out
+  // of a student's iframe. Empty means the stored URL was rejected -> render
+  // a fallback instead. The iframe is sandboxed (VIDEO_IFRAME_SANDBOX).
+  const safeSrc = mode === 'embed' ? safeVideoEmbedSrc(src) : src;
   // YouTube embeds need `enablejsapi=1` so the IFrame API can attach.
   const iframeSrc = isYouTube ? withJsApi(safeSrc) : safeSrc;
 
@@ -93,6 +98,8 @@ export const VideoNodeView = ({ node, deleteNode, editor }) => {
                 style={{ border: 0 }}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                sandbox={VIDEO_IFRAME_SANDBOX}
+                referrerPolicy="strict-origin-when-cross-origin"
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-white/80">

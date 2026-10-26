@@ -3,9 +3,13 @@
 // unit-tested in processMapUtils.test.js; the download* helpers are DOM
 // side effects and no-op outside the browser.
 
+import { neutraliseFormula } from '../../csvExport.js';
+
 function csvCell(value) {
     if (value === null || value === undefined) return '';
-    const str = typeof value === 'string' ? value : String(value);
+    // Host edit to the vendored module (security audit 2026-10-26): the
+    // shared spreadsheet formula guard, nothing else changed.
+    const str = neutraliseFormula(typeof value === 'string' ? value : String(value));
     // RFC-4180: quote when the field contains comma, double quote, or newline.
     if (/[",\r\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
     return str;

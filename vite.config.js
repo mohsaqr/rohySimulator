@@ -1,10 +1,33 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
+import { rmSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// public/uploads is the LIVE upload directory, not a static asset. Vite copies
+// publicDir verbatim, so every build snapshotted it into dist/ and then
+// frontend/, where a deleted upload stayed served and a Docker image built on
+// a machine with uploads shipped them (security audit 2026-10-26,
+// L4-05/L6-12). Uploads are served by the /uploads mount, never from the build.
+const LIVE_PUBLIC_ENTRIES = ['uploads']
+function noLiveUploadsInBuild() {
+  let outDir = null
+  return {
+    name: 'rohy-no-live-uploads-in-dist',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      if (!outDir) return
+      LIVE_PUBLIC_ENTRIES.forEach((entry) => rmSync(resolve(outDir, entry), { recursive: true, force: true }))
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), noLiveUploadsInBuild()],
   base: process.env.NODE_ENV === 'production' ? '/rohy/' : '/',
   resolve: {
     // rohy-3d-patient-room is a file:-linked package whose own node_modules

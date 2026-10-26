@@ -5,6 +5,7 @@ import { X, Upload, Download, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft
 import { useToast } from '../../../contexts/ToastContext';
 import { ApiError } from '../../../services/apiClient';
 import * as userService from '../../../services/userService';
+import { csvEscape } from '../../analytics/csvExport';
 
 const FIELDS = ['username', 'name', 'email', 'password', 'role', 'class'];
 const SYNONYMS = {
@@ -377,10 +378,9 @@ function Stat({ label, value, tone }) {
     );
 }
 
-function csvCell(v) {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+// Shared guarded cell: the rejected rows echo the uploaded file's own text
+// back into the educator's spreadsheet.
+const csvCell = csvEscape;
 function downloadCsv(filename, content) {
     const blob = new Blob([content], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

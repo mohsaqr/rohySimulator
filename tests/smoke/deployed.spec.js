@@ -47,8 +47,8 @@ test.describe('deployed smoke', () => {
         const detail = JSON.stringify(body.checks);
         expect(res.status(), `readiness is not ok: ${detail}`).toBe(200);
         expect(body.checks.db, `database probe: ${body.checks.db}`).toBe('ok');
-        expect(body.checks.migrations, `migration probe: ${body.checks.migrations}`)
-            .toMatch(/^at \d+ \(\d+ applied\)$/);
+        // Anonymous callers get verdicts only (detail needs an admin session).
+        expect(body.checks.migrations, `migration probe: ${body.checks.migrations}`).toBe('ok');
     });
 
     test('the application shell is served', async ({ page }) => {

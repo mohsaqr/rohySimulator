@@ -19,12 +19,33 @@ import { parsePluginOriginTokens } from '../lib/pluginOriginTokens.js';
 import { parsePluginOrigins } from '../lib/pluginRemoteOrigins.js';
 import { parseImportOrigins } from '../lib/pluginImportOrigins.js';
 import { parseLibraryDirs } from '../lib/pluginServerSlot.js';
+import { jwtSecretWeakness, MIN_JWT_SECRET_LENGTH } from '../lib/jwtSecretPolicy.js';
 
-const MIN_JWT_SECRET_LENGTH = 32;
 const defaultLog = logger('env');
 
 function isProd(env) {
     return env.NODE_ENV === 'production';
+}
+
+// JWT_SECRET placeholder / low-entropy rule: server/lib/jwtSecretPolicy.js
+// (dependency-free so deploy/preflight.sh can load it on a production host).
+export { jwtSecretWeakness, MIN_JWT_DISTINCT_CHARS } from '../lib/jwtSecretPolicy.js';
+
+// A URL as it is safe to log: user:password@ removed. ROHY_KOKORO_URL and
+// FRONTEND_URL were echoed verbatim, so credentials in the authority reached
+// the journal (L6-15).
+function urlForLog(raw) {
+    try {
+        const u = new URL(raw);
+        if (u.username || u.password) {
+            u.username = '';
+            u.password = '';
+            return `${u.toString()} (credentials removed)`;
+        }
+        return u.toString();
+    } catch {
+        return '[unparseable URL]';
+    }
 }
 
 function isLocalUrl(url) {
@@ -54,6 +75,16 @@ export function validateEnv(env = process.env) {
             `${MIN_JWT_SECRET_LENGTH} (session tokens are signed with it). ` +
             "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"";
         (isProd(env) ? errors : warnings).push(msg);
+    } else if (isProd(env)) {
+        // Production only: dev and test boot on throwaway secrets by design.
+        const weakness = jwtSecretWeakness(env.JWT_SECRET);
+        if (weakness) {
+            errors.push(
+                `JWT_SECRET is not a usable secret: ${weakness}. Anyone who can guess it can sign ` +
+                'a session token for any account. Generate one with: ' +
+                "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\""
+            );
+        }
     }
 
     // ROHY_PLUGIN_ORIGINS — fatal if malformed. Checked here rather than left
@@ -110,7 +141,7 @@ export function validateEnv(env = process.env) {
             kokoroUrl = new URL(env.ROHY_KOKORO_URL);
         } catch { /* reported below */ }
         if (!kokoroUrl || !['http:', 'https:'].includes(kokoroUrl.protocol)) {
-            errors.push(`ROHY_KOKORO_URL="${env.ROHY_KOKORO_URL}" is not an http(s) URL (expected e.g. https://api.example.org/v1).`);
+            errors.push(`ROHY_KOKORO_URL is not an http(s) URL (got ${urlForLog(env.ROHY_KOKORO_URL)}; expected e.g. https://api.example.org/v1).`);
         } else {
             if (kokoroUrl.protocol === 'http:' && isProd(env) && !isLocalUrl(env.ROHY_KOKORO_URL)) {
                 warnings.push('ROHY_KOKORO_URL uses plain http in production: the API key and every spoken line cross the network unencrypted.');
@@ -139,7 +170,7 @@ export function validateEnv(env = process.env) {
         try {
             new URL(env.FRONTEND_URL);
         } catch {
-            errors.push(`FRONTEND_URL="${env.FRONTEND_URL}" is not a valid URL.`);
+            errors.push(`FRONTEND_URL="${urlForLog(env.FRONTEND_URL)}" is not a valid URL.`);
         }
     } else if (isProd(env)) {
         warnings.push(
@@ -180,7 +211,7 @@ export function validateEnv(env = process.env) {
             const u = new URL(env.FRONTEND_URL);
             if (u.protocol === 'http:' && !isLocalUrl(env.FRONTEND_URL)) {
                 warnings.push(
-                    `FRONTEND_URL="${env.FRONTEND_URL}" uses plain HTTP and no TLS_CERT_PATH/TLS_KEY_PATH ` +
+                    `FRONTEND_URL="${urlForLog(env.FRONTEND_URL)}" uses plain HTTP and no TLS_CERT_PATH/TLS_KEY_PATH ` +
                     'is set. Browsers block getUserMedia (mic) on non-localhost insecure origins, ' +
                     'so press-to-talk will not work. Either terminate TLS at nginx or set ' +
                     'TLS_CERT_PATH/TLS_KEY_PATH for the rohy process.'
@@ -245,6 +276,28 @@ export function validateEnv(env = process.env) {
                 `ROHY_TRUST_PROXY="${v}" doesn't look like a documented Express trust-proxy value. ` +
                 'Expected: "loopback", "linklocal", "uniquelocal", "true", "false", a hop-count integer, ' +
                 'an IP, a CIDR, or a comma-separated list. See Express docs.'
+            );
+        }
+    }
+
+    // Switches that are right in CI and wrong on a live site. Accepted (the
+    // CI audit job boots in production mode with one of them), but never
+    // silently: an operator who copied a CI env file should see it at boot.
+    if (isProd(env)) {
+        for (const key of ['ROHY_DISABLE_AUTH_RATE_LIMIT', 'ROHY_DISABLE_GENERAL_RATE_LIMIT']) {
+            const value = env[key] == null ? '' : String(env[key]).trim();
+            if (value !== '' && value !== '0' && value.toLowerCase() !== 'false') {
+                warnings.push(
+                    `${key} is set in production: that rate limiter is OFF, so password guessing and ` +
+                    'request floods are not throttled. Remove it unless this is a test run.'
+                );
+            }
+        }
+        if (trustProxyRaw === 'true') {
+            warnings.push(
+                'ROHY_TRUST_PROXY=true in production trusts EVERY X-Forwarded-For hop, so any client can ' +
+                'choose the address the rate limiters and the audit log record. Name the proxy instead ' +
+                '("loopback", "uniquelocal", its IP/CIDR, or a hop count).'
             );
         }
     }

@@ -2,6 +2,7 @@
 // Used by OyonLearningAnalyticsTab. Pulled out of the deleted
 // EmotionLogsTable.jsx so we keep one source of colour + format truth.
 
+import { csvEscape } from '../analytics/csvExport.js';
 import { OYON_EMOTION_LABELS, canonicalEmotionLabel } from './emotionVocabulary';
 
 // 500/600-level palette — the old 300/400 pastels were tuned for the dark
@@ -79,12 +80,10 @@ export const RECORD_CSV_HEADERS = [
    'consent_version', 'consent_recorded_at',
 ];
 
-export function csvCell(v) {
-   if (v == null) return '';
-   const s = String(v);
-   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-   return s;
-}
+// The shared guarded cell (formula-injection guard + RFC-4180 quoting).
+// student_name_snapshot is client-supplied text, so this export is one a
+// learner can write into (L5-02).
+export const csvCell = csvEscape;
 
 /** Pure CSV builder over hydrated emotion-record rows — one row per window,
  *  RECORD_CSV_HEADERS order. Kept pure (no DOM) so it stays testable. */

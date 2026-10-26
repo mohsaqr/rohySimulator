@@ -12,6 +12,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# dynajs is cloned at a pinned commit, the SAME one deploy/docker/Dockerfile
+# builds the image from (DYNAJS_GIT_REF there; tests/server/sec2-e2-supply-chain
+# .test.js fails when the two drift). An unpinned `main` meant CI tested a
+# different dynajs from the image, and a compromised main ran code in jobs
+# that later hold the Prova tokens (security audit 2026-10-26, L6-14).
+env:
+  DYNAJS_GIT_REF: 0dbc6bb1fc8a1d33c8b91f7de38670fd61df6798
+
 jobs:
   lint:
     name: Lint
@@ -33,6 +41,12 @@ jobs:
       # days (tests/utils/describeQuarantine.js, playwright.config.js).
       - name: Quarantine rules
         run: node scripts/check-quarantine.mjs
+      # Vendored plugin code must still match its .vendor.json sha256 stamp:
+      # a PR that edits a vendored copy by hand fails here (L6-14). Upstream
+      # checkouts are absent on the runner, so "upstream has moved" never
+      # fires in CI; only a stamp mismatch does.
+      - name: Vendored plugins match their stamps
+        run: npm run vendor:check
 
   build:
     name: Build
@@ -57,7 +71,9 @@ jobs:
       # prepare script produces dist/. Same recipe as the Dockerfile.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       # The helper reads the one ref/version contract used by Docker, local
       # installs and verification. Auth is a one-shot header, never a remote URL.
@@ -89,7 +105,9 @@ jobs:
       # See the Build job for why this step exists.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       # Same pinned package the release image builds.
       - name: Clone 3D patient room sibling
@@ -178,7 +196,9 @@ jobs:
       # See the Build job for why the sibling clones exist.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       - name: Clone 3D patient room sibling
         env:
@@ -310,7 +330,9 @@ jobs:
           cache: npm
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       - name: Clone 3D patient room sibling
         env:
@@ -351,7 +373,9 @@ jobs:
       # See the Build job for why the sibling clones exist.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       - name: Clone 3D patient room sibling
         env:
@@ -394,7 +418,9 @@ jobs:
       # See the Build job for why this step exists.
       - name: Clone dynajs sibling
         run: |
-          git clone --depth 1 https://github.com/mohsaqr/dynajs.git ../dynajs
+          git init -q ../dynajs
+          git -C ../dynajs fetch -q --depth 1 https://github.com/mohsaqr/dynajs.git "$DYNAJS_GIT_REF"
+          git -C ../dynajs checkout -q --detach FETCH_HEAD
           cd ../dynajs && npm install --prefer-offline --no-audit --no-fund
       # Same pinned package the release image builds.
       - name: Clone 3D patient room sibling

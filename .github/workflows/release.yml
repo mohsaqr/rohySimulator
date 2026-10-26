@@ -52,28 +52,82 @@ env:
 
 jobs:
   # ----------------------------------------------------------------------
+  # Resolve and validate the release tag ONCE; every other job builds the
+  # tag's own commit, never the branch a manual run was dispatched from.
+  #
+  # A workflow_dispatch used to check out the dispatching branch and publish
+  # it as `:<tag>` and `:latest` — a feature branch could become "v3.0.0" —
+  # and `inputs.tag` was interpolated straight into `run:` in a job holding
+  # contents/packages: write (security audit 2026-10-26, L6-11). Now:
+  #   - the tag arrives through `env:` only, and must be v-semver
+  #     (v3.0.0, v3.0.0-rc.88) or the RC shorthand (v3.0.RC41);
+  #   - it must already exist, and its package.json version must match it
+  #     (v3.0.RC41 ↔ 3.0.0-rc.41, v3.0.0-rc.88 ↔ 3.0.0-rc.88);
+  #   - `latest` moves only when the tagged commit is on main.
+  # ----------------------------------------------------------------------
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.tag.outputs.ref }}
+      latest: ${{ steps.tag.outputs.latest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Resolve and validate release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          PUSHED_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="${PUSHED_REF#refs/tags/}"; fi
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+(\.[0-9]+(-[0-9A-Za-z.]+)?|\.RC[0-9]+)$'; then
+            echo "::error::release tag '$TAG' is not v<major>.<minor>.<patch>[-pre] or v<major>.<minor>.RC<n>"
+            exit 1
+          fi
+          git fetch --force --tags origin
+          if ! git rev-parse -q --verify "refs/tags/$TAG^{commit}" >/dev/null; then
+            echo "::error::tag $TAG does not exist — push the tag first, then release it"
+            exit 1
+          fi
+          case "$TAG" in
+            *.RC*) EXPECTED="$(printf '%s' "$TAG" | sed -E 's/^v([0-9]+)\.([0-9]+)\.RC0*([0-9]+)$/\1.\2.0-rc.\3/')" ;;
+            *)     EXPECTED="${TAG#v}" ;;
+          esac
+          VERSION="$(git show "refs/tags/$TAG:package.json" | node -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).version)))')"
+          if [ "$VERSION" != "$EXPECTED" ]; then
+            echo "::error::tag $TAG points at package version $VERSION; expected $EXPECTED — refusing to publish"
+            exit 1
+          fi
+          LATEST=false
+          if git merge-base --is-ancestor "refs/tags/$TAG^{commit}" origin/main; then LATEST=true; fi
+          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "release $TAG (package $VERSION), latest=$LATEST"
+
+  # ----------------------------------------------------------------------
   # Docker image → ghcr.io. Smallest download for operators with Docker.
   # Multi-arch: linux/amd64 always; linux/arm64 if the runner supports it.
   # ----------------------------------------------------------------------
   docker-image:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TAG: ${{ needs.resolve.outputs.ref }}
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.ref }}
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Resolve release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ref=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -95,8 +149,8 @@ jobs:
           secrets: |
             room3d_token=${{ secrets.ROOM3D_GIT_TOKEN }}
           tags: |
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
-            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ needs.resolve.outputs.ref }}
+            ${{ needs.resolve.outputs.latest == 'true' && format('{0}:latest', env.IMAGE) || '' }}
           # Cache from previous builds so re-tags / re-runs are fast,
           # but never trust the cache for the actual emitted layers —
           # the nightly install-from-scratch workflow already verifies
@@ -108,8 +162,8 @@ jobs:
         run: |
           echo "## Docker image published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "    docker pull ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "    docker pull ${{ env.IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "    docker pull ${IMAGE}:${TAG}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.resolve.outputs.latest }}" = "true" ]; then echo "    docker pull ${IMAGE}:latest" >> $GITHUB_STEP_SUMMARY; fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Digest: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
 
@@ -121,18 +175,15 @@ jobs:
   # install time). Could be matrixed across runners later.
   # ----------------------------------------------------------------------
   airgap-bundle:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TAG: ${{ needs.resolve.outputs.ref }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Resolve release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ref=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.ref }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -179,7 +230,8 @@ jobs:
       - name: Extract CHANGELOG notes for this tag
         id: notes
         run: |
-          VER="${{ steps.tag.outputs.ref }}"; VER="${VER#v}"
+          VER="${TAG#v}"
+          case "$TAG" in *.RC*) VER="$(printf '%s' "$TAG" | sed -E 's/^v([0-9]+)\.([0-9]+)\.RC0*([0-9]+)$/\1.\2.0-rc.\3/')" ;; esac
           node -e '
             const fs = require("fs");
             const ver = process.argv[1];
@@ -195,7 +247,7 @@ jobs:
             }
             fs.writeFileSync("release-notes.md", out);
           ' "$VER"
-          OWNER="${{ github.repository_owner }}" REPO="${{ github.repository }}" TAG="${{ steps.tag.outputs.ref }}"
+          OWNER="${{ github.repository_owner }}" REPO="${{ github.repository }}"
           {
             echo
             cat <<'EOF_INSTALL'
@@ -241,7 +293,7 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ steps.tag.outputs.ref }}
+          tag_name: ${{ needs.resolve.outputs.ref }}
           fail_on_unmatched_files: true
           body_path: release-notes.md
           # The bundler writes its manifest.json INSIDE each tarball at
@@ -279,19 +331,15 @@ jobs:
   # the last green version.
   # ----------------------------------------------------------------------
   verify-published-image:
-    needs: docker-image
+    needs: [resolve, docker-image]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TAG: ${{ needs.resolve.outputs.ref }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Resolve release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ref=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.ref }}
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -302,8 +350,8 @@ jobs:
 
       - name: Pull the published image (same command an operator runs)
         run: |
-          docker pull ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
-          docker image inspect ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }} \
+          docker pull "${IMAGE}:${TAG}"
+          docker image inspect "${IMAGE}:${TAG}" \
             --format '{{.Architecture}} {{.Os}} size={{.Size}}'
 
       # The first admin comes from ROHY_ADMIN_* with a per-run password, the
@@ -322,7 +370,7 @@ jobs:
             -e ROHY_ADMIN_USERNAME=admin \
             -e ROHY_ADMIN_PASSWORD="$ROHY_VERIFY_ADMIN_PASSWORD" \
             -e OYON_ENABLED=1 \
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}
+            "${IMAGE}:${TAG}"
 
       - name: Wait for /api/health
         run: |
@@ -394,7 +442,7 @@ jobs:
         run: |
           echo "## Published image verified" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}\` boots, answers /api/health, passes all tech-test.sh probes, and serves every standalone asset operators import." >> $GITHUB_STEP_SUMMARY
+          echo "\`${IMAGE}:${TAG}\` boots, answers /api/health, passes all tech-test.sh probes, and serves every standalone asset operators import." >> $GITHUB_STEP_SUMMARY
 
   # ----------------------------------------------------------------------
   # Docker-as-tarball (for air-gapped sites that have Docker but no
@@ -402,19 +450,15 @@ jobs:
   # node_modules separately — it's all inside the image layers.
   # ----------------------------------------------------------------------
   docker-tarball:
-    needs: docker-image
+    needs: [resolve, docker-image]
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TAG: ${{ needs.resolve.outputs.ref }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Resolve release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ref=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "ref=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.ref }}
 
       - name: Log in to GHCR (to pull the just-pushed image)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -430,15 +474,15 @@ jobs:
           OUT="dist/airgap"
           TARBALL="$OUT/rohy-airgap-docker-${STAMP}.tar.gz"
           mkdir -p "$OUT"
-          docker pull "${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}"
-          docker save "${{ env.IMAGE }}:${{ steps.tag.outputs.ref }}" | gzip > "$TARBALL"
+          docker pull "${IMAGE}:${TAG}"
+          docker save "${IMAGE}:${TAG}" | gzip > "$TARBALL"
           ( cd "$OUT" && sha256sum "$(basename "$TARBALL")" > "$(basename "$TARBALL").sha256" )
           ls -la "$OUT"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ steps.tag.outputs.ref }}
+          tag_name: ${{ needs.resolve.outputs.ref }}
           fail_on_unmatched_files: true
           files: |
             dist/airgap/rohy-airgap-docker-*.tar.gz

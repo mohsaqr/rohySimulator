@@ -144,6 +144,10 @@ esac
 # Source-mode prerequisites: the bundler does NOT fetch anything itself, so
 # fail loud if the artifacts that need to be in the tarball aren't present.
 if [[ "$MODE" == "source" || "$MODE" == "both" ]]; then
+    if ! git -C "$REPO_SRC" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+        echo "FATAL: --mode=source builds from 'git archive HEAD' and $REPO_SRC is not a git checkout." >&2
+        exit 1
+    fi
     if [[ ! -d "$REPO_SRC/node_modules" ]]; then
         echo "FATAL: $REPO_SRC/node_modules missing. Run 'npm install' on this build host first." >&2
         exit 1
@@ -208,6 +212,23 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 # -- source bundle -------------------------------------------------------
+# Untracked build artifacts the source bundle carries on top of
+# `git archive HEAD` (paths relative to the repo root; a missing one is
+# skipped). Everything else that is untracked — databases, env files,
+# uploads, notes, audit material, backups — stays out by construction.
+# Piper (server/data/piper) is handled separately by --with/--no-piper.
+BUILD_PAYLOAD=(
+    node_modules
+    frontend
+    docs/.vitepress/dist
+    OyonR/node_modules
+    OyonR/standalone/models
+    OyonR/standalone/vendor/mediapipe
+    OyonR/standalone/vendor/onnxruntime-web
+    OyonR/standalone/vendor/ladyna
+    server/plugin-content
+)
+
 build_source_bundle() {
     local stage="$OUTPUT_DIR/.stage-source-$STAMP"
     local root="$stage/rohy-airgap-${STAMP}"
@@ -215,9 +236,13 @@ build_source_bundle() {
     # Without this guard the stage dir leaks across repeated dry-runs.
     if (( DRY_RUN )); then
         echo "[source] (dry-run) would stage repo at $root/repo"
-        echo "  exclude: .git/, tmp/, dist/airgap/, server/database.sqlite*, server/.env, .env, *.log, .DS_Store"
+        echo "  source: git archive HEAD (tracked files at $GIT_SHA only — no local state, no uncommitted edits)"
         echo "  include: node_modules/ (~$(sizeof "$REPO_SRC/node_modules" 2>/dev/null || echo unknown))"
-        echo "  include: OyonR/ (~$(sizeof "$REPO_SRC/OyonR" 2>/dev/null || echo unknown))"
+        local p
+        for p in "${BUILD_PAYLOAD[@]}"; do
+            [[ "$p" == "node_modules" ]] && continue
+            [[ -e "$REPO_SRC/$p" ]] && echo "  include: $p (~$(sizeof "$REPO_SRC/$p"))"
+        done
         if [[ "$WITH_PIPER" != "no" ]] && [[ -d "$REPO_SRC/server/data/piper" ]]; then
             echo "  include: server/data/piper/ (~$(sizeof "$REPO_SRC/server/data/piper"))"
         fi
@@ -233,9 +258,7 @@ build_source_bundle() {
     # Piper handling. "auto" includes it if server/data/piper/ exists, "no"
     # always excludes it (smaller bundle, browser-side TTS only), "yes"
     # requires the dir and refuses if missing.
-    local piper_excludes=()
     if [[ "$WITH_PIPER" == "no" ]]; then
-        piper_excludes=(--exclude='server/data/piper/')
         echo "[source] excluding server/data/piper/ (--no-piper)"
     elif [[ "$WITH_PIPER" == "yes" ]] && [[ ! -d "$REPO_SRC/server/data/piper" ]]; then
         echo "FATAL: --with-piper but $REPO_SRC/server/data/piper not present. Run server/scripts/install-piper.sh first." >&2
@@ -244,23 +267,37 @@ build_source_bundle() {
         echo "[source] including server/data/piper/ ($(sizeof "$REPO_SRC/server/data/piper"))"
     fi
 
-    echo "[source] staging repo (excluding .git, tmp, dist, db, env files)"
-    # rsync with --exclude rules. We deliberately INCLUDE node_modules and
-    # OyonR vendor assets because the whole point of this bundle is carrying
-    # them across the air gap. The "${arr[@]+...}" empty-safe expansion is
-    # required because macOS ships bash 3.2 where set -u treats an empty
-    # array's `[@]` as unbound.
-    rsync -a \
-        --exclude='.git/' \
-        --exclude='tmp/' \
-        --exclude='dist/airgap/' \
-        --exclude='server/database.sqlite*' \
-        --exclude='server/.env' \
-        --exclude='.env' \
-        --exclude='*.log' \
-        --exclude='.DS_Store' \
-        "${piper_excludes[@]+"${piper_excludes[@]}"}" \
-        "$REPO_SRC/" "$root/repo/"
+    # The tree comes from `git archive HEAD`, never from the working
+    # directory. An rsync of the checkout with a short denylist packed
+    # whatever sat beside the code: live Prova tokens in AGENT-NOTE-*.md,
+    # tests/e2e/.auth/tokens.json, a 306 MB pre-purge git bundle under
+    # .local-backups/, the audit reports, server/rohy.db, public/uploads
+    # (security audit 2026-10-26, F-29). Now only committed files go in,
+    # plus the build artifacts named in BUILD_PAYLOAD, each one explicitly.
+    echo "[source] staging repo from git archive HEAD ($GIT_SHA)"
+    if [[ -n "$(git -C "$REPO_SRC" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+        echo "WARN: the working tree has uncommitted changes to tracked files; the bundle carries HEAD ($GIT_SHA) without them." >&2
+    fi
+    git -C "$REPO_SRC" archive --format=tar HEAD | tar -x -C "$root/repo"
+
+    # Build artifacts the target cannot fetch, copied one by one. The
+    # "${arr[@]+...}" empty-safe expansion is required because macOS ships
+    # bash 3.2 where set -u treats an empty array's `[@]` as unbound.
+    local p
+    for p in "${BUILD_PAYLOAD[@]}"; do
+        [[ -e "$REPO_SRC/$p" ]] || continue
+        echo "[source] adding build artifact $p ($(sizeof "$REPO_SRC/$p"))"
+        mkdir -p "$root/repo/$(dirname "$p")"
+        # frontend/uploads is vite's copy of public/uploads (runtime data of
+        # THIS host, L6-12): anchored exclude, so nothing else named uploads
+        # is touched.
+        rsync -a --exclude='.DS_Store' --exclude='*.log' --exclude='/frontend/uploads/' \
+            "$REPO_SRC/$p" "$root/repo/$(dirname "$p")/"
+    done
+    if [[ "$WITH_PIPER" != "no" ]] && [[ -d "$REPO_SRC/server/data/piper" ]]; then
+        mkdir -p "$root/repo/server/data"
+        rsync -a --exclude='.DS_Store' "$REPO_SRC/server/data/piper" "$root/repo/server/data/"
+    fi
 
     if (( WITH_HF_CACHE )); then
         echo "[source] adding HF cache from $HF_CACHE ($(sizeof "$HF_CACHE"))"

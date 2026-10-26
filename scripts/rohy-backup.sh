@@ -21,11 +21,17 @@
 #
 # What gets snapshotted (one timestamped subdirectory per backup):
 #   - database.sqlite          consistent copy via SQLite VACUUM INTO
-#   - env                       copy of /etc/rohy/env (or whichever file is in use)
 #   - manifest.json             metadata: timestamp, git sha, label, sizes,
 #                               integrity status, schema_migrations row count
 #   - migrations.lst            output of `SELECT name FROM schema_migrations`
 #                               (sanity reference for restore-time decisions)
+#
+# The env file (JWT_SECRET, provider keys) is NOT stored beside the database.
+# It goes to $ROHY_BACKUP_ENV_DIR/<snapshot-name>.env (default: the backup dir
+# with "-env" appended, e.g. /var/backups/rohy-env), so copying or shipping
+# the snapshot directory off-host never carries the signing secret with the
+# data it protects (security audit 2026-10-26, L6-13). Everything is written
+# under umask 077: directories 0700, files 0600.
 #
 # Retention (applied at the end of each successful run):
 #   - Keep the last $ROHY_BACKUP_KEEP_LAST snapshots (default 10).
@@ -34,11 +40,16 @@
 #     created within the last 24 hours (paranoia gate against runaway pruning).
 
 set -euo pipefail
+# Snapshots hold every learner's data and password hash; nothing written here
+# may be readable by other local users (VACUUM INTO and mkdir otherwise
+# inherit sudo's usual 022 → 0644 / 0755).
+umask 077
 
 # ── defaults ────────────────────────────────────────────────────────────────
 ROHY_DB="${ROHY_DB:-/opt/data/rohy/database.sqlite}"
 ROHY_ENV_FILE="${ROHY_ENV_FILE:-/etc/rohy/env}"
 ROHY_BACKUP_DIR="${ROHY_BACKUP_DIR:-/var/backups/rohy}"
+ROHY_BACKUP_ENV_DIR="${ROHY_BACKUP_ENV_DIR:-${ROHY_BACKUP_DIR%/}-env}"
 ROHY_BACKUP_KEEP_LAST="${ROHY_BACKUP_KEEP_LAST:-10}"
 ROHY_BACKUP_KEEP_MONTHS="${ROHY_BACKUP_KEEP_MONTHS:-12}"
 REPO_DIR="${REPO_DIR:-/opt/repos/rohy}"
@@ -112,7 +123,7 @@ step "snapshot target: $SUBDIR"
 if (( DRY_RUN )); then
   note "[dry-run] would mkdir -p $SUBDIR"
   note "[dry-run] would .backup $ROHY_DB → $SUBDIR/database.sqlite"
-  note "[dry-run] would copy $ROHY_ENV_FILE → $SUBDIR/env (if present)"
+  note "[dry-run] would copy $ROHY_ENV_FILE → $ROHY_BACKUP_ENV_DIR/$(basename "$SUBDIR").env (if present; kept apart from the DB)"
   note "[dry-run] would write manifest.json + migrations.lst"
   note "[dry-run] would integrity-check"
   note "[dry-run] would prune older snapshots per retention policy"
@@ -120,6 +131,7 @@ if (( DRY_RUN )); then
 fi
 
 mkdir -p "$SUBDIR"
+chmod 700 "$ROHY_BACKUP_DIR" "$SUBDIR"
 
 # SQLite online backup. VACUUM INTO produces a defragmented consistent copy
 # without holding a write lock — safe to run while rohy is serving requests.
@@ -129,17 +141,25 @@ step "running VACUUM INTO (consistent online snapshot)"
 # break the statement either.
 SNAPSHOT_SQL_PATH="${SUBDIR//\'/\'\'}/database.sqlite"
 sqlite3 "$ROHY_DB" "VACUUM INTO '$SNAPSHOT_SQL_PATH'"
+chmod 600 "$SUBDIR/database.sqlite"
 DB_BYTES=$(stat -c%s "$SUBDIR/database.sqlite" 2>/dev/null \
         || stat -f%z "$SUBDIR/database.sqlite")
 note "wrote database.sqlite ($DB_BYTES bytes)"
 
 # Snapshot the env file (contains JWT_SECRET, FRONTEND_URL, OYON_ENABLED,
 # etc.). If a future release changes env semantics, the snapshot lets us
-# re-pair the DB with its contemporary env on restore.
+# re-pair the DB with its contemporary env on restore. It lives in its OWN
+# directory, never inside $SUBDIR: whoever receives a copy of the database
+# snapshot must not also receive the key that signs every session token.
+# bin/rohy-update finds it by snapshot name (and still reads a legacy
+# $SUBDIR/env from older snapshots).
 if [[ -f "$ROHY_ENV_FILE" ]]; then
-  cp -p "$ROHY_ENV_FILE" "$SUBDIR/env"
-  chmod 600 "$SUBDIR/env"
-  note "copied env file (mode 0600)"
+  mkdir -p "$ROHY_BACKUP_ENV_DIR"
+  chmod 700 "$ROHY_BACKUP_ENV_DIR"
+  ENV_SNAPSHOT="$ROHY_BACKUP_ENV_DIR/$(basename "$SUBDIR").env"
+  cp "$ROHY_ENV_FILE" "$ENV_SNAPSHOT"
+  chmod 600 "$ENV_SNAPSHOT"
+  note "copied env file to $ENV_SNAPSHOT (mode 0600, separate from the DB snapshot)"
 else
   note "! env file $ROHY_ENV_FILE not found — skipping (manual snapshots from a non-systemd install are normal)"
 fi
@@ -162,6 +182,7 @@ RESULT=$(sqlite3 "$SUBDIR/database.sqlite" 'PRAGMA integrity_check;' 2>&1)
 if [[ "$RESULT" != "ok" ]]; then
   printf '%s\n' "$RESULT" | sed 's/^/    /' >&2
   rm -rf "$SUBDIR"
+  rm -f "${ENV_SNAPSHOT:-}"
   die "snapshot failed integrity_check — refusing to keep it"
 fi
 note "✓ ok"
@@ -226,6 +247,7 @@ for s in "${ALL_SNAPS[@]}"; do
   if [[ -z "${KEEP_SET[$s]:-}" ]]; then
     note "pruning $s"
     rm -rf "$s"
+    rm -f "$ROHY_BACKUP_ENV_DIR/$(basename "$s").env"
     PRUNED=$((PRUNED+1))
   fi
 done

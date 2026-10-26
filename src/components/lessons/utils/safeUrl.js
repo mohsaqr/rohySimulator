@@ -14,6 +14,30 @@ export const safeHref = (raw) => {
 /** Only http/https iframes are allowed — never javascript:, data:, etc. */
 export const safeEmbedSrc = safeHref;
 
+// Video providers a lecture-video embed may load (host edit, security audit
+// 2026-10-26, L5-05). The video iframe needs `allow-same-origin` in its
+// sandbox — the YouTube player and the IFrame API watch tracking do not run
+// without it — and that is only safe for a CROSS-origin frame. Any other URL
+// (this server's own /uploads/x.html above all) would get same-origin script
+// access to the lesson page, so it is refused instead.
+export const VIDEO_EMBED_HOSTS = Object.freeze([
+  'www.youtube.com', 'youtube.com', 'www.youtube-nocookie.com', 'youtube-nocookie.com',
+  'player.vimeo.com',
+]);
+
+/** An https video-provider embed URL from VIDEO_EMBED_HOSTS, else ''. */
+export const safeVideoEmbedSrc = (raw) => {
+  const u = safeHref(raw);
+  if (!u) return '';
+  try {
+    const url = new URL(u);
+    if (url.protocol !== 'https:') return '';
+    return VIDEO_EMBED_HOSTS.includes(url.hostname.toLowerCase()) ? u : '';
+  } catch {
+    return '';
+  }
+};
+
 /**
  * A lesson FILE address: this server's own `/uploads/…` or `/api/…`, or an
  * http(s) URL. Anything else — a relative path, a `javascript:` or `data:`
