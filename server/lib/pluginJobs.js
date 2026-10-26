@@ -71,7 +71,33 @@ export function registerJobHandler(kind, handler) {
 export function resetJobHandlers() { handlers.clear(); }
 
 /**
+ * How many jobs one tenant may have waiting or running at once.
+ *
+ * The worker is ONE process-wide queue (see the header). Without a bound, one
+ * tenant's batch of imports — or one educator re-clicking "import" on the same
+ * link — fills it, and every other tenant's import waits behind work they did
+ * not ask for (security audit 2026-10-26, L8-15).
+ */
+export const MAX_PENDING_JOBS_PER_TENANT = 20;
+
+/** Raised when a tenant is at MAX_PENDING_JOBS_PER_TENANT; the error handler answers 429. */
+export class JobQuotaExceeded extends Error {
+    constructor(limit) {
+        super(`This tenant already has ${limit} plugin jobs waiting or running. Try again when some have finished.`);
+        this.name = 'JobQuotaExceeded';
+        this.code = 'plugin_job_quota';
+        this.status = 429;
+    }
+}
+
+/**
  * Enqueue a job.
+ *
+ * IDEMPOTENT for pending work on an asset: a job of the same tenant, plugin
+ * and kind, for the same asset, that is still queued or running (and not being
+ * cancelled) is returned instead of a second one being queued. A re-import of one
+ * link is the same multi-gigabyte download and tiling run; queueing it twice
+ * only doubled the wait for everyone behind it.
  *
  * @param {object} spec
  * @param {number} spec.tenantId
@@ -80,7 +106,8 @@ export function resetJobHandlers() { handlers.clear(); }
  * @param {object} [spec.payload]
  * @param {string} [spec.assetId]
  * @param {number} [spec.userId]
- * @returns {Promise<string>} the job id
+ * @returns {Promise<string>} the job id (an existing one when the same work is already pending)
+ * @throws {JobQuotaExceeded} when the tenant has MAX_PENDING_JOBS_PER_TENANT jobs pending
  */
 export async function enqueueJob({ tenantId, pluginId, kind, payload = {}, assetId = null, userId = null }) {
     if (!handlers.has(kind)) {
@@ -88,11 +115,36 @@ export async function enqueueJob({ tenantId, pluginId, kind, payload = {}, asset
         // at 'queued' forever and reads to an admin as "the worker is stuck".
         throw new Error(`No handler is registered for job kind '${kind}'`);
     }
+    const payloadText = JSON.stringify(payload);
+    // Only work aimed at an ASSET is deduplicated: that is what an import is,
+    // and an imported asset's id already IS (tenant, source URL) — pathology's
+    // stableAssetId — so "same asset" is "same link, same tenant" whatever
+    // label came with the second click. A job with no asset may legitimately
+    // be asked for twice.
+    const pending = assetId == null ? null : await dbAdapter.get(
+        `SELECT id FROM plugin_jobs
+          WHERE tenant_id = ? AND plugin_id = ? AND kind = ? AND asset_id = ?
+            AND state IN ('queued', 'running') AND cancel_requested = 0
+          ORDER BY created_at, rowid LIMIT 1`,
+        [tenantId, pluginId, kind, assetId]
+    );
+    if (pending) {
+        log.info('identical plugin job already pending; not queued again', { jobId: pending.id, kind, tenant_id: tenantId });
+        pump();
+        return pending.id;
+    }
+    const count = await dbAdapter.get(
+        `SELECT COUNT(*) AS n FROM plugin_jobs WHERE tenant_id = ? AND state IN ('queued', 'running')`,
+        [tenantId]
+    );
+    if ((count?.n ?? 0) >= MAX_PENDING_JOBS_PER_TENANT) {
+        throw new JobQuotaExceeded(MAX_PENDING_JOBS_PER_TENANT);
+    }
     const id = randomUUID();
     await dbAdapter.run(
         `INSERT INTO plugin_jobs (id, tenant_id, plugin_id, kind, state, payload, asset_id, created_by, created_at)
          VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ${SQL_NOW})`,
-        [id, tenantId, pluginId, kind, JSON.stringify(payload), assetId, userId]
+        [id, tenantId, pluginId, kind, payloadText, assetId, userId]
     );
     pump();
     return id;
@@ -155,10 +207,35 @@ export async function recoverInterruptedJobs() {
     return { requeued, failed };
 }
 
-/** Claim the oldest queued job, or null. */
+// tenant id → when the worker last took one of its jobs (ms). In memory: it
+// only orders the queue, and after a restart every tenant starts level.
+const lastClaimedAt = new Map();
+
+/** Test seam — forget the fairness history. */
+export function resetJobFairness() { lastClaimedAt.clear(); }
+
+/**
+ * Claim the next queued job, or null.
+ *
+ * FAIR BETWEEN TENANTS, FIFO WITHIN ONE. The next job comes from the tenant
+ * that has waited longest since the worker last served it (a tenant never
+ * served goes first), and within that tenant it is the oldest job. Plain
+ * oldest-first let one tenant's batch of twenty slides hold the only worker
+ * while another tenant's single import sat behind all of them (L8-15).
+ */
 async function claimNext() {
+    const waiting = await dbAdapter.all(
+        `SELECT tenant_id, MIN(created_at) AS oldest FROM plugin_jobs
+          WHERE state = 'queued' GROUP BY tenant_id`
+    );
+    if (waiting.length === 0) return null;
+    const served = (tenant) => lastClaimedAt.get(Number(tenant)) ?? -Infinity;
+    const [next] = [...waiting].sort((a, b) => (served(a.tenant_id) - served(b.tenant_id))
+        || String(a.oldest).localeCompare(String(b.oldest))
+        || Number(a.tenant_id) - Number(b.tenant_id));
     const job = await dbAdapter.get(
-        `SELECT * FROM plugin_jobs WHERE state = 'queued' ORDER BY created_at, rowid LIMIT 1`
+        `SELECT * FROM plugin_jobs WHERE state = 'queued' AND tenant_id = ? ORDER BY created_at, rowid LIMIT 1`,
+        [next.tenant_id]
     );
     if (!job) return null;
     // Guarded by the state in the WHERE clause so a second claimant cannot take
@@ -172,6 +249,7 @@ async function claimNext() {
         [job.id]
     );
     if ((res?.changes ?? 0) === 0) return null;
+    lastClaimedAt.set(Number(job.tenant_id), Date.now());
     return { ...job, attempts: job.attempts + 1 };
 }
 

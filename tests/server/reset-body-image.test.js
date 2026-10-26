@@ -133,13 +133,14 @@ describe('DELETE /api/body-image/:type — restores the bundled default', () => 
     });
 
     it('stops serving the override, so the reader falls through to the default', async () => {
+        // Signed in: /uploads needs a sign-in since sec2 (L9).
         expect((await upload(PNG_BYTES, `${SLOT}.png`, 'image/png')).status).toBe(200);
-        expect((await fetch(`${server.baseUrl}/uploads/bodymap/${SLOT}.png`)).status).toBe(200);
+        expect((await fetch(`${server.baseUrl}/uploads/bodymap/${SLOT}.png`, { headers: { authorization: `Bearer ${adminToken}` } })).status).toBe(200);
 
         await reset();
 
         // 404 is what drives useBodyImage()'s onError to the next candidate.
-        expect((await fetch(`${server.baseUrl}/uploads/bodymap/${SLOT}.png`)).status).toBe(404);
+        expect((await fetch(`${server.baseUrl}/uploads/bodymap/${SLOT}.png`, { headers: { authorization: `Bearer ${adminToken}` } })).status).toBe(404);
     });
 
     it('removes BOTH extensions — a leftover twin would keep shadowing', async () => {

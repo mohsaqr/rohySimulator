@@ -118,9 +118,12 @@ describe('files of a lesson locked behind a case', () => {
     });
 
     it('serves files no locked lesson holds back, as before', async () => {
-        expect((await anonymous(`/uploads/${FILES.loose}`)).status).toBe(200);
+        // Since sec2 (L9) every upload needs a sign-in; the lesson-lock
+        // semantics below it are unchanged.
+        expect((await anonymous(`/uploads/${FILES.loose}`)).status).toBe(401);
+        expect((await student(`/uploads/${FILES.loose}`)).status).toBe(200);
         // Also used by a published open lesson: already shown, so not held back.
-        expect((await anonymous(`/uploads/${FILES.shared}`)).status).toBe(200);
+        expect((await outsider(`/uploads/${FILES.shared}`)).status).toBe(200);
     });
 
     it('serves it to the learner once the case\'s gate is met', async () => {

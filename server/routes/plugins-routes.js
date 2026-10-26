@@ -25,12 +25,15 @@
 //     The two sides share a path and nothing else.
 //   - It does not write. GET only: a proxy that can POST is a confused deputy
 //     with rohy's network position.
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import express from 'express';
 import rateLimit from 'express-rate-limit';
+// Plugin settings were exempt from every limiter (security audit 2026-10-26,
+// L8-15): routes.js skips /plugins/ in the general limiter for deep-zoom.
+import { pluginSettingsLimiter } from '../lib/routeLimiters.js';
 import { authenticateToken, requireStudent } from '../middleware/auth.js';
 import { PLUGIN_MANIFESTS } from '../shared/plugins/manifests.generated.js';
 import { roleAllows } from '../shared/pluginRegistry.js';
@@ -43,6 +46,7 @@ import { libraryDirs } from '../lib/pluginServerSlot.js';
 import { tenantId, auditSuccess, dbGet, dbRun, dbAll } from './_helpers.js';
 import { logger } from '../logger.js';
 import { contentPath, isRecordedContentPath, recordContentRead } from '../services/pluginContentReads.js';
+import { opaqueArchiveId, opaqueRemoteRefs, openOpaqueSegments } from '../lib/pluginOpaqueRefs.js';
 
 const log = logger('plugin-proxy');
 const router = express.Router();
@@ -283,6 +287,29 @@ function readStarterCatalog(dir, shape) {
  * anyway: two independent reasons a traversal cannot succeed is the right
  * number for a route that turns a URL into a file read.
  */
+/**
+ * The Content-Type a local content file is served as, by extension, or null
+ * for an extension no plugin content has. A file with an unknown extension is
+ * refused rather than served as an image: it used to go out as `image/jpeg`,
+ * which is how a slide's multi-gigabyte `source/` original or a `.webp` gross
+ * photo was labelled (security audit 2026-10-26, L4-06 / I-4).
+ */
+const LOCAL_CONTENT_TYPES = Object.freeze({
+    '.json': 'application/json',
+    '.dzi': 'application/xml',
+    '.xml': 'application/xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.dcm': 'application/dicom',
+});
+
+export function localContentType(contentPath) {
+    const match = /\.[A-Za-z0-9]+$/.exec(String(contentPath));
+    return match ? (LOCAL_CONTENT_TYPES[match[0].toLowerCase()] ?? null) : null;
+}
+
 function serveLocalFile(res, dir, contentPath, manifest, pluginId) {
     const target = resolve(join(dir, normalize(contentPath).replace(/^[/\\]+/, '')));
     if (target !== dir && !target.startsWith(dir + sep)) {
@@ -294,13 +321,25 @@ function serveLocalFile(res, dir, contentPath, manifest, pluginId) {
     if (!stat || !stat.isFile()) {
         return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
     }
+    // A symlink inside the content root must not reach outside it. The
+    // bundles are unpacked with system tar (sha256-pinned, so this is supply
+    // chain only), and a link planted in one would otherwise turn a content
+    // URL into a read of any file the server can open.
+    let realTarget;
+    let realDir;
+    try {
+        realTarget = realpathSync(target);
+        realDir = realpathSync(dir);
+    } catch {
+        return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
+    }
+    if (realTarget !== realDir && !realTarget.startsWith(realDir + sep)) {
+        log.warn('local plugin content resolved outside its directory', { pluginId, contentPath });
+        return res.status(403).json({ error: 'forbidden', code: 'plugin_remote_bad_path' });
+    }
 
-    const type = contentPath.endsWith('.json') ? 'application/json'
-        : contentPath.endsWith('.dzi') ? 'application/xml'
-            : contentPath.endsWith('.png') ? 'image/png'
-                : contentPath.endsWith('.dcm') ? 'application/dicom'
-                    : 'image/jpeg';
-    if (!manifest.remote.contentTypes.includes(type)) {
+    const type = localContentType(contentPath);
+    if (!type || !manifest.remote.contentTypes.includes(type)) {
         // The manifest lists what this plugin's content may BE. A bundle file
         // outside that list is a packaging error, not something to serve.
         log.warn('local plugin content type is not declared by the manifest', { pluginId, contentPath, type });
@@ -407,6 +446,62 @@ function learnerItem(item, keys) {
     return Object.fromEntries(
         keys.filter((key) => item[key] !== undefined).map((key) => [key, item[key]]),
     );
+}
+
+/**
+ * What a learner may read of an object nested inside an allowed key (PACS:
+ * one `series[]` element) — the fields a viewer needs to lay the images out,
+ * plus the plugin's reference fields. Never `description`: a series is
+ * described in the words of its finding ("AXIAL CHEST — RUL NODULE").
+ */
+const LEARNER_NESTED_KEYS = Object.freeze(['key', 'plane', 'instances', 'frames', 'geometry']);
+
+/**
+ * Radoyon's archive convention: an entry whose id starts with this is an
+ * abnormal example, and its normal-study lookup (`studyForOrder()`,
+ * src/components/pacs/caseDocument.js) skips it by that prefix. A sealed id no
+ * longer shows the prefix, so the learner projection withholds the entry's
+ * `studyId` instead — the one field that lookup matches on — and a plain order
+ * still never opens an abnormal study the case did not choose.
+ */
+const ABNORMAL_ENTRY_PREFIX = 'abnormal/';
+
+/**
+ * One catalog item as a LEARNER receives it (security audit 2026-10-26, F-25).
+ *
+ * The key allowlist above was not enough on its own: the allowed `id` is the
+ * bundle path (`abnormal/rul_nodule`), and the allowed `series[]` carried its
+ * own `description` and a `ref` repeating the path. So, for a learner:
+ *   - `id` is sealed (lib/pluginOpaqueRefs.js) — the case document's archive
+ *     baseline is sealed the same way, so the two still match;
+ *   - `label` is present and empty, so a host that falls back from a missing
+ *     label to the id shows nothing rather than a token;
+ *   - nested objects keep only LEARNER_NESTED_KEYS and the reference fields;
+ *   - every `remote:` reference is sealed, so the content URLs the browser
+ *     then loads carry no name either.
+ *
+ * @param {string} pluginId
+ * @param {object} item
+ * @param {{learnerKeys: string[], refFields: string[]}} shape
+ * @returns {object}
+ */
+function learnerCatalogItem(pluginId, item, shape) {
+    const base = learnerItem(item, shape.learnerKeys);
+    const nestedKeys = [...LEARNER_NESTED_KEYS, ...shape.refFields];
+    const projected = Object.fromEntries(Object.entries(base).map(([key, value]) => [
+        key,
+        Array.isArray(value)
+            ? value.map((element) => (element && typeof element === 'object' && !Array.isArray(element)
+                ? learnerItem(element, nestedKeys)
+                : element))
+            : value,
+    ]));
+    if (typeof item?.id === 'string' && Object.hasOwn(projected, 'id')) {
+        projected.id = opaqueArchiveId(pluginId, item.id);
+        projected.label = '';
+        if (item.id.startsWith(ABNORMAL_ENTRY_PREFIX)) delete projected.studyId;
+    }
+    return opaqueRemoteRefs(pluginId, projected);
 }
 
 /**
@@ -569,7 +664,7 @@ router.get('/plugins/:pluginId/catalog', authenticateToken, proxyLimiter, async 
     const items = [...managedCatalogEntries(managed), ...(catalog[shape.collection] ?? [])];
     catalog[shape.collection] = mayAuthor
         ? items
-        : items.map((item) => learnerItem(item, shape.learnerKeys));
+        : items.map((item) => learnerCatalogItem(pluginId, item, shape));
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({
         plugin: pluginId,
@@ -648,7 +743,7 @@ function settingsManifest(pluginId) {
     return manifest && manifest.settings ? manifest : null;
 }
 
-router.get('/plugins/:pluginId/settings', authenticateToken, async (req, res) => {
+router.get('/plugins/:pluginId/settings', authenticateToken, pluginSettingsLimiter, async (req, res) => {
     const { pluginId } = req.params;
     const manifest = settingsManifest(pluginId);
     if (!manifest) {
@@ -677,7 +772,7 @@ router.get('/plugins/:pluginId/settings', authenticateToken, async (req, res) =>
     });
 });
 
-router.put('/plugins/:pluginId/settings', authenticateToken, async (req, res) => {
+router.put('/plugins/:pluginId/settings', authenticateToken, pluginSettingsLimiter, async (req, res) => {
     const { pluginId } = req.params;
     const manifest = settingsManifest(pluginId);
     if (!manifest) {
@@ -729,6 +824,70 @@ router.put('/plugins/:pluginId/settings', authenticateToken, async (req, res) =>
     res.json({ plugin: pluginId, settings: merged.value });
 });
 
+/** Express 5's wildcard as an array of decoded segments. */
+function splatSegments(splat) {
+    return Array.isArray(splat) ? splat : (splat ? [splat] : []);
+}
+
+// The files that ARE a managed slide — the same layout casePackage.js carries
+// (LIBRARY_FILE_RE there). `source/` originals and anything else in the asset
+// directory are not content.
+const LIBRARY_FILE_RE = /^(slide\.dzi|preview\.jpg|gross\.(jpe?g|png|webp)|slide_files\/\d{1,2}\/\d{1,6}_\d{1,6}\.(jpe?g|png|webp))$/;
+// An asset directory name. No dot, so an import's `.<id>.importing-…` staging
+// directory never matches.
+const LIBRARY_ASSET_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+// asset id → owning tenant (or null for a directory with no row). A deep-zoom
+// pan is hundreds of tile requests for one asset in seconds, so the row is
+// read once a minute, not once a tile. Bounded: the map is cleared when full.
+const LIBRARY_TENANT_TTL_MS = 60_000;
+const LIBRARY_TENANT_CACHE_MAX = 2000;
+const libraryTenants = new Map();
+
+async function libraryAssetTenant(pluginId, assetId) {
+    const key = `${pluginId}\u0000${assetId}`;
+    const hit = libraryTenants.get(key);
+    if (hit && hit.expires > Date.now()) return hit.tenant;
+    const row = await dbGet('SELECT tenant_id FROM plugin_assets WHERE id = ? AND plugin_id = ?', [assetId, pluginId]);
+    if (libraryTenants.size >= LIBRARY_TENANT_CACHE_MAX) libraryTenants.clear();
+    const tenant = row ? Number(row.tenant_id) : null;
+    libraryTenants.set(key, { tenant, expires: Date.now() + LIBRARY_TENANT_TTL_MS });
+    return tenant;
+}
+
+/** Test seam: forget the cached asset owners. */
+export function resetLibraryTenantCache() { libraryTenants.clear(); }
+
+/**
+ * Why a managed-library file must not be served to this caller, or null.
+ *
+ * A directory with no plugin_assets row is served as before (a library
+ * written before rows carried every asset, and test fixtures, have none);
+ * a row that names ANOTHER tenant is refused with the same 404 as a missing
+ * file, so an id probe learns nothing.
+ *
+ * @param {string} pluginId
+ * @param {string} local   `/<assetId>/<file…>`
+ * @param {number} tenant  the caller's tenant
+ * @returns {Promise<string|null>} a refusal code
+ */
+async function libraryRefusal(pluginId, local, tenant, reqLog) {
+    const [assetId, ...rest] = local.replace(/^\/+/, '').split('/');
+    if (!LIBRARY_ASSET_RE.test(assetId ?? '') || !LIBRARY_FILE_RE.test(rest.join('/'))) {
+        return 'plugin_remote_not_found';
+    }
+    let owner;
+    try {
+        owner = await libraryAssetTenant(pluginId, assetId);
+    } catch (err) {
+        // Fail closed: an unreadable owner must not serve another tenant's slide.
+        reqLog.error('library asset owner could not be read', { pluginId, error: err.message });
+        return 'plugin_remote_not_found';
+    }
+    if (owner !== null && owner !== Number(tenant)) return 'plugin_remote_not_found';
+    return null;
+}
+
 // The content proxy is a CATCH-ALL under /plugins/:pluginId/, so it lives on its
 // own router and routes.js mounts it LAST — after any plugin's own server-slot
 // routes. Mounted with the rest, a plugin's `GET /plugins/pathology/jobs/:id`
@@ -773,7 +932,17 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     });
     if (!origin && !starter && !library) return noContent();
 
-    const built = buildUpstreamPath(req.params.splat);
+    // A learner's references arrive SEALED (lib/pluginOpaqueRefs.js, F-25):
+    // `/_o/<token>…` names no finding. Opened here, before anything else
+    // looks at the path, so every check below — segment parsing, declared
+    // prefixes, the library's tenant, the read record — runs on the real path
+    // exactly as it would for an author's unsealed request.
+    const opened = openOpaqueSegments(pluginId, splatSegments(req.params.splat));
+    if (opened.opaque && !opened.segments) {
+        return res.status(404).json({ error: 'not found', code: 'plugin_remote_not_found' });
+    }
+    const segments = opened.opaque ? opened.segments : req.params.splat;
+    const built = buildUpstreamPath(segments);
     if (!built.ok) {
         return res.status(400).json({ error: `Invalid content path: ${built.reason}`, code: 'plugin_remote_bad_path' });
     }
@@ -788,7 +957,7 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
     // served: the course gate's "every slide opened" counts these reads, which
     // the browser cannot post for itself.
     if (isRecordedContentPath(built.path)) {
-        const read = { tenantId: tenantId(req), userId: req.user.id, pluginId, path: contentPath(req.params.splat) };
+        const read = { tenantId: tenantId(req), userId: req.user.id, pluginId, path: contentPath(segments) };
         res.on('finish', () => {
             if (res.statusCode !== 200) return;
             recordContentRead(read).catch((err) => log.warn('plugin content read not recorded', { pluginId, error: err.message }));
@@ -806,6 +975,14 @@ pluginContentProxy.get('/plugins/:pluginId/*splat', authenticateToken, requireSt
         const root = resolve(library);
         const local = built.path.slice('/library'.length);
         if (existsSync(resolve(join(root, normalize(local).replace(/^[/\\]+/, ''))))) {
+            // The managed library is per tenant (plugin_assets.tenant_id), and
+            // it holds more than the slide: `source/` keeps the original when
+            // imports.keepOriginal is on, and an import stages into a
+            // `.<id>.importing-…` directory beside the finished ones. Only the
+            // slide's own layout is content, and only the owning tenant's
+            // (security audit 2026-10-26, L4-06).
+            const refusal = await libraryRefusal(pluginId, local, tenantId(req), req.log || log);
+            if (refusal) return res.status(404).json({ error: 'not found', code: refusal });
             return serveLocalFile(res, root, local, manifest, pluginId);
         }
     }

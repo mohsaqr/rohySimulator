@@ -1,18 +1,18 @@
 import express from 'express';
 import multer from 'multer';
+import { randomUUID } from 'node:crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
     authenticateToken,
-    requireAdmin,
     requireEducator,
 } from '../middleware/auth.js';
 
 
 
 
-import { auditSuccess } from './_helpers.js';
+import { auditSuccess, requirePlatformAdmin } from './_helpers.js';
 import { logger } from '../logger.js';
 
 
@@ -47,8 +47,12 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => {
         // Sanitize filename - remove path traversal attempts
         const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + sanitizedName);
+        // A random UUID, not Math.random(): the name is the only thing that
+        // keeps one signed-in reader from guessing another course's file
+        // (security audit 2026-10-26, I-1). The timestamp stays in front so
+        // names still sort by upload time and keep the `<digits>-…` shape
+        // older readers and the case-package matcher expect.
+        cb(null, `${Date.now()}-${randomUUID()}-${sanitizedName}`);
     }
 });
 
@@ -277,7 +281,11 @@ router.post('/uploads/video', authenticateToken, requireEducator, videoUpload.si
 // two can never disagree about what a valid slot is.
 const BODY_IMAGE_TYPES = ['man-front', 'man-back', 'woman-front', 'woman-back'];
 
-router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
+// The silhouettes and the region map are INSTALL-wide files (one
+// public/uploads/bodymap/, one public/bodymap-regions.json, read by every
+// tenant's learners), so they are platform configuration: a tenant admin may
+// not overwrite what every other tenant sees (security audit 2026-10-26, L4-04).
+router.post('/upload-body-image', authenticateToken, requirePlatformAdmin, uploadBodyImage.single('image'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -315,6 +323,13 @@ router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyIma
         // other-extension file so it can't shadow the fresh upload.
         const staleTwin = path.join(bodymapDir, `${imageType}${ext === '.png' ? '.svg' : '.png'}`);
         if (fs.existsSync(staleTwin)) fs.unlinkSync(staleTwin);
+        auditSuccess(req, {
+            action: 'upload_body_image',
+            resourceType: 'body_image',
+            resourceId: imageType,
+            resourceName: `${imageType}${ext}`,
+            newValue: { size: req.file.size, mimetype: req.file.mimetype, ext },
+        });
         res.json({
             success: true,
             message: `Body image ${imageType} updated successfully`,
@@ -334,7 +349,7 @@ router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyIma
 // the uploaded override IS the reset — the reader falls through to the
 // default on its own. Both extensions go, because either one would keep
 // shadowing the default (2.9.37 report, bug 4).
-router.delete('/body-image/:type', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/body-image/:type', authenticateToken, requirePlatformAdmin, (req, res) => {
     const imageType = req.params.type;
     if (!BODY_IMAGE_TYPES.includes(imageType)) {
         return res.status(400).json({
@@ -411,9 +426,10 @@ function regionsProblem(regions) {
     return null;
 }
 
-// POST save body map regions (admin only — it rewrites a file every learner
-// downloads, so it is platform configuration, not course authoring)
-router.post('/bodymap-regions', authenticateToken, requireAdmin, (req, res) => {
+// POST save body map regions (platform admin only — it rewrites a file every
+// learner of every tenant downloads, so it is platform configuration, not
+// course authoring)
+router.post('/bodymap-regions', authenticateToken, requirePlatformAdmin, (req, res) => {
     const { regions } = req.body;
     if (!regions) {
         return res.status(400).json({ error: 'No regions data provided' });

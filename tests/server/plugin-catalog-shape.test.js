@@ -128,10 +128,17 @@ describe('GET /api/plugins/pacs/catalog — the manifest declares the shape', ()
         const { catalog } = await res.json();
         // Enough to resolve an archive baseline into openable series…
         expect(catalog.entries).toHaveLength(2);
+        // Since sec2 (F-25) the id and every reference are SEALED and the
+        // series are structural only — see sec2-e1-opaque-refs.test.js.
         expect(catalog.entries[0]).toEqual({
-            id: 'normal/ct_chest_adult_m',
+            id: expect.stringMatching(/^[0-9a-f]{64,}$/),
             studyId: 'ct_chest',
-            series: ARCHIVE.entries[0].series,
+            label: '',
+            series: [{
+                key: 's2', plane: 'axial', instances: 240,
+                ref: expect.stringMatching(/^remote:_o\/[0-9a-f]{64,}$/),
+                geometry: { rows: 512, columns: 512, plane: 'axial' },
+            }],
         });
         // …and nothing else. Not the labels, not the provenance, not the tags.
         const serialised = JSON.stringify(catalog);

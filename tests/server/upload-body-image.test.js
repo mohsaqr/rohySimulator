@@ -131,7 +131,8 @@ describe('POST /api/upload-body-image — writes into the served /uploads/bodyma
     });
 
     it('serves the uploaded file back at the returned url via the /uploads static mount', async () => {
-        const r = await fetch(`${server.baseUrl}/uploads/bodymap/woman-back.png`);
+        // Signed in: /uploads needs a sign-in since sec2 (L9).
+        const r = await fetch(`${server.baseUrl}/uploads/bodymap/woman-back.png`, { headers: { authorization: `Bearer ${token}` } });
         expect(r.status).toBe(200);
         expect(r.headers.get('content-type')).toContain('image/png');
         const body = Buffer.from(await r.arrayBuffer());

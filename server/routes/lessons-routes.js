@@ -10,6 +10,9 @@
 // AND manage-access to the lesson's cohort (owner | admin | teacher-member) via
 // cohortAccess.resolveManageableCohort — NOT _helpers.canManageOwnedResource.
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, requireEducator } from '../middleware/auth.js';
 import { tenantId, auditSuccess } from './_helpers.js';
@@ -1042,6 +1045,20 @@ router.put('/cases/:caseId/course-locks', authenticateToken, requireEducator, as
 // ===========================================================================
 
 // The live lessons whose body, video or sections refer to `url`.
+//
+// Still a scan of lesson HTML (there is no lesson_files index table yet, and
+// adding one is a migration plus a writer on every lesson save), so it is kept
+// off the hot path: the guard below answers 401/404 before it ever runs, and a
+// result is reused for LESSON_FILE_CACHE_TTL_MS. Bounded: the cache is cleared
+// when it reaches LESSON_FILE_CACHE_MAX names. What is cached is WHICH lessons
+// use a file — never whether a reader may open one; that is decided per reader
+// on every request. The cost is that a lesson locked or unlocked moments ago
+// can hold or release its files up to the TTL late (security audit
+// 2026-10-26, L4-07).
+const LESSON_FILE_CACHE_TTL_MS = 10_000;
+const LESSON_FILE_CACHE_MAX = 1000;
+const lessonFileCache = new Map();
+
 function lessonsReferencing(url) {
     return dbAdapter.all(
         `SELECT DISTINCT l.id, l.tenant_id, l.unlock_case_id, l.is_published
@@ -1053,36 +1070,95 @@ function lessonsReferencing(url) {
     );
 }
 
-// Uploaded files are served from /uploads without a sign-in, so a file
-// attached to a lesson locked behind a case could be opened by anyone who
-// had its address — a classmate's, say — before the case. Mounted in front of
-// the static /uploads, this holds such a file back exactly as the lesson is:
-// it is served only to a signed-in reader for whom one of the lessons that
-// uses it is open. A file no locked lesson uses, or one a published open
-// lesson already shows, is served as before.
+async function lessonsReferencingCached(url) {
+    const hit = lessonFileCache.get(url);
+    if (hit && hit.expires > Date.now()) return hit.lessons;
+    const lessons = await lessonsReferencing(url);
+    if (lessonFileCache.size >= LESSON_FILE_CACHE_MAX) lessonFileCache.clear();
+    lessonFileCache.set(url, { lessons, expires: Date.now() + LESSON_FILE_CACHE_TTL_MS });
+    return lessons;
+}
+
+/** Test seam: forget which lessons use which files. */
+export function resetLessonFileCache() { lessonFileCache.clear(); }
+
+// The one directory /uploads serves (server.js mounts express.static on it
+// right after this guard).
+const UPLOADS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public', 'uploads');
+
+// The only subdirectory an upload lives in: the body-map silhouettes
+// (uploads-routes.js /upload-body-image). Every other upload is a bare name.
+const UPLOAD_SUBDIRS = new Set(['bodymap']);
+
+/**
+ * The upload a request names, as `{ name, dir }`, or null when the path is not
+ * one an upload can have.
+ *
+ * Normalised BEFORE anything is decided. The guard used to look at the raw
+ * decoded path and wave anything containing `/` through as "not a lesson
+ * file", and serve-static then normalised `./x`, `%2e/x`, `y/../x` and
+ * `.%2fx` back to `x` — a locked lesson's file served to anyone who spelled
+ * its address with a dot segment (L4-02). Now a dot segment, an empty
+ * segment, a backslash or a NUL anywhere is refused outright: no real upload
+ * address contains one.
+ */
+export function uploadRequestPath(rawPath) {
+    let decoded;
+    try { decoded = decodeURIComponent(rawPath); } catch { return null; }
+    if (decoded.includes('\\') || decoded.includes('\0')) return null;
+    const segments = decoded.replace(/^\/+/, '').split('/');
+    if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) return null;
+    if (path.posix.normalize(`/${segments.join('/')}`) !== `/${segments.join('/')}`) return null;
+    if (segments.length === 1) return { name: segments[0], dir: null };
+    if (segments.length === 2 && UPLOAD_SUBDIRS.has(segments[0])) return { name: segments[1], dir: segments[0] };
+    return null;
+}
+
+/** Is this upload a regular file inside the live uploads directory (symlinks resolved)? */
+function liveUploadExists(target) {
+    try {
+        const file = path.join(UPLOADS_ROOT, ...[target.dir, target.name].filter(Boolean));
+        const real = fs.realpathSync(file);
+        const root = fs.realpathSync(UPLOADS_ROOT);
+        return real.startsWith(root + path.sep) && fs.statSync(real).isFile();
+    } catch {
+        return false;
+    }
+}
+
+// Mounted in front of the static /uploads (server.js). Three jobs, in order:
+//
+//   1. Sign-in. Uploads used to be served to anyone with the address, so a
+//      file's only protection was an unguessable name (L9). Every reader of an
+//      upload is a signed-in page on this origin (the lesson room, the exam
+//      room's body map, the case editors), and the auth cookie travels with
+//      same-origin <img>/<video>/<a> loads, so this costs a signed-in reader
+//      nothing.
+//   2. Only the LIVE directory answers. A file missing here is a 404 from
+//      the guard itself, never a fall-through: the static mount falls through
+//      to the SPA's frontend/ build, which snapshots public/uploads at build
+//      time, so a deleted or reset upload kept being served from that copy
+//      (L4-05). The existence check also comes before the lesson scan, so a
+//      flood of random names costs a stat, not a query.
+//   3. A file a lesson locked behind a case uses is held back exactly as the
+//      lesson is: served only to a reader for whom one of the lessons that
+//      uses it is open. A file no locked lesson uses, or one a published open
+//      lesson already shows, is served as before.
 export async function lessonFileGuard(req, res, next) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    let name;
-    try {
-        name = decodeURIComponent(req.path).replace(/^\/+/, '');
-    } catch {
-        return next();
-    }
-    if (!name || name.includes('/') || name.includes('\\')) return next();
-
-    let lessons;
-    try {
-        lessons = await lessonsReferencing(`/uploads/${name}`);
-    } catch (err) {
-        // Fail closed: an error here must not serve a locked lesson's file.
-        log.error('lesson file lookup failed', { error: err.message });
-        return res.status(500).json({ error: 'Failed to load the file' });
-    }
-    const locked = lessons.filter((lesson) => lesson.unlock_case_id);
-    if (!locked.length || lessons.some((lesson) => !lesson.unlock_case_id && lesson.is_published)) return next();
+    const target = uploadRequestPath(req.path);
+    if (!target) return res.status(404).json({ error: 'Not found' });
 
     return authenticateToken(req, res, async () => {
         try {
+            if (!liveUploadExists(target)) return res.status(404).json({ error: 'Not found' });
+            // Lesson files are bare names; a silhouette is never a lesson's.
+            if (target.dir) return next();
+
+            const lessons = await lessonsReferencingCached(`/uploads/${target.name}`);
+            const locked = lessons.filter((lesson) => lesson.unlock_case_id);
+            if (!locked.length || lessons.some((lesson) => !lesson.unlock_case_id && lesson.is_published)) return next();
+
             for (const lesson of locked) {
                 if (lesson.tenant_id !== tenantId(req)) continue;
                 const access = await lessonForRead(lesson.id, req);
@@ -1094,6 +1170,7 @@ export async function lessonFileGuard(req, res, next) {
             }
             return res.status(404).json({ error: 'Not found' });
         } catch (err) {
+            // Fail closed: an error here must not serve a locked lesson's file.
             (req.log || log).error('lesson file check failed', { error: err.message });
             return res.status(500).json({ error: 'Failed to load the file' });
         }

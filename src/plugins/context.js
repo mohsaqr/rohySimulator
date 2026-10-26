@@ -117,10 +117,22 @@ function scopeStore(store, { pluginId, sessionId }) {
  */
 export function resolveRemoteRef(uri, pluginId) {
     if (typeof uri !== 'string' || !uri.startsWith(REMOTE_SCHEME)) return uri;
-    const path = uri.slice(REMOTE_SCHEME.length).replace(/^\/+/, '');
+    const path = uri.slice(REMOTE_SCHEME.length);
+    // A reference is a path INSIDE this plugin's content, never an address of
+    // its own. encodeURIComponent leaves '.' and '..' as they are, so
+    // `remote:../../auth/verify` became `/api/plugins/x/../../auth/verify`,
+    // which the browser normalises to `/api/auth/verify` — case material
+    // choosing a cookie-authenticated GET to any /api route for every learner
+    // who opened it (security audit 2026-10-26, L5-04). A dot segment, a
+    // backslash, a scheme-relative form (`remote://host/…`) or a scheme
+    // (`remote:https:…`) resolves to nothing. One leading slash is tolerated,
+    // as it always was (`remote:/tiles/x.dzi`).
+    if (path.startsWith('//') || path.includes('\\')) return '';
+    const segments = path.split('/').filter(Boolean);
+    if (segments.length === 0 || segments.some((seg) => seg === '.' || seg === '..') || segments[0].includes(':')) return '';
     // Encoded per segment: a filename may legitimately contain a space or a
     // '+', and neither may be allowed to become a path separator.
-    const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    const encoded = segments.map(encodeURIComponent).join('/');
     // Through baseUrl(): these addresses go straight into <img src> and the
     // viewers' tile loaders, not through apiFetch, so they must carry the
     // base path an install is served under. A host at /rohy/ was handed
