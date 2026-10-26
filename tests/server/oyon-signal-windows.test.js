@@ -50,15 +50,32 @@ function tokenFor(dbPath, user, jti) {
 
 async function setOyonViewFlags(dbPath, { admin = 1, educator = 1, student = 1 } = {}) {
     const db = await openDb(dbPath);
+    // Every modality this suite stores is switched ON explicitly: since rc.89
+    // ingest enforces the tenant's per-modality switches (posture, voice, heart
+    // rate and respiration start off). The OFF path is covered by
+    // tests/server/sec2-d-oyon-ingest.test.js.
     await dbRun(db,
         `INSERT OR REPLACE INTO oyon_settings (
             tenant_id, emotion_capture_enabled,
             admin_emotion_view_enabled, educator_emotion_view_enabled, student_emotion_view_enabled,
             model_profile, sample_interval_ms, window_ms,
-            min_valid_frames, smoothing_alpha, min_hold_ms, min_switch_confidence
+            min_valid_frames, smoothing_alpha, min_hold_ms, min_switch_confidence,
+            posture_tracking_enabled, heart_rate_enabled, respiration_enabled, voice_enabled
          ) VALUES ('1', 1, ?, ?, ?,
-                   'hse-emotion-mtl', 500, 10000, 3, 0.28, 3000, 0.5)`,
+                   'hse-emotion-mtl', 500, 10000, 3, 0.28, 3000, 0.5,
+                   1, 1, 1, 1)`,
         [admin, educator, student]);
+    await dbClose(db);
+}
+
+// Heart rate and respiration are stored only for a learner who gave the
+// separate physiological consent (rc.89, F-04); the suites that exercise those
+// blocks record it for their student.
+async function grantPhysiologicalConsent(dbPath, userId) {
+    const db = await openDb(dbPath);
+    await dbRun(db,
+        'INSERT INTO user_preferences (user_id, tenant_id, onboarding_settings) VALUES (?, 1, ?)',
+        [userId, JSON.stringify({ oyon_consent: true, oyon_consent_physio: true })]);
     await dbClose(db);
 }
 
@@ -193,6 +210,7 @@ describe('Oyon 3 modality-scoped window ingest', () => {
         adminTok = await tokenFor(server.dbPath, { id: admin.id, username: 'osw_admin', role: 'admin', tenant_id: 1 }, 'sw-a');
 
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
+        await grantPhysiologicalConsent(server.dbPath, stu.id);
     });
 
     afterAll(async () => { if (server) await server.close(); });
@@ -475,6 +493,7 @@ describe('consent v2 gate for host-driven modalities', () => {
         await dbClose(db);
         studentTok = await tokenFor(server.dbPath, { id: stu.id, username: 'cg_stu', role: 'student', tenant_id: 1 }, 'cg-s');
         await setOyonViewFlags(server.dbPath, { admin: 1, educator: 1, student: 1 });
+        await grantPhysiologicalConsent(server.dbPath, stu.id);
     });
 
     afterAll(async () => { if (server) await server.close(); });
@@ -822,10 +841,22 @@ describe('session consent row is server-authoritative', () => {
         expect(body.signals_consent_blocked).toBe(1);
     });
 
-    it('records camera-only for a learner who has not said yes', async () => {
+    // rc.89 (L5-03): a grant is refused outright for a learner whose account
+    // has not said yes — it used to be recorded as camera-only consent, which
+    // let a previous user's browser flag open capture for the next person.
+    it('refuses a grant for a learner who has not said yes', async () => {
         await setPrefs({ oyon_consent: false });
         const sid = await newSession();
-        await postConsent(sid, { accepted_version: 'oyon-consent-v2' });
-        expect(await recordedVersion(sid)).toBe('oyon-consent-v1');
+        const res = await fetch(`${server.baseUrl}/api/addons/oyon/consent`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: String(sid), consent_granted: true, accepted_version: 'oyon-consent-v2' }),
+        });
+        expect(res.status).toBe(403);
+        expect((await res.json()).code).toBe('oyon_consent_not_on_record');
+        const db = await openDb(server.dbPath);
+        const row = await dbGet(db, 'SELECT COUNT(*) AS n FROM oyon_emotion_consents WHERE session_id = ?', [String(sid)]);
+        await dbClose(db);
+        expect(Number(row.n)).toBe(0);
     });
 });

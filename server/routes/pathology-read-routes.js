@@ -38,6 +38,9 @@ import { disabledRooms } from '../shared/caseRooms.js';
 import { logger } from '../logger.js';
 import { readCaseDocument } from '../../src/components/pathology/hostDocument.js';
 import { assessPackedRead } from '../../src/components/pathology/readFeedback.js';
+import { slideContentPaths } from '../services/courseGate.js';
+import { contentReadPaths } from '../services/pluginContentReads.js';
+import { timeMs } from '../shared/time.js';
 
 const router = express.Router();
 const log = logger('routes-pathology-reads');
@@ -69,6 +72,57 @@ async function sessionCaseConfig(session, tenant) {
     return parseJson(row?.config);
 }
 
+/**
+ * How far the server can vouch for a read (security audit 2026-10-26, L8-17).
+ *
+ * The read — and so its score — is the viewport track the learner's browser
+ * packed; nothing in it can be checked against the rubric without trusting
+ * it. What the server CAN check is what it saw happen:
+ *   - every slide the read dwells on whose image goes through rohy's content
+ *     proxy must have been served to this learner (plugin_content_reads,
+ *     the same evidence the course gate uses);
+ *   - the read cannot span more time than the session has existed (a minute
+ *     of slack for clocks).
+ * Slides served from elsewhere cannot be checked and are listed as such. The
+ * verdict is stored with the result and shown to educators; it does not
+ * change what the learner is told. `earlier_attempts` counts this learner's
+ * assessments of the same activity in OTHER sessions of the case — a new
+ * session is a fresh attempt, which an educator reading the score should know.
+ */
+async function verifyRead({ read, config, session, tenant, activityId }) {
+    const slides = Array.isArray(read?.slides) ? read.slides : [];
+    const samples = Array.isArray(read?.samples) ? read.samples : [];
+    const dwelt = [...new Set(samples.map((tuple) => slides[tuple?.[0]]).filter((id) => typeof id === 'string'))];
+    const pathsBySlide = slideContentPaths(config);
+    const served = await contentReadPaths({ tenantId: tenant, userId: session.user_id, pluginId: PLUGIN_ID });
+    const unservedSlides = [];
+    const uncheckableSlides = [];
+    for (const slideId of dwelt) {
+        const paths = pathsBySlide.get(slideId) ?? [];
+        if (paths.length === 0) uncheckableSlides.push(slideId);
+        else if (!paths.some((path) => served.has(path))) unservedSlides.push(slideId);
+    }
+    const times = samples.map((tuple) => Number(tuple?.[1])).filter(Number.isFinite);
+    const spanMs = times.length ? Math.max(...times) - Math.min(...times) : 0;
+    const startedMs = timeMs(session.start_time);
+    const sessionAgeMs = startedMs == null ? null : Math.max(0, Date.now() - startedMs);
+    const longerThanSession = sessionAgeMs != null && spanMs > sessionAgeMs + 60_000;
+    const earlier = await dbAdapter.get(
+        `SELECT COUNT(*) AS n FROM pathology_read_assessments
+          WHERE tenant_id = ? AND user_id = ? AND case_id IS ? AND activity_id = ? AND session_id <> ?`,
+        [tenant, session.user_id, session.case_id, activityId, session.id]
+    );
+    return {
+        basis: 'client_track',
+        verified: unservedSlides.length === 0 && !longerThanSession,
+        unserved_slides: unservedSlides,
+        uncheckable_slides: uncheckableSlides,
+        span_ms: spanMs,
+        session_age_ms: sessionAgeMs,
+        earlier_attempts: Number(earlier?.n) || 0,
+    };
+}
+
 /** The kept assessment for this session and activity, as the learner may see it. */
 async function keptFeedback(tenant, sessionId, activityId) {
     const row = await dbAdapter.get(
@@ -98,7 +152,7 @@ router.post('/sessions/:sessionId/pathology-reads', authenticateToken, async (re
 
         const tenant = tenantId(req);
         const session = await dbAdapter.get(
-            'SELECT id, user_id, case_id, case_snapshot FROM sessions WHERE id = ? AND tenant_id = ?',
+            'SELECT id, user_id, case_id, case_snapshot, start_time FROM sessions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
             [sessionId, tenant]
         );
         if (!session) return res.status(404).json({ error: 'Session not found', code: 'pathology_read_no_session' });
@@ -141,6 +195,14 @@ router.post('/sessions/:sessionId/pathology-reads', authenticateToken, async (re
             throw err;
         }
 
+        const verification = await verifyRead({ read, config, session, tenant, activityId: activity.activityId });
+        if (!verification.verified) {
+            (req.log || log).warn('pathology read not verifiable against what the server served', {
+                session_id: sessionId, activity_id: activity.activityId,
+                unserved_slides: verification.unserved_slides.length, span_ms: verification.span_ms,
+            });
+        }
+
         const now = new Date().toISOString();
         const inserted = await dbAdapter.run(
             `INSERT INTO pathology_read_assessments
@@ -149,7 +211,7 @@ router.post('/sessions/:sessionId/pathology-reads', authenticateToken, async (re
              ON CONFLICT (session_id, activity_id) DO NOTHING`,
             [tenant, sessionId, session.user_id, session.case_id, activity.activityId, reportId,
                 assessed.sampleCount, assessed.scored.aggregate.readScore ?? null,
-                JSON.stringify(assessed.scored), JSON.stringify(assessed.feedback), now]
+                JSON.stringify({ ...assessed.scored, verification }), JSON.stringify(assessed.feedback), now]
         );
         // Two tabs submitting at once: the other one's insert won. Its read is
         // the kept one, and this request returns that, like any later submit.
@@ -168,6 +230,7 @@ router.post('/sessions/:sessionId/pathology-reads', authenticateToken, async (re
                 samples: assessed.sampleCount,
                 roiReached: assessed.feedback.roiReached,
                 roiTotal: assessed.feedback.roiTotal,
+                verified: verification.verified,
             },
         });
         (req.log || log).info('pathology read assessed', {
@@ -201,6 +264,9 @@ router.get('/sessions/:sessionId/pathology-reads', authenticateToken, requireEdu
                 sampleCount: row.sample_count,
                 readScore: row.read_score,
                 result: parseJson(row.result),
+                // How far the server could check the read (verifyRead); null
+                // for assessments kept before rc.89.
+                verification: parseJson(row.result)?.verification ?? null,
                 feedback: parseJson(row.feedback),
                 createdAt: row.created_at,
             })),

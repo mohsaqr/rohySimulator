@@ -6,6 +6,7 @@
 // Ownership: a survey is managed by its creator or an admin (createdById).
 // Attaching to a cohort additionally requires manage-access to that cohort.
 // Students may submit to a published survey attached to a cohort they belong to.
+import crypto from 'node:crypto';
 import express from 'express';
 import dbAdapter from '../dbAdapter.js';
 import { authenticateToken, requireEducator } from '../middleware/auth.js';
@@ -26,6 +27,71 @@ const fail = (res, status, error, code) => res.status(status).json(
 );
 
 const QUESTION_TYPES = new Set(['single_choice', 'multiple_choice', 'free_text']);
+
+/**
+ * The key that makes one person's response to a survey unique (migration
+ * 0073, `survey_responses.dedupe_key`, partial UNIQUE index with survey_id).
+ *
+ *   non-anonymous  `u:<user id>:c:<cohort id or ->`  — the per (survey, user,
+ *                  cohort) rule the route always had, now held by the index
+ *                  instead of a check-then-insert two requests could both pass;
+ *   anonymous      `a:<keyed digest>` of survey, user and cohort — so one
+ *                  person cannot submit an anonymous survey without limit,
+ *                  while the row still carries no user id. The digest is keyed
+ *                  (SURVEY_DEDUPE_KEY, else JWT_SECRET), so the survey's author
+ *                  cannot recompute it from the user list; an operator holding
+ *                  the key could, which is the same trust the operator already
+ *                  has over the request log.
+ */
+function surveyDedupeKey(survey, userId, cohortId) {
+    const cohortPart = Number.isInteger(cohortId) ? String(cohortId) : '-';
+    if (!survey.is_anonymous) return `u:${userId}:c:${cohortPart}`;
+    const key = process.env.SURVEY_DEDUPE_KEY || process.env.JWT_SECRET || 'rohy-survey-dedupe';
+    const digest = crypto.createHmac('sha256', key).update(`${survey.id}:${userId}:${cohortPart}`).digest('hex');
+    return `a:${digest.slice(0, 40)}`;
+}
+
+/**
+ * An anonymous response's completion time, to the hour (security audit
+ * 2026-10-26, L7-15): to the second, it could be matched against the lesson
+ * progress and learning events an author can already read. New anonymous rows
+ * are stored this way; this applies the same cut to rows stored before.
+ */
+function coarseCompletedAt(value) {
+    if (value == null) return value;
+    const text = String(value);
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2})/.exec(text);
+    return m ? `${m[1]} ${m[2]}:00:00` : text;
+}
+
+/** A CSV cell, quoted, with a leading formula character neutralised (L7-14). */
+function csvCell(value) {
+    let text = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Retry a short write transaction that lost the database lock. Concurrent
+ * isolatedTransaction() callers can get SQLITE_BUSY at BEGIN IMMEDIATE (measured
+ * 2026-10-26: 4 of 6 simultaneous submits) instead of waiting; nothing ran, so
+ * running it again is safe. The retried submit then meets the unique index and
+ * answers 409 like any second submit.
+ */
+async function withBusyRetry(work, delays = [20, 50, 100, 200, 400]) {
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await work();
+        } catch (err) {
+            if (err?.code !== 'SQLITE_BUSY' || attempt >= delays.length) throw err;
+            await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        }
+    }
+}
+
+function isUniqueViolation(err) {
+    return err?.code === 'SQLITE_CONSTRAINT' && /UNIQUE/i.test(err.message || '');
+}
 
 function safeJsonArray(str) {
     if (!str) return [];
@@ -490,16 +556,22 @@ router.post('/surveys/:id/submit', authenticateToken, async (req, res) => {
             }
         }
 
-        // Dedupe non-anonymous responses per (survey, user, cohort).
-        if (!survey.is_anonymous) {
-            const dup = await dbAdapter.get(
-                `SELECT 1 FROM survey_responses
-                  WHERE survey_id = ? AND user_id = ?
-                    AND (cohort_id IS ? OR cohort_id = ?) LIMIT 1`,
-                [surveyId, req.user.id, cohortId, cohortId]
-            );
-            if (dup) return fail(res, 409, 'You have already responded');
-        }
+        // One response per person per (survey, cohort), anonymous or not. The
+        // check answers the common case early; the UNIQUE index on
+        // (survey_id, dedupe_key) is what holds when two submits race
+        // (security audit 2026-10-26, F-37/F-39). The legacy user_id check
+        // still covers duplicates stored before migration 0073 keyed them.
+        const dedupeKey = surveyDedupeKey(survey, req.user.id, Number.isInteger(cohortId) ? cohortId : null);
+        const dup = await dbAdapter.get(
+            survey.is_anonymous
+                ? `SELECT 1 FROM survey_responses WHERE survey_id = ? AND dedupe_key = ? LIMIT 1`
+                : `SELECT 1 FROM survey_responses
+                    WHERE survey_id = ? AND (dedupe_key = ? OR (user_id = ? AND (cohort_id IS ? OR cohort_id = ?))) LIMIT 1`,
+            survey.is_anonymous
+                ? [surveyId, dedupeKey]
+                : [surveyId, dedupeKey, req.user.id, cohortId, cohortId]
+        );
+        if (dup) return fail(res, 409, 'You have already responded');
 
         // Every answer must be one the author offered (single choice: one of
         // the options; multiple choice: distinct options; text: bounded), and
@@ -509,22 +581,34 @@ router.post('/surveys/:id/submit', authenticateToken, async (req, res) => {
         const { answers, problem } = validateSurveyAnswers(questions, b.answers);
         if (problem) return fail(res, 400, problem.error, problem.code);
 
-        const responseId = await dbAdapter.transaction(async () => {
-            const { lastID } = await dbAdapter.run(
-                `INSERT INTO survey_responses (survey_id, user_id, cohort_id, context, context_id)
-                 VALUES (?,?,?,?,?)`,
-                [surveyId, survey.is_anonymous ? null : req.user.id, cohortId,
-                 b.context ?? (cohortId ? 'module' : 'standalone'),
-                 Number.isInteger(b.contextId) ? b.contextId : null]
-            );
-            for (const a of answers) {
-                await dbAdapter.run(
-                    `INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES (?,?,?)`,
-                    [lastID, a.questionId, a.value]
+        // On a connection of its own (dbAdapter.isolatedTransaction): the
+        // shared-handle transaction() let another request's writes join this
+        // one, and a ROLLBACK here undo them after they had answered "saved"
+        // (security audit 2026-10-26, L7-11 / L8-16). An anonymous response is
+        // stamped to the hour only (L7-15).
+        let responseId;
+        try {
+            responseId = await withBusyRetry(() => dbAdapter.isolatedTransaction(async (tx) => {
+                const { lastID } = await tx.run(
+                    `INSERT INTO survey_responses (survey_id, user_id, cohort_id, context, context_id, dedupe_key, completed_at)
+                     VALUES (?,?,?,?,?,?, ${survey.is_anonymous ? "strftime('%Y-%m-%d %H:00:00','now')" : 'CURRENT_TIMESTAMP'})`,
+                    [surveyId, survey.is_anonymous ? null : req.user.id, cohortId,
+                     b.context ?? (cohortId ? 'module' : 'standalone'),
+                     Number.isInteger(b.contextId) ? b.contextId : null,
+                     dedupeKey]
                 );
-            }
-            return lastID;
-        });
+                for (const a of answers) {
+                    await tx.run(
+                        `INSERT INTO survey_answers (response_id, question_id, answer_value) VALUES (?,?,?)`,
+                        [lastID, a.questionId, a.value]
+                    );
+                }
+                return lastID;
+            }));
+        } catch (err) {
+            if (isUniqueViolation(err)) return fail(res, 409, 'You have already responded');
+            throw err;
+        }
         return ok(res, { id: responseId }, 201);
     } catch (err) {
         log.error('submit survey failed', { error: err.message });
@@ -537,6 +621,19 @@ router.get('/surveys/:id/my-response', authenticateToken, async (req, res) => {
     try {
         const surveyId = Number(req.params.id);
         const cohortId = req.query.moduleId != null ? Number(req.query.moduleId) : null;
+        const survey = await dbAdapter.get(
+            `SELECT id, is_anonymous FROM surveys WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+            [surveyId, tenantId(req)]
+        );
+        // An anonymous response carries no user id; its dedupe key is how the
+        // learner's own "already answered" is known (it used to read false
+        // forever, inviting a second submission).
+        if (survey?.is_anonymous) {
+            const row = await dbAdapter.get(
+                `SELECT 1 FROM survey_responses WHERE survey_id = ? AND dedupe_key = ? LIMIT 1`,
+                [surveyId, surveyDedupeKey(survey, req.user.id, Number.isInteger(cohortId) ? cohortId : null)]);
+            return ok(res, { completed: !!row });
+        }
         const row = await dbAdapter.get(
             `SELECT 1 FROM survey_responses
               WHERE survey_id = ? AND user_id = ?
@@ -627,7 +724,7 @@ router.get('/surveys/:id/responses', authenticateToken, requireEducator, async (
             const u = anon ? null : usersById.get(r.user_id);
             return {
                 id: r.id,
-                completedAt: r.completed_at,
+                completedAt: anon ? coarseCompletedAt(r.completed_at) : r.completed_at,
                 user: u ? { displayName: u.username, email: u.email } : null,
                 answers: (answersByResp.get(r.id) || []).map((a) => {
                     let answerValue = a.answer_value;
@@ -667,7 +764,7 @@ router.get('/surveys/:id/export', authenticateToken, requireEducator, async (req
         const cohortId = req.query.moduleId != null ? Number(req.query.moduleId) : null;
         const { questions, responses, answers } = await collectResponses(surveyId, cohortId);
         const anon = !!survey.is_anonymous;
-        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const esc = csvCell;
         const header = [...(anon ? [] : ['user_id']), 'completed_at', ...questions.map((q) => q.question_text)];
         const answersByResp = new Map();
         for (const a of answers) {
@@ -679,7 +776,7 @@ router.get('/surveys/:id/export', authenticateToken, requireEducator, async (req
             const amap = answersByResp.get(r.id) || {};
             const cells = [
                 ...(anon ? [] : [r.user_id]),
-                r.completed_at,
+                anon ? coarseCompletedAt(r.completed_at) : r.completed_at,
                 ...questions.map((q) => {
                     const raw = amap[q.id];
                     if (raw == null) return '';

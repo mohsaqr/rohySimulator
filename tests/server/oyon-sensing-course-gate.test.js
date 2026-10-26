@@ -100,6 +100,10 @@ describe('Oyon course gate', () => {
             // tenant that does not enable it.
             await enrollInSensingCourse(db, stuId, { tenant: 2, name: 'foreign-course' });
             await enrollInSensingCourse(db, stuId, { settings: { oyon_sensing_enabled: false }, name: 'plain-course' });
+            // The account's own consent record: since rc.89 a consent GRANT is
+            // refused unless the account has said yes (L5-03).
+            await run(db, `INSERT INTO user_preferences (user_id, tenant_id, onboarding_settings) VALUES (?, 1, ?)`,
+                [stuId, JSON.stringify({ oyon_consent: true, oyon_consent_version: 'oyon-consent-v3' })]);
         });
         stuTok = await mintToken(server.dbPath, { id: stuId, username: 'gate_stu', role: 'student', tenant_id: 1 }, SECRET, { jti: 'gs' });
         eduTok = await mintToken(server.dbPath, { id: eduId, username: 'gate_edu', role: 'educator', tenant_id: 1 }, SECRET, { jti: 'ge' });

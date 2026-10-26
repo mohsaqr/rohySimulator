@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
-import { backfillAuditChain, ensureAuditChainColumns } from './audit-chain.js';
+import { backfillAuditChain, ensureAuditChainColumns, forgetAuditChainSchema } from './audit-chain.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -275,6 +275,10 @@ export async function runMigrations(db, options = {}) {
 
     if (appliedNow.length === 0) {
         migrationLog.info('database schema is current');
+    } else {
+        // A migration may have changed system_audit_log (0073 adds
+        // hash_version); the audit chain re-reads its shape on the next append.
+        forgetAuditChainSchema(db);
     }
 
     return {
@@ -283,4 +287,113 @@ export async function runMigrations(db, options = {}) {
         baselineStamped,
         dryRun: false
     };
+}
+
+// ---------------------------------------------------------------------------
+// Pre-migration backup — shared by the boot path (server/db.js
+// runDbMigrations) and the standalone CLI (scripts/migrate.js), which until
+// rc.89 called runMigrations directly and took no backup at all (security
+// audit 2026-10-26, L7-19).
+// ---------------------------------------------------------------------------
+
+// How many pre-migration snapshots to keep beside the database. Every release
+// that ships a migration adds one full copy of the database; left alone they
+// accumulate until the disk is full (which then breaks the next backup, and
+// the next migration with it). Five covers rolling back across several
+// releases; the operator's real backups are scripts/rohy-backup.sh.
+export const MIGRATION_BACKUPS_KEEP = 5;
+
+/**
+ * Remove all but the newest `keep` `<db>.bak.*` snapshots beside `databasePath`.
+ *
+ * Newest by modification time, with the name as the tie-break so the order is
+ * deterministic. Returns the paths removed; a listing or unlink failure is
+ * reported, not thrown — pruning is housekeeping, never a reason to fail a boot.
+ *
+ * @param {string} databasePath
+ * @param {object} [opts]
+ * @param {number} [opts.keep=MIGRATION_BACKUPS_KEEP]
+ * @param {object} [opts.log]
+ * @returns {Promise<string[]>} the files that were removed
+ */
+export async function pruneMigrationBackups(databasePath, { keep = MIGRATION_BACKUPS_KEEP, log = migrationLog } = {}) {
+    const dir = path.dirname(databasePath);
+    const prefix = `${path.basename(databasePath)}.bak.`;
+    let names;
+    try {
+        names = (await fs.promises.readdir(dir)).filter((name) => name.startsWith(prefix));
+    } catch (err) {
+        log.warn('pre-migration backup prune skipped', { dir, error: err.message });
+        return [];
+    }
+    const stats = (await Promise.all(names.map(async (name) => {
+        const file = path.join(dir, name);
+        try {
+            const stat = await fs.promises.stat(file);
+            return stat.isFile() ? { file, mtimeMs: stat.mtimeMs, name } : null;
+        } catch (err) {
+            log.warn('pre-migration backup not inspected', { backup_path: file, error: err.message });
+            return null;
+        }
+    }))).filter(Boolean);
+    stats.sort((a, b) => (b.mtimeMs - a.mtimeMs) || b.name.localeCompare(a.name));
+    const stale = stats.slice(keep);
+    const removed = [];
+    for (const { file } of stale) {
+        try {
+            await fs.promises.unlink(file);
+            removed.push(file);
+        } catch (err) {
+            log.warn('pre-migration backup not removed', { backup_path: file, error: err.message });
+        }
+    }
+    if (removed.length) log.info('pre-migration backups pruned', { kept: keep, removed });
+    return removed;
+}
+
+/**
+ * Snapshot the database file before any pending migration runs.
+ *
+ * Copies `databasePath` to `<databasePath>.bak.<ts>.<target version>` when at
+ * least one migration on disk is not recorded in `schema_migrations` (a missing
+ * table means first boot: everything is pending). Skipped for `:memory:` and
+ * when ROHY_BACKUP_BEFORE_MIGRATE=0 (throwaway CI/test databases). The copy is
+ * created owner-only (0600) whatever the umask. A failure is logged and
+ * reported, never thrown: refusing to migrate because a backup failed would
+ * brick upgrades on read-only or full disks, and the checksum guard still
+ * catches a corrupted run.
+ *
+ * @param {import('sqlite3').Database} db       open handle on databasePath
+ * @param {string} databasePath
+ * @param {{migrationsDir?: string, log?: object}} [opts]
+ * @returns {Promise<{tookBackup: boolean, backupPath: string|null, pending: number}>}
+ */
+export async function backupBeforeMigrate(db, databasePath, { migrationsDir = defaultMigrationsDir, log = migrationLog } = {}) {
+    const none = { tookBackup: false, backupPath: null, pending: 0 };
+    if (process.env.ROHY_BACKUP_BEFORE_MIGRATE === '0' || !databasePath || databasePath === ':memory:') return none;
+    try {
+        const migrations = discoverMigrations(migrationsDir);
+        const applied = await new Promise((resolve) => {
+            db.all('SELECT version FROM schema_migrations', [], (err, rows) => {
+                if (err) return resolve(new Set());  // table not yet created → first boot
+                resolve(new Set((rows || []).map((r) => r.version)));
+            });
+        });
+        const willApply = migrations.filter((m) => !applied.has(m.version));
+        if (willApply.length === 0 || !fs.existsSync(databasePath)) return { ...none, pending: willApply.length };
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const targetVersion = willApply[willApply.length - 1].version;
+        const backupPath = `${databasePath}.bak.${ts}.${targetVersion}`;
+        await fs.promises.copyFile(databasePath, backupPath);
+        await fs.promises.chmod(backupPath, 0o600);
+        log.info('pre-migration backup created', {
+            backup_path: backupPath,
+            pending_migrations: willApply.length,
+            target_version: targetVersion,
+        });
+        return { tookBackup: true, backupPath, pending: willApply.length };
+    } catch (err) {
+        log.warn('pre-migration backup failed', { error: err.message });
+        return none;
+    }
 }

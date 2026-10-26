@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runMigrations } from './migrationRunner.js';
+import { runMigrations, backupBeforeMigrate, pruneMigrationBackups, MIGRATION_BACKUPS_KEEP } from './migrationRunner.js';
 import { seedTreatmentEffects } from '../scripts/seed-treatment-effects.js';
 import { seedCuratedMedications } from '../scripts/seed-curated-medications.js';
 import { seedLabTestsFromJson } from '../scripts/seed-lab-tests-from-json.js';
@@ -58,6 +58,7 @@ const db = new sqlite.Database(dbPath, (err) => {
 
 async function bootDb() {
     await runDbMigrations();
+    await reportForeignKeys();
     if (process.env.ROHY_NO_AUTO_SEED === '1') {
         dbLog.info('auto seed skipped', { reason: 'ROHY_NO_AUTO_SEED=1' });
     } else {
@@ -105,6 +106,32 @@ async function enableWal() {
         // A filesystem without shared-memory support (some network mounts)
         // refuses WAL. The database still works, in the mode it reports.
         dbLog.warn('sqlite WAL mode unavailable', { db_path: dbPath, journal_mode: mode || null });
+    }
+}
+
+// Foreign keys (security audit 2026-10-26, L7-13) — REPORTED, not changed.
+// SQLite's default is OFF per connection, and the only statements that switch
+// it on are the trailing `PRAGMA foreign_keys=ON;` in migrations 0002–0032, so
+// the first process on a fresh database enforces foreign keys and every later
+// boot does not. Turning enforcement on everywhere was tried in this pass and
+// backed out: 40+ tables reference users(id) without ON DELETE, user deletion
+// and several fixtures rely on it being off, and the isolated-transaction
+// connections (dbAdapter.isolatedTransaction) open with it off. Until the
+// delete paths clean every dependant, the mode is logged at boot so the
+// difference between a first and a later process is visible, not silent.
+async function reportForeignKeys() {
+    try {
+        const row = await new Promise((resolve, reject) => {
+            db.get('PRAGMA foreign_keys', (err, result) => (err ? reject(err) : resolve(result)));
+        });
+        if (Number(row?.foreign_keys) !== 1) {
+            dbLog.warn('sqlite foreign key enforcement is off on the shared connection', {
+                db_path: dbPath,
+                note: 'expected on later boots; see server/db.js reportForeignKeys (L7-13, deferred)',
+            });
+        }
+    } catch (err) {
+        dbLog.warn('sqlite foreign key mode unreadable', { db_path: dbPath, error: err.message });
     }
 }
 
@@ -747,110 +774,22 @@ async function seedAvatarDefaults() {
     }
 }
 
-// How many pre-migration snapshots to keep beside the database. Every release
-// that ships a migration adds one full copy of the database; left alone they
-// accumulate until the disk is full (which then breaks the next backup, and
-// the next migration with it). Five covers rolling back across several
-// releases; the operator's real backups are scripts/rohy-backup.sh.
-export const MIGRATION_BACKUPS_KEEP = 5;
-
-/**
- * Remove all but the newest `keep` `<db>.bak.*` snapshots beside `databasePath`.
- *
- * Newest by modification time, with the name as the tie-break so the order is
- * deterministic. Returns the paths removed; a listing or unlink failure is
- * reported, not thrown — pruning is housekeeping, never a reason to fail a boot.
- *
- * @param {string} databasePath
- * @param {object} [opts]
- * @param {number} [opts.keep=MIGRATION_BACKUPS_KEEP]
- * @param {object} [opts.log=dbLog]
- * @returns {Promise<string[]>} the files that were removed
- */
-export async function pruneMigrationBackups(databasePath, { keep = MIGRATION_BACKUPS_KEEP, log = dbLog } = {}) {
-    const fs = await import('node:fs/promises');
-    const dir = path.dirname(databasePath);
-    const prefix = `${path.basename(databasePath)}.bak.`;
-    let names;
-    try {
-        names = (await fs.readdir(dir)).filter((name) => name.startsWith(prefix));
-    } catch (err) {
-        log.warn('pre-migration backup prune skipped', { dir, error: err.message });
-        return [];
-    }
-    const stats = (await Promise.all(names.map(async (name) => {
-        const file = path.join(dir, name);
-        try {
-            const stat = await fs.stat(file);
-            return stat.isFile() ? { file, mtimeMs: stat.mtimeMs, name } : null;
-        } catch (err) {
-            log.warn('pre-migration backup not inspected', { backup_path: file, error: err.message });
-            return null;
-        }
-    }))).filter(Boolean);
-    stats.sort((a, b) => (b.mtimeMs - a.mtimeMs) || b.name.localeCompare(a.name));
-    const stale = stats.slice(keep);
-    const removed = [];
-    for (const { file } of stale) {
-        try {
-            await fs.unlink(file);
-            removed.push(file);
-        } catch (err) {
-            log.warn('pre-migration backup not removed', { backup_path: file, error: err.message });
-        }
-    }
-    if (removed.length) log.info('pre-migration backups pruned', { kept: keep, removed });
-    return removed;
-}
+// The pre-migration snapshot and its pruning live in migrationRunner.js, so
+// the standalone CLI (scripts/migrate.js) takes the same backup the boot path
+// does (security audit 2026-10-26, L7-19). Re-exported here for existing
+// importers.
+export { pruneMigrationBackups, MIGRATION_BACKUPS_KEEP };
 
 // Migrations only — safe to run on every boot. Idempotent.
 //
 // Before running any migration that hasn't been applied yet, snapshot the
-// sqlite file to a sibling .bak.<timestamp>.<version> file. Cheap insurance:
-// if the migration corrupts data we can roll back by copying the snapshot
-// back over database.sqlite. Snapshot is skipped for in-memory DBs and when
-// ROHY_BACKUP_BEFORE_MIGRATE=0 (CI/test where DBs are throwaway anyway).
-// After the batch applies cleanly, older snapshots are pruned (see
-// pruneMigrationBackups) — the one just taken is always the newest, so it
-// survives.
+// sqlite file to a sibling .bak.<timestamp>.<version> file (see
+// backupBeforeMigrate). After the batch applies cleanly, older snapshots are
+// pruned — the one just taken is always the newest, so it survives.
 export async function runDbMigrations() {
-    let tookBackup = false;
-    if (process.env.ROHY_BACKUP_BEFORE_MIGRATE !== '0' && dbPath !== ':memory:') {
-        try {
-            // Compare on-disk migration files vs schema_migrations to decide
-            // if we'd apply anything. If yes, snapshot the DB first.
-            const { discoverMigrations } = await import('./migrationRunner.js');
-            const all = discoverMigrations();
-            const applied = await new Promise((resolve) => {
-                db.all('SELECT version FROM schema_migrations', [], (err, rows) => {
-                    if (err) return resolve(new Set());  // table not yet created → first boot
-                    resolve(new Set((rows || []).map(r => r.version)));
-                });
-            });
-            const willApply = all.filter(m => !applied.has(m.version));
-            if (willApply.length > 0) {
-                const ts = new Date().toISOString().replace(/[:.]/g, '-');
-                const targetVersion = willApply[willApply.length - 1].version;
-                const backupPath = `${dbPath}.bak.${ts}.${targetVersion}`;
-                const fs = await import('node:fs/promises');
-                await fs.copyFile(dbPath, backupPath);
-                tookBackup = true;
-                dbLog.info('pre-migration backup created', {
-                    backup_path: backupPath,
-                    pending_migrations: willApply.length,
-                    target_version: targetVersion,
-                });
-            }
-        } catch (err) {
-            // Backup failure is non-fatal — we still attempt migrations
-            // (the existing checksum guard catches mid-run corruption,
-            // and refusing to migrate when backup fails would brick
-            // upgrades on read-only filesystems / disk-full scenarios).
-            dbLog.warn('pre-migration backup failed', { error: err.message });
-        }
-    }
+    const { tookBackup } = await backupBeforeMigrate(db, dbPath, { log: dbLog });
     await runMigrations(db);
-    if (tookBackup) await pruneMigrationBackups(dbPath);
+    if (tookBackup) await pruneMigrationBackups(dbPath, { log: dbLog });
 }
 
 

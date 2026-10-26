@@ -185,6 +185,9 @@ export function compareTime(a, b) {
     return 0;
 }
 
+/** The longest `offset_ms` anchorToServer accepts (ten minutes). */
+export const ANCHOR_MAX_OFFSET_MS = 10 * 60 * 1000;
+
 /**
  * Anchor a client-reported instant to the server's clock.
  *
@@ -200,13 +203,24 @@ export function compareTime(a, b) {
  * throwing: telemetry that cannot be placed perfectly is still worth more
  * than telemetry dropped.
  *
+ * Bounded (security audit 2026-10-26, L8-11). The cap used to be 24 hours, so
+ * a client could backdate any event by up to a day — before its own session
+ * began, into another case's timeline. The client's queue lives in memory and
+ * flushes within seconds, so ten minutes covers any real delay; an offset past
+ * it is treated as absurd. And an event never lands before `notBeforeMs` (the
+ * session's start, when the caller knows it): it is clamped to that instant.
+ *
  * @param {number} receivedMs   server receipt, epoch ms
  * @param {unknown} offsetMs    client's `flushedAt - createdAt`, milliseconds
- * @param {number} [maxOffsetMs=86400000]  reject an offset beyond this
+ * @param {number|{maxOffsetMs?: number, notBeforeMs?: number|null}} [opts]
+ *        a number is read as `maxOffsetMs` (the old signature)
  * @returns {string} the contract shape
  */
-export function anchorToServer(receivedMs, offsetMs, maxOffsetMs = 86_400_000) {
+export function anchorToServer(receivedMs, offsetMs, opts = {}) {
+    const { maxOffsetMs = ANCHOR_MAX_OFFSET_MS, notBeforeMs = null } = typeof opts === 'number' ? { maxOffsetMs: opts } : (opts || {});
     const n = Number(offsetMs);
     if (!Number.isFinite(n) || n < 0 || n > maxOffsetMs) return new Date(receivedMs).toISOString();
-    return new Date(receivedMs - n).toISOString();
+    let at = receivedMs - n;
+    if (Number.isFinite(notBeforeMs) && notBeforeMs <= receivedMs && at < notBeforeMs) at = notBeforeMs;
+    return new Date(at).toISOString();
 }

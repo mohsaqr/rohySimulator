@@ -2,7 +2,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runMigrations } from '../server/migrationRunner.js';
+import { runMigrations, backupBeforeMigrate, pruneMigrationBackups } from '../server/migrationRunner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +18,14 @@ const db = new sqlite.Database(dbPath, async (err) => {
     }
 
     try {
+        // The same pre-migration snapshot the boot path takes (it used to be
+        // taken only there, so a migration run from this CLI had no way back —
+        // security audit 2026-10-26, L7-19). A dry run changes nothing and
+        // needs none.
+        const backup = dryRun ? { tookBackup: false } : await backupBeforeMigrate(db, dbPath);
+        if (backup.tookBackup) console.log(`[migration] backup written to ${backup.backupPath}`);
         const result = await runMigrations(db, { dryRun });
+        if (backup.tookBackup) await pruneMigrationBackups(dbPath);
         if (!dryRun) {
             console.log(`[migration] applied ${result.applied.length} migration${result.applied.length === 1 ? '' : 's'}`);
         }

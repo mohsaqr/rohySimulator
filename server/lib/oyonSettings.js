@@ -57,6 +57,13 @@ export async function ensureSettings(currentTenantId) {
             -- learners to consent to voice capture that does not exist. Both
             -- flags that must start off are named rather than defaulted.
             ai_assist_enabled, voice_enabled,
+            -- Heart rate and respiration (rPPG estimates from the camera) start
+            -- OFF too (security audit 2026-10-26, F-04): migration 0040's column
+            -- DEFAULT is 1, and no consent card or terms section names them. An
+            -- administrator switches them on deliberately, and even then ingest
+            -- stores them only for a learner who gave the separate physiological
+            -- consent (oyon-routes.js, PHYSIOLOGICAL_CONSENT_KEY).
+            heart_rate_enabled, respiration_enabled,
             -- Capture itself starts OFF on a fresh install (owner decision
             -- 2026-10-25): the column DEFAULT from migration 0011 is 1, so a new
             -- tenant used to start sensing as soon as a learner consented. Now an
@@ -70,7 +77,7 @@ export async function ensureSettings(currentTenantId) {
             -- sorts as a string and parses as local time in a browser
             -- (RPS-1 section 17, migrations 0050-0052).
             created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ${SQL_NOW}, ${SQL_NOW})
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ${SQL_NOW}, ${SQL_NOW})
          ON CONFLICT(tenant_id) DO NOTHING`,
         [
             String(currentTenantId),

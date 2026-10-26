@@ -102,7 +102,9 @@ describe('Oyon signal events', () => {
             const other = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['ose_other']);
             const edu = await dbGet(db, 'SELECT id FROM users WHERE username = ?', ['ose_edu']);
             // Oyon course gate: the student is in a course that enables sensing.
-            await enrollInSensingCourse(db, stu.id);
+            // The educator owns it: since rc.89 an educator's Oyon reads cover
+            // only learners of courses they teach (lib/oyonReadScope.js).
+            await enrollInSensingCourse(db, stu.id, { ownerId: edu.id });
 
             const session = async (version) => {
                 await dbRun(db,
@@ -124,8 +126,12 @@ describe('Oyon signal events', () => {
                     tenant_id, emotion_capture_enabled,
                     admin_emotion_view_enabled, educator_emotion_view_enabled, student_emotion_view_enabled,
                     model_profile, sample_interval_ms, window_ms,
-                    min_valid_frames, smoothing_alpha, min_hold_ms, min_switch_confidence
-                 ) VALUES ('1', 1, 1, 1, 0, 'hse-emotion-mtl', 500, 10000, 3, 0.28, 3000, 0.5)`);
+                    min_valid_frames, smoothing_alpha, min_hold_ms, min_switch_confidence,
+                    voice_enabled
+                 ) VALUES ('1', 1, 1, 1, 0, 'hse-emotion-mtl', 500, 10000, 3, 0.28, 3000, 0.5, 1)`);
+            // voice_enabled: since rc.89 ingest enforces the tenant's typing /
+            // voice switches (voice starts off); the OFF path is covered by
+            // tests/server/sec2-d-oyon-ingest.test.js.
 
             stuTok = await tokenFor(server.dbPath, { id: stu.id, username: 'ose_stu', role: 'student', tenant_id: 1 }, 'se-s');
             otherTok = await tokenFor(server.dbPath, { id: other.id, username: 'ose_other', role: 'student', tenant_id: 1 }, 'se-o');

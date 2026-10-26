@@ -40,6 +40,7 @@ import { auditSuccess, dbAll, dbGet, dbRun, tenantId, requirePlatformAdmin } fro
 // a route that wants it explicitly can import it from the terms module.
 export { requireTermsAccepted };
 import { logger } from '../logger.js';
+import { truncateIp } from '../audit-chain.js';
 import {
     DEFAULT_TERMS_BODY, DEFAULT_TERMS_TITLE, DEFAULT_TERMS_VERSION,
     TERMS_BODY_MAX, TERMS_TITLE_MAX, normalizeTermsVersion, termsVersionError,
@@ -196,11 +197,15 @@ router.post('/terms/accept', authenticateToken, async (req, res) => {
             });
         }
 
+        // The network the acceptance came from, not the machine: the IP is cut
+        // to /24 (IPv4) or /48 (IPv6) like audit rows (security audit
+        // 2026-10-26, F-32). The acceptance itself is the evidence; a full
+        // address beside it is personal data nothing reads.
         const result = await dbRun(
             `INSERT INTO terms_acceptances (tenant_id, user_id, version, title, body, language, ip_address, user_agent)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(user_id, version) DO NOTHING`,
-            [tenantId(req), req.user.id, doc.version, doc.title, doc.body, doc.lang, req.ip || null, String(req.headers['user-agent'] || '').slice(0, 500) || null],
+            [tenantId(req), req.user.id, doc.version, doc.title, doc.body, doc.lang, truncateIp(req.ip || null), String(req.headers['user-agent'] || '').slice(0, 500) || null],
         );
         if (result?.changes === 1) {
             auditSuccess(req, {

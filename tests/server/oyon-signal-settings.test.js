@@ -68,12 +68,17 @@ describe('Oyon 3 signal settings', () => {
 
     afterAll(async () => { if (server) await server.close(); });
 
-    it('defaults preserve the element\'s behaviour, except posture', async () => {
+    it('defaults preserve the element\'s behaviour, except posture, heart rate and respiration', async () => {
         const { settings } = await getSettings();
-        for (const key of ['facial_signals_enabled', 'heart_rate_enabled', 'respiration_enabled',
+        for (const key of ['facial_signals_enabled',
             'illumination_enabled', 'eye_tracking_enabled', 'gaze_tracking_enabled', 'enable_dynamics']) {
             expect(settings[key], key).toBe(true);
         }
+        // Off on a fresh tenant since rc.89 (security audit 2026-10-26, F-04):
+        // rPPG heart rate and respiration are physiological data no consent
+        // card names.
+        expect(settings.heart_rate_enabled).toBe(false);
+        expect(settings.respiration_enabled).toBe(false);
         // Off by design: the pose model cannot be served same-origin, so leaving
         // it on makes the browser fetch it from a Google CDN, breaking the
         // air-gap contract. See migration 0040.
@@ -88,7 +93,7 @@ describe('Oyon 3 signal settings', () => {
         const body = await res.json();
         // The client forwards these verbatim into the element's `settings`
         // attribute, so they must be real booleans, not 0/1.
-        expect(body.runtime.heart_rate_enabled).toBe(true);
+        expect(body.runtime.heart_rate_enabled).toBe(false);   // off on a fresh tenant since rc.89 (F-04)
         expect(body.runtime.posture_tracking_enabled).toBe(false);
         expect(typeof body.runtime.gaze_tracking_enabled).toBe('boolean');
     });

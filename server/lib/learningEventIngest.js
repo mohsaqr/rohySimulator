@@ -22,8 +22,9 @@ import dbAdapter from '../dbAdapter.js';
 import { LEARNING_VERBS, SERVER_ONLY_VERBS, normalizeVerb, resolveEventMetadata } from '../shared/learningVerbs.js';
 import { resolvePluginAttribution } from '../shared/pluginRegistry.js';
 import { resolveSessionTrinity, logAuditAsync } from '../routes/_helpers.js';
-import { anchorToServer, toIsoZ, nowIso } from '../shared/time.js';
+import { anchorToServer, toIsoZ, nowIso, timeMs } from '../shared/time.js';
 import { logger } from '../logger.js';
+import { learningEventBudget } from './ingestEventBudget.js';
 
 const log = logger('learning-event-ingest');
 
@@ -45,6 +46,49 @@ export const STRIP_REASONS = Object.freeze(['unknown_plugin', 'plugin_verb_misma
 
 const SERVER_ONLY = new Set(SERVER_ONLY_VERBS);
 const FORGERY = new Set(['not_owner', 'cross_tenant']);
+
+/**
+ * Distinct session ids one caller's batch may name. A real client's queue
+ * holds the current session and, across a session switch, the one before; a
+ * batch naming hundreds is a probe (security audit 2026-10-26, L8-01: 500
+ * made-up ids per batch cost 500 lookups, quarantine rows and audit appends).
+ */
+export const MAX_DISTINCT_SESSIONS_PER_BATCH = 5;
+
+/**
+ * Events for sessions the caller does not own that a batch may carry before
+ * the WHOLE batch is refused. One is tolerated — a tab left open across a
+ * sign-out can flush one stale event — and is handled per event as before (a
+ * quarantine row, the single route's 403/404). Past that the batch is refused
+ * with 400 and nothing in it is stored.
+ */
+export const MAX_FORGED_EVENTS_PER_BATCH = 1;
+
+/**
+ * How far before its session's recorded start an event may be anchored. The
+ * start is stored to the second and the client starts queueing as the session
+ * opens, so a minute of slack — the same bound Oyon windows get — keeps real
+ * spacing intact while a day's backdating is not.
+ */
+const SESSION_START_GRACE_MS = 60_000;
+
+/** Session ids an audit or log line names, at most. */
+const AUDIT_SESSION_IDS = 5;
+
+/**
+ * Raised when ingest refuses a caller's whole batch. Carries an HTTP status
+ * and a machine-readable code; the Express error handler answers
+ * `{ error, code }` with that status.
+ */
+export class IngestRefusedError extends Error {
+    constructor(status, code, message, details = {}) {
+        super(message);
+        this.name = 'IngestRefusedError';
+        this.status = status;
+        this.code = code;
+        this.details = details;
+    }
+}
 
 const INSERT_SQL = `
     INSERT INTO learning_events (
@@ -85,12 +129,12 @@ function jsonOrNull(value) {
  * attacker-supplied prose must not be persisted under a victim's tenant. Any
  * other rejection keeps the payload, truncated.
  */
-function quarantinePayload(event, reason) {
+function quarantinePayload(event, reason, repeat = 1) {
     if (FORGERY.has(reason)) {
         const shape = Object.fromEntries(Object.entries(event || {}).map(([k, v]) => [
             k, typeof v === 'string' ? `string(${v.length})` : Array.isArray(v) ? `array(${v.length})` : typeof v,
         ]));
-        return JSON.stringify({ _shape: shape });
+        return JSON.stringify(repeat > 1 ? { _shape: shape, _repeat: repeat } : { _shape: shape });
     }
     let json = jsonOrNull(event) ?? 'null';
     if (Buffer.byteLength(json, 'utf8') > REJECTED_PAYLOAD_MAX_BYTES) {
@@ -139,24 +183,109 @@ export async function ingestEvents({
     if (!Array.isArray(events) || events.length === 0) return out;
 
     const principalUserId = principal?.id ?? null;
+    const warnLog = req?.log || log;
+    const distinct = [...new Set(events.map((e) => e?.session_id).filter(Boolean))];
+
+    // Caller-facing limits (security audit 2026-10-26, L8-01). Server writers
+    // (principal null) chose their session ids themselves and are not limited.
+    if (principal) {
+        if (distinct.length > MAX_DISTINCT_SESSIONS_PER_BATCH) {
+            warnLog.warn('learning event batch refused: too many sessions', {
+                user_id: principalUserId, sessions: distinct.length, events: events.length, source,
+            });
+            throw new IngestRefusedError(400, 'too_many_sessions',
+                `a batch may name at most ${MAX_DISTINCT_SESSIONS_PER_BATCH} sessions`);
+        }
+        // EVENTS per minute, not requests: one request carries up to 500.
+        const charge = learningEventBudget.take(`${tenantId}:${principalUserId}`, events.length);
+        if (!charge.ok) {
+            warnLog.warn('learning event batch refused: event budget exhausted', {
+                user_id: principalUserId, events: events.length, used: charge.used, limit: charge.limit,
+            });
+            throw new IngestRefusedError(429, 'learning_events_rate_limited',
+                'Too many learning events; try again shortly', { retry_after_ms: charge.retryAfterMs });
+        }
+    }
 
     // Trinity once per distinct session id. `principal` is what stops a batch
     // carrying events for a session the caller does not own — the server would
     // otherwise derive the VICTIM's user_id and write the forged row under
     // their name.
-    const distinct = [...new Set(events.map((e) => e?.session_id).filter(Boolean))];
     const trinity = new Map();
     await Promise.all(distinct.map(async (sid) => {
         trinity.set(sid, await resolveSessionTrinity(sid, tenantId, { principal }));
     }));
+    const forgeryReasonFor = (sid) => (trinity.get(sid)?.reason === 'not_owner' ? 'not_owner' : 'cross_tenant');
+    const forgedSessions = distinct.filter((sid) => !trinity.get(sid)?.found);
 
-    const reject = async (event, reason, extra = {}) => {
-        out.dropped++;
-        out.dropped_reasons[reason] = (out.dropped_reasons[reason] || 0) + 1;
-        if (out.firstReason === null) {
-            out.firstReason = reason;
-            out.firstStatus = statusForReason(reason);
+    // Where each owned session began: an event is never anchored before it
+    // (L8-11 — offset_ms used to backdate an event by up to 24 h).
+    const sessionStartMs = new Map();
+    const owned = distinct.filter((sid) => trinity.get(sid)?.found);
+    if (owned.length) {
+        try {
+            const marks = owned.map(() => '?').join(', ');
+            const rows = await dbAdapter.all(
+                `SELECT id, start_time FROM sessions
+                  WHERE tenant_id = ? AND id IN (${marks})`,
+                [tenantId, ...owned],
+            );
+            for (const row of rows) {
+                const ms = timeMs(row.start_time);
+                if (ms != null) sessionStartMs.set(String(row.id), ms - SESSION_START_GRACE_MS);
+            }
+        } catch (err) {
+            warnLog.warn('session start times unreadable; events anchored without the session bound', { error: err.message });
         }
+    }
+
+    // One audit row per call, summarising every forgery in it — never one per
+    // event. Each append takes the database write lock behind a process-wide
+    // queue, and a batch of 500 forged events used to queue 500 of them
+    // (L8-01). The row names who, how many, why, and the first few sessions;
+    // never the payloads. AWAITED: the response says the events were rejected,
+    // and the audit row that proves it must exist by then. A failed audit
+    // write is warned, never allowed to fail the batch.
+    const auditForgeries = async ({ refused }) => {
+        const reasons = {};
+        for (const event of events) {
+            const sid = event?.session_id;
+            if (sid && !trinity.get(sid)?.found) {
+                const reason = forgeryReasonFor(sid);
+                reasons[reason] = (reasons[reason] || 0) + 1;
+            }
+        }
+        const firstReason = forgedSessions.length ? forgeryReasonFor(forgedSessions[0]) : null;
+        try {
+            await logAuditAsync({
+                userId: principalUserId,
+                username: principal?.username ?? null,
+                action: 'learning_event_rejected',
+                resourceType: 'session',
+                resourceId: forgedSessions[0] ?? null,
+                status: 'failure',
+                errorMessage: firstReason,
+                metadata: {
+                    source,
+                    refused,
+                    events: events.length,
+                    forged_events: Object.values(reasons).reduce((a, b) => a + b, 0),
+                    reasons,
+                    session_ids: forgedSessions.slice(0, AUDIT_SESSION_IDS),
+                    verb: events.find((e) => e?.session_id && !trinity.get(e.session_id)?.found)?.verb ?? null,
+                },
+                tenantId,
+                ipAddress: req?.ip ?? null,
+                userAgent: req?.headers?.['user-agent'] ?? null,
+            });
+        } catch (err) {
+            warnLog.warn('forgery audit write failed', { reason: firstReason, error: err.message });
+        }
+    };
+
+    // The quarantine row for one rejected event. `repeat` > 1 when the row
+    // stands for that many identical-reason events of a refused batch.
+    const quarantineOnly = async (event, reason, { repeat = 1, ...extra } = {}) => {
         try {
             await dbAdapter.run(REJECT_SQL, [
                 tenantId,
@@ -167,43 +296,53 @@ export async function ingestEvents({
                 source,
                 typeof event?.verb === 'string' ? event.verb.slice(0, 120) : null,
                 typeof event?.object_type === 'string' ? event.object_type.slice(0, 120) : null,
-                quarantinePayload(event, reason),
+                quarantinePayload(event, reason, repeat),
                 toIsoZ(event?.client_time ?? event?.timestamp) ?? null,
                 typeof event?.plugin_id === 'string' ? event.plugin_id.slice(0, 64) : null,
             ]);
-            out.quarantined++;
+            return true;
         } catch (err) {
             // The quarantine itself failing must not hide the drop: it is
             // still counted, and the failure is loud.
-            (req?.log || log).warn('learning event could not be quarantined', { reason, error: err.message, ...extra });
-        }
-        if (FORGERY.has(reason)) {
-            // A forgery is a security event, not telemetry noise: the audit
-            // chain gets the fact (who, which session), never the payload.
-            // AWAITED, unlike the fire-and-forget logAudit: the response says
-            // the event was rejected, and the audit row that proves it must
-            // exist by then — under CI load the chain's retry landed the row
-            // after the caller had already read the table. A failed audit
-            // write is warned, never allowed to fail the batch.
-            try {
-                await logAuditAsync({
-                    userId: principalUserId,
-                    username: principal?.username ?? null,
-                    action: 'learning_event_rejected',
-                    resourceType: 'session',
-                    resourceId: event?.session_id ?? null,
-                    status: 'failure',
-                    errorMessage: reason,
-                    metadata: { source, verb: event?.verb ?? null },
-                    tenantId,
-                    ipAddress: req?.ip ?? null,
-                    userAgent: req?.headers?.['user-agent'] ?? null,
-                });
-            } catch (err) {
-                (req?.log || log).warn('forgery audit write failed', { reason, error: err.message });
-            }
+            warnLog.warn('learning event could not be quarantined', { reason, error: err.message, ...extra });
+            return false;
         }
     };
+
+    const reject = async (event, reason, extra = {}) => {
+        out.dropped++;
+        out.dropped_reasons[reason] = (out.dropped_reasons[reason] || 0) + 1;
+        if (out.firstReason === null) {
+            out.firstReason = reason;
+            out.firstStatus = statusForReason(reason);
+        }
+        if (await quarantineOnly(event, reason, extra)) out.quarantined++;
+    };
+
+    // Refuse the whole batch when it carries more forged events than a stale
+    // tab could explain. Nothing in it is stored; the quarantine keeps ONE
+    // shape-only row per forged session (at most MAX_DISTINCT_SESSIONS_PER_BATCH),
+    // with how many events it stood for, and the audit chain one row.
+    if (principal) {
+        const forgedEvents = events.filter((e) => e?.session_id && !trinity.get(e.session_id)?.found);
+        if (forgedEvents.length > MAX_FORGED_EVENTS_PER_BATCH) {
+            for (const sid of forgedSessions) {
+                const sample = forgedEvents.find((e) => e.session_id === sid);
+                const count = forgedEvents.filter((e) => e.session_id === sid).length;
+                await quarantineOnly(sample, forgeryReasonFor(sid), { repeat: count });
+            }
+            await auditForgeries({ refused: true });
+            warnLog.warn('learning event batch refused: events for sessions the caller does not own', {
+                user_id: principalUserId,
+                forged_events: forgedEvents.length,
+                events: events.length,
+                session_ids: forgedSessions.slice(0, AUDIT_SESSION_IDS),
+            });
+            throw new IngestRefusedError(400, 'forged_session_events',
+                'This batch names sessions that are not yours; nothing in it was stored',
+                { forged_events: forgedEvents.length });
+        }
+    }
 
     const stmt = dbAdapter.prepare(INSERT_SQL);
     try {
@@ -244,7 +383,13 @@ export async function ingestEvents({
                 userId = t.user_id;
                 caseId = t.case_id;
             } else {
-                userId = event.user_id ?? principalUserId;
+                // A caller's session-less event is ALWAYS the caller's: the
+                // client-supplied user_id is honoured only for server writers
+                // (principal null), which chose it themselves. It used to be
+                // `event.user_id ?? principal`, so a student could file events
+                // — chat text included — under any classmate's id (security
+                // audit 2026-10-26, L7-10 / L8-04).
+                userId = principal ? principalUserId : (event.user_id ?? null);
                 caseId = null;
             }
 
@@ -284,7 +429,9 @@ export async function ingestEvents({
                 // before this flush the event happened, so subtracting it
                 // preserves the SPACING between a session's events exactly
                 // while the anchor stays on a clock rohy controls.
-                anchorToServer(receivedMs, event.offset_ms),
+                anchorToServer(receivedMs, event.offset_ms, {
+                    notBeforeMs: event.session_id ? sessionStartMs.get(String(event.session_id)) ?? null : null,
+                }),
                 toIsoZ(event.client_time ?? event.timestamp) ?? null,
                 tenantId,
                 meta.severity,
@@ -310,6 +457,8 @@ export async function ingestEvents({
     } finally {
         try { await stmt.finalize(); } catch { /* finalize errors don't change the result */ }
     }
+
+    if (forgedSessions.length > 0) await auditForgeries({ refused: false });
 
     if (out.dropped_reasons.not_owner > 0) {
         (req?.log || log).warn('learning events for sessions the caller does not own', {

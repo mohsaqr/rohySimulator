@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { validateEmotionBatch, isModalityOnlyEvent } from 'oyon/validation';
 import { OYON_EVENT_SOURCES, OYON_MODALITIES, OYON_STATE_VOCABULARIES, OYON_WINDOW_KINDS } from 'oyon/version';
 import { authenticateToken, hasRoleAtLeast, requireAdmin, ROLE_RANKS } from '../middleware/auth.js';
-import { dbAll, dbGet, dbRun, logAuditAsync, redactRow, tenantId } from './_helpers.js';
+import { dbAll, dbGet, dbRun, escapeLikeTerm, logAuditAsync, redactRow, tenantId } from './_helpers.js';
 import dbAdapter from '../dbAdapter.js';
 import { withLearnerCaseLabels } from '../services/caseProjection.js';
 
@@ -16,7 +16,13 @@ const learnerLabels = (req, payload) => withLearnerCaseLabels(payload, req.user.
 import { logger } from '../logger.js';
 import { rejectionMiddleware, getStats as getRejectionStats } from './oyon-rejection-counter.js';
 import { DEFAULT_RUNTIME, ensureSettings } from '../lib/oyonSettings.js';
-import { SENSING_COURSE_ERROR_CODE, resolveSensingGate } from '../lib/oyonSensingGate.js';
+import { SENSING_COURSE_ERROR_CODE, resolveSensingGate, resolveSessionSensing } from '../lib/oyonSensingGate.js';
+import { oyonSignalEventBudget } from '../lib/ingestEventBudget.js';
+// The ONE Oyon read policy (role, per-role tenant flag, per-row *_can_view and,
+// for educators, only the learners of courses they teach), shared with the
+// analytics routes. Its assertOyonReadAccess has the same answers and codes as
+// the helper this router used to define for itself.
+import { assertOyonReadAccess, oyonReadScope } from '../lib/oyonReadScope.js';
 import { SQL_NOW } from '../shared/time.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -95,6 +101,54 @@ function acceptedConsentVersion(value) {
  * contract — the narrowest one, so a failure grants less, never more.
  */
 async function recordedAcceptedVersion(req) {
+    const stored = await readStoredConsent(req);
+    if (stored.consent !== true) return CONSENT_VERSION_CAMERA_ONLY;
+    return acceptedConsentVersion(stored.version);
+}
+
+/*
+ * The onboarding_settings key that records the learner's SEPARATE consent to
+ * physiological signals — heart rate and respiration estimated from the camera
+ * (rPPG). Security audit 2026-10-26, F-04: these were stored under the camera
+ * consent, whose card ("camera-based emotion capture") and terms (§7: facial
+ * expression and gaze) name neither, and heart rate is likely special-category
+ * data. Ingest now stores a heart-rate or respiration block only when the
+ * tenant switch is on AND this key is `true`. No surface writes it yet: the
+ * card text is the owner's to write, so until then nothing physiological is
+ * stored.
+ */
+const PHYSIOLOGICAL_CONSENT_KEY = 'oyon_consent_physio';
+const PHYSIOLOGICAL_MODALITIES = new Set(['heart_rate', 'respiration']);
+
+/*
+ * The tenant switch for each modality (security audit 2026-10-26, L7-07). The
+ * switches used to reach only the browser (signalFlagsFromSettings); a stale
+ * tab, a cached bundle or a hand-rolled request still had every block stored.
+ * Ingest now drops a block or window whose switch is off. `engagement` has no
+ * switch of its own (it is derived from the face and gaze the others gate) and
+ * `emotion` is the record itself, gated by emotion_capture_enabled.
+ */
+const MODALITY_SWITCH = Object.freeze({
+    facial: 'facial_signals_enabled',
+    gaze: 'gaze_tracking_enabled',
+    heart_rate: 'heart_rate_enabled',
+    respiration: 'respiration_enabled',
+    posture: 'posture_tracking_enabled',
+    illumination: 'illumination_enabled',
+    typing: 'typing_enabled',
+    interaction: 'interaction_enabled',
+    discourse: 'discourse_enabled',
+    ai_assist: 'ai_assist_enabled',
+    voice: 'voice_enabled',
+});
+
+/**
+ * What the account itself has on record (user_preferences.onboarding_settings):
+ * `consent` is true / false / null (never chosen), `version` the accepted
+ * contract, `physio` whether the separate physiological consent is given.
+ * An unreadable record reads as "never chosen" — the narrowest answer.
+ */
+async function readStoredConsent(req) {
     const row = await dbGet(
         'SELECT onboarding_settings FROM user_preferences WHERE user_id = ? AND tenant_id = ?',
         [req.user.id, tenantId(req)],
@@ -103,14 +157,68 @@ async function recordedAcceptedVersion(req) {
     try {
         onboarding = JSON.parse(row?.onboarding_settings || '{}') || {};
     } catch (err) {
-        oyonLog.warn('onboarding settings unreadable; recording camera-only consent', {
+        oyonLog.warn('onboarding settings unreadable; treating consent as not given', {
             user_id: req.user?.id,
             error: err.message,
         });
-        return CONSENT_VERSION_CAMERA_ONLY;
+        return { consent: null, version: null, physio: false };
     }
-    if (onboarding.oyon_consent !== true) return CONSENT_VERSION_CAMERA_ONLY;
-    return acceptedConsentVersion(onboarding.oyon_consent_version);
+    return {
+        consent: typeof onboarding.oyon_consent === 'boolean' ? onboarding.oyon_consent : null,
+        version: onboarding.oyon_consent_version ?? null,
+        physio: onboarding[PHYSIOLOGICAL_CONSENT_KEY] === true,
+    };
+}
+
+/**
+ * Which modalities ingest may store for this request: the tenant switch for
+ * each, plus — for heart rate and respiration — the learner's physiological
+ * consent. Returns a predicate over modality names.
+ */
+function modalityPolicy(settings, stored) {
+    return (modality) => {
+        const key = MODALITY_SWITCH[modality];
+        if (key && !boolFrom(settings?.[key], SIGNAL_SETTING_DEFAULTS[key] ?? false)) return false;
+        if (PHYSIOLOGICAL_MODALITIES.has(modality) && !stored?.physio) return false;
+        return true;
+    };
+}
+
+/**
+ * The per-session half of the sensing gate (lib/oyonSensingGate.js
+ * resolveSessionSensing): the course the session's case is taught in decides,
+ * not any course the learner happens to be in. Answers 403 and returns null
+ * when sensing is not enabled for this session; otherwise returns the gate,
+ * whose `course` is what the stored rows are attributed to.
+ */
+async function sessionSensingOrRefuse(req, res, settings, session) {
+    const gate = await resolveSessionSensing(req.user, tenantId(req), settings, session);
+    if (gate.allowed || !gate.courseRule) return gate;
+    (req.log || oyonLog).warn('oyon write refused: the session\'s course does not enable sensing', {
+        user_id: req.user?.id,
+        session_id: session.id,
+        path: req.path,
+    });
+    res.status(403).json({
+        error: 'Optional learning measures are not enabled for the course this session belongs to',
+        code: SENSING_COURSE_ERROR_CODE,
+    });
+    return null;
+}
+
+/**
+ * A learner who turned Oyon off in their own settings is not sensed, whatever
+ * session consent row is still open in another tab or device (L7-16: the
+ * session row stayed "granted" until the session ended plus 24 h). Answers 403
+ * and returns true when the account's stored consent is an explicit "no".
+ */
+function refuseWithdrawn(req, res, stored) {
+    if (stored.consent !== false) return false;
+    (req.log || oyonLog).info('oyon write refused: consent withdrawn in the account settings', {
+        user_id: req.user?.id, path: req.path,
+    });
+    res.status(403).json({ error: 'Oyon consent withdrawn', code: 'oyon_consent_withdrawn' });
+    return true;
 }
 
 function consentCoversModality(consent, modality) {
@@ -350,6 +458,24 @@ router.post('/consent', authenticateToken, async (req, res) => {
     // A GRANT needs a course that enables sensing; a withdrawal is always
     // recorded — refusing someone's "no" would be the wrong way round.
     if (granted && await refuseWithoutSensingCourse(req, res, settings)) return;
+    if (granted && !(await sessionSensingOrRefuse(req, res, settings, session))) return;
+    // A grant must match what the ACCOUNT has on record (L5-03): the browser
+    // parked its consent flag in localStorage, unscoped by user, so on a shared
+    // machine the previous person's "yes" could open a granted row for the
+    // next one. Only the surfaces that show the consent card write the account
+    // record, so it, not the request, decides.
+    if (granted) {
+        const stored = await readStoredConsent(req);
+        if (stored.consent !== true) {
+            oyonLog.warn('consent grant refused: the account has not consented', {
+                user_id: req.user.id, session_id: session.id, stored: stored.consent,
+            });
+            return res.status(403).json({
+                error: 'Consent is not on record for this account; accept it in Settings first',
+                code: 'oyon_consent_not_on_record',
+            });
+        }
+    }
     await dbRun(
         `INSERT INTO oyon_emotion_consents (
             tenant_id, user_id, student_id, session_id, case_id,
@@ -427,16 +553,24 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Access denied' });
     }
 
+    const gate = await sessionSensingOrRefuse(req, res, settings, session);
+    if (!gate) return;
+
     const consent = await latestConsent(req, session.id);
     if (!consent?.consent_granted) {
         return res.status(403).json({ error: 'Oyon consent required' });
     }
+    const stored = await readStoredConsent(req);
+    if (refuseWithdrawn(req, res, stored)) return;
+    const allowModality = modalityPolicy(settings, stored);
+    const policy = { allowModality, course: gate.course };
 
     let inserted = 0;
     let skipped = 0;
     let signalsInserted = 0;
     let signalsSkipped = 0;
     let consentBlocked = 0;
+    let modalityBlocked = 0;
     for (const event of events) {
         const serverErrors = validateServerEvent(event, session);
         if (serverErrors.length) {
@@ -488,7 +622,15 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
                     });
                 }
             }
-            const signalResult = await insertSignalWindow(req, session, settings, consent, event, modality);
+            // After the raw-audio refusal, so a waveform is refused loudly even
+            // when voice is off. The tenant switch for this modality, and for heart rate and
+            // respiration the learner's physiological consent (F-04, L7-07).
+            // Dropped and counted like a consent block, never stored.
+            if (!allowModality(modality)) {
+                modalityBlocked += 1;
+                continue;
+            }
+            const signalResult = await insertSignalWindow(req, session, settings, consent, event, modality, policy);
             if (signalResult?.changes === 1) signalsInserted += 1;
             else signalsSkipped += 1;
             continue;
@@ -499,13 +641,13 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         // is 0 in that case. Distinguishing inserted vs skipped here lets
         // clients tell "the second batch arrived but was a no-op" from
         // "the first batch failed mid-way".
-        const result = await insertEmotionRecord(req, session, settings, consent, event);
+        const result = await insertEmotionRecord(req, session, settings, consent, event, policy);
         if (result?.changes === 1) inserted += 1;
         else skipped += 1;
     }
 
     oyonLog.info('emotion batch accepted', {
-        session_id: session.id, inserted, skipped, signalsInserted, signalsSkipped, consentBlocked,
+        session_id: session.id, inserted, skipped, signalsInserted, signalsSkipped, consentBlocked, modalityBlocked,
     });
     // `inserted`/`skipped` keep counting emotion records ONLY, so existing
     // clients and tests reading them are unaffected by the new modalities.
@@ -518,6 +660,9 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         // Reported rather than silent: a client seeing this knows its consent
         // prompt is stale, not that the network dropped the windows.
         signals_consent_blocked: consentBlocked,
+        // Windows of a modality the tenant has switched off (or, for heart
+        // rate and respiration, without physiological consent).
+        signals_modality_blocked: modalityBlocked,
     });
 });
 
@@ -532,7 +677,8 @@ router.get('/emotion-records', authenticateToken, async (req, res) => {
     if (req.query.session_id && !session) return res.status(404).json({ error: 'Session not found' });
     if (session && !canReadSession(req.user, session)) return res.status(403).json({ error: 'Access denied' });
 
-    const { whereSql, params: whereParams } = buildEmotionRecordsWhere(req, { session });
+    const scope = await staffReadScope(req, settings);
+    const { whereSql, params: whereParams } = buildEmotionRecordsWhere(req, { session, scope });
 
     // total uses the same WHERE so pagination UI can show "X of N".
     const countRow = await dbGet(
@@ -595,9 +741,11 @@ router.get('/signal-windows', authenticateToken, async (req, res) => {
         });
     }
 
+    const scope = await staffReadScope(req, settings);
     const { whereSql, params: whereParams } = buildSignalWindowsWhere(req, {
         session,
         modality: requestedModality,
+        scope,
     });
 
     const countRow = await dbGet(
@@ -732,18 +880,38 @@ router.post('/signal-events', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Access denied' });
     }
 
+    // EVENTS per minute per user, not requests (security audit 2026-10-26,
+    // L8-01): a batch carries up to 500, and the request limiter alone let one
+    // account write ~120,000 rows a minute. Charged before any DB work.
+    const charge = oyonSignalEventBudget.take(`${tenantId(req)}:${req.user.id}`, events.length);
+    if (!charge.ok) {
+        oyonLog.warn('signal events refused: event budget exhausted', {
+            user_id: req.user.id, events: events.length, used: charge.used, limit: charge.limit,
+        });
+        return res.status(429).json({ error: 'Too many signal events; try again shortly', code: 'oyon_signal_events_rate_limited' });
+    }
+
     const errors = events.flatMap((event, index) => signalEventErrors(event, index, session));
     if (errors.length) {
         return res.status(400).json({ error: 'Invalid signal events', code: 'oyon_bad_event_batch', details: errors.slice(0, 10) });
     }
 
+    if (!(await sessionSensingOrRefuse(req, res, settings, session))) return;
+
     const consent = await latestConsent(req, session.id);
     if (!consent?.consent_granted) {
         return res.status(403).json({ error: 'Oyon consent required' });
     }
+    const stored = await readStoredConsent(req);
+    if (refuseWithdrawn(req, res, stored)) return;
+    const allowModality = modalityPolicy(settings, stored);
 
-    const covered = events.filter(event => consentCoversModality(consent, event.modality));
-    const consentBlocked = events.length - covered.length;
+    const consentCovered = events.filter(event => consentCoversModality(consent, event.modality));
+    const consentBlocked = events.length - consentCovered.length;
+    // The tenant's typing / voice switch, enforced here as well as in the
+    // browser (L7-07).
+    const covered = consentCovered.filter(event => allowModality(event.modality));
+    const modalityBlocked = consentCovered.length - covered.length;
 
     const snapshot = parseJson(session.case_snapshot) || {};
     const caseTitle = snapshot.name || session.live_case_name || null;
@@ -794,8 +962,11 @@ router.post('/signal-events', authenticateToken, async (req, res) => {
         inserted,
         skipped: covered.length - inserted,
         consent_blocked: consentBlocked,
+        modality_blocked: modalityBlocked,
     });
-    res.json({ ok: true, inserted, skipped: covered.length - inserted, consent_blocked: consentBlocked });
+    res.json({
+        ok: true, inserted, skipped: covered.length - inserted, consent_blocked: consentBlocked, modality_blocked: modalityBlocked,
+    });
 });
 
 router.get('/signal-events', authenticateToken, async (req, res) => {
@@ -811,7 +982,10 @@ router.get('/signal-events', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'Unknown Oyon modality', code: 'oyon_unknown_modality' });
     }
 
-    const { whereSql, params } = buildSignalWindowsWhere(req, { session, modality, timeColumn: 'occurred_at' });
+    // oyon_signal_events has educator_can_view / admin_can_view but no
+    // student_can_view; the staff scope uses only the former.
+    const scope = await staffReadScope(req, settings);
+    const { whereSql, params } = buildSignalWindowsWhere(req, { session, modality, timeColumn: 'occurred_at', scope });
     const countRow = await dbGet(`SELECT COUNT(*) AS total FROM oyon_signal_events r WHERE ${whereSql}`, params);
     const total = Number(countRow?.total) || 0;
 
@@ -852,7 +1026,8 @@ router.get('/analytics/students', authenticateToken, async (req, res) => {
     const settings = await ensureSettings(tenantId(req));
     if (!assertOyonReadAccess(req, res, settings)) return;
 
-    const { whereSql, params } = buildEmotionRecordsWhere(req, {});
+    const scope = await staffReadScope(req, settings);
+    const { whereSql, params } = buildEmotionRecordsWhere(req, { scope });
     const rows = await dbAll(
         `SELECT
             r.user_id,
@@ -900,7 +1075,8 @@ router.get('/analytics/cases', authenticateToken, async (req, res) => {
     const settings = await ensureSettings(tenantId(req));
     if (!assertOyonReadAccess(req, res, settings)) return;
 
-    const { whereSql, params } = buildEmotionRecordsWhere(req, {});
+    const scope = await staffReadScope(req, settings);
+    const { whereSql, params } = buildEmotionRecordsWhere(req, { scope });
     const summaryRows = await dbAll(
         `SELECT
             r.case_id,
@@ -978,8 +1154,8 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
     // window so researchers can combine Oyon output with Rohy's session/case
     // data offline (CSV/JSON export, or external joins). This keeps the live
     // path read-light: one indexed query per session.
-    const visCol = rowVisibilityColumn(req.user);
-    if (!visCol) {
+    const scope = await staffReadScope(req, settings);
+    if (!scope) {
         return res.json(await learnerLabels(req, {
             session: {
                 id: session.id,
@@ -997,9 +1173,9 @@ router.get('/analytics/session/:sessionId', authenticateToken, async (req, res) 
         `SELECT r.*, u.username, u.role AS user_role
          FROM oyon_emotion_records r
          LEFT JOIN users u ON CAST(r.user_id AS INTEGER) = u.id AND u.tenant_id = r.tenant_id
-         WHERE r.tenant_id = ? AND r.session_id = ? AND ${visCol} = 1
+         WHERE r.tenant_id = ? AND r.session_id = ? AND (${scope.sql})
          ORDER BY r.window_start ASC, r.id ASC`,
-        [tenantId(req), String(session.id)]
+        [tenantId(req), String(session.id), ...scope.params]
     );
 
     oyonLog.debug('analytics read', {
@@ -1132,24 +1308,24 @@ router.get('/admin/live', authenticateToken, async (req, res) => {
     // previous `(admin_can_view = 1 OR educator_can_view = 1)` let an
     // educator see admin-only rows (and vice versa) — that OR was the
     // bug. assertOyonReadAccess upstream guarantees educator/admin only.
-    const visCol = rowVisibilityColumn(req.user);
-    if (!visCol) return res.json({ records: [] });
-    const visColBare = visCol.replace(/^r\./, '');
+    const scope = await staffReadScope(req, settings);
+    if (!scope) return res.json({ records: [] });
+    const inner = await oyonReadScope(req, { settings, alias: 'i', staffOnly: true });
 
     const rows = await dbAll(
         `SELECT r.*
          FROM oyon_emotion_records r
          JOIN (
-           SELECT session_id, MAX(window_start) AS latest_window
-           FROM oyon_emotion_records
-           WHERE tenant_id = ? AND ${visColBare} = 1
-           GROUP BY session_id
+           SELECT i.session_id, MAX(i.window_start) AS latest_window
+           FROM oyon_emotion_records i
+           WHERE i.tenant_id = ? AND (${inner.sql})
+           GROUP BY i.session_id
          ) latest
            ON latest.session_id = r.session_id AND latest.latest_window = r.window_start
-         WHERE r.tenant_id = ? AND ${visCol} = 1
+         WHERE r.tenant_id = ? AND (${scope.sql})
          ORDER BY r.window_start DESC, r.id DESC
          LIMIT ?`,
-        [tenantId(req), tenantId(req), limit(req.query.limit, 100)]
+        [tenantId(req), ...inner.params, tenantId(req), ...scope.params, limit(req.query.limit, 100)]
     );
     oyonLog.debug('admin live read', { user_id: req.user.id, returned: rows.length });
     res.json({ records: rows.map(hydrateRecord) });
@@ -1172,45 +1348,6 @@ async function resolveSession(req, rawSessionId) {
 
 function canReadSession(user, session) {
     return String(session.user_id) === String(user.id) || hasRoleAtLeast(user, ROLE_RANKS.educator);
-}
-
-/**
- * Single source of truth for whether an educator-or-higher caller is allowed
- * to read Oyon analytics in their tenant. Combines role hierarchy with the
- * per-role tenant view-enabled flags so policy can't drift between
- * /emotion-records, /admin/live, and the analytics roll-ups.
- *
- * Behaviour:
- *   - Admin (or higher) AND admin_emotion_view_enabled = 1 → allow.
- *   - Educator (exactly) AND educator_emotion_view_enabled = 1 → allow.
- *   - Anything else (admin with the toggle off, educator with the toggle
- *     off, students, guests) → block with 403.
- *
- * Note: students have their own self-only path at GET /student/me. They
- * cannot use the educator+ surfaces.
- *
- * Returns true on allow. On block, writes the 403 directly and returns false
- * so the caller just `return`s.
- */
-function assertOyonReadAccess(req, res, settings) {
-    const isAdmin = hasRoleAtLeast(req.user, ROLE_RANKS.admin);
-    const isEducator = hasRoleAtLeast(req.user, ROLE_RANKS.educator);
-    if (isAdmin) {
-        if (!settings.admin_emotion_view_enabled) {
-            res.status(403).json({ error: 'Oyon view disabled for this role', code: 'oyon_view_disabled' });
-            return false;
-        }
-        return true;
-    }
-    if (isEducator) {
-        if (!settings.educator_emotion_view_enabled) {
-            res.status(403).json({ error: 'Oyon view disabled for this role', code: 'oyon_view_disabled' });
-            return false;
-        }
-        return true;
-    }
-    res.status(403).json({ error: 'Oyon view requires educator role', code: 'oyon_role_required' });
-    return false;
 }
 
 async function latestConsent(req, sessionId) {
@@ -1236,7 +1373,16 @@ function validateServerEvent(event, session) {
     return errors;
 }
 
-async function insertEmotionRecord(req, session, settings, consent, event) {
+async function insertEmotionRecord(req, session, settings, consent, event, policy = {}) {
+    // A block whose modality the tenant switched off — or heart rate and
+    // respiration without physiological consent — is stored as NULL, never as
+    // what the client sent (F-04, L7-07). The emotion record itself stays.
+    const allow = policy.allowModality || (() => true);
+    const block = (modality, value) => (allow(modality) ? jsonTextOrNull(value) : null);
+    const dynamicsOn = boolFrom(settings?.enable_dynamics, SIGNAL_SETTING_DEFAULTS.enable_dynamics);
+    // The course is the server's resolution of the session (oyonSensingGate
+    // resolveSessionSensing), never the client's course_id / cohort_id (L7-08).
+    const course = policy.course || null;
     const snapshot = parseJson(session.case_snapshot) || {};
     const liveConfig = parseJson(session.live_case_config) || {};
     const config = snapshot.config || liveConfig || {};
@@ -1286,14 +1432,14 @@ async function insertEmotionRecord(req, session, settings, consent, event) {
         // Two batches re-sending the same window collapse to one row;
         // legitimately distinct windows (different timestamps) hash apart.
         recordId,
-        event.course_id == null ? null : String(event.course_id),
-        event.cohort_id == null ? null : String(event.cohort_id),
+        course ? String(course.id) : null,
+        course ? String(course.id) : null,
         shortText(studentName, 200),
         shortText(session.role || req.user.role, 80),
         shortText(caseTitle, 300),
         shortText(config.category || config.specialty || demographics.category, 200),
-        shortText(event.course_title, 300),
-        shortText(event.cohort_title, 300),
+        course ? shortText(course.name, 300) : null,
+        course ? shortText(course.name, 300) : null,
         shortText(event.session_type || 'simulation', 100),
         Number.isInteger(event.attempt_number) ? event.attempt_number : null,
         shortText(event.started_from_page, 200),
@@ -1325,21 +1471,21 @@ async function insertEmotionRecord(req, session, settings, consent, event) {
         shortText(modelProfile, 200),
         shortText(settingsHash, 100),
         jsonTextOrNull(event.settings_snapshot),
-        jsonTextOrNull(event.dynamics),
+        dynamicsOn ? jsonTextOrNull(event.dynamics) : null,
         // Oyon v2 window blocks (migration 0028). Aggregates only — the gaze
         // block carries zone shares / AOI dwell / centroid stats, never a raw
         // point stream (validateGazeBlock upstream enforces the same).
-        jsonTextOrNull(event.gaze),
+        block('gaze', event.gaze),
         jsonTextOrNull(event.engagement),
         shortText(event.room, 100),
         // Oyon 3 window-shared blocks (migration 0039). Present whenever the
         // matching modality is enabled with `*_window_share` (the default);
         // dropped on the floor before 0039 for want of a column.
-        jsonTextOrNull(event.facial),
-        jsonTextOrNull(event.posture),
-        jsonTextOrNull(event.heart_rate),
-        jsonTextOrNull(event.respiration),
-        jsonTextOrNull(event.illumination),
+        block('facial', event.facial),
+        block('posture', event.posture),
+        block('heart_rate', event.heart_rate),
+        block('respiration', event.respiration),
+        block('illumination', event.illumination),
         jsonTextOrNull(event.capture_quality),
         event.capture_mode,
         'captured',
@@ -1461,7 +1607,9 @@ function resolveSignalPayload(event, modality) {
     return Object.keys(rest).length ? rest : null;
 }
 
-async function insertSignalWindow(req, session, settings, consent, event, modality) {
+async function insertSignalWindow(req, session, settings, consent, event, modality, policy = {}) {
+    // Server-resolved course, never the client's ids (L7-08).
+    const course = policy.course || null;
     const snapshot = parseJson(session.case_snapshot) || {};
     const liveConfig = parseJson(session.live_case_config) || {};
     const config = snapshot.config || liveConfig || {};
@@ -1499,14 +1647,14 @@ async function insertSignalWindow(req, session, settings, consent, event, modali
         String(session.id),
         session.case_id == null ? null : String(session.case_id),
         recordId,
-        event.course_id == null ? null : String(event.course_id),
-        event.cohort_id == null ? null : String(event.cohort_id),
+        course ? String(course.id) : null,
+        course ? String(course.id) : null,
         shortText(studentName, 200),
         shortText(session.role || req.user.role, 80),
         shortText(caseTitle, 300),
         shortText(config.category || config.specialty || demographics.category, 200),
-        shortText(event.course_title, 300),
-        shortText(event.cohort_title, 300),
+        course ? shortText(course.name, 300) : null,
+        course ? shortText(course.name, 300) : null,
         shortText(event.session_type || 'simulation', 100),
         Number.isInteger(event.attempt_number) ? event.attempt_number : null,
         shortText(event.started_from_page, 200),
@@ -1656,15 +1804,22 @@ function boolFrom(value, fallback) {
 }
 
 /*
- * The tenant-editable signal columns of migration 0040, with the SAME defaults
- * the migration writes. One map so the SQL defaults, the runtime projection and
- * the PUT merge can never disagree — a mismatch would show up as a signal that
- * silently flips state on an unrelated settings save.
+ * The tenant-editable signal columns of migration 0040. One map so the runtime
+ * projection and the PUT merge can never disagree — a mismatch would show up as
+ * a signal that silently flips state on an unrelated settings save. The values
+ * are the migration's defaults except heart rate and respiration, which 0040
+ * created ON and which now start OFF (F-04): a row always exists by the time
+ * these are read (ensureSettings inserts both as 0), so the fallback only
+ * matters for a NULL column.
  */
 const SIGNAL_SETTING_DEFAULTS = Object.freeze({
     facial_signals_enabled: true,
-    heart_rate_enabled: true,
-    respiration_enabled: true,
+    // Off (security audit 2026-10-26, F-04): rPPG heart rate and respiration
+    // are physiological data no consent card names. Migration 0073 turns them
+    // off where no administrator ever saved the settings; ingest additionally
+    // requires the learner's separate physiological consent.
+    heart_rate_enabled: false,
+    respiration_enabled: false,
     illumination_enabled: true,
     eye_tracking_enabled: true,
     gaze_tracking_enabled: true,
@@ -1776,6 +1931,16 @@ const ALLOWED_ROLES = new Set(['student', 'reviewer', 'educator', 'admin']);
 // flips back on. assertOyonReadAccess upstream guarantees the caller is
 // educator or admin; anything else is a defensive default that yields
 // no rows.
+/**
+ * The caller's cross-user read predicate for an oyon_* table aliased `r`
+ * (lib/oyonReadScope.js, staff only): the per-row *_can_view column for the
+ * role and, for an educator, only learners of courses they own or co-teach.
+ * Null means no rows. Every educator+ read below ANDs it on.
+ */
+function staffReadScope(req, settings) {
+    return oyonReadScope(req, { settings, alias: 'r', staffOnly: true });
+}
+
 function rowVisibilityColumn(user) {
     if (hasRoleAtLeast(user, ROLE_RANKS.admin)) return 'r.admin_can_view';
     if (hasRoleAtLeast(user, ROLE_RANKS.educator)) return 'r.educator_can_view';
@@ -1792,13 +1957,14 @@ function rowVisibilityColumn(user) {
  * builder is on the hot path of every existing dashboard, and the whole point of
  * this change is that none of them shift.
  */
-function buildSignalWindowsWhere(req, { session = null, modality = null, timeColumn = 'window_start' } = {}) {
+function buildSignalWindowsWhere(req, { session = null, modality = null, timeColumn = 'window_start', scope = null } = {}) {
     const params = [tenantId(req)];
     const parts = ['r.tenant_id = ?'];
 
-    const visCol = rowVisibilityColumn(req.user);
-    if (visCol) {
-        parts.push(`${visCol} = 1`);
+    // The read scope (staffReadScope): visibility column + taught learners.
+    if (scope) {
+        parts.push(`(${scope.sql})`);
+        params.push(...scope.params);
     } else {
         parts.push('1 = 0');
     }
@@ -1840,16 +2006,16 @@ function buildSignalWindowsWhere(req, { session = null, modality = null, timeCol
     return { whereSql: parts.join(' AND '), params };
 }
 
-function buildEmotionRecordsWhere(req, { session = null } = {}) {
+function buildEmotionRecordsWhere(req, { session = null, scope = null } = {}) {
     const params = [tenantId(req)];
     const parts = ['r.tenant_id = ?'];
 
-    const visCol = rowVisibilityColumn(req.user);
-    if (visCol) {
-        parts.push(`${visCol} = 1`);
+    // The read scope (staffReadScope): visibility column + taught learners.
+    // None → no rows, as an always-false predicate so the SQL still binds.
+    if (scope) {
+        parts.push(`(${scope.sql})`);
+        params.push(...scope.params);
     } else {
-        // No role match → no rows. Encoded as an always-false predicate so
-        // the parameterised SQL still binds cleanly.
         parts.push('1 = 0');
     }
 
@@ -1904,8 +2070,11 @@ function buildEmotionRecordsWhere(req, { session = null } = {}) {
         // parameter binding to neutralise quote-based injection — that's why
         // tests/server/oyon-routes.test.js asserts the "' OR 1=1 --" payload
         // returns zero rows.
-        const needle = `%${req.query.q.trim()}%`;
-        parts.push(`(r.student_name_snapshot LIKE ? OR r.case_title_snapshot LIKE ? OR r.dominant_emotion LIKE ? OR u.username LIKE ?)`);
+        // % and _ in the search text are literal characters, not wildcards
+        // (security audit 2026-10-26, L7-18).
+        const needle = `%${escapeLikeTerm(req.query.q.trim())}%`;
+        parts.push(`(r.student_name_snapshot LIKE ? ESCAPE '\\' OR r.case_title_snapshot LIKE ? ESCAPE '\\'
+                     OR r.dominant_emotion LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\')`);
         params.push(needle, needle, needle, needle);
     }
 
