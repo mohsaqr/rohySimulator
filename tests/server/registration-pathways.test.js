@@ -107,7 +107,9 @@ describe('registration & auth-entry pathways', () => {
             await tzServer.close();
         });
 
-        it('returns 423 on the attempt after 5 failures — even with the correct password', async () => {
+        // The locked answer is the generic 401 since F-10 (security audit
+        // 2026-10-26): a 423 to the correct password was a password oracle.
+        it('refuses the attempt after 5 failures — even with the correct password', async () => {
             const bad = () => fetch(`${tzServer.baseUrl}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
@@ -126,7 +128,7 @@ describe('registration & auth-entry pathways', () => {
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ username: 'locky', password: TEST_PASSWORD }),
             });
-            expect(res.status).toBe(423);
+            expect(res.status).toBe(401);
         });
     });
 
@@ -283,7 +285,10 @@ describe('registration approval queue', () => {
         expect(req.status).toBe('pending');
     });
 
-    it('refuses a second request for the same username (partial unique index)', async () => {
+    // Since L1-10 (security audit 2026-10-26) a duplicate application gets the
+    // same 202 as a new one — a 409 here told anyone which names were queued —
+    // and the partial unique index still keeps it to ONE live request.
+    it('folds a second request for the same username into the first (partial unique index)', async () => {
         // Self-contained: create the first request here rather than leaning on the
         // park test above, so this still exercises the collision when run alone.
         const first = await register(server.baseUrl, {
@@ -293,8 +298,11 @@ describe('registration approval queue', () => {
         const dup = await register(server.baseUrl, {
             username: 'dup_applicant', email: 'other@example.com', password: APPLICANT_PW,
         });
-        expect(dup.status).toBe(409);
-        expect(dup.body.code).toBe('approval_already_requested');
+        expect(dup.status).toBe(202);
+        expect(dup.body.code).toBe('approval_pending');
+        const live = await get(db,
+            `SELECT COUNT(*) AS n FROM registration_requests WHERE username = ? AND status = 'pending'`, ['dup_applicant']);
+        expect(live.n).toBe(1);
     });
 
     it('shows the queue to an admin and hides it from a student', async () => {

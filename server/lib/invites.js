@@ -8,6 +8,7 @@
 import dbAdapter from '../dbAdapter.js';
 import { logger } from '../logger.js';
 import { generateCode, normalizeCode } from './joinCode.js';
+import { getRoleRank } from '../middleware/auth.js';
 
 const inviteLog = logger('registration-invites');
 
@@ -48,6 +49,41 @@ export function inviteRejection(invite) {
     if (invite.expires_at && new Date(invite.expires_at).getTime() <= Date.now()) return 'expired';
     if (invite.max_uses != null && invite.uses >= invite.max_uses) return 'exhausted';
     return null;
+}
+
+/**
+ * Why the invite's MINTER no longer vouches for it, or null when they still do
+ * (security audit 2026-10-26, L2-10).
+ *
+ * An invite is an admin's standing decision to let someone in with a role. It
+ * used to outlive the admin: delete, purge, suspend or demote the person who
+ * minted it and their unlimited, never-expiring admin invite kept minting
+ * accounts — through `closed` mode too. The rank ceiling enforced at mint time
+ * is therefore re-checked at redemption: the creator must still exist, be
+ * active, live in the invite's tenant, and hold at least the invite's role.
+ * The holder is told "withdrawn", which is what it amounts to.
+ *
+ * @param {object} invite  a registration_invites row
+ * @returns {Promise<'revoked'|null>}
+ */
+export async function inviteCreatorRejection(invite) {
+    const creator = await dbAdapter.get(
+        'SELECT role, status, deleted_at, tenant_id FROM users WHERE id = ?',
+        [invite.created_by]
+    );
+    if (!creator || creator.deleted_at || creator.status !== 'active') return 'revoked';
+    if (Number(creator.tenant_id || 1) !== Number(invite.tenant_id || 1)) return 'revoked';
+    if (getRoleRank(creator.role) < getRoleRank(invite.role)) return 'revoked';
+    return null;
+}
+
+/**
+ * Every reason an invite cannot be redeemed right now: its own state
+ * (inviteRejection) and then its minter's (inviteCreatorRejection).
+ * @returns {Promise<string|null>}
+ */
+export async function inviteUsableRejection(invite) {
+    return inviteRejection(invite) || inviteCreatorRejection(invite);
 }
 
 /** Look up an invite from raw user input (normalised). Null when there is none. */

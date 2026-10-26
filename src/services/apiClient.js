@@ -254,23 +254,42 @@ export async function apiFetch(path, options = {}) {
     // we set it explicitly so the rohy_auth HttpOnly cookie travels — this
     // is the client side of the audit's "JWT in localStorage → cookies"
     // migration. Cross-origin callers can still override via `rest`.
-    let response;
-    try {
-        response = await fetch(url, {
-            method,
-            headers,
-            body,
-            signal,
-            credentials: 'same-origin',
-            ...rest,
-        });
-    } catch (err) {
-        if (err?.name === 'AbortError') throw err;
-        throw new ApiError(`Network error: ${err?.message || 'request failed'}`, {
-            status: 0,
-            code: 'NETWORK',
-            url,
-        });
+    const send = async (sendHeaders) => {
+        try {
+            return await fetch(url, {
+                method,
+                headers: sendHeaders,
+                body,
+                signal,
+                credentials: 'same-origin',
+                ...rest,
+            });
+        } catch (err) {
+            if (err?.name === 'AbortError') throw err;
+            throw new ApiError(`Network error: ${err?.message || 'request failed'}`, {
+                status: 0,
+                code: 'NETWORK',
+                url,
+            });
+        }
+    };
+
+    let response = await send(headers);
+
+    // The CSRF token is now bound to the session (server/middleware/csrf.js,
+    // security audit 2026-10-26, F-13). A tab still holding a pre-binding
+    // token gets 403 `csrf_stale` together with a Set-Cookie carrying the
+    // bound one, so the request is sent ONCE more with the fresh cookie value.
+    // Only when the cookie really changed: an unchanged token would just
+    // repeat the refusal.
+    const sentCsrf = headers['X-CSRF-Token'];
+    const streamBody = typeof ReadableStream !== 'undefined' && body instanceof ReadableStream;
+    if (response.status === 403 && sentCsrf && !streamBody) {
+        const refusal = await response.clone().json().catch(() => null);
+        const fresh = refusal?.code === 'csrf_stale' ? readCsrfToken() : null;
+        if (fresh && fresh !== sentCsrf) {
+            response = await send({ ...headers, 'X-CSRF-Token': fresh });
+        }
     }
 
     if (parseAs === 'response') {

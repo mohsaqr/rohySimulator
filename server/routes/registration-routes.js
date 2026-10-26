@@ -17,7 +17,8 @@ import {
     getRoleRank,
 } from '../middleware/auth.js';
 import { logger } from '../logger.js';
-import { allocateInviteToken, findInviteByToken, inviteRejection } from '../lib/invites.js';
+import { allocateInviteToken, findInviteByToken, inviteRejection, inviteUsableRejection } from '../lib/invites.js';
+import { findIdentityClash } from '../lib/identity.js';
 // One time shape everywhere (RPS-1 §17): a user row created here gets an
 // explicit UTC ISO created_at instead of sqlite's naive DEFAULT CURRENT_TIMESTAMP.
 import { SQL_NOW } from '../shared/time.js';
@@ -58,7 +59,9 @@ const invitePreviewLimiter = rateLimit({
 router.get('/auth/invite/:token', invitePreviewLimiter, async (req, res) => {
     try {
         const invite = await findInviteByToken(req.params.token);
-        const reason = inviteRejection(invite);
+        // Same rule as redemption: an invite whose minter was deleted, disabled
+        // or demoted below its role is withdrawn (L2-10).
+        const reason = await inviteUsableRejection(invite);
         if (reason) return res.json({ valid: false, reason });
 
         let cohortName = null;
@@ -294,6 +297,17 @@ router.post('/registration-requests/:id/approve', authenticateToken, requireAdmi
         if (!isValidRole(role)) return res.status(400).json({ error: 'Invalid role' });
         if (getRoleRank(role) > getRoleRank(req.user.role)) {
             return res.status(403).json({ error: 'Cannot approve a role higher than your own' });
+        }
+
+        // Case-insensitive, like every other path that creates an account
+        // (L1-12). Self-registration in approval mode now queues EVERY request
+        // and answers 202 (no enumeration, L1-10), so a request for a name that
+        // is already taken — in any letter case — is refused here instead.
+        if (await findIdentityClash({ username: request.username, email: request.email })) {
+            return res.status(409).json({
+                code: 'username_taken',
+                error: 'That username or email now belongs to an existing account. Reject this request.'
+            });
         }
 
         // The hash moves across untouched — the applicant signs in with the password

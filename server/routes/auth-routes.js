@@ -15,10 +15,11 @@ import {
     AUTH_COOKIE_NAME,
     getRoleRank,
 } from '../middleware/auth.js';
+import crypto from 'crypto';
 import {
     CSRF_COOKIE_NAME,
     csrfCookieOptions,
-    generateCsrfToken,
+    csrfTokenForSession,
 } from '../middleware/csrf.js';
 import { sqliteTsToIso } from '../sqliteTime.js';
 import { cookieSecure } from '../middleware/authTtl.js';
@@ -37,6 +38,65 @@ const LOCKOUT_MINUTES = 15;
 // audit 2026-10-24). Cost 10 matches the hashes register/create write.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('rohy-dummy', 10);
 
+// Every failed login answers no sooner than this after it arrived (L1-11).
+// bcrypt already equalises the expensive part, but a known account then
+// awaited its failure-counter UPDATE while an unknown name did not: a
+// one-write timing difference that told a patient caller which names exist.
+// A floor well above bcrypt (+ one write) hides it. Only failures pay it.
+const LOGIN_FAILURE_FLOOR_MS = 250;
+const waitUntil = (deadlineMs) => new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, deadlineMs - Date.now()));
+});
+
+/**
+ * Whether a login/register/refresh response may carry the JWT in its body
+ * (security audit 2026-10-26, F-14).
+ *
+ * The browser SPA authenticates with the HttpOnly rohy_auth cookie and never
+ * reads the body token (src/services/authService.js keeps it only under an
+ * explicit `rememberToken`). A body token there is pure liability: any script
+ * running in the origin could POST /auth/refresh and walk away with a portable
+ * bearer token, which is exactly what HttpOnly exists to prevent.
+ *
+ * So the body token goes only to callers that need it:
+ *   - `bearerSession`: this refresh was authenticated by an Authorization
+ *     header, i.e. the caller already holds a bearer token and must learn the
+ *     rotated one (legacy localStorage tabs, API scripts);
+ *   - a request with no `Sec-Fetch-Site` header: every current browser sends
+ *     it on every fetch and page script cannot remove it, while Node/undici,
+ *     curl, Playwright's API client and the bench/test tooling do not — they
+ *     have no cookie jar to fall back on;
+ *   - `allowOptIn` + `X-Rohy-Auth: bearer`: an explicit browser opt-in at LOGIN
+ *     or REGISTER only (AuthService `rememberToken`). Those need the password,
+ *     so the opt-in hands an injected script nothing it did not already have.
+ *     It is NOT honoured on refresh, where a cookie alone would otherwise buy
+ *     a token.
+ * A browser without Fetch Metadata (Safari < 16.4) still gets the body token,
+ * as every browser did before this change.
+ */
+function bodyTokenAllowed(req, { bearerSession = false, allowOptIn = false } = {}) {
+    if (bearerSession) return true;
+    if (!req.headers?.['sec-fetch-site']) return true;
+    return allowOptIn && String(req.headers?.['x-rohy-auth'] || '').trim().toLowerCase() === 'bearer';
+}
+
+/**
+ * Optional one-time setup token for claiming an empty instance (F-30 / L6-06).
+ * When ROHY_SETUP_TOKEN is set, the first signup becomes admin only if it
+ * presents that value (in the register form's invite-code field, or as
+ * `setup_token`). Unset, behaviour is unchanged: the claim is open to the first
+ * registrant, and operators who want neither should provision ROHY_ADMIN_*.
+ */
+function setupTokenRequired() {
+    return Boolean(String(process.env.ROHY_SETUP_TOKEN || '').trim());
+}
+function setupTokenMatches(body) {
+    const expected = String(process.env.ROHY_SETUP_TOKEN || '').trim();
+    const supplied = String(body?.setup_token || body?.invite || body?.invite_code || '').trim();
+    if (!expected || supplied.length !== expected.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+}
+
 // How much of a submitted username is kept in login_logs for a failed attempt.
 // The column is a free-text copy of whatever the client sent; without a cap a
 // single request could park kilobytes per row in a table nobody prunes.
@@ -47,7 +107,7 @@ const LOGIN_LOG_USERNAME_MAX = 128;
 // ASCII set; emails are trimmed and lower-cased so `Alice@Example.com` and
 // `alice@example.com` are one account, not two.
 export const USERNAME_PATTERN = /^[A-Za-z0-9_.-]{3,64}$/;
-export const EMAIL_MAX_LENGTH = 254;
+export { EMAIL_MAX_LENGTH };
 
 /**
  * Normalise a submitted username/email pair and say what is wrong with it.
@@ -55,19 +115,14 @@ export const EMAIL_MAX_LENGTH = 254;
  */
 export function normalizeIdentity({ username, email }) {
     const user = typeof username === 'string' ? username.trim() : '';
-    const mail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const mail = normalizeEmail(email);
     if (!USERNAME_PATTERN.test(user)) {
         return {
-            username: user, email: mail,
+            username: user, email: mail.email,
             error: 'Username must be 3-64 characters: letters, digits, underscore, dot or hyphen',
         };
     }
-    const at = mail.indexOf('@');
-    const oneAt = at > 0 && at < mail.length - 1 && at === mail.lastIndexOf('@');
-    if (mail.length > EMAIL_MAX_LENGTH || !oneAt || /\s/.test(mail)) {
-        return { username: user, email: mail, error: 'A valid email address is required' };
-    }
-    return { username: user, email: mail, error: null };
+    return { username: user, email: mail.email, error: mail.error };
 }
 
 
@@ -90,10 +145,12 @@ import {
     claimInviteUse,
     findInviteByToken,
     INVITE_ERRORS,
-    inviteRejection,
+    inviteUsableRejection,
     recordInviteUse,
     releaseInviteUse,
 } from '../lib/invites.js';
+import { EMAIL_MAX_LENGTH, findIdentityClash, normalizeEmail } from '../lib/identity.js';
+import { auditDigest } from '../audit-chain.js';
 
 // maxAge defaults to the shared auth TTL — a cookie that dies before the
 // JWT inside it silently logs cookie-mode users out early.
@@ -195,7 +252,10 @@ router.get('/auth/registration-policy', policyLimiter, async (req, res) => {
             approval_required: !bootstrap && policy.mode === 'approval',
             email_domains: policy.domains,
             message: policy.message,
-            bootstrap
+            bootstrap,
+            // Present only while an empty instance is claimable AND the claim
+            // needs the operator's ROHY_SETUP_TOKEN (entered as the invite code).
+            ...(bootstrap && setupTokenRequired() ? { setup_token_required: true } : {})
         });
     } catch (err) {
         (req.log || authLog).warn('registration policy probe failed', { error: err.message });
@@ -252,6 +312,15 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
     // lets an admin ship an instance as `closed` and still claim it — without
     // this ordering, a closed fresh install would have no path to a first admin
     // at all, which is the exact dead end 2.5.2 fixed.
+    // An empty instance with ROHY_SETUP_TOKEN set is claimable only by whoever
+    // holds that token (printed for the operator, never served by the app).
+    if (isBootstrapClaim && setupTokenRequired() && !setupTokenMatches(req.body)) {
+        return res.status(403).json({
+            code: 'setup_token_required',
+            error: 'This new instance can only be claimed with its setup token. Enter it as the invite code.'
+        });
+    }
+
     let invite = null;
     if (!isBootstrapClaim) {
         const policy = await registrationPolicy();
@@ -263,7 +332,8 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // user would land in the wrong place and nobody would know why.
         if (suppliedToken) {
             invite = await findInviteByToken(suppliedToken);
-            const reason = inviteRejection(invite);
+            // Includes the minter: an invite dies with its creator's rights (L2-10).
+            const reason = await inviteUsableRejection(invite);
             if (reason) {
                 invite = null;
                 return res.status(400).json({ code: `invite_${reason}`, error: INVITE_ERRORS[reason] });
@@ -320,16 +390,21 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // same administrator the same question twice. Same reasoning that lets an
         // invite through a closed door.
         if (policy.mode === 'approval' && !invite) {
-            const taken = await new Promise((resolve, reject) => {
-                dbAdapter.get(
-                    'SELECT id FROM users WHERE username = ? OR email = ?',
-                    [username, email],
-                    (err, row) => (err ? reject(err) : resolve(Boolean(row)))
-                );
+            // ONE answer whatever the queue or the users table already holds
+            // (L1-10). This route used to 409 for a taken username or email and
+            // a pending duplicate, which made it an oracle for which accounts
+            // exist. Now every well-formed application is queued and answered
+            // 202; a request for a name that is already taken is resolved at
+            // approval, where the approve route refuses it (username_taken) and
+            // the admin rejects it. The cost is honest-but-mistaken applicants
+            // waiting on an admin instead of being told at once — an accepted
+            // trade-off, since nothing else can tell them without telling
+            // everyone. A second live request for the same name or email is
+            // silently folded into the first (same 202, no second row).
+            const approvalPending = () => res.status(202).json({
+                code: 'approval_pending',
+                message: 'Your request has been sent to an administrator. You will be able to sign in once it is approved.'
             });
-            if (taken) {
-                return res.status(409).json({ error: 'Username or email already exists' });
-            }
 
             // Hashed here, never stored in the clear even for a moment. On approval
             // the hash moves into the users row untouched, so the applicant signs in
@@ -343,12 +418,10 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 );
             } catch (err) {
                 // The partial unique indexes cover LIVE requests only, so this is a
-                // duplicate application, not a duplicate account.
+                // duplicate application, not a duplicate account. Same answer as
+                // a new one — see approvalPending above.
                 if (String(err.message).includes('UNIQUE')) {
-                    return res.status(409).json({
-                        code: 'approval_already_requested',
-                        error: 'A request for this username or email is already waiting for approval.'
-                    });
+                    return approvalPending();
                 }
                 throw err;
             }
@@ -363,10 +436,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 tenantId: tenantId(req),
             });
 
-            return res.status(202).json({
-                code: 'approval_pending',
-                message: 'Your request has been sent to an administrator. You will be able to sign in once it is approved.'
-            });
+            return approvalPending();
         }
     }
 
@@ -379,6 +449,15 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         finalRole = invite.role;
     } else if (getRoleRank(requestedRole) > ROLE_RANKS.student) {
         return res.status(403).json({ error: 'Only admins can create elevated accounts' });
+    }
+
+    // Case-insensitive uniqueness (L1-12): the UNIQUE index is case-sensitive,
+    // so without this a student could register `Admin` beside the real `admin`.
+    // In open mode the account is created on the spot, so a taken name has to
+    // be refused here; that 409 is inherent without e-mail verification and is
+    // documented as an accepted enumeration residue (L1-10).
+    if (!isBootstrapClaim && await findIdentityClash({ username, email })) {
+        return res.status(409).json({ error: 'Username or email already exists' });
     }
 
     // Claim the use BEFORE creating the user. The conditional UPDATE re-checks
@@ -396,9 +475,17 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
-        // Insert user
+        // Insert user. The bootstrap claim is a CONDITIONAL insert (F-30): the
+        // count above was read before a ~70 ms bcrypt hash, so two first
+        // signups both used to see an empty table and both became admin. The
+        // `WHERE NOT EXISTS` is decided by sqlite's single writer, so exactly
+        // one claim lands; the loser inserts nothing and is told to retry,
+        // which then goes through the normal registration policy.
         const defaultTenantId = invite?.tenant_id || 1;
-        const sql = `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
+        const sql = isBootstrapClaim
+            ? `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at)
+               SELECT ?, ?, ?, ?, ?, ?, ${SQL_NOW} WHERE NOT EXISTS (SELECT 1 FROM users)`
+            : `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`;
         dbAdapter.run(sql, [username, name || null, email, password_hash, finalRole, defaultTenantId], async function (err) {
             if (err) {
                 if (invite) await releaseInviteUse(invite.id);
@@ -406,6 +493,12 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                     return res.status(409).json({ error: 'Username or email already exists' });
                 }
                 return res.status(500).json({ error: err.message });
+            }
+            if (isBootstrapClaim && this.changes === 0) {
+                return res.status(409).json({
+                    code: 'bootstrap_claimed',
+                    error: 'This instance was claimed a moment ago. Sign in, or register again.'
+                });
             }
 
             const user = { id: this.lastID, username, name, email, role: finalRole, tenant_id: defaultTenantId };
@@ -456,8 +549,9 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 
             // The account and invite redemption are complete even if signing
             // in is unavailable. Never expose a newly minted, unrevocable JWT.
+            let sessionHash;
             try {
-                await recordActiveSession(token, user, { ipAddress, userAgent });
+                sessionHash = await recordActiveSession(token, user, { ipAddress, userAgent });
             } catch (e) {
                 (req.log || authLog).error('register active session record failed', {
                     user_id: user.id, tenant_id: defaultTenantId, error: e.message
@@ -469,17 +563,14 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             }
 
             res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
-            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+            res.cookie(CSRF_COOKIE_NAME, csrfTokenForSession(sessionHash), csrfCookieOptions());
 
-            // The JWT is returned in the body as well as in the HttpOnly cookie
-            // (also on login and refresh). Reviewed in the security audit of
-            // 2026-10-24 and kept: the client stores it only under an explicit
-            // "remember me" opt-in, and it is what the bearer-header path and
-            // the test/bench tooling authenticate with.
+            // The JWT rides in the body only for callers that need it — see
+            // bodyTokenAllowed() (F-14; it used to go to every caller).
             res.status(201).json({
                 message: 'User registered successfully',
                 user: { id: user.id, username, name, email, role: finalRole, tenant_id: defaultTenantId },
-                token
+                ...(bodyTokenAllowed(req, { allowOptIn: true }) ? { token } : {})
             });
         });
     } catch (err) {
@@ -492,11 +583,20 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
 // The login response is deliberately uniform. Whatever the real reason — the
 // username does not exist, the password is wrong, the account is disabled or
 // locked — a caller who does not know the password gets the same 401 after the
-// same bcrypt work. Disabled (403) and locked (423) are only ever told to
-// someone who has just proved they know the password: those codes exist so a
-// legitimate owner learns why they cannot get in, not so a stranger can learn
-// which usernames are worth guessing (security audit 2026-10-24). The real
-// reason still goes to login_logs and the learning-event stream.
+// same bcrypt work and no sooner than LOGIN_FAILURE_FLOOR_MS. Disabled (403) is
+// only ever told to someone who has just proved they know the password
+// (security audit 2026-10-24). The real reason still goes to login_logs and the
+// learning-event stream.
+//
+// A LOCKED account answers the same 401 whatever password is sent, the right
+// one included (security audit 2026-10-26, F-10). It used to answer 423 to the
+// right password, so the lock told a guesser spread over many IPs exactly when
+// a guess was correct — throttling only the owner. An attempt made during an
+// active lock writes nothing to the counter either (F-11): it used to push
+// `locked_until` forward, so one wrong password every 14 minutes kept any known
+// account locked for ever. The lock now always runs out on time; an admin can
+// lift it early (PATCH /users/:id/status to 'active', a password reset, or
+// `node scripts/unlock-user.js <username>`).
 router.post('/auth/login', authLimiter, (req, res) => {
     const rawUsername = req.body?.username;
     const password = req.body?.password;
@@ -510,7 +610,11 @@ router.post('/auth/login', authLimiter, (req, res) => {
     // trailing space still finds its account.
     const username = rawUsername.trim();
     const loggedUsername = username.slice(0, LOGIN_LOG_USERNAME_MAX);
-    const generic401 = () => res.status(401).json({ error: 'Invalid username or password' });
+    const startedAt = Date.now();
+    const generic401 = async () => {
+        await waitUntil(startedAt + LOGIN_FAILURE_FLOOR_MS);
+        return res.status(401).json({ error: 'Invalid username or password' });
+    };
 
     const sql = `SELECT * FROM users WHERE username = ?`;
     dbAdapter.get(sql, [username], async (err, user) => {
@@ -528,9 +632,15 @@ router.post('/auth/login', authLimiter, (req, res) => {
             }
             // Log failed login attempt — dual-write so the unified Activity
             // view sees auth events alongside in-session learning events.
+            //
+            // The attempted name is NOT stored in clear for an unknown account
+            // (L7-17): it is whatever was typed — often a password in the wrong
+            // field — and login_logs keeps it indefinitely. A keyed digest
+            // (`hmac:…`, the audit log's own) still lets an operator count
+            // repeated attempts on one name and check a name they are asked about.
             dbAdapter.run(
                 `INSERT INTO login_logs (user_id, username, action, ip_address, user_agent, tenant_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [null, loggedUsername, 'failed_login', ipAddress, userAgent, 1]
+                [null, auditDigest(username), 'failed_login', ipAddress, userAgent, 1]
             );
             // No learning event for an UNKNOWN username: there is no learner
             // to attribute it to and no honest tenant to file it under (the
@@ -557,9 +667,8 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // — unlimited password guessing. Docker's UTC default hid it.
             let lockActive = false;
             let lockExpired = false;
-            let lockedUntilMs = NaN;
             if (user.locked_until) {
-                lockedUntilMs = new Date(sqliteTsToIso(user.locked_until)).getTime();
+                const lockedUntilMs = new Date(sqliteTsToIso(user.locked_until)).getTime();
                 lockActive = Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now();
                 lockExpired = !lockActive;
             }
@@ -575,6 +684,14 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 }, { tenantId: user.tenant_id || 1, source: 'server:auth' }).catch(() => {});
             };
 
+            // ACTIVE LOCK: same 401 for a right and a wrong password, and the
+            // counter / locked_until are not touched — the lock is neither
+            // revealed nor renewed (F-10, F-11). The attempt is still logged.
+            if (lockActive) {
+                logFailure('locked');
+                return generic401();
+            }
+
             if (!match) {
                 // Bump the fail counter; lock at the threshold. A lock that has
                 // EXPIRED starts the count again from zero: the counter used to
@@ -582,8 +699,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 // wrong password re-locked the account for another 15 minutes
                 // — anyone who knew a username could keep its owner out for
                 // good with one request a quarter-hour (security audit
-                // 2026-10-24). An ACTIVE lock keeps counting, so hammering a
-                // locked account renews the lock rather than running it down.
+                // 2026-10-24). An active lock never reaches this point.
                 const priorAttempts = lockExpired ? 0 : (user.failed_login_attempts || 0);
                 const newAttempts = priorAttempts + 1;
                 // Awaited: the next attempt reads this counter, and a 401 that
@@ -608,7 +724,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
                         [newAttempts, user.id]
                     );
                 }
-                logFailure(disabled ? 'account_disabled' : lockActive ? 'locked' : 'bad_password', { attempts: newAttempts });
+                logFailure(disabled ? 'account_disabled' : 'bad_password', { attempts: newAttempts });
                 return generic401();
             }
 
@@ -626,14 +742,6 @@ router.post('/auth/login', authLimiter, (req, res) => {
                 return res.status(403).json({
                     code: 'account_disabled',
                     error: 'This account is not active. Contact an administrator.'
-                });
-            }
-
-            if (lockActive) {
-                const minsLeft = Math.ceil((lockedUntilMs - Date.now()) / 60000);
-                logFailure('locked');
-                return res.status(423).json({
-                    error: `Account locked. Try again in ${minsLeft} minute${minsLeft === 1 ? '' : 's'}.`
                 });
             }
 
@@ -661,8 +769,9 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // shape stays in lockstep with authenticateToken's revocation
             // check. A new login must have a revocable session before its JWT
             // reaches either the response body or an auth cookie.
+            let sessionHash;
             try {
-                await recordActiveSession(token, user, { ipAddress, userAgent });
+                sessionHash = await recordActiveSession(token, user, { ipAddress, userAgent });
             } catch (e) {
                 (req.log || authLog).error('active session record failed', {
                     user_id: user.id,
@@ -689,9 +798,9 @@ router.post('/auth/login', authLimiter, (req, res) => {
             // cookie-auth state-changing requests can satisfy the
             // double-submit check in authenticateToken. Client JS reads
             // this and echoes it as X-CSRF-Token. See middleware/csrf.js.
-            res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+            res.cookie(CSRF_COOKIE_NAME, csrfTokenForSession(sessionHash), csrfCookieOptions());
 
-            // `token` in the body: see the note on the register response.
+            // `token` in the body: see bodyTokenAllowed() (F-14).
             res.json({
                 message: 'Login successful',
                 user: {
@@ -701,7 +810,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
                     role: user.role,
                     tenant_id: user.tenant_id || 1
                 },
-                token
+                ...(bodyTokenAllowed(req, { allowOptIn: true }) ? { token } : {})
             });
         } catch (err) {
             res.status(500).json({ error: 'Error during login', details: err.message });
@@ -715,7 +824,7 @@ router.post('/auth/login', authLimiter, (req, res) => {
 // extra dedicated endpoint.
 router.get('/auth/verify', authenticateToken, (req, res) => {
     if (req.tokenSource === 'cookie') {
-        res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+        res.cookie(CSRF_COOKIE_NAME, csrfTokenForSession(req.tokenHash), csrfCookieOptions());
     }
     res.json({
         valid: true,
@@ -771,8 +880,9 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
         // proceeding to the revoke below would kill the CURRENT token too,
         // returning 200 while logging the user out. Fail the refresh
         // instead; the client keeps its still-valid token and retries.
+        let newHash;
         try {
-            await recordActiveSession(newToken, fresh, { ipAddress, userAgent });
+            newHash = await recordActiveSession(newToken, fresh, { ipAddress, userAgent });
         } catch (e) {
             (req.log || authLog).error('refresh active session record failed', {
                 user_id: fresh.id,
@@ -800,9 +910,12 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
         // bearer-mode clients also get the new JSON token in the body
         // and can update their localStorage if they're still on that path.
         res.cookie(AUTH_COOKIE_NAME, newToken, authCookieOptions());
-        res.cookie(CSRF_COOKIE_NAME, generateCsrfToken(), csrfCookieOptions());
+        res.cookie(CSRF_COOKIE_NAME, csrfTokenForSession(newHash), csrfCookieOptions());
 
-        // `token` in the body: see the note on the register response.
+        // `token` in the body only for a bearer-authenticated refresh or a
+        // non-browser caller — never for a cookie session in a browser, where
+        // it would hand an injected script a portable token (F-14).
+        const sendToken = bodyTokenAllowed(req, { bearerSession: req.tokenSource === 'header' });
         res.json({
             message: 'Token refreshed',
             user: {
@@ -812,7 +925,7 @@ router.post('/auth/refresh', authenticateToken, async (req, res) => {
                 role: fresh.role,
                 tenant_id: fresh.tenant_id || 1,
             },
-            token: newToken,
+            ...(sendToken ? { token: newToken } : {}),
         });
     } catch (err) {
         res.status(500).json({ error: 'Refresh failed', details: err.message });

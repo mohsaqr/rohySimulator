@@ -4,7 +4,13 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dbAdapter from '../dbAdapter.js';
-import { csrfRequired, verifyCsrf } from './csrf.js';
+import {
+    CSRF_COOKIE_NAME,
+    csrfCookieOptions,
+    csrfRequired,
+    verifyCsrf,
+    verifyCsrfBinding,
+} from './csrf.js';
 import { requireTermsAccepted } from './termsGate.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -157,7 +163,7 @@ export const authenticateToken = (req, res, next) => {
 
         const tokenHash = hashToken(token);
         dbAdapter.get(
-            `SELECT is_active, expires_at FROM active_sessions WHERE token_hash = ? LIMIT 1`,
+            `SELECT id, is_active, expires_at, tenant_id FROM active_sessions WHERE token_hash = ? LIMIT 1`,
             [tokenHash],
             (sessionErr, sessionRow) => {
                 if (sessionErr) {
@@ -212,6 +218,23 @@ export const authenticateToken = (req, res, next) => {
                             role: row.role || user.role,
                             tenant_id: row.tenant_id || user.tenant_id || 1
                         };
+                        // The user was moved to another tenant after this
+                        // session was issued (POST /users/:id/tenant). Re-tag
+                        // the row so it lives where the user now lives: the
+                        // new tenant's admin can see and force-logout it, and
+                        // the old tenant's admin stops seeing the user's IP and
+                        // user agent (L1-06 / L2-15). Revocation on password
+                        // change is by user_id regardless of tenant
+                        // (users-routes.js), so a pre-move token no longer
+                        // survives either. Best-effort: the request proceeds
+                        // under the user's CURRENT tenant either way.
+                        if (Number(sessionRow.tenant_id || 1) !== Number(req.user.tenant_id)) {
+                            dbAdapter.run(
+                                'UPDATE active_sessions SET tenant_id = ? WHERE id = ?',
+                                [req.user.tenant_id, sessionRow.id],
+                                () => { /* best-effort re-tag; next request retries */ }
+                            );
+                        }
                         // Stash the hash so /auth/logout can revoke this exact session
                         // without having to recompute it from the auth header.
                         req.tokenHash = tokenHash;
@@ -221,9 +244,18 @@ export const authenticateToken = (req, res, next) => {
                         // requests are exempt (the attacker can't auto-
                         // attach Authorization headers cross-site). See
                         // server/middleware/csrf.js for the full rationale.
+                        //
+                        // Two halves: the double-submit pair must agree, and
+                        // the token must be the one bound to THIS session
+                        // (F-13). A tab still holding a pre-binding random
+                        // token gets the bound one re-set on the 403 (`heal`),
+                        // so its next attempt succeeds without a reload.
                         if (csrfRequired(req)) {
-                            const verdict = verifyCsrf(req);
+                            const verdict = verifyCsrf(req) || verifyCsrfBinding(req);
                             if (verdict) {
+                                if (verdict.heal) {
+                                    res.cookie(CSRF_COOKIE_NAME, verdict.heal, csrfCookieOptions());
+                                }
                                 return res.status(verdict.status).json(verdict.body);
                             }
                         }

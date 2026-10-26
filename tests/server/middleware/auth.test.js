@@ -512,7 +512,10 @@ describe('auth middleware — CSRF protection on cookie-auth state-changing requ
     it('cookie-auth POST with matching cookie/header → next() runs', async () => {
         const jwtToken = signToken({ id: 104, role: 'admin' }, { jwtid: 'csrf-ok' });
         await auth.recordActiveSession(jwtToken, { id: 104, tenant_id: 1 });
-        const csrf = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg'; // 43 chars
+        // The token must be the one BOUND to this session since F-13 (security
+        // audit 2026-10-26); an arbitrary matching pair is refused (sec2-a-csrf).
+        const { csrfTokenForSession } = await import('../../../server/middleware/csrf.js');
+        const csrf = csrfTokenForSession(auth.hashToken(jwtToken));
 
         const req = makeReq({
             method: 'POST',

@@ -4,11 +4,14 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
 import {
     authenticateToken,
     requireAdmin,
     getRoleRank,
 } from '../middleware/auth.js';
+import { findIdentityClash, normalizeAdminIdentity, normalizeEmail } from '../lib/identity.js';
+import { clearLoginLock, revokeUserSessions } from '../lib/accountSessions.js';
 
 
 
@@ -17,7 +20,6 @@ import { logger } from '../logger.js';
 import { verifyAuditChain } from '../audit-chain.js';
 import {
     auditSuccess,
-    commitThen,
     buildUserPurgePlan,
     dbGet,
     enrollUserInCohort,
@@ -26,6 +28,10 @@ import {
     isValidRole,
     logAudit,
     logAuditAsync,
+    clampLimit,
+    clampOffset,
+    newPurgePseudonym,
+    purgeAuditIdentity,
     redactAuditSetting,
     redactRow,
     redactRows,
@@ -63,14 +69,42 @@ try {
 
 const router = express.Router();
 
+// PUT /user/password checks the CURRENT password, so a stolen session (or an
+// unattended lab PC) could guess it online at the general 600/min limit and
+// then own the account for good (L1-07). Five wrong answers per user per
+// 15 minutes; successful changes do not count. Keyed on the user, not the IP:
+// the attacker already holds the session, and campuses share NAT addresses.
+const RATE_LIMIT_DISABLED = process.env.ROHY_DISABLE_AUTH_RATE_LIMIT === '1';
+const passwordChangeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: RATE_LIMIT_DISABLED ? 100_000 : 5,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `user:${req.user.id}`,
+    handler: (req, res) => res.status(429).json({
+        error: 'Too many wrong passwords. Try again in 15 minutes.',
+        code: 'RATE_LIMITED',
+    }),
+});
+
+/** A sentinel thrown inside a transaction to roll it back and answer 404. */
+class NotFoundInTransaction extends Error {}
+
 router.post('/users/create', authenticateToken, requireAdmin, async (req, res) => {
-    const { username, name, email, password, role = 'student' } = req.body;
+    const { name, password, role = 'student' } = req.body;
     const finalRole = roleForStorage(role);
 
     // Validation
-    if (!username || !email || !password) {
+    if (!req.body?.username || !req.body?.email || !password) {
         return res.status(400).json({ error: 'Username, email, and password are required' });
     }
+    // Trimmed username, trimmed + lower-cased email (L1-12, as self-registration).
+    const identity = normalizeAdminIdentity(req.body);
+    if (identity.error) {
+        return res.status(400).json({ error: identity.error, code: 'invalid_identity' });
+    }
+    const { username, email } = identity;
     if (!isValidRole(finalRole)) {
         return res.status(400).json({ error: 'Invalid role' });
     }
@@ -84,6 +118,11 @@ router.post('/users/create', authenticateToken, requireAdmin, async (req, res) =
     }
 
     try {
+        // The UNIQUE index is case-sensitive; `Admin` beside `admin` is refused here.
+        if (await findIdentityClash({ username, email })) {
+            return res.status(409).json({ error: 'Username or email already exists' });
+        }
+
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
@@ -130,17 +169,23 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
     };
 
     for (const userData of users) {
-        const { username, name, email, password, role = 'student' } = userData;
+        const { name, password, role = 'student' } = userData || {};
         const finalRole = roleForStorage(role);
 
         // Validation
-        if (!username || !email || !password) {
-            results.failed.push({ 
-                username, 
+        if (!userData?.username || !userData?.email || !password) {
+            results.failed.push({
+                username: userData?.username,
                 name,
-                email, 
-                error: 'Missing required fields' 
+                email: userData?.email,
+                error: 'Missing required fields'
             });
+            continue;
+        }
+        const identity = normalizeAdminIdentity(userData);
+        const { username, email } = identity;
+        if (identity.error) {
+            results.failed.push({ username, name, email, error: identity.error });
             continue;
         }
         if (!isValidRole(finalRole)) {
@@ -174,6 +219,10 @@ router.post('/users/batch', authenticateToken, requireAdmin, async (req, res) =>
         }
 
         try {
+            if (await findIdentityClash({ username, email })) {
+                throw { error: 'Username or email already exists' };
+            }
+
             // Hash password
             const password_hash = await bcrypt.hash(password, 10);
 
@@ -262,7 +311,8 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
         for (let i = 0; i < rows.length; i++) {
             const raw = rows[i] || {};
             const username = String(raw.username || '').trim();
-            const email = String(raw.email || '').trim();
+            // Lower-cased as stored, like every other creation path (L1-12).
+            const email = String(raw.email || '').trim().toLowerCase();
             const name = String(raw.name || '').trim();
             const password = raw.password || '';
             const finalRole = roleForStorage(raw.role || 'student');
@@ -272,6 +322,8 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
 
             if (!username || !email) { fail('Missing username or email'); continue; }
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { fail('Invalid email format'); continue; }
+            const identityError = normalizeAdminIdentity({ username, email }).error;
+            if (identityError) { fail(identityError); continue; }
             if (!isValidRole(finalRole)) { fail('Invalid role'); continue; }
             if (getRoleRank(finalRole) > getRoleRank(req.user)) { fail('Cannot grant a role higher than your own'); continue; }
 
@@ -308,6 +360,9 @@ router.post('/users/import', authenticateToken, requireAdmin, async (req, res) =
             if (!password) { fail('Password required for a new user'); continue; }
             const pv = validatePassword(password);
             if (!pv.valid) { fail(pv.errors.join('. ')); continue; }
+            // The maps above cover THIS tenant; usernames and emails are unique
+            // install-wide, in any letter case.
+            if (await findIdentityClash({ username, email })) { fail('Username or email already exists'); continue; }
 
             if (dryRun) { results.created.push({ row: rowNo, username, email, role: finalRole, class: cohort?.name || null }); continue; }
 
@@ -628,10 +683,25 @@ router.patch('/users/:id/status', authenticateToken, requireAdmin, async (req, r
         if (getRoleRank(target.role) >= getRoleRank(req.user.role)) {
             return res.status(403).json({ error: 'Cannot modify a user at or above your role' });
         }
-        await dbAdapter.run('UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [status, id, tenantId(req)]);
+        // One transaction with its consequences:
+        //   - leaving 'active' revokes every session (L1-04). authenticateToken
+        //     already refuses a non-active user, but the rows stayed live, so
+        //     REactivating the account revived every token it ever had —
+        //     including the attacker's the suspension was meant to stop;
+        //   - setting 'active' also lifts a login lockout (F-11). This is the
+        //     admin unlock: the same control, re-applied to an active account.
+        const revoked = await dbAdapter.isolatedTransaction(async (tx) => {
+            await tx.run('UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [status, id, tenantId(req)]);
+            if (status === 'active') {
+                await clearLoginLock(id, { executor: tx });
+                return 0;
+            }
+            return revokeUserSessions(id, { executor: tx });
+        });
         auditSuccess(req, {
             action: 'admin_user_status_change', resourceType: 'user', resourceId: String(id),
-            resourceName: target.username, oldValue: { status: target.status }, newValue: { status },
+            resourceName: target.username, oldValue: { status: target.status },
+            newValue: { status, ...(status === 'active' ? { login_lock_cleared: true } : { sessions_revoked: revoked }) },
         });
         res.json({ updated: true, status });
     } catch (err) {
@@ -666,9 +736,17 @@ router.post('/users/bulk-action', authenticateToken, requireAdmin, async (req, r
                     if (getRoleRank(newRole) > getRoleRank(req.user.role)) { results.failed.push({ id, error: 'cannot grant a role above your own' }); continue; }
                     await dbAdapter.run('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [newRole, id, tid]);
                 } else if (action === 'suspend') {
-                    await dbAdapter.run("UPDATE users SET status = 'suspended', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                    // Suspension revokes the sessions with it (L1-04), as PATCH status does.
+                    await dbAdapter.isolatedTransaction(async (tx) => {
+                        await tx.run("UPDATE users SET status = 'suspended', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                        await revokeUserSessions(id, { executor: tx });
+                    });
                 } else {
-                    await dbAdapter.run("UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                    // Reactivation also lifts a login lockout (F-11).
+                    await dbAdapter.isolatedTransaction(async (tx) => {
+                        await tx.run("UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?", [id, tid]);
+                        await clearLoginLock(id, { executor: tx });
+                    });
                 }
                 results.success.push({ id, username: target.username });
             } catch (err) {
@@ -739,9 +817,36 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         // Only overwrite a field when the caller sent it; empty string clears to
         // NULL. Unspecified fields keep their prior value.
         const merge = (k) => (body[k] !== undefined ? (body[k] === '' ? null : body[k]) : prior[k]);
-        const username = body.username !== undefined ? body.username : prior.username;
         const name = body.name !== undefined ? (body.name || null) : prior.name;
-        const email = body.email !== undefined ? body.email : prior.email;
+        // A username or email the caller SENT is normalised and checked for a
+        // case-insensitive clash, as on create (L1-12); an untouched one is kept
+        // byte-for-byte, so editing a legacy row never fails on its old shape.
+        let username = prior.username;
+        let email = prior.email;
+        if (body.username !== undefined || body.email !== undefined) {
+            const nextUsername = typeof body.username === 'string' ? body.username.trim() : prior.username;
+            const mail = body.email !== undefined ? normalizeEmail(body.email) : null;
+            const usernameChanged = body.username !== undefined && nextUsername !== prior.username;
+            const emailChanged = mail !== null && mail.email !== String(prior.email || '').toLowerCase();
+            if (usernameChanged) {
+                // Validate the username alone, against a placeholder address.
+                const check = normalizeAdminIdentity({ username: body.username, email: 'x@x.invalid' });
+                if (check.error) return res.status(400).json({ error: check.error, code: 'invalid_identity' });
+            }
+            if (emailChanged && mail.error) {
+                return res.status(400).json({ error: mail.error, code: 'invalid_identity' });
+            }
+            if (usernameChanged || emailChanged) {
+                const clash = await findIdentityClash({
+                    username: usernameChanged ? nextUsername : null,
+                    email: emailChanged ? mail.email : null,
+                    excludeUserId: targetUserId,
+                });
+                if (clash) return res.status(409).json({ error: 'Username or email already exists' });
+            }
+            if (usernameChanged) username = nextUsername;
+            if (emailChanged) email = mail.email;
+        }
 
         let password_hash = null;
         if (body.password) {
@@ -755,32 +860,35 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         const cols = [username, name, email, finalRole, finalStatus,
             merge('department'), merge('institution'), merge('address'),
             merge('phone'), merge('alternative_email'), merge('education'), merge('grade')];
+        // A password reset or a move away from 'active' revokes the user's
+        // sessions in the same commit: by user_id ALONE, never `AND tenant_id`,
+        // or sessions issued before a tenant move survive (F-12 / L2-15). A
+        // reset also lifts a login lockout (F-11). Own connection, not the
+        // shared handle (F-37).
+        const revokeSessions = Boolean(password_hash) || (finalStatus !== 'active' && prior.status === 'active');
         let result;
         try {
-            if (password_hash) {
-                result = await dbAdapter.transaction(async () => {
-                    const updated = await dbAdapter.run(
+            result = await dbAdapter.isolatedTransaction(async (tx) => {
+                const updated = password_hash
+                    ? await tx.run(
                         `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
                             department=?, institution=?, address=?, phone=?, alternative_email=?, education=?, grade=?,
                             password_hash=?, updated_at=CURRENT_TIMESTAMP
                        WHERE id=? AND tenant_id=?`,
                         [...cols, password_hash, targetUserId, tenantId(req)]
-                    );
-                    await dbAdapter.run(
-                        'UPDATE active_sessions SET is_active = 0 WHERE user_id = ? AND tenant_id = ?',
-                        [targetUserId, tenantId(req)]
-                    );
-                    return updated;
-                });
-            } else {
-                result = await dbAdapter.run(
-                    `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
+                    )
+                    : await tx.run(
+                        `UPDATE users SET username=?, name=?, email=?, role=?, status=?,
                             department=?, institution=?, address=?, phone=?, alternative_email=?, education=?, grade=?,
                             updated_at=CURRENT_TIMESTAMP
                        WHERE id=? AND tenant_id=?`,
-                    [...cols, targetUserId, tenantId(req)]
-                );
-            }
+                        [...cols, targetUserId, tenantId(req)]
+                    );
+                if (updated.changes === 0) return updated;
+                if (revokeSessions) await revokeUserSessions(targetUserId, { executor: tx });
+                if (password_hash) await clearLoginLock(targetUserId, { executor: tx });
+                return updated;
+            });
         } catch (err) {
             if (String(err.message).includes('UNIQUE')) {
                 return res.status(409).json({ error: 'Username or email already exists' });
@@ -795,6 +903,7 @@ router.put('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
             logAudit({
                 userId: req.user.id,
                 username: req.user.username,
+                tenantId: tenantId(req),
                 action: password_hash ? 'admin_user_password_and_profile_change' : 'admin_user_profile_change',
                 targetType: 'user',
                 targetId: targetUserId,
@@ -852,7 +961,9 @@ router.post('/users/:id/purge', authenticateToken, requireAdmin, async (req, res
             return res.json(responsePlan);
         }
 
-        const anonymizedUsername = `deleted_user_${userId}`;
+        // A random pseudonym, not `deleted_user_<id>` — the id is a key back to
+        // every row that still carries it (F-31 / L7-04, lane D helper).
+        const anonymizedUsername = newPurgePseudonym();
         const passwordHash = await bcrypt.hash(`purged-${userId}-${Date.now()}`, 10);
 
         await logAuditAsync({
@@ -861,10 +972,13 @@ router.post('/users/:id/purge', authenticateToken, requireAdmin, async (req, res
             action: 'purge_user',
             resourceType: 'user',
             resourceId: String(userId),
-            resourceName: targetUser.username,
+            // The audit chain cannot be edited later, so the erased username
+            // never goes into it: the pseudonym, plus a keyed digest of the
+            // former name for "was X erased?" checks (F-32, lane D helper).
+            resourceName: anonymizedUsername,
             oldValue: {
                 id: targetUser.id,
-                username: targetUser.username,
+                ...purgeAuditIdentity(targetUser, anonymizedUsername),
                 email_present: Boolean(targetUser.email),
                 role: targetUser.role
             },
@@ -929,79 +1043,68 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
             });
         }
 
-        dbAdapter.serialize(() => {
-            dbAdapter.run('BEGIN IMMEDIATE');
-            const cleanupSteps = [
-                ['DELETE FROM active_sessions WHERE user_id = ?', [userId]],
-                ['DELETE FROM user_preferences WHERE user_id = ?', [userId]],
-                ['DELETE FROM session_notes WHERE user_id = ?', [userId]],
-                ['DELETE FROM cohort_members WHERE user_id = ?', [userId]],
-                ['DELETE FROM questionnaire_responses WHERE user_id = ?', [userId]],
-                ['DELETE FROM case_questionnaire_responses WHERE user_id = ?', [userId]],
-                ['DELETE FROM plugin_content_reads WHERE user_id = ?', [userId]],
-                ['DELETE FROM plugin_session_documents WHERE user_id = ?', [userId]],
-                ['DELETE FROM pathology_read_assessments WHERE user_id = ?', [userId]],
-                ['DELETE FROM alarm_config WHERE user_id = ?', [userId]],
-                ['DELETE FROM clinical_notes WHERE user_id = ?', [userId]],
-                ['DELETE FROM export_records WHERE user_id = ?', [userId]],
-                ['DELETE FROM llm_usage WHERE user_id = ?', [userId]],
-                ['DELETE FROM tts_usage WHERE user_id = ?', [userId]],
-                ['UPDATE sessions SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE event_log SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE login_logs SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE settings_logs SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE session_settings SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE learning_events SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE physical_exam_findings SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE system_audit_log SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE lab_definitions SET created_by = NULL WHERE created_by = ?', [userId]],
-                ['UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?', [userId]],
-                ['UPDATE scenarios SET created_by = NULL WHERE created_by = ?', [userId]],
-                ['UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?', [userId]],
-                ['UPDATE agent_templates SET created_by = NULL WHERE created_by = ?', [userId]],
-                ['UPDATE cases SET created_by = NULL WHERE created_by = ?', [userId]],
-                ['UPDATE cases SET last_modified_by = NULL WHERE last_modified_by = ?', [userId]],
-                ['UPDATE scenario_events SET acknowledged_by = NULL WHERE acknowledged_by = ?', [userId]],
-                ['UPDATE emotion_logs SET user_id = NULL WHERE user_id = ?', [userId]],
-                ['UPDATE llm_request_log SET user_id = NULL WHERE user_id = ?', [userId]]
-            ];
+        // system_audit_log is deliberately NOT in this list (F-08 / L1-03 /
+        // L6-01): every row's entry_hash covers user_id, so nulling it in place
+        // made verifyAuditChain report tampering from the deleted user's first
+        // row on — after every routine delete — and a known break hides every
+        // later one. The purge path made the same choice for the same reason
+        // (SEC-41). SQLite foreign keys are off, so the row may keep the id.
+        const cleanupSteps = [
+            ['DELETE FROM active_sessions WHERE user_id = ?', [userId]],
+            ['DELETE FROM user_preferences WHERE user_id = ?', [userId]],
+            ['DELETE FROM session_notes WHERE user_id = ?', [userId]],
+            ['DELETE FROM cohort_members WHERE user_id = ?', [userId]],
+            ['DELETE FROM questionnaire_responses WHERE user_id = ?', [userId]],
+            ['DELETE FROM case_questionnaire_responses WHERE user_id = ?', [userId]],
+            ['DELETE FROM plugin_content_reads WHERE user_id = ?', [userId]],
+            ['DELETE FROM plugin_session_documents WHERE user_id = ?', [userId]],
+            ['DELETE FROM pathology_read_assessments WHERE user_id = ?', [userId]],
+            ['DELETE FROM alarm_config WHERE user_id = ?', [userId]],
+            ['DELETE FROM clinical_notes WHERE user_id = ?', [userId]],
+            ['DELETE FROM export_records WHERE user_id = ?', [userId]],
+            ['DELETE FROM llm_usage WHERE user_id = ?', [userId]],
+            ['DELETE FROM tts_usage WHERE user_id = ?', [userId]],
+            ['UPDATE sessions SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE event_log SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE login_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE settings_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE session_settings SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE learning_events SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE physical_exam_findings SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE lab_definitions SET created_by = NULL WHERE created_by = ?', [userId]],
+            ['UPDATE platform_settings SET updated_by = NULL WHERE updated_by = ?', [userId]],
+            ['UPDATE scenarios SET created_by = NULL WHERE created_by = ?', [userId]],
+            ['UPDATE scenario_templates SET created_by = NULL WHERE created_by = ?', [userId]],
+            ['UPDATE agent_templates SET created_by = NULL WHERE created_by = ?', [userId]],
+            ['UPDATE cases SET created_by = NULL WHERE created_by = ?', [userId]],
+            ['UPDATE cases SET last_modified_by = NULL WHERE last_modified_by = ?', [userId]],
+            ['UPDATE scenario_events SET acknowledged_by = NULL WHERE acknowledged_by = ?', [userId]],
+            ['UPDATE emotion_logs SET user_id = NULL WHERE user_id = ?', [userId]],
+            ['UPDATE llm_request_log SET user_id = NULL WHERE user_id = ?', [userId]]
+        ];
 
-            const runCleanup = (idx) => {
-                if (idx >= cleanupSteps.length) {
-                    dbAdapter.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
-                        if (err) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(500).json({ error: err.message });
-                        }
-                        if (this.changes === 0) {
-                            dbAdapter.run('ROLLBACK');
-                            return res.status(404).json({ error: 'User not found' });
-                        }
-                        return commitThen(req, res, () => {
-                            auditSuccess(req, {
-                                action: 'admin_delete_user',
-                                resourceType: 'user',
-                                resourceId: userId,
-                                resourceName: targetUser.username,
-                                oldValue: targetUser
-                            });
-                            res.json({ message: 'User deleted successfully', id: userId });
-                        });
-                    });
-                    return;
-                }
-
-                const [sql, params] = cleanupSteps[idx];
-                dbAdapter.run(sql, params, (err) => {
-                    if (err) {
-                        dbAdapter.run('ROLLBACK');
-                        return res.status(500).json({ error: err.message });
-                    }
-                    runCleanup(idx + 1);
-                });
-            };
-
-            runCleanup(0);
+        // Own connection (F-37): BEGIN IMMEDIATE on the shared handle, with the
+        // steps chained through callbacks, committed or rolled back whatever
+        // ANOTHER request wrote on that handle in between.
+        dbAdapter.isolatedTransaction(async (tx) => {
+            for (const [sql, params] of cleanupSteps) {
+                await tx.run(sql, params);
+            }
+            const deleted = await tx.run('DELETE FROM users WHERE id = ?', [userId]);
+            if (deleted.changes === 0) throw new NotFoundInTransaction('User not found');
+        }).then(() => {
+            auditSuccess(req, {
+                action: 'admin_delete_user',
+                resourceType: 'user',
+                resourceId: userId,
+                resourceName: targetUser.username,
+                oldValue: targetUser
+            });
+            res.json({ message: 'User deleted successfully', id: userId });
+        }, (err) => {
+            if (err instanceof NotFoundInTransaction) return res.status(404).json({ error: 'User not found' });
+            (req.log || routesAuthLog).error('user delete failed', { user_id: userId, error: err.message });
+            return res.status(500).json({ error: 'Failed to delete user' });
         });
     });
     });
@@ -1046,7 +1149,8 @@ function handleSystemAuditLogRequest(req, res) {
     // ts_utc is a generated column over it — always the contract shape,
     // indexed, and invisible to canonicalRow(). See migrations/0050.
     sql += ` ORDER BY sal.ts_utc DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    // Clamped (L7-18): a negative or huge limit used to mean "everything".
+    params.push(clampLimit(limit, 100, 1000), clampOffset(offset));
 
     dbAdapter.all(sql, params, (err, logs) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1083,10 +1187,14 @@ router.get('/system-audit-log', authenticateToken, requireAdmin, handleSystemAud
 
 router.get('/admin/active-sessions', authenticateToken, requireAdmin, (req, res) => {
     dbAdapter.all(
+        // Scoped by the USER's current tenant, not the row's issue-time copy
+        // (F-12 / L1-06): after a tenant move the new tenant's admin must see
+        // (and be able to kill) the user's sessions, and the old one must not
+        // keep seeing their IP and user agent.
         `SELECT acs.*, u.username, u.email, u.role
          FROM active_sessions acs
-         LEFT JOIN users u ON acs.user_id = u.id
-         WHERE acs.tenant_id = ? AND acs.is_active = 1 AND (acs.expires_at IS NULL OR acs.expires_at > datetime('now'))
+         JOIN users u ON acs.user_id = u.id
+         WHERE u.tenant_id = ? AND acs.is_active = 1 AND (acs.expires_at IS NULL OR acs.expires_at > datetime('now'))
          ORDER BY acs.last_activity_at DESC`,
         [tenantId(req)],
         (err, sessions) => {
@@ -1102,7 +1210,9 @@ router.delete('/admin/active-sessions/:id', authenticateToken, requireAdmin, (re
     const ipAddress = req.ip || req.connection?.remoteAddress;
 
     dbAdapter.run(
-        `UPDATE active_sessions SET is_active = 0 WHERE id = ? AND tenant_id = ?`,
+        // The user's current tenant decides, as in the list above (F-12).
+        `UPDATE active_sessions SET is_active = 0
+          WHERE id = ? AND user_id IN (SELECT id FROM users WHERE tenant_id = ?)`,
         [id, tenantId(req)],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -1113,6 +1223,7 @@ router.delete('/admin/active-sessions/:id', authenticateToken, requireAdmin, (re
             logAudit({
                 userId: req.user.id,
                 username: req.user.username,
+                tenantId: tenantId(req),
                 action: 'FORCE_LOGOUT',
                 resourceType: 'active_session',
                 resourceId: id,
@@ -1187,7 +1298,7 @@ router.put('/user/profile', authenticateToken, (req, res) => {
 });
 
 // PUT /api/user/password - Change current user's password
-router.put('/user/password', authenticateToken, async (req, res) => {
+router.put('/user/password', authenticateToken, passwordChangeLimiter, async (req, res) => {
     const { current_password, new_password } = req.body;
 
     if (!current_password || !new_password) {
@@ -1223,21 +1334,21 @@ router.put('/user/password', authenticateToken, async (req, res) => {
         const newHash = await bcrypt.hash(new_password, 10);
 
         // Keep the initiating session so the profile UI stays usable; revoke
-        // every other device in the same commit as the credential change.
-        await dbAdapter.transaction(async () => {
-            await dbAdapter.run(
+        // every other device in the same commit as the credential change — by
+        // user_id alone, so sessions issued before a tenant move go too (F-12).
+        // Own connection, not the shared handle (F-37).
+        await dbAdapter.isolatedTransaction(async (tx) => {
+            await tx.run(
                 'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
                 [newHash, req.user.id, tenantId(req)]
             );
-            await dbAdapter.run(
-                'UPDATE active_sessions SET is_active = 0 WHERE user_id = ? AND tenant_id = ? AND token_hash <> ?',
-                [req.user.id, tenantId(req), req.tokenHash]
-            );
+            await revokeUserSessions(req.user.id, { exceptTokenHash: req.tokenHash, executor: tx });
         });
         // Audit the action and user identity, never the password.
         logAudit({
             userId: req.user.id,
             username: req.user.username,
+            tenantId: tenantId(req),
             action: 'change_password_self',
             targetType: 'user',
             targetId: req.user.id

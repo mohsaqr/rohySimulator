@@ -12,14 +12,19 @@ import { apiUrl } from '../config/api';
 // the cookie-only path and localStorage stays clean.
 //
 // Tests / explicit cross-origin callers can opt back into bearer mode by
-// passing { rememberToken: true } to login/register.
+// passing { rememberToken: true } to login/register. That also sends
+// `X-Rohy-Auth: bearer`: since the security audit of 2026-10-26 (F-14) the
+// server leaves the JWT out of a browser's login/register/refresh response
+// unless the caller asks for it this way (server/routes/auth-routes.js,
+// bodyTokenAllowed). The default cookie mode never needs it.
+const BEARER_OPT_IN = { 'X-Rohy-Auth': 'bearer' };
 
 export const AuthService = {
     async register(username, email, password, { rememberToken = false, invite } = {}) {
         const response = await fetch(apiUrl(`/auth/register`), {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(rememberToken ? BEARER_OPT_IN : {}) },
             // `invite` is sent only when there is one — an absent key and an empty
             // string are NOT the same to the server: an empty-but-present token
             // would be a supplied-and-invalid invite, which is a 400 by design.
@@ -52,7 +57,7 @@ export const AuthService = {
             response = await fetch(apiUrl(`/auth/login`), {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...(rememberToken ? BEARER_OPT_IN : {}) },
                 body: JSON.stringify({ username, password })
             });
         } catch {

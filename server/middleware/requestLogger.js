@@ -22,7 +22,17 @@ function bytesOut(res, measured) {
 // verbatim, the request log would hold every invite token ever previewed —
 // readable by anyone with log access, usable by anyone until it is claimed.
 const INVITE_TOKEN_PATH_RE = /(\/auth\/invite\/)[^/?#]+/i;
-const TOKEN_QUERY_RE = /([?&](?:[a-z_]*token)=)[^&#]*/gi;
+// Query keys whose VALUE is a credential. `invite` is the canonical invite
+// link itself (/register?invite=<token>, registrationService.js; also
+// /?invite=), which the SEC-46 fix missed: the request logger is app-level,
+// so the SPA shell's own request logged every invite token verbatim (L6-08).
+// `code`, `join_code`, `key`/`*_key`, `*secret`, `jwt`, `auth`, `password`,
+// `signature` cover the other shapes a credential arrives in. Matching is on the key name only and
+// case-insensitive; the value is replaced up to the next & or #.
+const TOKEN_QUERY_RE = /([?&](?:[a-z_]*token|invite(?:_code)?|join_code|code|(?:[a-z_]*_)?key|[a-z_]*secret|jwt|auth|password|signature|sig)=)[^&#]*/gi;
+// A JWT anywhere in the URL — a path segment or a query key not listed above:
+// three base64url parts, the first always starting `eyJ` (`{"`). (L1-05)
+const JWT_RE = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
 
 /**
  * The request path as it is safe to log: credential-bearing segments and
@@ -35,7 +45,8 @@ export function redactRequestPath(url) {
     if (typeof url !== 'string') return url;
     return url
         .replace(INVITE_TOKEN_PATH_RE, '$1[redacted]')
-        .replace(TOKEN_QUERY_RE, '$1[redacted]');
+        .replace(TOKEN_QUERY_RE, '$1[redacted]')
+        .replace(JWT_RE, '[redacted]');
 }
 
 function userFields(req) {

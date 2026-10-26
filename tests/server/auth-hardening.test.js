@@ -82,16 +82,20 @@ describe('login, lockout and registration hardening', () => {
             expect((await loginRaw(server.baseUrl, 'lock_expired', TEST_PASSWORD)).status).toBe(200);
         });
 
-        it('a wrong password during an ACTIVE lock keeps counting (and keeps it locked)', async () => {
+        // Regression lock (F-11, security audit 2026-10-26): a wrong password
+        // during an ACTIVE lock used to renew it, so one guess every 14 minutes
+        // kept any known account locked for ever. It must leave the lock alone.
+        it('a wrong password during an ACTIVE lock neither counts nor extends the lock', async () => {
             await seedUser(db, { username: 'lock_active' });
             await run(db, `UPDATE users SET failed_login_attempts = 5,
                 locked_until = datetime('now', '+10 minutes') WHERE username = ?`, ['lock_active']);
+            const before = await get(db, 'SELECT locked_until FROM users WHERE username = ?', ['lock_active']);
 
             expect((await loginRaw(server.baseUrl, 'lock_active', 'WrongPassw0rd')).status).toBe(401);
             const row = await get(db,
                 'SELECT failed_login_attempts, locked_until FROM users WHERE username = ?', ['lock_active']);
-            expect(row.failed_login_attempts).toBe(6);
-            expect(row.locked_until).toBeTruthy();
+            expect(row.failed_login_attempts).toBe(5);
+            expect(row.locked_until).toBe(before.locked_until);
         });
     });
 
@@ -126,7 +130,12 @@ describe('login, lockout and registration hardening', () => {
             expect(elapsed).toBeGreaterThan(15);
         });
 
-        it('disabled (403) and locked (423) are told only to someone with the right password', async () => {
+        // Regression lock (F-10, security audit 2026-10-26): the locked state
+        // used to answer the RIGHT password with 423 and a wrong one with 401,
+        // telling a distributed guesser when a guess was correct. A lock now
+        // answers the generic 401 whatever the password; disabled (403) is
+        // still told only to someone with the right password.
+        it('disabled (403) is told only to the right password; a lock answers 401 even to it', async () => {
             await seedUser(db, { username: 'enum_disabled_ok', status: 'inactive' });
             await seedUser(db, { username: 'enum_locked_ok' });
             await run(db, `UPDATE users SET failed_login_attempts = 5,
@@ -135,7 +144,9 @@ describe('login, lockout and registration hardening', () => {
             const disabled = await loginRaw(server.baseUrl, 'enum_disabled_ok', TEST_PASSWORD);
             expect(disabled.status).toBe(403);
             expect((await disabled.json()).code).toBe('account_disabled');
-            expect((await loginRaw(server.baseUrl, 'enum_locked_ok', TEST_PASSWORD)).status).toBe(423);
+            const locked = await loginRaw(server.baseUrl, 'enum_locked_ok', TEST_PASSWORD);
+            expect(locked.status).toBe(401);
+            expect(await locked.json()).toEqual({ error: 'Invalid username or password' });
         });
 
         it('a wrong password on a disabled account still counts toward lockout and is logged', async () => {
@@ -183,13 +194,16 @@ describe('login, lockout and registration hardening', () => {
         });
 
         // Regression lock: login_logs kept whatever username a failed attempt sent.
-        it('caps the username written to login_logs for a failed attempt at 128 chars', async () => {
+        // Since L7-17 (security audit 2026-10-26) an UNKNOWN name is not kept in
+        // clear at all — only a fixed-size keyed digest — which bounds it too.
+        it('never writes a kilobyte-long unknown username to login_logs', async () => {
             const huge = `cap_${'x'.repeat(2000)}`;
+            const before = await get(db, 'SELECT COALESCE(MAX(id), 0) AS id FROM login_logs');
             expect((await loginRaw(server.baseUrl, huge, 'WrongPassw0rd')).status).toBe(401);
             // Written fire-and-forget after the response; poll briefly.
             const row = await eventually(() => get(db,
-                `SELECT username FROM login_logs WHERE username LIKE 'cap_x%' ORDER BY id DESC LIMIT 1`), (r) => Boolean(r));
-            expect(row.username.length).toBe(128);
+                `SELECT username FROM login_logs WHERE id > ? AND user_id IS NULL ORDER BY id DESC LIMIT 1`, [before.id]), (r) => Boolean(r));
+            expect(row.username).toMatch(/^hmac:[0-9a-f]{32}$/);
         });
     });
 });

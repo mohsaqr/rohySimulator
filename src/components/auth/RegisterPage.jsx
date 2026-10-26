@@ -53,6 +53,11 @@ export function translateRegisterError(err, t) {
     if (raw === 'You need an invite link or code to create an account here.') {
         return t('error_invite_required');
     }
+    // First-admin bootstrap (lane A, F-30): an instance started with
+    // ROHY_SETUP_TOKEN wants that token in the code field; and when two people
+    // claim a fresh instance at once, exactly one wins.
+    if (code === 'setup_token_required') return t('error_setup_token_required');
+    if (code === 'bootstrap_claimed') return t('error_bootstrap_claimed');
     if (code === 'approval_already_requested' || raw === 'A request for this username or email is already waiting for approval.') {
         return t('error_approval_already_requested');
     }
@@ -108,6 +113,8 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
     // its own whenever a code is actually in play (link arrival, or invite-only).
     const [codeOpen, setCodeOpen] = useState(
         startWithCode || inviteRequired || Boolean(inviteToken) || Boolean(invite)
+        // The setup token travels in the code field, so it must be open.
+        || Boolean(policy?.setup_token_required)
     );
     // True only while the users table is genuinely empty. The old footer claimed
     // "the first user becomes an administrator" unconditionally, which was a lie

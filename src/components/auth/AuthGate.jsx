@@ -74,6 +74,17 @@ export default function AuthGate() {
         } catch { /* history is not load-bearing here */ }
     };
 
+    // …and the moment it is read, not only once the preview resolves (lane A
+    // handoff, security audit 2026-10-26, L1-05): while the URL still holds the
+    // token, every request this page makes — the preview itself included —
+    // carries it in its Referer header. Declared before the preview effect so
+    // it runs first. The finally() below stays as a backstop.
+    useEffect(() => {
+        if (inviteToken) clearInviteFromUrl();
+        // Mount only: inviteToken is read once (useState initialiser).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
         if (!inviteToken) return undefined;
         let cancelled = false;
