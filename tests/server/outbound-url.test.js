@@ -10,6 +10,10 @@ describe('isPrivateHost', () => {
         '127.0.0.1', '127.9.9.9', '0.0.0.0', '10.0.0.5', '172.16.0.1', '172.31.255.255', '192.168.1.1',
         '169.254.169.254', '100.64.0.1', '224.0.0.1', '255.255.255.255',
         '::1', '::', '[::1]', 'fe80::1', 'fd00::1', 'fc00::1', '::ffff:127.0.0.1', '::ffff:10.1.2.3',
+        // 2026-10-26 (F-01): the spellings the WHATWG parser actually produces,
+        // and the other IPv4-carrying forms (sec2-c-outbound.test.js has more).
+        '[::ffff:7f00:1]', '::7f00:1', '64:ff9b::7f00:1', '2002:7f00:1::', '2001::1', 'fec0::1',
+        '198.18.0.1', '192.0.0.8', 'metadata.google.internal',
     ])('%s is private', (host) => {
         expect(isPrivateHost(host)).toBe(true);
     });

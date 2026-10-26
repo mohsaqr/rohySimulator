@@ -32,6 +32,9 @@
 
 import { Buffer } from 'node:buffer';
 import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { env as TRANSFORMERS_ENV } from '@huggingface/transformers';
 import { buildWavHeader, float32ToInt16Buffer } from './wav.js';
 import { fetchWithTimeout, FetchTimeoutError } from './fetchWithTimeout.js';
@@ -55,6 +58,86 @@ const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 // q4 (4-bit quantized) is ~40% faster than q8 with imperceptible quality loss
 // for speech. Synthesis runs at ~0.38× realtime on M-series CPU vs q8's 0.66×.
 const DTYPE = 'q4';
+
+// Supply-chain pin (security audit 2026-10-26, L6-14). The model is fetched
+// from the Hugging Face Hub at its `main` revision and was never checked, so a
+// changed or tampered upstream file would be loaded into the native runtime.
+//
+// - REVISION is recorded, not passed: kokoro-js's KokoroTTS.from_pretrained
+//   forwards only { dtype, device, progress_callback } to transformers.js (no
+//   `revision` hook), and transformers.js keys its file cache by revision —
+//   passing one would re-download the 305 MB model on every existing install.
+//   It is the Hub commit `main` pointed at when the hashes below were taken
+//   (lastModified 2025-02-08).
+// - The SHA-256 of every file the load reads is checked: before loading when
+//   the files are already in the cache, after the first download otherwise. A
+//   mismatch disables local Kokoro for the process (honest error, as for a
+//   corrupt model). model_q4.onnx's hash is the Hub's own LFS oid (verified
+//   2026-10-26 against the API, and equal to a local cached copy); the three
+//   JSON files are hashed from that same revision's cached copies.
+// - ROHY_KOKORO_MODEL_SHA256=<hex> replaces the model hash for an operator who
+//   deliberately moves to another build (the JSON hashes then still apply).
+export const KOKORO_MODEL_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+export const KOKORO_FILE_SHA256 = Object.freeze({
+    'onnx/model_q4.onnx': '04cf570cf9c4153694f76347ed4b9a48c1b59ff1de0999e6605d123966b197c7',
+    'config.json': 'df34b4f930b23447cd4dc410fabfb42eb3f24e803e6c3f97d618fb359380a36f',
+    'tokenizer.json': '77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34',
+    'tokenizer_config.json': 'be1cb066d6ef6b074b3f15e6a6dd21ac88ff3cdaedf325f0aaed686c70f75d20',
+});
+
+export class KokoroIntegrityError extends Error {
+    constructor(file, expected, actual) {
+        super(`Kokoro model file ${file} does not match its pinned SHA-256 (expected ${expected.slice(0, 12)}…, got ${actual.slice(0, 12)}…)`);
+        this.name = 'KokoroIntegrityError';
+        this.code = 'KOKORO_INTEGRITY';
+        this.file = file;
+    }
+}
+
+function expectedKokoroHashes() {
+    const override = (process.env.ROHY_KOKORO_MODEL_SHA256 || '').trim().toLowerCase();
+    return /^[0-9a-f]{64}$/.test(override)
+        ? { ...KOKORO_FILE_SHA256, 'onnx/model_q4.onnx': override }
+        : KOKORO_FILE_SHA256;
+}
+
+// A verified file is not re-hashed on every reload (an idle unload reloads the
+// model): the result is remembered by path, size and mtime.
+const _verified = new Map();
+
+function sha256File(file) {
+    return new Promise((resolve, reject) => {
+        const hash = crypto.createHash('sha256');
+        fs.createReadStream(file).on('error', reject).on('data', (c) => hash.update(c)).on('end', () => resolve(hash.digest('hex')));
+    });
+}
+
+/**
+ * Check the cached Kokoro files against their pinned hashes.
+ * Throws KokoroIntegrityError on the first mismatch. Files not present in
+ * `cacheDir` are reported in `missing` (not yet downloaded, or served from a
+ * local model path) — the caller decides what that means.
+ *
+ * @param {{ cacheDir?: string, modelId?: string, expected?: Record<string,string> }} [opts]
+ * @returns {Promise<{ verified: string[], missing: string[] }>}
+ */
+export async function verifyKokoroModelFiles({ cacheDir = TRANSFORMERS_ENV.cacheDir, modelId = MODEL_ID, expected = expectedKokoroHashes() } = {}) {
+    const verified = [];
+    const missing = [];
+    for (const [rel, want] of Object.entries(expected)) {
+        const file = path.join(String(cacheDir || ''), modelId, rel);
+        let stat;
+        try { stat = fs.statSync(file); } catch { missing.push(rel); continue; }
+        const memoKey = `${file}:${stat.size}:${stat.mtimeMs}:${want}`;
+        if (!_verified.has(memoKey)) {
+            const got = await sha256File(file);
+            if (got !== want) throw new KokoroIntegrityError(rel, want, got);
+            _verified.set(memoKey, true);
+        }
+        verified.push(rel);
+    }
+    return { verified, missing };
+}
 
 let _instance = null;
 let _loading = null;
@@ -167,6 +250,7 @@ const KOKORO_FATAL_PATTERNS = [
 ];
 
 function classifyLoadError(err) {
+    if (err instanceof KokoroIntegrityError) return 'fatal';
     const msg = (err?.message || String(err)).slice(0, 500);
     return KOKORO_FATAL_PATTERNS.some(rx => rx.test(msg)) ? 'fatal' : 'transient';
 }
@@ -218,8 +302,25 @@ export async function loadKokoro() {
         if (_unloading) await _unloading.catch(() => {});
         const t0 = Date.now();
         try {
+            // Cached files are checked BEFORE the native runtime parses them;
+            // a first download is checked straight after (L6-14).
+            const before = await verifyKokoroModelFiles();
             const { KokoroTTS } = await kokoroLib();
             const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: DTYPE });
+            if (before.missing.length > 0) {
+                let after;
+                try {
+                    after = await verifyKokoroModelFiles();
+                } catch (integrityErr) {
+                    try { await tts?.model?.dispose?.(); } catch { /* the failure below is what matters */ }
+                    throw integrityErr;
+                }
+                if (after.missing.length > 0) {
+                    kokoroLog.warn('kokoro model files not verified: not in the cache directory', {
+                        missing: after.missing, cache_dir: TRANSFORMERS_ENV.cacheDir, revision: KOKORO_MODEL_REVISION,
+                    });
+                }
+            }
             kokoroLog.info('model loaded', {
                 duration_ms: Date.now() - t0,
                 wasm_threads: _wasmThreads,

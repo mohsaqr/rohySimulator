@@ -12,7 +12,8 @@
 // Same express-rate-limit mechanism as every other limiter in the tree; the
 // 429 body is the standard `{ error, code }` shape apiClient.js reads.
 
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
+import { principalKey } from '../lib/requestPrincipal.js';
 
 export const RATE_LIMITED_CODE = 'RATE_LIMITED';
 
@@ -21,14 +22,22 @@ export const RATE_LIMITED_CODE = 'RATE_LIMITED';
  * @param {number} opts.max        requests per window per user
  * @param {number} [opts.windowMs] window length (default 60 s)
  * @param {string} [opts.message]  human-readable error text
+ * @param {(req) => boolean} [opts.skip]  requests that bypass the limiter
+ * @param {boolean} [opts.skipFailedRequests]  do not count requests answered >= 400
+ *
+ * The key is `req.user.id` when authenticateToken has already run, else the
+ * user a validly signed token names (lib/requestPrincipal.js), else the IP —
+ * so the limiter is per user even when it is mounted ahead of the router.
  */
-export function perUserRateLimit({ max, windowMs = 60 * 1000, message = 'Too many requests. Please slow down.' }) {
+export function perUserRateLimit({ max, windowMs = 60 * 1000, message = 'Too many requests. Please slow down.', skip, skipFailedRequests = false }) {
     return rateLimit({
         windowMs,
         max,
         standardHeaders: true,
         legacyHeaders: false,
-        keyGenerator: (req) => (req.user?.id != null ? `user:${req.user.id}` : `ip:${ipKeyGenerator(req.ip)}`),
+        keyGenerator: principalKey,
+        ...(skip ? { skip } : {}),
+        ...(skipFailedRequests ? { skipFailedRequests: true } : {}),
         handler: (req, res) => res.status(429).json({ error: message, code: RATE_LIMITED_CODE }),
     });
 }

@@ -37,7 +37,9 @@ import {
 import { logger } from '../logger.js';
 import {
     auditSuccess,
+    isPlatformAdmin,
     loadSessionCaseConfig,
+    requirePlatformAdmin,
     tenantId,
     verifySessionOwnership
 } from './_helpers.js';
@@ -46,12 +48,35 @@ import {
     BudgetExceededError,
     LLM_MIN_PREFLIGHT_TOKENS,
     budgetExceededResponse,
-    enforceBudget,
-    recordUsage
+    reserveBudget
 } from '../usage-budget.js';
 import { LLM_MODEL_REGISTRY, LLM_PROVIDERS, defaultModelFor, thinkingOffParams, thinkingIsOff } from '../shared/llmCatalogue.js';
-import { SQL_NOW, sqlNowPlus } from '../shared/time.js';
-import { OUTBOUND_FETCH_OPTIONS, validateOutboundUrl } from '../lib/outboundUrl.js';
+import { SQL_NOW } from '../shared/time.js';
+import { OUTBOUND_FETCH_OPTIONS, OutboundBlockedError, secureFetch, validateOutboundUrl } from '../lib/outboundUrl.js';
+import {
+    LlmQuotaRefusal,
+    estimateTokens,
+    llmInFlightGuard,
+    llmRateLimiter,
+    readLlmLimits,
+    reserveLlmQuota,
+    usageOrEstimate,
+} from '../lib/llmLimits.js';
+import {
+    MAX_SSE_BUFFER_CHARS,
+    MAX_STREAM_REPLY_CHARS,
+    MAX_UPSTREAM_ERROR_BYTES,
+    UpstreamBodyTooLargeError,
+    createThinkStripper,
+    noteAgentReply,
+    publicUpstreamError,
+    readJsonCapped,
+    readTextCapped,
+    shapeReply,
+    upstreamReplyText,
+} from '../lib/llmReply.js';
+import { TTS_TIMEOUT_MS, ttsGate, ttsRateLimiter } from '../lib/ttsLimits.js';
+import { GateFullError } from '../lib/concurrencyGate.js';
 import {
     DEFAULT_MAX_OUTPUT_TOKENS_CAP,
     clampOutputTokens,
@@ -114,13 +139,8 @@ const getPlatformSetting = async (key) => {
     return row?.setting_value ?? null;
 };
 
-const DEFAULT_RATE_LIMITS = {
-    tokensPerUserDaily: 100000,
-    costPerUserDaily: 10,
-    tokensPlatformDaily: 1000000,
-    costPlatformDaily: 100,
-    requestsPerUserHourly: 100
-};
+// Rate limits: one definition, shared with the admin page — lib/llmLimits.js
+// (F-24: this file displayed defaults the proxy never enforced).
 
 
 // F-005: upstream LLM fetches were unbounded. /proxy/llm is intentionally
@@ -132,14 +152,60 @@ const DEFAULT_RATE_LIMITS = {
 const LLM_UPSTREAM_CONNECT_MS = 60_000;
 const LLM_STREAM_MAX_MS = 5 * 60_000;
 
-const extractUpstreamError = (errText) => {
-    try {
-        const parsed = JSON.parse(errText);
-        const msg = parsed?.error?.message ?? parsed?.error ?? parsed?.message;
-        if (typeof msg === 'string' && msg.length > 0 && msg.length <= 500) return msg;
-    } catch { /* not json */ }
-    return 'Upstream LLM error';
-};
+// Agent-template values are educator-typed: bounded at use time so a stray
+// 1e9 cannot reserve a day's budget in one request (L3 info).
+const AGENT_MAX_OUTPUT_TOKENS_CAP = 16_384;
+
+// OpenAI-compatible providers known to accept `stream_options`; a custom
+// endpoint may be a server that rejects unknown fields, so it relies on the
+// character estimate instead (lib/llmLimits.js usageOrEstimate).
+const STREAM_USAGE_PROVIDERS = new Set(['openai', 'openrouter', 'groq', 'together', 'azure', 'ollama', 'lmstudio']);
+
+// The specialist "after effort" gate counts the learner's turns. A learner can
+// write `role: 'user'` rows straight into agent_conversations without ever
+// asking the agent anything, so on its own that count opened the gate for
+// free (L3-10 / L2-13). A stored turn now counts only up to the number of
+// times this agent was actually asked through the proxy in this session —
+// llm_request_log rows the server writes itself — plus the turn being asked
+// now.
+async function countAnsweredStudentTurns({ sessionId, tenant, agentType, caseAgentId }) {
+    const [userTurns, asked] = await Promise.all([
+        countStudentTurns({ sessionId, tenant, agentType }),
+        dbAdapter.get(
+            `SELECT COUNT(*) AS n FROM llm_request_log
+              WHERE session_id = ? AND tenant_id = ? AND case_agent_id = ? AND status = 'success'`,
+            [sessionId, tenant, caseAgentId]
+        ).then((row) => Number(row?.n) || 0),
+    ]);
+    return Math.min(userTurns, asked + 1);
+}
+
+// A team agent's history is the stored conversation (AgentService loads it
+// from GET .../conversation and sends it back). An assistant turn the client
+// sends that is not a stored agent reply is a learner writing the agent's
+// lines — a prompt-extraction aid (L3-10) — and is dropped. Learner turns
+// pass: they are the learner's own words either way.
+async function verifiedTeamHistory({ sessionId, tenant, agentType, messages, log }) {
+    if (!messages.some((m) => m.role === 'assistant')) return messages;
+    const rows = await dbAdapter.all(
+        `SELECT content FROM agent_conversations
+          WHERE session_id = ? AND tenant_id = ? AND agent_type = ? AND role = 'assistant'`,
+        [sessionId, tenant, agentType]
+    );
+    const stored = new Map();
+    rows.forEach((r) => { const k = String(r.content ?? '').trim(); stored.set(k, (stored.get(k) || 0) + 1); });
+    let dropped = 0;
+    const kept = messages.filter((m) => {
+        if (m.role !== 'assistant') return true;
+        const k = m.content.trim();
+        const left = stored.get(k) || 0;
+        if (left > 0) { stored.set(k, left - 1); return true; }
+        dropped += 1;
+        return false;
+    });
+    if (dropped > 0) log.warn('unverified assistant turns dropped from team-agent history', { session_id: sessionId, agent_type: agentType, dropped });
+    return kept;
+}
 
 // GET /api/sessions/:id/patient-prompt — the patient's assembled system prompt
 // for this session, exactly as the proxy builds it (minus the per-turn affect
@@ -170,7 +236,7 @@ router.get('/sessions/:id/patient-prompt', authenticateToken, requireReviewer, a
     }
 });
 
-router.post('/proxy/llm', authenticateToken, async (req, res) => {
+router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, async (req, res) => {
     const { messages, system_prompt, session_id, agent_llm_config, session_mode, case_language, student_affect } = req.body;
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
@@ -199,113 +265,22 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             return res.status(503).json({ error: 'LLM service is currently disabled by administrator' });
         }
 
-        // 2. Get user's current usage
-        const userUsage = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM llm_usage WHERE user_id = ? AND date = ?', [userId, today], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { total_tokens: 0, estimated_cost: 0, request_count: 0 });
-            });
-        });
+        // Rate-limit refusals are logged before the agent is resolved (and the
+        // body's agent ids are not trusted unresolved), so agent_type and
+        // case_agent_id stay NULL on these rows. Awaited: the quota check
+        // counts llm_request_log rows, so a refusal's row lands before the
+        // next request is checked.
+        const logRateLimit = (msg) => dbAdapter.run(
+            `INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, status, error_message, request_timestamp) VALUES (?, ?, ?, NULL, NULL, ?, ?, ${SQL_NOW})`,
+            [userId, session_id ?? null, tenantId(req), 'rate_limited', msg]
+        ).catch((err) => routesLlmLog.warn('llm rate-limit log failed', { error: err.message }));
 
-        // 3. Get platform usage
-        const platformUsage = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT SUM(total_tokens) as total_tokens, SUM(estimated_cost) as total_cost FROM llm_usage WHERE date = ?', [today], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { total_tokens: 0, total_cost: 0 });
-            });
-        });
-
-        // 4. Get rate limits
-        const getLimitSetting = (key, defaultVal) => new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT setting_value FROM platform_settings WHERE setting_key = ?', [key], (err, row) => {
-                if (err) reject(err);
-                else resolve(row?.setting_value ? parseFloat(row.setting_value) : defaultVal);
-            });
-        });
-
-        const tokensPerUserDaily = await getLimitSetting('rate_limit_tokens_per_user_daily', 0);
-        const costPerUserDaily = await getLimitSetting('rate_limit_cost_per_user_daily', 0);
-        const tokensPlatformDaily = await getLimitSetting('rate_limit_tokens_platform_daily', 0);
-        const costPlatformDaily = await getLimitSetting('rate_limit_cost_platform_daily', 0);
-
-        // Helper to log rate limit events (fire and forget with error handling)
-        const logRateLimit = (msg) => {
-            // Rate limits are checked before the agent is resolved (and the
-            // body's agent ids are not trusted unresolved), so agent_type and
-            // case_agent_id stay NULL on these rows.
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, status, error_message, request_timestamp) VALUES (?, ?, ?, NULL, NULL, ?, ?, ${SQL_NOW})`,
-                [userId, session_id, tenantId(req), 'rate_limited', msg],
-                (err) => { if (err) routesLlmLog.warn('llm rate-limit log failed', { error: err.message }); }
-            );
-        };
-
-        // 5. Check user rate limits (0 = unlimited/disabled)
-        if (tokensPerUserDaily > 0 && userUsage.total_tokens >= tokensPerUserDaily) {
-            logRateLimit('User daily token limit exceeded');
-            return res.status(429).json({
-                error: 'Daily token limit exceeded',
-                tokensUsed: userUsage.total_tokens,
-                tokensLimit: tokensPerUserDaily,
-                resetsAt: 'midnight UTC'
-            });
-        }
-
-        if (costPerUserDaily > 0 && userUsage.estimated_cost >= costPerUserDaily) {
-            logRateLimit('User daily cost limit exceeded');
-            return res.status(429).json({
-                error: 'Daily cost limit exceeded',
-                costUsed: userUsage.estimated_cost,
-                costLimit: costPerUserDaily,
-                resetsAt: 'midnight UTC'
-            });
-        }
-
-        // 6. Check platform rate limits (0 = unlimited/disabled)
-        if (tokensPlatformDaily > 0 && (platformUsage.total_tokens || 0) >= tokensPlatformDaily) {
-            logRateLimit('Platform daily token limit exceeded');
-            return res.status(429).json({
-                error: 'Platform daily token limit exceeded. Please try again tomorrow.',
-                resetsAt: 'midnight UTC'
-            });
-        }
-
-        if (costPlatformDaily > 0 && (platformUsage.total_cost || 0) >= costPlatformDaily) {
-            logRateLimit('Platform daily cost limit exceeded');
-            return res.status(429).json({
-                error: 'Platform daily cost limit exceeded. Please try again tomorrow.',
-                resetsAt: 'midnight UTC'
-            });
-        }
-
-        // 6b. Requests per user per hour (admin setting
-        // `rate_limit_requests_per_user_hourly`, written by PUT
-        // /platform-settings/rate-limits). Stored since the setting existed,
-        // enforced only since 2026-10-24: it was read back to the admin page
-        // and never consulted here. Counts this user's requests that reached
-        // the provider in the last hour (refusals are not held against them,
-        // or a limited user would stay limited for ever). Rows are stamped
-        // with SQL_NOW (ISO, 'T'), so the string comparison is exact for every
-        // row written since migration 0050.
-        const requestsPerUserHourly = await getLimitSetting('rate_limit_requests_per_user_hourly', 0);
-        if (requestsPerUserHourly > 0) {
-            const hourly = await dbAdapter.get(
-                `SELECT COUNT(*) AS n FROM llm_request_log
-                  WHERE tenant_id = ? AND user_id = ?
-                    AND COALESCE(status, 'success') != 'rate_limited'
-                    AND request_timestamp >= ${sqlNowPlus("'-1 hour'")}`,
-                [tenantId(req), userId]
-            );
-            const requestsThisHour = Number(hourly?.n || 0);
-            if (requestsThisHour >= requestsPerUserHourly) {
-                logRateLimit('User hourly request limit exceeded');
-                return res.status(429).json({
-                    error: 'Hourly request limit reached. Please try again later.',
-                    code: 'hourly_limit',
-                    requestsUsed: requestsThisHour,
-                    requestsLimit: requestsPerUserHourly
-                });
-            }
-        }
+        // 2-6. The daily user / tenant / platform token and cost limits, the
+        // hourly request limit and the SEC-26 usage budget are checked AND
+        // reserved together just before the provider is called (step 9b),
+        // once the request's size is known: until 2026-10-26 they were read
+        // here, against usage recorded only after earlier calls finished, so
+        // parallel requests all passed (F-06).
 
         // 7. Get LLM settings from platform settings (these are the defaults)
         const getPlatformLLMSetting = (key, defaultVal) => new Promise((resolve, reject) => {
@@ -429,6 +404,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             // agent would otherwise answer with no persona at all.
             if (!caseAgent) {
                 return res.status(404).json({ error: 'Agent not found for this session' });
+            }
+            // An ended case has no team to talk to either: the same gate the
+            // patient has (FI-0010 F09). The debrief discussant speaks after
+            // the end by design and keeps its own unlock gate below.
+            if (caseAgent.agentType !== 'discussant'
+                && await isSessionEnded({ sessionId: session_id, tenant: tenantId(req) })) {
+                (req.log || routesLlmLog).info('case agent refused after the session ended', { session_id, case_agent_id: caseAgent.caseAgentId });
+                return res.status(409).json({ error: 'This session has ended', code: 'session_ended' });
             }
             agentTemplateId = caseAgent.agentTemplateId;
             agentTemplate = {
@@ -562,10 +545,14 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 agentApiKey = agentTemplate.llm_api_key;
                 agentEndpoint = agentTemplate.llm_endpoint;
                 if (agentTemplate.llm_temperature !== null && Number.isFinite(agentTemplate.llm_temperature)) {
-                    agentTemperature = agentTemplate.llm_temperature;
+                    agentTemperature = clampTemperature(agentTemplate.llm_temperature).value;
                 }
                 if (agentTemplate.llm_max_tokens !== null && Number.isFinite(agentTemplate.llm_max_tokens)) {
-                    agentMaxTokens = agentTemplate.llm_max_tokens;
+                    // Bounded by the platform cap when that is higher, else
+                    // by AGENT_MAX_OUTPUT_TOKENS_CAP — never unbounded.
+                    agentMaxTokens = clampOutputTokens(agentTemplate.llm_max_tokens, {
+                        platformMax: Math.max(parseInt(platformMaxTokens, 10) || 0, AGENT_MAX_OUTPUT_TOKENS_CAP),
+                    }).value;
                 }
                 (req.log || routesLlmLog).info('using agent-template llm config', { agent_template_id: agentTemplateId, provider: agentProvider, temperature: agentTemperature ?? null, max_tokens: agentMaxTokens ?? null });
             }
@@ -838,17 +825,6 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         }
 
         const budgetProvider = `llm-${provider || 'unknown'}`;
-        // The pre-flight reserves the clamped output size; a tiny
-        // client-supplied value may not shrink it below LLM_MIN_PREFLIGHT_TOKENS.
-        const requestedTokens = maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS_CAP;
-        await enforceBudget({
-            tenantId: tenantId(req),
-            userId,
-            provider: budgetProvider,
-            metric: 'tokens',
-            requested: requestedTokens,
-            minRequested: LLM_MIN_PREFLIGHT_TOKENS
-        });
 
         // 8. Build system prompt. See assembleSystemPrompt for the ordering
         // invariant — case content leads, platform template trails, and the
@@ -997,7 +973,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                 && disclosure.value.requireRoomActivity === true;
             const [caseData, studentTurns, roomActive] = await Promise.all([
                 loadSpecialistCaseData({ sessionId: session_id, tenant: tenantId(req) }),
-                countStudentTurns({ sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType }),
+                countAnsweredStudentTurns({ sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType, caseAgentId: caseAgent.caseAgentId }),
                 needsRoomProbe
                     ? hasRoomActivity({ sessionId: session_id, tenant: tenantId(req), roomKeys: roomKeysOf(specialty) })
                     : Promise.resolve(false),
@@ -1097,6 +1073,17 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             ? casePrompt
             : assembleSystemPrompt({ system_prompt: casePrompt, systemPromptTemplate, caseLanguage: promptLanguage, encounterRecordNote, studentAffectNote });
 
+        // 9a. The conversation sent upstream. A team agent's assistant turns
+        // must be ones it actually said (verifiedTeamHistory); the patient's
+        // and the discussant's history is still the client's (residual, see
+        // done-C notes: their transcript is client-written end to end).
+        const conversationMessages = caseAgent
+            ? await verifiedTeamHistory({
+                sessionId: session_id, tenant: tenantId(req), agentType: caseAgent.agentType,
+                messages: chat.messages, log: req.log || routesLlmLog,
+            })
+            : chat.messages;
+
         // 9. Build request based on provider type
         let llmHeaders = { 'Content-Type': 'application/json' };
         let requestPayload = {};
@@ -1112,7 +1099,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             requestPayload = {
                 model: model || defaultModelFor('anthropic'),
                 max_tokens: maxOutputTokens || 1024,
-                messages: chat.messages
+                messages: conversationMessages
             };
             if (fullSystemPrompt) {
                 requestPayload.system = fullSystemPrompt;
@@ -1133,7 +1120,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (fullSystemPrompt) {
                 conversation.push({ role: 'system', content: fullSystemPrompt });
             }
-            conversation.push(...chat.messages);
+            conversation.push(...conversationMessages);
 
             requestPayload = {
                 messages: conversation,
@@ -1161,22 +1148,118 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             endpoint = `${baseUrl}/chat/completions`;
         }
 
+        // 9b. Limits, checked and RESERVED in one step (F-06). The estimate is
+        // the input this request sends (system prompt + conversation, ~4
+        // characters a token) plus the output it may produce (the resolved
+        // max tokens; the cap when none is set; never below
+        // LLM_MIN_PREFLIGHT_TOKENS, so a tiny client value cannot slip under
+        // a budget). The reservation is settled to the real usage — or given
+        // back — when the call ends (the finally below).
+        const inputChars = (fullSystemPrompt || '').length
+            + conversationMessages.reduce((n, m) => n + m.content.length, 0);
+        const estimatedInputTokens = estimateTokens(inputChars);
+        const estimatedOutputTokens = Math.max(
+            LLM_MIN_PREFLIGHT_TOKENS,
+            provider === 'anthropic' ? (maxOutputTokens || 1024) : (maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS_CAP)
+        );
+        const pricing = (await dbAdapter.get(
+            'SELECT input_cost_per_1k, output_cost_per_1k FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?) ORDER BY (model = ?) DESC LIMIT 1',
+            [provider, model, 'default', model]
+        )) || { input_cost_per_1k: 0, output_cost_per_1k: 0 };
+        const costOf = (inTokens, outTokens) => (inTokens / 1000) * (Number(pricing.input_cost_per_1k) || 0)
+            + (outTokens / 1000) * (Number(pricing.output_cost_per_1k) || 0);
+        let quotaReservation = null;
+        let budgetReservation = null;
+        try {
+            quotaReservation = await reserveLlmQuota({
+                tenantId: tenantId(req),
+                userId,
+                date: today,
+                limits: await readLlmLimits(getPlatformSetting),
+                estimatedTokens: estimatedInputTokens + estimatedOutputTokens,
+                estimatedCost: costOf(estimatedInputTokens, estimatedOutputTokens),
+            });
+            budgetReservation = await reserveBudget({
+                tenantId: tenantId(req),
+                userId,
+                provider: budgetProvider,
+                metric: 'tokens',
+                amount: estimatedInputTokens + estimatedOutputTokens,
+                minRequested: LLM_MIN_PREFLIGHT_TOKENS,
+            });
+        } catch (limitErr) {
+            quotaReservation?.release();
+            if (limitErr instanceof LlmQuotaRefusal) {
+                await logRateLimit(limitErr.logMessage);
+                return res.status(429).json(limitErr.body);
+            }
+            throw limitErr;
+        }
+        // Set by the paths that reach the provider, AFTER llm_usage and
+        // llm_request_log are written; null gives the reservation back.
+        let accountedTokens = null;
+        try {
+
         // 10. Make LLM request
         (req.log || routesLlmLog).info('llm upstream request sending', { user_id: userId, provider, model: model || null, endpoint });
 
         // A request to anything but the platform's own URL never follows a
         // redirect (the redirect target was not validated — LLM-2d); a 3xx
-        // from such an endpoint is an upstream error, answered as 502.
+        // from such an endpoint is an upstream error, answered as 502. It also
+        // goes through secureFetch, which re-checks the host and refuses a
+        // name that RESOLVES to a private or metadata address at connect time
+        // (F-01). The platform URL is the platform admin's own setting and is
+        // often a LAN model server, so it keeps plain fetch.
         const upstreamIsPlatform = stripSlash(baseUrl) === platformBaseNormalised;
+        const upstreamFetch = upstreamIsPlatform ? fetch : secureFetch;
         const upstreamFetchOptions = upstreamIsPlatform ? {} : OUTBOUND_FETCH_OPTIONS;
         const upstreamRedirected = (upstream) => !upstreamIsPlatform && upstream.status >= 300 && upstream.status < 400;
-        const refuseRedirect = (upstream, responseTime) => {
+        const logUpstreamFailure = (message, responseTime) => dbAdapter.run(
+            `INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+            [userId, session_id, ...logAttribution(), model, 'error', String(message).substring(0, 500), responseTime]
+        ).catch((err) => routesLlmLog.warn('llm request log failed', { error: err.message }));
+        const refuseRedirect = async (upstream, responseTime) => {
             let target = null;
             try { const loc = new URL(upstream.headers.get('location') || '', endpoint); target = `${loc.origin}${loc.pathname}`; } catch { /* unparseable Location */ }
             (req.log || routesLlmLog).error('llm upstream redirected; not followed', { status: upstream.status, target });
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [userId, session_id, ...logAttribution(), model, 'error', `upstream redirected (${upstream.status})`, responseTime]);
+            try { await upstream.body?.cancel(); } catch { /* already closed */ }
+            await logUpstreamFailure(`upstream redirected (${upstream.status})`, responseTime);
             return res.status(502).json({ error: 'The LLM endpoint redirected the request; redirects are not followed', code: 'upstream_redirect' });
+        };
+        // An upstream 4xx/5xx: the provider's text is logged, never shown to a
+        // learner (it can echo the request, a key prefix, the model id). An
+        // administrator still gets the provider's short message (L3 info).
+        const answerUpstreamError = async (upstream, responseTime, label) => {
+            const errText = await readTextCapped(upstream, MAX_UPSTREAM_ERROR_BYTES, { truncate: true });
+            (req.log || routesLlmLog).error(label, { status: upstream.status, error: errText.slice(0, 500) });
+            await logUpstreamFailure(errText, responseTime);
+            return res.status(upstream.status).json({
+                error: publicUpstreamError(upstream.status, errText, { detailed: hasRoleAtLeast(req.user, ROLE_RANKS.admin) }),
+                code: 'upstream_error',
+            });
+        };
+        // llm_usage is written with the tenant (F-18 / L3-08: it defaulted to
+        // tenant 1) and awaited, so the quota reservation is released only
+        // once the real spend is on disk.
+        const writeUsageRows = async ({ promptTokens, completionTokens, totalTokens, cost, status, errorMessage, responseTime }) => {
+            await dbAdapter.run(`INSERT INTO llm_usage (user_id, tenant_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
+                completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
+                total_tokens = llm_usage.total_tokens + excluded.total_tokens,
+                estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
+                request_count = llm_usage.request_count + 1,
+                updated_at = CURRENT_TIMESTAMP`,
+                [userId, tenantId(req), today, promptTokens, completionTokens, totalTokens, cost, model]);
+            await dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms, request_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
+                [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, cost, status, errorMessage ?? null, responseTime]);
+        };
+        // The agent's own words, remembered so POST .../conversation can tell
+        // them from a learner-written assistant turn (L3-10).
+        const rememberReply = (text) => {
+            if (caseAgent) noteAgentReply({ tenantId: tenantId(req), sessionId: session_id, agentType: caseAgent.agentType }, text);
         };
 
         // Streaming branch — emit SSE deltas from the upstream provider.
@@ -1190,8 +1273,15 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             // naming the answer is never written (createStreamReplyGuard).
             // Until 2026-10-14 this branch skipped the guard and only logged
             // it, so any client asking for a stream got the unguarded reply.
+            // Think blocks are removed BEFORE the guard sees the text (F-22).
             const streamGuard = guardHasTerms(specialistGuard) ? createStreamReplyGuard(specialistGuard) : null;
+            const thinkStripper = createThinkStripper();
             const streamPayload = { ...requestPayload, stream: true };
+            // Ask for the usage block on the last chunk, so a streamed reply is
+            // metered (L3-02: it was recorded as 0 tokens).
+            if (provider !== 'anthropic' && STREAM_USAGE_PROVIDERS.has(provider)) {
+                streamPayload.stream_options = { include_usage: true };
+            }
             // F-005: bound upstream. Connect timeout caps how long we'll
             // wait for the upstream's first response; the max-duration
             // timer caps a slow/never-ending stream; the req 'close'
@@ -1212,7 +1302,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             });
             let upstream;
             try {
-                upstream = await fetch(endpoint, {
+                upstream = await upstreamFetch(endpoint, {
                     ...upstreamFetchOptions,
                     method: 'POST',
                     headers: llmHeaders,
@@ -1224,15 +1314,11 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             }
             if (upstreamRedirected(upstream)) {
                 clearTimeout(overallTimer);
-                return refuseRedirect(upstream, Date.now() - startTime);
+                return await refuseRedirect(upstream, Date.now() - startTime);
             }
             if (!upstream.ok) {
                 clearTimeout(overallTimer);
-                const errText = await upstream.text();
-                (req.log || routesLlmLog).error('llm stream upstream error', { status: upstream.status, error: errText.slice(0, 200) });
-                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                    [userId, session_id, ...logAttribution(), model, 'error', errText.substring(0, 500), Date.now() - startTime]);
-                return res.status(upstream.status).json({ error: extractUpstreamError(errText) });
+                return await answerUpstreamError(upstream, Date.now() - startTime, 'llm stream upstream error');
             }
 
             res.set('Content-Type', 'text/event-stream');
@@ -1242,11 +1328,21 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             if (res.socket) res.socket.setNoDelay(true);
 
             const sse = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-            // Every text delta goes through here, so the guard (when there is
-            // one) sees all of it before any of it is written.
+            // Every text delta goes through here: think blocks out first, then
+            // the guard (when there is one) sees all of it before any of it is
+            // written. `replyText` is exactly what the learner received.
+            let replyText = '';
+            let upstreamChars = 0;
+            const emit = (out) => {
+                if (!out) return;
+                replyText += out;
+                sse({ delta: out });
+            };
             const writeDelta = (text) => {
-                const out = streamGuard ? streamGuard.push(text) : text;
-                if (out) sse({ delta: out });
+                upstreamChars += text.length;
+                const visible = thinkStripper.push(text);
+                if (!visible) return;
+                emit(streamGuard ? streamGuard.push(visible) : visible);
             };
 
             let promptTokens = 0;
@@ -1271,8 +1367,18 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             });
 
             try {
+                streamLoop:
                 for await (const chunk of upstream.body) {
                     buffered += decoder.decode(chunk, { stream: true });
+                    // One SSE event may not outgrow MAX_SSE_BUFFER_CHARS, and a
+                    // whole reply may not outgrow MAX_STREAM_REPLY_CHARS
+                    // (L3-07: both grew without bound).
+                    if (buffered.length > MAX_SSE_BUFFER_CHARS || upstreamChars > MAX_STREAM_REPLY_CHARS) {
+                        streamInterrupted = true;
+                        streamErrMessage = 'upstream_stream_too_large';
+                        streamController.abort(new Error('upstream_stream_too_large'));
+                        break;
+                    }
                     // SSE messages are separated by blank lines; data: lines accumulate
                     let sep;
                     while ((sep = buffered.indexOf('\n\n')) >= 0) {
@@ -1287,7 +1393,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                         }
                         if (dataLines.length === 0) continue;
                         const dataStr = dataLines.join('\n');
-                        if (dataStr === '[DONE]') break;
+                        if (dataStr === '[DONE]') break streamLoop;
                         let evt;
                         try { evt = JSON.parse(dataStr); } catch { continue; }
 
@@ -1302,9 +1408,10 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
                                 promptTokens = evt.message.usage.input_tokens || 0;
                             }
                         } else {
-                            // OpenAI / OpenAI-compatible
-                            const delta = evt?.choices?.[0]?.delta?.content || '';
-                            if (delta) writeDelta(delta);
+                            // OpenAI / OpenAI-compatible. Only delta.content
+                            // is read: reasoning fields never reach the client.
+                            const delta = evt?.choices?.[0]?.delta?.content;
+                            if (typeof delta === 'string' && delta) writeDelta(delta);
                             if (evt?.usage) {
                                 promptTokens = evt.usage.prompt_tokens || promptTokens;
                                 completionTokens = evt.usage.completion_tokens || completionTokens;
@@ -1315,60 +1422,46 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             } catch (streamErr) {
                 (req.log || routesLlmLog).error('llm stream interrupted', { error: streamErr.message });
                 streamInterrupted = true;
-                streamErrMessage = streamErr?.message?.slice(0, 500) || 'stream_error';
+                streamErrMessage = streamErrMessage || streamErr?.message?.slice(0, 500) || 'stream_error';
             } finally {
                 clearTimeout(overallTimer);
             }
-            if (streamGuard) {
-                // The last, unterminated sentence — or, when every sentence
-                // was dropped, the fallback question in the case language.
-                const tail = streamGuard.end();
-                if (tail && !res.writableEnded) sse({ delta: tail });
-                if (streamGuard.removed > 0) {
-                    (req.log || routesLlmLog).warn('specialist reply guarded', {
-                        session_id, agent_type: agentType, removed_sentences: streamGuard.removed, streamed: true
-                    });
+            const strippedTail = thinkStripper.end();
+            if (!res.writableEnded) {
+                if (strippedTail) emit(streamGuard ? streamGuard.push(strippedTail) : strippedTail);
+                if (streamGuard) {
+                    // The last, unterminated sentence — or, when every sentence
+                    // was dropped, the fallback question in the case language.
+                    emit(streamGuard.end());
                 }
             }
-
-            // Final usage + log
-            const totalTokens = promptTokens + completionTokens;
-            await recordUsage({
-                tenantId: tenantId(req),
-                userId,
-                provider: budgetProvider,
-                metric: 'tokens',
-                amount: totalTokens
-            });
-            const responseTimeStream = Date.now() - startTime;
-            const pricing = await new Promise((resolve) => {
-                dbAdapter.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?)',
-                    [provider, model, 'default'], (err, row) => {
-                    resolve(row || { input_cost_per_1k: 0, output_cost_per_1k: 0 });
+            if (streamGuard?.removed > 0) {
+                (req.log || routesLlmLog).warn('specialist reply guarded', {
+                    session_id, agent_type: agentType, removed_sentences: streamGuard.removed, streamed: true
                 });
-            });
-            const estCost = (promptTokens / 1000) * pricing.input_cost_per_1k
-                + (completionTokens / 1000) * pricing.output_cost_per_1k;
-            dbAdapter.run(`INSERT INTO llm_usage (user_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id, date) DO UPDATE SET
-                prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
-                completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
-                total_tokens = llm_usage.total_tokens + excluded.total_tokens,
-                estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
-                request_count = llm_usage.request_count + 1,
-                updated_at = CURRENT_TIMESTAMP`,
-                [userId, today, promptTokens, completionTokens, totalTokens, estCost, model]);
+            }
+            if (!streamInterrupted) rememberReply(replyText);
+
+            // Final usage + log. A provider that sent no usage is metered from
+            // the characters in and out, never as 0 (L3-02).
+            const metered = usageOrEstimate({ promptTokens, completionTokens, inputChars, outputChars: upstreamChars });
+            if (metered.estimated) {
+                (req.log || routesLlmLog).info('llm stream usage estimated from characters', { provider, prompt_tokens: metered.promptTokens, completion_tokens: metered.completionTokens });
+            }
             // Schema's status CHECK whitelists ('success','error','rate_limited').
             // Stream interrupts (upstream error mid-stream OR client disconnect)
             // get logged as 'error' with error_message disambiguating the cause.
-            const finalStatus = streamInterrupted ? 'error' : 'success';
-            dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, error_message, response_time_ms, request_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, estCost, finalStatus, streamErrMessage, responseTimeStream]);
+            await writeUsageRows({
+                ...metered,
+                cost: costOf(metered.promptTokens, metered.completionTokens),
+                status: streamInterrupted ? 'error' : 'success',
+                errorMessage: streamErrMessage,
+                responseTime: Date.now() - startTime,
+            });
+            accountedTokens = metered.totalTokens;
 
             if (!res.writableEnded) {
-                sse({ done: true, usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens } });
+                sse({ done: true, usage: { prompt_tokens: metered.promptTokens, completion_tokens: metered.completionTokens, total_tokens: metered.totalTokens } });
                 res.write('data: [DONE]\n\n');
                 return res.end();
             }
@@ -1398,7 +1491,7 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
         let response;
         let rawData;
         try {
-            response = await fetch(endpoint, {
+            response = await upstreamFetch(endpoint, {
                 ...upstreamFetchOptions,
                 method: 'POST',
                 headers: llmHeaders,
@@ -1409,115 +1502,92 @@ router.post('/proxy/llm', authenticateToken, async (req, res) => {
             const responseTime = Date.now() - startTime;
 
             if (upstreamRedirected(response)) {
-                return refuseRedirect(response, responseTime);
+                return await refuseRedirect(response, responseTime);
             }
             if (!response.ok) {
-                const errText = await response.text();
-                (req.log || routesLlmLog).error('llm upstream error', { status: response.status, error: errText });
-                dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, status, error_message, response_time_ms, request_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-                    [userId, session_id, ...logAttribution(), model, 'error', errText.substring(0, 500), responseTime]);
-                return res.status(response.status).json({ error: extractUpstreamError(errText) });
+                return await answerUpstreamError(response, responseTime, 'llm upstream error');
             }
 
-            rawData = await response.json();
+            // At most MAX_UPSTREAM_JSON_BYTES (L3-07).
+            rawData = await readJsonCapped(response);
         } finally {
             clearTimeout(nonStreamTimer);
         }
 
         const responseTime = Date.now() - startTime;
 
-        // 11. Normalize response format (Anthropic vs OpenAI)
-        let data;
-        let promptTokens, completionTokens, totalTokens;
-
-        if (provider === 'anthropic') {
-            // Anthropic response format -> OpenAI format
-            const content = rawData.content?.[0]?.text || '';
-            promptTokens = rawData.usage?.input_tokens || 0;
-            completionTokens = rawData.usage?.output_tokens || 0;
-            totalTokens = promptTokens + completionTokens;
-
-            data = {
-                choices: [{
-                    message: { role: 'assistant', content },
-                    finish_reason: rawData.stop_reason || 'stop'
-                }],
-                usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: totalTokens }
-            };
-        } else {
-            // OpenAI-compatible format
-            data = rawData;
-            promptTokens = data.usage?.prompt_tokens || 0;
-            completionTokens = data.usage?.completion_tokens || 0;
-            totalTokens = data.usage?.total_tokens || promptTokens + completionTokens;
-        }
-
-        // 12. Calculate estimated cost
-        const pricing = await new Promise((resolve, reject) => {
-            dbAdapter.get('SELECT * FROM llm_model_pricing WHERE provider = ? AND (model = ? OR model = ?)',
-                [provider, model, 'default'], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { input_cost_per_1k: 0, output_cost_per_1k: 0 });
-            });
+        // 11. Rebuild the reply from the fields the client uses, nothing else
+        // (F-22): no reasoning_content / reasoning, no provider extras, think
+        // blocks stripped from the content.
+        const upstreamText = upstreamReplyText(provider, rawData);
+        const rawUsage = provider === 'anthropic'
+            ? { prompt_tokens: rawData?.usage?.input_tokens, completion_tokens: rawData?.usage?.output_tokens }
+            : rawData?.usage;
+        const metered = usageOrEstimate({
+            promptTokens: rawUsage?.prompt_tokens,
+            completionTokens: rawUsage?.completion_tokens,
+            inputChars,
+            outputChars: upstreamText.length,
+        });
+        const data = shapeReply({
+            content: upstreamText,
+            finishReason: provider === 'anthropic' ? (rawData?.stop_reason || 'stop') : rawData?.choices?.[0]?.finish_reason,
+            usage: { prompt_tokens: metered.promptTokens, completion_tokens: metered.completionTokens, total_tokens: metered.totalTokens },
+            model: typeof rawData?.model === 'string' ? rawData.model : (model || null),
         });
 
-        const estimatedCost = (promptTokens / 1000) * pricing.input_cost_per_1k +
-                             (completionTokens / 1000) * pricing.output_cost_per_1k;
+        // 12-14. Cost, daily usage (upsert) and the request log.
+        const estimatedCost = costOf(metered.promptTokens, metered.completionTokens);
+        await writeUsageRows({ ...metered, cost: estimatedCost, status: 'success', responseTime });
+        accountedTokens = metered.totalTokens;
 
-        await recordUsage({
-            tenantId: tenantId(req),
-            userId,
-            provider: budgetProvider,
-            metric: 'tokens',
-            amount: totalTokens
-        });
-
-        // 13. Update user's daily usage (upsert)
-        dbAdapter.run(`
-            INSERT INTO llm_usage (user_id, date, prompt_tokens, completion_tokens, total_tokens, estimated_cost, model, request_count, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id, date) DO UPDATE SET
-            prompt_tokens = llm_usage.prompt_tokens + excluded.prompt_tokens,
-            completion_tokens = llm_usage.completion_tokens + excluded.completion_tokens,
-            total_tokens = llm_usage.total_tokens + excluded.total_tokens,
-            estimated_cost = llm_usage.estimated_cost + excluded.estimated_cost,
-            request_count = llm_usage.request_count + 1,
-            updated_at = CURRENT_TIMESTAMP
-        `, [userId, today, promptTokens, completionTokens, totalTokens, estimatedCost, model]);
-
-        // 14. Log the request
-        dbAdapter.run(`INSERT INTO llm_request_log (user_id, session_id, tenant_id, agent_type, case_agent_id, model, prompt_tokens, completion_tokens, total_tokens, estimated_cost, status, response_time_ms, request_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
-            [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, estimatedCost, 'success', responseTime]);
-
-        (req.log || routesLlmLog).info('llm usage recorded', { user_id: userId, total_tokens: totalTokens, estimated_cost: Number(estimatedCost.toFixed(4)), response_time_ms: responseTime });
+        (req.log || routesLlmLog).info('llm usage recorded', { user_id: userId, total_tokens: metered.totalTokens, estimated: metered.estimated, estimated_cost: Number(estimatedCost.toFixed(4)), response_time_ms: responseTime });
 
         // 15. Guard a specialist's reply: drop any sentence naming the answer
-        // (services/specialistBrief.js guardSpecialistReply). Only message
-        // content changes — usage was accounted above from the upstream
-        // numbers, and the response shape is untouched.
-        if (guardHasTerms(specialistGuard) && Array.isArray(data?.choices)) {
-            let removedSentences = 0;
-            data.choices.forEach((choice) => {
-                if (typeof choice?.message?.content !== 'string') return;
-                const guarded = guardSpecialistReply(choice.message.content, specialistGuard);
-                removedSentences += guarded.removed;
-                choice.message.content = guarded.text;
-            });
-            if (removedSentences > 0) {
+        // (services/specialistBrief.js guardSpecialistReply), on the FINAL
+        // content — after think blocks are gone, so nothing hidden in one
+        // survives in the text the guard never saw.
+        if (guardHasTerms(specialistGuard)) {
+            const guarded = guardSpecialistReply(data.choices[0].message.content, specialistGuard);
+            data.choices[0].message.content = guarded.text;
+            if (guarded.removed > 0) {
                 (req.log || routesLlmLog).warn('specialist reply guarded', {
-                    session_id, agent_type: agentType, removed_sentences: removedSentences
+                    session_id, agent_type: agentType, removed_sentences: guarded.removed
                 });
             }
         }
+        rememberReply(data.choices[0].message.content);
 
         // 16. Return response
         res.json(data);
+        } finally {
+            // Settle the reservations to what was recorded, or give them back
+            // when the provider was never reached (accountedTokens null).
+            try {
+                if (accountedTokens == null) await budgetReservation?.release();
+                else await budgetReservation?.settle(accountedTokens);
+            } catch (settleErr) {
+                (req.log || routesLlmLog).warn('llm budget settle failed', { error: settleErr.message });
+            }
+            quotaReservation?.release();
+        }
     } catch (err) {
         if (err instanceof BudgetExceededError) {
             return res.status(429).json(budgetExceededResponse(err));
         }
-        (req.log || routesLlmLog).error('llm proxy failed', { error: err.message });
+        (req.log || routesLlmLog).error('llm proxy failed', { error: err.message, cause: err.cause?.code || null });
+        if (res.headersSent) {
+            if (!res.writableEnded) res.end();
+            return;
+        }
+        // An educator endpoint whose host is, or resolves to, a refused
+        // address (secureFetch, F-01).
+        if (err?.cause instanceof OutboundBlockedError) {
+            return res.status(502).json({ error: 'The LLM endpoint is not an allowed destination', code: 'upstream_blocked' });
+        }
+        if (err instanceof UpstreamBodyTooLargeError) {
+            return res.status(502).json({ error: 'The LLM endpoint sent a reply that is too large', code: 'upstream_too_large' });
+        }
         // The provider could not be reached at all (DNS, refused, reset):
         // undici's fetch rejects with a TypeError "fetch failed". That is an
         // upstream failure, not this server's — 502, as sendSynthesisError
@@ -1551,10 +1621,13 @@ router.get('/llm/models', authenticateToken, (req, res) => {
 // per-user, so this is more useful as a platform-wide indicator.
 router.get('/tts/usage', authenticateToken, async (req, res) => {
     try {
+        // ?scope=all: every user of the install for a platform administrator,
+        // every user of their own tenant for a tenant administrator (L3-08).
         const isAdmin = hasRoleAtLeast(req.user, ROLE_RANKS.admin);
         const scopeAll = isAdmin && req.query.scope === 'all';
-        const userFilter = scopeAll ? '' : 'AND user_id = ?';
-        const userParam = scopeAll ? [] : [req.user.id];
+        const installWide = scopeAll && isPlatformAdmin(req.user);
+        const userFilter = scopeAll ? (installWide ? '' : 'AND tenant_id = ?') : 'AND user_id = ?';
+        const userParam = scopeAll ? (installWide ? [] : [tenantId(req)]) : [req.user.id];
 
         const today = new Date().toISOString().slice(0, 10);
         const monthStart = today.slice(0, 7) + '-01';
@@ -1589,6 +1662,7 @@ router.get('/tts/usage', authenticateToken, async (req, res) => {
 
         res.json({
             scope: scopeAll ? 'all' : 'self',
+            tenant_only: scopeAll && !installWide,
             today: todayRows,
             last_7_days: weekRows,
             this_month: monthRows,
@@ -1706,20 +1780,22 @@ async function resolveTtsVoice(provider, requestedVoice) {
     }
 }
 
-function recordTtsUsage(userId, provider, charCount) {
+// Stamped with the tenant (F-18 / L3-08: rows defaulted to tenant 1, so
+// tenant 1's admins saw every tenant's usage and the others saw none).
+function recordTtsUsage(userId, tenant, provider, charCount) {
     if (!userId || !provider || !charCount) return;
     const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
     const rate = TTS_COST_PER_M_CHARS[provider] ?? 0;
     const cost = (charCount / 1_000_000) * rate;
     dbAdapter.run(
-        `INSERT INTO tts_usage (user_id, date, provider, char_count, request_count, estimated_cost, updated_at)
-         VALUES (?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
+        `INSERT INTO tts_usage (user_id, tenant_id, date, provider, char_count, request_count, estimated_cost, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(user_id, date, provider) DO UPDATE SET
             char_count    = tts_usage.char_count    + excluded.char_count,
             request_count = tts_usage.request_count + 1,
             estimated_cost = tts_usage.estimated_cost + excluded.estimated_cost,
             updated_at    = CURRENT_TIMESTAMP`,
-        [userId, today, provider, charCount, cost],
+        [userId, tenant, today, provider, charCount, cost],
         (err) => { if (err) routesLlmLog.warn('tts usage insert failed', { error: err.message }); }
     );
 }
@@ -1777,14 +1853,17 @@ async function pipePcmStream(res, asyncIter) {
 // configured at all; by the time a request reaches this route the voice is
 // always explicit. The engine-off impact modal in Settings → Voice warns
 // admins which cases a toggle strands BEFORE they flip it.
-router.post('/tts', authenticateToken, async (req, res) => {
+//
+// Bounded (F-07): ttsRateLimiter (per user per minute), then the synthesis
+// queue and the overall deadline inside handleTtsSynthesis (lib/ttsLimits.js).
+router.post('/tts', authenticateToken, ttsRateLimiter, async (req, res) => {
     return handleTtsSynthesis(req, res, { isPreview: false });
 });
 
 // Admin preview: accepts a `provider` override on the body so the Voice
 // settings tab can audition any voice without touching the runtime path.
 // Same literal-or-error semantics as the main route.
-router.post('/tts/preview', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/tts/preview', authenticateToken, requireAdmin, ttsRateLimiter, async (req, res) => {
     return handleTtsSynthesis(req, res, { isPreview: true });
 });
 
@@ -1873,43 +1952,74 @@ async function handleTtsSynthesis(req, res, { isPreview }) {
         plan = { provider: derived, voice: requestedVoice };
     }
 
+    // A place in the synthesis queue before anything is reserved or spent.
+    // Full (too many running and waiting, overall or for this user) → 429 at
+    // once. A client that leaves while queued gives its place up.
+    const leftQueue = new AbortController();
+    const onLeave = () => leftQueue.abort(new Error('client_disconnected'));
+    req.once('close', onLeave);
+    let releaseSlot;
     try {
-        await enforceBudget({
-            tenantId: tenantId(req),
-            userId: req.user?.id,
-            provider: `tts-${plan.provider}`,
-            metric: 'characters',
-            requested: text.length
-        });
+        releaseSlot = await ttsGate.acquire(`user:${req.user?.id ?? req.ip}`, { signal: leftQueue.signal });
     } catch (err) {
-        if (err instanceof BudgetExceededError) {
-            return res.status(429).json(budgetExceededResponse(err));
+        req.off('close', onLeave);
+        if (err instanceof GateFullError) {
+            (req.log || routesLlmLog).warn('tts refused: synthesis queue full', { scope: err.scope });
+            return res.status(429).json({ error: 'Speech synthesis is busy. Please try again in a moment.', code: 'tts_busy' });
         }
+        if (leftQueue.signal.aborted) return undefined;   // nobody left to answer
         throw err;
     }
-
-    // Record char usage up-front for the engine that actually synthesizes.
-    // Paid engines bill on submission, not delivery; local rows are $0 but
-    // keep per-user volume visible.
-    recordTtsUsage(req.user?.id, plan.provider, text.length);
-    await recordUsage({
-        tenantId: tenantId(req),
-        userId: req.user?.id,
-        provider: `tts-${plan.provider}`,
-        metric: 'characters',
-        amount: text.length
-    });
-
+    req.off('close', onLeave);
     try {
-        return await synthesizeToResponse(req, res, plan, { text, rate, pitch });
-    } catch (err) {
-        // A runtime engine failure (quota, network, 5xx) is an honest error
-        // — the configured voice is literal, so there is no retry onto a
-        // stand-in (owner directive, docs/design/voice-2.0-plan.md v1.4). The first-chunk
-        // pre-flight keeps the response uncommitted until the engine
-        // actually delivers, so the client gets a real JSON error instead
-        // of a dead stream.
-        return sendSynthesisError(req, res, plan.provider, err);
+        // Check AND reserve the characters in one step (F-07: the check and
+        // the record were two steps, so parallel requests all passed). Paid
+        // engines bill on submission, not delivery, so the reservation is the
+        // record; local rows are $0 but keep per-user volume visible.
+        try {
+            await reserveBudget({
+                tenantId: tenantId(req),
+                userId: req.user?.id,
+                provider: `tts-${plan.provider}`,
+                metric: 'characters',
+                amount: text.length
+            });
+        } catch (err) {
+            if (err instanceof BudgetExceededError) {
+                return res.status(429).json(budgetExceededResponse(err));
+            }
+            throw err;
+        }
+        recordTtsUsage(req.user?.id, tenantId(req), plan.provider, text.length);
+
+        // The whole synthesis has a deadline. Past it, an uncommitted
+        // response is answered 504; a stream already flowing is ended.
+        const deadline = setTimeout(() => {
+            (req.log || routesLlmLog).warn('tts synthesis deadline reached', { provider: plan.provider, timeout_ms: TTS_TIMEOUT_MS });
+            if (!res.headersSent) res.status(504).json({ error: 'Speech synthesis took too long', code: 'tts_timeout' });
+            // destroy, not end: the engine may still write, and a write after
+            // end() on a live response is an 'error' event nobody listens to.
+            else if (!res.writableEnded) res.destroy();
+        }, TTS_TIMEOUT_MS);
+        deadline.unref?.();
+        try {
+            return await synthesizeToResponse(req, res, plan, { text, rate, pitch });
+        } catch (err) {
+            // A runtime engine failure (quota, network, 5xx) is an honest error
+            // — the configured voice is literal, so there is no retry onto a
+            // stand-in (owner directive, docs/design/voice-2.0-plan.md v1.4). The first-chunk
+            // pre-flight keeps the response uncommitted until the engine
+            // actually delivers, so the client gets a real JSON error instead
+            // of a dead stream.
+            if (res.headersSent && (res.writableEnded || res.destroyed)) return undefined;   // the deadline answered
+            return sendSynthesisError(req, res, plan.provider, err);
+        } finally {
+            clearTimeout(deadline);
+        }
+    } finally {
+        // The slot is held until the engine has finished, not merely until
+        // the deadline answered: the CPU is busy until then.
+        releaseSlot();
     }
 }
 
@@ -2264,11 +2374,9 @@ router.get('/llm/usage', authenticateToken, async (req, res) => {
             );
         });
 
-        // Get rate limits
-        const limits = {
-            tokensPerUserDaily: parseInt(await getPlatformSetting('rate_limit_tokens_per_user_daily')) || DEFAULT_RATE_LIMITS.tokensPerUserDaily,
-            costPerUserDaily: parseFloat(await getPlatformSetting('rate_limit_cost_per_user_daily')) || DEFAULT_RATE_LIMITS.costPerUserDaily
-        };
+        // The limits exactly as the proxy enforces them (0 = no limit) —
+        // lib/llmLimits.js, the one definition (F-24).
+        const limits = await readLlmLimits(getPlatformSetting);
 
         res.json({
             date: today,
@@ -2311,35 +2419,33 @@ router.get('/llm/usage/all', authenticateToken, requireAdmin, async (req, res) =
     }
 });
 
-// GET /api/llm/usage/platform - Get platform-wide usage (Admin only)
+// GET /api/llm/usage/platform - today's usage totals (Admin only).
+// Install-wide for a platform administrator; a tenant administrator sees
+// their own tenant's totals against the tenant limits (L3-08: every tenant
+// admin used to read the whole install's spend).
 router.get('/llm/usage/platform', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
+        const installWide = isPlatformAdmin(req.user);
 
-        // Get platform-wide totals for today
-        const platformUsage = await new Promise((resolve, reject) => {
-            dbAdapter.get(
-                `SELECT
-                    SUM(total_tokens) as total_tokens,
-                    SUM(estimated_cost) as total_cost,
-                    SUM(request_count) as total_requests,
-                    COUNT(DISTINCT user_id) as active_users
-                 FROM llm_usage WHERE date = ?`,
-                [today],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row || { total_tokens: 0, total_cost: 0, total_requests: 0, active_users: 0 });
-                }
-            );
-        });
+        const platformUsage = (await dbAdapter.get(
+            `SELECT
+                SUM(total_tokens) as total_tokens,
+                SUM(estimated_cost) as total_cost,
+                SUM(request_count) as total_requests,
+                COUNT(DISTINCT user_id) as active_users
+             FROM llm_usage WHERE date = ? ${installWide ? '' : 'AND tenant_id = ?'}`,
+            installWide ? [today] : [today, tenantId(req)]
+        )) || { total_tokens: 0, total_cost: 0, total_requests: 0, active_users: 0 };
 
-        // Get limits
-        const limits = {
-            tokensPlatformDaily: parseInt(await getPlatformSetting('rate_limit_tokens_platform_daily')) || DEFAULT_RATE_LIMITS.tokensPlatformDaily,
-            costPlatformDaily: parseFloat(await getPlatformSetting('rate_limit_cost_platform_daily')) || DEFAULT_RATE_LIMITS.costPlatformDaily
-        };
+        // The limits exactly as the proxy enforces them (0 = no limit).
+        const enforced = await readLlmLimits(getPlatformSetting);
+        const limits = installWide
+            ? { tokensPlatformDaily: enforced.tokensPlatformDaily, costPlatformDaily: enforced.costPlatformDaily }
+            : { tokensPlatformDaily: enforced.tokensTenantDaily, costPlatformDaily: enforced.costTenantDaily };
 
         res.json({
+            scope: installWide ? 'install' : 'tenant',
             date: today,
             tokensUsed: platformUsage.total_tokens || 0,
             tokensLimit: limits.tokensPlatformDaily,
@@ -2371,8 +2477,10 @@ router.get('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => 
     }
 });
 
-// PUT /api/llm/pricing - Update model pricing (Admin only)
-router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => {
+// PUT /api/llm/pricing - Update model pricing (platform admin only: the
+// pricing table has no tenant, so a tenant admin zeroing a price disabled the
+// cost limits of every tenant — F-02 / L3-09).
+router.put('/llm/pricing', authenticateToken, requirePlatformAdmin, async (req, res) => {
     try {
         const { provider, model, inputCostPer1k, outputCostPer1k } = req.body;
 

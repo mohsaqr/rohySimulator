@@ -106,6 +106,7 @@ import { useBodyImage } from '../../hooks/useBodyImage';
 import EventLogger, { COMPONENTS, VERBS, OBJECT_TYPES } from '../../services/eventLogger';
 import { isSpecialistType, normalizeDisclosure } from '../../../server/shared/specialties.js';
 import { KNOWLEDGE_TYPES, normalizeKnowledge } from '../../../server/shared/agentKnowledge.js';
+import { usagePercent } from '../../utils/usagePercent';
 
 // Wizard step order — the single source of truth for step numbers. CaseWizard's
 // WIZARD_STEPS table (titles + icons) is built from this list, and any call
@@ -2483,7 +2484,7 @@ function LLMConfiguration() {
                             <div className="mt-2 h-1 bg-neutral-600 rounded">
                                 <div
                                     className="h-full bg-green-500 rounded"
-                                    style={{ width: `${Math.min((platformUsage.tokensUsed / platformUsage.tokensLimit) * 100, 100)}%` }}
+                                    style={{ width: `${usagePercent(platformUsage.tokensUsed, platformUsage.tokensLimit)}%` }}
                                 />
                             </div>
                             <div className="text-xs text-neutral-500 mt-1">{t('llm_remaining', { value: platformUsage.tokensRemaining?.toLocaleString() || 0 })}</div>
@@ -2495,7 +2496,7 @@ function LLMConfiguration() {
                             <div className="mt-2 h-1 bg-neutral-600 rounded">
                                 <div
                                     className="h-full bg-orange-500 rounded"
-                                    style={{ width: `${Math.min((platformUsage.costUsed / platformUsage.costLimit) * 100, 100)}%` }}
+                                    style={{ width: `${usagePercent(platformUsage.costUsed, platformUsage.costLimit)}%` }}
                                 />
                             </div>
                             <div className="text-xs text-neutral-500 mt-1">{t('llm_remaining', { value: '$' + (platformUsage.costRemaining?.toFixed(2) || '0.00') })}</div>

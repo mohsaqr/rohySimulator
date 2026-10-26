@@ -284,8 +284,13 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
 
     it('briefs from the session snapshot, not the live case, when a snapshot exists', async () => {
         await visitRoom(snapshotSessionId, 'pathology');
+        // Each turn is asked through the proxy: since 2026-10-26 a stored
+        // learner turn counts toward the gate only if the agent was actually
+        // asked (sec2-c-history.test.js) — three bare rows no longer open it.
         await storeStudentTurn(snapshotSessionId, 'a');
+        await callPathologist(snapshotSessionId, 'a');
         await storeStudentTurn(snapshotSessionId, 'b');
+        await callPathologist(snapshotSessionId, 'b');
         await storeStudentTurn(snapshotSessionId, 'c');
         await callPathologist(snapshotSessionId, 'c');
         const system = lastSystemPrompt();
@@ -332,7 +337,10 @@ describe('POST /proxy/llm as an on-call pathologist', () => {
         expect(body.choices[0].message.content).toBe('The nests show invasion.');
         expect(body.choices[0].message.content.toLowerCase()).not.toContain('carcinoma');
         expect(body.usage).toEqual({ prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 });
-        expect(body.id).toBe('cmpl-1');
+        // Since 2026-10-26 the reply is rebuilt to { choices, usage, model }
+        // only — provider extras such as `id` no longer pass (F-22,
+        // sec2-c-llm-proxy.test.js).
+        expect(Object.keys(body).sort()).toEqual(['choices', 'model', 'usage']);
         expect(body.choices[0].finish_reason).toBe('stop');
     });
 
@@ -363,7 +371,10 @@ describe('agent conversations: channel, call_id, case_agent_id', () => {
     it('stores channel and call_id, resolves the case agent server-side, and GET returns them', async () => {
         const call = await postAs(studentToken, path(convoSessionId), { role: 'user', content: 'on the phone', channel: 'call', call_id: 'call_01-A' });
         expect(call.status).toBe(201);
-        const chat = await postAs(studentToken, path(convoSessionId), { role: 'assistant', content: 'typed', case_agent_id: 999999 });
+        // A learner's own turn: since 2026-10-26 an `assistant` row is accepted
+        // only for a reply the proxy produced (sec2-c-history.test.js), so the
+        // second row is a learner turn too.
+        const chat = await postAs(studentToken, path(convoSessionId), { role: 'user', content: 'typed', case_agent_id: 999999 });
         expect(chat.status).toBe(201);
 
         const res = await getAs(studentToken, path(convoSessionId));
@@ -371,7 +382,7 @@ describe('agent conversations: channel, call_id, case_agent_id', () => {
         const { messages } = await res.json();
         expect(messages.map((m) => [m.content, m.role, m.channel, m.call_id])).toEqual([
             ['on the phone', 'user', 'call', 'call_01-A'],
-            ['typed', 'assistant', 'chat', null],
+            ['typed', 'user', 'chat', null],
         ]);
 
         const db = await openDb(dbPath);

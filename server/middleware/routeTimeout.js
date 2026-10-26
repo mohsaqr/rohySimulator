@@ -5,10 +5,14 @@
 // payload (rather than letting the upstream nginx time out and surface a
 // generic gateway error to the user).
 //
-// Skips streaming endpoints (/api/tts, /api/proxy/llm) — those have their
-// own per-request timeouts inside the service layer (kokoroTts, the
-// upstream OpenAI/Google client) and a global timer here would cut off
-// long-but-legitimate audio synthesis.
+// Streaming endpoints (/api/tts, /api/proxy/llm) get a longer deadline
+// instead of the 30 s one: their own timers (the 5-minute LLM stream cap, the
+// TTS synthesis deadline) are the real bound, and a 30 s timer here would cut
+// off a long-but-legitimate reply. Until 2026-10-26 they were skipped
+// entirely, so a handler that hung before its own timers started (a DB
+// stall, a queue) was bounded by nothing (F-06 / L8-02). The backstop is
+// ROHY_STREAM_ROUTE_TIMEOUT_MS (default 6 min): past it an uncommitted
+// response is answered 504 and a stream still open is destroyed.
 //
 // Cleanup on response finish/close is essential — without it, a handler
 // that responds faster than the timeout would leak a setTimeout that holds
@@ -20,6 +24,7 @@ import { logger } from '../logger.js';
 const log = logger('route-timeout');
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_STREAM_TIMEOUT_MS = 6 * 60_000;
 
 // Paths where a global timeout is wrong because they stream.
 // The patterns are matched against req.path (post-mount, no /api prefix).
@@ -56,29 +61,42 @@ export function routeTimeout(opts = {}) {
         ? opts.ms
         : (parseInt(process.env.ROHY_ROUTE_TIMEOUT_MS, 10) || DEFAULT_TIMEOUT_MS);
 
+    const streamMs = Number.isFinite(opts.streamMs) && opts.streamMs > 0
+        ? opts.streamMs
+        : (parseInt(process.env.ROHY_STREAM_ROUTE_TIMEOUT_MS, 10) || DEFAULT_STREAM_TIMEOUT_MS);
+
     return function routeTimeoutMiddleware(req, res, next) {
-        if (isStreamingPath(req.path)) return next();
+        const streaming = isStreamingPath(req.path);
+        const deadlineMs = streaming ? streamMs : ms;
 
         const timer = setTimeout(() => {
+            if (res.writableEnded) return;
             // If the response has already started (headers sent or stream
-            // open), we can't change the status code. Just log and let the
-            // existing response finish — the client may receive a partial.
-            if (res.headersSent || res.writableEnded) return;
+            // open), we can't change the status code. An ordinary route is
+            // left to finish (the client may receive a partial); a stream
+            // past its backstop is cut, or it could hold a socket for ever.
+            if (res.headersSent) {
+                if (streaming) {
+                    log.warn('stream route deadline reached; closing', { method: req.method, path: req.path, request_id: req.requestId || null, timeout_ms: deadlineMs });
+                    res.destroy();
+                }
+                return;
+            }
 
             log.warn('route timeout', {
                 method: req.method,
                 path: req.path,
                 request_id: req.requestId || null,
-                timeout_ms: ms,
+                timeout_ms: deadlineMs,
             });
 
             res.status(504).json({
                 error: 'Request timeout',
-                message: `The server took longer than ${ms}ms to respond. Please retry.`,
+                message: `The server took longer than ${deadlineMs}ms to respond. Please retry.`,
                 code: 'ROUTE_TIMEOUT',
             });
             silenceLateResponse(req, res);
-        }, ms);
+        }, deadlineMs);
 
         // Don't keep the event loop alive just for this timer.
         timer.unref?.();
@@ -96,4 +114,4 @@ export function routeTimeout(opts = {}) {
 }
 
 // Exported for tests.
-export const __test = { isStreamingPath, DEFAULT_TIMEOUT_MS, STREAMING_PATH_PREFIXES };
+export const __test = { isStreamingPath, DEFAULT_TIMEOUT_MS, DEFAULT_STREAM_TIMEOUT_MS, STREAMING_PATH_PREFIXES };

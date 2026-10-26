@@ -29,9 +29,48 @@ import { toSqliteUtc, sqliteTsToIso } from '../sqliteTime.js';
 import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/specialties.js';
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 import { validateOutboundUrl } from '../lib/outboundUrl.js';
+import { clampTemperature } from '../lib/llmGuards.js';
+import { claimAgentReply } from '../lib/llmReply.js';
+import { readableCase } from '../lib/caseReadAccess.js';
+import crypto from 'node:crypto';
 
 const radiologyLog = logger('radiology');
 const routesAdminLog = logger('routes-agent-tna-admin');
+
+// Educator-typed generation settings, bounded at write time (the proxy bounds
+// them again at use): temperature to the range every provider accepts, max
+// tokens to a sane ceiling (security audit 2026-10-26, L3 info).
+const AGENT_MAX_TOKENS_CEILING = 32_768;
+function parseAgentTemperature(value) {
+    if (value === undefined || value === null || value === '') return null;
+    return clampTemperature(value).value;
+}
+function parseAgentMaxTokens(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const n = Number.parseInt(value, 10);
+    if (!Number.isFinite(n) || n < 1) return null;
+    return Math.min(n, AGENT_MAX_TOKENS_CEILING);
+}
+
+// The audit chain keeps rows for ever and they cannot be erased (SEC-41), so a
+// template's prose — the persona prompt, its knowledge / answer-key config —
+// is recorded as a fingerprint (length + SHA-256), never verbatim
+// (security audit 2026-10-26, L2-06). The key is never recorded at all.
+const fingerprint = (value) => {
+    if (value === undefined || value === null) return value ?? null;
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return { chars: text.length, sha256: crypto.createHash('sha256').update(text).digest('hex') };
+};
+const PROSE_FIELDS = new Set(['system_prompt', 'config', 'communication_style', 'llm_config', 'memory_access']);
+function templateForAudit(row) {
+    if (!row || typeof row !== 'object') return row ?? null;
+    return Object.fromEntries(Object.entries(row)
+        .filter(([key]) => key !== 'llm_api_key')
+        .map(([key, value]) => [key, PROSE_FIELDS.has(key) ? fingerprint(value) : value]));
+}
+const TEMPLATE_AUDIT_FIELDS = ['id', 'agent_type', 'name', 'role_title', 'avatar_url', 'system_prompt', 'context_filter',
+    'communication_style', 'config', 'llm_provider', 'llm_model', 'llm_endpoint', 'llm_temperature', 'llm_max_tokens', 'memory_access'];
+const pickTemplateFields = (row) => Object.fromEntries(TEMPLATE_AUDIT_FIELDS.filter((k) => row?.[k] !== undefined).map((k) => [k, row[k]]));
 
 // A template's `llm_endpoint` is a URL the SERVER will call with the
 // template's key (proxy-routes.js), so it passes the shared outbound-URL rule
@@ -341,10 +380,8 @@ router.post('/agents/templates', authenticateToken, requireEducator, async (req,
         // Stage-4 audit: temperature/max_tokens parsed defensively. Empty
         // strings and non-finite values store as NULL so the resolver falls
         // through to session/platform; finite numbers persist as-is.
-        const tempVal = (llm_temperature !== undefined && llm_temperature !== null && llm_temperature !== '' && Number.isFinite(parseFloat(llm_temperature)))
-            ? parseFloat(llm_temperature) : null;
-        const maxTokensVal = (llm_max_tokens !== undefined && llm_max_tokens !== null && llm_max_tokens !== '' && Number.isFinite(parseInt(llm_max_tokens, 10)))
-            ? parseInt(llm_max_tokens, 10) : null;
+        const tempVal = parseAgentTemperature(llm_temperature);
+        const maxTokensVal = parseAgentMaxTokens(llm_max_tokens);
         const endpoint = checkAgentEndpoint(llm_endpoint);
         if (!endpoint.ok) return res.status(400).json({ error: endpoint.error, code: 'invalid_endpoint' });
         const avatar = checkAvatarUrl(avatar_url);
@@ -480,26 +517,41 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
         if (communication_style !== undefined) { updates.push('communication_style = ?'); params.push(communication_style); }
         if (config !== undefined) { updates.push('config = ?'); params.push(JSON.stringify(config)); }
         // LLM fields
-        if (llm_provider !== undefined) { updates.push('llm_provider = ?'); params.push(llm_provider || null); }
-        if (llm_model !== undefined) { updates.push('llm_model = ?'); params.push(llm_model || null); }
-        if (llm_api_key !== undefined && llm_api_key !== REDACTED) { updates.push('llm_api_key = ?'); params.push(llm_api_key || null); }
+        // The stored key belongs to the provider and endpoint it was entered
+        // for. Pointing the template somewhere else without typing a key in
+        // the same request would send that key to the new host (F-23 / L3-04,
+        // the SEC-27 class): the key is cleared instead.
+        let nextEndpoint;
         if (llm_endpoint !== undefined) {
             const endpoint = checkAgentEndpoint(llm_endpoint);
             if (!endpoint.ok) return res.status(400).json({ error: endpoint.error, code: 'invalid_endpoint' });
-            updates.push('llm_endpoint = ?'); params.push(endpoint.value);
+            nextEndpoint = endpoint.value;
         }
+        const providerChanged = llm_provider !== undefined && (llm_provider || null) !== (existing.llm_provider || null);
+        const endpointChanged = nextEndpoint !== undefined && (nextEndpoint || null) !== (existing.llm_endpoint || null);
+        const newKeySupplied = llm_api_key !== undefined && llm_api_key !== REDACTED && llm_api_key !== null && String(llm_api_key) !== '';
+        const clearKey = (providerChanged || endpointChanged) && !newKeySupplied && Boolean(existing.llm_api_key);
+        if (llm_provider !== undefined) { updates.push('llm_provider = ?'); params.push(llm_provider || null); }
+        if (llm_model !== undefined) { updates.push('llm_model = ?'); params.push(llm_model || null); }
+        if (clearKey) {
+            updates.push('llm_api_key = ?'); params.push(null);
+            (req.log || routesAdminLog).info('agent template key cleared: routing changed without a new key', {
+                agent_template_id: id, provider_changed: providerChanged, endpoint_changed: endpointChanged,
+            });
+        } else if (llm_api_key !== undefined && llm_api_key !== REDACTED) {
+            updates.push('llm_api_key = ?'); params.push(llm_api_key || null);
+        }
+        if (nextEndpoint !== undefined) { updates.push('llm_endpoint = ?'); params.push(nextEndpoint); }
         if (llm_config !== undefined) { updates.push('llm_config = ?'); params.push(llm_config ? JSON.stringify(llm_config) : null); }
         // Stage-4: temperature + max_tokens. Empty string clears (resolver falls
         // back to session/platform); a finite number persists.
         if (llm_temperature !== undefined) {
-            const v = (llm_temperature === null || llm_temperature === '') ? null : parseFloat(llm_temperature);
             updates.push('llm_temperature = ?');
-            params.push(Number.isFinite(v) ? v : null);
+            params.push(parseAgentTemperature(llm_temperature));
         }
         if (llm_max_tokens !== undefined) {
-            const v = (llm_max_tokens === null || llm_max_tokens === '') ? null : parseInt(llm_max_tokens, 10);
             updates.push('llm_max_tokens = ?');
-            params.push(Number.isFinite(v) ? v : null);
+            params.push(parseAgentMaxTokens(llm_max_tokens));
         }
         // Memory access
         if (memory_access !== undefined) { updates.push('memory_access = ?'); params.push(memory_access ? JSON.stringify(memory_access) : null); }
@@ -518,31 +570,15 @@ router.put('/agents/templates/:id', authenticateToken, requireEducator, async (r
             );
         });
 
-        logAudit({
-            userId: req.user.id,
-            username: req.user.username,
+        // Tenant-stamped (L2-06: these rows landed in tenant 1's log) and
+        // with the prose fingerprinted, not copied.
+        auditSuccess(req, {
             action: 'update_agent_template',
             resourceType: 'agent_template',
             resourceId: id,
             resourceName: name ?? existing.name,
-            oldValue: {
-                id: existing.id,
-                agent_type: existing.agent_type,
-                name: existing.name,
-                role_title: existing.role_title,
-                avatar_url: existing.avatar_url,
-                system_prompt: existing.system_prompt,
-                context_filter: existing.context_filter,
-                communication_style: existing.communication_style,
-                config: existing.config,
-                llm_provider: existing.llm_provider,
-                llm_model: existing.llm_model,
-                llm_endpoint: existing.llm_endpoint,
-                llm_temperature: existing.llm_temperature,
-                llm_max_tokens: existing.llm_max_tokens,
-                memory_access: existing.memory_access
-            },
-            newValue: req.body
+            oldValue: templateForAudit(pickTemplateFields(existing)),
+            newValue: templateForAudit({ ...pickTemplateFields(req.body || {}), ...(clearKey ? { llm_api_key_cleared: true } : {}) })
         });
 
         res.json({ success: true, message: 'Agent template updated' });
@@ -600,9 +636,7 @@ router.delete('/agents/templates/:id', authenticateToken, requireEducator, async
             });
         });
 
-        logAudit({
-            userId: req.user.id,
-            username: req.user.username,
+        auditSuccess(req, {
             action: 'delete_agent_template',
             resourceType: 'agent_template',
             resourceId: id,
@@ -690,32 +724,18 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
             );
         });
 
-        // Audit captures the full pre-reset row + the baseline applied so
-        // a reset is reversible from the audit trail (admin can paste the
-        // oldValue back through PUT to recover an accidental click).
-        logAudit({
-            userId: req.user.id,
-            username: req.user.username,
+        // Audit records what was reset and to which baseline. The persona
+        // prose and config are fingerprinted (length + SHA-256), not copied:
+        // audit rows live for ever and the config carries the answer-key
+        // settings (security audit 2026-10-26, L2-06). A reset is undone by
+        // re-entering the text, not from the audit trail.
+        auditSuccess(req, {
             action: 'reset_agent_template_to_default',
             resourceType: 'agent_template',
             resourceId: id,
             resourceName: baseline.name,
-            oldValue: {
-                id: existing.id,
-                agent_type: existing.agent_type,
-                name: existing.name,
-                role_title: existing.role_title,
-                avatar_url: existing.avatar_url,
-                system_prompt: existing.system_prompt,
-                context_filter: existing.context_filter,
-                communication_style: existing.communication_style,
-                config: existing.config,
-                llm_provider: existing.llm_provider,
-                llm_model: existing.llm_model,
-                llm_endpoint: existing.llm_endpoint,
-                memory_access: existing.memory_access
-            },
-            newValue: {
+            oldValue: templateForAudit(pickTemplateFields(existing)),
+            newValue: templateForAudit({
                 source: 'DEFAULT_AGENTS',
                 agent_type: baseline.agent_type,
                 name: baseline.name,
@@ -724,7 +744,7 @@ router.post('/agents/templates/:id/reset-to-default', authenticateToken, require
                 context_filter: baseline.context_filter,
                 communication_style: baseline.communication_style,
                 config: baseline.config
-            }
+            })
         });
 
         // Return the freshly-reset row so the client can rehydrate without
@@ -839,6 +859,13 @@ router.post('/agents/templates/:id/duplicate', authenticateToken, requireEducato
 router.get('/cases/:caseId/agents', authenticateToken, async (req, res) => {
     try {
         const { caseId } = req.params;
+        // Same visibility rule as GET /cases/:id (lib/caseReadAccess.js): a
+        // learner sees the team of an available case a course of theirs gives
+        // them, and "not found" for any other — the team list names the case's
+        // specialists and personas (security audit 2026-10-26, L2-16).
+        if (!await readableCase(req, caseId)) {
+            return res.status(404).json({ error: 'Case not found' });
+        }
 
         // Deliberately NO `at.deleted_at IS NULL` here, unlike
         // GET /sessions/:id/agents. This is the educator's case editor: an
@@ -1656,6 +1683,12 @@ router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateTo
 const CONVERSATION_CHANNELS = Object.freeze(['chat', 'call']);
 // Client-generated call ids group the turns of one call; opaque, bounded.
 const CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+// Who may speak in a stored conversation. `assistant` rows are the agent's
+// words: accepted only for a reply POST /proxy/llm actually produced for this
+// agent in this session (lib/llmReply.js ledger), because the stored history
+// is what the proxy sends the model next turn and what the specialist's
+// "after effort" gate counts (security audit 2026-10-26, L3-10 / L2-13).
+const CONVERSATION_ROLES = Object.freeze(['user', 'assistant']);
 
 // POST /api/sessions/:sessionId/agents/:agentType/conversation - Add message to conversation
 router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateToken, async (req, res) => {
@@ -1666,6 +1699,9 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
         if (!role || !content) {
             return res.status(400).json({ error: 'role and content are required' });
         }
+        if (!CONVERSATION_ROLES.includes(role) || typeof content !== 'string') {
+            return res.status(400).json({ error: `role must be one of ${CONVERSATION_ROLES.join(', ')} and content a string`, code: 'invalid_role' });
+        }
         if (channel !== undefined && channel !== null && !CONVERSATION_CHANNELS.includes(channel)) {
             return res.status(400).json({ error: `channel must be one of ${CONVERSATION_CHANNELS.join(', ')}`, code: 'invalid_channel' });
         }
@@ -1674,6 +1710,11 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
         }
         if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
         if (await refuseUnansweredSpecialist(req, res, sessionId, agentType)) return;
+        if (role === 'assistant'
+            && !claimAgentReply({ tenantId: tenantId(req), sessionId, agentType }, content)) {
+            (req.log || routesAdminLog).warn('assistant turn refused: not a reply the proxy produced', { session_id: sessionId, agent_type: agentType });
+            return res.status(403).json({ error: 'An agent turn can only record a reply the agent gave', code: 'reply_not_attested' });
+        }
 
         // Attribution: the case agent of this type on the session's case,
         // resolved here rather than taken from the body. Same liveness rules

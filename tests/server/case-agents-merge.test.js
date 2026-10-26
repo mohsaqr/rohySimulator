@@ -328,10 +328,12 @@ describe('GET /api/cases/:caseId/agents — config merge contract', () => {
         // status 200 — there is no separate "case not found" check.
         // Locking that observed behaviour rather than the (perhaps more
         // intuitive) 404.
+        // Since 2026-10-26 (L2-16, sec2-c-agents.test.js) the route applies the
+        // GET /cases/:id visibility rule first, so an unknown case is 404.
         const unknownId = 999_999;
         const { res, body } = await fetchAgents(unknownId);
-        expect(res.status).toBe(200);
-        expect(body).toEqual({ agents: [] });
+        expect(res.status).toBe(404);
+        expect(body).toEqual({ error: 'Case not found' });
     });
 
     it('returns 401 without auth token', async () => {
@@ -349,9 +351,9 @@ describe('GET /api/cases/:caseId/agents — config merge contract', () => {
         //
         // We lock the no-leak contract: cross-tenant request must NOT
         // return any of the tenant-1 case_agents rows.
+        // Since 2026-10-26 (L2-16) a case outside the caller's tenant is 404.
         const { res, body } = await fetchAgents(caseId, otherTenantToken);
-        expect(res.status).toBe(200);
-        expect(Array.isArray(body.agents)).toBe(true);
-        expect(body.agents).toHaveLength(0);
+        expect(res.status).toBe(404);
+        expect(body.agents).toBeUndefined();
     });
 });

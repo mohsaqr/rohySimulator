@@ -382,6 +382,22 @@ describe('GET /sessions/:id/agents as an educator viewing a learner session', ()
 
 describe('GET /cases/:id/agents', () => {
     it('withholds every agent prompt from a learner, the patient\'s included', async () => {
+        // Since 2026-10-26 (L2-16) the team list follows the GET /cases/:id
+        // visibility rule: with course access enforced (the default) a learner
+        // sees only an available case a live course of theirs gives them, else
+        // 404. Make it so, so this test still checks what it is about.
+        const db = await openDb(server.dbPath);
+        try {
+            const learner = await new Promise((resolve, reject) => db.get(
+                "SELECT u.id FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.case_id = ? LIMIT 1", [caseId],
+                (err, row) => (err ? reject(err) : resolve(row))));
+            const course = (await pRun(db, `INSERT INTO cohorts (name, owner_user_id, tenant_id) VALUES ('Persona course', ?, 1)`, [learner.id])).lastID;
+            await pRun(db, 'INSERT INTO cohort_members (cohort_id, user_id) VALUES (?, ?)', [course, learner.id]);
+            await pRun(db, 'INSERT INTO cohort_cases (cohort_id, case_id) VALUES (?, ?)', [course, caseId]);
+            await pRun(db, 'UPDATE cases SET is_available = 1 WHERE id = ?', [caseId]);
+        } finally {
+            await closeDb(db);
+        }
         const res = await getAs(studentToken, `/api/cases/${caseId}/agents`);
         expect(res.status).toBe(200);
         const { agents } = await res.json();

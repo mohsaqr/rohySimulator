@@ -64,11 +64,13 @@ async function incrementBucket(tx, { tenantId, userId, provider, metric, amount,
         : [amount, tenantId, userId, provider, metric, window.start];
     const updated = await tx.run(
         `UPDATE usage_budget
-         SET used = used + ?
+         SET used = MAX(0, used + ?)
          WHERE tenant_id = ? AND ${userClause} AND provider = ? AND metric = ? AND window_start = ?`,
         params
     );
-    if (updated.changes > 0) return;
+    // A negative amount settles a reservation down; with no row there is
+    // nothing to give back (the window rolled over), never a negative row.
+    if (updated.changes > 0 || amount <= 0) return;
 
     await tx.run(
         `INSERT INTO usage_budget (tenant_id, user_id, provider, metric, window_start, window_end, used)
@@ -153,6 +155,63 @@ export async function enforceBudget({ tenantId, userId, provider, metric, reques
             throw new BudgetExceededError(usage);
         }
     }
+}
+
+const NOOP_RESERVATION = Object.freeze({ reserved: 0, settle: async () => {}, release: async () => {} });
+
+/**
+ * Check AND reserve, atomically: refuse (BudgetExceededError) when `amount`
+ * more units would take the user's or the tenant's daily usage over its
+ * limit, otherwise add `amount` to both buckets before returning. Two
+ * requests arriving together can no longer both pass a check that only one
+ * of them fits under (security audit 2026-10-26, F-06/F-07: enforceBudget
+ * read usage that was recorded only after the upstream call finished).
+ *
+ * The returned reservation is settled once the real amount is known:
+ * `settle(actual)` moves the buckets by `actual - reserved` (down as well as
+ * up), `release()` gives the whole reservation back (the call failed before
+ * anything was spent). Both are idempotent; only the first call counts.
+ *
+ * `minRequested` floors the reservation, for a user-controlled `amount`.
+ *
+ * @returns {Promise<{ reserved: number, settle: (actual: number) => Promise<void>, release: () => Promise<void> }>}
+ */
+export async function reserveBudget({ tenantId, userId, provider, metric, amount, minRequested = 0 }) {
+    if (!tenantId || !provider || !metric) return NOOP_RESERVATION;
+    const reserved = Math.max(0, Math.ceil(Number(minRequested) || 0), Math.ceil(Number(amount) || 0));
+    const window = currentWindow();
+    const userScope = { tenantId, userId, provider, metric };
+    // Same lock as recordUsage: every budget writer in this process is
+    // serialised, so the read below sees every earlier reservation.
+    await withKeyedLock('usage-budget', async () => {
+        const checks = [
+            await getCurrentUsage(userScope),
+            await getCurrentUsage({ ...userScope, userId: null }),
+        ];
+        for (const usage of checks) {
+            if (usage.limit > 0 && usage.used + reserved > usage.limit) {
+                throw new BudgetExceededError(usage);
+            }
+        }
+        if (reserved > 0) {
+            await dbAdapter.isolatedTransaction(async (tx) => {
+                if (userId != null) await incrementBucket(tx, { tenantId, userId, provider, metric, amount: reserved, window });
+                await incrementBucket(tx, { tenantId, userId: null, provider, metric, amount: reserved, window });
+            });
+        }
+    });
+    let settled = false;
+    const settle = async (actual) => {
+        if (settled) return;
+        settled = true;
+        const delta = Math.max(0, Math.ceil(Number(actual) || 0)) - reserved;
+        if (delta === 0) return;
+        await withKeyedLock('usage-budget', () => dbAdapter.isolatedTransaction(async (tx) => {
+            if (userId != null) await incrementBucket(tx, { tenantId, userId, provider, metric, amount: delta, window });
+            await incrementBucket(tx, { tenantId, userId: null, provider, metric, amount: delta, window });
+        }));
+    };
+    return { reserved, settle, release: () => settle(0) };
 }
 
 export function budgetExceededResponse(err) {

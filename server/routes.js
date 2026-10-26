@@ -31,6 +31,12 @@ import pluginSessionStateRoutes from './routes/plugin-session-state-routes.js';
 import pathologyReadRoutes from './routes/pathology-read-routes.js';
 import { mountPluginServerSlots } from './lib/pluginServerSlot.js';
 import { routeTimeout } from './middleware/routeTimeout.js';
+import {
+    createGeneralLimiter,
+    pluginSurfaceLimiter,
+    reportMessageLimiter,
+    reportSubmitLimiter,
+} from './lib/routeLimiters.js';
 
 // Oyon mounts in three possible states. The stub matters because earlier
 // versions left /api/addons/oyon/* completely unrouted when Oyon was off,
@@ -79,17 +85,17 @@ function buildOyonDisabledStub(reason) {
 // Item D slice marker: D6 final mount point after D1-D5 extracted route domains.
 const router = express.Router();
 
-const generalLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: 600,
-    message: { error: 'Too many requests. Please slow down.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-    // /plugins is exempt for the same reason as /tts: a deep-zoom pan is
-    // hundreds of legitimate requests in seconds, and generalLimiter is keyed
-    // by IP — a lab behind one NAT would exhaust the whole building's budget on
-    // one student reading a slide. plugins-routes.js carries its own per-user
-    // limiter instead.
+// Keyed by the verified user when the request carries a validly signed token,
+// by IP otherwise (F-40 / L8-07: an IP key put a whole NAT'd classroom in one
+// bucket) — lib/routeLimiters.js. 600/min per user, 1200/min per anonymous IP.
+const generalLimiter = createGeneralLimiter({
+    // Paths with their own, tighter or differently-shaped limiter:
+    //   /tts, /proxy/llm — per-user rate + concurrency caps on the route
+    //     itself (lib/ttsLimits.js, lib/llmLimits.js), mounted after
+    //     authenticateToken (F-06 / F-07; until 2026-10-26 they had none);
+    //   /plugins/ — a deep-zoom pan is hundreds of legitimate requests in
+    //     seconds; pluginSurfaceLimiter below (2000/min per user) and the
+    //     content proxy's own limiter bound it instead.
     //
     // ROHY_DISABLE_GENERAL_RATE_LIMIT mirrors ROHY_DISABLE_AUTH_RATE_LIMIT
     // (auth-routes.js): the e2e suite mounts the full SPA dozens of times
@@ -124,6 +130,14 @@ router.use(['/ready', '/health/plugins'], probeLimiter);
 router.use(healthRoutes);
 
 router.use(generalLimiter);
+// Every /plugins/* request — slot routes and /plugins/:id/settings had no
+// limiter at all (L8-15) — per user, as generous as the content proxy's.
+router.use('/plugins', pluginSurfaceLimiter);
+// The problem-report relay spends the installation's Prova quota (L8-09):
+// POST /report and POST /reports/:id/messages, per user. ('/report' does not
+// match '/reports/…' — Express matches whole segments.)
+router.use('/report', reportSubmitLimiter);
+router.use('/reports', reportMessageLimiter);
 
 // Terms of use are enforced server-side (451 until accepted) from INSIDE
 // authenticateToken — see middleware/termsGate.js. It cannot be mounted here:
@@ -379,16 +393,17 @@ if (oyonRoutes) {
 // router.get('/patient-record/:sessionId/events', authenticateToken, async (req, res) => {
 // router.delete('/patient-record/:sessionId', authenticateToken, async (req, res) => {
 // router.get('/patient-record/:sessionId/summary', authenticateToken, async (req, res) => {
-// router.post('/proxy/llm', authenticateToken, async (req, res) => {
+// router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, async (req, res) => {
 // router.get('/llm/models', authenticateToken, (req, res) => {
 // router.get('/tts/usage', authenticateToken, async (req, res) => {
 // router.get('/tts/voices', authenticateToken, async (req, res) => {
-// router.post('/tts', authenticateToken, async (req, res) => {
+// router.post('/tts', authenticateToken, ttsRateLimiter, async (req, res) => {
 // router.get('/llm/usage', authenticateToken, async (req, res) => {
 // router.get('/llm/usage/all', authenticateToken, requireAdmin, async (req, res) => {
-// router.get('/llm/usage/platform', authenticateToken, requireAdmin, async (req, res) => {
+// router.get('/llm/usage/platform', authenticateToken, requireAdmin, async (req, res) => {   (install-wide for a platform admin, own tenant otherwise)
 // router.get('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => {
-// router.put('/llm/pricing', authenticateToken, requireAdmin, async (req, res) => {
+// router.put('/llm/pricing', authenticateToken, requirePlatformAdmin, async (req, res) => {
+// router.post('/tts/preview', authenticateToken, requireAdmin, ttsRateLimiter, async (req, res) => {
 // router.post('/sessions', authenticateToken, async (req, res) => {
 // router.get('/sessions/:id', authenticateToken, (req, res) => {
 // router.put('/sessions/:id/end', authenticateToken, (req, res) => {
@@ -396,8 +411,8 @@ if (oyonRoutes) {
 // router.get('/sessions/:id/vitals', authenticateToken, async (req, res) => {
 // router.post('/sessions/:sessionId/vitals', authenticateToken, async (req, res) => {
 // router.get('/sessions/:sessionId/vitals', authenticateToken, async (req, res) => {
-// router.post('/tenants', authenticateToken, requireAdmin, (req, res) => {
-// router.post('/users/:id/tenant', authenticateToken, requireAdmin, (req, res) => {
+// router.post('/tenants', authenticateToken, requirePlatformAdmin, (req, res) => {
+// router.post('/users/:id/tenant', authenticateToken, requirePlatformAdmin, (req, res) => {
 // router.post('/upload', authenticateToken, requireEducator, upload.single('photo'), (req, res) => {
 // router.post('/upload-body-image', authenticateToken, requireAdmin, uploadBodyImage.single('image'), (req, res) => {
 // router.get('/bodymap-regions', (req, res) => {
