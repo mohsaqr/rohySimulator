@@ -420,12 +420,16 @@ router.get('/courses/for-case/:caseId', authenticateToken, async (req, res) => {
                JOIN cohorts co ON co.id = cc.cohort_id
               WHERE cc.case_id = ? AND cc.deleted_at IS NULL AND co.deleted_at IS NULL
                 AND co.tenant_id = ?
-              ORDER BY co.id ASC`,
+              ORDER BY COALESCE(co.is_default, 0) ASC, co.id ASC`,
             [caseId, tenantId(req)]
         );
         // Prefer a cohort the caller is actually ENROLLED in (student or
-        // teacher-member), then one they own, then any (admins). ORDER BY
-        // co.id ASC above stays the tiebreaker within each tier.
+        // teacher-member), then one they own, then any (admins). Within each
+        // tier a teacher's course comes before the default course (PRV-61): a
+        // case put in a new course stays in the Basic course too, and its
+        // students are members of both — lowest id first sent them to the
+        // Basic course, and the new course's lessons and surveys never showed.
+        // Then co.id ASC is the tiebreaker.
         for (const c of rows) {
             if (await isLiveCohortMember(c.id, req.user.id)) {
                 return ok(res, { cohortId: c.id, cohortName: c.name });

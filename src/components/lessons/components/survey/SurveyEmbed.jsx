@@ -45,8 +45,11 @@ export const SurveyEmbed = ({
         const surveyData = await surveysApi.getSurveyById(surveyId);
         setSurvey(surveyData);
 
-        // Check if user has already completed this survey (if logged in)
-        if (user && !surveyData.isAnonymous) {
+        // Check if user has already completed this survey (if logged in).
+        // Anonymous surveys too: the server knows an anonymous answer by its
+        // dedupe key, and skipping the check offered a second form that could
+        // only be refused (409).
+        if (user) {
           setCheckingCompletion(true);
           try {
             const { completed: isCompleted } = await surveysApi.checkIfCompleted(surveyId, moduleId);

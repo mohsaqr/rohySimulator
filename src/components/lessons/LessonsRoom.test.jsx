@@ -49,3 +49,30 @@ describe('LessonsRoom — publication state', () => {
         expect(screen.queryByText(/Not published/)).toBeNull();
     });
 });
+
+describe('LessonsRoom — answered course surveys', () => {
+    // Regression lock: PRV-61 — a course survey the learner had answered looked like one still to do; the listing now carries `completed`
+    it('marks a survey the learner answered, in cards and in the list view', async () => {
+        render(
+            <LessonsRoom
+                lessons={[]}
+                surveys={[
+                    { id: 1, completed: true, survey: { id: 3, title: 'Answered survey', isPublished: true, _count: { questions: 2 } } },
+                    { id: 2, completed: false, survey: { id: 4, title: 'Open survey', isPublished: true, _count: { questions: 2 } } },
+                ]}
+                classroomId={9}
+                completedIds={new Set()}
+                onMarkComplete={() => {}}
+            />,
+        );
+        const check = () => {
+            const answered = screen.getByText('Answered survey').closest('[role="button"]');
+            const open = screen.getByText('Open survey').closest('[role="button"]');
+            expect(within(answered).getByLabelText('Completed')).toBeTruthy();
+            expect(within(open).queryByLabelText('Completed')).toBeNull();
+        };
+        check();
+        await userEvent.click(screen.getByRole('button', { name: /list/i }));
+        check();
+    });
+});

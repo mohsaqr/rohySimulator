@@ -174,6 +174,35 @@ async function isMemberOfAttachedCohort(surveyId, userId) {
     return !!row;
 }
 
+// The ids of `surveys` the user has already answered in `cohortId`. A named
+// response is found by user id, an anonymous one by its dedupe key — the same
+// two checks as GET /surveys/:id/my-response, batched for a course listing.
+async function answeredInCohort(surveys, userId, cohortId) {
+    const done = new Set();
+    if (!surveys.length) return done;
+    const named = surveys.filter((s) => !s.is_anonymous).map((s) => s.id);
+    if (named.length) {
+        const rows = await dbAdapter.all(
+            `SELECT DISTINCT survey_id FROM survey_responses
+              WHERE user_id = ? AND cohort_id = ? AND survey_id IN (${named.map(() => '?').join(',')})`,
+            [userId, cohortId, ...named]
+        );
+        rows.forEach((r) => done.add(r.survey_id));
+    }
+    const anonymous = surveys.filter((s) => s.is_anonymous);
+    if (anonymous.length) {
+        const keys = anonymous.map((s) => surveyDedupeKey(s, userId, cohortId));
+        const rows = await dbAdapter.all(
+            `SELECT DISTINCT survey_id FROM survey_responses
+              WHERE dedupe_key IN (${keys.map(() => '?').join(',')})
+                AND survey_id IN (${anonymous.map(() => '?').join(',')})`,
+            [...keys, ...anonymous.map((s) => s.id)]
+        );
+        rows.forEach((r) => done.add(r.survey_id));
+    }
+    return done;
+}
+
 // ===========================================================================
 // Survey CRUD
 // ===========================================================================
@@ -827,11 +856,15 @@ router.get('/surveys/module/:moduleId', authenticateToken, async (req, res) => {
             );
             counts.forEach((c) => countBySurvey.set(c.survey_id, c.n));
         }
+        const answered = await answeredInCohort(rows, req.user.id, cohortId);
         const data = rows.map((r) => ({
             id: r.link_id,
             classroomId: cohortId,
             surveyId: r.id,
             orderIndex: r.link_order,
+            // The caller's own "already answered in this course", so the course
+            // room can mark the card instead of offering a form that answers 409.
+            completed: answered.has(r.id),
             survey: { ...mapSurvey(r), _count: { questions: countBySurvey.get(r.id) || 0 } },
         }));
         return ok(res, data);

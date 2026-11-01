@@ -105,6 +105,9 @@ export function LessonsRoom({
   const { t } = useTranslation(['teaching', 'common']);
   const [open, setOpen] = useState(null);
   const [view, setView] = useState('cards');
+  // Surveys answered in this visit: the course list was fetched before, so its
+  // `completed` flag does not know about them yet.
+  const [answeredIds, setAnsweredIds] = useState(() => new Set());
   const viewLabel = {
     cards: t('room_view_cards', { defaultValue: 'Cards' }),
     list: t('room_view_list', { defaultValue: 'List' }),
@@ -160,7 +163,13 @@ export function LessonsRoom({
       <div className="min-h-full bg-background">
         <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
           {backToContents && <div className="mb-4">{backToContents}</div>}
-          <SurveyEmbed surveyId={open.id} context="module" moduleId={classroomId} courseId={classroomId} />
+          <SurveyEmbed
+            surveyId={open.id}
+            context="module"
+            moduleId={classroomId}
+            courseId={classroomId}
+            onComplete={() => setAnsweredIds((prev) => new Set(prev).add(open.id))}
+          />
         </div>
       </div>
     );
@@ -289,6 +298,7 @@ export function LessonsRoom({
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           {surveyBadge}
                         </span>
+                        {(cs.completed || answeredIds.has(cs.survey.id)) && <Check className="h-4 w-4 shrink-0 text-primary" aria-label={completedLabel} />}
                         {cs.survey.isPublished === false && <NotPublished />}
                       </div>
                       {cs.survey.description && (
@@ -363,6 +373,7 @@ export function LessonsRoom({
                         <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           {surveyBadge}
                         </span>
+                        {(cs.completed || answeredIds.has(cs.survey.id)) && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-label={completedLabel} />}
                         {cs.survey.isPublished === false && <NotPublished />}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
