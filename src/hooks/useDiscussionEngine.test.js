@@ -730,3 +730,28 @@ describe('useDiscussionEngine — a failed turn is not tutor speech', () => {
         expect(result.current.error).toBeNull();
     });
 });
+
+describe('useDiscussionEngine — the tutor\'s turn is stored by the server', () => {
+    const loggedTurns = () =>
+        globalThis.fetch.mock.calls
+            .filter(([url]) => String(url).includes('/agents/discussant/conversation'))
+            .map(([, init]) => JSON.parse(init?.body || '{}'));
+
+    // Regression lock: since rc.89 the tutor's reply, posted back from here,
+    // was refused 403 reply_not_attested (the persona path was never in the
+    // server's reply ledger), so every tutor turn was missing from the
+    // server transcript. The proxy now stores it; the hook logs only the
+    // learner's turns, and the reply still shows and is reported as received.
+    it('logs the learner turn only, and still shows and reports the reply', async () => {
+        LLMService.streamMessage.mockImplementation(async (_s, _m, _sp, _mo, { onDelta }) => {
+            onDelta('What did the ECG show?');
+            return 'What did the ECG show?';
+        });
+        const { result } = renderHook(() => useDiscussionEngine(makeProps()));
+        await act(async () => { await result.current.sendMessage('I think it was an MI'); });
+
+        expect(loggedTurns()).toEqual([{ role: 'user', content: 'I think it was an MI' }]);
+        expect(result.current.messages.at(-1)).toEqual({ role: 'assistant', content: 'What did the ECG show?' });
+        expect(EventLogger.debriefMessageReceived).toHaveBeenCalledTimes(1);
+    });
+});

@@ -87,6 +87,7 @@ import {
 import { buildAgentPersonaPrompt, loadSessionAgentKnowledge, loadSessionCaseAgent } from '../services/agentPersona.js';
 import { buildSessionPatientPrompt, isSessionEnded } from '../services/patientPersona.js';
 import { buildSessionDiscussantPrompt, buildTeamAgentSituation } from '../services/agentSituation.js';
+import { recordConversationTurn, turnTagError } from '../services/agentConversation.js';
 import { isKnownLanguage } from '../shared/languages.js';
 import { isSpecialistType, normalizeDisclosure, roomKeysOf, specialtyFor } from '../shared/specialties.js';
 import { normalizeKnowledge, serverBuildsSituation } from '../shared/agentKnowledge.js';
@@ -252,6 +253,13 @@ router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, a
         if (!chat.ok) {
             return res.status(400).json({ error: chat.error, code: 'invalid_messages' });
         }
+        // The conversation turn this reply becomes (recordReply below) is
+        // tagged with how it arrived — typed chat or a phone call — as the
+        // learner's own turn is (POST .../conversation).
+        const turnChannel = req.body?.channel ?? null;
+        const turnCallId = req.body?.call_id ?? null;
+        const turnTags = turnTagError(turnChannel, turnCallId);
+        if (turnTags) return res.status(400).json(turnTags);
 
         // 1. Check if LLM is enabled
         const llmEnabled = await new Promise((resolve, reject) => {
@@ -1256,10 +1264,34 @@ router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, a
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${SQL_NOW})`,
                 [userId, session_id, ...logAttribution(), model, promptTokens, completionTokens, totalTokens, cost, status, errorMessage ?? null, responseTime]);
         };
-        // The agent's own words, remembered so POST .../conversation can tell
-        // them from a learner-written assistant turn (L3-10).
-        const rememberReply = (text) => {
-            if (caseAgent) noteAgentReply({ tenantId: tenantId(req), sessionId: session_id, agentType: caseAgent.agentType }, text);
+        // The agent's own words, STORED here as its conversation turn: every
+        // case agent (nurse, consultant, the on-call specialists, the
+        // laboratorian, a case-attached discussant) and the debrief tutor on
+        // the persona path. The browser used to post the reply back in a
+        // second request, which could only be accepted by matching it against
+        // the ledger below — so a reply the proxy had not produced in this
+        // process, and every persona-path tutor turn (never remembered), was
+        // refused 403 and the turn was lost (monkey walk 2026-11-01). The
+        // ledger still lets a tab loaded before this change echo the reply
+        // without a 403 or a second row (L3-10). The patient keeps its own
+        // `interactions` thread and is not stored here.
+        const replyAgentType = caseAgent ? caseAgent.agentType : (serverDiscussant ? 'discussant' : null);
+        const recordReply = async (text) => {
+            if (!replyAgentType || session_id == null) return;
+            const scope = { tenantId: tenantId(req), sessionId: session_id, agentType: replyAgentType };
+            // The stand-in the client shows for an empty reply.
+            const content = String(text ?? '').trim() ? text : '...';
+            let turnId = null;
+            try {
+                turnId = await recordConversationTurn({
+                    sessionId: session_id, tenant: tenantId(req), agentType: replyAgentType,
+                    role: 'assistant', content, channel: turnChannel, callId: turnCallId,
+                });
+            } catch (recordErr) {
+                // The learner has the reply; only its stored copy is missing.
+                (req.log || routesLlmLog).error('agent reply not stored', { session_id, agent_type: replyAgentType, error: recordErr.message });
+            }
+            noteAgentReply(scope, text, { turnId });
         };
 
         // Streaming branch — emit SSE deltas from the upstream provider.
@@ -1440,7 +1472,7 @@ router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, a
                     session_id, agent_type: agentType, removed_sentences: streamGuard.removed, streamed: true
                 });
             }
-            if (!streamInterrupted) rememberReply(replyText);
+            if (!streamInterrupted) await recordReply(replyText);
 
             // Final usage + log. A provider that sent no usage is metered from
             // the characters in and out, never as 0 (L3-02).
@@ -1556,7 +1588,7 @@ router.post('/proxy/llm', authenticateToken, llmRateLimiter, llmInFlightGuard, a
                 });
             }
         }
-        rememberReply(data.choices[0].message.content);
+        await recordReply(data.choices[0].message.content);
 
         // 16. Return response
         res.json(data);

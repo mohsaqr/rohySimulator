@@ -205,8 +205,9 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     persona: 'discussant',
                     discussionOpening: opening,
                     caseLanguage,
-                    // The discussant owns its transcript via logTurn() →
-                    // agent_conversations. It must NOT also write to the
+                    // The discussant's transcript is agent_conversations (the
+                    // learner's turns via logTurn(), the tutor's stored by the
+                    // proxy). It must NOT also write to the
                     // patient `interactions` thread, or the debrief bleeds
                     // into the patient chat on restore (Bug 8).
                     persistInteractions: false,
@@ -242,7 +243,11 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             // path and was written into `agent_conversations` as a genuine
             // tutor turn: invisible to the learner, replayed on restore, and
             // counted by the analytics (2026-08-30 UI review, #6).
-            logTurn(sessionId, 'assistant', finalText);
+            // The tutor's reply itself is stored by the proxy as it answers
+            // (POST /proxy/llm records the discussant's turn): posting it from
+            // here was refused 403 reply_not_attested since rc.89, so every
+            // tutor turn was silently missing from the server's transcript
+            // (2026-11-01). Only the learner's own turns are logged from here.
             EventLogger.debriefMessageReceived(finalText, COMPONENTS.DISCUSSION_SCREEN, { objectId: String(discussant?.id ?? 'discussant'), objectName: discussant?.name ?? 'Discussant' });
         } catch (err) {
             // LLM stream failed mid-utterance — cancel any in-flight TTS

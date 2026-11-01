@@ -243,8 +243,9 @@ export const AgentService = {
    * 'call', default 'chat'), `callId` (the call a turn belongs to) and
    * `storeLearnerTurn` (default true; false on a Retry whose learner turn was
    * already stored, so the conversation and the server's turn count do not
-   * gain a duplicate). channel/callId are written on BOTH the learner's and
-   * the agent's turn; they do not change what is sent to the model.
+   * gain a duplicate). channel/callId are written on BOTH the learner's turn
+   * (stored from here) and the agent's (stored by the proxy, which is sent
+   * them); they do not change what the model is sent.
    *
    * @returns {Promise<
    *   {ok: true, content: string, learnerTurnStored: true}
@@ -289,11 +290,17 @@ export const AgentService = {
       // the patient chat in llmService. Without this, nurse/consultant/
       // relative replies stay English in a non-English session.
       if (caseLanguage) requestBody.case_language = caseLanguage;
+      // The proxy stores the agent's reply as its conversation turn itself,
+      // tagged like the learner's turn, so the reply is NOT posted back from
+      // here. Posting it was refused (403 reply_not_attested) whenever the
+      // reply had not come from this server's proxy in this process — the
+      // nightly monkey walk's stubbed proxy, a restart — and the turn was lost
+      // (2026-11-01). The browser cannot write the agent's lines (L3-10).
+      if (channel) requestBody.channel = channel;
+      if (callId) requestBody.call_id = callId;
 
       const data = await apiPost('/proxy/llm', requestBody);
       const aiContent = data?.choices?.[0]?.message?.content || '...';
-
-      await this.addMessage(sessionId, agent.agent_type, 'assistant', aiContent, turnTags);
 
       const keyPoints = this.extractKeyPoints(aiContent, agent.agent_type);
       if (keyPoints) {

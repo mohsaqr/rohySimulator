@@ -6,6 +6,9 @@
 //     text posts channel 'chat' and names the case agent to /proxy/llm
 //   - a call without speech recognition offers typing; a call turn posts
 //     channel 'call' with a call id; End call returns to the chat thread
+//   - only the learner's turn is posted to the conversation; the specialist's
+//     reply is stored by the proxy, which is sent the same channel/call id
+//     (tests/server/agent-turn-recorded.test.js)
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import { useRef } from 'react';
@@ -260,9 +263,9 @@ describe('OnCallPhone — chat', () => {
         const posts = conversationPosts('pathologist');
         expect(posts.map(r => [r.body.role, r.body.channel, r.body.call_id])).toEqual([
             ['user', 'chat', undefined],
-            ['assistant', 'chat', undefined],
         ]);
         const llm = requests.find(r => r.path.endsWith('/api/proxy/llm'));
+        expect([llm.body.channel, llm.body.call_id]).toEqual(['chat', undefined]);
         expect(llm.body.agent_llm_config).toEqual({ case_agent_id: 31 });
         expect(llm.body.session_id).toBe(SESSION);
         expect(llm.body.messages).toEqual([
@@ -318,7 +321,7 @@ describe('OnCallPhone — a turn that could not be answered', () => {
         expect(within(dialog).queryByTestId('oncall-unanswered-turn')).not.toBeInTheDocument();
         expect(received).toHaveBeenCalledTimes(1);
         // One learner turn stored, not two; the model saw it once.
-        expect(conversationPosts('pathologist').map(r => r.body.role)).toEqual(['user', 'assistant']);
+        expect(conversationPosts('pathologist').map(r => r.body.role)).toEqual(['user']);
         const llm = requests.filter(r => r.path.endsWith('/api/proxy/llm')).at(-1);
         expect(llm.body.messages.filter(m => m.role === 'user')).toHaveLength(1);
         received.mockRestore();
@@ -362,13 +365,15 @@ describe('OnCallPhone — call', () => {
         expect(voice.speak.mock.calls[0][0].text).toBe('What do you think the margins show?');
 
         const posts = conversationPosts('radiologist');
-        expect(posts).toHaveLength(2);
+        expect(posts).toHaveLength(1);
         const callId = posts[0].body.call_id;
         expect(callId).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
         expect(posts.map(r => [r.body.role, r.body.channel, r.body.call_id])).toEqual([
             ['user', 'call', callId],
-            ['assistant', 'call', callId],
         ]);
+        // The reply's turn is stored by the proxy under the same call.
+        const llm = requests.filter(r => r.path.endsWith('/api/proxy/llm')).at(-1);
+        expect([llm.body.channel, llm.body.call_id]).toEqual(['call', callId]);
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'End call' }));
         expect(voice.cancelSpeech).toHaveBeenCalled();
@@ -404,8 +409,10 @@ describe('OnCallPhone — call', () => {
         expect(voice.startListening.mock.calls[0][0].lang).toBe('en-US');
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'Stop talking and send' }));
-        await waitFor(() => expect(conversationPosts('radiologist')).toHaveLength(2));
+        await waitFor(() => expect(requests.filter(r => r.path.endsWith('/api/proxy/llm'))).toHaveLength(1));
+        expect(conversationPosts('radiologist')).toHaveLength(1);
         expect(conversationPosts('radiologist')[0].body).toMatchObject({ role: 'user', content: 'Is there a hilar node?', channel: 'call' });
+        expect(requests.find(r => r.path.endsWith('/api/proxy/llm')).body.channel).toBe('call');
     });
 });
 

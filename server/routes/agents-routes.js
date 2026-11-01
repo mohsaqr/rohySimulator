@@ -30,7 +30,8 @@ import { isSpecialistType, normalizeDisclosure, standsOnCase } from '../shared/s
 import { normalizeKnowledge } from '../shared/agentKnowledge.js';
 import { validateOutboundUrl } from '../lib/outboundUrl.js';
 import { clampTemperature } from '../lib/llmGuards.js';
-import { claimAgentReply } from '../lib/llmReply.js';
+import { claimAgentReplyTurn } from '../lib/llmReply.js';
+import { recordConversationTurn, tagConversationTurn, turnTagError } from '../services/agentConversation.js';
 import { readableCase } from '../lib/caseReadAccess.js';
 import crypto from 'node:crypto';
 
@@ -1677,17 +1678,14 @@ router.get('/sessions/:sessionId/agents/:agentType/conversation', authenticateTo
     }
 });
 
-// A conversation message arrives by typed chat or on a specialist phone call
-// (migration 0061). The column has no CHECK constraint, so this list is the
-// enforcement.
-const CONVERSATION_CHANNELS = Object.freeze(['chat', 'call']);
-// Client-generated call ids group the turns of one call; opaque, bounded.
-const CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 // Who may speak in a stored conversation. `assistant` rows are the agent's
-// words: accepted only for a reply POST /proxy/llm actually produced for this
-// agent in this session (lib/llmReply.js ledger), because the stored history
-// is what the proxy sends the model next turn and what the specialist's
-// "after effort" gate counts (security audit 2026-10-26, L3-10 / L2-13).
+// words, and the proxy stores those itself as it answers (POST /proxy/llm,
+// services/agentConversation.js). One is accepted here only as the echo of a
+// reply the proxy produced for this agent in this session (lib/llmReply.js
+// ledger) — what a tab loaded before that change still sends — and then adds
+// no second row. The stored history is what the proxy sends the model next
+// turn and what the specialist's "after effort" gate counts, so a learner
+// must not write it (security audit 2026-10-26, L3-10 / L2-13).
 const CONVERSATION_ROLES = Object.freeze(['user', 'assistant']);
 
 // POST /api/sessions/:sessionId/agents/:agentType/conversation - Add message to conversation
@@ -1702,49 +1700,29 @@ router.post('/sessions/:sessionId/agents/:agentType/conversation', authenticateT
         if (!CONVERSATION_ROLES.includes(role) || typeof content !== 'string') {
             return res.status(400).json({ error: `role must be one of ${CONVERSATION_ROLES.join(', ')} and content a string`, code: 'invalid_role' });
         }
-        if (channel !== undefined && channel !== null && !CONVERSATION_CHANNELS.includes(channel)) {
-            return res.status(400).json({ error: `channel must be one of ${CONVERSATION_CHANNELS.join(', ')}`, code: 'invalid_channel' });
-        }
-        if (callId !== undefined && callId !== null && !(typeof callId === 'string' && CALL_ID_PATTERN.test(callId))) {
-            return res.status(400).json({ error: 'call_id must be 1-64 characters of letters, digits, _ or -', code: 'invalid_call_id' });
-        }
+        const tagError = turnTagError(channel, callId);
+        if (tagError) return res.status(400).json(tagError);
         if (!await verifySessionOwnership(sessionId, req.user, res, { requireSession: true })) return;
         if (await refuseUnansweredSpecialist(req, res, sessionId, agentType)) return;
-        if (role === 'assistant'
-            && !claimAgentReply({ tenantId: tenantId(req), sessionId, agentType }, content)) {
-            (req.log || routesAdminLog).warn('assistant turn refused: not a reply the proxy produced', { session_id: sessionId, agent_type: agentType });
-            return res.status(403).json({ error: 'An agent turn can only record a reply the agent gave', code: 'reply_not_attested' });
+
+        if (role === 'assistant') {
+            const claimed = claimAgentReplyTurn({ tenantId: tenantId(req), sessionId, agentType }, content);
+            if (!claimed) {
+                (req.log || routesAdminLog).warn('assistant turn refused: not a reply the proxy produced', { session_id: sessionId, agent_type: agentType });
+                return res.status(403).json({ error: 'An agent turn can only record a reply the agent gave', code: 'reply_not_attested' });
+            }
+            if (claimed.turnId != null) {
+                // The proxy already stored it; the echo only brings the tags
+                // an older client sent the proxy without.
+                await tagConversationTurn({ turnId: claimed.turnId, sessionId, tenant: tenantId(req), channel, callId });
+                return res.status(201).json({ id: claimed.turnId, message: 'Message added' });
+            }
         }
 
-        // Attribution: the case agent of this type on the session's case,
-        // resolved here rather than taken from the body. Same liveness rules
-        // as the proxy (agentPersona.loadSessionCaseAgent): enabled, template
-        // not soft-deleted, same tenant. NULL when the case has none.
-        const caseAgentRow = await dbAdapter.get(
-            `SELECT ca.id FROM case_agents ca
-               JOIN agent_templates at
-                 ON at.id = ca.agent_template_id AND at.tenant_id = ca.tenant_id
-                AND at.deleted_at IS NULL
-               JOIN sessions s
-                 ON s.case_id = ca.case_id AND s.tenant_id = ca.tenant_id
-              WHERE s.id = ? AND ca.tenant_id = ? AND at.agent_type = ? AND ca.enabled = 1
-              ORDER BY ca.id ASC LIMIT 1`,
-            [sessionId, tenantId(req), agentType]
-        );
-
-        const result = await new Promise((resolve, reject) => {
-            dbAdapter.run(
-                `INSERT INTO agent_conversations (session_id, tenant_id, agent_type, role, content, channel, call_id, case_agent_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [sessionId, tenantId(req), agentType, role, content, channel || 'chat', callId ?? null, caseAgentRow?.id ?? null],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve({ id: this.lastID });
-                }
-            );
+        const id = await recordConversationTurn({
+            sessionId, tenant: tenantId(req), agentType, role, content, channel, callId,
         });
-
-        res.status(201).json({ id: result.id, message: 'Message added' });
+        res.status(201).json({ id, message: 'Message added' });
     } catch (err) {
         (req.log || routesAdminLog).error('agent conversation add failed', { error: err.message });
         res.status(500).json({ error: err.message });

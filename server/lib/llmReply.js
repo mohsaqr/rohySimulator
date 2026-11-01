@@ -15,7 +15,9 @@
 //     send gigabytes into this process. Reads are capped.
 //   L3-10 — a reply the proxy produced is remembered (a digest, in memory) so
 //     the conversation routes can tell a real agent turn from one a learner
-//     wrote themselves.
+//     wrote themselves. Since 2026-11-01 the proxy also STORES the reply
+//     (services/agentConversation.js); the ledger only answers an older tab
+//     that still posts it back.
 
 import crypto from 'node:crypto';
 
@@ -222,16 +224,19 @@ const replyDigest = (content) => crypto.createHmac('sha256', ledgerSecret)
 
 /**
  * Remember that the proxy produced `content` as `agentType`'s reply in this
- * session, so POST .../conversation can accept it as an assistant turn. An
- * empty reply is remembered as '...' too — the client stores that stand-in.
+ * session. The proxy stores the reply itself (services/agentConversation.js)
+ * and passes the stored row's `turnId`; the ledger then only lets a tab
+ * loaded before that change echo the reply back without a 403 and without a
+ * second row. An empty reply is remembered as '...' too — the stand-in the
+ * client shows and stores.
  */
-export function noteAgentReply(scope, content) {
+export function noteAgentReply(scope, content, { turnId = null } = {}) {
     if (!scope?.sessionId || !scope?.agentType) return;
     const key = ledgerKey(scope);
     const now = Date.now();
     const entries = (ledger.get(key) || []).filter((e) => now - e.at < LEDGER_TTL_MS);
-    entries.push({ digest: replyDigest(content), at: now });
-    if (!String(content ?? '').trim()) entries.push({ digest: replyDigest('...'), at: now });
+    entries.push({ digest: replyDigest(content), at: now, turnId });
+    if (!String(content ?? '').trim()) entries.push({ digest: replyDigest('...'), at: now, turnId });
     while (entries.length > LEDGER_MAX_PER_KEY) entries.shift();
     ledger.delete(key);
     ledger.set(key, entries);   // re-insert: Map order is the LRU order
@@ -241,18 +246,28 @@ export function noteAgentReply(scope, content) {
 /**
  * Was `content` produced by the proxy for this agent in this session (and not
  * yet claimed)? A match is consumed, so one reply backs one stored turn.
+ * Returns the entry — `{ turnId }`, the row the proxy stored, or null when it
+ * stored none — or null when nothing matches.
  */
-export function claimAgentReply(scope, content) {
+export function claimAgentReplyTurn(scope, content) {
     const key = ledgerKey(scope);
     const entries = ledger.get(key);
-    if (!entries) return false;
+    if (!entries) return null;
     const digest = replyDigest(content);
     const now = Date.now();
     const at = entries.findIndex((e) => e.digest === digest && now - e.at < LEDGER_TTL_MS);
-    if (at === -1) return false;
-    entries.splice(at, 1);
-    if (entries.length === 0) ledger.delete(key);
-    return true;
+    if (at === -1) return null;
+    const entry = entries[at];
+    // An empty reply was remembered twice ('' and '...'); claiming one claims both.
+    const left = entries.filter((e, i) => i !== at && (entry.turnId == null || e.turnId !== entry.turnId));
+    if (left.length === 0) ledger.delete(key);
+    else ledger.set(key, left);
+    return { turnId: entry.turnId ?? null };
+}
+
+/** claimAgentReplyTurn as a yes/no. */
+export function claimAgentReply(scope, content) {
+    return claimAgentReplyTurn(scope, content) !== null;
 }
 
 /** Test seam. */

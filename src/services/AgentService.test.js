@@ -809,6 +809,8 @@ describe('AgentService.sendAgentMessage', () => {
         }
     });
 
+    // The learner's turn is stored from here; the agent's is stored by the
+    // proxy, which is sent the same tags (agent-turn-recorded.test.js).
     it('tags both turns with channel "chat" and no call_id by default', async () => {
         const agent = { case_agent_id: 21, agent_type: 'pathologist', name: 'Dr. Path' };
         const out = await AgentService.sendAgentMessage('sess-1', agent, 'what do you see?', null, [], null, []);
@@ -816,8 +818,10 @@ describe('AgentService.sendAgentMessage', () => {
         const turns = sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/api/sessions/sess-1/agents/pathologist/conversation'));
         expect(turns.map(r => r.body)).toEqual([
             { role: 'user', content: 'what do you see?', channel: 'chat' },
-            { role: 'assistant', content: 'agent reply.', channel: 'chat' },
         ]);
+        const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
+        expect(llmReq.body.channel).toBe('chat');
+        expect(llmReq.body).not.toHaveProperty('call_id');
     });
 
     it('passes channel "call" and the call id through on both turns, not to the model', async () => {
@@ -827,12 +831,14 @@ describe('AgentService.sendAgentMessage', () => {
         const turns = sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/api/sessions/sess-1/agents/cardiologist/conversation'));
         expect(turns.map(r => [r.body.role, r.body.channel, r.body.call_id])).toEqual([
             ['user', 'call', 'call0001'],
-            ['assistant', 'call', 'call0001'],
         ]);
         const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
         expect(llmReq.body.case_language).toBe('it');
         expect(llmReq.body.agent_llm_config).toEqual({ case_agent_id: 22 });
-        expect(JSON.stringify(llmReq.body)).not.toContain('call0001');
+        // The tags travel as the stored turn's tags, never in what the model reads.
+        expect(llmReq.body.channel).toBe('call');
+        expect(llmReq.body.call_id).toBe('call0001');
+        expect(JSON.stringify(llmReq.body.messages)).not.toContain('call0001');
     });
 
     it('LLM API failure: returns user-facing error string (does not throw)', async () => {
@@ -870,7 +876,38 @@ describe('AgentService.requestAgentReply', () => {
     it('answers with the reply as content on success', async () => {
         const out = await AgentService.requestAgentReply('sess-1', agent, 'what do you see?', []);
         expect(out).toEqual({ ok: true, content: 'agent reply.', learnerTurnStored: true });
-        expect(turnPosts().map(r => r.body.role)).toEqual(['user', 'assistant']);
+        // The proxy stores the agent's turn; only the learner's is posted.
+        expect(turnPosts().map(r => r.body.role)).toEqual(['user']);
+    });
+
+    // Regression lock: nightly monkey walk on rc.91 (2026-11-01). After the
+    // proxy answered, the client posted the reply back as the agent's turn;
+    // the server refuses any reply its own proxy did not produce in this
+    // process (403 reply_not_attested — the walker's stubbed proxy, a
+    // restart), so Send logged "[AgentService] addMessage error" and the
+    // turn came back as a failure. Against the un-fixed service this test
+    // gets ok:false and a console.error.
+    it('a reply is a success without posting it back, so a refused echo cannot fail the turn', async () => {
+        server.use(http.post('*/api/sessions/:sessionId/agents/:agentType/conversation', async ({ request }) => {
+            const body = await recordRequest(request);
+            if (body?.role === 'assistant') {
+                return HttpResponse.json({ error: 'An agent turn can only record a reply the agent gave', code: 'reply_not_attested' }, { status: 403 });
+            }
+            return HttpResponse.json({ added: true }, { status: 201 });
+        }));
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const out = await AgentService.requestAgentReply('sess-1', { ...agent, agent_type: 'laboratorian' }, '¿Hay resultados?', [],
+                { channel: 'call', callId: 'call-1' });
+            expect(out).toEqual({ ok: true, content: 'agent reply.', learnerTurnStored: true });
+            expect(errors).not.toHaveBeenCalled();
+            const posts = sentRequests.filter(r => r.method === 'POST' && r.path.endsWith('/agents/laboratorian/conversation'));
+            expect(posts.map(r => r.body.role)).toEqual(['user']);
+            const llmReq = lastRequest({ method: 'POST', pathEndsWith: '/api/proxy/llm' });
+            expect([llmReq.body.channel, llmReq.body.call_id]).toEqual(['call', 'call-1']);
+        } finally {
+            errors.mockRestore();
+        }
     });
 
     it('a proxy failure is {ok:false} with a kind and status, and stores no assistant turn', async () => {
@@ -906,7 +943,7 @@ describe('AgentService.requestAgentReply', () => {
     it('storeLearnerTurn:false (a Retry) does not store the learner turn again', async () => {
         const out = await AgentService.requestAgentReply('sess-1', agent, 'again', [], { storeLearnerTurn: false });
         expect(out.ok).toBe(true);
-        expect(turnPosts().map(r => r.body.role)).toEqual(['assistant']);
+        expect(turnPosts()).toEqual([]);
     });
 
     it('refuses an agent with no case_agent_id as a typed failure', async () => {
