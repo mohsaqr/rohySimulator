@@ -4,8 +4,15 @@
  *
  *   sampleFaceRoiRgb(video, face) → {r,g,b} per frame  (DOM helper, below)
  *      → addSample() into a rolling buffer (~bufferSeconds)
- *      → estimate(): build pulse (POS or green) → detrend → Hann → FFT →
- *        peak in the [minBpm,maxBpm] band → BPM + SNR + confidence.
+ *      → estimate(): build pulse (windowed POS or green) → detrend → Hann →
+ *        FFT → peak in the [minBpm,maxBpm] band → BPM + SNR + confidence.
+ *
+ * TWO WINDOWS, NOT ONE. POS (Wang et al. 2017) extracts the pulse in short
+ * sliding windows of l ≈ 1.6 s (`posWindowSeconds`), overlap-adding each
+ * window's projection; the rolling `bufferSeconds` buffer (~12 s) is only the
+ * spectral window the BPM is read from. Projecting the whole 12 s buffer as a
+ * single POS window (the pre-fix behaviour, PRV-75) fits one alpha to 12 s and
+ * cannot follow a change in illumination colour or motion direction.
  *
  * ACCURACY: webcam rPPG is dominated by motion, lighting, and video
  * compression. This is a research-grade TREND signal, NOT a clinical
@@ -24,6 +31,9 @@ export class HeartRateEstimator {
     this.options = {
       bufferSeconds: 12,        // rolling analysis buffer
       method: 'pos',            // 'pos' | 'green'
+      // POS projection window l (Wang et al. 2017: 1.6 s, i.e. 32 frames at
+      // 20 fps). Distinct from bufferSeconds, the spectral (HR) window.
+      posWindowSeconds: 1.6,
       minBpm: 42,               // 0.7 Hz
       maxBpm: 240,              // 4 Hz
       minSamples: 32,
@@ -132,7 +142,7 @@ export class HeartRateEstimator {
     } else {
       const rUniform = resampleUniform(times, s.map((x) => x.r));
       const bUniform = resampleUniform(times, s.map((x) => x.b));
-      pulse = posSignal(rUniform, gUniform, bUniform);
+      pulse = posSignalWindowed(rUniform, gUniform, bUniform, fs, this.options.posWindowSeconds);
     }
     // Detrend (remove DC + linear drift), then an aggressive moving-average
     // high-pass. Window ≈ 0.7·fs puts the high-pass corner near ~0.7 Hz, which
@@ -230,6 +240,12 @@ export class HeartRateEstimator {
       fs,
       n_samples: n,
       window_seconds: spanSeconds, // integration window this BPM reflects
+      // POS projection window actually used, in samples (null for 'green', or
+      // when the buffer is shorter than one window and POS fell back to the
+      // whole-buffer projection).
+      pos_window_samples: this.options.method === 'green'
+        ? null
+        : posWindowUsed(n, fs, this.options.posWindowSeconds),
       method: this.options.method,
     };
     this.lastEstimate = est;
@@ -239,8 +255,10 @@ export class HeartRateEstimator {
 }
 
 /**
- * POS (Plane-Orthogonal-to-Skin, Wang et al. 2017) applied over the whole
- * buffer as one window. More motion-robust than the raw green channel.
+ * POS projection (Plane-Orthogonal-to-Skin) applied over the whole buffer as
+ * ONE window. This is a single step of Wang et al.'s algorithm, not the
+ * algorithm: `estimate()` uses `posSignalWindowed`. Kept for callers that pass
+ * a buffer already cut to one projection window.
  */
 export function posSignal(r, g, b) {
   const n = r.length;
@@ -263,6 +281,80 @@ export function posSignal(r, g, b) {
   for (let i = 0; i < n; i += 1) h[i] = s1[i] + alpha * s2[i];
   const mh = mean(h);
   return h.map((v) => v - mh);
+}
+
+/**
+ * Number of samples in a POS projection window: round(windowSeconds · fs).
+ * Returns 0 for a non-finite or non-positive rate or window.
+ * @param {number} fs  sample rate (Hz)
+ * @param {number} [windowSeconds=1.6]
+ * @returns {number}
+ */
+export function posWindowLength(fs, windowSeconds = 1.6) {
+  if (!(Number.isFinite(fs) && fs > 0) || !(Number.isFinite(windowSeconds) && windowSeconds > 0)) return 0;
+  return Math.round(fs * windowSeconds);
+}
+
+function posWindowUsed(n, fs, windowSeconds) {
+  const l = posWindowLength(fs, windowSeconds);
+  return l >= 2 && l <= n ? l : null;
+}
+
+/**
+ * POS as specified by Wang, den Brinker, Stuijk & de Haan (2017), Algorithm 1:
+ * a window of l = round(windowSeconds · fs) samples slides with step 1. In each
+ * window every channel is divided by its own temporal mean, projected onto
+ * S1 = G − B and S2 = G + B − 2R, combined as h = S1 + (σ(S1)/σ(S2))·S2,
+ * mean-centred, and overlap-ADDED into the output. Re-fitting alpha per window
+ * is what lets POS follow slowly changing illumination colour and motion.
+ *
+ * A buffer shorter than one window falls back to the whole-buffer projection.
+ * A zero channel mean normalises to 0 and σ(S2) = 0 gives alpha = 0, so the
+ * output is always finite. Returns a new array of the input length.
+ *
+ * @param {ArrayLike<number>} r
+ * @param {ArrayLike<number>} g
+ * @param {ArrayLike<number>} b
+ * @param {number} fs  sample rate (Hz)
+ * @param {number} [windowSeconds=1.6]
+ * @returns {number[]}
+ */
+export function posSignalWindowed(r, g, b, fs, windowSeconds = 1.6) {
+  const n = r.length;
+  const l = posWindowLength(fs, windowSeconds);
+  if (l < 2 || l > n) return posSignal(r, g, b);
+  const out = new Float64Array(n);
+  const s1 = new Float64Array(l);
+  const s2 = new Float64Array(l);
+  for (let start = 0; start + l <= n; start += 1) {
+    const end = start + l;
+    const mr = meanRange(r, start, end);
+    const mg = meanRange(g, start, end);
+    const mb = meanRange(b, start, end);
+    for (let i = 0; i < l; i += 1) {
+      const cr = mr !== 0 ? r[start + i] / mr : 0;
+      const cg = mg !== 0 ? g[start + i] / mg : 0;
+      const cb = mb !== 0 ? b[start + i] / mb : 0;
+      s1[i] = cg - cb;
+      s2[i] = cg + cb - 2 * cr;
+    }
+    const sd2 = std(s2);
+    const alpha = sd2 !== 0 ? std(s1) / sd2 : 0;
+    let sum = 0;
+    for (let i = 0; i < l; i += 1) sum += s1[i] + alpha * s2[i];
+    const mh = sum / l;
+    for (let i = 0; i < l; i += 1) {
+      const v = s1[i] + alpha * s2[i] - mh;
+      out[start + i] += Number.isFinite(v) ? v : 0;
+    }
+  }
+  return Array.from(out);
+}
+
+function meanRange(a, start, end) {
+  let s = 0;
+  for (let i = start; i < end; i += 1) s += Number.isFinite(a[i]) ? a[i] : 0;
+  return end > start ? s / (end - start) : 0;
 }
 
 /**

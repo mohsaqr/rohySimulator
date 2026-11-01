@@ -357,6 +357,8 @@ export interface HeartRateEstimate {
   n_samples: number;
   /** Seconds of signal this BPM integrates over — it is not instantaneous. */
   window_seconds: number;
+  /** POS projection window used, in samples (null for 'green' or a sub-window buffer). */
+  pos_window_samples: number | null;
   method: 'pos' | 'green';
 }
 
@@ -859,6 +861,8 @@ export class HeartRateEstimator {
   constructor(options?: {
     bufferSeconds?: number;
     method?: 'pos' | 'green';
+    /** POS projection window in seconds (Wang et al. 2017; default 1.6). */
+    posWindowSeconds?: number;
     minBpm?: number;
     maxBpm?: number;
     minSamples?: number;
@@ -917,6 +921,10 @@ export class HeartRateAggregator {
 export function sampleFaceRoiRgb(video: unknown, face: unknown, roi?: 'forehead' | 'cheeks' | 'face'): { r: number; g: number; b: number } | null;
 export function faceRoiRect(bbox: { x: number; y: number; width: number; height: number }, roi: 'forehead' | 'cheeks' | 'face'): { x: number; y: number; w: number; h: number } | null;
 export function posSignal(r: number[], g: number[], b: number[]): number[];
+/** POS with Wang et al.'s (2017) sliding window + overlap-add; l = round(windowSeconds·fs). */
+export function posSignalWindowed(r: ArrayLike<number>, g: ArrayLike<number>, b: ArrayLike<number>, fs: number, windowSeconds?: number): number[];
+/** POS projection window length in samples: round(windowSeconds·fs), 0 if invalid. */
+export function posWindowLength(fs: number, windowSeconds?: number): number;
 export function detrend(x: number[]): number[];
 export function movingAverageHighPass(x: number[], win: number): number[];
 export function resampleUniform(times: number[], values: number[]): number[];

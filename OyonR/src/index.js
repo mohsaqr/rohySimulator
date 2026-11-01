@@ -50,6 +50,8 @@ export {
   sampleFaceRoiRgb,
   faceRoiRect,
   posSignal,
+  posSignalWindowed,
+  posWindowLength,
   detrend,
   movingAverageHighPass,
   resampleUniform,

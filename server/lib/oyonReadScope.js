@@ -91,19 +91,27 @@ export async function oyonReadScope(req, {
     if (view === 'admin') {
         return { sql: `${col(alias, 'admin_can_view')} = 1`, params: [], view };
     }
+    const selfPath = (!self || !studentColumn || !row?.student_emotion_view_enabled) ? null : {
+        sql: `${col(alias, 'student_can_view')} = 1 AND CAST(${col(alias, 'user_id')} AS INTEGER) = ?`,
+        params: [Number(req.user.id)],
+    };
     if (view === 'educator') {
         const learners = await taughtLearnerIds(req);
-        return {
+        const taught = {
             sql: `${col(alias, 'educator_can_view')} = 1 AND CAST(${col(alias, 'user_id')} AS INTEGER) IN (SELECT value FROM json_each(?))`,
             params: [JSON.stringify(learners)],
+        };
+        // An educator also keeps the self path for their OWN practice runs
+        // (same flag + per-row student_can_view as a learner) — the taught-
+        // learner scope alone dropped a teacher's own windows (Codex review
+        // of rc.89–91, 2026-11-01). staffOnly surfaces stay taught-only.
+        if (staffOnly || !selfPath) return { ...taught, view };
+        return {
+            sql: `((${taught.sql}) OR (${selfPath.sql}))`,
+            params: [...taught.params, ...selfPath.params],
             view,
         };
     }
-    if (staffOnly || !self || !studentColumn) return null;
-    if (!row?.student_emotion_view_enabled) return null;
-    return {
-        sql: `${col(alias, 'student_can_view')} = 1 AND CAST(${col(alias, 'user_id')} AS INTEGER) = ?`,
-        params: [Number(req.user.id)],
-        view: 'self',
-    };
+    if (staffOnly || !selfPath) return null;
+    return { ...selfPath, view: 'self' };
 }

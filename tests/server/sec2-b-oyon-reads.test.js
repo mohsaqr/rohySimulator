@@ -41,12 +41,13 @@ describe('sec2 lane B — Oyon reads go through one policy', () => {
         ids.s1 = await session(ids.l1);     // L1, every view flag on
         ids.s2 = await session(ids.l2);     // L2, not in educator A's course
         ids.s3 = await session(ids.l1);     // L1, captured with every view off
+        ids.s4 = await session(ids.eduA);   // educator A's OWN practice run
 
         // educator A owns a course with L1 as a student member.
         ids.course = (await run(db, "INSERT INTO cohorts (name, owner_user_id, tenant_id) VALUES ('Oyon course', ?, 1)", [ids.eduA])).lastID;
         await run(db, "INSERT INTO cohort_members (cohort_id, user_id, member_role, status) VALUES (?, ?, 'student', 'active')", [ids.course, ids.l1]);
 
-        for (const sid of [ids.s1, ids.s2, ids.s3]) {
+        for (const sid of [ids.s1, ids.s2, ids.s3, ids.s4]) {
             await run(db, "INSERT INTO interactions (session_id, role, content, tenant_id, timestamp) VALUES (?, 'user', 'hello', 1, '2026-10-26T10:00:20.000Z')", [sid]);
             await run(db, `INSERT INTO learning_events (session_id, user_id, case_id, verb, object_type, tenant_id, timestamp)
                            SELECT id, user_id, case_id, 'EXAMINED', 'body_region', 1, '2026-10-26T10:00:05.000Z' FROM sessions WHERE id = ?`, [sid]);
@@ -60,6 +61,7 @@ describe('sec2 lane B — Oyon reads go through one policy', () => {
         await record(ids.s1, ids.l1, { admin: 1, educator: 1, student: 1 });
         await record(ids.s2, ids.l2, { admin: 1, educator: 1, student: 1 });
         await record(ids.s3, ids.l1, { admin: 0, educator: 0, student: 0 });
+        await record(ids.s4, ids.eduA, { admin: 1, educator: 1, student: 1 });
 
         for (const name of ['admin', 'eduA', 'eduB', 'reviewer', 'l1']) {
             as[name] = await asUser(server.baseUrl, { admin: 'oy_admin', eduA: 'oy_edu_a', eduB: 'oy_edu_b', reviewer: 'oy_reviewer', l1: 'oy_l1' }[name]);
@@ -88,6 +90,18 @@ describe('sec2 lane B — Oyon reads go through one policy', () => {
         expect(await windowCount('eduB', ids.s1)).toBe(0);
         const moments = await (await as.eduA(`/api/learning-events/moments?session_id=${ids.s1}`)).json();
         expect(moments.moments.some((m) => m.emotion === 'fear')).toBe(true);
+    });
+
+    // Regression lock: the educator scope returned only taught learners, so a teacher's own practice windows vanished (Codex review of rc.89–91, 2026-11-01)
+    it("an educator still sees their own practice windows, and only they do", async () => {
+        expect(await windowCount('eduA', ids.s4)).toBe(1);
+        expect(await windowCount('eduB', ids.s4)).toBe(0);
+        await run(db, "UPDATE oyon_settings SET student_emotion_view_enabled = 0 WHERE tenant_id = '1'");
+        try {
+            expect(await windowCount('eduA', ids.s4)).toBe(0);
+        } finally {
+            await run(db, "UPDATE oyon_settings SET student_emotion_view_enabled = 1 WHERE tenant_id = '1'");
+        }
     });
 
     it('rows captured with a role view off stay hidden from that role (Regression lock: per-row *_can_view ignored)', async () => {
