@@ -1,4 +1,6 @@
+import OpenSeadragon from 'openseadragon';
 import { manifest } from './manifest.js';
+import { installViewerHostGuard } from './viewerGuard.js';
 import { resolveRemoteRef, resolveRemoteRefs, unresolveRemoteRefs } from '../context.js';
 import { createHostAssetService } from '../hostAssetService.js';
 import { PathologyScreen } from '../../components/pathology/PathologyScreen.jsx';
@@ -13,6 +15,11 @@ import {
 import { hasOpticalProfile } from '../../components/pathology/slideGeometry.js';
 import { eventLoggerFor } from '../eventLoggerFor.js';
 import { apiPost } from '../../services/apiClient.js';
+
+// Before any room can mount: the vendored viewers can be asked to build into a
+// host React has already detached (see viewerGuard.js). Installed here, on the
+// one module that loads the package, so every host of the room is covered.
+installViewerHostGuard(OpenSeadragon);
 
 /**
  * Host-side tightening of the package's servability gate.
