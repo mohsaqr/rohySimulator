@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { VoiceService } from '../../services/voiceService';
 import { resolveVoice } from '../../utils/voiceResolver';
 import { useVoice } from '../../contexts/VoiceContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { apiFetch } from '../../services/apiClient.js';
 
 /**
@@ -37,6 +38,11 @@ import { apiFetch } from '../../services/apiClient.js';
  */
 export default function usePatientVoice({ activeCase, enabled = true, onVisemes = null, patientTemplate = null }) {
     const { voiceSettings, setVoiceSettings, setSpeaking, setVisemes } = useVoice();
+    // The case language (PRV-64): it picks the per-language default voice and
+    // goes to the TTS server as the language tiebreak, exactly as the chat
+    // room's patient voice does. This read `config.language`, which cases do
+    // not have, so an unconfigured Finnish patient got the ENGLISH default.
+    const { caseLanguage } = useLanguage();
     // Only the fetched fallback is state; the provider's copy wins when it
     // has one, so nothing is mirrored (and no state is set during render).
     const [fetchedSettings, setFetchedSettings] = useState(null);
@@ -108,10 +114,10 @@ export default function usePatientVoice({ activeCase, enabled = true, onVisemes 
             // is female, so a male patient answers in a woman's voice.
             templateVoice: patientTemplate?.config?.voice ?? null,
             voiceSettings: current,
-            language: activeCase?.config?.language,
+            language: caseLanguage,
         });
         return resolved.file ? resolved : null;
-    }, [activeCase, patientTemplate]);
+    }, [activeCase, patientTemplate, caseLanguage]);
 
     // Speaking state is identical whichever path produced the audio, so both
     // the scripted line and the streamed reply share these handlers.
@@ -154,10 +160,10 @@ export default function usePatientVoice({ activeCase, enabled = true, onVisemes 
             rate: resolved.rate,
             pitch: resolved.pitch,
             provider: resolved.provider,
-            language: activeCase?.config?.language,
+            language: caseLanguage,
             ...speechHandlers(),
         });
-    }, [activeCase, resolveForSpeaking, speechHandlers]);
+    }, [caseLanguage, resolveForSpeaking, speechHandlers]);
 
     // Returns whether the line will actually be heard, so the caller can tell
     // a silent room (muted, voice mode off, or a voice that cannot play) from
@@ -174,18 +180,18 @@ export default function usePatientVoice({ activeCase, enabled = true, onVisemes 
             rate: resolved.rate,
             pitch: resolved.pitch,
             provider: resolved.provider,
-            language: activeCase?.config?.language,
+            language: caseLanguage,
             ...speechHandlers(),
         });
         return true;
-    }, [activeCase, resolveForSpeaking, speechHandlers]);
+    }, [caseLanguage, resolveForSpeaking, speechHandlers]);
 
     const resolvedForStatus = settings
         ? resolveVoice({
             voice: activeCase?.config?.voice,
             templateVoice: patientTemplate?.config?.voice ?? null,
             voiceSettings: settings,
-            language: activeCase?.config?.language,
+            language: caseLanguage,
         })
         : { file: null };
 

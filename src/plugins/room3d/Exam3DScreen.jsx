@@ -19,7 +19,9 @@ import { useSubtitleReveal } from '../../components/voice/useSubtitleReveal';
 import VoiceControl from '../../components/discussion/VoiceControl';
 import { useVoice } from '../../contexts/VoiceContext';
 import { VoiceService } from '../../services/voiceService';
-import { sttLocaleFor, DEFAULT_LANGUAGE } from '../../i18n/languages';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { sttLocaleFor } from '../../i18n/languages';
+import { examReactionLine } from './reactionLines.js';
 
 // The exam3d room surface: a full-screen 3D patient room bound to live Rohy
 // data. The active case supplies the patient record and avatar; the monitor
@@ -85,12 +87,6 @@ const CHROME_LABEL_KEYS = [
 ];
 export const chromeLabels = (t) => Object.fromEntries(CHROME_LABEL_KEYS.map((key) => [key, t(`chrome_${key}`)]));
 
-const REACTION_KEYS = {
-    chestAnterior: 'reaction_chest',
-    heart: 'reaction_heart',
-    abdomen: 'reaction_abdomen',
-};
-
 export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conversation: conversationBus = null, log = null, vitals = null }) {
     // Order matters to the i18n extractor, which files every `t(` call under
     // the LAST namespace named in the file: the room's and the monitor's
@@ -100,9 +96,15 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     const { t: tMonitor } = useTranslation('monitor');
     const { t } = useTranslation('chat');
     const hostRef = useRef(null);
+    // The patient speaks the CASE language, not the interface's (PRV-64):
+    // the reaction lines and the microphone both follow it. Read through a
+    // ref so a language change does not remount the whole room.
+    const { caseLanguage } = useLanguage();
+    const caseLanguageRef = useRef(caseLanguage);
+    useEffect(() => { caseLanguageRef.current = caseLanguage; }, [caseLanguage]);
     const reactionLine = useCallback(
-        (regionId) => tRoom(REACTION_KEYS[regionId] ?? 'reaction_default'),
-        [tRoom],
+        (regionId) => examReactionLine(regionId, caseLanguageRef.current),
+        [],
     );
     // Rohy's examination manikin, opened from the "Body map" pill.
     const [manikinOpen, setManikinOpen] = useState(false);
@@ -206,8 +208,10 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     const patientCaption = spokenAloud
         ? (patientSpeaking && subtitleReady ? caption.line : null)
         : caption.line;
-    // The learner speaks the session's language, not the platform's.
-    const sttLang = sttLocaleFor(activeCase?.config?.language ?? DEFAULT_LANGUAGE);
+    // The learner speaks the case language, not the platform's. (This read
+    // `config.language`, a field cases do not have, so every case listened
+    // for English.)
+    const sttLang = sttLocaleFor(caseLanguage);
     const performExam = usePhysicalExam({
         physicalExam: activeCase?.config?.physical_exam ?? null,
         sessionId,

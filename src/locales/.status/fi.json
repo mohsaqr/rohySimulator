@@ -469,6 +469,56 @@
     "reviewer": null,
     "risk": "low"
   },
+  "auth.course_link_closed": {
+    "src": "b64f05b108e5",
+    "tgt": "295b70e79a9c",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.course_link_invite_signed_in": {
+    "src": "7d84e1929705",
+    "tgt": "02871797cd28",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.course_link_joined": {
+    "src": "1e983e531f46",
+    "tgt": "eb4aad176b04",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.course_link_not_found": {
+    "src": "e56e91e1c093",
+    "tgt": "77fc273e3456",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.course_link_sign_in": {
+    "src": "5a75e9258aad",
+    "tgt": "efadf79fcc18",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "auth.create_account": {
     "src": "0dffe234b447",
     "tgt": "74b684168d48",
@@ -612,6 +662,16 @@
   "auth.error_cannot_connect": {
     "src": "00e1f31f3ba7",
     "tgt": "f3a4900a752e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "auth.error_course_code_not_invite": {
+    "src": "5479d3e3a70f",
+    "tgt": "814a62e1f8ef",
     "state": "machine",
     "origin": "machine",
     "locked": false,
@@ -39199,6 +39259,16 @@
     "reviewer": null,
     "risk": "low"
   },
+  "teacher_cohorts.btn_copy_reg_link": {
+    "src": "a96537c0db91",
+    "tgt": "031247d139c7",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
   "teacher_cohorts.btn_create_course": {
     "src": "9ba34828c676",
     "tgt": "86f1f9f10754",
@@ -40692,6 +40762,16 @@
   "teacher_cohorts.toast_reg_code_generated": {
     "src": "6ddfb20b0fa9",
     "tgt": "14482098c486",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "teacher_cohorts.toast_reg_link_copied": {
+    "src": "3f8595a3bcfc",
+    "tgt": "e511bae18cb5",
     "state": "machine",
     "origin": "machine",
     "locked": false,

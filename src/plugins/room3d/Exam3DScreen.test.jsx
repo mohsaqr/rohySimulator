@@ -5,6 +5,22 @@ import { VoiceProvider } from '../../contexts/VoiceContext';
 import EventLogger from '../../services/eventLogger';
 import { setAppLanguage } from '../../i18n';
 
+// The case language comes from the host's LanguageContext (App syncs it from
+// config.case_language); tests set it here.
+const language = vi.hoisted(() => ({ caseLanguage: 'en' }));
+vi.mock('../../contexts/LanguageContext', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        useLanguage: () => ({
+            uiLanguage: 'en',
+            caseLanguage: language.caseLanguage,
+            setUiLanguage: () => Promise.resolve(),
+            setCaseLanguage: () => {},
+        }),
+    };
+});
+
 const controller = {
     update: vi.fn(),
     addTimelineEvent: vi.fn(),
@@ -145,6 +161,7 @@ describe('Exam3DScreen', () => {
     afterEach(() => {
         vi.useRealTimers();
         EventLogger.setCurrentVitals(null);
+        language.caseLanguage = 'en';
     });
 
     it('mounts the room in bound mode with the mapped case patient and avatar', () => {
@@ -365,6 +382,49 @@ describe('Exam3DScreen', () => {
         expect(view.container.textContent).not.toContain('that is sore when you press there');
     });
 
+    // Regression lock: PRV-64 in the 3D room — a Finnish case's patient
+    // reacted to an exam in the UI language (English), listened for English,
+    // and an unconfigured Finnish patient got the English default voice:
+    // the room read `config.language`, a field cases do not have, and its
+    // reaction lines went through the UI-language translator.
+    it('reacts, speaks and listens in the CASE language, not the UI language', async () => {
+        const { act } = require('react');
+        const { fireEvent } = require('@testing-library/react');
+        speak.mockClear();
+        startListening.mockClear();
+        language.caseLanguage = 'fi';
+        const finnishCase = { ...ACTIVE_CASE, config: { ...ACTIVE_CASE.config, case_language: 'fi' } };
+        const view = renderRoom({ activeCase: finnishCase, sessionId: 7 });
+        await act(async () => { await Promise.resolve(); });
+
+        act(() => {
+            mountPatientRoom.mock.calls[0][1].on_event({ type: 'exam', region_id: 'chestAnterior', abnormal: true });
+        });
+        expect(controller.say).toHaveBeenLastCalledWith('Ai – tuohon sattuu, kun painatte.');
+        expect(speak).toHaveBeenCalledTimes(1);
+        expect(speak.mock.calls[0][0].text).toBe('Ai – tuohon sattuu, kun painatte.');
+        expect(speak.mock.calls[0][0].language).toBe('fi');
+
+        fireEvent.click(view.getByLabelText(/listening/i));
+        expect(startListening.mock.calls[0][0].lang).toBe('fi-FI');
+        view.unmount();
+    });
+
+    it('keeps an English case English under a Finnish interface', async () => {
+        const { act } = require('react');
+        try {
+            await act(async () => { await setAppLanguage('fi'); });
+            renderRoom({ activeCase: ACTIVE_CASE, sessionId: 7 });
+            await act(async () => { await Promise.resolve(); });
+            act(() => {
+                mountPatientRoom.mock.calls.at(-1)[1].on_event({ type: 'exam', region_id: 'abdomen', abnormal: true });
+            });
+            expect(controller.say).toHaveBeenLastCalledWith('That really hurts when you push on my belly.');
+        } finally {
+            await act(async () => { await setAppLanguage('en'); });
+        }
+    });
+
     it('mutes the patient from the room control', async () => {
         const { act, fireEvent } = { ...require('react'), ...require('@testing-library/react') };
         speak.mockClear();
@@ -418,8 +478,9 @@ describe('Exam3DScreen', () => {
     it('offers a microphone, and opens it in the session language', () => {
         const { fireEvent } = require('@testing-library/react');
         startListening.mockClear();
+        language.caseLanguage = 'it';
         const view = renderRoom({
-            activeCase: { ...ACTIVE_CASE, config: { ...ACTIVE_CASE.config, language: 'it' } },
+            activeCase: { ...ACTIVE_CASE, config: { ...ACTIVE_CASE.config, case_language: 'it' } },
             sessionId: 7,
         });
         fireEvent.click(view.getByLabelText(/listening/i));
