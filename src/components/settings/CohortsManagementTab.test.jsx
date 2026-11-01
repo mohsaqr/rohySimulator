@@ -331,6 +331,24 @@ describe('CohortsManagementTab — roster drill-down', () => {
         await waitFor(() => expect(writeText).toHaveBeenCalledWith('CPY333'));
     });
 
+    // Regression lock: a teacher could share only the code, not a link a
+    // student clicks to register into the course (PRV-67).
+    it('copies the registration link — the invite link shape carrying the code', async () => {
+        const writeText = vi.fn().mockResolvedValue();
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText },
+            configurable: true,
+        });
+        await openRoster({ id: 1, name: 'Cardio', join_code: 'LNK444AB' }, []);
+        fireEvent.click(screen.getByTestId('copy-registration-link'));
+        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+        const link = new URL(writeText.mock.calls[0][0]);
+        expect(link.searchParams.get('invite')).toBe('LNK444AB');
+        expect(link.pathname.endsWith('/register')).toBe(true);
+        expect(link.origin).toBe(window.location.origin);
+        expect(toast.success).toHaveBeenCalledWith('Registration link copied');
+    });
+
     it('switches to the Reports section (renders the stub)', async () => {
         await openRoster();
         fireEvent.click(screen.getByRole('button', { name: /Reports/i }));

@@ -26,6 +26,10 @@ export const INVITE_ERRORS = {
     exhausted: 'That invite has already been used the maximum number of times.',
 };
 
+/** A course's registration code on a platform that admits only invited people. */
+export const COURSE_CODE_NOT_INVITE_ERROR =
+    'A course code cannot create an account on this platform. Ask an administrator for an invite, then join the course with the code once you are signed in.';
+
 /** Mint a token, retrying on the (vanishingly unlikely) UNIQUE collision. */
 export async function allocateInviteToken() {
     for (let attempt = 0; attempt < INVITE_MAX_RETRIES; attempt++) {
@@ -91,6 +95,41 @@ export async function findInviteByToken(rawToken) {
     const token = normalizeCode(rawToken);
     if (!token) return null;
     return dbAdapter.get('SELECT * FROM registration_invites WHERE token = ?', [token]);
+}
+
+/**
+ * The course a code names, when it is a course's join code rather than a
+ * registration invite (PRV-68).
+ *
+ * A teacher's course page calls its join code the "Registration code" and the
+ * teacher hands it to people who have no account yet, so the register form's
+ * code field has to accept it. The two never collide: invites are
+ * INVITE_TOKEN_LENGTH (12) characters and join codes 8, from the same alphabet.
+ *
+ * What a course code is NOT: an admin's invite. It carries no role (always
+ * student), no use limit, no expiry and no email rule, and any educator can
+ * mint one, so it never opens a door the registration policy keeps shut — it
+ * says which course the newcomer joins, in that course's tenant.
+ *
+ * @returns {Promise<{course: {id:number, name:string, tenant_id:number}|null, reason: 'not_found'|'revoked'|null}>}
+ *   `revoked` when the code belonged to a course that has since been closed
+ *   (soft-deleted), so the holder is told "withdrawn" rather than "typo".
+ */
+export async function findCourseByJoinCode(rawCode) {
+    const code = normalizeCode(rawCode);
+    if (!code) return { course: null, reason: 'not_found' };
+    // join_code is unique among LIVE courses (partial index, migration 0025);
+    // a closed course may still hold a code a live one has since reused.
+    const course = await dbAdapter.get(
+        `SELECT id, name, tenant_id FROM cohorts WHERE join_code = ? AND deleted_at IS NULL`,
+        [code]
+    );
+    if (course) return { course: { ...course, tenant_id: Number(course.tenant_id || 1) }, reason: null };
+    const closed = await dbAdapter.get(
+        `SELECT id FROM cohorts WHERE join_code = ? AND deleted_at IS NOT NULL LIMIT 1`,
+        [code]
+    );
+    return { course: null, reason: closed ? 'revoked' : 'not_found' };
 }
 
 /**

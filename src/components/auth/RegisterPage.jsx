@@ -39,6 +39,8 @@ export function translateRegisterError(err, t) {
     if (code === 'invite_exhausted' || raw === 'That invite has already been used the maximum number of times.') {
         return t('invite_invalid_exhausted');
     }
+    // A course's registration code on an invite-only platform (PRV-68).
+    if (code === 'course_code_not_invite') return t('error_course_code_not_invite');
 
     // The two domain rules read the same to a user but name different lists,
     // and the list is the actionable part — pull it out and re-render it.
@@ -263,12 +265,13 @@ export default function RegisterPage({ onSwitchToLogin, onRegistered, policy, in
 
                         {codeOpen && (
                             <div>
-                                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                                <label htmlFor="register-invite-code" className="block text-sm font-medium text-neutral-300 mb-2">
                                     {t('invite_code')}
                                 </label>
                                 <div className="relative">
                                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
                                     <input
+                                        id="register-invite-code"
                                         type="text"
                                         name="invite"
                                         value={inviteCode}

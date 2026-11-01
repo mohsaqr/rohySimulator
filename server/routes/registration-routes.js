@@ -17,7 +17,13 @@ import {
     getRoleRank,
 } from '../middleware/auth.js';
 import { logger } from '../logger.js';
-import { allocateInviteToken, findInviteByToken, inviteRejection, inviteUsableRejection } from '../lib/invites.js';
+import {
+    allocateInviteToken,
+    findCourseByJoinCode,
+    findInviteByToken,
+    inviteRejection,
+    inviteUsableRejection,
+} from '../lib/invites.js';
 import { findIdentityClash } from '../lib/identity.js';
 // One time shape everywhere (RPS-1 §17): a user row created here gets an
 // explicit UTC ISO created_at instead of sqlite's naive DEFAULT CURRENT_TIMESTAMP.
@@ -27,6 +33,7 @@ import {
     dbAll,
     dbGet,
     dbRun,
+    enrollUserInCohort,
     ensureAutoEnrollMemberships,
     isValidRole,
     roleForStorage,
@@ -56,9 +63,28 @@ const invitePreviewLimiter = rateLimit({
 // ALWAYS 200, so the client has one code path. Returns only what the invited
 // person legitimately needs to see: never the creator, the invite id, the
 // admin's private note, or the tenant.
+//
+// A course's registration code previews here too (PRV-67/68), so ONE link
+// shape — /register?invite=CODE — serves both: the teacher's "Copy
+// registration link" is inviteLink(join_code). `kind: 'course'` tells the
+// client it is a course code, which never opens a closed platform and which a
+// signed-in student redeems with POST /cohorts/join instead.
 router.get('/auth/invite/:token', invitePreviewLimiter, async (req, res) => {
     try {
         const invite = await findInviteByToken(req.params.token);
+        if (!invite) {
+            const { course, reason } = await findCourseByJoinCode(req.params.token);
+            if (!course) return res.json({ valid: false, reason });
+            return res.json({
+                valid: true,
+                kind: 'course',
+                role: 'student',
+                cohort_name: course.name,
+                expires_at: null,
+                email_domain: null,
+                uses_left: null,
+            });
+        }
         // Same rule as redemption: an invite whose minter was deleted, disabled
         // or demoted below its role is withdrawn (L2-10).
         const reason = await inviteUsableRejection(invite);
@@ -260,10 +286,12 @@ router.get('/registration-requests', authenticateToken, requireAdmin, async (req
             : 'pending';
         const requests = await dbAll(
             `SELECT r.id, r.username, r.name, r.email, r.status, r.requested_at,
-                    r.decided_at, r.decision_note, r.user_id,
-                    d.username AS decided_by_username
+                    r.decided_at, r.decision_note, r.user_id, r.cohort_id,
+                    d.username AS decided_by_username,
+                    c.name AS cohort_name
                FROM registration_requests r
                LEFT JOIN users d ON d.id = r.decided_by
+               LEFT JOIN cohorts c ON c.id = r.cohort_id AND c.tenant_id = r.tenant_id
               WHERE r.tenant_id = ? AND r.status = ?
               ORDER BY r.requested_at DESC`,
             [tenantId(req), status]
@@ -347,6 +375,25 @@ router.post('/registration-requests/:id/approve', authenticateToken, requireAdmi
             [req.user.id, userId, request.id]
         );
 
+        // Applied with a course's registration code (PRV-68): that course,
+        // first, so the default-course sweep below sees them as placed. Only a
+        // course that is still open and in the request's tenant.
+        let enrolledCohortId = null;
+        if (request.cohort_id) {
+            const course = await dbGet(
+                'SELECT id FROM cohorts WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+                [request.cohort_id, request.tenant_id]
+            );
+            if (course) {
+                await enrollUserInCohort(course.id, userId);
+                enrolledCohortId = course.id;
+            } else {
+                (req.log || inviteLog).warn('approved request names a course that is gone', {
+                    request_id: request.id, cohort_id: request.cohort_id,
+                });
+            }
+        }
+
         // Same courtesy every other entry path gets: land them in the auto-enrol
         // classes so an approved student opens the app inside their course.
         await ensureAutoEnrollMemberships(userId, request.tenant_id);
@@ -355,7 +402,10 @@ router.post('/registration-requests/:id/approve', authenticateToken, requireAdmi
             action: 'registration_request_approved',
             resourceType: 'registration_request',
             resourceId: String(request.id),
-            newValue: { username: request.username, role, user_id: userId },
+            newValue: {
+                username: request.username, role, user_id: userId,
+                ...(enrolledCohortId ? { cohort_id: enrolledCohortId } : {}),
+            },
         });
 
         res.status(201).json({

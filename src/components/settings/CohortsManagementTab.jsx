@@ -5,7 +5,7 @@ import {
     Check, Loader2, UserPlus, X, ChevronDown, ChevronRight,
     GraduationCap, BookOpen, Save,
     ListChecks, LayoutGrid, BarChart3, Download, Activity,
-    Target, Percent, SlidersHorizontal, Info, ShieldCheck,
+    Target, Percent, SlidersHorizontal, Info, ShieldCheck, Link2,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/apiClient';
@@ -17,6 +17,9 @@ import {
     addCohortTeacher, removeCohortTeacher,
 } from '../../services/cohortsService';
 import { getEnforcementFlag, setEnforcementFlag } from '../../services/userService';
+// The course link is the registration-invite link shape (PRV-67): one link
+// format, one reader (AuthGate), and GET /auth/invite previews both.
+import { inviteLink } from '../../services/registrationService';
 import CohortReports from './CohortReports';
 import { CasePicker, PeoplePicker } from './CohortPickers';
 import { usesSeededDefaultCourseName } from '../../services/defaultCourse';
@@ -626,6 +629,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
     const [identifier, setIdentifier] = useState('');
     const [adding, setAdding] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
     const [busyCode, setBusyCode] = useState(false);
     const [section, setSection] = useState(initialSection); // 'manage' | 'reports' | 'settings'
 
@@ -713,6 +717,21 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
             await navigator.clipboard.writeText(cohort.join_code);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
+        } catch {
+            toast.error(t('toast_copy_failed'));
+        }
+    };
+
+    // The registration link: a new student who opens it registers with the
+    // code pre-filled and lands in this course; a student who is already
+    // signed in joins it (PRV-67).
+    const handleCopyLink = async () => {
+        if (!cohort?.join_code) return;
+        try {
+            await navigator.clipboard.writeText(inviteLink(cohort.join_code));
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 1500);
+            toast.success(t('toast_reg_link_copied'));
         } catch {
             toast.error(t('toast_copy_failed'));
         }
@@ -812,7 +831,7 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                         <span className="text-sm font-bold text-neutral-200">{t('label_reg_code')}</span>
                         </div>
                         {cohort.join_code ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <code className="px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-lg text-purple-300 font-mono text-sm tracking-wider">
                                     {cohort.join_code}
                                 </code>
@@ -824,6 +843,17 @@ function CohortRoster({ cohortId, onBack, initialSection = 'manage', initialRepo
                                     {copied
                                         ? <Check className="w-4 h-4 text-green-400" />
                                         : <Copy className="w-4 h-4" />}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyLink}
+                                    data-testid="copy-registration-link"
+                                    className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                                >
+                                    {linkCopied
+                                        ? <Check className="w-4 h-4" />
+                                        : <Link2 className="w-4 h-4" />}
+                                    {t('btn_copy_reg_link')}
                                 </button>
                                 <button
                                     onClick={handleRotate}

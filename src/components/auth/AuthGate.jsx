@@ -9,6 +9,7 @@ import {
     FAILSAFE_POLICY,
 } from '../../services/registrationService';
 import { baseUrl } from '../../config/api';
+import { forgetCourseCode, rememberCourseCode } from '../../services/courseLink';
 import TermsPublicPage from '../terms/TermsPublicPage';
 
 /**
@@ -89,7 +90,14 @@ export default function AuthGate() {
         if (!inviteToken) return undefined;
         let cancelled = false;
         previewInvite(inviteToken)
-            .then((res) => { if (!cancelled) setInvite(res); })
+            .then((res) => {
+                if (cancelled) return;
+                setInvite(res);
+                // A teacher's course link (PRV-67). If this person signs in
+                // instead of registering, the signed-in app joins them to the
+                // course (CourseLinkJoin) — the code has left the URL by then.
+                if (res?.valid && res.kind === 'course') rememberCourseCode(inviteToken);
+            })
             .catch(() => { if (!cancelled) setInvite({ valid: false, reason: 'not_found' }); })
             .finally(() => {
                 if (cancelled) return;
@@ -126,8 +134,11 @@ export default function AuthGate() {
     }
 
     // A VALID invite outranks a closed platform — that is what an invite IS: a
-    // named exception, issued by an admin, to the rule on the front door.
-    const canRegister = policy.self_registration || invite?.valid;
+    // named exception, issued by an admin, to the rule on the front door. A
+    // course's registration code is not: any educator mints it, so it never
+    // opens a closed platform (the server refuses it there too).
+    const courseLink = Boolean(invite?.valid && invite.kind === 'course');
+    const canRegister = policy.self_registration || (invite?.valid && !courseLink);
 
     if (showRegister && canRegister) {
         return (
@@ -137,7 +148,11 @@ export default function AuthGate() {
                     invite={invite}
                     inviteToken={inviteToken}
                     startWithCode={startWithCode}
-                    onRegistered={clearInviteFromUrl}
+                    onRegistered={() => {
+                        // Registering with the code already enrolled them.
+                        forgetCourseCode();
+                        clearInviteFromUrl();
+                    }}
                     onSwitchToLogin={() => {
                         setShowRegister(false);
                         setStartWithCode(false);
@@ -150,6 +165,15 @@ export default function AuthGate() {
 
     return (
         <AuthLayout onOpenTerms={openTerms}>
+            {courseLink && (
+                <p
+                    role="status"
+                    data-testid="course-link-sign-in"
+                    className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200"
+                >
+                    {t('course_link_sign_in', { course: invite.cohort_name || '' })}
+                </p>
+            )}
             <LoginPage
                 policy={policy}
                 onSwitchToRegister={canRegister ? () => setShowRegister(true) : null}

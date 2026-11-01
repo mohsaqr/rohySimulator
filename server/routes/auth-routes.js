@@ -144,6 +144,8 @@ import {
 import {
     claimInviteUse,
     findInviteByToken,
+    COURSE_CODE_NOT_INVITE_ERROR,
+    findCourseByJoinCode,
     INVITE_ERRORS,
     inviteUsableRejection,
     recordInviteUse,
@@ -322,6 +324,11 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
     }
 
     let invite = null;
+    // A course's registration code (cohorts.join_code), when the supplied code
+    // is that rather than an invite (PRV-68). It decides WHICH course and tenant
+    // the newcomer lands in; unlike an invite it never decides WHETHER they may
+    // register — closed, invite-only and approval still apply.
+    let course = null;
     if (!isBootstrapClaim) {
         const policy = await registrationPolicy();
         const suppliedToken = req.body?.invite || req.body?.invite_code || null;
@@ -332,6 +339,19 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // user would land in the wrong place and nobody would know why.
         if (suppliedToken) {
             invite = await findInviteByToken(suppliedToken);
+            if (!invite) {
+                // Not an invite — the teacher's course code, perhaps. Until
+                // 3.1.0 this was the dead end of PRV-68: the course page calls
+                // its join code the "Registration code", and every student who
+                // typed it here was told the code was not valid.
+                const found = await findCourseByJoinCode(suppliedToken);
+                if (!found.course) {
+                    return res.status(400).json({ code: `invite_${found.reason}`, error: INVITE_ERRORS[found.reason] });
+                }
+                course = found.course;
+            }
+        }
+        if (invite) {
             // Includes the minter: an invite dies with its creator's rights (L2-10).
             const reason = await inviteUsableRejection(invite);
             if (reason) {
@@ -362,6 +382,13 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             });
         }
 
+        if (policy.mode === 'invite' && course) {
+            // An invite-only platform admits the people an ADMIN named. A course
+            // code is minted by any educator, has no use limit or expiry, and
+            // is shared with whole classes — it is not that. Say so, rather
+            // than "you need an invite or code" to someone who typed a code.
+            return res.status(403).json({ code: 'course_code_not_invite', error: COURSE_CODE_NOT_INVITE_ERROR });
+        }
         if (policy.mode === 'invite' && !invite) {
             return res.status(403).json({
                 code: 'invite_required',
@@ -410,11 +437,15 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
             // the hash moves into the users row untouched, so the applicant signs in
             // with the password they chose and no admin ever handles it.
             const requestHash = await bcrypt.hash(password, 10);
+            // A course code travels through the queue (migration 0075): the
+            // request is filed in the course's tenant, and approving it enrols
+            // the new account in that course.
+            const requestTenant = course ? course.tenant_id : tenantId(req);
             try {
                 await dbAdapter.run(
-                    `INSERT INTO registration_requests (tenant_id, username, name, email, password_hash, ip_address)
-                     VALUES (?, ?, ?, ?, ?, ?)`,
-                    [tenantId(req), username, name || null, email, requestHash, req.ip || null]
+                    `INSERT INTO registration_requests (tenant_id, username, name, email, password_hash, ip_address, cohort_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [requestTenant, username, name || null, email, requestHash, req.ip || null, course?.id ?? null]
                 );
             } catch (err) {
                 // The partial unique indexes cover LIVE requests only, so this is a
@@ -430,10 +461,10 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 userId: null,
                 action: 'register_request',
                 resourceType: 'registration_request',
-                newValue: { username, email },
+                newValue: { username, email, ...(course ? { via_course: course.id } : {}) },
                 ipAddress: req.ip,
                 userAgent: req.headers['user-agent'],
-                tenantId: tenantId(req),
+                tenantId: requestTenant,
             });
 
             return approvalPending();
@@ -481,7 +512,7 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
         // `WHERE NOT EXISTS` is decided by sqlite's single writer, so exactly
         // one claim lands; the loser inserts nothing and is told to retry,
         // which then goes through the normal registration policy.
-        const defaultTenantId = invite?.tenant_id || 1;
+        const defaultTenantId = invite?.tenant_id || course?.tenant_id || 1;
         const sql = isBootstrapClaim
             ? `INSERT INTO users (username, name, email, password_hash, role, tenant_id, created_at)
                SELECT ?, ?, ?, ?, ?, ?, ${SQL_NOW} WHERE NOT EXISTS (SELECT 1 FROM users)`
@@ -524,6 +555,17 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 }
                 await recordInviteUse(invite.id, user.id, ipAddress);
             }
+            // Same for a course registration code (PRV-68), and for the same
+            // reason it runs before auto-enrolment.
+            if (course) {
+                try {
+                    await enrollUserInCohort(course.id, user.id);
+                } catch (e) {
+                    (req.log || authLog).warn('course code enrolment failed', {
+                        user_id: user.id, cohort_id: course.id, error: e.message
+                    });
+                }
+            }
 
             // Auto-enrol into the tenant's auto-enrol classes (the default
             // course — cohorts.is_default = 1, seeded as "Basic course" but
@@ -540,7 +582,8 @@ router.post('/auth/register', registerLimiter, async (req, res) => {
                 resourceName: username,
                 newValue: {
                     username, email, role: finalRole, tenant_id: defaultTenantId,
-                    ...(invite ? { via_invite: invite.id } : {})
+                    ...(invite ? { via_invite: invite.id } : {}),
+                    ...(course ? { via_course: course.id } : {})
                 },
                 tenantId: defaultTenantId,
                 ipAddress,

@@ -5,6 +5,7 @@ import PatientVisual from './components/patient/PatientVisual';
 import ChatInterface from './components/chat/ChatInterface';
 import ConfigPanel from './components/settings/ConfigPanel';
 import AuthGate from './components/auth/AuthGate';
+import CourseLinkJoin from './components/auth/CourseLinkJoin';
 import OrdersDrawer from './components/orders/OrdersDrawer';
 import UserProfilePanel from './components/settings/UserProfilePanel';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -1639,6 +1640,10 @@ function AuthenticatedApp() {
    return (
       <>
          <TermsGate>
+            {/* A teacher's course registration link opened while signed in, or
+                signed in from (PRV-67). Inside TermsGate: the API refuses a
+                user who still owes the terms. */}
+            <CourseLinkJoin />
             <FirstRunGate>
                <MainApp />
             </FirstRunGate>
