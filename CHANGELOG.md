@@ -9,6 +9,42 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.1.0] — 2026-11-01
+
+Version 3.1: the rc.89–rc.91 security and consent pass (see those sections below) plus the fixes for every open
+Prova bug that code can fix, two regressions the nightly monkey walk found on rc.91 and two found by a Codex review.
+
+### Fixes
+- **Agent replies are recorded by the server.** Since rc.89 the browser had to echo every agent reply back, and the server
+  refused any echo it could not match to a reply it had produced. The debrief discussant was never matched, so the
+  tutor's half of every debrief was dropped silently; a stubbed or restarted turn showed a 403. `/proxy/llm` now stores
+  the reply the learner actually received, for every case agent (nurse, consultant, on-call phone chat and call,
+  laboratorian) and the discussant; the browser no longer posts it. A forged assistant turn is still refused.
+- **Pathology room no longer crashes when it is left mid-load.** A viewer could be built into a host React had already
+  detached ("Cannot read properties of null (reading 'appendChild')", uncaught). rohy now wraps the OpenSeadragon viewer
+  constructor so such a viewer is built inert and destroyed; the upstream Pathoyon fix is still owed.
+- **Registering with a course's code works (PRV-68), and teachers can copy a registration link (PRV-67).** A course's
+  registration code was only checked as an admin invite, so new students were told it was "not valid". It now creates a
+  student in that course (open mode), or queues the request with the course (approval mode; migration 0075). Invite-only
+  and closed platforms still refuse it, with a message that says why. The course page has "Copy registration link"; the
+  link pre-fills the code, and a signed-in student who opens it joins the course.
+- **Students see their course's surveys (PRV-61).** A case placed in a teacher's course also stays in the Basic course,
+  and the course lookup took the lowest id, so students were shown the Basic course's lessons and surveys. A teacher's
+  course now comes before the default course. Answered surveys show "Completed", anonymous ones included (an answered
+  anonymous survey used to show the form again and refuse the submit with 409).
+- **Oyon heart-rate estimate follows the POS method (PRV-75).** The POS projection ran once over the whole 12 s buffer;
+  it now uses Wang et al. (2017)'s 1.6 s sliding window with per-window normalisation and overlap-add, which keeps the
+  estimate stable when lighting changes during the window. The 12 s heart-rate window is unchanged, so the reporting
+  delay is too.
+- **Educators see their own Oyon practice sessions again.** The rc.89 read scope gave educators only their learners'
+  rows; their own rows now follow the same self-view rules as a learner's.
+- **The Bedside (3D) room speaks the case's language (PRV-64 follow-up).** Its reaction lines followed the interface
+  language and its microphone and default voice read a field cases do not have, so a Finnish case answered in English.
+  Alarm lines were already fixed.
+
+### Migrations
+- `0075_registration_request_course.sql` — additive: a nullable `cohort_id` on `registration_requests`.
+
 ## [3.0.0-rc.91] — 2026-10-26
 
 ### Fixes (CI only, no behaviour change)

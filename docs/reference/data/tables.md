@@ -1798,6 +1798,7 @@ Stores registration requests records.
 | `decided_by` | INTEGER | REFERENCES users(id) | — |
 | `decision_note` | TEXT | — | — |
 | `shown` | to | nobody but admins user_id INTEGER REFERENCES users(id) -- the account created on approval | — |
+| `cohort_id` | INTEGER | REFERENCES cohorts(id) | `0075_registration_request_course.sql` |
 
 ## `scenario_events`
 
