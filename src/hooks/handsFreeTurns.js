@@ -1,8 +1,18 @@
-// Turn-taking state machine for hands-free voice conversation with the
-// patient. Pure: `reduceHandsFree(state, event)` returns the next state and
-// the list of effects the caller must run, in order. The hook
-// (useHandsFreeConversation) owns the timers and the recogniser; this file
-// owns every decision.
+// Turn-taking state machine for every voice conversation in Rohy (the
+// patient chat, the on-call phone, the debrief, the Bedside room). Pure:
+// `reduceHandsFree(state, event)` returns the next state and the list of
+// effects the caller must run, in order. The hook (useVoiceConversation)
+// owns the timers and the recogniser; this file owns every decision.
+//
+// TWO MODES, one machine (`state.mode`):
+//   handsFree   the turn ends on a pause, the mic reopens after the reply,
+//               and the learner can talk over the other side (barge-in).
+//   pushToTalk  tap to start, tap to end and send. No silence commit, no
+//               reopen, no watcher. A tap while the other side speaks
+//               silences it first (when the surface is `interruptible`).
+// `interruptible` (a reducer option, per surface) says whether the learner
+// may cut the other side off at all — by a tap or, hands-free, by voice. The
+// debrief says no: the discussant finishes its point.
 //
 // ONE CAPTURE ONLY. The Web Speech recogniser is the only microphone user.
 // While the patient speaks it runs in a WATCH role and barge-in is decided
@@ -50,8 +60,11 @@ export const MAX_WATCH_RESTARTS = 12;
 // 'unsupported' is raised by the caller when STT or its language is missing.
 export const FATAL_STT_ERRORS = Object.freeze(['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'unsupported']);
 
+export const VOICE_MODES = Object.freeze(['pushToTalk', 'handsFree']);
+
 export const initialHandsFreeState = Object.freeze({
     phase: 'off',
+    mode: 'handsFree',
     turn: 0,
     reply: 0,
     emptyStreak: 0,
@@ -66,6 +79,9 @@ export const initialHandsFreeState = Object.freeze({
     // Set when the turn began as an interruption: the patient's text and the
     // fixed final/interim echo boundary (see echoFilter.learnerTurnText).
     echo: null,
+    // Push-to-talk: the recogniser reported an error this turn, so an empty
+    // end is not ALSO reported as "nothing was heard".
+    errored: false,
 });
 
 // The final/interim pair a finished turn is made of. Chrome normally
@@ -112,6 +128,7 @@ const freshTurn = {
     echoFinal: '',
     watchText: '',
     echo: null,
+    errored: false,
 };
 
 function startListening(state, { gesture, resetStreak }) {
@@ -153,42 +170,109 @@ function commitTurn(state, text, stop = false) {
     };
 }
 
-export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_TURNS } = {}) {
+// The learner ends a listening turn: send what was heard, or stop and let
+// the recogniser's onEnd decide (it may still carry the last words).
+function endTurnNow(state) {
+    if (turnText(state, '')) return commitTurn(state, turnText(state, ''), true);
+    return {
+        state: { ...state, stopRequested: true },
+        effects: [{ type: 'clearSilence' }, { type: 'stopListen' }],
+    };
+}
+
+// A gesture turn that may have to silence the other side first.
+function tapToListen(state, otherSpeaking) {
+    const next = startListening(state, { gesture: true, resetStreak: true });
+    return otherSpeaking ? { state: next.state, effects: [{ type: 'cancelSpeech' }, ...next.effects] } : next;
+}
+
+const isPushToTalk = (state) => state.mode === 'pushToTalk';
+
+export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_TURNS, interruptible = true } = {}) {
     const stale = event.turn !== undefined && event.turn !== state.turn;
+    const ptt = isPushToTalk(state);
 
     switch (event.type) {
         case 'ENABLE':
             if (state.phase !== 'off') return none(state);
-            return { state: { ...initialHandsFreeState, turn: state.turn + 1, reply: state.reply, phase: 'idle' }, effects: [] };
+            return {
+                state: {
+                    ...initialHandsFreeState,
+                    mode: VOICE_MODES.includes(event.mode) ? event.mode : state.mode,
+                    turn: state.turn + 1,
+                    reply: state.reply,
+                    phase: 'idle',
+                },
+                effects: [],
+            };
 
         case 'DISABLE': {
             if (state.phase === 'off') return none(state);
             const effects = [{ type: 'clearSilence' }];
             if (state.phase === 'listening' || state.watching) effects.push({ type: 'stopListen' });
             effects.push({ type: 'dropPendingSend' });
-            return { state: { ...initialHandsFreeState, turn: state.turn + 1, reply: state.reply + 1 }, effects };
+            return { state: { ...initialHandsFreeState, mode: state.mode, turn: state.turn + 1, reply: state.reply + 1 }, effects };
         }
 
-        case 'TAP':
+        case 'SUSPEND': {
+            // Another conversation took the microphone (the phone over the
+            // chat, the Bedside room over the hidden chat). Stop, forget the
+            // turn in flight, and wait for this surface's next tap — never
+            // fight the new owner with an automatic restart.
+            if (state.phase === 'off') return none(state);
+            const effects = [{ type: 'clearSilence' }];
+            if (state.phase === 'listening' || state.watching) effects.push({ type: 'stopListen' });
+            effects.push({ type: 'dropPendingSend' });
+            return {
+                state: { ...state, ...freshTurn, phase: 'idle', turn: state.turn + 1, reply: state.reply + 1, emptyStreak: 0, watching: false, watchRestarts: 0 },
+                effects,
+            };
+        }
+
+        case 'SET_MODE': {
+            // Switching modes starts over: whatever was running stops and the
+            // surface waits for a tap in the new mode. A turn half-spoken in
+            // one mode is not finished under the other's rules.
+            if (!VOICE_MODES.includes(event.mode) || event.mode === state.mode) return none(state);
+            if (state.phase === 'off') return none({ ...state, mode: event.mode });
+            const effects = [{ type: 'clearSilence' }];
+            if (state.phase === 'listening' || state.watching) effects.push({ type: 'stopListen' });
+            effects.push({ type: 'dropPendingSend' });
+            return {
+                state: { ...initialHandsFreeState, mode: event.mode, phase: 'idle', turn: state.turn + 1, reply: state.reply + 1 },
+                effects,
+            };
+        }
+
+        case 'AUTO_START':
+            // The surface opens the mic by itself (a phone call that has just
+            // connected, hands-free): an automatic turn, not a gesture.
+            if (state.phase !== 'idle') return none(state);
+            return startListening(state, { gesture: false, resetStreak: true });
+
+        case 'TAP': {
+            const otherSpeaking = event.speaking === true || state.phase === 'speaking';
+            if (state.phase === 'listening') return endTurnNow(state);
+            if (state.phase === 'off') return none(state);
+            // Some surfaces let the other side finish (the debrief).
+            if (otherSpeaking && !interruptible) return none(state);
             switch (state.phase) {
                 case 'idle':
-                    return startListening(state, { gesture: true, resetStreak: true });
-                case 'listening':
-                    if (turnText(state, '')) return commitTurn(state, turnText(state, ''), true);
-                    // A tap ends the turn now; the recogniser's onEnd sends it.
-                    return {
-                        state: { ...state, stopRequested: true },
-                        effects: [{ type: 'clearSilence' }, { type: 'stopListen' }],
-                    };
-                case 'speaking': {
+                    return tapToListen(state, otherSpeaking);
+                case 'speaking':
                     // Tap-to-interrupt: a fresh gesture turn (the watcher, if
                     // any, is stopped — it only ever heard the patient).
-                    const next = startListening(state, { gesture: true, resetStreak: true });
-                    return { state: next.state, effects: [{ type: 'cancelSpeech' }, ...next.effects] };
-                }
+                    return tapToListen(state, true);
+                case 'thinking':
+                case 'reopening':
+                    // Push-to-talk has no automatic reopen to wait for: the
+                    // learner may talk again once nothing is in flight (the
+                    // hook does not pass a tap while a reply is loading).
+                    return ptt ? tapToListen(state, otherSpeaking) : none(state);
                 default:
                     return none(state);
             }
+        }
 
         case 'RESULT': {
             if (stale) return none(state);
@@ -239,12 +323,13 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
             const heardNow = Boolean(`${lastFinal}${lastInterim}`.trim());
             const next = { ...state, lastFinal, lastInterim, heard: state.heard || heardNow };
             // The silence clock only runs once something was heard, and every
-            // new result (interim or final) restarts it.
-            return { state: next, effects: next.heard && !state.stopRequested ? [{ type: 'restartSilence' }] : [] };
+            // new result (interim or final) restarts it. Push-to-talk has no
+            // silence clock: the learner's tap ends the turn.
+            return { state: next, effects: next.heard && !state.stopRequested && !ptt ? [{ type: 'restartSilence' }] : [] };
         }
 
         case 'SILENCE_TIMEOUT':
-            if (stale || state.phase !== 'listening' || !state.heard) return none(state);
+            if (stale || ptt || state.phase !== 'listening' || !state.heard) return none(state);
             // The deadline commits the text already heard, including interim.
             // Waiting for stop()'s onend caused 14 s delays and dropped turns.
             return commitTurn(state, turnText(state, ''), true);
@@ -279,6 +364,14 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
             const text = turnText(state, event.final);
             if (text) {
                 return commitTurn(state, text);
+            }
+            if (ptt) {
+                // Push-to-talk never restarts itself. An end with nothing
+                // heard is reported once, unless an error already was.
+                return {
+                    state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null },
+                    effects: [{ type: 'clearSilence' }, ...(state.errored ? [] : [{ type: 'notifyNoSpeech' }])],
+                };
             }
             if (state.stopRequested) {
                 // The learner tapped to stop and said nothing: wait for them.
@@ -319,18 +412,28 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
                 // startListening). Never fight it with an auto-restart.
                 return { state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null }, effects: [{ type: 'clearSilence' }] };
             }
-            // 'no-speech' and friends: onEnd follows and counts the empty turn.
-            return none(state);
+            // 'no-speech' and friends: onEnd follows and counts the empty turn
+            // (push-to-talk: ends the turn, already reported).
+            return ptt ? none({ ...state, errored: true }) : none(state);
         }
 
         case 'SPEAKING':
-            // The reply starts playing: watch for the learner talking over it.
-            if (event.value && state.phase === 'thinking') return startWatching({ ...state, phase: 'speaking' }, { restarts: 0 });
+            if (!event.value) return none(state);
+            // The reply starts playing: hands-free watches for the learner
+            // talking over it — where the learner may interrupt at all.
+            if (state.phase === 'thinking') {
+                if (!ptt && interruptible) return startWatching({ ...state, phase: 'speaking' }, { restarts: 0 });
+                return none({ ...state, phase: 'speaking' });
+            }
+            // Where the other side may not be interrupted, it starting to
+            // speak ends an open turn, so the mic never records its voice.
+            if (state.phase === 'listening' && !interruptible) return endTurnNow(state);
             return none(state);
 
         case 'SEND_DONE':
             if (event.reply !== state.reply || (state.phase !== 'thinking' && state.phase !== 'speaking')) return none(state);
-            return { state: { ...state, phase: 'reopening' }, effects: [] };
+            // Push-to-talk waits for the learner's next tap.
+            return { state: { ...state, phase: ptt ? 'idle' : 'reopening' }, effects: [] };
 
         case 'REOPEN':
             // The reply is over and was not interrupted: the watcher (if
@@ -342,6 +445,35 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
         default:
             return none(state);
     }
+}
+
+/**
+ * What a voice control shows: 'idle' | 'listening' | 'thinking' | 'speaking',
+ * or null when the conversation is off. Hands-free follows the phase;
+ * push-to-talk follows what is actually happening (a reply may play that the
+ * learner did not ask for, e.g. an alarm line or the debrief's opening).
+ */
+export function voiceStatus(phase, { mode = 'handsFree', loading = false, speaking = false } = {}) {
+    if (phase === 'off') return null;
+    if (mode !== 'pushToTalk') return handsFreeStatus(phase, { loading });
+    if (phase === 'listening') return 'listening';
+    if (speaking) return 'speaking';
+    if (loading || phase === 'thinking') return 'thinking';
+    return 'idle';
+}
+
+/**
+ * Whether a tap does anything now — the button's enabled state and the gate
+ * for keyboard taps (Space), so both behave the same.
+ */
+export function canTapVoice({ phase, mode = 'handsFree', loading = false, speaking = false, interruptible = true }) {
+    if (phase === 'off') return false;
+    if (phase === 'listening') return true;
+    if (speaking && !interruptible) return false;
+    if (mode === 'pushToTalk') return !loading;
+    // Hands-free: a tap also interrupts a reply that is still streaming.
+    if (loading && phase !== 'speaking') return false;
+    return phase === 'idle' || phase === 'speaking';
 }
 
 /** What the voice controls show for a phase (null = no hands-free line). */

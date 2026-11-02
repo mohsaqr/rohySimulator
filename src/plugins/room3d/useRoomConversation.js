@@ -29,7 +29,7 @@ const NO_MESSAGES = Object.freeze([]);
  *   spoken: boolean,
  *   onReply: (line: string|null, meta?: {source: string|null}) => void}} options
  *   `spoken` asks the host to voice the reply (the room's own voice switch).
- * @return {{ask: (text: string) => Promise<void>, thinking: boolean,
+ * @return {{ask: (text: string, opts?: {onReplyDone?: () => void}) => Promise<void>, thinking: boolean,
  *   error: string|null, ready: boolean}}
  */
 export default function useRoomConversation({ conversation, spoken = true, onReply }) {
@@ -63,18 +63,28 @@ export default function useRoomConversation({ conversation, spoken = true, onRep
         onReplyRef.current?.(line, { source: asked?.source ?? null });
     }, [messages]);
 
-    const ask = useCallback(async (heard) => {
+    // `onReplyDone` (optional) is called exactly once when the reply is over
+    // — after its audio, or at once when nothing was asked or it failed — so
+    // a hands-free microphone reopens after the patient, not over them.
+    const ask = useCallback(async (heard, { onReplyDone } = {}) => {
         const text = typeof heard === 'string' ? heard.trim() : '';
-        if (!text) return;
+        if (!text) {
+            onReplyDone?.();
+            return;
+        }
         if (!ready) {
             setError(t('not_ready'));
+            onReplyDone?.();
             return;
         }
         setError(null);
         try {
-            await conversation.send(text, { source: 'room3d', spoken });
+            await conversation.send(text, onReplyDone
+                ? { source: 'room3d', spoken, onReplyDone }
+                : { source: 'room3d', spoken });
         } catch (err) {
             setError(err?.message || t('no_answer'));
+            onReplyDone?.();
         }
     }, [conversation, ready, spoken, t]);
 

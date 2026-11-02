@@ -6,6 +6,7 @@
   "call_done_label": "Sprechen beenden und senden",
   "call_end": "Beenden",
   "call_end_label": "Anruf beenden",
+  "call_hands_free_speaking": "{name} spricht — zum Unterbrechen einfach sprechen",
   "call_listening": "Hört zu…",
   "call_mute_label": "Stimme von {name} stummschalten",
   "call_no_answer": "Keine Antwort",

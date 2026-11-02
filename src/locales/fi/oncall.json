@@ -6,6 +6,7 @@
   "call_done_label": "Lopeta puhuminen ja lähetä",
   "call_end": "Lopeta",
   "call_end_label": "Lopeta puhelu",
+  "call_hands_free_speaking": "{name} puhuu — keskeytä puhumalla",
   "call_listening": "Kuunnellaan…",
   "call_mute_label": "Mykistä henkilön {name} ääni",
   "call_no_answer": "Ei vastausta",

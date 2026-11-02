@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Touchez le micro une fois pour commencer — ensuite, parlez simplement",
   "hands_free_thinking": "Réflexion…",
   "hands_free_title_off": "Parlez sans toucher : votre tour se termine quand vous faites une pause, le micro se rouvre après la réponse du patient, et vous pouvez parler pour l’interrompre",
+  "hands_free_title_off_general": "Parlez sans toucher : votre tour se termine quand vous faites une pause, et le micro se rouvre après la réponse",
   "hands_free_title_on": "La conversation mains libres est activée. Cliquez pour revenir à toucher pour parler",
   "hide": "Masquer",
   "hide_transcript_title": "Masquer la transcription (plus immersif)",

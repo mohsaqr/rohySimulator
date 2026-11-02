@@ -28,7 +28,7 @@ import { oyonClientLog } from './clientLogger';
 //      useOyonSignalGate's coveredRuntime has already applied, so runtime's
 //      voice_enabled is false for anyone who has not accepted v3;
 //   3. a learner-initiated voice turn, which the patient chat starts in its
-//      click handler (ChatInterface.startVoiceTurn).
+//      click handler (the patient chat's push-to-talk tap, via useVoiceConversation's onTurnStart).
 // There is no single mic owner to share with: Rohy's STT is the browser's
 // SpeechRecognition, which captures internally and exposes no MediaStream. So
 // Oyon opens its own measurement stream for the length of the turn and releases

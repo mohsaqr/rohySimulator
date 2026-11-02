@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Tryck på mikrofonen en gång för att börja — sedan pratar du bara",
   "hands_free_thinking": "Tänker…",
   "hands_free_title_off": "Prata utan att trycka: din tur slutar när du gör en paus, mikrofonen öppnas igen när patienten har svarat, och du kan prata för att avbryta",
+  "hands_free_title_off_general": "Prata utan att trycka: din tur slutar när du gör en paus, och mikrofonen öppnas igen efter svaret",
   "hands_free_title_on": "Handsfree-samtal är på. Klicka för att gå tillbaka till tryck för att prata",
   "hide": "Dölj",
   "hide_transcript_title": "Dölj transkript (mer inlevelse)",

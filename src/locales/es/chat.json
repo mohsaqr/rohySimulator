@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Toque el micrófono una vez para empezar — después, simplemente hable",
   "hands_free_thinking": "Pensando…",
   "hands_free_title_off": "Hable sin tocar: su turno termina cuando hace una pausa, el micrófono se vuelve a abrir cuando el paciente responde y puede hablar para interrumpir",
+  "hands_free_title_off_general": "Hable sin tocar: su turno termina cuando hace una pausa y el micrófono se vuelve a abrir después de la respuesta",
   "hands_free_title_on": "La conversación manos libres está activada. Haga clic para volver a tocar para hablar",
   "hide": "Ocultar",
   "hide_transcript_title": "Ocultar transcripción (más inmersivo)",

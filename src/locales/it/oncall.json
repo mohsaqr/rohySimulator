@@ -6,6 +6,7 @@
   "call_done_label": "Smetti di parlare e invia",
   "call_end": "Chiudi",
   "call_end_label": "Termina la chiamata",
+  "call_hands_free_speaking": "{name} sta parlando — parla per interromperlo",
   "call_listening": "In ascolto…",
   "call_mute_label": "Disattiva la voce di {name}",
   "call_no_answer": "Nessuna risposta",

@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Napauta mikrofonia kerran aloittaaksesi — sen jälkeen vain puhu",
   "hands_free_thinking": "Miettii…",
   "hands_free_title_off": "Puhu napauttamatta: vuorosi päättyy, kun pidät tauon, mikrofoni avautuu uudelleen potilaan vastattua, ja voit keskeyttää puhumalla",
+  "hands_free_title_off_general": "Puhu napauttamatta: vuorosi päättyy, kun pidät tauon, ja mikrofoni avautuu uudelleen vastauksen jälkeen",
   "hands_free_title_on": "Handsfree-keskustelu on päällä. Napsauta palataksesi napauta ja puhu -tilaan",
   "hide": "Piilota",
   "hide_transcript_title": "Piilota keskusteluloki (immersiivisempi kokemus)",

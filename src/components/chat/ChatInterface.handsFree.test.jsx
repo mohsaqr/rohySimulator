@@ -2,15 +2,17 @@
 // by default). VoiceService is mocked: the test plays the browser's
 // recogniser (startListening handlers) and the TTS session (onStart/onEnd).
 // The turn-taking decisions themselves are covered in
-// src/hooks/handsFreeTurns.test.js and useHandsFreeConversation.test.jsx.
+// src/hooks/handsFreeTurns.test.js, voiceTurns.pushToTalk.test.js and
+// useVoiceConversation{,.engine}.test.jsx.
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import { fireEvent, screen, waitFor, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
 import ChatInterface from './ChatInterface.jsx';
+import OnCallCall from '../oncall/OnCallCall.jsx';
 import { useVoice } from '../../contexts/VoiceContext.jsx';
 import { renderWithProviders } from '../../../tests/utils/renderWithProviders.jsx';
 
@@ -160,6 +162,71 @@ describe('ChatInterface hands-free conversation', () => {
         expect(globalThis.AudioContext).not.toHaveBeenCalled();
     });
 
+    // Regression lock: hidden chat kept listening under the Bedside room / ringing phone — what the learner said to the phone was heard and sent to the patient.
+    it('a call screen opening over a hands-free chat (still ringing) stops the chat recogniser, sends nothing, and the chat waits for a tap after hang-up', async () => {
+        const thread = { messages: [], sending: false, failure: null, send: vi.fn(), retry: vi.fn() };
+        const agent = { case_agent_id: 32, agent_type: 'radiologist', name: 'Dr. Jonas Berg', config: {} };
+        const phone = {};
+        const now = Date.now();
+        function WithPhone() {
+            const [calling, setCalling] = useState(false);
+            useEffect(() => { phone.open = setCalling; }, []);
+            return calling ? (
+                <OnCallCall
+                    agent={agent}
+                    reachability="available"
+                    pagingNow
+                    now={now}
+                    callId="call-1"
+                    caseLanguage="en"
+                    thread={thread}
+                    onEnd={() => setCalling(false)}
+                />
+            ) : null;
+        }
+        renderWithProviders(
+            <>
+                <ChatInterface activeCase={caseFixture} onSessionStart={() => {}} restoredSessionId={999} sessionStartTime={Date.now()} />
+                <VoiceOn />
+                <WithPhone />
+            </>,
+            { withPatientRecord: false },
+        );
+        fireEvent.click(await screen.findByTestId('hands-free-toggle'));
+        await waitFor(() => expect(screen.getByTestId('hands-free-toggle')).toHaveAttribute('aria-pressed', 'true'));
+        fireEvent.click(await talkButton());
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
+        const chatRec = lastListen();
+        act(() => chatRec.onResult({ final: '', interim: 'hello doctor' }));
+
+        // The phone's call screen opens; the specialist has not picked up.
+        act(() => phone.open(true));
+        await screen.findByText('Dr. Jonas Berg');
+        expect(VoiceService.stopListening).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'idle'));
+
+        // Whatever the old recogniser still reports is dropped.
+        await new Promise((r) => setTimeout(r, 1300));
+        act(() => chatRec.onResult({ final: 'hello doctor is the scan back', interim: '' }));
+        act(() => chatRec.onEnd({ final: 'hello doctor is the scan back' }));
+        // Space and the chat's mic do nothing under the call screen.
+        fireEvent.keyDown(document.body, { code: 'Space', key: ' ' });
+        fireEvent.click(await talkButton());
+        await new Promise((r) => setTimeout(r, 200));
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
+        expect(llmRequests).toHaveLength(0);
+
+        // Hang up: the chat stays idle until the learner taps it.
+        fireEvent.click(screen.getByRole('button', { name: 'End call' }));
+        await waitFor(() => expect(screen.queryByText('Dr. Jonas Berg')).toBeNull());
+        await new Promise((r) => setTimeout(r, 300));
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'idle');
+        expect(llmRequests).toHaveLength(0);
+        fireEvent.click(await talkButton());
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(2);
+    });
+
     // Regression lock: a barge-in queued during streaming must survive the loading/in-flight handoff and cancellation before flush().
     it('delivers the whole interruption when the previous reply is still streaming', async () => {
         let finishReply;
@@ -191,6 +258,24 @@ describe('ChatInterface hands-free conversation', () => {
         expect(lastUserText()).toBe('sorry doctor where exactly does it radiate?');
         act(() => watcher.onEnd({ final: 'It hurts here sorry doctor where exactly does it radiate?' }));
         expect(llmRequests).toHaveLength(2);
+    });
+
+    // Regression lock: the unified engine keeps Oyon's per-turn voice measurement on push-to-talk gesture turns (onTurnStart), before the recogniser opens.
+    it('push-to-talk: a tap starts the Oyon voice turn, then opens the recogniser; the end of listening stops it', async () => {
+        const order = [];
+        const voice = { startTurn: vi.fn(async () => { order.push('oyon'); return { ok: true }; }), stopTurn: vi.fn() };
+        VoiceService.startListening.mockImplementation((h) => { order.push('listen'); vs.listens.push(h); });
+        mount({ voice });
+        // The platform voice settings (and their STT locale) have loaded.
+        await screen.findByTestId('hands-free-toggle');
+        fireEvent.click(await talkButton());
+        expect(voice.startTurn).toHaveBeenCalledWith(expect.objectContaining({ userAction: true }));
+        expect(order).toEqual(['oyon', 'listen']);
+        act(() => lastListen().onResult({ final: 'where does it hurt', interim: '' }));
+        fireEvent.click(await screen.findByRole('button', { name: /listening… click to stop/i }));
+        await waitFor(() => expect(llmRequests.length).toBe(1));
+        expect(lastUserText()).toBe('where does it hurt');
+        await waitFor(() => expect(voice.stopTurn).toHaveBeenCalledWith('turn_end'));
     });
 
     it('is off by default: push-to-talk, no silence end, no reopen, no extra mic', async () => {

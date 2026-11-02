@@ -18,6 +18,7 @@ import SubtitleBand from '../../components/voice/SubtitleBand';
 import { useSubtitleReveal } from '../../components/voice/useSubtitleReveal';
 import VoiceControl from '../../components/discussion/VoiceControl';
 import { useVoice } from '../../contexts/VoiceContext';
+import { useVoiceFocus } from '../../hooks/useVoiceConversation';
 import { VoiceService } from '../../services/voiceService';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { sttLocaleFor } from '../../i18n/languages';
@@ -95,6 +96,12 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     const { t: tRoom } = useTranslation('room3d');
     const { t: tMonitor } = useTranslation('monitor');
     const { t } = useTranslation('chat');
+    // The room is on top of the chat, which stays mounted (inert) beneath
+    // it: while the room is open the chat's voice conversation is suspended,
+    // so what the learner says to this patient is never heard — and sent —
+    // by the hidden chat. Called before the room's own microphone exists, so
+    // the claim covers the chat and not the room's mic.
+    useVoiceFocus(true);
     const hostRef = useRef(null);
     // The patient speaks the CASE language, not the interface's (PRV-64):
     // the reaction lines and the microphone both follow it. Read through a
@@ -195,6 +202,18 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     // applies to a line that is actually being spoken; an unspoken line has
     // no audio to wait for and goes straight on screen.
     const subtitleReady = useSubtitleReveal(patientSpeaking, caption.line ?? '');
+    // What the patient is saying: hands-free tells the learner's words from
+    // this echo. Read through a ref so the engine always sees the newest line.
+    const spokenLineRef = useRef('');
+    useEffect(() => { spokenLineRef.current = caption.line ?? ''; }, [caption.line]);
+    const getSpokenText = useCallback(() => spokenLineRef.current, []);
+    // A spoken question settles when the patient has finished answering, so
+    // a hands-free microphone reopens after the reply, not over it.
+    const { ask } = conversation;
+    const askAloud = useCallback(
+        (text) => new Promise((resolve) => { ask(text, { onReplyDone: resolve }); }),
+        [ask],
+    );
     // A line only waits for audio that is actually coming. If the voice
     // failed outright — a TTS error, a provider whose model will not load —
     // or the chat room says the reply is not being voiced at all, the
@@ -377,8 +396,9 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
         roomRef.current?.setNavSide?.(finding ? 'right' : 'left');
     }, [finding]);
 
-    // Space is push-to-talk in the room — and this listener is deliberately
-    // on the CAPTURE phase so it also SHIELDS the key.
+    // Space taps the room's microphone (push-to-talk, or hands-free's tap) —
+    // and this listener is deliberately on the CAPTURE phase so it also
+    // SHIELDS the key.
     //
     // ChatInterface is still mounted underneath (hidden and inert, so the
     // vitals keep running), and it carries its own window-level Space
@@ -473,8 +493,10 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
             )}
 
             {/* The microphone. Rohy's own VoiceControl — the same control the
-                debrief screen uses, in the room's palette — so there is one
-                microphone in the product and it speaks seven languages. */}
+                debrief screen uses, in the room's palette, on the same voice
+                engine as the chat and the phone — so there is one microphone
+                in the product: push-to-talk or hands-free, in the case
+                language. */}
             {sessionId && (
                 <div className="absolute bottom-[92px] left-1/2 z-10 -translate-x-1/2">
                     {conversation.error && (
@@ -495,8 +517,9 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
                         // Barge-in: the learner may cut the patient off, the
                         // way they would in a real room.
                         onInterrupt={stopPatient}
+                        getSpokenText={getSpokenText}
                         onListeningChange={handleHeard}
-                        onSend={conversation.ask}
+                        onSend={askAloud}
                     />
                 </div>
             )}

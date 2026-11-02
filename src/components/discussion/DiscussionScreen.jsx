@@ -135,6 +135,17 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [speaking]);
 
+    // A spoken turn settles when the discussant has finished answering
+    // (audio over, or at once when nothing is voiced), so hands-free reopens
+    // the mic after the reply, not over it.
+    const sendSpoken = useCallback((text) => new Promise((resolve) => {
+        Promise.resolve(sendMessage(text, { onReplyDone: resolve }))
+            .catch((err) => {
+                console.warn('[DiscussionScreen] spoken turn failed:', err?.message || err);
+                resolve();
+            });
+    }), [sendMessage]);
+
     // Stable callback for VoiceControl so its useEffect dep doesn't churn.
     const handleListeningChange = useCallback((isListening, currentInterim) => {
         setListening(isListening);
@@ -142,7 +153,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
     }, []);
 
     // Session language wins over the platform-wide STT locale, mirroring the
-    // patient-chat rule in ChatInterface.startVoiceTurn: an Italian debrief
+    // patient-chat rule in ChatInterface.resolveSttLang: an Italian debrief
     // listens in Italian; English sessions keep the platform setting.
     // The caption line. The learner's own words while they speak; the
     // discussant's line once the reveal lag has passed — and it STAYS after
@@ -318,7 +329,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                             </button>
                         ) : (
                             <VoiceControl
-                                onSend={sendMessage}
+                                onSend={sendSpoken}
                                 busy={busy}
                                 speaking={speaking}
                                 sttLang={sttLang}

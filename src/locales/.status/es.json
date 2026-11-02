@@ -19249,6 +19249,16 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.hands_free_title_off_general": {
+    "src": "8d58e695e6e6",
+    "tgt": "08da83aa354e",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.hands_free_title_on": {
     "src": "1dcdc49d5281",
     "tgt": "8ebfadeca059",
@@ -31702,6 +31712,16 @@
   "oncall.call_end_label": {
     "src": "2fe13d93a1f4",
     "tgt": "ff6527b63f24",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "low"
+  },
+  "oncall.call_hands_free_speaking": {
+    "src": "6019e91be06c",
+    "tgt": "2d68981d21cc",
     "state": "machine",
     "origin": "machine",
     "locked": false,

@@ -6,6 +6,7 @@
   "call_done_label": "Сөйлеуді тоқтатып, жіберу",
   "call_end": "Аяқтау",
   "call_end_label": "Қоңырауды аяқтау",
+  "call_hands_free_speaking": "{name} сөйлеп тұр — бөлу үшін сөйлей беріңіз",
   "call_listening": "Тыңдалуда…",
   "call_mute_label": "Дауысты өшіру: {name}",
   "call_no_answer": "Жауап жоқ",

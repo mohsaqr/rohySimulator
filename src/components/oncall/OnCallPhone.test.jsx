@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import { useRef } from 'react';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
@@ -413,6 +413,66 @@ describe('OnCallPhone — call', () => {
         expect(conversationPosts('radiologist')).toHaveLength(1);
         expect(conversationPosts('radiologist')[0].body).toMatchObject({ role: 'user', content: 'Is there a hilar node?', channel: 'call' });
         expect(requests.find(r => r.path.endsWith('/api/proxy/llm')).body.channel).toBe('call');
+    });
+});
+
+describe('OnCallCall — hands-free (the shared voice-conversation engine)', () => {
+    // Regression lock: the phone had its own push-to-talk copy and no hands-free at all; it now runs on useVoiceConversation like the patient chat.
+    it('the Hands-free switch on a call opens the mic, a pause sends, the reply is watched, and the mic reopens after it', async () => {
+        sttSupported = true;
+        const listens = [];
+        voice.startListening.mockImplementation((opts) => { listens.push(opts); });
+        let speech = null;
+        voice.speak.mockImplementation((opts) => { speech = opts; opts.onStart?.(); });
+        const getUserMedia = vi.fn(async () => ({ getTracks: () => [] }));
+        Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+        vi.stubGlobal('AudioContext', vi.fn());
+        server.use(http.get('*/api/platform-settings/voice', () => HttpResponse.json({ stt_language: 'en-US' })));
+        try {
+            mount();
+            const dialog = await openPhone();
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Call Dr. Jonas Berg' }));
+            const talk = await within(dialog).findByRole('button', { name: 'Start talking' });
+            await waitFor(() => expect(talk).not.toBeDisabled());
+            await new Promise(r => setTimeout(r, 0));
+            expect(voice.startListening).not.toHaveBeenCalled();
+
+            // One switch, shared with every voice surface.
+            const toggle = within(dialog).getByTestId('hands-free-toggle');
+            expect(toggle).toHaveAttribute('aria-pressed', 'false');
+            fireEvent.click(toggle);
+            await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'));
+
+            // The specialist is on the line: the mic opens without a tap.
+            await waitFor(() => expect(voice.startListening).toHaveBeenCalledTimes(1));
+            expect(listens[0].lang).toBe('en-US');
+            expect(listens[0]).not.toHaveProperty('purpose');
+            expect(within(dialog).getByTestId('hands-free-status')).toHaveAttribute('data-status', 'listening');
+
+            // A pause ends the turn; it goes out as a call turn.
+            act(() => listens[0].onResult({ final: '', interim: 'Is there a hilar node?' }));
+            await waitFor(() => expect(requests.filter(r => r.path.endsWith('/api/proxy/llm'))).toHaveLength(1), { timeout: 3000 });
+            expect(conversationPosts('radiologist')[0].body).toMatchObject({ role: 'user', content: 'Is there a hilar node?', channel: 'call' });
+
+            // The reply is spoken; the recogniser watches it for barge-in.
+            await waitFor(() => expect(speech).not.toBeNull());
+            await waitFor(() => expect(listens.some(h => h.purpose === 'watch')).toBe(true));
+            expect(within(dialog).getByTestId('hands-free-status')).toHaveTextContent('Dr. Jonas Berg is speaking — talk to interrupt');
+
+            // The reply ends: a fresh turn listens.
+            const before = listens.length;
+            act(() => speech.onEnd());
+            await waitFor(() => expect(listens.length).toBe(before + 1));
+            expect(listens[listens.length - 1]).not.toHaveProperty('purpose');
+            await waitFor(() => expect(within(dialog).getByTestId('hands-free-status')).toHaveAttribute('data-status', 'listening'));
+
+            // Regression lock: a phone call in hands-free never opens a second capture beside the recogniser (macOS Chrome goes deaf).
+            expect(getUserMedia).not.toHaveBeenCalled();
+            expect(globalThis.AudioContext).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+            delete globalThis.navigator.mediaDevices;
+        }
     });
 });
 

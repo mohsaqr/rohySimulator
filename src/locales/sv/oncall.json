@@ -6,6 +6,7 @@
   "call_done_label": "Sluta tala och skicka",
   "call_end": "Lägg på",
   "call_end_label": "Avsluta samtalet",
+  "call_hands_free_speaking": "{name} talar — prata för att avbryta",
   "call_listening": "Lyssnar…",
   "call_mute_label": "Stäng av ljudet för {name}",
   "call_no_answer": "Inget svar",

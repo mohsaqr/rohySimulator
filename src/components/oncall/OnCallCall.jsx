@@ -10,14 +10,23 @@ import { parseConfig } from '../../utils/parseConfig';
 import { sanitizeResponseText } from '../../utils/plainText';
 import OnCallAvatar from './OnCallAvatar';
 import { EndIcon, KeyboardIcon, MicIcon, SendIcon, SpeakerIcon } from './phoneIcons';
+import { AudioLines } from 'lucide-react';
+import { useVoiceConversation, sttErrorKey } from '../../hooks/useVoiceConversation';
+import { useHandsFreePreference } from '../voice/useHandsFreePreference';
+import { VoiceTurnButton, VoiceTurnStatus, HandsFreeToggle } from '../voice/VoiceTurnControl';
 import { NO_ANSWER_RING_MS, displayNameOf, displayRoleOf, failureKeyOf, formatCallDuration } from './onCallModel';
 import { formatRemaining } from '../../utils/agentWait';
 
-// A voice call with one specialist. Push-to-talk like the patient chat: tap
-// Talk, speak, tap Done and the transcript is sent as a 'call' turn under
-// this call's id. The reply is shown as a live subtitle and read aloud in the
-// agent's own voice (resolved exactly as ChatInterface resolves agent
-// voices). Where the browser has no speech recognition, the learner types.
+// A voice call with one specialist, on the same voice-conversation engine as
+// the patient chat (useVoiceConversation). Push-to-talk: tap Talk, speak, tap
+// Done and the transcript is sent as a 'call' turn under this call's id.
+// Hands-free (the learner's one Hands-free preference): the mic opens when
+// the specialist picks up, the turn ends on a pause, the mic reopens after
+// the specialist has answered, and talking over the specialist interrupts —
+// a real phone conversation. The reply is shown as a live subtitle and read
+// aloud in the agent's own voice (resolved exactly as ChatInterface resolves
+// agent voices); that spoken text is what hands-free tells apart from the
+// learner. Where the browser has no speech recognition, the learner types.
 export default function OnCallCall({ agent, reachability, pagingNow, now, callId, caseLanguage, thread, onEnd }) {
     const { t } = useTranslation(['oncall', 'chat']);
     const toast = useToast();
@@ -28,9 +37,9 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
     const [sttSupported] = useState(() => VoiceService.isSttSupported());
     const [typing, setTyping] = useState(() => !VoiceService.isSttSupported());
     const [typed, setTyped] = useState('');
-    const [listening, setListening] = useState(false);
-    const [heard, setHeard] = useState('');
     const [speaking, setSpeaking] = useState(false);
+    // What the specialist is saying now: hands-free's echo reference.
+    const spokenTextRef = useRef('');
     const [muted, setMuted] = useState(false);
     const [subtitle, setSubtitle] = useState('');
     const [connectedAt, setConnectedAt] = useState(null);
@@ -80,9 +89,14 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
         };
     }, []);
 
-    const speak = (reply) => {
+    // Resolves when the reply is over: its audio has finished, or at once
+    // when nothing is spoken (muted, no voice). Hands-free reopens on it.
+    const speak = (reply) => new Promise((resolve) => {
         const spoken = sanitizeResponseText(reply);
-        if (mutedRef.current || !spoken) return;
+        if (mutedRef.current || !spoken) {
+            resolve();
+            return;
+        }
         const r = resolveVoice({
             voice: parseConfig(agent.config).voice,
             templateVoice: null,
@@ -95,12 +109,14 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
             } else {
                 toast?.error?.(t('chat:no_voice_configured_agent'));
             }
+            resolve();
             return;
         }
         if (r.substituted && !substitutionToastedRef.current) {
             substitutionToastedRef.current = true;
             toast?.info?.(t('chat:voice_default_not_configured', { voice: r.file }));
         }
+        spokenTextRef.current = spoken;
         VoiceService.speak({
             text: spoken,
             voice: r.file,
@@ -109,73 +125,69 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
             provider: r.provider,
             language: caseLanguage,
             onStart: () => setSpeaking(true),
-            onEnd: () => setSpeaking(false),
+            onEnd: () => {
+                setSpeaking(false);
+                resolve();
+            },
             onError: (err) => {
                 console.error('[OnCallCall] TTS error:', err);
                 setSpeaking(false);
+                resolve();
                 const msg = err?.message || t('chat:tts_failed');
                 if (/unknown.*voice|not in catalog/i.test(msg)) toast?.error?.(t('chat:voice_not_valid_for_engine'));
                 else if (/api.?key|API_KEY/i.test(msg)) toast?.error?.(t('chat:cloud_tts_missing_api_key'));
                 else toast?.error?.(t('chat:voice_playback_failed', { msg }));
             },
         });
-    };
+    });
 
     // Only an answered turn is shown as the specialist's subtitle and spoken.
     // A failed one (result.ok false) is the thread's `failure`: an error line
     // with Retry, never read aloud in the specialist's voice.
     const answered = (result) => {
-        if (!result?.ok || endingRef.current) return;
+        if (!result?.ok || endingRef.current) return undefined;
         setSubtitle(sanitizeResponseText(result.content));
-        speak(result.content);
+        return speak(result.content);
     };
     const sendTurn = async (text) => answered(await thread.send(text, { channel: 'call', callId }));
     const retryTurn = async () => answered(await thread.retry());
 
-    const startTalking = () => {
-        if (!VoiceService.isSttSupported()) {
-            toast?.error?.(t('chat:stt_not_supported_browser'));
-            return;
-        }
-        const sttLang = caseLanguage !== DEFAULT_LANGUAGE
-            ? sttLocaleFor(caseLanguage)
-            : voiceSettings?.stt_language;
-        if (!sttLang) {
-            toast?.error?.(t('chat:no_stt_language'));
-            return;
-        }
-        VoiceService.cancelSpeech();
-        setSpeaking(false);
-        setHeard('');
-        setListening(true);
-        let sawError = false;
-        VoiceService.startListening({
-            lang: sttLang,
-            onResult: ({ final, interim }) => setHeard(interim || final),
-            onError: (err) => {
-                sawError = true;
-                const code = err?.message || 'unknown';
-                if (code === 'not-allowed' || code === 'service-not-allowed') toast?.error?.(t('chat:mic_blocked'));
-                else if (code === 'network') toast?.error?.(t('chat:stt_network_error'));
-                else if (code === 'audio-capture') toast?.error?.(t('chat:no_microphone'));
-                else if (code === 'no-speech') toast?.error?.(t('chat:no_speech_heard'));
-                else if (code !== 'aborted') toast?.error?.(t('chat:stt_error', { code }));
-                setListening(false);
-            },
-            onEnd: ({ final }) => {
-                setListening(false);
-                setHeard('');
-                if (endingRef.current) return;
-                if (final) sendTurn(final);
-                else if (!sawError) toast?.error?.(t('chat:listening_ended_no_speech'));
-            },
-        });
-    };
-
-    const toggleTalk = () => {
-        if (listening) VoiceService.stopListening();
-        else startTalking();
-    };
+    // The learner speaks the case language; English sessions keep the
+    // platform's STT locale.
+    const sttLang = caseLanguage !== DEFAULT_LANGUAGE
+        ? sttLocaleFor(caseLanguage)
+        : voiceSettings?.stt_language;
+    const { mode: talkMode } = useHandsFreePreference();
+    const voiceTurn = useVoiceConversation({
+        // "Type instead" hands the turn to the keyboard: hands-free stops
+        // listening; push-to-talk keeps its Talk key, as before.
+        enabled: connected && !(typing && talkMode === 'handsFree'),
+        mode: talkMode,
+        lang: sttLang || null,
+        loading: Boolean(thread.sending),
+        speaking,
+        // A call is a conversation: the learner may cut the specialist off.
+        interruptible: true,
+        // Hands-free: the mic opens when the specialist picks up.
+        autoStart: talkMode === 'handsFree',
+        // The call screen is on top from the moment it opens, ringing
+        // included: the chat underneath must not hear what is said to the
+        // phone (it is suspended until its own next tap).
+        claimFocus: true,
+        send: (text) => (endingRef.current ? undefined : sendTurn(text)),
+        cancelSpeech: () => {
+            VoiceService.cancelSpeech();
+            setSpeaking(false);
+        },
+        getSpokenText: () => spokenTextRef.current,
+        onError: (code) => {
+            const key = sttErrorKey(code);
+            if (key) toast?.error?.(t(`chat:${key}`, { code }));
+        },
+        onNoSpeech: () => toast?.error?.(t('chat:listening_ended_no_speech')),
+    });
+    const listening = voiceTurn.listening;
+    const heard = voiceTurn.interim;
 
     const submitTyped = (e) => {
         e.preventDefault();
@@ -218,7 +230,6 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
     else if (speaking) stateLine = t('call_speaking', { name });
     else stateLine = formatCallDuration(connectedAt ? clock - connectedAt : 0);
 
-    const talkDisabled = !connected || thread.sending;
     // This call's transcript, in order: the turns tagged with its call id.
     const turns = thread.messages.filter(m => m.channel === 'call' && m.call_id === callId);
     const lastReplyIndex = turns.map(m => m.role).lastIndexOf('assistant');
@@ -263,7 +274,14 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                     )}
                 </div>
 
-                <div className="call-note">{!sttSupported ? t('call_stt_unsupported') : ''}</div>
+                <div className="call-note">
+                    {!sttSupported ? t('call_stt_unsupported') : (
+                        <VoiceTurnStatus
+                            conversation={voiceTurn}
+                            speakingLabel={t('call_hands_free_speaking', { name })}
+                        />
+                    )}
+                </div>
 
                 {typing && (
                     <form className="call-type" onSubmit={submitTyped}>
@@ -290,16 +308,13 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                 <div className="call-controls">
                     {sttSupported && (
                         <div className="ctl">
-                            <button
-                                type="button"
+                            <VoiceTurnButton
+                                conversation={voiceTurn}
                                 className={`round ${listening ? 'live' : ''}`}
-                                onClick={toggleTalk}
-                                disabled={talkDisabled && !listening}
-                                aria-pressed={listening}
                                 aria-label={listening ? t('call_done_label') : t('call_talk_label')}
                             >
                                 <MicIcon />
-                            </button>
+                            </VoiceTurnButton>
                             <span className="round-label">{listening ? t('call_done') : t('call_talk')}</span>
                         </div>
                     )}
@@ -321,6 +336,14 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
                         </button>
                         <span className="round-label">{t('call_voice')}</span>
                     </div>
+                    {sttSupported && (
+                        <div className="ctl">
+                            <HandsFreeToggle className={(on) => `round ${on ? 'on' : ''}`} aria-label={t('chat:hands_free')}>
+                                <AudioLines aria-hidden="true" />
+                            </HandsFreeToggle>
+                            <span className="round-label">{t('chat:hands_free')}</span>
+                        </div>
+                    )}
                     {sttSupported && (
                         <div className="ctl">
                             <button

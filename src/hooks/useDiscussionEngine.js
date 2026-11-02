@@ -109,9 +109,22 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
     // opening directive to the system prompt — in the system role, not the
     // user role, where smaller voice-mode models tend to paraphrase it back
     // instead of executing it.
-    const sendMessage = useCallback(async (text, { silentUser = false, opening = false } = {}) => {
+    //
+    // `onReplyDone` (the voice conversation's hands-free reopen) is called
+    // exactly once when the reply is over: after its audio has finished, or
+    // at once when nothing was sent or nothing is spoken.
+    const sendMessage = useCallback(async (text, { silentUser = false, opening = false, onReplyDone } = {}) => {
+        let replyDone = false;
+        const settle = () => {
+            if (replyDone) return;
+            replyDone = true;
+            try { onReplyDone?.(); } catch (err) { console.warn('[useDiscussionEngine] onReplyDone threw:', err); }
+        };
         const trimmed = text?.trim();
-        if (!trimmed || busy || !sessionId || !discussant) return;
+        if (!trimmed || busy || !sessionId || !discussant) {
+            settle();
+            return;
+        }
 
         // Cross-case guard: refuse to send unless the discussant was
         // resolved for exactly the case currently in focus. Strict equality
@@ -126,6 +139,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                 discussantCaseId: discussant._caseId,
                 activeCaseId: activeCase.id,
             });
+            settle();
             return;
         }
 
@@ -180,6 +194,7 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
                     onEnd: () => {
                         setSpeaking(false);
                         setVisemes({ viseme_sil: 1 });
+                        settle();
                     },
                     onError: (err) => console.error('[useDiscussionEngine] TTS error:', err),
                 });
@@ -271,6 +286,10 @@ export function useDiscussionEngine({ sessionId, activeCase, discussant, voiceMo
             setBusy(false);
             abortRef.current = null;
             speechRef.current = null;
+            // No voice: the reply is over once its text is in. (A voiced one
+            // settles from the speech session's onEnd, which flush() and
+            // cancel() both guarantee.)
+            if (!speech) settle();
         }
     }, [sessionId, activeCase, discussant, voiceMode, voiceSettings, busy, messages, caseLanguage]);
 

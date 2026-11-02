@@ -4,6 +4,7 @@ import Exam3DScreen from './Exam3DScreen.jsx';
 import { VoiceProvider } from '../../contexts/VoiceContext';
 import EventLogger from '../../services/eventLogger';
 import { setAppLanguage } from '../../i18n';
+import { voiceFocusClaims } from '../../hooks/useVoiceConversation';
 
 // The case language comes from the host's LanguageContext (App syncs it from
 // config.case_language); tests set it here.
@@ -505,7 +506,9 @@ describe('Exam3DScreen', () => {
         // caption — the patient's answer takes the band from here.
         ask.mockClear();
         act(() => { onEnd({ final: 'where does it hurt' }); });
-        expect(ask).toHaveBeenCalledWith('where does it hurt');
+        // The room waits for the patient's answer to finish (hands-free
+        // reopens the mic on it), so the question carries onReplyDone.
+        expect(ask).toHaveBeenCalledWith('where does it hurt', { onReplyDone: expect.any(Function) });
         expect(view.queryByText('where does it hurt')).toBeNull();
     });
 
@@ -639,6 +642,14 @@ describe('Exam3DScreen', () => {
         const { on_event } = mountPatientRoom.mock.calls[0][1];
         act(() => { on_event({ type: 'exam', region_id: 'chestAnterior', abnormal: true }); });
         expect(speak.mock.calls.at(-1)[0].voice).toBe('am_michael');
+    });
+
+    // Regression lock: hidden chat kept listening under the Bedside room — the room holds voice focus for as long as it is open.
+    it('holds voice focus while open, so the chat mounted beneath it is suspended', () => {
+        const view = renderRoom({ activeCase: ACTIVE_CASE, sessionId: 7 });
+        expect(voiceFocusClaims()).toBe(1);
+        view.unmount();
+        expect(voiceFocusClaims()).toBe(0);
     });
 
     it('has no microphone before a session exists', () => {

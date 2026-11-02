@@ -9,6 +9,23 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.1.2] — 2026-11-02
+
+### One voice engine for every voice surface
+- The patient chat, the on-call phone call, the debrief and the Bedside (3D) room now share one voice engine
+  (`src/hooks/useVoiceConversation.js`) with two modes, push-to-talk and hands-free, and one shared mic control.
+  The Hands-free switch is one preference: on anywhere means on everywhere.
+- **Phone call:** a fifth key, Hands-free. The mic opens when the specialist picks up; a pause sends the turn; talking
+  over the specialist interrupts them; their own voice is ignored by comparing with what they are saying. The phone
+  keys are slightly smaller (56 px) so five fit. **(change)**
+- **Debrief:** hands-free turns end on a pause and the mic reopens after the discussant; the discussant is still never
+  interrupted. **Bedside room:** hands-free with interruption; still listens in the case language; Space still taps.
+- **One microphone at a time, and voice focus.** A screen on top (a phone call from the moment it rings, the Bedside
+  room) takes the microphone; the chat underneath stops listening at once and sends nothing it heard. After the call
+  or the room, the chat waits for a tap. **(change)**
+- No screen starts the speech recogniser directly any more (a test enforces it), so the four copies of the
+  listen/send/reopen loop are gone.
+
 ## [3.1.1] — 2026-11-02
 
 ### Hands-free voice conversation (learner preference, off by default)

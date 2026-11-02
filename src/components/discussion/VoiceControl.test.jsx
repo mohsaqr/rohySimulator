@@ -7,12 +7,14 @@
 // it was before the room existed, so the additive props can never change it.
 
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import VoiceControl from './VoiceControl';
+import { NotificationContextObject } from '../../notifications/NotificationContextObject';
 
 // The recogniser itself is Rohy's service; this component only drives it.
 const listeners = {};
+const listens = [];
 const startListening = vi.fn((opts) => { Object.assign(listeners, opts); });
 const stopListening = vi.fn(() => { listeners.onEnd?.({ final: listeners._final ?? '' }); });
 let supported = true;
@@ -29,7 +31,8 @@ const mic = () => screen.getByRole('button');
 
 beforeEach(() => {
     supported = true;
-    startListening.mockClear();
+    startListening.mockReset();
+    startListening.mockImplementation((opts) => { Object.assign(listeners, opts); });
     stopListening.mockClear();
     Object.keys(listeners).forEach((k) => delete listeners[k]);
 });
@@ -138,5 +141,79 @@ describe('VoiceControl (additive — the 3D room)', () => {
         expect(startListening).toHaveBeenCalledTimes(1);
         act(() => ref.current.toggle());
         expect(stopListening).toHaveBeenCalled();
+    });
+});
+
+// Hands-free on the debrief and the Bedside room: the same engine as the
+// patient chat and the phone, under the learner's one Hands-free preference.
+describe('VoiceControl (hands-free — the shared voice-conversation engine)', () => {
+    const PAUSE_MS = 900;
+
+    function HandsFreeOn({ children, setPrefs = vi.fn() }) {
+        return (
+            <NotificationContextObject.Provider value={{ prefs: { handsFreeConversation: true }, setPrefs }}>
+                {children}
+            </NotificationContextObject.Provider>
+        );
+    }
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        startListening.mockImplementation((opts) => { listens.push(opts); Object.assign(listeners, opts); });
+        listens.length = 0;
+    });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('shows the Hands-free switch, which writes the one shared preference', () => {
+        const setPrefs = vi.fn();
+        render(<HandsFreeOn setPrefs={setPrefs}><VoiceControl onSend={vi.fn()} sttLang="en-US" /></HandsFreeOn>);
+        const toggle = screen.getByTestId('hands-free-toggle');
+        expect(toggle).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(toggle);
+        expect(setPrefs).toHaveBeenCalledWith({ handsFreeConversation: false });
+    });
+
+    it('debrief: a pause sends, the discussant is not watched or interrupted, the mic reopens after the reply', async () => {
+        let replyDone;
+        const onSend = vi.fn(() => new Promise((resolve) => { replyDone = resolve; }));
+        const view = render(<HandsFreeOn><VoiceControl onSend={onSend} sttLang="it-IT" /></HandsFreeOn>);
+        expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'idle');
+        fireEvent.click(screen.getByRole('button', { name: /start listening/i }));
+        expect(listens).toHaveLength(1);
+        expect(listens[0].lang).toBe('it-IT');
+
+        act(() => listens[0].onResult({ final: '', interim: 'penso sia un infarto' }));
+        act(() => { vi.advanceTimersByTime(PAUSE_MS); });
+        expect(onSend).toHaveBeenCalledExactlyOnceWith('penso sia un infarto');
+
+        view.rerender(<HandsFreeOn><VoiceControl onSend={onSend} sttLang="it-IT" busy speaking /></HandsFreeOn>);
+        // No watcher: the discussant finishes its point.
+        expect(listens).toHaveLength(1);
+        expect(screen.getByTestId('hands-free-status')).toHaveTextContent(/discussant is speaking/i);
+        expect(screen.getByRole('button', { name: /start listening/i })).toBeDisabled();
+
+        view.rerender(<HandsFreeOn><VoiceControl onSend={onSend} sttLang="it-IT" /></HandsFreeOn>);
+        await act(async () => { replyDone(); });
+        expect(listens).toHaveLength(2);
+        expect(listens[1]).not.toHaveProperty('purpose');
+    });
+
+    it('Bedside room (onInterrupt): the reply is watched, and talking over the patient silences it', async () => {
+        const onInterrupt = vi.fn();
+        const onSend = vi.fn(() => new Promise(() => {}));
+        const spoken = () => 'It hurts here when I breathe in.';
+        const props = { onSend, sttLang: 'fi-FI', onInterrupt, getSpokenText: spoken, variant: 'room' };
+        const view = render(<HandsFreeOn><VoiceControl {...props} /></HandsFreeOn>);
+        fireEvent.click(screen.getByRole('button', { name: /start listening/i }));
+        act(() => listens[0].onResult({ final: 'missä sattuu', interim: '' }));
+        act(() => { vi.advanceTimersByTime(PAUSE_MS); });
+        expect(onSend).toHaveBeenCalledTimes(1);
+
+        view.rerender(<HandsFreeOn><VoiceControl {...props} busy speaking /></HandsFreeOn>);
+        expect(listens).toHaveLength(2);
+        expect(listens[1].purpose).toBe('watch');
+        act(() => listens[1].onResult({ final: 'It hurts', interim: 'anteeksi tohtori' }));
+        expect(onInterrupt).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'listening');
     });
 });

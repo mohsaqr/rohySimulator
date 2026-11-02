@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Tap the microphone once to start — then just talk",
   "hands_free_thinking": "Thinking…",
   "hands_free_title_off": "Talk without tapping: your turn ends when you pause, the microphone reopens after the patient answers, and you can talk to interrupt",
+  "hands_free_title_off_general": "Talk without tapping: your turn ends when you pause, and the microphone reopens after the answer",
   "hands_free_title_on": "Hands-free conversation is on. Click to go back to tap-to-talk",
   "hide": "Hide",
   "hide_transcript_title": "Hide transcript (more immersive)",

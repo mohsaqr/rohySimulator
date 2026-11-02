@@ -31,6 +31,7 @@
   "hands_free_tap_to_start": "Tocca il microfono una volta per iniziare — poi parla e basta",
   "hands_free_thinking": "Sta pensando…",
   "hands_free_title_off": "Parla senza toccare: il tuo turno finisce quando fai una pausa, il microfono si riapre dopo la risposta del paziente e puoi parlare per interromperlo",
+  "hands_free_title_off_general": "Parla senza toccare: il tuo turno finisce quando fai una pausa e il microfono si riapre dopo la risposta",
   "hands_free_title_on": "La conversazione in vivavoce è attiva. Fai clic per tornare a tocca per parlare",
   "hide": "Nascondi",
   "hide_transcript_title": "Nascondi la trascrizione (più immersivo)",

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useHandsFreeConversation } from './useHandsFreeConversation';
+import { useTurnEngine } from './useVoiceConversation';
 import { END_OF_TURN_SILENCE_MS, MAX_EMPTY_AUTO_TURNS } from './handsFreeTurns';
 
 const PATIENT = 'I have had chest pain since yesterday morning. It gets worse on the stairs.';
@@ -25,7 +25,7 @@ function setup(overrides = {}) {
         onPaused: vi.fn(),
         ...overrides,
     };
-    const hook = renderHook((p) => useHandsFreeConversation(p), { initialProps: props });
+    const hook = renderHook((p) => useTurnEngine(p), { initialProps: props });
     const rerender = (patch) => {
         Object.assign(props, patch);
         hook.rerender({ ...props });
@@ -41,7 +41,7 @@ function toSpeaking(t) {
     t.rerender({ loading: true, speaking: true });
 }
 
-describe('useHandsFreeConversation', () => {
+describe('useTurnEngine (hands-free mode)', () => {
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); });
 
