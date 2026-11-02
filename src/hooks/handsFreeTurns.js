@@ -26,12 +26,24 @@
 //   idle       active, waiting for the learner's first tap, or paused after
 //              repeated empty turns / an STT error.
 //   listening  the recogniser is running for the learner's `turn`.
+//   ending     the learner tapped to end the turn: the recogniser was told to
+//              stop and the turn is sent from its end (onEnd), which carries
+//              the words Chrome finalises after stop() — or, if the end never
+//              comes, from what was heard, after STOP_END_GRACE_MS.
 //   thinking   a heard turn was sent; the reply is being generated.
 //   speaking   the patient's reply is playing; the recogniser WATCHES
 //              (`watching`). Nothing it hears is sent unless it is an
 //              interruption, which switches the same recogniser to listening.
 //   reopening  the reply finished; the hook reopens the mic as soon as
 //              nothing is loading or speaking. The watcher may still run.
+//
+// Speech the engine did not ask for (an exam reaction in the Bedside room,
+// an alarm line) is treated like a reply: hands-free, a mic that has heard
+// nothing yet becomes an echo-filtered watcher until the line ends and then
+// reopens fresh (`unsolicited`); a learner mid-sentence has their words so
+// far sent before the line can enter them. Without this the recogniser
+// transcribed the patient's line and sent it as the learner's (Codex review
+// 2026-11-02). Push-to-talk is left alone: the learner holds that turn.
 //
 // Every recogniser callback carries the `turn` it was started for. Starting,
 // stopping or restarting a recogniser bumps `turn`, so a late callback from
@@ -45,6 +57,13 @@ import { detectInterruption, learnerTurnText } from './echoFilter';
 
 /** Silence after the last recognised word that ends the learner's turn. */
 export const END_OF_TURN_SILENCE_MS = 900;
+/**
+ * After a tap ends the turn, how long to wait for the recogniser's end (and
+ * the trailing words Chrome finalises on stop()) before sending what was
+ * heard anyway. Chrome normally ends within a few hundred ms; an end that
+ * never comes must not strand the turn.
+ */
+export const STOP_END_GRACE_MS = 1500;
 /** Recover Chrome's silent stall after a watch final, without restarting on every result. */
 export const WATCH_STALL_MS = 900;
 /** Consecutive empty auto-started turns before falling back to tap-to-talk. */
@@ -82,6 +101,9 @@ export const initialHandsFreeState = Object.freeze({
     // Push-to-talk: the recogniser reported an error this turn, so an empty
     // end is not ALSO reported as "nothing was heard".
     errored: false,
+    // The 'speaking' phase is speech nobody asked for (no reply in flight):
+    // its end reopens the mic instead of SEND_DONE.
+    unsolicited: false,
 });
 
 // The final/interim pair a finished turn is made of. Chrome normally
@@ -115,9 +137,18 @@ function turnText(state, endFinal) {
     return learnerTurnText({ final, interim, ...state.echo }).trim();
 }
 
+// The turn text at the recogniser's end after a tap: the end normally
+// carries the most (the words finalised on stop()), but it is never allowed
+// to lose words already heard.
+function endedTurnText(state, endFinal) {
+    const atEnd = turnText(state, endFinal);
+    const heard = turnText(state, '');
+    return heard.length > atEnd.length ? heard : atEnd;
+}
+
 /** The learner's words so far in the current listening turn (for display). */
 export function currentTurnText(state) {
-    return state.phase === 'listening' ? turnText(state, '') : '';
+    return state.phase === 'listening' || state.phase === 'ending' ? turnText(state, '') : '';
 }
 
 const freshTurn = {
@@ -143,6 +174,7 @@ function startListening(state, { gesture, resetStreak }) {
             turn: state.turn + 1,
             emptyStreak: resetStreak ? 0 : state.emptyStreak,
             watching: false,
+            unsolicited: false,
         },
         effects,
     };
@@ -165,19 +197,45 @@ function commitTurn(state, text, stop = false) {
     return {
         // Invalidate callbacks BEFORE stop(): Chrome may end synchronously,
         // many seconds later, or never. None may send this turn twice.
-        state: { ...state, phase: 'thinking', turn: state.turn + 1, reply, emptyStreak: 0, stopRequested: false, watching: false, echo: null },
+        state: { ...state, phase: 'thinking', turn: state.turn + 1, reply, emptyStreak: 0, stopRequested: false, watching: false, echo: null, unsolicited: false },
         effects: [{ type: 'clearSilence' }, ...(stop ? [{ type: 'stopListen' }] : []), { type: 'send', text, reply }],
     };
 }
 
-// The learner ends a listening turn: send what was heard, or stop and let
-// the recogniser's onEnd decide (it may still carry the last words).
+// The learner taps to end a listening turn: stop the recogniser and send
+// from its end, which carries the words Chrome finalises on stop() — the
+// snapshot alone lost them ("where does it" sent, "hurt" dropped; Codex
+// review 2026-11-02). A bounded deadline (awaitEnd → END_TIMEOUT) sends the
+// snapshot if the end never comes. The silence commit does NOT wait: it
+// fixed a 14 s delay, and after END_OF_TURN_SILENCE_MS without a result
+// there are no pending words to finalise.
 function endTurnNow(state) {
-    if (turnText(state, '')) return commitTurn(state, turnText(state, ''), true);
     return {
-        state: { ...state, stopRequested: true },
-        effects: [{ type: 'clearSilence' }, { type: 'stopListen' }],
+        state: { ...state, phase: 'ending', stopRequested: true },
+        effects: [{ type: 'clearSilence' }, { type: 'stopListen' }, { type: 'awaitEnd' }],
     };
+}
+
+// The other side starts speaking over an open turn. What was heard is sent
+// NOW — waiting for the end would let the first words of that voice into
+// the learner's turn. Nothing heard yet: stop and let the end decide.
+function endTurnForSpeech(state) {
+    const text = turnText(state, '');
+    return text ? commitTurn(state, text, true) : endTurnNow(state);
+}
+
+// No end arrived (or it arrived empty): what then happens to the turn.
+function endWithoutText(state, ptt) {
+    if (ptt) {
+        // Push-to-talk never restarts itself. An end with nothing heard is
+        // reported once, unless an error already was.
+        return {
+            state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null },
+            effects: [{ type: 'clearSilence' }, ...(state.errored ? [] : [{ type: 'notifyNoSpeech' }])],
+        };
+    }
+    // The learner tapped to stop and said nothing: wait for them.
+    return { state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null }, effects: [{ type: 'clearSilence' }] };
 }
 
 // A gesture turn that may have to silence the other side first.
@@ -224,7 +282,7 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
             if (state.phase === 'listening' || state.watching) effects.push({ type: 'stopListen' });
             effects.push({ type: 'dropPendingSend' });
             return {
-                state: { ...state, ...freshTurn, phase: 'idle', turn: state.turn + 1, reply: state.reply + 1, emptyStreak: 0, watching: false, watchRestarts: 0 },
+                state: { ...state, ...freshTurn, phase: 'idle', turn: state.turn + 1, reply: state.reply + 1, emptyStreak: 0, watching: false, watchRestarts: 0, unsolicited: false },
                 effects,
             };
         }
@@ -310,12 +368,13 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
                         lastInterim: event.interim ?? '',
                         heard: true,
                         stopRequested: false,
+                        unsolicited: false,
                         echo: { patientText, cutFinal: d.cutFinal, cutTokens: d.cutTokens },
                     },
                     effects,
                 };
             }
-            if (state.phase !== 'listening') return none(state);
+            if (state.phase !== 'listening' && state.phase !== 'ending') return none(state);
             const lastFinal = event.final ?? state.lastFinal;
             // An empty update with no new final must not erase words Chrome
             // never finalised. A growing final replaces the pending interim.
@@ -324,8 +383,16 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
             const next = { ...state, lastFinal, lastInterim, heard: state.heard || heardNow };
             // The silence clock only runs once something was heard, and every
             // new result (interim or final) restarts it. Push-to-talk has no
-            // silence clock: the learner's tap ends the turn.
-            return { state: next, effects: next.heard && !state.stopRequested && !ptt ? [{ type: 'restartSilence' }] : [] };
+            // silence clock: the learner's tap ends the turn. Nor does a turn
+            // already ending: it waits for the recogniser's end.
+            return { state: next, effects: next.heard && !state.stopRequested && state.phase === 'listening' && !ptt ? [{ type: 'restartSilence' }] : [] };
+        }
+
+        case 'END_TIMEOUT': {
+            // The tapped-off recogniser never ended: send what was heard.
+            if (stale || state.phase !== 'ending') return none(state);
+            const text = turnText(state, '');
+            return text ? commitTurn(state, text) : endWithoutText(state, ptt);
         }
 
         case 'SILENCE_TIMEOUT':
@@ -360,23 +427,16 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
                 if (state.watchRestarts >= MAX_WATCH_RESTARTS) return none(stopWatching(state));
                 return startWatching(state, { restarts: state.watchRestarts + 1 });
             }
+            if (state.phase === 'ending') {
+                const text = endedTurnText(state, event.final);
+                return text ? commitTurn(state, text) : endWithoutText(state, ptt);
+            }
             if (state.phase !== 'listening') return none(state);
             const text = turnText(state, event.final);
             if (text) {
                 return commitTurn(state, text);
             }
-            if (ptt) {
-                // Push-to-talk never restarts itself. An end with nothing
-                // heard is reported once, unless an error already was.
-                return {
-                    state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null },
-                    effects: [{ type: 'clearSilence' }, ...(state.errored ? [] : [{ type: 'notifyNoSpeech' }])],
-                };
-            }
-            if (state.stopRequested) {
-                // The learner tapped to stop and said nothing: wait for them.
-                return { state: { ...state, phase: 'idle', turn: state.turn + 1, stopRequested: false, echo: null }, effects: [{ type: 'clearSilence' }] };
-            }
+            if (ptt) return endWithoutText(state, ptt);
             const emptyStreak = state.emptyStreak + 1;
             if (emptyStreak >= maxEmptyTurns) {
                 return {
@@ -399,6 +459,9 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
                 if (FATAL_STT_ERRORS.includes(event.code) || event.code === 'aborted') return none(stopWatching(state));
                 return none(state);
             }
+            // Ending: the end follows and sends what was heard; only note
+            // the error so an empty end is not reported twice.
+            if (state.phase === 'ending') return none({ ...state, errored: true });
             if (state.phase !== 'listening') return none(state);
             if (FATAL_STT_ERRORS.includes(event.code)) {
                 // Mic blocked / missing / offline: stop everything, no loop.
@@ -418,17 +481,30 @@ export function reduceHandsFree(state, event, { maxEmptyTurns = MAX_EMPTY_AUTO_T
         }
 
         case 'SPEAKING':
-            if (!event.value) return none(state);
+            if (!event.value) {
+                // Unsolicited speech is over: reopen like after a reply.
+                if (state.unsolicited && state.phase === 'speaking') return none({ ...state, phase: 'reopening', unsolicited: false });
+                return none(state);
+            }
             // The reply starts playing: hands-free watches for the learner
             // talking over it — where the learner may interrupt at all.
             if (state.phase === 'thinking') {
                 if (!ptt && interruptible) return startWatching({ ...state, phase: 'speaking' }, { restarts: 0 });
                 return none({ ...state, phase: 'speaking' });
             }
+            if (state.phase !== 'listening') return none(state);
             // Where the other side may not be interrupted, it starting to
             // speak ends an open turn, so the mic never records its voice.
-            if (state.phase === 'listening' && !interruptible) return endTurnNow(state);
-            return none(state);
+            if (!interruptible) return endTurnForSpeech(state);
+            if (ptt) return none(state);
+            // Hands-free, speech nobody asked for (see the header): never
+            // transcribe it as the learner. Their words so far are sent;
+            // a mic that heard nothing watches the line instead.
+            if (turnText(state, '')) return endTurnForSpeech(state);
+            {
+                const next = startWatching({ ...state, phase: 'speaking', unsolicited: true }, { restarts: 0 });
+                return { state: next.state, effects: [{ type: 'clearSilence' }, { type: 'stopListen' }, ...next.effects] };
+            }
 
         case 'SEND_DONE':
             if (event.reply !== state.reply || (state.phase !== 'thinking' && state.phase !== 'speaking')) return none(state);
@@ -457,6 +533,7 @@ export function voiceStatus(phase, { mode = 'handsFree', loading = false, speaki
     if (phase === 'off') return null;
     if (mode !== 'pushToTalk') return handsFreeStatus(phase, { loading });
     if (phase === 'listening') return 'listening';
+    if (phase === 'ending') return 'thinking';
     if (speaking) return 'speaking';
     if (loading || phase === 'thinking') return 'thinking';
     return 'idle';
@@ -467,7 +544,8 @@ export function voiceStatus(phase, { mode = 'handsFree', loading = false, speaki
  * for keyboard taps (Space), so both behave the same.
  */
 export function canTapVoice({ phase, mode = 'handsFree', loading = false, speaking = false, interruptible = true }) {
-    if (phase === 'off') return false;
+    // Ending: the turn is already being sent.
+    if (phase === 'off' || phase === 'ending') return false;
     if (phase === 'listening') return true;
     if (speaking && !interruptible) return false;
     if (mode === 'pushToTalk') return !loading;
@@ -481,6 +559,7 @@ export function handsFreeStatus(phase, { loading = false } = {}) {
     switch (phase) {
         case 'listening': return 'listening';
         case 'speaking': return 'speaking';
+        case 'ending':
         case 'thinking': return 'thinking';
         case 'reopening': return loading ? 'thinking' : 'listening';
         case 'idle': return 'idle';

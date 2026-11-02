@@ -1352,6 +1352,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         notifySubstitutionOnce(toast, t, r);
         setMessages(prev => [...prev, { role: 'assistant', content: spokenText }]);
         EventLogger.messageReceived(spokenText, COMPONENTS.CHAT_INTERFACE);
+        // The echo reference for a hands-free watcher: this line, not the
+        // last reply, is what the speakers are about to play.
+        patientSpokenTextRef.current = spokenText;
         VoiceService.speak({
             text: spokenText,
             voice: r.file,
@@ -1545,7 +1548,12 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // the mic button drives, so trainees can keep their eyes on the patient
     // instead of aiming for a button. Guarded so it never hijacks Space while
     // the user is typing in a field, and never fires on key-repeat (holding the
-    // key) or while the patient is mid-sentence.
+    // key). Whether a tap does anything NOW is the engine's call (`canTap`,
+    // the button's own gate): hands-free, Space interrupts the patient like the
+    // button does; push-to-talk lets the patient finish; covered by a surface
+    // on top (the phone's call screen, the Bedside room), Space is not ours.
+    // (It used to refuse while speaking/loading, so Space could not interrupt
+    // a hands-free reply — Codex review 2026-11-02.)
     useEffect(() => {
         if (!voiceMode || activeTab !== 'patient') return undefined;
         const onKeyDown = (e) => {
@@ -1554,18 +1562,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             const el = e.target;
             const tag = el?.tagName;
             if (el?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-            if (loading || speaking || !VoiceService.isSttSupported()) return;
-            // Covered by a surface on top (the phone's call screen, the
-            // Bedside room): Space is not ours.
-            if (voiceTurnRef.current.covered) return;
+            if (!VoiceService.isSttSupported() || !voiceTurnRef.current.canTap) return;
             e.preventDefault();
             voiceTurnRef.current.tap();
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-        // The conversation is read through voiceTurnRef; the deps re-arm the
-        // guard when the relevant state flips.
-    }, [voiceMode, activeTab, loading, speaking, listening]);
+        // The conversation (and its tap gate) is read through voiceTurnRef,
+        // which every render refreshes.
+    }, [voiceMode, activeTab]);
 
     const handleSendToAgent = async (agentType) => {
         const agent = agents.find(a => a.agent_type === agentType);

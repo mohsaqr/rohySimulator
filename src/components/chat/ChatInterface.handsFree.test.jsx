@@ -271,11 +271,39 @@ describe('ChatInterface hands-free conversation', () => {
         fireEvent.click(await talkButton());
         expect(voice.startTurn).toHaveBeenCalledWith(expect.objectContaining({ userAction: true }));
         expect(order).toEqual(['oyon', 'listen']);
-        act(() => lastListen().onResult({ final: 'where does it hurt', interim: '' }));
+        act(() => lastListen().onResult({ final: 'where does it', interim: '' }));
         fireEvent.click(await screen.findByRole('button', { name: /listening… click to stop/i }));
+        // Stop sends from the recogniser's end, trailing words included.
+        act(() => lastListen().onEnd({ final: 'where does it hurt' }));
         await waitFor(() => expect(llmRequests.length).toBe(1));
         expect(lastUserText()).toBe('where does it hurt');
         await waitFor(() => expect(voice.stopTurn).toHaveBeenCalledWith('turn_end'));
+    });
+
+    // Regression lock: Space could not interrupt a hands-free reply — the keyboard handler refused while speaking/loading although the engine (and the button) allowed the tap.
+    it('hands-free: Space interrupts the patient like the button does, and never fires from a text field', async () => {
+        mount();
+        fireEvent.click(await screen.findByTestId('hands-free-toggle'));
+        await waitFor(() => expect(screen.getByTestId('hands-free-toggle')).toHaveAttribute('aria-pressed', 'true'));
+        fireEvent.click(await talkButton());
+        act(() => lastListen().onResult({ final: '', interim: 'where does it hurt' }));
+        await waitFor(() => expect(llmRequests.length).toBe(1), { timeout: 2000 });
+        await waitFor(() => expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'speaking'));
+        const listensBefore = VoiceService.startListening.mock.calls.length;
+        const cancelsBefore = VoiceService.cancelSpeech.mock.calls.length;
+        fireEvent.keyDown(document.body, { code: 'Space', key: ' ' });
+        expect(VoiceService.cancelSpeech.mock.calls.length).toBe(cancelsBefore + 1);
+        expect(VoiceService.startListening.mock.calls.length).toBe(listensBefore + 1);
+        expect(lastListen().purpose).toBeUndefined();
+        await waitFor(() => expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'listening'));
+        // Still never while typing in a field (the turn is not ended by it).
+        const box = document.createElement('input');
+        document.body.appendChild(box);
+        const stopsNow = VoiceService.stopListening.mock.calls.length;
+        fireEvent.keyDown(box, { code: 'Space', key: ' ' });
+        expect(VoiceService.stopListening.mock.calls.length).toBe(stopsNow);
+        expect(screen.getByTestId('hands-free-status')).toHaveAttribute('data-status', 'listening');
+        box.remove();
     });
 
     it('is off by default: push-to-talk, no silence end, no reopen, no extra mic', async () => {

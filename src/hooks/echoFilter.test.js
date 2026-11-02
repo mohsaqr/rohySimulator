@@ -176,3 +176,62 @@ describe('learnerTurnText', () => {
         }
     });
 });
+
+describe('Codex review 2026-11-02: commands, numbers and units', () => {
+    // Regression lock: a truncated echo of a longer patient word became a stop command ("I was waiting" heard as "I was wait", fi "Odotan lääkettä" heard as "odota") and cut the patient off.
+    it.each([
+        ['I was waiting for the nurse', 'I was', 'wait'],
+        ['Odotan lääkettä vielä', '', 'odota'],
+        ['The pain stopped after an hour', 'the pain', 'stop'],
+        ['Ich warte schon lange', 'ich', 'warte'],
+        ['Estoy esperando al médico', 'estoy', 'espera'],
+    ])('a command word that truncates or nearly matches the patient\'s own word is echo: %s', (patient, final, interim) => {
+        expect(detect(final, interim, patient).interrupt).toBe(false);
+    });
+
+    it('a command the patient did not say (nor anything like it) still interrupts', () => {
+        expect(detect('I was waiting for the nurse', 'stop', 'I was waiting for the nurse').interrupt).toBe(true);
+        expect(detect('Odotan lääkettä', 'seis', 'Odotan lääkettä vielä').interrupt).toBe(true);
+    });
+
+    // Regression lock: the patient saying "25 mg" was recognised as "twenty five milligrams" — three novel words — and the patient interrupted itself.
+    it.each([
+        ['I take 25 mg of aspirin every day.', 'I take', 'twenty five milligrams of aspirin'],
+        ['My temperature was 38.5° this morning.', 'my temperature was', 'thirty eight point five degrees'],
+        ['My pulse was 110 bpm and my pressure 150/90 mmHg.', 'my pulse was', 'one hundred and ten beats per minute'],
+        ['Oxygen was 92% at home.', 'oxygen was', 'ninety two percent'],
+        ['Ich nehme 25 mg täglich.', 'ich nehme', 'fünfundzwanzig Milligramm'],
+        ['Tomo 25 mg al día.', 'tomo', 'veinticinco miligramos'],
+        ['Prendo 25 mg al giorno.', 'prendo', 'venticinque milligrammi'],
+        ['Je prends 25 mg par jour.', 'je prends', 'vingt-cinq milligrammes'],
+        ['Otan 25 mg päivässä.', 'otan', 'kaksikymmentäviisi milligrammaa'],
+        ['Jag tar 25 mg om dagen.', 'jag tar', 'tjugofem milligram'],
+        ['Мен 25 мг ішемін.', 'мен', 'жиырма бес миллиграмм'],
+    ])('spoken numbers and units echo the patient\'s digits and unit symbols: %s', (patient, final, interim) => {
+        expect(detect(final, interim, patient).interrupt).toBe(false);
+    });
+
+    it('number and unit words are novel when the patient said no number or unit', () => {
+        expect(detect('I have had chest pain', 'twenty five milligrams', EN).interrupt).toBe(true);
+    });
+
+    it('a learner sentence over a dosed reply still interrupts, and starts at the learner\'s first word', () => {
+        const patient = 'I take 25 mg of aspirin every day.';
+        expect(detect('I take 25 mg', 'sorry doctor which pharmacy', patient).interrupt).toBe(true);
+        const final = 'I take twenty five milligrams';
+        const interim = 'sorry doctor which pharmacy';
+        const d = detectInterruption({ final, interim, patientText: patient, echoFinal: 'I take' });
+        expect(d.interrupt).toBe(true);
+        expect(learnerTurnText({ final, interim, ...d })).toBe(interim);
+    });
+
+    // Regression lock: polite and plural commands (fi "odottakaa", fr "attendez", es "espere", kk "тоқтаңыз") were ignored.
+    it.each([
+        'Warten', 'Stoppen', 'Espere', 'Esperen', 'Paren', 'Aspetti', 'Si fermi', 'Aspettate', 'Fermatevi',
+        'Attendez', 'Arrêtez', 'Odottakaa', 'Lopeta', 'Lopettakaa', 'Stoppa', 'Тоқтаңыз', 'Күтіңіз', 'Тоқтаңдар', 'Күтіңдер',
+    ])('accepts the polite or plural command %s', (command) => {
+        const d = detect('I have had chest pain', command, EN);
+        expect(d.interrupt).toBe(true);
+        expect(detect('', command, `I said ${command}`).interrupt).toBe(false);
+    });
+});

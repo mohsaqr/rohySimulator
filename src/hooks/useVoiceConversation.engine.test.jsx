@@ -377,3 +377,33 @@ describe('useTurnEngine (hands-free mode)', () => {
         expect(t.props.send).not.toHaveBeenCalled();
     });
 });
+
+describe('useTurnEngine — speech it did not ask for (Codex review 2026-11-02)', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    // Regression lock: the Bedside room's exam reaction, played while hands-free was listening, was transcribed and sent as the learner's words.
+    it('a line played while the mic waits is watched, never sent, and the mic reopens after it', () => {
+        const LINE = 'Ouch, that really hurts there.';
+        const t = setup({ getSpokenText: vi.fn(() => LINE) });
+        act(() => t.hook.result.current.tap());
+        const learner = t.last();
+        t.rerender({ speaking: true });
+        expect(t.props.stopListening).toHaveBeenCalledTimes(1);
+        const watcher = t.last();
+        expect(watcher.watch).toBe(true);
+        expect(t.hook.result.current.status).toBe('speaking');
+        act(() => learner.onEnd(''));
+        act(() => watcher.onResult({ final: 'ouch that really', interim: 'hurts there' }));
+        act(() => { vi.advanceTimersByTime(END_OF_TURN_SILENCE_MS * 3); });
+        expect(t.props.send).not.toHaveBeenCalled();
+        expect(t.props.cancelSpeech).not.toHaveBeenCalled();
+        t.rerender({ speaking: false });
+        expect(t.hook.result.current.phase).toBe('listening');
+        const reopened = t.last();
+        expect(reopened.watch).toBe(false);
+        act(() => reopened.onResult({ final: 'can you sit up', interim: '' }));
+        act(() => { vi.advanceTimersByTime(END_OF_TURN_SILENCE_MS); });
+        expect(t.props.send).toHaveBeenCalledExactlyOnceWith('can you sit up');
+    });
+});

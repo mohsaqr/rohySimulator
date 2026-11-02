@@ -275,9 +275,18 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                 </aside>
 
                 {/* Right: discussant + voice */}
+                {/* Height budget of this column, top to bottom: avatar,
+                    caption, controls. On a short screen something must give,
+                    and it is the AVATAR (it shrinks to h-24): the caption
+                    keeps a floor (min-h-20) because it is the discussant's
+                    question. With the caption at min-h-0 it was the thing
+                    that gave — when the voice control grew a row (the
+                    Hands-free switch, v3.1.2) the caption collapsed to 0 px
+                    at 1280x720 and the question vanished (CI e2e
+                    gate-debrief.spec.js:138). */}
                 <main className="min-h-0 flex flex-col items-center justify-between bg-slate-800/60 rounded-2xl border border-slate-700 shadow-xl p-8 backdrop-blur-sm">
-                    <div className="flex flex-col items-center gap-4 w-full">
-                        <div className="w-64 h-64 max-w-full">
+                    <div data-testid="debrief-avatar-block" className="flex flex-col items-center gap-4 w-full min-h-0 shrink">
+                        <div className="w-64 h-64 max-w-full min-h-24 shrink">
                             <Suspense fallback={<div className="w-full h-full rounded-full bg-slate-700" />}>
                                 <PatientAvatar
                                     patient={{ id: discussant?.id, name: discussant?.name, gender: discussant?.voice?.gender }}
@@ -298,7 +307,7 @@ export default function DiscussionScreen({ sessionId, activeCase, onClose, roomN
                         band was a button that swallowed clicks for as long
                         as the discussant spoke (QA 2026-10-04, PRV-30). */}
                     {started && captionLine && (
-                        <div className="w-full max-w-2xl flex-1 min-h-0 mt-4 flex flex-col items-center gap-1" data-testid="debrief-caption">
+                        <div className="w-full max-w-2xl flex-1 min-h-20 mt-4 flex flex-col items-center gap-1" data-testid="debrief-caption">
                             <p className="w-full max-h-48 overflow-y-auto text-center text-base md:text-lg font-medium text-white leading-snug whitespace-pre-wrap break-words">
                                 {captionLine}
                             </p>

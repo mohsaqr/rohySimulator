@@ -9,6 +9,25 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.1.3] — 2026-11-02
+
+### Voice engine fixes (Codex review of 3.1.1–3.1.2, and a red CI e2e on 3.1.2)
+- **Push-to-talk no longer drops the last words (all surfaces).** 3.1.2 sent what was heard at the moment of the stop
+  tap and ignored the final words Chrome delivers after it. A stop now waits for the recogniser's end (at most 1.5 s)
+  and sends the longer of the two; never twice. The button shows "thinking" for that moment. **(change)**
+- **Voice focus follows which screen is on top.** Layers chat < Bedside room < phone call: the Bedside room no longer
+  silences a phone call above it, and a chat that remounts under an open room is silenced from its first render.
+- **The patient's own unprompted lines are not sent as the learner's.** A Bedside reaction (or an alarm line) spoken
+  while hands-free is listening is treated as echo; the mic reopens when it ends.
+- The phone's hands-free mic now opens once voice settings have loaded and nothing is in flight (it stayed idle if the
+  call connected first). Space interrupts a hands-free reply like the button does.
+- Echo filter: a cut-off echo ("I was wait…", fi "odotan" → "odota") is no longer taken as a stop command; spoken
+  numbers and units ("twenty five milligrams" for "25 mg") no longer make the patient interrupt itself; polite and
+  plural stop/wait forms in every case language.
+- **Debrief caption visible again (CI e2e red on 3.1.2).** The Hands-free row under the debrief mic squeezed the
+  discussant's caption to 0 px on a 720 px-high screen; the caption keeps a height floor and the avatar shrinks
+  instead, and the switch shares the status row.
+
 ## [3.1.2] — 2026-11-02
 
 ### One voice engine for every voice surface

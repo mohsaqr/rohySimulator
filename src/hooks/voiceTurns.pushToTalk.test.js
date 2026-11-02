@@ -39,21 +39,61 @@ describe('push-to-talk mode', () => {
         expect(r.state.phase).toBe('listening');
     });
 
-    it('a second tap sends what was heard at once, final and interim, and stops the recogniser', () => {
+    // Regression lock: tapping Stop committed the snapshot ("where does it") and dropped the words Chrome finalised after stop() ("where does it hurt").
+    it('a second tap stops the recogniser and waits for its end, which carries the trailing words', () => {
         const base = run([PTT, { type: 'TAP' }]);
+        const turn = base.state.turn;
         const r = run([
-            { type: 'RESULT', turn: base.state.turn, final: 'my chest', interim: 'hurts' },
+            { type: 'RESULT', turn, final: '', interim: 'where does it' },
             { type: 'TAP' },
         ], base.state);
-        expect(types(r.last)).toEqual(['clearSilence', 'stopListen', 'send']);
-        expect(r.last).toContainEqual({ type: 'send', text: 'my chest hurts', reply: 1 });
-        // Chrome's late end is from a finished turn: nothing is sent twice.
-        expect(reduceHandsFree(r.state, { type: 'RECOGNITION_END', turn: base.state.turn, final: 'my chest hurts' }).effects).toEqual([]);
+        expect(types(r.last)).toEqual(['clearSilence', 'stopListen', 'awaitEnd']);
+        expect(types(r.effects)).not.toContain('send');
+        expect(r.state.phase).toBe('ending');
+        // Results still arriving after stop() are kept, never sent on their own.
+        const late = run([{ type: 'RESULT', turn, final: '', interim: 'where does it hurt' }], r.state);
+        expect(late.effects).toEqual([]);
+        const end = run([{ type: 'RECOGNITION_END', turn, final: 'where does it hurt' }], late.state);
+        expect(end.effects.filter(e => e.type === 'send')).toEqual([{ type: 'send', text: 'where does it hurt', reply: 1 }]);
+        expect(end.state.phase).toBe('thinking');
+        // The fallback deadline after the end is stale: nothing is sent twice.
+        expect(reduceHandsFree(end.state, { type: 'END_TIMEOUT', turn }).effects).toEqual([]);
+        expect(reduceHandsFree(end.state, { type: 'RECOGNITION_END', turn, final: 'where does it hurt' }).effects).toEqual([]);
+    });
+
+    it('the end is preferred, but never shorter than what was already heard', () => {
+        const base = run([PTT, { type: 'TAP' }]);
+        const turn = base.state.turn;
+        const r = run([
+            { type: 'RESULT', turn, final: 'my chest', interim: 'hurts when I breathe' },
+            { type: 'TAP' },
+            { type: 'RECOGNITION_END', turn, final: 'my chest hurts' },
+        ], base.state);
+        expect(r.last).toContainEqual({ type: 'send', text: 'my chest hurts when I breathe', reply: 1 });
+    });
+
+    it('if the end never comes, the deadline sends what was heard — once', () => {
+        const base = run([PTT, { type: 'TAP' }]);
+        const turn = base.state.turn;
+        const r = run([
+            { type: 'RESULT', turn, final: 'my chest', interim: 'hurts' },
+            { type: 'TAP' },
+            { type: 'END_TIMEOUT', turn },
+        ], base.state);
+        expect(r.last.filter(e => e.type === 'send')).toEqual([{ type: 'send', text: 'my chest hurts', reply: 1 }]);
+        expect(r.state.phase).toBe('thinking');
+        // Chrome's very late end is from a finished turn.
+        expect(reduceHandsFree(r.state, { type: 'RECOGNITION_END', turn, final: 'my chest hurts a lot' }).effects).toEqual([]);
+        // A second tap while ending does nothing (and the tap gate says so).
+        const ending = run([PTT, { type: 'TAP' }, { type: 'TAP' }]).state;
+        expect(reduceHandsFree(ending, { type: 'TAP' }).effects).toEqual([]);
+        expect(canTapVoice({ phase: 'ending', mode: 'pushToTalk' })).toBe(false);
+        expect(voiceStatus('ending', { mode: 'pushToTalk' })).toBe('thinking');
     });
 
     it('a tap with nothing heard yet stops, and the end sends whatever the recogniser finalised', () => {
         const base = run([PTT, { type: 'TAP' }, { type: 'TAP' }]);
-        expect(types(base.last)).toEqual(['clearSilence', 'stopListen']);
+        expect(types(base.last)).toEqual(['clearSilence', 'stopListen', 'awaitEnd']);
         const r = reduceHandsFree(base.state, { type: 'RECOGNITION_END', turn: base.state.turn, final: 'is there a hilar node' });
         expect(r.effects).toContainEqual({ type: 'send', text: 'is there a hilar node', reply: 1 });
     });
@@ -123,7 +163,7 @@ describe('interruptible: false (the debrief — the other side finishes its poin
     it('the other side starting to speak ends an open turn, so its voice is never recorded', () => {
         const base = run([PTT, { type: 'TAP' }], initialHandsFreeState, opts);
         const empty = reduceHandsFree(base.state, { type: 'SPEAKING', value: true }, opts);
-        expect(types(empty.effects)).toEqual(['clearSilence', 'stopListen']);
+        expect(types(empty.effects)).toEqual(['clearSilence', 'stopListen', 'awaitEnd']);
         const heard = run([
             { type: 'RESULT', turn: base.state.turn, final: 'I think', interim: '' },
             { type: 'SPEAKING', value: true },

@@ -19,7 +19,7 @@ vi.mock('../services/voiceService', () => ({
 
 import { VoiceService } from '../services/voiceService';
 import { useVoiceConversation, useVoiceFocus, voiceFloorOwner, voiceFocusClaims, sttErrorKey } from './useVoiceConversation';
-import { END_OF_TURN_SILENCE_MS } from './handsFreeTurns';
+import { END_OF_TURN_SILENCE_MS, STOP_END_GRACE_MS } from './handsFreeTurns';
 
 const last = () => vs.listens[vs.listens.length - 1];
 
@@ -73,14 +73,39 @@ describe('useVoiceConversation — push-to-talk', () => {
 
         act(() => t.hook.result.current.tap());
         expect(VoiceService.stopListening).toHaveBeenCalledTimes(1);
-        expect(t.props.send).toHaveBeenCalledExactlyOnceWith('where does it hurt');
         expect(t.hook.result.current.listening).toBe(false);
         expect(t.hook.result.current.interim).toBe('');
+        expect(t.hook.result.current.status).toBe('thinking');
+        // The turn is sent from the recogniser's end, with its last words.
+        expect(t.props.send).not.toHaveBeenCalled();
+        act(() => last().onEnd({ final: 'where does it hurt now' }));
+        expect(t.props.send).toHaveBeenCalledExactlyOnceWith('where does it hurt now');
+        act(() => { vi.advanceTimersByTime(STOP_END_GRACE_MS * 2); });
+        expect(t.props.send).toHaveBeenCalledTimes(1);
 
         // The reply ends: no reopen in push-to-talk.
         await act(async () => t.sends[0].resolve());
         expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
         expect(t.hook.result.current.status).toBe('idle');
+    });
+
+    // Regression lock: push-to-talk Stop sent the snapshot ("where does it") and ignored the finalisation Chrome delivers after stop() ("where does it hurt").
+    it('Stop waits for the recogniser\'s end; if it never comes, the deadline sends what was heard, once', () => {
+        const t = setup();
+        act(() => t.hook.result.current.tap());
+        const rec = last();
+        act(() => rec.onResult({ final: '', interim: 'where does it' }));
+        act(() => t.hook.result.current.tap());
+        // A second tap while ending does nothing.
+        expect(t.hook.result.current.canTap).toBe(false);
+        act(() => t.hook.result.current.tap());
+        act(() => { vi.advanceTimersByTime(STOP_END_GRACE_MS - 1); });
+        expect(t.props.send).not.toHaveBeenCalled();
+        act(() => { vi.advanceTimersByTime(1); });
+        expect(t.props.send).toHaveBeenCalledExactlyOnceWith('where does it');
+        act(() => rec.onEnd({ final: 'where does it hurt' }));
+        expect(t.props.send).toHaveBeenCalledTimes(1);
+        expect(VoiceService.stopListening).toHaveBeenCalledTimes(1);
     });
 
     it('a tap while the other side speaks silences it before the mic opens', () => {
@@ -248,7 +273,7 @@ describe('voice focus: a surface on top covers the conversations beneath it', ()
         act(() => chatRec.onResult({ final: '', interim: 'where does it' }));
 
         // The Bedside room / the call screen mounts on top.
-        const room = renderHook(({ on }) => useVoiceFocus(on), { initialProps: { on: true } });
+        const room = renderHook(({ on }) => useVoiceFocus(on, 'room'), { initialProps: { on: true } });
         expect(voiceFocusClaims()).toBe(1);
         expect(VoiceService.stopListening).toHaveBeenCalledTimes(1);
         expect(chat.hook.result.current.phase).toBe('idle');
@@ -268,8 +293,8 @@ describe('voice focus: a surface on top covers the conversations beneath it', ()
         chat.rerender({ speaking: false });
         expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
 
-        // A conversation created on top (the room's own mic) is not covered.
-        const roomMic = setup({ mode: 'handsFree' });
+        // A conversation on the claiming layer (the room's own mic) is not covered.
+        const roomMic = setup({ mode: 'handsFree', layer: 'room' });
         expect(roomMic.hook.result.current.covered).toBe(false);
         act(() => roomMic.hook.result.current.tap());
         expect(VoiceService.startListening).toHaveBeenCalledTimes(2);
@@ -291,7 +316,7 @@ describe('voice focus: a surface on top covers the conversations beneath it', ()
 
     it('claimFocus on a conversation covers older ones, never itself, and blocks their auto-start', () => {
         const chat = setup({ mode: 'handsFree', autoStart: true, enabled: false });
-        const phone = setup({ mode: 'pushToTalk', claimFocus: true });
+        const phone = setup({ mode: 'pushToTalk', layer: 'phone', claimFocus: true });
         expect(phone.hook.result.current.covered).toBe(false);
         expect(chat.hook.result.current.covered).toBe(true);
         chat.rerender({ enabled: true });
@@ -300,6 +325,95 @@ describe('voice focus: a surface on top covers the conversations beneath it', ()
         expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
         phone.hook.unmount();
         chat.hook.unmount();
+    });
+});
+
+describe('voice focus follows surface LAYERS, not creation order (Codex review 2026-11-02)', () => {
+    // Regression lock: a chat remounted beneath an existing Bedside claim was uncovered (it was created after the claim) and could take the mic from the room.
+    it('a chat created under an existing room claim is covered from its first render', () => {
+        const room = renderHook(() => useVoiceFocus(true, 'room'));
+        const chat = setup({ mode: 'handsFree', autoStart: true });
+        expect(chat.hook.result.current.covered).toBe(true);
+        expect(chat.hook.result.current.canTap).toBe(false);
+        act(() => chat.hook.result.current.tap());
+        expect(VoiceService.startListening).not.toHaveBeenCalled();
+        // The room's own microphone (created after its claim, same layer) is live.
+        const roomMic = setup({ mode: 'handsFree', layer: 'room' });
+        expect(roomMic.hook.result.current.covered).toBe(false);
+        roomMic.hook.unmount();
+        chat.hook.unmount();
+        room.unmount();
+    });
+
+    // Regression lock: entering the Bedside room during a phone call suspended the phone, though the call screen stays on top of the room.
+    it('a room claim taken during a phone call covers the chat but not the phone; the phone covers the room\'s mic', () => {
+        const chat = setup({ mode: 'handsFree' });
+        const phone = setup({ mode: 'handsFree', layer: 'phone', claimFocus: true });
+        act(() => phone.hook.result.current.tap());
+        expect(phone.hook.result.current.listening).toBe(true);
+        const stopsBefore = VoiceService.stopListening.mock.calls.length;
+
+        const room = renderHook(() => useVoiceFocus(true, 'room'));
+        const roomMic = setup({ mode: 'handsFree', layer: 'room' });
+        expect(phone.hook.result.current.covered).toBe(false);
+        expect(phone.hook.result.current.listening).toBe(true);
+        expect(VoiceService.stopListening.mock.calls.length).toBe(stopsBefore);
+        expect(chat.hook.result.current.covered).toBe(true);
+        expect(roomMic.hook.result.current.covered).toBe(true);
+        act(() => roomMic.hook.result.current.tap());
+        expect(phone.hook.result.current.listening).toBe(true);
+
+        // Hanging up uncovers the room's mic; the chat stays under the room.
+        phone.hook.unmount();
+        expect(roomMic.hook.result.current.covered).toBe(false);
+        expect(chat.hook.result.current.covered).toBe(true);
+        roomMic.hook.unmount();
+        room.unmount();
+        expect(chat.hook.result.current.covered).toBe(false);
+        chat.hook.unmount();
+    });
+
+    it('two claims on one layer: the most recent wins', () => {
+        const first = renderHook(() => useVoiceFocus(true, 'room'));
+        const older = setup({ mode: 'handsFree', layer: 'room' });
+        expect(older.hook.result.current.covered).toBe(false);
+        const second = renderHook(() => useVoiceFocus(true, 'room'));
+        expect(older.hook.result.current.covered).toBe(true);
+        second.unmount();
+        expect(older.hook.result.current.covered).toBe(false);
+        older.hook.unmount();
+        first.unmount();
+    });
+});
+
+describe('phone auto-start waits for readiness (Codex review 2026-11-02)', () => {
+    // Regression lock: a call that connected before the voice settings (STT language) arrived started without a language and stayed idle.
+    it('starts once the language arrives', () => {
+        const t = setup({ mode: 'handsFree', autoStart: true, enabled: false, lang: null });
+        t.rerender({ enabled: true });
+        expect(VoiceService.startListening).not.toHaveBeenCalled();
+        expect(t.hook.result.current.phase).toBe('idle');
+        t.rerender({ lang: 'fi-FI' });
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
+        expect(last().lang).toBe('fi-FI');
+        expect(t.hook.result.current.listening).toBe(true);
+    });
+
+    // Regression lock: an auto-start skipped because a reply was loading when the call connected was never retried.
+    it('starts once nothing is loading or speaking, and only once', () => {
+        const t = setup({ mode: 'handsFree', autoStart: true, enabled: false, loading: true });
+        t.rerender({ enabled: true });
+        expect(VoiceService.startListening).not.toHaveBeenCalled();
+        t.rerender({ loading: false, speaking: true });
+        expect(VoiceService.startListening).not.toHaveBeenCalled();
+        t.rerender({ speaking: false });
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
+        // The learner taps to stop: the pending start is spent, nothing reopens.
+        act(() => t.hook.result.current.tap());
+        act(() => last().onEnd({ final: '' }));
+        t.rerender({ loading: true });
+        t.rerender({ loading: false });
+        expect(VoiceService.startListening).toHaveBeenCalledTimes(1);
     });
 });
 

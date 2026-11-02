@@ -108,10 +108,10 @@ describe('reduceHandsFree', () => {
         expect(r.state).toBe(base.state);
     });
 
-    it('a tap while listening ends the turn now', () => {
+    it('a tap while listening ends the turn: stop, then send what the end carries', () => {
         const base = run([{ type: 'ENABLE' }, { type: 'TAP' }]);
         const r = run([{ type: 'TAP' }], base.state);
-        expect(types(r.effects)).toEqual(['clearSilence', 'stopListen']);
+        expect(types(r.effects)).toEqual(['clearSilence', 'stopListen', 'awaitEnd']);
         const end = run([{ type: 'RECOGNITION_END', turn: base.state.turn, final: 'hello' }], r.state);
         expect(end.effects).toContainEqual({ type: 'send', text: 'hello', reply: 1 });
     });
@@ -318,6 +318,77 @@ describe('reduceHandsFree', () => {
         expect(r.state.phase).toBe('off');
         // The stopped recogniser's late end is ignored.
         expect(reduceHandsFree(r.state, { type: 'RECOGNITION_END', turn: base.state.turn, final: 'x' }).effects).toEqual([]);
+    });
+
+    // Regression lock: a tap ending a hands-free turn dropped the words Chrome finalised after stop() — the same loss as push-to-talk.
+    it('a tap ending a heard turn waits for the end and keeps its trailing words', () => {
+        const base = run([{ type: 'ENABLE' }, { type: 'TAP' }]);
+        const turn = base.state.turn;
+        const r = run([
+            { type: 'RESULT', turn, final: '', interim: 'where does it' },
+            { type: 'TAP' },
+            { type: 'RECOGNITION_END', turn, final: 'where does it hurt' },
+        ], base.state);
+        expect(r.effects.filter(e => e.type === 'send')).toEqual([{ type: 'send', text: 'where does it hurt', reply: 1 }]);
+    });
+
+    it('the silence commit stays immediate (it waits for nothing)', () => {
+        const base = run([{ type: 'ENABLE' }, { type: 'TAP' }]);
+        const turn = base.state.turn;
+        const r = run([
+            { type: 'RESULT', turn, final: '', interim: 'where does it hurt' },
+            { type: 'SILENCE_TIMEOUT', turn },
+        ], base.state);
+        expect(types(r.last)).toEqual(['clearSilence', 'stopListen', 'send']);
+    });
+
+    // Regression lock: in the Bedside room, a reaction line the patient spoke while hands-free was listening was transcribed and sent as the learner's words.
+    describe('speech the engine did not ask for (an exam reaction, an alarm line)', () => {
+        const LINE = 'Ouch, that really hurts there.';
+        const listening = () => run([{ type: 'ENABLE' }, { type: 'TAP' }]).state;
+
+        it('before the learner said anything: the recogniser becomes an echo-filtered watcher', () => {
+            const s = listening();
+            const r = reduceHandsFree(s, { type: 'SPEAKING', value: true });
+            expect(types(r.effects)).toEqual(['clearSilence', 'stopListen', 'watch']);
+            expect(r.state).toMatchObject({ phase: 'speaking', watching: true });
+            // It hears the line through the speakers: nothing is sent.
+            const heard = run([
+                { type: 'RESULT', turn: r.state.turn, final: 'ouch that really', interim: 'hurts there', patientText: LINE },
+                { type: 'RECOGNITION_END', turn: r.state.turn, final: 'ouch that really hurts there', patientText: LINE },
+            ], r.state);
+            expect(types(heard.effects)).not.toContain('send');
+            expect(types(heard.effects)).not.toContain('cancelSpeech');
+            // The line ends: the mic reopens fresh, its words discarded.
+            const after = run([{ type: 'SPEAKING', value: false }, { type: 'REOPEN' }], heard.state);
+            expect(after.state.phase).toBe('listening');
+            expect(after.last).toEqual([{ type: 'stopListen' }, { type: 'listen', gesture: false }]);
+            expect(after.state.lastFinal).toBe('');
+        });
+
+        it('the learner may still talk over it', () => {
+            const s = reduceHandsFree(listening(), { type: 'SPEAKING', value: true }).state;
+            const r = reduceHandsFree(s, { type: 'RESULT', turn: s.turn, final: 'ouch', interim: 'sorry is it sharp', patientText: LINE });
+            expect(r.state.phase).toBe('listening');
+            expect(types(r.effects)).toEqual(['cancelSpeech', 'restartSilence']);
+            // The line's end after the interruption reopens nothing.
+            expect(reduceHandsFree(r.state, { type: 'SPEAKING', value: false }).state.phase).toBe('listening');
+        });
+
+        it('mid-sentence: the learner\'s words so far are sent before the line can enter them', () => {
+            const s = listening();
+            const r = run([
+                { type: 'RESULT', turn: s.turn, final: '', interim: 'does this hurt' },
+                { type: 'SPEAKING', value: true },
+            ], s);
+            expect(r.last).toEqual([{ type: 'clearSilence' }, { type: 'stopListen' }, { type: 'send', text: 'does this hurt', reply: 1 }]);
+            expect(reduceHandsFree(r.state, { type: 'RECOGNITION_END', turn: s.turn, final: 'does this hurt ouch that really' }).effects).toEqual([]);
+        });
+
+        it('push-to-talk: the learner holds the turn; nothing changes', () => {
+            const s = run([{ type: 'ENABLE', mode: 'pushToTalk' }, { type: 'TAP' }]).state;
+            expect(reduceHandsFree(s, { type: 'SPEAKING', value: true }).effects).toEqual([]);
+        });
     });
 
     it('maps phases to the visible status', () => {

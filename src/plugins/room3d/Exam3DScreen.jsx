@@ -99,9 +99,11 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
     // The room is on top of the chat, which stays mounted (inert) beneath
     // it: while the room is open the chat's voice conversation is suspended,
     // so what the learner says to this patient is never heard — and sent —
-    // by the hidden chat. Called before the room's own microphone exists, so
-    // the claim covers the chat and not the room's mic.
-    useVoiceFocus(true);
+    // by the hidden chat. The claim is on the room's LAYER: it covers the
+    // chat (even one remounted beneath the room later) and never the room's
+    // own microphone (VoiceControl voiceLayer="room") or the on-call phone,
+    // which sits above the room.
+    useVoiceFocus(true, 'room');
     const hostRef = useRef(null);
     // The patient speaks the CASE language, not the interface's (PRV-64):
     // the reaction lines and the microphone both follow it. Read through a
@@ -507,6 +509,9 @@ export default function Exam3DScreen({ activeCase, sessionId, onOpenDrawer, conv
                     <VoiceControl
                         ref={micRef}
                         variant="room"
+                        // On the room's voice layer, beside its focus claim:
+                        // covered by the on-call phone, never by the room.
+                        voiceLayer="room"
                         // The debrief's fallback line points at a type
                         // button; this room has none, so it passes the
                         // platform's own generic sentence instead.

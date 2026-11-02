@@ -32,6 +32,10 @@ import { VoiceTurnButton, VoiceTurnStatus, HandsFreeToggle } from '../voice/Voic
 //   speakingLabel  The hands-free status while the other side speaks.
 //   variant      'discussion' (indigo, on a light panel) or 'room' (teal, on
 //                the dark 3D room). Palette only — same control, same states.
+//   voiceLayer   Where this microphone sits (useVoiceConversation's
+//                VOICE_LAYERS). The debrief is a base room ('chat', the
+//                default); the Bedside room passes 'room', the layer its
+//                focus claim covers the hidden chat from.
 //   ref          Exposes toggle(), so a room-level push-to-talk key can drive
 //                the same engine the button drives instead of forking it.
 const VoiceControl = forwardRef(function VoiceControl({
@@ -45,6 +49,7 @@ const VoiceControl = forwardRef(function VoiceControl({
     speakingLabel = null,
     variant = 'discussion',
     unsupportedText = null,
+    voiceLayer = 'chat',
 }, ref) {
     const { t } = useTranslation('discussion');
     const { mode } = useHandsFreePreference();
@@ -55,6 +60,7 @@ const VoiceControl = forwardRef(function VoiceControl({
         loading: Boolean(busy),
         speaking: Boolean(speaking),
         interruptible: Boolean(onInterrupt),
+        layer: voiceLayer,
         cancelSpeech: onInterrupt ?? undefined,
         getSpokenText,
         send: (text) => onSend?.(text),
@@ -83,11 +89,14 @@ const VoiceControl = forwardRef(function VoiceControl({
         );
     }
 
+    // A turn the learner just stopped is being sent from the recogniser's
+    // end (phase 'ending'): it reads as thinking, not as "tap to talk".
+    const thinkingNow = Boolean(busy) || conversation.phase === 'ending';
     const status = speaking
         ? t('status_speaking')
         : listening
             ? t('status_listening')
-            : busy
+            : thinkingNow
                 ? t('status_thinking')
                 : t('status_tap_to_talk');
 
@@ -115,7 +124,7 @@ const VoiceControl = forwardRef(function VoiceControl({
                         ? 'bg-rose-500 hover:bg-rose-600 text-white ring-4 ring-rose-200 animate-pulse'
                         : speaking
                             ? waiting
-                            : busy
+                            : thinkingNow
                                 ? thinking
                                 : idle
                 }`}
@@ -127,6 +136,11 @@ const VoiceControl = forwardRef(function VoiceControl({
                         ? <MicOff className="w-8 h-8" />
                         : <Mic className="w-8 h-8" />}
             </VoiceTurnButton>
+            {/* Status and the Hands-free switch share ONE row: as a third
+                row the switch made the control ~30 px taller, and in the
+                debrief that height came out of the caption, which collapsed
+                to nothing at 1280x720 (CI e2e gate-debrief.spec.js:138). */}
+            <div data-testid="voice-status-row" className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             {conversation.mode === 'handsFree' ? (
                 <VoiceTurnStatus
                     conversation={conversation}
@@ -147,6 +161,7 @@ const VoiceControl = forwardRef(function VoiceControl({
                         : (room ? 'bg-neutral-950/70 text-neutral-400 ring-1 ring-neutral-700 hover:text-neutral-200' : 'bg-slate-700/60 text-slate-300 ring-1 ring-slate-600 hover:text-white')
                 }`}
             />
+            </div>
             {/* Interim transcript intentionally not rendered here — the
                 caller's subtitle band shows the live STT text. */}
         </div>

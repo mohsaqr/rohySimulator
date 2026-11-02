@@ -29,13 +29,20 @@
 //
 // FOCUS: a surface ON TOP (the on-call call screen from the moment it opens,
 // ringing included; the Bedside room while it is mounted) claims voice
-// focus with `useVoiceFocus` / `claimFocus`. Every conversation created
-// before that claim — the chat that stays mounted, inert, underneath — is
-// COVERED while the claim lasts: it stops listening at once, drops its
-// silence commit and watcher, sends nothing it heard, never reopens, and
-// ignores taps (button and Space). Releasing the claim does not resume it:
-// it waits for its own tap. Without this a learner talking to the 3D patient
-// or to a ringing phone was heard — and answered — by the hidden chat.
+// focus with `useVoiceFocus` / `claimFocus`, AT ITS LAYER (VOICE_LAYERS:
+// chat < room < phone). Every conversation on a lower layer — the chat that
+// stays mounted, inert, underneath — is COVERED while the claim lasts: it
+// stops listening at once, drops its silence commit and watcher, sends
+// nothing it heard, never reopens, and ignores taps (button and Space).
+// Releasing the claim does not resume it: it waits for its own tap. Without
+// this a learner talking to the 3D patient or to a ringing phone was heard —
+// and answered — by the hidden chat.
+// Coverage is decided by LAYER, not by creation order (Codex review
+// 2026-11-02): ordering by creation let a chat remounted under the Bedside
+// room take the mic (it was "newer" than the room's claim), and let the
+// Bedside room, entered during a call, suspend the phone that stays on top
+// of it. Only on the SAME layer does order count: the most recent claim
+// covers what that layer held before it.
 //
 // Layers: `useTurnEngine` runs the reducer's effects (timers, recogniser
 // through an injected `listen`, the send). `useVoiceConversation` is what a
@@ -46,6 +53,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { VoiceService } from '../services/voiceService';
 import {
     END_OF_TURN_SILENCE_MS,
+    STOP_END_GRACE_MS,
     WATCH_STALL_MS,
     MAX_EMPTY_AUTO_TURNS,
     initialHandsFreeState,
@@ -75,9 +83,22 @@ export function voiceFloorOwner() {
 
 // ---- Focus -------------------------------------------------------------
 
+/**
+ * Where a voice surface sits. Higher covers lower: the patient chat is the
+ * floor, the Bedside room sits over it, the on-call phone (a modal reachable
+ * from any room) over everything.
+ */
+export const VOICE_LAYERS = Object.freeze({ chat: 0, room: 1, phone: 2 });
+
+function layerOf(layer) {
+    if (typeof layer === 'number' && Number.isFinite(layer)) return layer;
+    if (Object.prototype.hasOwnProperty.call(VOICE_LAYERS, layer)) return VOICE_LAYERS[layer];
+    throw new TypeError(`unknown voice layer: ${String(layer)}`);
+}
+
 // Creation order, taken at RENDER time: a parent renders before its
-// children, so a screen's claim is older than the conversations it contains
-// and newer than the chat that was already mounted underneath it.
+// children, so a screen's claim is older than the conversations it
+// contains. It only breaks ties on one layer.
 let creationSeq = 0;
 const focus = { claims: new Map(), listeners: new Set() };
 
@@ -85,32 +106,34 @@ function emitFocus() {
     focus.listeners.forEach((listener) => listener());
 }
 
-// Covered = some surface claimed focus after this conversation was created.
-function isCovered(seq) {
-    for (const claimSeq of focus.claims.values()) {
-        if (claimSeq > seq) return true;
+// Covered = a claim on a higher layer, or a newer claim on the same layer.
+function isCovered(layer, seq) {
+    for (const claim of focus.claims.values()) {
+        if (claim.layer > layer || (claim.layer === layer && claim.seq > seq)) return true;
     }
     return false;
 }
 
 /**
  * Claim voice focus while `active` (a surface on top of others): every
- * voice conversation created before this call is suspended until the claim
- * ends, and then waits for its own tap.
+ * voice conversation on a lower layer — and any created earlier on the same
+ * layer — is suspended until the claim ends, and then waits for its own tap.
  * @param {boolean} [active=true]
+ * @param {'chat'|'room'|'phone'|number} [layer='room']  where the claiming surface sits (VOICE_LAYERS)
  */
-export function useVoiceFocus(active = true) {
+export function useVoiceFocus(active = true, layer = 'room') {
     const id = useId();
     const [seq] = useState(() => ++creationSeq);
+    const level = layerOf(layer);
     useEffect(() => {
         if (!active) return undefined;
-        focus.claims.set(id, seq);
+        focus.claims.set(id, { layer: level, seq });
         emitFocus();
         return () => {
             focus.claims.delete(id);
             emitFocus();
         };
-    }, [active, id, seq]);
+    }, [active, id, seq, level]);
 }
 
 /** Test-only: how many focus claims are held. */
@@ -125,8 +148,11 @@ export function voiceFocusClaims() {
  * @param {boolean} opts.enabled   the surface can converse now (case running, call connected, …)
  * @param {'pushToTalk'|'handsFree'} [opts.mode='handsFree']
  * @param {boolean} [opts.interruptible=true]  the learner may cut the other side off (tap or voice)
- * @param {boolean} [opts.autoStart=false]     open the mic without a tap whenever idle-and-enabled begins
- * @param {boolean} [opts.claimFocus=false]    this surface is on top: cover every older conversation while mounted
+ * @param {boolean} [opts.autoStart=false]     open the mic without a tap once it becomes possible (enabled,
+ *        ready, nothing loading or speaking, not covered) — once per enable
+ * @param {boolean} [opts.ready=true]          the recogniser can start (e.g. its language is known)
+ * @param {'chat'|'room'|'phone'|number} [opts.layer='chat']  where this surface sits (VOICE_LAYERS)
+ * @param {boolean} [opts.claimFocus=false]    this surface is on top: cover every lower conversation while mounted
  * @param {boolean} opts.loading   a reply is in flight
  * @param {boolean} opts.speaking  the other side's voice is playing
  * @param {(h: {gesture: boolean, watch: boolean, isWatching: () => boolean, onResult: Function, onError: Function, onEnd: Function}) => void} opts.listen
@@ -144,6 +170,8 @@ export function useTurnEngine({
     mode = 'handsFree',
     interruptible = true,
     autoStart = false,
+    ready = true,
+    layer = 'chat',
     claimFocus = false,
     loading,
     speaking,
@@ -156,13 +184,15 @@ export function useTurnEngine({
     onPaused,
     onNoSpeech,
     silenceMs = END_OF_TURN_SILENCE_MS,
+    endGraceMs = STOP_END_GRACE_MS,
     maxEmptyTurns = MAX_EMPTY_AUTO_TURNS,
 }) {
     // The claim is taken before this conversation's own creation number, so
     // a surface never covers itself.
-    useVoiceFocus(claimFocus);
+    const level = layerOf(layer);
+    useVoiceFocus(claimFocus, level);
     const [seq] = useState(() => ++creationSeq);
-    const [covered, setCovered] = useState(() => isCovered(seq));
+    const [covered, setCovered] = useState(() => isCovered(level, seq));
     const coveredRef = useRef(covered);
     const floorId = useId();
     const [phase, setPhase] = useState(initialHandsFreeState.phase);
@@ -260,6 +290,19 @@ export function useTurnEngine({
                 );
                 break;
             }
+            case 'awaitEnd': {
+                // A tapped-off turn waits for the recogniser's end; this
+                // deadline sends what was heard if it never comes. It shares
+                // the silence timer, so clearSilence (every commit, suspend,
+                // disable) cancels it.
+                clearTimeout(silenceTimerRef.current);
+                const turn = state.turn;
+                silenceTimerRef.current = setTimeout(
+                    () => dispatchRef.current?.({ type: 'END_TIMEOUT', turn }),
+                    endGraceMs,
+                );
+                break;
+            }
             case 'clearSilence':
                 clearTimeout(watchTimerRef.current);
                 clearTimeout(silenceTimerRef.current);
@@ -280,7 +323,7 @@ export function useTurnEngine({
             default:
                 break;
         }
-    }, [deliver, silenceMs, floorId]);
+    }, [deliver, silenceMs, endGraceMs, floorId]);
 
     const dispatch = useCallback((event) => {
         // Covered by a surface on top: nothing may open the mic.
@@ -303,7 +346,7 @@ export function useTurnEngine({
     // release leaves it idle until its own tap.
     useEffect(() => {
         const check = () => {
-            const now = isCovered(seq);
+            const now = isCovered(level, seq);
             const was = coveredRef.current;
             coveredRef.current = now;
             setCovered(now);
@@ -312,7 +355,7 @@ export function useTurnEngine({
         focus.listeners.add(check);
         check();
         return () => { focus.listeners.delete(check); };
-    }, [seq]);
+    }, [seq, level]);
 
     // Another conversation taking the recogniser suspends this one.
     useEffect(() => {
@@ -341,14 +384,31 @@ export function useTurnEngine({
     }, [speaking, dispatch]);
 
     // Hands-free surfaces that open the mic by themselves (a connected call).
+    // Becoming enabled ARMS one automatic start; it fires as soon as it is
+    // possible — the language known (`ready`), nothing loading or speaking,
+    // not covered — and is then spent. A call that connects before the voice
+    // settings arrive, or while a reply is still loading, used to skip its
+    // start for good (Codex review 2026-11-02). Spent also means a learner
+    // who tapped to stop is never reopened behind their back; being covered
+    // disarms it (a released claim waits for a tap, like everywhere else).
     // Read through refs: the ENABLE above has just run in this same commit.
-    // Only on the moment it becomes possible — a learner who tapped to stop
-    // is not reopened behind their back.
+    const autoArmedRef = useRef(false);
     useEffect(() => {
-        if (!enabled || !autoStart) return;
-        if (loadingRef.current || speakingRef.current || stateRef.current.phase !== 'idle') return;
+        autoArmedRef.current = Boolean(enabled && autoStart);
+    }, [enabled, autoStart]);
+    useEffect(() => {
+        if (!autoArmedRef.current) return;
+        const now = stateRef.current.phase;
+        if (now === 'off') return;
+        if (covered || now !== 'idle') {
+            // Covered, or the learner already took a turn: never auto-start.
+            autoArmedRef.current = false;
+            return;
+        }
+        if (!ready || loading || speaking) return;
+        autoArmedRef.current = false;
         dispatch({ type: 'AUTO_START' });
-    }, [enabled, autoStart, dispatch]);
+    }, [enabled, autoStart, ready, loading, speaking, covered, phase, dispatch]);
 
     // Deferred send: deliver once the in-flight turn has finished.
     useEffect(() => {
@@ -408,8 +468,10 @@ export function useTurnEngine({
  * @param {() => string} [opts.getSpokenText]  what the other side is saying (hands-free echo rejection)
  * @param {boolean} [opts.interruptible=true]  the learner may cut the other side off
  * @param {boolean} [opts.autoStart=false]     open the mic without a tap when the surface becomes ready
+ *        (waits for `lang` and for nothing to be loading or speaking)
+ * @param {'chat'|'room'|'phone'|number} [opts.layer='chat']  where the surface sits (VOICE_LAYERS)
  * @param {boolean} [opts.claimFocus=false]    the surface sits on top of others (a call screen):
- *        every conversation created before it is suspended while it is mounted
+ *        every conversation on a lower layer is suspended while it is mounted
  * @param {() => void} [opts.onTurnStart]  a push-to-talk turn started from a gesture (Oyon voice measurement)
  * @param {(code: string) => void} [opts.onError]  a recogniser problem worth telling the learner
  *        ('not-allowed', 'network', 'unsupported', 'no-language', …; never 'aborted',
@@ -432,6 +494,7 @@ export function useVoiceConversation({
     getSpokenText,
     interruptible = true,
     autoStart = false,
+    layer = 'chat',
     claimFocus = false,
     onTurnStart,
     onError,
@@ -494,6 +557,8 @@ export function useVoiceConversation({
         mode,
         interruptible,
         autoStart,
+        ready: Boolean(lang),
+        layer,
         claimFocus,
         loading,
         speaking,

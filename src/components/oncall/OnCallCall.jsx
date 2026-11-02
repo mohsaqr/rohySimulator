@@ -171,8 +171,11 @@ export default function OnCallCall({ agent, reachability, pagingNow, now, callId
         // Hands-free: the mic opens when the specialist picks up.
         autoStart: talkMode === 'handsFree',
         // The call screen is on top from the moment it opens, ringing
-        // included: the chat underneath must not hear what is said to the
-        // phone (it is suspended until its own next tap).
+        // included: the chat underneath — and the Bedside room, even one
+        // entered during the call — must not hear what is said to the phone
+        // (they are suspended until their own next tap). The phone's layer
+        // is the top one, so nothing opened beneath it can suspend it.
+        layer: 'phone',
         claimFocus: true,
         send: (text) => (endingRef.current ? undefined : sendTurn(text)),
         cancelSpeech: () => {
