@@ -248,12 +248,62 @@ afterAll(() => server.close());
 let VoiceService;
 let auditionWirePayload;
 let getRecentTtsRequests;
+const recognisers = [];
+const originalSpeechRecognition = window.SpeechRecognition;
+class TestRecognition {
+    constructor() {
+        this.start = vi.fn();
+        this.stop = vi.fn();
+        recognisers.push(this);
+    }
+}
 
 beforeAll(async () => {
+    window.SpeechRecognition = TestRecognition;
     const mod = await import('./voiceService.js');
     VoiceService = mod.VoiceService;
     auditionWirePayload = mod.auditionWirePayload;
     getRecentTtsRequests = mod.getRecentTtsRequests;
+});
+afterAll(() => {
+    if (originalSpeechRecognition === undefined) delete window.SpeechRecognition;
+    else window.SpeechRecognition = originalSpeechRecognition;
+});
+
+describe('voiceService — recogniser ownership and transcripts', () => {
+    afterEach(() => VoiceService.stopListening());
+
+    // Regression lock: (c) a late watcher onend must not orphan its replacement and make stopListening a no-op.
+    it('stops the replacement even after the previous recogniser ends late', () => {
+        const onEnd = vi.fn();
+        VoiceService.startListening({ lang: 'en-US', onEnd });
+        const old = recognisers.at(-1);
+        VoiceService.startListening({ lang: 'en-US' });
+        const current = recognisers.at(-1);
+        old.onend();
+        VoiceService.stopListening();
+        expect(old.stop).toHaveBeenCalledTimes(1);
+        expect(current.stop).toHaveBeenCalledTimes(1);
+        expect(onEnd).toHaveBeenCalledTimes(1);
+    });
+
+    // Regression lock: cumulative Chrome result snapshots can revise a final and omit spaces between final segments.
+    it('rebuilds finals without duplication and preserves unchanged interim segments', () => {
+        const onResult = vi.fn();
+        const onEnd = vi.fn();
+        VoiceService.startListening({ lang: 'en-US', onResult, onEnd });
+        const rec = recognisers.at(-1);
+        expect(rec.continuous).toBe(true);
+        expect(rec.interimResults).toBe(true);
+        const result = (text, isFinal) => Object.assign([{ transcript: text }], { isFinal });
+        rec.onresult({ resultIndex: 0, results: [result('my chest', true)] });
+        rec.onresult({ resultIndex: 0, results: [result('my arm', true), result('hurts', true)] });
+        expect(onResult).toHaveBeenLastCalledWith({ final: 'my arm hurts', interim: '', isFinal: true });
+        rec.onresult({ resultIndex: 3, results: [result('my arm', true), result('hurts', true), result('since', false), result('yesterday', false)] });
+        expect(onResult).toHaveBeenLastCalledWith({ final: 'my arm hurts', interim: 'since yesterday', isFinal: true });
+        rec.onend();
+        expect(onEnd).toHaveBeenCalledWith({ final: 'my arm hurts' });
+    });
 });
 
 beforeEach(() => {

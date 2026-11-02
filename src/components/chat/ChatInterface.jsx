@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, Send, Bot, User as UserIcon, Loader2, Stethoscope, Phone, Clock, Users, Mic, MicOff, Volume2, Eye, EyeOff, AudioLines } from 'lucide-react';
 import { oyonClientLog } from '../oyon/clientLogger';
 import { LLMService } from '../../services/llmService';
 import { AgentService } from '../../services/AgentService';
@@ -20,7 +20,7 @@ import { createSpeechChunker } from '../../utils/sentenceSplit';
 import { resolveVoice, voiceMatchesLanguage } from '../../utils/voiceResolver';
 import { useToast } from '../../contexts/ToastContext';
 import { useNotifications } from '../../notifications/useNotifications';
-import { SEVERITY } from '../../notifications/types';
+import { SEVERITY, SOURCES } from '../../notifications/types';
 import { alarmSpeechLine } from './alarmSpeechLines';
 import { usePatientConversation } from '../../contexts/PatientConversationContext';
 import { resolvePatientTemplate } from '../../utils/patientTemplate';
@@ -28,6 +28,7 @@ import { getAffectSnapshot } from '../../utils/latestAffect';
 import { buildAffectSignal } from '../../utils/affectSignal';
 import { pickWaitPhase, formatRemaining, waitProgressPct } from '../../utils/agentWait';
 import SubtitleBand from '../voice/SubtitleBand';
+import { useHandsFreeConversation } from '../../hooks/useHandsFreeConversation';
 import { isSpecialistType } from '../../../server/shared/specialties.js';
 
 // Lazy-loaded so the ~270 KB gzipped Three.js / drei / r3f bundle is fetched
@@ -252,6 +253,14 @@ function notifySubstitutionOnce(toast, t, r) {
     toast?.info?.(t('voice_default_not_configured', { voice: r.file }));
 }
 
+// Hands-free status → chat-namespace key. Static keys so i18next-parser sees them.
+const HANDS_FREE_STATUS_KEYS = {
+    idle: 'hands_free_tap_to_start',
+    listening: 'hands_free_listening',
+    speaking: 'hands_free_patient_speaking',
+    thinking: 'hands_free_thinking',
+};
+
 export default function ChatInterface({ activeCase, onSessionStart, restoredSessionId, sessionStartTime, personaRefreshCounter = 0, signalCapture = null, caseEnded = false }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -270,7 +279,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     const { caseLanguage } = useLanguage();
     const { t } = useTranslation('chat');
     const toast = useToast();
-    const { subscribe, prefs } = useNotifications();
+    const { subscribe, prefs, setPrefs, notify } = useNotifications();
 
     // Voice-mode transcript curtain. The transcript is the textual log of
     // what was said. Showing it during a real patient interaction feels
@@ -328,6 +337,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // turn THROUGH the same handler. Inert when no provider is mounted.
     const conversationBus = usePatientConversation();
     const sendRef = useRef(null);
+    // The sentences handed to the patient's current speech session, i.e. what
+    // the patient is saying. Hands-free barge-in compares what the
+    // recogniser hears against it to tell echo from the learner.
+    const patientSpokenTextRef = useRef('');
     // One patient turn at a time. The chat's own controls are disabled
     // while `loading`, but a turn arriving through the bus (a second
     // recognised utterance at the bedside) has no such guard: two turns in
@@ -1010,15 +1023,23 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
     // plugin room passes its id through the conversation bus) and is stored
     // with the interaction. `meta.spoken` forces a voiced reply for a turn
     // that was spoken, whatever the chat's own voice mode says.
+    //
+    // `meta.onReplyDone` (hands-free conversation only) is called exactly once
+    // when the reply is over — after its audio has finished playing, or at
+    // once when nothing was sent or nothing is spoken.
     const handleSendToPatient = async (overrideText, meta = {}) => {
         const text = (overrideText ?? input).trim();
-        if (!text) return;
+        if (!text) {
+            meta.onReplyDone?.();
+            return;
+        }
         const source = meta.source ?? 'typed';
         // A room-level control is authoritative in both directions. `true`
         // forces speech, `false` forces silence, and only an omitted value
         // falls back to the chat room's own voice-mode switch.
         const wantSpeech = meta.spoken === undefined ? voiceMode : meta.spoken === true;
         if (turnInFlightRef.current) {
+            meta.onReplyDone?.();
             // A caller that came through the bus gets told; the chat's own
             // path is already gated by `loading` and stays silent.
             if (source !== 'typed' && source !== 'voice') {
@@ -1027,12 +1048,19 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
             return;
         }
         turnInFlightRef.current = true;
+        let speechDone;
         try {
-            await runPatientTurn(text, source, wantSpeech);
+            // The turn is over when the text is in; the audio may still
+            // play. `spoken` is wrapped so this await does not wait for it.
+            speechDone = (await runPatientTurn(text, source, wantSpeech))?.spoken;
         } finally {
             turnInFlightRef.current = false;
+            // Publish readiness only after the synchronous guard is released:
+            // a hands-free turn queued during streaming must be accepted.
+            setLoading(false);
             // The reply is over, spoken or not: nothing is being voiced now.
             conversationBus.publish({ voiced: null });
+            if (meta.onReplyDone) Promise.resolve(speechDone).then(meta.onReplyDone, meta.onReplyDone);
         }
     };
 
@@ -1122,6 +1150,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                     });
                     toast?.warning?.(t('voice_language_mismatch', { voice: r.file, language: caseLanguage }));
                 }
+                patientSpokenTextRef.current = '';
                 speech = VoiceService.beginSpeechSession({
                     voice: r.file,
                     rate: r.rate,
@@ -1198,7 +1227,10 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         if (!speech || voiceErrored) return;
                         for (const s of speechChunker.push(delta)) {
                             const spoken = sanitizeResponseText(s).trim();
-                            if (spoken) speech.enqueue(spoken);
+                            if (spoken) {
+                                patientSpokenTextRef.current += ` ${spoken}`;
+                                speech.enqueue(spoken);
+                            }
                         }
                     }
                 }
@@ -1230,8 +1262,6 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         const loggedText = isError ? finalDisplay : responseText;
         EventLogger.messageReceived(loggedText, source === 'typed' || source === 'voice' ? COMPONENTS.CHAT_INTERFACE : source, { objectId: 'patient', objectName: patientDisplayName, context: { source, error: Boolean(isError) } });
         obtained('history', text, loggedText);
-        setLoading(false);
-
         if (speech) {
             // Flush trailing partial sentence (e.g. an unterminated final clause)
             // and surface any error state to skip TTS for error responses.
@@ -1239,10 +1269,17 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 speech.cancel();
             } else {
                 const tail = sanitizeResponseText(speechChunker.flush()).trim();
-                if (tail) speech.enqueue(tail);
-                speech.flush();
+                if (tail) {
+                    patientSpokenTextRef.current += ` ${tail}`;
+                    speech.enqueue(tail);
+                }
+                // `spoken` resolves when the audio has drained (or was
+                // cancelled); only hands-free conversation waits on it. In an
+                // object, so awaiting this async function does not adopt it.
+                return { spoken: speech.flush() };
             }
         }
+        return undefined;
     };
     // Written in an effect, not during render: a render React throws away
     // must not leave the ref pointing at its handler.
@@ -1405,20 +1442,176 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [speaking]);
 
+    // Session language wins over the platform-wide STT locale: a student
+    // in an Italian session speaks Italian into the mic regardless of the
+    // platform default. English sessions keep the platform setting, so
+    // English-only deployments see zero behaviour change.
+    const resolveSttLang = () => (caseLanguage !== DEFAULT_LANGUAGE
+        ? sttLocaleFor(caseLanguage)
+        : voiceSettings?.stt_language);
+
+    // Make the silent-immediate-return symptom debuggable. The browser fires
+    // deterministic error codes ('not-allowed', 'service-not-allowed',
+    // 'network', 'audio-capture', 'no-speech', 'aborted') — surface them
+    // verbatim so the admin can tell HTTP-origin vs. mic-permission vs. firewall.
+    const toastSttError = (code) => {
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+            toast?.error?.(t('mic_blocked'));
+        } else if (code === 'network') {
+            toast?.error?.(t('stt_network_error'));
+        } else if (code === 'audio-capture') {
+            toast?.error?.(t('no_microphone'));
+        } else if (code === 'no-speech') {
+            toast?.error?.(t('no_speech_heard'));
+        } else if (code === 'aborted') {
+            // Self-aborted (we called stopListening); not a user-facing error.
+        } else {
+            toast?.error?.(t('stt_error', { code }));
+        }
+    };
+
+    // Oyon voice measurement for this turn. Started only from a click/key
+    // handler, never from an effect or a timer: Chrome suspends an
+    // AudioContext created outside a user gesture (a suspended context
+    // delivers no frames), and Oyon's own activation gate requires a
+    // deliberate per-turn learner action (`userAction: true`). So a turn the
+    // hands-free conversation is NOT measured, including its gesture turn:
+    // Oyon opens getUserMedia, which leaves Web Speech deaf on macOS Chrome.
+    // `signalCapture.voice` is null unless the tenant enabled voice AND the
+    // learner accepted consent v3. Never allowed to block or delay speech
+    // recognition. The turn is ended by the `listening` effect above,
+    // whichever way listening stops.
+    const startOyonVoiceTurn = () => {
+        const voice = signalCapture?.voice;
+        if (!voice) return;
+        voice.startTurn({ userAction: true, targetKind: 'voice_control', targetId: 'patient' })
+            .then((result) => {
+                if (result && result.ok === false) {
+                    oyonClientLog('warn', 'voice turn refused', { reason: result.reason || null });
+                }
+            })
+            .catch((err) => oyonClientLog('warn', 'voice turn failed to start', {
+                error: err?.message || String(err),
+            }));
+    };
+
+    // Hands-free conversation (learner preference, off by default): the turn
+    // ends on a pause, the mic reopens after the patient answers, and the
+    // learner can talk over the patient to interrupt. Off → push-to-talk below
+    // runs exactly as before. The recogniser is the ONLY capture it uses:
+    // barge-in is read from the recogniser's own text while the patient
+    // speaks (see src/hooks/echoFilter.js for why there is no second mic).
+    const handsFreeEnabled = Boolean(activeCase)
+        && voiceMode
+        && activeTab === 'patient'
+        && prefs.handsFreeConversation === true
+        && !caseEnded
+        && Boolean(voiceSettings?.voice_mode_enabled)
+        && VoiceService.isSttSupported();
+    // Bumped per hands-free recogniser so a stopped recogniser's late onend
+    // cannot flip `listening` off under the one that replaced it.
+    const handsFreeRecRef = useRef(0);
+    const handsFree = useHandsFreeConversation({
+        enabled: handsFreeEnabled,
+        loading,
+        speaking,
+        listen: ({ watch, isWatching, onResult, onError, onEnd }) => {
+            const sttLang = resolveSttLang();
+            if (!VoiceService.isSttSupported() || !sttLang) {
+                onError('unsupported');
+                return;
+            }
+            const rec = ++handsFreeRecRef.current;
+            const current = () => rec === handsFreeRecRef.current;
+            // A watcher runs under the patient's voice: it must not silence
+            // the patient or look like the learner's turn.
+            if (!watch) {
+                VoiceService.cancelSpeech();
+                setSpeaking(false);
+                setVisemes({ viseme_sil: 1 });
+                setListening(true);
+            }
+            // No Oyon voice.startTurn here, even for a tap: hands-free must
+            // keep SpeechRecognition as its sole microphone capture.
+            VoiceService.startListening({
+                lang: sttLang,
+                ...(watch ? { purpose: 'watch' } : {}),
+                onResult: ({ final, interim }) => onResult({ final, interim }),
+                onError: (err) => {
+                    const code = err?.message || 'unknown';
+                    console.warn('STT error:', code);
+                    // A watcher fails silently (Chrome ends it with
+                    // 'no-speech' during every long reply); 'no-speech' is
+                    // routine for a listening turn too — repeated empty
+                    // turns end in one "paused" notice instead of a toast.
+                    if (current() && !isWatching()) {
+                        if (code !== 'no-speech') toastSttError(code);
+                        setListening(false);
+                    }
+                    onError(code);
+                },
+                onEnd: ({ final }) => {
+                    if (current()) setListening(false);
+                    onEnd(final);
+                },
+            });
+        },
+        stopListening: () => {
+            // The silence deadline commits immediately; Chrome's onend can
+            // arrive much later. Invalidate its UI callbacks before stop().
+            handsFreeRecRef.current += 1;
+            setListening(false);
+            VoiceService.stopListening();
+        },
+        cancelSpeech: () => {
+            VoiceService.cancelSpeech();
+            setSpeaking(false);
+            setVisemes({ viseme_sil: 1 });
+        },
+        // Through sendRef: a deferred send must run with the latest
+        // handler (current messages), not the one from the render that heard it.
+        send: (text) => new Promise((resolve) => {
+            const sendNow = sendRef.current;
+            if (!sendNow) {
+                resolve();
+                return;
+            }
+            Promise.resolve(sendNow(text, { source: 'voice', onReplyDone: resolve }))
+                .catch((err) => {
+                    console.warn('[hands-free] patient turn failed:', err?.message || err);
+                    resolve();
+                });
+        }),
+        getSpokenText: () => patientSpokenTextRef.current,
+        onTranscript: setInput,
+        onPaused: () => notify({
+            source: SOURCES.USER,
+            severity: SEVERITY.INFO,
+            key: 'hands-free-paused',
+            message: t('hands_free_paused'),
+        }),
+    });
+    // An interruption turns the watching recogniser into the learner's turn
+    // without restarting it, so the listening UI follows the phase.
+    useEffect(() => {
+        if (handsFree.phase === 'listening') setListening(true);
+    }, [handsFree.phase, setListening]);
+
     const startVoiceTurn = () => {
         if (!VoiceService.isSttSupported()) {
             toast?.error?.(t('stt_not_supported_browser'));
             return;
         }
-        // Session language wins over the platform-wide STT locale: a student
-        // in an Italian session speaks Italian into the mic regardless of the
-        // platform default. English sessions keep the platform setting, so
-        // English-only deployments see zero behaviour change.
-        const sttLang = caseLanguage !== DEFAULT_LANGUAGE
-            ? sttLocaleFor(caseLanguage)
-            : voiceSettings?.stt_language;
+        const sttLang = resolveSttLang();
         if (!sttLang) {
             toast?.error?.(t('no_stt_language'));
+            return;
+        }
+        // Hands-free: the tap ends the current turn now, starts the first
+        // turn, or interrupts the patient. A push-to-talk turn still running from
+        // before hands-free was switched on is stopped the old way.
+        if (handsFree.active && !(listening && handsFree.phase === 'idle')) {
+            handsFree.tap();
             return;
         }
         if (listening) {
@@ -1431,25 +1624,7 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
         setVisemes({ viseme_sil: 1 });
         setListening(true);
 
-        // Oyon voice measurement for this turn. Started HERE, inside the click
-        // handler, not in an effect: Chrome suspends an AudioContext created
-        // outside a user gesture, and a suspended context delivers no frames —
-        // every voice window would be empty. `signalCapture.voice` is null unless
-        // the tenant enabled voice AND the learner accepted consent v3. Never
-        // allowed to block or delay speech recognition. The turn is ended by the
-        // `listening` effect below, whichever way listening stops.
-        const voice = signalCapture?.voice;
-        if (voice) {
-            voice.startTurn({ userAction: true, targetKind: 'voice_control', targetId: 'patient' })
-                .then((result) => {
-                    if (result && result.ok === false) {
-                        oyonClientLog('warn', 'voice turn refused', { reason: result.reason || null });
-                    }
-                })
-                .catch((err) => oyonClientLog('warn', 'voice turn failed to start', {
-                    error: err?.message || String(err),
-                }));
-        }
+        startOyonVoiceTurn();
 
         let sawError = false;
 
@@ -1463,27 +1638,9 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 setInput(interim || final);
             },
             onError: (err) => {
-                // Make the silent-immediate-return symptom debuggable. The
-                // browser fires deterministic error codes ('not-allowed',
-                // 'service-not-allowed', 'network', 'audio-capture',
-                // 'no-speech', 'aborted') — surface them verbatim so the
-                // admin can tell HTTP-origin vs. mic-permission vs. firewall.
                 sawError = true;
                 console.warn('STT error:', err.message);
-                const code = err?.message || 'unknown';
-                if (code === 'not-allowed' || code === 'service-not-allowed') {
-                    toast?.error?.(t('mic_blocked'));
-                } else if (code === 'network') {
-                    toast?.error?.(t('stt_network_error'));
-                } else if (code === 'audio-capture') {
-                    toast?.error?.(t('no_microphone'));
-                } else if (code === 'no-speech') {
-                    toast?.error?.(t('no_speech_heard'));
-                } else if (code === 'aborted') {
-                    // Self-aborted (we called stopListening); not a user-facing error.
-                } else {
-                    toast?.error?.(t('stt_error', { code }));
-                }
+                toastSttError(err?.message || 'unknown');
                 setListening(false);
             },
             onEnd: ({ final }) => {
@@ -1683,6 +1840,23 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                 </div>
                 {voiceModeAvailable && (
                     <div className="ml-auto mb-1 flex shrink-0 items-center gap-1.5">
+                        {voiceMode && activeTab === 'patient' && sttSupported && (
+                            <button
+                                type="button"
+                                data-testid="hands-free-toggle"
+                                aria-pressed={prefs.handsFreeConversation === true}
+                                onClick={() => setPrefs({ handsFreeConversation: prefs.handsFreeConversation !== true })}
+                                title={prefs.handsFreeConversation === true ? t('hands_free_title_on') : t('hands_free_title_off')}
+                                className={`px-2.5 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                                    prefs.handsFreeConversation === true
+                                        ? 'rohy-voice-primary'
+                                        : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                                }`}
+                            >
+                                <AudioLines className="w-3.5 h-3.5" aria-hidden="true" />
+                                {t('hands_free')}
+                            </button>
+                        )}
                         {voiceMode && (
                             <button
                                 onClick={() => setShowTranscript(s => !s)}
@@ -2049,12 +2223,15 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                         <button
                             type="button"
                             onClick={startVoiceTurn}
-                            disabled={loading || !sttSupported || speaking || caseEnded}
+                            disabled={handsFree.active
+                                // Hands-free: a tap also interrupts the patient.
+                                ? (!sttSupported || caseEnded || (loading && handsFree.phase !== 'speaking'))
+                                : (loading || !sttSupported || speaking || caseEnded)}
                             className={`w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
                                 listening
                                     ? 'bg-green-600 hover:bg-green-500 text-white'
                                     : speaking
-                                    ? 'bg-blue-700 text-white cursor-not-allowed'
+                                    ? (handsFree.active ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-blue-700 text-white cursor-not-allowed')
                                     : 'rohy-voice-primary disabled:bg-neutral-700 disabled:text-neutral-500'
                             }`}
                         >
@@ -2085,9 +2262,20 @@ export default function ChatInterface({ activeCase, onSessionStart, restoredSess
                                 </>
                             )}
                         </button>
+                        {handsFree.active && HANDS_FREE_STATUS_KEYS[handsFree.status] && (
+                            <div
+                                data-testid="hands-free-status"
+                                data-status={handsFree.status}
+                                role="status"
+                                aria-live="polite"
+                                className="text-[11px] text-emerald-300/90 text-center select-none"
+                            >
+                                {t(HANDS_FREE_STATUS_KEYS[handsFree.status])}
+                            </div>
+                        )}
                         {input ? (
                             <div className="text-xs text-neutral-500 px-1 italic truncate">{input}</div>
-                        ) : (!listening && !speaking && !loading && sttSupported && (
+                        ) : (!handsFree.active && !listening && !speaking && !loading && sttSupported && (
                             <div className="text-[11px] text-neutral-500 text-center select-none">{t('talk_hint_space')}</div>
                         ))}
                     </div>

@@ -290,12 +290,12 @@ class EventLoggerService {
     messageSent(content, c, extra = {}) { this.log(VERBS.SENT_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'user', ...extra }); }
     messageReceived(content, c, extra = {}) { this.log(VERBS.RECEIVED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c, messageContent: content, messageRole: 'assistant', ...extra }); }
     messageCopied(c) { this.log(VERBS.COPIED_MESSAGE, OBJECT_TYPES.CHAT_MESSAGE, { component: c }); }
-    sttResult({ finalLength = 0, interimLength = 0, isFinal = false, lang = null } = {}) {
+    sttResult({ finalLength = 0, interimLength = 0, isFinal = false, lang = null, purpose } = {}) {
         this.log(VERBS.RECOGNIZED_SPEECH, OBJECT_TYPES.SPEECH, {
             objectId: 'speech_recognition',
             objectName: 'Speech recognition result',
             component: 'VoiceService',
-            context: { finalLength, interimLength, isFinal, lang },
+            context: { finalLength, interimLength, isFinal, lang, ...(purpose ? { purpose } : {}) },
         });
     }
     sttError(message, ctx = null) {

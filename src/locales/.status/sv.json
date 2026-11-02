@@ -19179,6 +19179,86 @@
     "reviewer": null,
     "risk": "clinical"
   },
+  "chat.hands_free": {
+    "src": "12096979c20b",
+    "tgt": "0dd14a671062",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_listening": {
+    "src": "bbb4106e8144",
+    "tgt": "a22df28a766a",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_patient_speaking": {
+    "src": "37ef7a13c3fc",
+    "tgt": "bd74b85d0da3",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_paused": {
+    "src": "aee80b7e824e",
+    "tgt": "92a07a12b643",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_tap_to_start": {
+    "src": "42891518c870",
+    "tgt": "5e117d8ed207",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_thinking": {
+    "src": "a02f1cea3c1d",
+    "tgt": "8a31169d3121",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_title_off": {
+    "src": "bbd879ad4c19",
+    "tgt": "edb081cf31b1",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
+  "chat.hands_free_title_on": {
+    "src": "1dcdc49d5281",
+    "tgt": "bf22bf25f91f",
+    "state": "machine",
+    "origin": "machine",
+    "locked": false,
+    "reviewed_at": null,
+    "reviewer": null,
+    "risk": "clinical"
+  },
   "chat.hide": {
     "src": "ac20a57bfde0",
     "tgt": "868e94f221d4",

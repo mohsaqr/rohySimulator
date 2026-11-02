@@ -176,6 +176,15 @@ describe('eventLogger — xAPI verb mapping (5+ representative verbs)', () => {
             voice: 'voice-a',
             provider: 'piper',
         });
+        // No purpose given: the context carries no purpose key at all.
+        expect(payloads.find(p => p.data.verb === 'RECOGNIZED_SPEECH').data.context).not.toHaveProperty('purpose');
+    });
+
+    it('tags speech-recognition results with their purpose (hands-free watcher)', async () => {
+        const notify = mountCenter();
+        const { default: log } = await loadFreshLogger();
+        log.sttResult({ finalLength: 3, interimLength: 0, isFinal: true, lang: 'en-US', purpose: 'watch' });
+        expect(notify.mock.calls[0][0].data.context).toMatchObject({ lang: 'en-US', purpose: 'watch' });
     });
 });
 

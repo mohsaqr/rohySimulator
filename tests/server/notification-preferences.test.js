@@ -57,6 +57,13 @@ describe('notification preferences account persistence', () => {
         expect(JSON.parse((await common.json()).notification_settings)).toMatchObject({ avatarAlarmSpeechEnabled: false, dnd: true });
     });
 
+    // Regression lock: the hands-free conversation switch was dropped by the server whitelist, so it lived only in one browser's localStorage (v3.1.1)
+    it('persists the hands-free conversation preference', async () => {
+        expect((await request('notification-prefs', { prefs: { handsFreeConversation: true } })).status).toBe(200);
+        const result = await request('notification-prefs');
+        expect((await result.json()).prefs).toEqual({ handsFreeConversation: true });
+    });
+
     it('repairs a historical notification-first row assigned to the default tenant', async () => {
         await run(db, 'UPDATE user_preferences SET tenant_id = 1 WHERE user_id = ?', [userId]);
         expect((await request('notification-prefs')).status).toBe(200);

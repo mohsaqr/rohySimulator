@@ -629,7 +629,11 @@ export const VoiceService = {
         return !!SR;
     },
 
-    startListening({ lang, onResult, onError, onEnd, continuous = true }) {
+    // `purpose` (optional) is recorded with the STT learning events: the
+    // hands-free conversation passes 'watch' for the recogniser that runs
+    // under the patient's voice, so its routine no-speech ends and echo
+    // results are not read as the learner's failed or spoken turns.
+    startListening({ lang, onResult, onError, onEnd, continuous = true, purpose }) {
         if (!SR) {
             onError?.(new Error('SpeechRecognition not supported in this browser'));
             return;
@@ -653,11 +657,16 @@ export const VoiceService = {
         let finalT = '';
         rec.onresult = (e) => {
             let interim = '';
-            for (let i = e.resultIndex; i < e.results.length; i++) {
+            const finals = [];
+            for (let i = 0; i < e.results.length; i++) {
                 const r = e.results[i];
-                if (r.isFinal) finalT += r[0].transcript;
-                else interim += r[0].transcript;
+                if (r.isFinal) finals.push(r[0].transcript.trim());
+                else interim += ` ${r[0].transcript.trim()}`;
             }
+            // Results is the current snapshot, not a stream of append-only
+            // deltas. Rebuild it so revised finals neither duplicate words
+            // nor glue consecutive segments together without a space.
+            finalT = finals.join(' ');
             onResult?.({
                 final: finalT.trim(),
                 interim: interim.trim(),
@@ -668,15 +677,19 @@ export const VoiceService = {
                 interimLength: interim.trim().length,
                 isFinal: !!finalT,
                 lang: rec.lang,
+                ...(purpose ? { purpose } : {}),
             });
         };
         rec.onerror = (e) => {
             const message = e.error || 'speech recognition error';
-            EventLogger.sttError(message, { lang: rec.lang });
+            EventLogger.sttError(message, { lang: rec.lang, ...(purpose ? { purpose } : {}) });
             onError?.(new Error(message));
         };
         rec.onend = () => {
-            _recognition = null;
+            // A stopped watcher can end after its replacement has started.
+            // It must never orphan that replacement (stopListening would
+            // then do nothing, leaving a heard turn waiting forever).
+            if (_recognition === rec) _recognition = null;
             onEnd?.({ final: finalT.trim() });
         };
 
@@ -684,15 +697,16 @@ export const VoiceService = {
         try {
             rec.start();
         } catch (err) {
-            _recognition = null;
+            if (_recognition === rec) _recognition = null;
             onError?.(err);
         }
     },
 
     stopListening() {
         if (_recognition) {
-            try { _recognition.stop(); } catch { /* noop */ }
+            const rec = _recognition;
             _recognition = null;
+            try { rec.stop(); } catch { /* noop */ }
         }
     },
 

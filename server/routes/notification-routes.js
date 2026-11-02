@@ -58,6 +58,7 @@ router.get('/notification-prefs', authenticateToken, (req, res) => {
 const ALLOWED_PREF_KEYS = new Set([
     'dnd', 'pausedUntil', 'minSeverity',
     'mutedSources', 'audioMuted', 'bannerMuted', 'consoleMuted', 'avatarAlarmSpeechEnabled',
+    'handsFreeConversation',
     'snoozeDuration',
     'toastDedupeWindowMs', 'toastMaxVisible',
     'telemetryBatchSize', 'telemetryFlushIntervalMs',

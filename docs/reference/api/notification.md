@@ -10,4 +10,4 @@ model.
 | Method | Path | Auth | Source |
 |--------|------|------|--------|
 | `GET` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:38` |
-| `PUT` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:68` |
+| `PUT` | `/api/notification-prefs` | `authenticateToken` | `server/routes/notification-routes.js:69` |

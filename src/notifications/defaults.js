@@ -94,6 +94,11 @@ export const DEFAULT_PREFS = {
     bannerMuted: false,
     consoleMuted: false, // false in dev = noisy console. true = silent.
     avatarAlarmSpeechEnabled: true,
+    // Hands-free voice conversation with the patient (end of turn on a
+    // pause, mic reopens after the reply, talk to interrupt). Off by default.
+    // PROTOTYPE: the server's /notification-prefs whitelist does not carry
+    // this key yet, so it persists in this browser's localStorage only.
+    handsFreeConversation: false,
 
     // Default snooze duration in minutes when user clicks "Snooze".
     snoozeDuration: 5,

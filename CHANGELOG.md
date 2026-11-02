@@ -9,6 +9,21 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.1.1] — 2026-11-02
+
+### Hands-free voice conversation (learner preference, off by default)
+- Voice mode on the patient tab gains a **Hands-free** switch. With it on, a pause of about 0.9 s ends the learner's
+  turn and sends it, the microphone reopens by itself when the patient finishes, and the learner can interrupt the
+  patient by talking (two new words, or a one-word "stop"/"wait" in any of the eight case languages); a tap still
+  ends or interrupts a turn. Off, push-to-talk and Space work exactly as before. The switch is saved with the
+  learner's preferences on the server.
+- Interruption uses the speech recogniser itself while the patient speaks, and ignores the patient's own voice by
+  comparing what it hears with the text the patient is saying. There is deliberately no second microphone capture:
+  on macOS Chrome an echo-cancelled capture beside the recogniser left it hearing nothing (three live trials).
+- In hands-free mode the Oyon voice measure is not started (it opens a second capture); push-to-talk still starts it.
+- Fix: a message typed while the patient was still speaking was dropped (a regression in the first hands-free draft,
+  never released).
+
 ## [3.1.0] — 2026-11-01
 
 Version 3.1: the rc.89–rc.91 security and consent pass (see those sections below) plus the fixes for every open

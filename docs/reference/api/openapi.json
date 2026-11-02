@@ -9312,7 +9312,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/notification-routes.js:68",
+        "x-rohy-source": "server/routes/notification-routes.js:69",
         "x-rohy-auth": [
           "authenticateToken"
         ],
