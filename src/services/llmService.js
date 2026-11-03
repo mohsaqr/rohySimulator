@@ -4,7 +4,7 @@
  * still benefiting from centralised auth header injection.
  */
 
-import { ApiError, apiFetch, apiPost, apiPut } from './apiClient.js';
+import { ApiError, apiErrorFromResponse, apiFetch, apiPost, apiPut } from './apiClient.js';
 
 /**
  * A failed LLM call. THROWN, never returned.
@@ -39,6 +39,36 @@ export class LLMError extends Error {
         this.meta = meta ?? {};
         if (cause) this.cause = cause;
     }
+}
+
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
+
+/**
+ * An ApiError from /proxy/llm → the LLMError the caller shows. One
+ * classifier for the JSON path and the streaming path; the stream used to
+ * read the body itself and put whatever came back into the bubble, which on
+ * 2026-11-03 was Cloudflare's whole 502 page.
+ *
+ * A gateway status whose body is not the server's JSON (a proxy's HTML page
+ * or plain text) means the server's own answer never arrived: shown as the
+ * translated "service unavailable" line. A JSON error from the server keeps
+ * its text, as before.
+ */
+export function proxyFailure(err) {
+    if (err.status === 429) {
+        console.warn('[LLMService] Rate limit exceeded:', err.body);
+        const resetsAt = err.body?.resetsAt;
+        return new LLMError(
+            `Rate limit exceeded: ${err.message}.${resetsAt ? ` Resets at ${resetsAt}.` : ''}`,
+            { status: 429, cause: err, code: 'rate_limited', meta: { resetsAt: resetsAt || null } }
+        );
+    }
+    const fromGateway = GATEWAY_STATUSES.has(err.status) && (err.body == null || typeof err.body !== 'object');
+    if (err.status === 503 || fromGateway) {
+        return new LLMError(`AI service unavailable: ${err.message || 'unknown'}`, { status: err.status, cause: err, code: 'service_unavailable' });
+    }
+    console.error(`[LLMService] ${err.status} from /proxy/llm:`, err.message);
+    return new LLMError(err.message, { status: err.status, cause: err });
 }
 
 // What the model is sent: role and content, nothing else. The client's
@@ -111,21 +141,7 @@ export const LLMService = {
             return aiContent;
 
         } catch (err) {
-            if (err instanceof ApiError) {
-                if (err.status === 429) {
-                    console.warn('[LLMService] Rate limit exceeded:', err.body);
-                    const resetsAt = err.body?.resetsAt;
-                    throw new LLMError(
-                        `Rate limit exceeded: ${err.message}.${resetsAt ? ` Resets at ${resetsAt}.` : ''}`,
-                        { status: 429, cause: err, code: 'rate_limited', meta: { resetsAt: resetsAt || null } }
-                    );
-                }
-                if (err.status === 503) {
-                    throw new LLMError(`AI service unavailable: ${err.message || 'unknown'}`, { status: 503, cause: err, code: 'service_unavailable' });
-                }
-                console.error(`[LLMService] ${err.status} from /proxy/llm:`, err.message);
-                throw new LLMError(err.message, { status: err.status, cause: err });
-            }
+            if (err instanceof ApiError) throw proxyFailure(err);
             console.error('LLM Error', err);
             throw new LLMError('Could not connect to AI patient. Please check with your administrator.', { cause: err, code: 'cannot_connect' });
         }
@@ -228,11 +244,10 @@ export const LLMService = {
 
             if (!response.ok) {
                 disarmWatchdog();
-                const errText = await response.text();
-                let detail = errText;
-                try { detail = JSON.parse(errText).error || errText; } catch { /* not json */ }
-                console.error(`[LLMService] HTTP ${response.status}:`, detail);
-                throw new LLMError(detail, { status: response.status, detail });
+                // Same reading and the same classification as the JSON path:
+                // a gateway's HTML error page becomes a translated line, not
+                // the page itself in the bubble.
+                throw proxyFailure(await apiErrorFromResponse(response));
             }
             const ctype = response.headers.get('Content-Type') || '';
             if (!ctype.includes('text/event-stream')) {

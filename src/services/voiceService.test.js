@@ -671,6 +671,26 @@ describe('voiceService — sentence fetches run in parallel, playback in order (
         expect(durations()).toEqual([480 / 24000, 1440 / 24000]);
     });
 
+    // Regression lock: a gateway's HTML 502 page does not reach the toast.
+    // It used to be sliced to 200 characters of "<!DOCTYPE html> …"
+    // (production 2026-11-03, Cloudflare replacing the server's JSON 502).
+    it('a gateway HTML 502 page is reported as "Server unavailable", without the HTML', async () => {
+        useTts(async (text) => (text === 'two'
+            ? new HttpResponse('<!DOCTYPE html><html><head><title>lacarm.com | 502: Bad gateway</title></head><body>Bad gateway</body></html>',
+                { status: 502, headers: { 'Content-Type': 'text/html' } })
+            : pcmResponse(SAMPLES[text])));
+        const onError = vi.fn();
+        const session = VoiceService.beginSpeechSession({ voice: 'af_bella', provider: 'kokoro', onError });
+        session.enqueue('one');
+        session.enqueue('two');
+        await session.flush();
+        expect(onError).toHaveBeenCalledTimes(1);
+        const { message } = onError.mock.calls[0][0];
+        expect(message).toMatch(/Server unavailable/);
+        expect(message).toMatch(/502/);
+        expect(message).not.toMatch(/<|DOCTYPE/i);
+    });
+
     it('cancel() aborts every in-flight fetch and nothing is scheduled', async () => {
         const arrived = useTts((_text, request) => new Promise((_, reject) => {
             request.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });

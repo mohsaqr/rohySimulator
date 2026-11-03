@@ -32,7 +32,7 @@
 // and speed do not couple in the browser.
 
 import { Lipsync } from 'wawa-lipsync';
-import { apiFetch } from './apiClient.js';
+import { apiErrorFromResponse, apiFetch } from './apiClient.js';
 import EventLogger from './eventLogger.js';
 import { guessVoiceProvider } from '../../server/shared/voiceIdentity.js';
 
@@ -294,13 +294,14 @@ async function ttsFetch(streaming, body, signal) {
             // instead of just "(502)" — that opaque fallback was masking
             // quota/region/voice failures and leaving users with nothing
             // actionable. Keep the status code in parens for telemetry.
-            let detail = '';
-            try {
-                const j = await res.json();
-                if (j?.error) detail = typeof j.error === 'string' ? j.error : (j.error?.message || JSON.stringify(j.error));
-            } catch {
-                try { detail = (await res.text()).slice(0, 200); } catch { /* nothing usable */ }
-            }
+            // Read through apiClient so a gateway's HTML page (Cloudflare
+            // replaces a 502's JSON) becomes "Server unavailable (…)" instead
+            // of the first 200 characters of <!DOCTYPE html>.
+            const apiErr = await apiErrorFromResponse(res);
+            const jsonError = apiErr.body && typeof apiErr.body === 'object' ? apiErr.body.error : null;
+            const detail = jsonError
+                ? (typeof jsonError === 'string' ? jsonError : (jsonError.message || JSON.stringify(jsonError)))
+                : apiErr.message;
             const msg = detail
                 ? `TTS failed (${res.status}): ${detail}`
                 : `TTS request failed (${res.status})`;

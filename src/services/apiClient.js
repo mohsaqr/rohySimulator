@@ -156,6 +156,22 @@ async function readErrorBody(response) {
     }
 }
 
+/**
+ * The ApiError a failed response stands for, read the same way apiFetch
+ * reads it. For callers that ask for the raw Response (`parseAs:
+ * 'response'`, e.g. a stream) and so get no ApiError of their own: they
+ * must not read the body themselves, because a gateway in front of the
+ * server answers 502/504 with its own HTML page (Cloudflare replaces the
+ * server's JSON), and a raw `response.text()` put that whole page into the
+ * patient's chat bubble (production 2026-11-03).
+ * `body` is the parsed JSON, or the raw text when the reply was not JSON.
+ */
+export async function apiErrorFromResponse(response) {
+    const { body, message } = await readErrorBody(response);
+    const code = (body && typeof body === 'object' && body.code) || `HTTP_${response.status}`;
+    return new ApiError(message, { status: response.status, code, body, url: response.url || null });
+}
+
 async function parseResponse(response, parseAs, requestId) {
     if (parseAs === 'response') return response;
     if (parseAs === 'blob') return attachRequestId(await response.blob(), requestId);

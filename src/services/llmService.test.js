@@ -469,6 +469,49 @@ describe('LLMService.streamMessage', () => {
         )).rejects.toMatchObject({ name: 'LLMError', status: 500, message: 'plain text death' });
     });
 
+    // Regression lock: a gateway's HTML 502 page is not shown to the learner.
+    // Production 2026-11-03: the server answered {"error":"LLM provider
+    // unreachable"} (502), Cloudflare replaced it with its own HTML page, and
+    // the stream path put that whole page into the patient's bubble.
+    it('turns a gateway HTML 502 page into the service-unavailable code, without the HTML', async () => {
+        const cloudflarePage = '<!DOCTYPE html> <html class="no-js" lang="en-US"> <head> <title>lacarm.com | 502: Bad gateway</title></head><body>Bad gateway Error code 502</body></html>';
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(new Response(cloudflarePage, { status: 502, headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
+        });
+
+        const err = await LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
+            { onDelta: () => {} }
+        ).then(
+            (value) => { throw new Error(`expected a rejection, resolved with ${JSON.stringify(value)}`); },
+            (e) => e
+        );
+        expect(err).toBeInstanceOf(LLMError);
+        expect(err.status).toBe(502);
+        expect(err.code).toBe('service_unavailable');
+        expect(err.message).not.toMatch(/<|DOCTYPE|html/i);
+    });
+
+    it('keeps the server\'s own JSON 502 text (no gateway in between)', async () => {
+        fetchMock.mockImplementation((url) => {
+            if (!String(url).includes('/proxy/llm')) {
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return Promise.resolve(new Response(
+                JSON.stringify({ error: 'LLM provider unreachable' }),
+                { status: 502, headers: { 'Content-Type': 'application/json' } }
+            ));
+        });
+
+        await expect(LLMService.streamMessage(
+            SESSION_ID, MESSAGES, SYSTEM_PROMPT, null,
+            { onDelta: () => {} }
+        )).rejects.toMatchObject({ name: 'LLMError', status: 502, code: null, message: 'LLM provider unreachable' });
+    });
+
     // --- 5. Network error (fetch rejection) -----------------------------
     // Regression lock: a transport failure rejects too — same contract as a
     // non-ok response, so no caller needs two failure shapes.

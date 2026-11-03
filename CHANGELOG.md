@@ -9,6 +9,19 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [3.1.4] — 2026-11-03
+
+### Fixed
+- **A gateway's error page no longer appears in the patient's chat bubble.** When the AI model could not be reached,
+  the server answered with a short JSON error (502), Cloudflare replaced it with its own HTML "Bad gateway" page, and
+  the streaming chat printed that whole page after "Error:" (production, 2026-11-03, during a ~90-minute outage of the
+  server's outbound internet). The stream now reads failures the same way every other request does
+  (`apiErrorFromResponse` in `apiClient.js`) and shares one classifier with the non-streaming path: a gateway status
+  whose body is not the server's JSON shows the translated "The AI service is unavailable right now" line. The
+  server's own JSON errors keep their text, as before.
+- **The same page no longer reaches a voice toast.** A failed speech request showed the first 200 characters of the
+  HTML; it now reads "Server unavailable (bad gateway) (502)".
+
 ## [3.1.3] — 2026-11-02
 
 ### Voice engine fixes (Codex review of 3.1.1–3.1.2, and a red CI e2e on 3.1.2)
