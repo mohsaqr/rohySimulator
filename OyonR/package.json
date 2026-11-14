@@ -1,6 +1,6 @@
 {
   "name": "oyon",
-  "version": "3.3.3",
+  "version": "3.5.14",
   "description": "Local facial-expression analytics for browser-based learning simulations. Camera-side inference with MediaPipe + ONNX Runtime Web; only aggregate windows leave the device. Runs standalone or attaches to a host app.",
   "type": "module",
   "sideEffects": [
@@ -80,6 +80,26 @@
       "import": "./src/analytics/DynamicalFeatures.js",
       "default": "./src/analytics/DynamicalFeatures.js"
     },
+    "./analytics/affect-dynamics": {
+      "types": "./types/analytics-affect-dynamics.d.ts",
+      "import": "./src/analytics/AffectDynamics.js",
+      "default": "./src/analytics/AffectDynamics.js"
+    },
+    "./analytics/gaze-dynamics": {
+      "types": "./types/analytics-gaze-dynamics.d.ts",
+      "import": "./src/analytics/GazeDynamics.js",
+      "default": "./src/analytics/GazeDynamics.js"
+    },
+    "./analytics/aoi-transition-matrix": {
+      "types": "./types/analytics-aoi-transition-matrix.d.ts",
+      "import": "./src/analytics/AoiTransitionMatrix.js",
+      "default": "./src/analytics/AoiTransitionMatrix.js"
+    },
+    "./group": {
+      "types": "./types/group.d.ts",
+      "import": "./src/group/index.js",
+      "default": "./src/group/index.js"
+    },
     "./engagement": {
       "types": "./types/engagement.d.ts",
       "import": "./src/aggregation/EngagementAggregator.js",
@@ -114,6 +134,46 @@
       "types": "./types/typing.d.ts",
       "import": "./src/capture/TypingComposerAdapter.js",
       "default": "./src/capture/TypingComposerAdapter.js"
+    },
+    "./typing/contenteditable": {
+      "types": "./types/typing.d.ts",
+      "import": "./src/capture/TypingContentEditableAdapter.js",
+      "default": "./src/capture/TypingContentEditableAdapter.js"
+    },
+    "./typing/reporter": {
+      "types": "./types/typing.d.ts",
+      "import": "./src/capture/TypingEditReporter.js",
+      "default": "./src/capture/TypingEditReporter.js"
+    },
+    "./typing/text": {
+      "types": "./types/typing.d.ts",
+      "import": "./src/capture/typingText.js",
+      "default": "./src/capture/typingText.js"
+    },
+    "./typing/analytics": {
+      "types": "./types/typing.d.ts",
+      "import": "./src/analytics/TypingEpisodeAnalytics.js",
+      "default": "./src/analytics/TypingEpisodeAnalytics.js"
+    },
+    "./writing/analytics": {
+      "types": "./types/writing.d.ts",
+      "import": "./src/analytics/WritingAnalytics.js",
+      "default": "./src/analytics/WritingAnalytics.js"
+    },
+    "./document-edit/tracker": {
+      "types": "./types/host-acts.d.ts",
+      "import": "./src/capture/DocumentEditTracker.js",
+      "default": "./src/capture/DocumentEditTracker.js"
+    },
+    "./code-run/tracker": {
+      "types": "./types/host-acts.d.ts",
+      "import": "./src/capture/CodeRunTracker.js",
+      "default": "./src/capture/CodeRunTracker.js"
+    },
+    "./records": {
+      "types": "./types/records.d.ts",
+      "import": "./src/records/index.js",
+      "default": "./src/records/index.js"
     },
     "./ai-assist": {
       "types": "./types/ai-assist.d.ts",
@@ -264,7 +324,7 @@
     "demo": "vite --host 127.0.0.1",
     "app": "npm --prefix standalone/app run dev",
     "app:build": "npm --prefix standalone/app run build",
-    "app:build:element": "npm --prefix standalone/app run build:element",
+    "app:build:element": "npm --prefix standalone/app run build:element && node scripts/check-element-bundle.mjs",
     "app:typecheck": "npm --prefix standalone/app run typecheck",
     "build": "npm run license:sync && rollup -c rollup.config.mjs",
     "vendor:webeyetrack": "node scripts/vendor-webeyetrack.mjs",
@@ -272,7 +332,8 @@
     "build:clean": "rm -rf dist && npm run build",
     "check": "find src standalone -name '*.js' -not -path '*/node_modules/*' -not -path '*/vendor/*' -print0 | xargs -0 -n1 node --check",
     "pretest": "node tests/version-contract.test.js && node tests/app-about-contracts.test.js && node tests/dom-aoi.test.js && node tests/host-check.test.js && node tests/runtime-capture-quality.test.js && node tests/sensing-diagnostics-screen.test.js && node tests/attention-analytics.test.js && node tests/analytics-summary-layout.test.js && node tests/cli-assets.test.js && node tests/dependency-security.test.js",
-    "test": "node tests/aggregation.test.js && node tests/camera-controller.test.js && node tests/wasm-paths.test.js && node tests/face-tracker-output.test.js && node tests/eye-features.test.js && node tests/eye-smoother.test.js && node tests/engagement-aggregator.test.js && node tests/typing-aggregator.test.js && node tests/typing-adapter.test.js && node tests/signal-event-log.test.js && node tests/signal-event-tna.test.js && node tests/signal-event-store.test.js && node tests/signal-capture.test.js && node tests/runtime-engagement.test.js && node tests/facial-signals.test.js && node tests/runtime-facial.test.js && node tests/posture.test.js && node tests/runtime-posture.test.js && node tests/heart-rate.test.js && node tests/heart-rate-robust.test.js && node tests/heart-rate-sampling.test.js && node tests/runtime-heart-rate.test.js && node tests/respiration.test.js && node tests/runtime-respiration.test.js && node tests/validation.test.js && node tests/local-transport.test.js && node tests/http-transport.test.js && node tests/fallback-transport.test.js && node tests/rohy-addon.test.js && node tests/oyon-attach.test.js && node tests/oyon-addon.test.js && node tests/server-batch.test.js && node tests/settings.test.js && node tests/logging.test.js && node tests/metrics.test.js && node tests/dynamics.test.js && node tests/runtime-settings.test.js && node tests/transition-network.test.js && node tests/web-eye-track-adapter.test.js && node tests/webgazer-adapter.test.js && node tests/gaze-engine-switch.test.js && node tests/mediapipe-gaze-adapter.test.js && node tests/gaze-smoother.test.js && node tests/gaze-aggregator.test.js && node tests/runtime-gaze.test.js && node tests/runtime-mediapipe-gaze.test.js && node tests/gaze-calibration-overlay.test.js && node tests/standalone-preview-data.test.js && node tests/app-runtime-contracts.test.js && node tests/settings-nav.test.js && node tests/centrality-sizing.test.js && node tests/position-layout.test.js && node tests/emotion-timeline-slots.test.js && node tests/app-filter-windows.test.js && node tests/app-tna-pooling.test.js && node tests/app-embed-contracts.test.js && node tests/app-pill-a11y.test.js && node tests/app-analyze-typing.test.js && node tests/app-typing-charts.test.js && node tests/app-voice-charts.test.js && node tests/app-analyze-voice.test.js && node tests/ai-assist.test.js && node tests/interaction-tracker.test.js && node tests/interaction-aggregator.test.js && node tests/text-analyzer.test.js && node tests/discourse-aggregator.test.js && node tests/voice-features.test.js && node tests/pitch.test.js && node tests/voice-turn-controller.test.js && node tests/vad-adapter.test.js && node tests/voice-aggregator.test.js && node tests/voice-worker.test.js && node tests/license-contract.test.js && node tests/exports-map.test.js",
+    "test": "node tests/aggregation.test.js && node tests/camera-controller.test.js && node tests/wasm-paths.test.js && node tests/onnx-classifier-load.test.js && node tests/face-tracker-output.test.js && node tests/eye-features.test.js && node tests/eye-smoother.test.js && node tests/engagement-aggregator.test.js && node tests/typing-aggregator.test.js && node tests/typing-adapter.test.js && node tests/signal-event-log.test.js && node tests/signal-event-tna.test.js && node tests/signal-event-store.test.js && node tests/signal-capture.test.js && node tests/runtime-engagement.test.js && node tests/facial-signals.test.js && node tests/runtime-facial.test.js && node tests/posture.test.js && node tests/runtime-posture.test.js && node tests/heart-rate.test.js && node tests/heart-rate-robust.test.js && node tests/heart-rate-sampling.test.js && node tests/heart-rate-pos-window.test.js && node tests/runtime-heart-rate.test.js && node tests/respiration.test.js && node tests/runtime-respiration.test.js && node tests/validation.test.js && node tests/local-transport.test.js && node tests/http-transport.test.js && node tests/post-chunking.test.js && node tests/fallback-transport.test.js && node tests/rohy-addon.test.js && node tests/oyon-attach.test.js && node tests/oyon-addon.test.js && node tests/server-batch.test.js && node tests/settings.test.js && node tests/logging.test.js && node tests/metrics.test.js && node tests/log-idb-transports.test.js && node tests/log-delivery.test.js && node tests/dynamics.test.js && node tests/affect-dynamics.test.js && node tests/gaze-dynamics.test.js && node tests/aoi-transition-matrix.test.js && node tests/runtime-settings.test.js && node tests/transition-network.test.js && node tests/web-eye-track-adapter.test.js && node tests/webgazer-adapter.test.js && node tests/gaze-engine-switch.test.js && node tests/mediapipe-gaze-adapter.test.js && node tests/gaze-smoother.test.js && node tests/gaze-aggregator.test.js && node tests/runtime-gaze.test.js && node tests/runtime-mediapipe-gaze.test.js && node tests/gaze-calibration-overlay.test.js && node tests/standalone-preview-data.test.js && node tests/app-runtime-contracts.test.js && node tests/settings-nav.test.js && node tests/centrality-sizing.test.js && node tests/position-layout.test.js && node tests/emotion-timeline-slots.test.js && node tests/app-filter-windows.test.js && node tests/app-tna-pooling.test.js && node tests/app-embed-contracts.test.js && node tests/app-pill-a11y.test.js && node tests/app-phone-layout.test.js && node tests/app-analyze-typing.test.js && node tests/app-typing-charts.test.js && node tests/app-voice-charts.test.js && node tests/app-analyze-voice.test.js && node tests/ai-assist.test.js && node tests/interaction-tracker.test.js && node tests/interaction-aggregator.test.js && node tests/text-analyzer.test.js && node tests/discourse-aggregator.test.js && node tests/voice-features.test.js && node tests/pitch.test.js && node tests/voice-turn-controller.test.js && node tests/vad-adapter.test.js && node tests/voice-aggregator.test.js && node tests/voice-worker.test.js && node tests/typing-text.test.js && node tests/typing-capture-entries.test.js && node tests/typing-episode-analytics.test.js && node tests/host-records.test.js && node tests/record-kinds.test.js && node tests/log-rows.test.js && node tests/writing-analytics.test.js && node tests/host-acts.test.js && node tests/app-host-scopes.test.js && node tests/license-contract.test.js && node tests/group-clock.test.js && node tests/group-alignment.test.js && node tests/window-integrity.test.js && node tests/group-timeline.test.js && node tests/inter-beat-intervals.test.js && node tests/group-hub.test.js && node tests/multi-face.test.js && node tests/exports-map.test.js",
+    "test:app-group": "node tests/app-group-dashboard.test.js && node tests/app-group-networks.test.js && node tests/app-patterns.test.js && node tests/app-dynamics.test.js && node tests/app-channel-offer.test.js && node tests/app-logs.test.js && node tests/app-view-narrowing.test.js && node tests/app-export-records.test.js && node tests/app-review-contracts.test.js",
     "test:e2e": "playwright test",
     "test:all": "npm run check && npm test && npm run app:typecheck && npm run test:e2e",
     "download-models": "bash scripts/download-models.sh",

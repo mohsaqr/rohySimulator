@@ -31,7 +31,7 @@ function EvidenceRow({ label, value, hint }: { label: string; value: string | nu
       <span className="text-xs text-ink-2">{label}</span>
       <span className="text-right text-sm font-medium tabular-nums text-ink-0">
         {value}
-        {hint ? <span className="ml-1 text-[10px] font-normal text-ink-3">{hint}</span> : null}
+        {hint ? <span className="ml-1 text-micro font-normal text-ink-3">{hint}</span> : null}
       </span>
     </div>
   );
@@ -151,12 +151,12 @@ export function AttentionExperimentalPanels({
           }
         >
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Metric label="Windows" value={analytics.windows.length} tone="info" />
-            <Metric label="Measured" value={`${analytics.measuredAttentionWindows} / ${analytics.windows.length}`} tone="info" />
-            <Metric label="Mean focus" value={pct(analytics.meanFocus)} tone="info" />
-            <Metric label="On screen" value={pct(analytics.meanOnScreen)} tone="info" />
-            <Metric label="Focused windows" value={pct(focusedShare)} tone="info" />
-            <Metric label="Fixations" value={analytics.totalFixations || null} hint="detected across windows" tone="info" />
+            <Metric label="Windows" value={analytics.windows.length} />
+            <Metric label="Measured" value={`${analytics.measuredAttentionWindows} / ${analytics.windows.length}`} />
+            <Metric label="Mean focus" value={pct(analytics.meanFocus)} />
+            <Metric label="On screen" value={pct(analytics.meanOnScreen)} />
+            <Metric label="Focused windows" value={pct(focusedShare)} />
+            <Metric label="Fixations" value={analytics.totalFixations || null} hint="detected across windows" />
           </div>
         </Section>
       ) : null}
@@ -175,7 +175,7 @@ export function AttentionExperimentalPanels({
           <Card className={ATTENTION_CARD}>
             <CardHeader>
               <CardTitle>Measured signals over time</CardTitle>
-              <span className="text-[10px] text-ink-3">0–100%</span>
+              <span className="text-micro text-ink-3">0–100%</span>
             </CardHeader>
             <CardContent className="flex flex-1 items-center">
               <LineChart
@@ -195,7 +195,7 @@ export function AttentionExperimentalPanels({
             <CardContent className="flex flex-1 flex-col gap-5">
               <AttentionRibbon states={analytics.states} />
               <StateDistribution states={analytics.states} counts={analytics.stateCounts} />
-              <p className="mt-auto mb-0 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-auto mb-0 border-t border-line pt-3 text-mini leading-relaxed text-ink-3">
                 Focused: focus ≥65%, off-screen ≤20% and usable gaze. Away: off-screen ≥35% or missing face ≥40%.
                 Shifting describes visible, lower-focus windows with multiple fixations. Unmeasured remains separate.
               </p>
@@ -226,11 +226,11 @@ export function AttentionExperimentalPanels({
             <CardHeader><CardTitle>Where attention moved</CardTitle></CardHeader>
             <CardContent className="grid flex-1 items-center gap-5 md:grid-cols-2">
               <div>
-                <h3 className="mt-0 mb-3 text-[10px] font-semibold uppercase tracking-wider text-ink-3">Top AOI transitions</h3>
+                <h3 className="label-eyebrow mt-0 mb-3">Top AOI transitions</h3>
                 <RankedRows rows={analytics.topAoiTransitions} unit="moves" empty="No AOI transitions were captured." />
               </div>
               <div>
-                <h3 className="mt-0 mb-3 text-[10px] font-semibold uppercase tracking-wider text-ink-3">Top AOI dwell</h3>
+                <h3 className="label-eyebrow mt-0 mb-3">Top AOI dwell</h3>
                 <RankedRows rows={analytics.topAoiDwell} unit="ms" empty="No AOI dwell was captured." />
               </div>
             </CardContent>
@@ -251,7 +251,7 @@ export function AttentionExperimentalPanels({
           <CardContent className="grid gap-6 px-5 py-5 md:grid-cols-2 md:items-center">
             <div className="md:border-r md:border-line md:pr-6">
               <div>
-                <div className="text-[10px] font-medium uppercase tracking-wider text-ink-3">Focus–breathing correlation</div>
+                <div className="label-eyebrow">Focus–breathing correlation</div>
                 <div className="mt-1 flex items-baseline gap-3">
                   <span className="text-4xl font-semibold tabular-nums tracking-tight text-ink-0">
                     {correlation == null ? '—' : correlation.toFixed(2)}
@@ -259,7 +259,7 @@ export function AttentionExperimentalPanels({
                   <span className="text-xs text-ink-2">{correlationLabel}</span>
                 </div>
               </div>
-              <p className="mt-4 mb-0 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-4 mb-0 text-mini leading-relaxed text-ink-3">
                 Pearson r is shown only with ≥5 paired windows. It is a within-session association, not evidence that breathing caused attention to change.
               </p>
             </div>

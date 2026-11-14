@@ -317,4 +317,159 @@ function sgs(overrides = {}) {
   assert.equal(out.fixation_duration_ms_total, null);
 }
 
+// V — Attention distribution: even dwell over every AOI is maximal entropy,
+//     zero imbalance, full coverage.
+{
+  const aois = [
+    { id: 'a', x: -1, y: -1, width: 1, height: 2 },
+    { id: 'b', x: 0, y: -1, width: 1, height: 2 },
+  ];
+  const agg = new GazeAggregator({ windowMs: 1000, aois, sampleIntervalMs: 50 });
+  for (let i = 0; i < 5; i += 1) agg.consumeFrame(sgs({ x: -0.5, y: 0, ts_ms: i * 50 }), i * 50);
+  for (let i = 5; i < 10; i += 1) agg.consumeFrame(sgs({ x: 0.5, y: 0, ts_ms: i * 50 }), i * 50);
+  const out = agg.flush(600);
+  assert.equal(out.aoi_count, 2);
+  assert.equal(out.aoi_coverage, 1, 'both AOIs were reached');
+  assert.ok(Math.abs(out.aoi_stationary_entropy - 1) < 1e-9, 'even split ⇒ entropy 1');
+  assert.ok(out.aoi_allocation_sd < 1e-9, 'even split ⇒ no imbalance');
+}
+
+// W — Attention pooled in one AOI: entropy 0, coverage halved, and the
+//     imbalance SD is the full spread around the 50% mean.
+{
+  const aois = [
+    { id: 'a', x: -1, y: -1, width: 1, height: 2 },
+    { id: 'b', x: 0, y: -1, width: 1, height: 2 },
+  ];
+  const agg = new GazeAggregator({ windowMs: 1000, aois, sampleIntervalMs: 50 });
+  for (let i = 0; i < 10; i += 1) agg.consumeFrame(sgs({ x: -0.5, y: 0, ts_ms: i * 50 }), i * 50);
+  const out = agg.flush(600);
+  assert.equal(out.aoi_coverage, 0.5, 'only one of two AOIs was reached');
+  assert.equal(out.aoi_stationary_entropy, 0, 'all mass in one AOI ⇒ entropy 0');
+  assert.ok(Math.abs(out.aoi_allocation_sd - 50) < 1e-9, 'shares are 100/0 ⇒ SD 50');
+}
+
+// X — An ignored AOI must LOWER stationary entropy. Normalizing by the number
+//     of AOIs actually visited (as the transition-entropy helper does) would
+//     score this identically to case V, hiding that a third of the layout was
+//     never looked at.
+{
+  // Thirds of the on-screen span (|x| <= SCREEN_HALF), so every point is on
+  // screen and only the third AOI is genuinely ignored.
+  const aois = [
+    { id: 'a', x: -0.5, y: -1, width: 0.34, height: 2 },
+    { id: 'b', x: -0.16, y: -1, width: 0.33, height: 2 },
+    { id: 'c', x: 0.17, y: -1, width: 0.33, height: 2 },
+  ];
+  const agg = new GazeAggregator({ windowMs: 1000, aois, sampleIntervalMs: 50 });
+  for (let i = 0; i < 5; i += 1) agg.consumeFrame(sgs({ x: -0.4, y: 0, ts_ms: i * 50 }), i * 50);
+  for (let i = 5; i < 10; i += 1) agg.consumeFrame(sgs({ x: 0, y: 0, ts_ms: i * 50 }), i * 50);
+  const out = agg.flush(600);
+  assert.equal(out.aoi_count, 3);
+  assert.ok(Math.abs(out.aoi_coverage - 2 / 3) < 1e-9);
+  assert.ok(
+    out.aoi_stationary_entropy < 1 && out.aoi_stationary_entropy > 0,
+    `two of three AOIs evenly viewed must sit below 1, got ${out.aoi_stationary_entropy}`,
+  );
+}
+
+// Y — Saccade amplitudes are retained, not just summed away into the scanpath.
+{
+  const agg = new GazeAggregator({ windowMs: 4000, sampleIntervalMs: 40 });
+  const dwellAt = (x, from) => {
+    for (let i = 0; i < 8; i += 1) {
+      const ts = from + i * 40;
+      agg.consumeFrame(sgs({ x, y: 0, ts_ms: ts }), ts);
+    }
+  };
+  dwellAt(-0.4, 0);
+  dwellAt(0, 400);
+  dwellAt(0.4, 800);
+  const out = agg.flush(1200);
+  assert.equal(out.fixation_sampling_adequate, true);
+  assert.equal(out.saccade_count, Math.max(0, out.fixation_count - 1));
+  assert.ok(out.saccade_amplitude_mean > 0, 'amplitudes must be measured');
+  assert.ok(
+    Math.abs(out.saccade_amplitude_mean * out.saccade_count - out.scanpath_length) < 1e-9,
+    'amplitudes must sum to the scanpath length',
+  );
+}
+
+// Z — With no AOIs configured the distribution fields stay null rather than
+//     reporting a perfectly balanced zero.
+{
+  const agg = new GazeAggregator({ windowMs: 1000, aois: [] });
+  agg.consumeFrame(sgs({ ts_ms: 0 }), 0);
+  const out = agg.flush(600);
+  assert.equal(out.aoi_stationary_entropy, null);
+  assert.equal(out.aoi_allocation_sd, null);
+  assert.equal(out.aoi_coverage, null);
+  assert.equal(out.aoi_count, null);
+}
+
+// AA — REGRESSION GUARD. No per-window transition-entropy scalar may be
+//      emitted from this aggregator, ever.
+//
+//      One was implemented and removed. Two independent reasons, and both
+//      still hold, so this test exists to stop it drifting back:
+//
+//      1. Ownership. tnaj's `transitionEntropy()` — a verified port of
+//         Nestimate's `transition_entropy()` — already computes the entropy
+//         rate, stationary distribution and redundancy from a transition
+//         matrix. Oyon senses; the network packages own network algorithms.
+//      2. Sample size. Over 400 stationary sessions the per-window estimate
+//         had a 95% interval of [0.00, 1.17] bits against a true 1.585 — an
+//         interval containing zero, on a process with no structure at all.
+//
+//      What crosses the boundary is `aoi_transitions`, the raw counts, pooled
+//      by src/analytics/AoiTransitionMatrix.js. That is asserted present.
+{
+  const aois = [
+    { id: 'left',  x: -0.5, y: -0.5, width: 0.5, height: 1.0 },
+    { id: 'right', x:  0.0, y: -0.5, width: 0.5, height: 1.0 },
+  ];
+  const agg = new GazeAggregator({ windowMs: 2000, aois, sampleIntervalMs: 50 });
+  for (let i = 0; i < 8; i += 1) {
+    agg.consumeFrame(sgs({ x: i % 2 === 0 ? -0.2 : 0.2, y: 0, ts_ms: i * 50 }), i * 50);
+  }
+  const out = agg.flush(400);
+
+  for (const field of Object.keys(out)) {
+    assert.ok(
+      !/entropy_bits$|^aoi_gaze_transition_entropy/.test(field),
+      `${field}: entropy belongs in tnaj over a POOLED matrix, not in a 3s window`,
+    );
+  }
+
+  // The counts are the interface, and they must survive intact.
+  assert.ok(out.aoi_transitions, 'aoi_transitions is what the analysis layer consumes');
+  assert.equal(out.aoi_transitions['left→right'], 4);
+  assert.equal(out.aoi_transitions['right→left'], 3);
+  assert.equal(out.aoi_transition_count, 7);
+}
+
+// AC — Per-window SDs, the inputs that let a session-level σ be pooled
+//      exactly for coefficient K.
+{
+  const agg = new GazeAggregator({
+    windowMs: 5000,
+    sampleIntervalMs: 20,
+    fixationMinDurationMs: 100,
+  });
+  const dwellAt = (x, from) => {
+    for (let i = 0; i < 10; i += 1) {
+      agg.consumeFrame(sgs({ x, y: 0, ts_ms: from + i * 20 }), from + i * 20);
+    }
+  };
+  dwellAt(-0.4, 0);
+  dwellAt(0, 400);
+  dwellAt(0.4, 800);
+  const out = agg.flush(1200);
+
+  assert.ok(Number.isFinite(out.fixation_duration_ms_sd), 'fixation SD must be emitted');
+  assert.ok(Number.isFinite(out.saccade_amplitude_sd), 'saccade SD must be emitted');
+  assert.ok(out.fixation_duration_ms_sd >= 0);
+  assert.ok(out.saccade_amplitude_sd >= 0);
+}
+
 console.log('gaze-aggregator.test.js — all cases passed');

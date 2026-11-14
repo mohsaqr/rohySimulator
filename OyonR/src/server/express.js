@@ -9,7 +9,7 @@ import { createOyonBatchHandler } from './batchHandler.js';
  *   import express from 'express';
  *   import { createOyonExpressBatch } from 'oyon/server/express';
  *
- *   app.use(express.json({ limit: '256kb' }));   // batches are small JSON
+ *   app.use(express.json({ limit: '4mb' }));   // windows carry per-sample raw_streams; a queued batch can be MBs
  *   app.post(
  *     '/api/oyon/sessions/:sessionId/emotions/batch',
  *     createOyonExpressBatch({

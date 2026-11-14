@@ -46,4 +46,36 @@ declare module 'legacy-tnaj' {
     sequences: (string | null)[][],
     options?: { k?: number; alpha?: number; minCount?: number; pAdjustMethod?: string },
   ): { k: number; alpha: number; pAdjust: string; scores: HypaScore[] };
+
+  /*
+   * Markov-chain entropy diagnostics — tnaj's verified port of Nestimate's
+   * `transition_entropy()` (Krejtz et al. 2015 gaze transition entropy; ETRA
+   * 2025 real-time transition matrix entropy). This is the ONLY place gaze
+   * transition entropy is computed: Oyon pools the counts, tnaj does the
+   * information theory.
+   */
+  export interface TransitionEntropy {
+    /** Per-state branching entropy H(P_{i·}). */
+    rowEntropy: number[];
+    rowEntropyNorm: number[];
+    /** Stationary distribution π, from the eigenvector of Pᵀ. */
+    stationary: number[];
+    /** H(π), treating π as i.i.d. Upper bound on the entropy rate. */
+    stationaryEntropy: number;
+    stationaryEntropyNorm: number;
+    /** h(P) = Σ πᵢ H(P_{i·}) — per-step uncertainty of the chain. */
+    entropyRate: number;
+    entropyRateNorm: number;
+    /** H(π) − h(P). Zero for a memoryless chain. */
+    redundancy: number;
+    /** (H(π) − h(P)) / H(π), in [0, 1]. */
+    redundancyNorm: number;
+    maxEntropy: number;
+    base: number;
+    states: string[];
+  }
+  export function transitionEntropy(
+    x: number[][] | unknown,
+    options?: { base?: number; normalize?: boolean },
+  ): TransitionEntropy;
 }

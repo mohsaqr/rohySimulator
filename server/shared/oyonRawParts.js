@@ -3,14 +3,10 @@
 //
 // Imported by BOTH the browser (src/components/oyon/captureBridge.js packs
 // POST bodies) and the server (server/routes/oyon-routes.js stores and reads
-// raw rows), so it lives in server/shared and stays dependency-free.
+// raw rows), so it lives in server/shared; its one import is Oyon's light
+// `oyon/records` subpath, which both sides resolve.
 //
-// RE-VENDOR NOTE (OyonR 3.3.3 → ≥ 3.5.11): `joinRawParts` below is a port of
-// Oyon's own `joinRawParts` (oyon/records, src/records/rawParts.js), kept
-// here only because the vendored 3.3.3 has no `oyon/records`. After the
-// re-vendor, replace the port with
-//     export { joinRawParts } from 'oyon/records';
-// and keep the tests in tests/server/oyon-raw-streams.test.js passing.
+// joinRawParts is re-exported from Oyon (oyon/records, OyonR >= 3.5.11).
 
 /** The modality of a raw-only envelope or continuation part. */
 export const OYON_RAW_MODALITY = 'raw';
@@ -128,66 +124,7 @@ export function packPersistBatches(events, {
 }
 
 /**
- * Rebuild windows that were split across POSTs. PORT of Oyon's
- * `joinRawParts` (see the re-vendor note at the top): the parts sharing
- * `raw_part.id` are merged onto index 0 in index order — per stream the rows
- * are concatenated, a differing field list is unioned with missing cells null —
- * and the joined window keeps `raw_part` with `joined: n` (parts found), so an
- * incomplete set stays visible. Parts whose index-0 window is missing, and
- * raw-only envelopes without `raw_part`, are returned unchanged. Order follows
- * the input; nothing is dropped.
- *
- * @param {object[]} windows
- * @returns {object[]}
+ * Rebuild windows split across POSTs (Oyon's own joinRawParts; the parts that
+ * share `raw_part.id` are merged onto index 0, nothing is dropped).
  */
-export function joinRawParts(windows) {
-    if (!Array.isArray(windows)) throw new TypeError('joinRawParts: windows must be an array');
-    const groups = new Map();
-    windows.forEach((w, position) => {
-        const id = w?.raw_part?.id;
-        if (typeof id !== 'string' || !id) return;
-        if (!groups.has(id)) groups.set(id, []);
-        groups.get(id).push({ w, position });
-    });
-    if (!groups.size) return windows.slice();
-
-    const replaced = new Map(); // position → joined window, or null to skip
-    for (const parts of groups.values()) {
-        const head = parts.find(p => p.w.raw_part.index === 0);
-        if (!head) continue;
-        const ordered = parts.slice().sort((a, b) => a.w.raw_part.index - b.w.raw_part.index || a.position - b.position);
-        const raw = {};
-        for (const { w } of ordered) mergeStreams(raw, w.raw_streams);
-        replaced.set(head.position, {
-            ...head.w,
-            raw_streams: raw,
-            raw_part: { ...head.w.raw_part, joined: ordered.length },
-        });
-        for (const p of ordered) if (p !== head) replaced.set(p.position, null);
-    }
-    const out = [];
-    windows.forEach((w, position) => {
-        if (!replaced.has(position)) out.push(w);
-        else if (replaced.get(position)) out.push(replaced.get(position));
-    });
-    return out;
-}
-
-function mergeStreams(into, streams) {
-    if (!streams || typeof streams !== 'object') return;
-    for (const [name, block] of Object.entries(streams)) {
-        if (!block || !Array.isArray(block.fields) || !Array.isArray(block.rows)) continue;
-        const target = into[name];
-        if (!target) {
-            into[name] = { ...block, fields: block.fields.slice(), rows: block.rows.slice() };
-            continue;
-        }
-        const added = block.fields.filter(f => !target.fields.includes(f));
-        if (added.length) {
-            target.fields.push(...added);
-            target.rows = target.rows.map(r => [...r, ...added.map(() => null)]);
-        }
-        const index = target.fields.map(f => block.fields.indexOf(f));
-        for (const row of block.rows) target.rows.push(index.map(i => (i < 0 ? null : row[i])));
-    }
-}
+export { joinRawParts } from 'oyon/records';

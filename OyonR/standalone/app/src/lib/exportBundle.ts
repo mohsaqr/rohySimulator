@@ -1,5 +1,9 @@
-import type { EmotionWindow, OyonSettings } from 'oyon';
+import type { EmotionWindow, OyonLogEvent, OyonMetric, OyonSettings } from 'oyon';
 import type { SessionSummary } from './sessions';
+import { collectRecords } from './exportRecords';
+import { readRuntimeLog } from './runtimeLogStore';
+import { readStoredRawOnly } from './storedWindows';
+import { splitRawOnly } from './rawOnly';
 
 /*
  * Reproducibility export bundle — the artifact you hand a peer reviewer.
@@ -17,8 +21,23 @@ import type { SessionSummary } from './sessions';
  * the inner manifest.
  */
 
-export interface ExportBundle {
-  schema_version: '1.0';
+/** Every other record kind of the session, so the bundle is the whole log. */
+export interface SessionRecords {
+  /** Episode windows: typing episodes, voice turns, AI-assist cycles. */
+  signal_windows: Array<Record<string, unknown>>;
+  /** Per-event states: typing, interaction, ai_assist, voice, document_edit, code_run. */
+  signal_events: Array<Record<string, unknown>>;
+  /** `oyon-log-v1` runtime (or host) log events. */
+  log_events: Array<OyonLogEvent | Record<string, unknown>>;
+  /** `oyon-metric-v1` runtime metrics. */
+  metrics: Array<OyonMetric | Record<string, unknown>>;
+  /** Raw-only envelopes (`modality: 'raw'`): per-sample rows no camera window carried (sent at stop, at the recorder's row bound, or when a track ended). */
+  raw_windows: Array<Record<string, unknown>>;
+}
+
+export interface ExportBundle extends SessionRecords {
+  /** 1.1 adds signal_windows, signal_events, log_events, metrics and raw_windows. */
+  schema_version: '1.1';
   generated_at: string;
   generator: 'oyon-app';
   session: SessionSummary;
@@ -40,7 +59,18 @@ re-runnable by a reviewer without access to the original device.
 
 ## Files
 
-- \`windows.json\`  — every aggregate EmotionWindow recorded for this session
+- \`windows\`        — every interval window (camera) of this session, each with
+  its per-sample \`raw_streams\` (a session with no camera has none; its other
+  records are below). A comparison bundle holds these five kinds under
+  \`records\`, for every compared session or person.
+- \`signal_windows\` — typing episodes, voice turns, AI-assist cycles
+- \`signal_events\`  — every per-event state (typing, interaction, AI, voice,
+  document edit, code run)
+- \`log_events\`     — the runtime log (oyon-log-v1): start, stop, errors, sync
+- \`metrics\`        — runtime metrics (oyon-metric-v1)
+- \`raw_windows\`    — raw-only envelopes (modality \`raw\`): per-sample rows
+  no camera window carried (sent at stop, at the recorder's row bound, or
+  when a face track ended). Split windows are already joined back.
 - \`summary.json\`  — derived per-session KPIs (counts, means, dominant emotion)
 - \`settings.json\` — the OyonSettings profile under which this data was captured
 - \`model.json\`    — emotion classifier identity (name + version)
@@ -58,7 +88,8 @@ re-runnable by a reviewer without access to the original device.
 
 - Raw video frames, images, or landmarks. By design — see
   \`src/validation/validateEmotionPayload.js\` for the validator deny-list.
-- Per-frame predictions. Only aggregate 10-second windows are retained.
+- Text the person typed or said. Typing and voice records carry timing and
+  counts, never content.
 
 ## How to read
 
@@ -67,6 +98,7 @@ jq '.session' bundle.json                  # one-line summary
 jq '.windows | length' bundle.json         # number of aggregate windows
 jq '.windows[0]' bundle.json               # shape of one window
 jq '.settings' bundle.json                 # full parameter snapshot
+jq '.signal_events | group_by(.modality) | map({(.[0].modality): length}) | add' bundle.json
 \`\`\`
 
 ## Ethical use
@@ -83,17 +115,55 @@ export function buildSessionBundle(args: {
   windows: EmotionWindow[];
   settings: OyonSettings;
   model: { name: string; version: string; label: string };
+  /** The session's other record kinds; a kind left out is empty. */
+  records?: Partial<SessionRecords>;
 }): ExportBundle {
   return {
-    schema_version: '1.0',
+    schema_version: '1.1',
     generated_at: new Date().toISOString(),
     generator: 'oyon-app',
     session: args.summary,
     windows: args.windows,
+    signal_windows: args.records?.signal_windows ?? [],
+    signal_events: args.records?.signal_events ?? [],
+    log_events: args.records?.log_events ?? [],
+    metrics: args.records?.metrics ?? [],
+    raw_windows: args.records?.raw_windows ?? [],
     settings: args.settings,
     model: args.model,
     readme: README_TEMPLATE,
   };
+}
+
+/** The record sets a surface may draw (useOverviewRecords().inScope). */
+export interface BundleRecordSets {
+  signalWindows: Array<Record<string, unknown>>;
+  signalEvents: Array<Record<string, unknown>>;
+  logEvents: Array<Record<string, unknown>>;
+}
+
+/**
+ * Every non-window record `keep` accepts, for a bundle: episode windows and
+ * events from the surface's sets; the log and metrics from the runtime's own
+ * store, read whole at export time — or, under a host feed, the feed's log
+ * events (a feed has no metrics).
+ */
+export async function bundleRecords(args: {
+  sets: BundleRecordSets;
+  fed: boolean;
+  keep: (record: object) => boolean;
+  /** Under a host feed: the fed windows, whose raw-only envelopes are exported. */
+  fedWindows?: ReadonlyArray<object> | null;
+}): Promise<SessionRecords> {
+  const runtimeLog = args.fed ? null : await readRuntimeLog();
+  const rawWindows = args.fed ? splitRawOnly(args.fedWindows ?? []).rawOnly : await readStoredRawOnly();
+  return collectRecords({
+    signalWindows: args.sets.signalWindows,
+    signalEvents: args.sets.signalEvents,
+    logEvents: runtimeLog?.logEvents ?? args.sets.logEvents,
+    metrics: runtimeLog?.metrics ?? [],
+    rawWindows,
+  }, args.keep);
 }
 
 /*
@@ -102,7 +172,8 @@ export function buildSessionBundle(args: {
  * studies where reviewers want every condition in one file.
  */
 export interface MultiSessionBundle {
-  schema_version: '1.0';
+  /** 1.1 adds `records`: every other record kind of the compared sessions (or people). */
+  schema_version: '1.1';
   variant: 'multi';
   generated_at: string;
   generator: 'oyon-app';
@@ -110,6 +181,8 @@ export interface MultiSessionBundle {
     summary: SessionSummary;
     windows: EmotionWindow[];
   }>;
+  /** Episode windows, events, log and metrics of every compared session (or person). */
+  records: SessionRecords;
   settings: OyonSettings;
   model: { name: string; version: string; label: string };
   readme: string;
@@ -117,15 +190,24 @@ export interface MultiSessionBundle {
 
 export function buildMultiSessionBundle(args: {
   groups: Array<{ summary: SessionSummary; windows: EmotionWindow[] }>;
+  /** The compared sessions' other record kinds; a kind left out is empty. */
+  records?: Partial<SessionRecords>;
   settings: OyonSettings;
   model: { name: string; version: string; label: string };
 }): MultiSessionBundle {
   return {
-    schema_version: '1.0',
+    schema_version: '1.1',
     variant: 'multi',
     generated_at: new Date().toISOString(),
     generator: 'oyon-app',
     sessions: args.groups,
+    records: {
+      signal_windows: args.records?.signal_windows ?? [],
+      signal_events: args.records?.signal_events ?? [],
+      log_events: args.records?.log_events ?? [],
+      metrics: args.records?.metrics ?? [],
+      raw_windows: args.records?.raw_windows ?? [],
+    },
     settings: args.settings,
     model: args.model,
     readme: README_TEMPLATE,

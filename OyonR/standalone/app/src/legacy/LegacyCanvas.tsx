@@ -78,7 +78,7 @@ export function LegacyTable({ render, deps, headers, className }: LegacyTableBod
               <th
                 key={h.label}
                 style={{ width: h.width, textAlign: h.align ?? 'left' }}
-                className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider"
+                className="label-eyebrow px-3 py-2"
               >
                 {h.label}
               </th>

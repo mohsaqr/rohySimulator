@@ -2161,8 +2161,21 @@ function modelLabelShort(profile) {
 function modelHint(profile) {
   return MODEL_PROFILES[profile]?.hint || MODEL_PROFILES[DEFAULT_MODEL_PROFILE].hint;
 }
+// Same weights as the profile's CDN URL, git-tracked under
+// standalone/models/emotion/ and served by the Vite dev server. Local first
+// so a reload never depends on raw.githubusercontent.com (which answers
+// HTTP 429 after repeated fetches of a 16–40 MB model); the CDN URL stays as
+// a fallback for a checkout without the local files.
+const LOCAL_EMOTION_MODEL_DIR = '/standalone/models/emotion';
 function modelConfigFor(profile) {
-  return (MODEL_PROFILES[profile] || MODEL_PROFILES[DEFAULT_MODEL_PROFILE]).config;
+  const config = (MODEL_PROFILES[profile] || MODEL_PROFILES[DEFAULT_MODEL_PROFILE]).config;
+  const file = typeof config.modelUrl === 'string' ? config.modelUrl.split('/').pop() : null;
+  if (!file) return config;
+  return {
+    ...config,
+    modelUrl: `${LOCAL_EMOTION_MODEL_DIR}/${file}`,
+    modelFallbackUrls: [config.modelUrl],
+  };
 }
 
 // ---------- utils ----------

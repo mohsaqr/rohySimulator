@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { robustBpm } from '../src/aggregation/heartRateRobust.js';
 import { HeartRateAggregator } from '../src/aggregation/HeartRateAggregator.js';
+// The ramp cases below assert against the SHIPPED default rather than a copy,
+// so lowering/raising heart_rate_tracker_windows is caught here immediately.
+import { createOyonSettings } from '../src/settings/OyonSettings.js';
 
 // The worked example: true HR ~86 with an octave error (43), a double (172),
 // and a low-confidence noise spike (118). Naive mean = 93.5; robust ≈ 86.1.
@@ -220,6 +223,86 @@ const EXAMPLE = [
   }
   assert.ok(Math.abs(win.bpm_tracked - win.bpm_robust) < 1e-9, 'slew off → tracked equals robust');
   assert.equal(win.slew_clamped, false);
+}
+
+// ── RISING HR must not be under-reported by the anchor's lag ────────
+// The gap the previous test set missed entirely: every case above feeds a
+// STEADY or STEP rate, and a trailing median is unbiased on both. It is only
+// on a monotonic ramp that the anchor's phase lag turns into a systematic
+// UNDER-estimate — the tracked value sits ~half the anchor span in the past,
+// which at the old trackerWindows=9 (a 90 s anchor) read ~10% low on a HR
+// climbing 10 bpm/min. Pin the ceiling so the default cannot drift back.
+{
+  const WINDOW_MS = 10000;
+  const START = 60;
+  const END = 110;
+  const TOTAL_S = 300;
+  const agg = new HeartRateAggregator({
+    windowMs: WINDOW_MS,
+    sampleIntervalMs: 1000,
+    maxSlewBpmPerS: 1.5,
+    trackerWindows: createOyonSettings({ heart_rate_enabled: true }).heart_rate_tracker_windows,
+    robust: {},
+  });
+  // Deterministic zig-zag instead of random noise: a test that samples an RNG
+  // is a test that can fail on a different day for no reason.
+  const jitter = (i) => [2.2, -1.7, 0.9, -2.4, 1.4, -0.6][i % 6];
+  const errors = [];
+  for (let i = 0; i < TOTAL_S; i += 1) {
+    const t = (i + 1) * 1000;
+    const truth = START + ((END - START) * i) / TOTAL_S;
+    const win = agg.consumeFrame(
+      { bpm: truth + jitter(i), snr: 8, confidence: 0.8, window_seconds: 12, method: 'pos' }, t,
+    );
+    if (win && Number.isFinite(win.bpm_tracked)) errors.push(win.bpm_tracked - truth);
+  }
+  assert.ok(errors.length >= 20, `ramp produced enough windows to judge (got ${errors.length})`);
+
+  const meanErr = errors.reduce((a, b) => a + b, 0) / errors.length;
+  const worst = errors.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
+  // Signed, not absolute: the whole point is that the error has a DIRECTION.
+  assert.ok(meanErr > -3.0,
+    `tracked must not lag a rising HR by more than 3 bpm on average (got ${meanErr.toFixed(2)})`);
+  assert.ok(Math.abs(worst) < 8.0,
+    `worst-case ramp error stays under 8 bpm (got ${worst.toFixed(2)})`);
+
+  // And the mechanism, so a regression is diagnosable rather than just red:
+  // a longer anchor MUST be measurably worse on this same input.
+  const laggy = new HeartRateAggregator({
+    windowMs: WINDOW_MS, sampleIntervalMs: 1000, maxSlewBpmPerS: 1.5, trackerWindows: 9, robust: {},
+  });
+  const laggyErrors = [];
+  for (let i = 0; i < TOTAL_S; i += 1) {
+    const t = (i + 1) * 1000;
+    const truth = START + ((END - START) * i) / TOTAL_S;
+    const win = laggy.consumeFrame(
+      { bpm: truth + jitter(i), snr: 8, confidence: 0.8, window_seconds: 12, method: 'pos' }, t,
+    );
+    if (win && Number.isFinite(win.bpm_tracked)) laggyErrors.push(win.bpm_tracked - truth);
+  }
+  const laggyMean = laggyErrors.reduce((a, b) => a + b, 0) / laggyErrors.length;
+  assert.ok(laggyMean < meanErr,
+    `a 9-window anchor lags MORE than the default (9-win ${laggyMean.toFixed(2)} vs default ${meanErr.toFixed(2)})`);
+}
+
+// ── steady HR stays unbiased — the shorter anchor must not cost this ─
+{
+  const agg = new HeartRateAggregator({
+    windowMs: 10000, sampleIntervalMs: 1000, maxSlewBpmPerS: 1.5, robust: {},
+    trackerWindows: createOyonSettings({ heart_rate_enabled: true }).heart_rate_tracker_windows,
+  });
+  const jitter = (i) => [3.1, -2.6, 1.2, -1.9, 2.4, -2.2][i % 6];
+  const tracked = [];
+  for (let i = 0; i < 300; i += 1) {
+    const win = agg.consumeFrame(
+      { bpm: 72 + jitter(i), snr: 8, confidence: 0.8, window_seconds: 12, method: 'pos' }, (i + 1) * 1000,
+    );
+    if (win && Number.isFinite(win.bpm_tracked)) tracked.push(win.bpm_tracked);
+  }
+  const settled = tracked.slice(Math.floor(tracked.length / 2));
+  const meanTracked = settled.reduce((a, b) => a + b, 0) / settled.length;
+  assert.ok(Math.abs(meanTracked - 72) < 1.5,
+    `a steady 72 stays unbiased with the shorter anchor (got ${meanTracked.toFixed(2)})`);
 }
 
 console.log('heart-rate-robust.test.js — all cases passed');

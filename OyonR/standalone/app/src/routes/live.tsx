@@ -26,7 +26,6 @@ import { symmetricColumns } from '@/lib/gridColumns';
 import { vitalTone } from '@/lib/vitalsTone';
 import { emotionColor } from '@/lib/emotionColors';
 import { deriveFrameQuality } from '@/lib/frameQuality';
-import { respirationPhase } from '@/lib/respirationState.js';
 
 /*
  * Every card in the two 3-up grids shares one height, so Signals and Structure
@@ -74,6 +73,7 @@ function LivePage() {
     lastPosture,
     lastHeartRate,
     lastRespiration,
+    lastIllumination,
     lastGaze,
     recentWindows,
     windowCount,
@@ -145,22 +145,21 @@ function LivePage() {
     min: numOr(rs.respiration_plausible_min_brpm, 9),
     max: numOr(rs.respiration_plausible_max_brpm, 24),
   };
-  // The large live values use the same confidence-weighted window summaries
-  // that are stored and analyzed. Per-sample status still controls colour and
-  // whether the value is marked current/held; a weak update never erases the
-  // last weighted physiological estimate.
-  const weightedHeartBpm = windowHeartRate?.bpm_tracked
+  // Heart rate shows BOTH estimators rather than substituting one for the
+  // other. `lastHeartRate` is the per-sample reading (~1 Hz, ~12 s
+  // integration); `trackedHeartBpm` is the cross-window value Analyze stores.
+  // Overwriting the per-sample BPM with the tracked one — as this did — made
+  // the two indistinguishable under one "live" heading, and left the beat
+  // animation pulsing at the tracked rate. The gap between them is not noise:
+  // the tracker's anchor is a trailing median over trackerWindows x the
+  // aggregate window, so it necessarily reads low while the rate is climbing.
+  const trackedHeartBpm = windowHeartRate?.bpm_tracked
     ?? windowHeartRate?.bpm_robust
     ?? windowHeartRate?.bpm_mean
     ?? null;
-  const displayedHeartRate = lastHeartRate && weightedHeartBpm != null
-    ? {
-        ...lastHeartRate,
-        bpm: weightedHeartBpm,
-        confidence: windowHeartRate?.confidence_mean ?? lastHeartRate.confidence,
-        windowSeconds: windowHeartRate?.analysis_window_seconds ?? lastHeartRate.windowSeconds,
-      }
-    : lastHeartRate;
+  // State the anchor's span instead of leaving the lag to be inferred.
+  const trackedHeartSpanSeconds = (numOr(rs.heart_rate_tracker_windows, 9)
+    * numOr(rs.aggregate_window_ms, 10000)) / 1000;
   const displayedRespiration = lastRespiration && windowRespiration?.brpm_mean != null
     ? {
         ...lastRespiration,
@@ -169,41 +168,6 @@ function LivePage() {
         windowSeconds: windowRespiration.analysis_window_seconds ?? lastRespiration.windowSeconds,
       }
     : lastRespiration;
-  const heartEnabled = Boolean(settings.heart_rate_enabled);
-  const breathingEnabled = Boolean(settings.respiration_enabled);
-  const enabledVitalCount = Number(heartEnabled) + Number(breathingEnabled);
-  const visibleVitalCount = Number(heartEnabled && lastHeartRate?.bpm != null)
-    + Number(breathingEnabled && lastRespiration?.brpm != null);
-  const liveVitalCount = Number(heartEnabled
-      && lastHeartRate?.bpm != null
-      && lastHeartRate.current !== false
-      && lastHeartRate.qualityAccepted !== false)
-    + Number(breathingEnabled
-      && lastRespiration?.brpm != null
-      && lastRespiration.current !== false
-      && lastRespiration.qualityAccepted !== false);
-  const breathingPhase = respirationPhase(lastRespiration);
-  const vitalState: { label: string; tone: MetricTone; reason?: string } = enabledVitalCount === 0
-    ? { label: 'off', tone: 'null', reason: 'disabled in Settings' }
-    : !cameraRunning
-      ? { label: 'idle', tone: 'null', reason: 'start capture' }
-      : liveVitalCount === enabledVitalCount
-        ? { label: 'live', tone: 'ok' }
-        : visibleVitalCount > 0
-          ? {
-              label: liveVitalCount > 0 ? 'partial' : 'holding',
-              tone: 'warn',
-              reason: liveVitalCount > 0 ? 'one rate has low quality' : 'showing last or low-quality readings',
-            }
-          : lastHeartRate?.ready === true || breathingPhase === 'unconfirmed'
-            ? {
-                label: 'check signal',
-                tone: 'warn',
-                reason: lastHeartRate?.statusReason ?? lastRespiration?.statusReason ?? 'rate rejected',
-              }
-            : breathingEnabled && breathingPhase === 'confirming'
-              ? { label: 'confirming', tone: 'info', reason: 'checking rate stability' }
-            : { label: 'acquiring', tone: 'info', reason: 'buffers filling' };
   const dominantPct = lastWindow
     ? Math.max(...Object.values(lastWindow.probabilities ?? {}))
     : null;
@@ -215,7 +179,10 @@ function LivePage() {
         title="Live"
         description="Watch the signal as it streams. Engagement KPIs, current prediction, and a spatial gaze tile."
         actions={
-          <div className="flex items-center gap-2">
+          // flex-wrap: these three controls are 261 px together, which does not
+          // fit beside the title on a phone. PageHeader's own action slot wraps,
+          // but this nested row has to wrap too or it just overflows as a unit.
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setTypingTestOpen(true)}>
               <Keyboard className="size-3.5" aria-hidden="true" />
               Test typing
@@ -337,7 +304,7 @@ function LivePage() {
           </CardHeader>
           <CardContent className={`${PAIR_BODY} flex flex-col gap-2`}>
             <LiveGazeHeatmap className="min-h-0 flex-1" />
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-3">
+            <div className="flex flex-wrap items-center gap-2 text-mini text-ink-3">
               {gazeDiag?.error ? (
                 <span className="text-status-bad">
                   ⚠ gaze adapter failed: {gazeDiag.error} — use “Demo gaze stream” meanwhile
@@ -373,20 +340,17 @@ function LivePage() {
             <Card className={CARD}>
               <CardHeader>
                 <CardTitle>Heart rate &amp; breathing</CardTitle>
-                <StatusPill
-                  tone={vitalState.tone}
-                  reason={vitalState.reason}
-                >
-                  {vitalState.label}
-                </StatusPill>
               </CardHeader>
               <CardContent className={CARD_BODY}>
                 <LiveHeartRateTile
                   enabled={Boolean(settings.heart_rate_enabled)}
                   active={cameraRunning}
-                  sample={displayedHeartRate}
+                  sample={lastHeartRate}
+                  trackedBpm={trackedHeartBpm}
+                  trackedSpanSeconds={trackedHeartSpanSeconds}
                   respirationEnabled={Boolean(settings.respiration_enabled)}
                   respiration={displayedRespiration}
+                  lighting={lastIllumination?.assessment ?? null}
                   // Bands come from the RUNTIME settings, so the colour matches
                   // the prior the tracker actually applies rather than a
                   // hardcoded copy that could silently drift from it.
@@ -538,7 +502,6 @@ function LivePage() {
             <Metric
               label="Windows"
               value={windowCount}
-              tone="info"
               hint="this session"
             />
           </div>
@@ -671,7 +634,7 @@ function MockGazeToggle({
     <button
       type="button"
       onClick={() => onToggleMock(!mockGaze)}
-      className="rounded border border-line bg-surface-1 px-2 py-1 text-[11px] font-medium text-ink-1 hover:bg-surface-2"
+      className="rounded border border-line bg-surface-1 px-2 py-1 text-mini font-medium text-ink-1 hover:bg-surface-2"
     >
       {mockGaze ? '■ Stop demo gaze stream' : '▶ Demo gaze stream (no camera)'}
     </button>
@@ -739,7 +702,7 @@ function LiveGazeTile({
       <div className="flex items-center gap-2">
         <MockGazeToggle mockGaze={mockGaze} onToggleMock={onToggleMock} />
         {mockGaze ? (
-          <span className="text-[11px] text-ink-3">synthetic</span>
+          <span className="text-mini text-ink-3">synthetic</span>
         ) : null}
       </div>
     </div>
@@ -749,7 +712,7 @@ function LiveGazeTile({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b border-line py-1 last:border-b-0">
-      <span className="text-[10px] uppercase tracking-wider text-ink-3">{label}</span>
+      <span className="label-eyebrow">{label}</span>
       <span className="font-medium tabular-nums text-ink-0 truncate">{value}</span>
     </div>
   );

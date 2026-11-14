@@ -8,16 +8,21 @@ import {
   createHostBridgeStore,
   HostBridgeProvider,
   type ChromeMode,
+  type EmbedScope,
   type GazeAoi,
   type HostBridgeStore,
 } from '@/lib/hostBridge';
+import { normalizeEmotionWindows } from '@/lib/windowTime';
 import elementCss from '@/styles/element.css?inline';
 import { parsePillLabels, parsePillLang, type PillLabels, type PillLang } from '@/lib/pillStrings';
 import {
   OYON_HOST_CONTRACT_VERSION,
   OYON_VERSION,
+  validateHostRecords,
   type EmotionWindow,
+  type HostRecordsInput,
 } from 'oyon';
+import type { SignalEvent } from 'oyon/signal-events';
 
 /*
  * <oyon-app> — the full Oyon Research Instrument as an embeddable custom
@@ -26,12 +31,15 @@ import {
  * URL is never touched).
  *
  * Host contract (see docs/EMBEDDING.md):
- *   attributes  user-id, user-label, session-id, api-base-url, asset-base,
- *               page, sample-events, sample-event-hz, lang, labels
- *               (identity, sample-event, lang and labels attrs apply live)
+ *   attributes  user-id, user-label, session-id, group-id, context-id,
+ *               scope, closable, api-base-url, asset-base, page,
+ *               sample-events, sample-event-hz, lang, labels
+ *               (identity, scope, sample-event, lang and labels attrs apply live)
  *   property    getToken: () => string | Promise<string>
- *   methods     start(), stop()
+ *   methods     start(), stop(), setWindows(), setRecords(), setGazeAois()
  *   events      oyon:window  { windows, sessionId, userId }
+ *               oyon:records { accepted, refused, reasons }  (after setRecords)
+ *               oyon:close   {}  (the close control, when `closable`)
  *               oyon:sample  { dominant, confidence, valence, ts }
  *                            (live ~10Hz per-sample emotion for a real-time
  *                             face/avatar between windows; derived label only)
@@ -177,7 +185,40 @@ const OBSERVED = [
   //                  header strip ABOVE the full Analyze dashboards, all on the
   //                  REAL runtime — one element, both capture and analytics.
   'chrome',
+  // scope selects which host-fed records the dashboards draw: "session"
+  // (default, one session-id), "person" (every session of user-id) or
+  // "group" (every person in the feed). Applies live.
+  'scope',
+  // group-id / context-id are stamped on captured records beside session_id
+  // and user_id: the group the person works in, and the document, case,
+  // conversation or task the work belongs to. Live-updatable, like user-id.
+  'class-id',
+  'group-id',
+  'context-id',
+  // closable shows a close control in the embedded header that emits
+  // `oyon:close`; the host decides what closing means.
+  'closable',
 ] as const;
+
+/** Parse the `scope` attribute. Anything unrecognized is 'session' — the
+ *  narrowest scope — so a typo can never widen what an embed draws. */
+function parseScope(value: string | null): EmbedScope {
+  const v = value?.trim().toLowerCase();
+  if (v === 'person' || v === 'group' || v === 'class') return v;
+  if (v != null && v !== '' && v !== 'session') {
+    try {
+      console.warn(
+        `[oyon-app] unrecognized scope="${value}" — using "session". ` +
+          'Valid: "session" | "person" | "group" | "class".',
+      );
+    } catch { /* no console */ }
+  }
+  return 'session';
+}
+
+/** How many refused records the `oyon:records` event lists individually. The
+ *  counts always cover all of them. */
+const MAX_REPORTED_REFUSALS = 50;
 
 type SampleEventMode = 'source' | 'throttled' | 'off';
 
@@ -233,8 +274,11 @@ function parseChromeMode(value: string | null): ChromeMode {
 /** Initial memory-history entry. `page` wins when set; otherwise the combined
  *  capture+analytics embed lands on /analyze (its reason to exist), while every
  *  other mode keeps the historical '/' default (→ /live) untouched. */
-function initialEntryFor(chromeMode: ChromeMode, pageAttr: string | null): string {
+function initialEntryFor(chromeMode: ChromeMode, pageAttr: string | null, scope: EmbedScope): string {
   if (pageAttr != null && pageAttr.trim() !== '') return pageAttr;
+  // A person or group dashboard opens on its Overview: who and what is in
+  // scope, before any one analytic view.
+  if (scope !== 'session' && chromeMode !== 'capture') return '/overview';
   return chromeMode === 'capture-analytics' ? '/analyze' : '/';
 }
 
@@ -344,6 +388,8 @@ export class OyonAppElement extends HTMLElement {
     this.bridge.getState().setBridge({
       embedded: true,
       chromeMode,
+      scope: parseScope(this.getAttribute('scope')),
+      closable: this.hasAttribute('closable') && this.getAttribute('closable') !== 'false',
       assetBase: this.getAttribute('asset-base'),
       apiBaseUrl: this.getAttribute('api-base-url'),
       gazeEngineOverride: this.getAttribute('gaze-engine')?.trim().toLowerCase() || null,
@@ -375,7 +421,9 @@ export class OyonAppElement extends HTMLElement {
 
     this.router = makeRouter(
       createMemoryHistory({
-        initialEntries: [initialEntryFor(chromeMode, this.getAttribute('page'))],
+        initialEntries: [
+          initialEntryFor(chromeMode, this.getAttribute('page'), parseScope(this.getAttribute('scope'))),
+        ],
       }),
     );
     this.reactRoot = createRoot(host);
@@ -453,6 +501,11 @@ export class OyonAppElement extends HTMLElement {
           gazeEngineOverride: null,
           gazeAois: null,
           settingsOverride: null,
+          scope: 'session',
+          classId: null,
+          groupId: null,
+          contextId: null,
+          closable: false,
           lang: 'en',
           labels: null,
           assetBase: null,
@@ -461,6 +514,8 @@ export class OyonAppElement extends HTMLElement {
           emitHostEvent: null,
         });
         bridge?.getState().setHostWindows(null);
+        // Drop everything the host fed: it lived only in this store.
+        bridge?.getState().setHostRecords(null);
         this.bridge = null;
         if (this.shadowRoot) this.shadowRoot.replaceChildren();
       });
@@ -473,7 +528,16 @@ export class OyonAppElement extends HTMLElement {
       case 'user-id':
       case 'user-label':
       case 'session-id':
+      case 'class-id':
+      case 'group-id':
+      case 'context-id':
         this.applyIdentityAttributes();
+        break;
+      case 'scope':
+        this.bridge?.getState().setBridge({ scope: parseScope(value) });
+        break;
+      case 'closable':
+        this.bridge?.getState().setBridge({ closable: value != null && value !== 'false' });
         break;
       case 'gaze-engine':
         // Takes effect on the NEXT start() — the runtime snapshots settings at
@@ -573,6 +637,56 @@ export class OyonAppElement extends HTMLElement {
   }
 
   /**
+   * Feed the dashboards everything the HOST stored, in the shapes Oyon
+   * emits: interval windows, episode windows, per-event states and log
+   * events. While a feed is set it is the only data source for the
+   * dashboards — nothing is read from the element's own local store — and
+   * the `scope` attribute decides which of the fed records are drawn.
+   *
+   * The records are held in memory only: nothing is written to IndexedDB or
+   * localStorage, and `setRecords(null)` (or removing the element) drops
+   * them. Pass `null` to go back to the element's own local store.
+   *
+   * Every record is shape-checked on the way in. One that fails is left out
+   * and reported, never fatal: the `oyon:records` event carries how many of
+   * each kind were accepted and refused, and why. A kind left out of the
+   * call is an empty set, not "keep what was there".
+   */
+  setRecords(records: HostRecordsInput | null): void {
+    const bridge = this.bridge?.getState();
+    if (!bridge) {
+      try {
+        console.warn('[oyon-app] setRecords() was called before the element was connected — ignored.');
+      } catch { /* no console */ }
+      return;
+    }
+    if (records == null) {
+      bridge.setHostRecords(null);
+      return;
+    }
+    const checked = validateHostRecords(records);
+    bridge.setHostRecords({
+      windows: normalizeEmotionWindows(checked.records.windows as EmotionWindow[]),
+      signalWindows: checked.records.signalWindows as Array<Record<string, unknown>>,
+      signalEvents: checked.records.signalEvents as SignalEvent[],
+      logEvents: checked.records.logEvents as Array<Record<string, unknown>>,
+    });
+    bridge.emitHostEvent?.('oyon:records', {
+      accepted: checked.counts.accepted,
+      refused: checked.counts.refused,
+      reasons: checked.refused.slice(0, MAX_REPORTED_REFUSALS),
+    });
+    if (checked.counts.refused.total > 0) {
+      try {
+        console.warn(
+          `[oyon-app] setRecords(): refused ${checked.counts.refused.total} record(s); ` +
+            'see the oyon:records event for the kind, index and reason of each.',
+        );
+      } catch { /* no console */ }
+    }
+  }
+
+  /**
    * Define/replace the gaze Areas-of-Interest for THIS embed — e.g. the host
    * app's tutor-avatar face region, so windows report `aoi_dwell_ms` ("was
    * the learner looking at the agent?"). Rects use the gaze convention:
@@ -659,7 +773,16 @@ export class OyonAppElement extends HTMLElement {
       userId: userId && userId.trim().length > 0 ? userId.trim() : DEFAULT_USER_ID,
       userLabel: userLabel && userLabel.trim().length > 0 ? userLabel.trim() : null,
       sessionIdOverride: sessionId && sessionId.trim().length > 0 ? sessionId.trim() : null,
+      classId: this.trimmedAttribute('class-id'),
+      groupId: this.trimmedAttribute('group-id'),
+      contextId: this.trimmedAttribute('context-id'),
     });
+  }
+
+  /** An attribute's trimmed value, or null when absent or blank. */
+  private trimmedAttribute(name: string): string | null {
+    const value = this.getAttribute(name)?.trim();
+    return value ? value : null;
   }
 }
 

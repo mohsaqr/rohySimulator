@@ -23,11 +23,179 @@
       'Helvetica Neue', sans-serif;
     font-feature-settings: 'ss01', 'cv11';
     -webkit-font-smoothing: antialiased;
+    /*
+     * Stop iOS from re-flowing type when the phone is rotated to landscape.
+     * Safari's default "text size adjust" silently inflates body copy on
+     * rotation, which on a dashboard means a number and its label stop
+     * agreeing about how tall a row is.
+     */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /*
+   * The page itself must never scroll sideways. Individual regions opt IN to
+   * horizontal scrolling (the nav rows, wide tables, chart strips); the
+   * document does not, because a document that scrolls sideways on a phone
+   * makes every vertical swipe feel like it is fighting the page.
+   *
+   * On <html> rather than <body>: iOS Safari resolves the page's scrolling
+   * box on the documentElement, and `overflow-x: hidden` on <body> alone is
+   * simply ignored there.
+   */
+  html {
+    overflow-x: hidden;
+  }
+
+  /*
+   * iOS zooms the entire viewport when a form control smaller than 16px
+   * receives focus, and never zooms back out. The app's controls are `text-sm`
+   * (14px) by design, so without this every tap into a filter field or a
+   * participant ID leaves the user stranded at 1.3× with no way back except a
+   * manual pinch.
+   *
+   * Scoped to coarse pointers so the desktop UI keeps its intended 14px.
+   */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em);
+    }
   }
 
   :focus-visible {
     outline: 2px solid var(--status-info);
     outline-offset: 2px;
+  }
+
+  /*
+   * Honour the OS "reduce motion" setting. The app has spinners, a pulse, and
+   * ~60 `transition-colors`, none of which consulted it before.
+   *
+   * Motion is near-eliminated rather than removed outright: `animation:
+   * none` on a spinner leaves a static icon that reads as a frozen app, so
+   * animations are collapsed to a single instantaneous iteration instead —
+   * state still resolves, nothing sweeps across the screen.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * Safe-area padding for the shell's screen-edge furniture.
+   *
+   * With `viewport-fit=cover` in the viewport meta (which is what lets the
+   * app's own surfaces reach the physical edges of the display instead of
+   * being letterboxed in white), the OS stops reserving the notch and the
+   * home-indicator strip — so anything pinned to an edge has to reserve them
+   * itself. `env()` is 0 on every device without a cutout, so these are inert
+   * on desktop and on older phones.
+   *
+   * Written as classes rather than a Tailwind plugin because there are exactly
+   * three call sites — the top bar, the tab bar, and the camera sheet.
+   */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /*
+   * A horizontally scrolling strip with no visible scrollbar. The nav rows use
+   * it: on a phone their contents legitimately exceed the width, and a
+   * scrollbar track drawn across a 32 px nav row costs more than it explains.
+   *
+   * `overscroll-behavior-x: contain` is the important half — without it,
+   * swiping past the end of the nav hands the gesture to the browser and
+   * triggers back-navigation, so a mistimed flick on the tab strip leaves the
+   * app entirely.
+   */
+  .scroll-strip {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scroll-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * Sits a floating panel just clear of the phone tab bar.
+   *
+   * 3.25rem is the tab bar's `min-h-[3.25rem]`; the inset is the home
+   * indicator the bar already reserves; 0.5rem is the visual gap. Written as
+   * one named class rather than an arbitrary Tailwind value because CSS
+   * `calc()` requires whitespace around its operators, which in a Tailwind
+   * bracket has to be spelled with underscores — unreadable, and silently
+   * inert if you get it wrong.
+   */
+  .above-tab-bar {
+    bottom: calc(3.25rem + env(safe-area-inset-bottom) + 0.5rem);
+  }
+
+  /*
+   * Touch-target floor. Apple and WCAG 2.2 both put the minimum around 44 px;
+   * the desktop bar's controls are ~30 px tall, which is correct for a mouse
+   * and too small for a thumb. Applied only on coarse pointers so the dense
+   * desktop chrome is unaffected.
+   */
+  @media (pointer: coarse) {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /*
+   * The uppercase micro-label — Oyon's most repeated typographic role, and
+   * the one that had no name.
+   *
+   * It was spelled SIX ways across 31 sites: four weights (14 sites set none
+   * at all, rendering 400 beside their 600 twins), four trackings, and three
+   * inks. Worse, the two primitives disagreed with each other — `CardTitle`
+   * said 11px/semibold/0.08em/ink-2 while `Metric`'s label said
+   * 10px/medium/0.05em/ink-3 — so every hand-rolled copy downstream inherited
+   * whichever it was cargo-culted from.
+   *
+   * Standardized on the majority size (10px, 26 of 31) with the wider
+   * tracking the primitive deliberately chose: uppercase needs MORE tracking
+   * as it gets smaller, and 0.05em at 10px is under a pixel. Both values were
+   * already in the codebase; neither is invented.
+   *
+   * Colour is set here as a default rather than baked in, so the handful of
+   * call sites on non-standard grounds (the dark-glass capture pill) can
+   * still override it with a plain utility — @layer utilities is emitted
+   * after @layer components, so `text-white` wins without an `!important`.
+   */
+  .label-eyebrow {
+    font-size: var(--text-micro);
+    line-height: var(--text-micro-lh);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    /*
+     * ink-2, not the ink-3 that 25 of the 31 original sites used. Measured
+     * against the surfaces these labels actually sit on, ink-3 gives 4.35:1
+     * in light and 3.87:1 in dark — both under the 4.5:1 WCAG AA floor that
+     * 10px text has to clear. ink-2 clears it on both grounds.
+     *
+     * The failure predates this class; centralizing the role is what made it
+     * fixable in one place instead of thirty-one.
+     */
+    color: var(--ink-2);
   }
 }
 

@@ -1,0 +1,17 @@
+# How Oyon is tested on the Mac mini (ci VM). Run in the repo: mini-ci [job]
+#   job NAME COMMAND   (first = default)   env KEY=VALUE   include PATH   fetch PATH
+node mac
+# The React app depends on ladyna via file:../../../tna-js; its built dist/ travels with it.
+sibling ../tna-js
+# …and on psychaj (file:../../../psychaj) for the mlVAR / graphicalVAR networks.
+sibling ../psychaj
+
+# Syntax check of every source file, then the node test chain (prepublishOnly's first two steps).
+job test npm run check && npm test
+# The React app's TypeScript check; the app has its own lockfile and dependencies.
+# The group dashboard's node test resolves ladyna from standalone/app/node_modules, so it runs here.
+job types npm --prefix standalone/app ci --no-audit --no-fund && npm run app:typecheck && npm run test:app-group
+# The <oyon-app> element bundle the embed and examples load, then the release check that it
+# will not throw at load (an unresolved optional dependency compiled in as a throwing module).
+job element npm --prefix standalone/app ci --no-audit --no-fund && npm run app:build:element
+# Playwright (tests/e2e) is not a job here: the ci VM has no browsers.

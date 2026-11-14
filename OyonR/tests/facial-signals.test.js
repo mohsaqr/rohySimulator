@@ -55,6 +55,7 @@ function blendshapes(pairs) {
   assert.ok(Math.abs(action_units.smile - 0.7) < 1e-9, 'smile = mean(0.8,0.6)=0.7');
   assert.ok(Math.abs(action_units.brow_furrow - 0.3) < 1e-9, 'brow_furrow = mean(0.4,0.2)=0.3');
   assert.ok(Math.abs(action_units.jaw_open - 0.5) < 1e-9, 'jaw_open passthrough');
+  assert.ok(Math.abs(action_units.mouth_open - 0.5) < 1e-9, 'mouth_open = jawOpen, not jawOpen/2');
   assert.equal(all.mouthSmileLeft, 0.8, 'raw blendshape retained');
   assert.equal(action_units.frown, 0, 'missing names contribute 0');
 

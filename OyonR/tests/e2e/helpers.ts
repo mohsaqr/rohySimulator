@@ -13,33 +13,42 @@ import type { Page } from '@playwright/test';
  *      teardown (all tracks ended) after stop()/element removal.
  */
 const SYNTHETIC_CAMERA = `
-  (() => {
+  ((pulseBpm) => {
     window.__oyonStreams = [];
     const mint = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 640; canvas.height = 480;
       const ctx = canvas.getContext('2d');
+      const t0 = performance.now();
       setInterval(() => {
         ctx.fillStyle = '#8a7a6a'; ctx.fillRect(0, 0, 640, 480);
-        ctx.fillStyle = '#d9b99b';
+        // Optional synthetic pulse: a small skin-colour oscillation (mostly
+        // green, as in blood-volume pulse) at pulseBpm, for rPPG journeys.
+        if (pulseBpm > 0) {
+          const p = Math.sin(2 * Math.PI * (pulseBpm / 60) * (performance.now() - t0) / 1000);
+          ctx.fillStyle = 'rgb(' + Math.round(217 + 1 * p) + ',' + Math.round(185 + 3 * p) + ',' + Math.round(155 + 2 * p) + ')';
+        } else {
+          ctx.fillStyle = '#d9b99b';
+        }
         ctx.beginPath(); ctx.ellipse(320, 240, 110, 150, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#3a2a1a';
         ctx.beginPath(); ctx.ellipse(280, 200, 14, 9, 0, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.ellipse(360, 200, 14, 9, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#9a6a5a';
         ctx.beginPath(); ctx.ellipse(320, 300, 35, 12, 0, 0, Math.PI * 2); ctx.fill();
-      }, 100);
+      }, pulseBpm > 0 ? 33 : 100);
       const stream = canvas.captureStream(15);
       window.__oyonStreams.push(stream);
       return stream;
     };
     const md = navigator.mediaDevices;
     if (md) md.getUserMedia = async () => mint();
-  })();
+  })(__PULSE_BPM__);
 `;
 
-export async function installSyntheticCamera(page: Page): Promise<void> {
-  await page.addInitScript(SYNTHETIC_CAMERA);
+export async function installSyntheticCamera(page: Page, opts: { pulseBpm?: number } = {}): Promise<void> {
+  const pulse = Number.isFinite(opts.pulseBpm) && (opts.pulseBpm as number) > 0 ? Number(opts.pulseBpm) : 0;
+  await page.addInitScript(SYNTHETIC_CAMERA.replace('__PULSE_BPM__', String(pulse)));
 }
 
 /** All getUserMedia tracks handed out so far are ended (camera released). */

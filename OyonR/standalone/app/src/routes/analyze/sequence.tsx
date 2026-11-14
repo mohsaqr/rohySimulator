@@ -1,7 +1,10 @@
+import { useChannelOptions } from '@/lib/channelOptions';
+import { writingActEvents, writingActSequences } from 'oyon';
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Database } from 'lucide-react';
 import { lsa, plotLSAPolar } from 'legacy-tnaj';
+import { describeSequences } from 'ladyna/sequences';
 import { Section } from '@/components/ui/Section';
 import { CentralityPanel } from '@/components/charts/CentralityPanel';
 import { StateDistributionBars } from '@/components/charts/StateDistributionBars';
@@ -19,7 +22,7 @@ import { STORED_WINDOWS_QUERY_KEY } from '@/lib/storedWindows';
 import { useFilteredWindows } from '@/lib/useFilteredWindows';
 import { useStoredEvents } from '@/lib/storedEvents';
 import { buildSessionSequences, buildEventSequences } from '@/lib/tnaPooling';
-import { CHANNEL_OPTIONS, channelUnit, channelLabel } from '@/lib/analyticsChannel';
+import { channelUnit, channelLabel } from '@/lib/analyticsChannel';
 import { useChannelStore } from '@/lib/channelStore';
 import { LegacyContainer } from '@/legacy/LegacyCanvas';
 import { loadDemoData } from '@/legacy/demoFixture.js';
@@ -53,8 +56,15 @@ export function SequenceView() {
   // channelStore, so the selection carries across the two tabs.
   const channel = useChannelStore((s) => s.channel);
   const setChannel = useChannelStore((s) => s.setChannel);
+  const channelOptions = useChannelOptions(channel, windowsLoading || eventsLoading ? null : { windows: enriched, events });
+  const writingLevel = useChannelStore((s) => s.writingLevel);
+  const setWritingLevel = useChannelStore((s) => s.setWritingLevel);
   const isLoading = channel === 'emotion' ? windowsLoading : eventsLoading;
-  const recordCount = channel === 'emotion' ? enriched.length : events.length;
+  // The chosen channel's own events, not every channel's under its name.
+  const recordCount = channel === 'emotion' ? enriched.length
+    : channel === 'all' ? events.length
+      : channel === 'writing' ? writingActEvents(events).length
+        : events.filter((event) => event.modality === channel).length;
   const unit = channelUnit(channel);
 
   // One chain per session (or per session+capture for events), pooled by
@@ -63,8 +73,9 @@ export function SequenceView() {
   const sequences = useMemo(
     () => channel === 'emotion'
       ? buildSessionSequences(enriched)
-      : buildEventSequences(events, channel === 'all' ? null : channel),
-    [enriched, events, channel],
+      : channel === 'writing' ? writingActSequences(events, { level: writingLevel })
+        : buildEventSequences(events, channel === 'all' ? null : channel),
+    [enriched, events, channel, writingLevel],
   );
   const tnaResult = useMemo(
     () => computeTnaFromSequences(sequences),
@@ -98,29 +109,18 @@ export function SequenceView() {
   const [sizeBy, setSizeBy] = useState<NodeSizeKey>('none');
   const rows = useMemo(() => centralityRows(tnaResult?.centrality ?? null), [tnaResult]);
   const nodeRadii = useMemo(() => nodeRadiiFor(rows, sizeBy), [rows, sizeBy]);
+  // Counts and the normalised state entropy come from ladyna describeSequences
+  // (R-checked: tests/series-statistics-r-groundtruth.test.ts in ladyna).
   const overview = useMemo(() => {
     if (!tnaResult) return null;
-    const chains = tnaResult.sequences ?? [];
-    const labels = tnaResult.model?.labels ?? [];
-    const lengths = chains.map((chain: unknown[]) => chain.length);
-    const windows = lengths.reduce((sum: number, length: number) => sum + length, 0);
-    const counts = new Map<string, number>();
-    let transitions = 0;
-    for (const chain of chains as string[][]) {
-      transitions += Math.max(0, chain.length - 1);
-      for (const state of chain) counts.set(state, (counts.get(state) ?? 0) + 1);
-    }
-    const proportions = [...counts.values()].map((count) => count / Math.max(1, windows));
-    const entropy = -proportions.reduce((sum, proportion) => (
-      proportion > 0 ? sum + proportion * Math.log2(proportion) : sum
-    ), 0);
+    const d = describeSequences((tnaResult.sequences ?? []) as string[][]);
     return {
-      sequences: chains.length,
-      windows,
-      meanLength: chains.length ? windows / chains.length : 0,
-      states: labels.length,
-      transitions,
-      entropy: labels.length > 1 ? entropy / Math.log2(labels.length) : 0,
+      sequences: d.nSequences,
+      windows: d.nStates,
+      meanLength: d.nSequences ? d.meanLength : 0,
+      states: tnaResult.model?.labels?.length ?? d.alphabet.length,
+      transitions: d.nTransitions,
+      entropy: Number.isFinite(d.stateEntropy) ? d.stateEntropy : 0,
     };
   }, [tnaResult]);
 
@@ -142,8 +142,25 @@ export function SequenceView() {
   // Rendered above every branch below (including loading/empty) so switching
   // channels is always possible, not just once a channel already has data.
   const channelPicker = (
-    <div className="max-w-xs">
-      <Select label="Channel" value={channel} options={CHANNEL_OPTIONS} onChange={setChannel} />
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-full max-w-xs">
+        <Select label="Channel" value={channel} options={channelOptions} onChange={setChannel} />
+      </div>
+      {channel === 'writing' ? (
+        <div className="inline-flex overflow-hidden rounded border border-line text-xs" role="group" aria-label="Grain of the writing acts">
+          {(['main', 'detail'] as const).map((level) => (
+            <button
+              key={level}
+              type="button"
+              aria-pressed={writingLevel === level}
+              onClick={() => setWritingLevel(level)}
+              className={writingLevel === level ? 'bg-status-info-dim px-2.5 py-1.5 font-medium text-status-info' : 'px-2.5 py-1.5 text-ink-2 hover:bg-surface-2'}
+            >
+              {level === 'main' ? 'Main acts' : 'With detail'}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -189,12 +206,12 @@ export function SequenceView() {
       {channelPicker}
       <Section id="seq-overview" title="Sequence overview">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Metric label="Sequences" value={overview?.sequences ?? null} tone="info" />
-          <Metric label={channel === 'emotion' ? 'Windows' : 'Events'} value={overview?.windows ?? null} tone="info" />
-          <Metric label="Mean length" value={overview ? overview.meanLength.toFixed(1) : null} tone="info" />
-          <Metric label="Distinct states" value={overview?.states ?? null} tone="info" />
-          <Metric label="Transitions" value={overview?.transitions ?? null} tone="info" />
-          <Metric label="State entropy" value={overview ? overview.entropy.toFixed(2) : null} hint="normalised 0–1" tone="info" />
+          <Metric label="Sequences" value={overview?.sequences ?? null} />
+          <Metric label={channel === 'emotion' ? 'Windows' : 'Events'} value={overview?.windows ?? null} />
+          <Metric label="Mean length" value={overview ? overview.meanLength.toFixed(1) : null} />
+          <Metric label="Distinct states" value={overview?.states ?? null} />
+          <Metric label="Transitions" value={overview?.transitions ?? null} />
+          <Metric label="State entropy" value={overview ? overview.entropy.toFixed(2) : null} hint="normalised 0–1" />
         </div>
       </Section>
 

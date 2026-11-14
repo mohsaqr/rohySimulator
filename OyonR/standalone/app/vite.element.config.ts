@@ -53,7 +53,18 @@ function webgazerNotBundled(): Plugin {
 export default defineConfig({
   plugins: [webgazerNotBundled(), react()],
   resolve: {
-    alias: makeAliases(__dirname, repoRoot),
+    alias: [
+      // `webgazer` is an OPTIONAL peer (GPL, opt-in gaze engine) and is never
+      // compiled into the element. Left to Vite, the build depends on whether
+      // the peer happens to be installed: present, its code is inlined;
+      // absent, Vite substitutes a module that throws `Could not resolve
+      // "webgazer"`, and because dynamic imports are inlined below that throw
+      // runs when the element loads — in every host page, whichever gaze
+      // engine is in use. Aliasing it to an inert stand-in makes the build the
+      // same either way; WebGazerAdapter then loads the script at runtime.
+      { find: /^webgazer$/, replacement: path.resolve(__dirname, 'src/stubs/webgazerNotBundled.ts') },
+      ...makeAliases(__dirname, repoRoot),
+    ],
   },
   define: {
     // React's UMD-style dev checks read process.env.NODE_ENV; in a host page

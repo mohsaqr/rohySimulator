@@ -76,7 +76,7 @@ export function CalibrateButton({ className }: { className?: string }) {
         title="Calibrate gaze — run the 9-point flow so the live dot tracks where you look"
         aria-label="Calibrate gaze"
         className={cn(
-          'inline-flex items-center gap-1 rounded bg-status-info px-2 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50',
+          'inline-flex items-center gap-1 rounded bg-status-info px-2 py-1 text-mini font-medium text-status-on hover:opacity-90 disabled:opacity-50',
           className,
         )}
       >

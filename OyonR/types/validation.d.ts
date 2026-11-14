@@ -1,1 +1,1 @@
-export { ALLOWED_EMOTIONS, validateEmotionBatch } from './index.js';
+export { ALLOWED_EMOTIONS, validateEmotionBatch, validateRawStreamsBlock, validateRawPart } from './index.js';

@@ -22,7 +22,23 @@ export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
       <div
         ref={ref}
         className={cn(
-          'rounded-lg border border-line bg-surface-1 shadow-card',
+          /*
+           * `min-w-0` is load-bearing, not cosmetic.
+           *
+           * Grid and flex items default to `min-width: auto`, which floors
+           * them at their content's min-content width — so a card holding
+           * anything unbreakable (a wide table, a `whitespace-nowrap` row of
+           * state chips) refuses to shrink and drags its whole track wider
+           * than the viewport. On /analyze/patterns that made a 390 px phone
+           * render a 533 px card and scroll the entire dashboard sideways.
+           *
+           * Setting it here rather than at each grid site fixes the class of
+           * bug once: a Card should never be the reason its container
+           * overflows. Content that genuinely cannot shrink is then free to
+           * scroll INSIDE the card, which is what its own `overflow-x-auto`
+           * wrappers already do.
+           */
+          'min-w-0 rounded-lg border border-line bg-surface-1 shadow-card',
           className,
         )}
         {...props}
@@ -54,13 +70,7 @@ export function CardTitle({
   ...props
 }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2
-      className={cn(
-        'm-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2',
-        className,
-      )}
-      {...props}
-    />
+    <h2 className={cn('label-eyebrow m-0 text-ink-2', className)} {...props} />
   );
 }
 

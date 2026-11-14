@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties } from 'react';
+import { extent } from '@/lib/extent';
 
 /*
  * Small dependency-free SVG charts for the sensing analytics screens (Position
@@ -280,13 +281,36 @@ export function OrientationDensity({
         aria-label={`Head orientation density for ${pts.length} windows; horizontal is yaw and vertical is pitch`}
         style={{ display: 'block' }}
       >
+        {/*
+          * Cells are clipped to the plot instead of each carrying a corner
+          * radius. A density field must read as one continuous surface, so
+          * the rounding belongs to the FIELD, not to every bin inside it.
+          */}
+        <defs>
+          <clipPath id="orientation-plot-clip">
+            <rect
+              x={ORIENTATION_PLOT.x}
+              y={ORIENTATION_PLOT.y}
+              width={ORIENTATION_PLOT.width}
+              height={ORIENTATION_PLOT.height}
+              rx={6}
+            />
+          </clipPath>
+        </defs>
+
+        {/*
+          * surface-1, not surface-2. The empty field must sit BELOW the
+          * faintest occupied cell or it advances in front of the data — at
+          * surface-2 the unvisited region read as darker than a one-window
+          * bin, inverting the whole encoding.
+          */}
         <rect
           x={ORIENTATION_PLOT.x}
           y={ORIENTATION_PLOT.y}
           width={ORIENTATION_PLOT.width}
           height={ORIENTATION_PLOT.height}
-          rx={8}
-          fill="var(--surface-2)"
+          rx={6}
+          fill="var(--surface-1)"
         />
 
         {/* A yaw/pitch tolerance region with a practical meaning, not a decoration. */}
@@ -296,55 +320,67 @@ export function OrientationDensity({
           width={Math.max(0, facingRight - facingLeft)}
           height={Math.max(0, facingBottom - facingTop)}
           fill="var(--status-ok)"
-          fillOpacity={0.07}
+          fillOpacity={0.06}
         />
 
+        {/* Grid UNDER the density, axis labels outside it. */}
         {axisTicks.map((tick) => (
           <g key={`grid-${tick}`}>
             <line
               x1={px(tick)} x2={px(tick)}
               y1={ORIENTATION_PLOT.y} y2={ORIENTATION_PLOT.y + ORIENTATION_PLOT.height}
-              stroke="var(--line)" strokeWidth={1} opacity={tick === 0 ? 0.9 : 0.55}
+              stroke="var(--line)" strokeWidth={1} opacity={tick === 0 ? 0.9 : 0.5}
             />
             <line
               x1={ORIENTATION_PLOT.x} x2={ORIENTATION_PLOT.x + ORIENTATION_PLOT.width}
               y1={py(tick)} y2={py(tick)}
-              stroke="var(--line)" strokeWidth={1} opacity={tick === 0 ? 0.9 : 0.55}
+              stroke="var(--line)" strokeWidth={1} opacity={tick === 0 ? 0.9 : 0.5}
             />
-            <text x={px(tick)} y={ORIENTATION_PLOT.y + ORIENTATION_PLOT.height + 20} textAnchor="middle" fontSize={11} fill="var(--ink-3)">
+            <text x={px(tick)} y={ORIENTATION_PLOT.y + ORIENTATION_PLOT.height + 22} textAnchor="middle" fontSize={11} fill="var(--ink-3)">
               {tick > 0 ? '+' : ''}{tick.toFixed(0)}°
             </text>
-            <text x={ORIENTATION_PLOT.x - 10} y={py(tick) + 4} textAnchor="end" fontSize={11} fill="var(--ink-3)">
+            <text x={ORIENTATION_PLOT.x - 12} y={py(tick) + 4} textAnchor="end" fontSize={11} fill="var(--ink-3)">
               {tick > 0 ? '+' : ''}{tick.toFixed(0)}°
             </text>
           </g>
         ))}
 
-        {/* Square-root opacity keeps low-frequency areas visible beside peaks. */}
-        {summary.bins.filter((bin) => bin.count > 0).map((bin) => (
-          <rect
-            key={`${bin.x}-${bin.y}`}
-            x={ORIENTATION_PLOT.x + bin.x * cellW + 1}
-            y={ORIENTATION_PLOT.y + bin.y * cellH + 1}
-            width={Math.max(0, cellW - 2)}
-            height={Math.max(0, cellH - 2)}
-            rx={3}
-            fill="var(--status-info)"
-            fillOpacity={0.12 + 0.78 * Math.sqrt(bin.count / summary.maxBin)}
-          />
-        ))}
+        {/*
+          * Contiguous cells — no inset, no per-cell radius. Adjacent bins
+          * must fuse into one gradient; the 1px gutter they used to carry
+          * broke the field into ~60 floating lozenges and let the background
+          * grid show through every seam.
+          *
+          * A half-pixel overdraw closes the hairline seams that appear when
+          * a fractional cell width lands between device pixels.
+          *
+          * Square-root opacity keeps low-frequency areas visible beside peaks.
+          */}
+        <g clipPath="url(#orientation-plot-clip)">
+          {summary.bins.filter((bin) => bin.count > 0).map((bin) => (
+            <rect
+              key={`${bin.x}-${bin.y}`}
+              x={ORIENTATION_PLOT.x + bin.x * cellW}
+              y={ORIENTATION_PLOT.y + bin.y * cellH}
+              width={cellW + 0.5}
+              height={cellH + 0.5}
+              fill="var(--status-info)"
+              fillOpacity={0.10 + 0.85 * Math.sqrt(bin.count / summary.maxBin)}
+            />
+          ))}
+        </g>
 
         <rect
           x={facingLeft}
           y={facingTop}
           width={Math.max(0, facingRight - facingLeft)}
           height={Math.max(0, facingBottom - facingTop)}
-          rx={4}
+          rx={3}
           fill="none"
           stroke="var(--status-ok)"
-          strokeOpacity={0.8}
-          strokeWidth={2}
-          strokeDasharray="6 5"
+          strokeOpacity={0.65}
+          strokeWidth={1.5}
+          strokeDasharray="5 4"
         />
 
         {/* The robust typical pose is the sole foreground mark. */}
@@ -357,32 +393,67 @@ export function OrientationDensity({
           </g>
         )}
 
-        <text x={ORIENTATION_PLOT.x} y={18} fontSize={12} fontWeight={600} fill="var(--ink-2)">PITCH</text>
-        <text x={ORIENTATION_PLOT.x} y={ORIENTATION_PLOT.y + 15} fontSize={11} fill="var(--ink-3)">up</text>
-        <text x={ORIENTATION_PLOT.x} y={ORIENTATION_PLOT.y + ORIENTATION_PLOT.height - 10} fontSize={11} fill="var(--ink-3)">down</text>
-        <text x={ORIENTATION_PLOT.x + ORIENTATION_PLOT.width / 2} y={452} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--ink-2)">YAW · left to right</text>
+        {/*
+          * The pitch title reads UP the y-axis like a conventional axis
+          * label, carrying its own direction words. Previously "PITCH" hung
+          * detached above the corner while "up"/"down" sat stranded inside
+          * the data field, where they read as stray data labels.
+          */}
+        <text
+          transform={`translate(22,${ORIENTATION_PLOT.y + ORIENTATION_PLOT.height / 2}) rotate(-90)`}
+          textAnchor="middle" fontSize={11} fontWeight={600} letterSpacing={0.8} fill="var(--ink-2)"
+        >
+          PITCH · down to up
+        </text>
+        <text x={ORIENTATION_PLOT.x + ORIENTATION_PLOT.width / 2} y={452} textAnchor="middle" fontSize={11} fontWeight={600} letterSpacing={0.8} fill="var(--ink-2)">YAW · left to right</text>
 
         <line x1={856} x2={856} y1={34} y2={414} stroke="var(--line)" strokeWidth={1} />
-        <text x={sideX} y={57} fontSize={12} fontWeight={700} letterSpacing={1.2} fill="var(--ink-2)">TYPICAL ORIENTATION</text>
+        <text x={sideX} y={57} fontSize={10} fontWeight={600} letterSpacing={0.8} fill="var(--ink-2)">TYPICAL ORIENTATION</text>
 
-        {/* A small head glyph makes roll immediately legible in the summary. */}
+        {/*
+          * A small head glyph makes roll immediately legible in the summary.
+          *
+          * The dashed rule is TRUE VERTICAL and deliberately sits outside the
+          * rotating group, so the gap between it and the head's own axis IS
+          * the roll angle. Without a datum the glyph only implied tilt; with
+          * one it can be read. That is also why the smile and the eyebrows
+          * went: a face invites you to read mood, and the only quantity here
+          * is an angle.
+          */}
+        <line
+          x1={sideX + 108} x2={sideX + 108} y1={70} y2={182}
+          stroke="var(--line-strong)" strokeWidth={1} strokeDasharray="3 4"
+        />
         <g transform={`translate(${sideX + 108},126) rotate(${summary.typicalRoll ?? 0})`}>
-          <path d="M-35,-3 C-35,-33 -18,-49 0,-49 C18,-49 35,-33 35,-3 L31,25 C21,43 10,51 0,51 C-10,51 -21,43 -31,25 Z" fill="var(--surface-2)" stroke="var(--ink-2)" strokeWidth={2} />
-          <circle cx={-12} cy={-5} r={3} fill="var(--ink-1)" />
-          <circle cx={12} cy={-5} r={3} fill="var(--ink-1)" />
-          <path d="M0,-1 L-4,13 L4,13" fill="none" stroke="var(--ink-2)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M-10,25 Q0,31 10,25" fill="none" stroke="var(--ink-2)" strokeWidth={1.5} strokeLinecap="round" />
+          <path
+            d="M-33,-4 C-33,-31 -17,-46 0,-46 C17,-46 33,-31 33,-4 L29,23 C20,40 9,48 0,48 C-9,48 -20,40 -29,23 Z"
+            fill="var(--surface-1)" stroke="var(--ink-2)" strokeWidth={1.5} strokeLinejoin="round"
+          />
+          {/* The head's own axis — the line the datum is compared against. */}
+          <line x1={0} x2={0} y1={-40} y2={42} stroke="var(--ink-2)" strokeWidth={1} strokeOpacity={0.35} />
+          <circle cx={-12} cy={-6} r={2.5} fill="var(--ink-2)" />
+          <circle cx={12} cy={-6} r={2.5} fill="var(--ink-2)" />
         </g>
 
-        <text x={sideX} y={205} fontSize={11} fill="var(--ink-3)">YAW</text>
-        <text x={sideX + 72} y={205} fontSize={15} fontWeight={600} fill="var(--ink-1)">{directedDegrees(summary.typicalYaw, 'left', 'right')}</text>
-        <text x={sideX} y={239} fontSize={11} fill="var(--ink-3)">PITCH</text>
-        <text x={sideX + 72} y={239} fontSize={15} fontWeight={600} fill="var(--ink-1)">{directedDegrees(summary.typicalPitch, 'down', 'up')}</text>
-        <text x={sideX} y={273} fontSize={11} fill="var(--ink-3)">ROLL</text>
-        <text x={sideX + 72} y={273} fontSize={15} fontWeight={600} fill="var(--ink-1)">{directedDegrees(summary.typicalRoll, 'left tilt', 'right tilt')}</text>
+        {/*
+          * One row per rotation, values right-aligned on a shared edge so the
+          * three magnitudes can be scanned as a column. They were previously
+          * left-aligned at a fixed offset, which ragged the numbers against
+          * their trailing direction words ("6.1° right" vs "2.0° left tilt").
+          */}
+        {([
+          ['YAW', directedDegrees(summary.typicalYaw, 'left', 'right')],
+          ['PITCH', directedDegrees(summary.typicalPitch, 'down', 'up')],
+          ['ROLL', directedDegrees(summary.typicalRoll, 'left tilt', 'right tilt')],
+        ] as const).map(([label, value], i) => (
+          <g key={label}>
+            <text x={sideX} y={205 + i * 34} fontSize={10} fontWeight={600} letterSpacing={0.8} fill="var(--ink-3)">{label}</text>
+            <text x={sideX + 216} y={205 + i * 34} textAnchor="end" fontSize={16} fontWeight={600} fill="var(--ink-1)">{value}</text>
+          </g>
+        ))}
 
-        <rect x={sideX} y={302} width={210} height={72} rx={8} fill="var(--status-ok)" fillOpacity={0.08} />
-        <text x={sideX + 14} y={326} fontSize={11} fontWeight={600} fill="var(--status-ok)">WITHIN POSE ZONE</text>
+        <rect x={sideX} y={302} width={216} height={72} rx={6} fill="var(--status-ok)" fillOpacity={0.08} />
+        <text x={sideX + 14} y={325} fontSize={10} fontWeight={600} letterSpacing={0.8} fill="var(--status-ok)">WITHIN POSE ZONE</text>
         <text x={sideX + 14} y={355} fontSize={24} fontWeight={700} fill="var(--ink-1)">
           {summary.facingPct == null ? '—' : `${summary.facingPct.toFixed(0)}%`}
         </text>
@@ -489,8 +560,10 @@ export function Histogram({ values, bins = 18, color = 'var(--status-info)', hei
 
   const { lo, hi, counts } = useMemo(() => {
     if (v.length === 0) return { lo: 0, hi: 1, counts: [] as number[] };
-    let a = Math.min(...v);
-    let b = Math.max(...v);
+    // One pass; no spread into Math.min/max (argument limit on long series).
+    const range = extent(v)!;
+    let a = range.min;
+    let b = range.max;
     if (a === b) { a -= 1; b += 1; }
     const c = new Array(bins).fill(0);
     for (const x of v) {

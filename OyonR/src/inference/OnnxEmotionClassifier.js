@@ -22,18 +22,31 @@ export class OnnxEmotionClassifier {
       executionProviders: null,
       modelName: 'fer-onnx',
       modelVersion: 'unknown',
+      // Extra URLs tried in order when `modelUrl` fails to download (e.g. a
+      // self-hosted mirror behind the public GitHub-raw default).
+      modelFallbackUrls: [],
+      // Cache API bucket that keeps downloaded weights across page loads so
+      // a 16–40 MB model is fetched once, not on every reload (which is how
+      // raw.githubusercontent starts answering HTTP 429). `false` disables.
+      modelCache: 'oyon-models-v1',
+      // Test hook: pre-loaded ORT module instead of the dynamic import.
+      ortModule: null,
       ...options,
     };
     this.ort = null;
     this.session = null;
+    // URL (or 'bytes') the loaded weights actually came from — for diagnostics.
+    this.modelSource = null;
     this.canvas = null;
     this.ctx = null;
   }
 
   async init() {
-    this.ort = await loadOrt();
+    this.ort = this.options.ortModule || await loadOrt();
     configureOrt(this.ort, this.options);
-    this.session = await this.ort.InferenceSession.create(this.options.modelUrl, {
+    const { bytes, source } = await loadModelBytes(this.options);
+    this.modelSource = source;
+    this.session = await this.ort.InferenceSession.create(bytes, {
       executionProviders: executionProviders(this.options),
     });
     this.options.inputName ||= this.session.inputNames[0];
@@ -94,6 +107,70 @@ export class OnnxEmotionClassifier {
     }
 
     return new this.ort.Tensor('float32', chw, [1, channelCount, size, size]);
+  }
+}
+
+// Ordered list of URLs to try for the model weights.
+export function modelUrlCandidates(options) {
+  const urls = [options.modelUrl, ...(Array.isArray(options.modelFallbackUrls) ? options.modelFallbackUrls : [])];
+  return [...new Set(urls.filter((u) => typeof u === 'string' && u.length > 0))];
+}
+
+// Download the ONNX weights ourselves instead of handing ORT a URL.
+//
+// Two reasons. (1) ORT Web reports *any* non-OK response as
+// "failed to load external data file: <url>" — wording meant for .onnx.data
+// sidecars that hides the real cause (an HTTP 429 from raw.githubusercontent,
+// a 404 from a mis-rooted asset base). Fetching here lets the error name the
+// URL and the status. (2) It gives us a fallback list and a Cache API layer,
+// so a rate-limited primary can fall through to a mirror and a model is
+// downloaded once per browser rather than on every reload.
+//
+// `modelUrl` may also be an ArrayBuffer / typed array (a host that ships the
+// weights itself); it is passed straight through.
+export async function loadModelBytes(options, { fetchImpl = globalThis.fetch, cachesImpl = globalThis.caches } = {}) {
+  const url = options.modelUrl;
+  if (url instanceof ArrayBuffer || ArrayBuffer.isView(url)) {
+    return { bytes: url instanceof ArrayBuffer ? new Uint8Array(url) : url, source: 'bytes' };
+  }
+  const candidates = modelUrlCandidates(options);
+  if (candidates.length === 0) throw new Error('OnnxEmotionClassifier: no modelUrl configured.');
+  if (typeof fetchImpl !== 'function') throw new Error('OnnxEmotionClassifier: fetch is not available in this environment.');
+
+  const cache = await openModelCache(options.modelCache, cachesImpl);
+  const failures = [];
+  for (const candidate of candidates) {
+    try {
+      const cached = cache ? await cache.match(candidate).catch(() => null) : null;
+      if (cached) return { bytes: new Uint8Array(await cached.arrayBuffer()), source: candidate };
+      const response = await fetchImpl(candidate);
+      if (!response.ok) {
+        failures.push(`${candidate} → HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
+        continue;
+      }
+      if (cache) await cache.put(candidate, response.clone()).catch(() => {});
+      return { bytes: new Uint8Array(await response.arrayBuffer()), source: candidate };
+    } catch (err) {
+      failures.push(`${candidate} → ${err?.message || err}`);
+    }
+  }
+  throw new Error(
+    `OnnxEmotionClassifier: could not download the emotion model (${failures.length} URL${failures.length === 1 ? '' : 's'} tried):\n` +
+    failures.map((f) => `  - ${f}`).join('\n') +
+    '\nIf the public GitHub-raw default is rate-limited (HTTP 429), self-host the weights ' +
+    '(`npx oyon download-models ./public`) and pass classifier.modelUrl / modelFallbackUrls, ' +
+    'or use the SELF_HOSTED_* URLs exported from oyon.',
+  );
+}
+
+async function openModelCache(name, cachesImpl) {
+  if (!name || typeof name !== 'string') return null;
+  if (!cachesImpl || typeof cachesImpl.open !== 'function') return null;
+  try {
+    return await cachesImpl.open(name);
+  } catch {
+    // Cache API can throw (private browsing, insecure context, quota); treat as absent.
+    return null;
   }
 }
 

@@ -159,4 +159,36 @@ function makeWebGazerStub() {
   assert.ok(webEyeTrackAdapter instanceof WebEyeTrackAdapter);
 }
 
+// init() without an injected instance: the `webgazer` package is an optional
+// peer and is not installed here, so `import('webgazer')` fails — the same
+// outcome, for the adapter, as the <oyon-app> element bundle's inert stand-in
+// (a module with no WebGazer API). Either way the script fallback is tried.
+{
+  const hadGlobal = Object.prototype.hasOwnProperty.call(globalThis, 'webgazer');
+  const previous = globalThis.webgazer;
+  try {
+    // Fallback supplies WebGazer (here: already on the page): init succeeds.
+    const fromScript = makeWebGazerStub();
+    globalThis.webgazer = fromScript;
+    const adapter = new WebGazerAdapter({ onGaze: () => {}, scriptUrl: null, viewport: { width: 100, height: 100 } });
+    await adapter.init();
+    assert.equal(adapter._webgazer, fromScript, 'the script-provided WebGazer is used when the import gives nothing usable');
+    assert.equal(adapter.status(), 'idle');
+
+    // Neither the package nor the script: a clear, classed-by-message failure
+    // at init() — when the engine is chosen — never at module load.
+    delete globalThis.webgazer;
+    const missing = new WebGazerAdapter({ onGaze: () => {}, scriptUrl: null, viewport: { width: 100, height: 100 } });
+    await assert.rejects(() => missing.init(), /failed to load 'webgazer'/);
+
+    // Something that is not WebGazer on the page is refused, not adopted.
+    globalThis.webgazer = { notWebGazer: true };
+    const wrong = new WebGazerAdapter({ onGaze: () => {}, scriptUrl: null, viewport: { width: 100, height: 100 } });
+    await assert.rejects(() => wrong.init(), /did not expose setGazeListener/);
+  } finally {
+    if (hadGlobal) globalThis.webgazer = previous;
+    else delete globalThis.webgazer;
+  }
+}
+
 console.log('webgazer-adapter.test.js — all cases passed');

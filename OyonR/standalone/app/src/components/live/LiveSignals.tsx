@@ -49,20 +49,60 @@ function WaitingState({ reason }: { reason: string }) {
 
 /* ── Heart rate ───────────────────────────────────────────────────────────── */
 
+/*
+ * DECORATIVE ECG — SYNTHETIC. Drawn geometry, not data.
+ *
+ * Oyon has no electrodes: rPPG measures blood VOLUME in facial skin, so a
+ * PQRST complex (P/QRS/T are electrical events) is not something this sensor
+ * could ever produce. It is a pulse indicator — one static cycle with a dot
+ * tracing it once per beat — while the NUMBERS carry every accuracy claim the
+ * tile makes. Deliberate call by the project owner.
+ *
+ * If you ever want the real thing, the honest waveform already exists and is
+ * discarded: the filtered `pulse` array in HeartRateEstimator.estimate(),
+ * snapshotted before the applyHann() taper. Plot that, not this.
+ *
+ * ONE cycle, sized as a badge rather than a strip. Curves for the P and T
+ * waves (they are rounded), straight segments for QRS (it is sharp) — drawing
+ * all five with the same primitive is what makes a fake ECG look fake. The dot
+ * rides this exact path via CSS offset-path, so the trace and the tracer can
+ * never disagree: one definition, used twice.
+ *
+ * The flat runs are kept SHORT. At strip proportions most of the width is
+ * isoelectric baseline, which is realistic and also dead space — at this size
+ * the features have to sit close together or the thing reads as a mostly-empty
+ * line with an occasional twitch.
+ */
+const ECG_VIEW_WIDTH = 100;
+const ECG_VIEW_HEIGHT = 26;
+const ECG_PATH = 'M0,13 L11,13 Q19,5 27,13 L35,13 L39,16 L45,2 L51,20 L56,13 L63,13 Q73,3 83,13 L100,13';
+
 export function LiveHeartRateTile({
   enabled,
   active = true,
   sample,
+  trackedBpm = null,
+  trackedSpanSeconds = null,
   respirationEnabled,
   respiration,
   plausibleMinBpm = 60,
   plausibleMaxBpm = 100,
   plausibleMinBrpm = 9,
   plausibleMaxBrpm = 24,
+  lighting = null,
 }: {
   enabled: boolean;
   active?: boolean;
   sample: HeartRateSampleSnapshot | null;
+  /** Illumination assessment ('good' | 'dim' | 'backlit' | 'bright' | 'unstable'). */
+  lighting?: string | null;
+  /** Cross-window tracked BPM — the value Analyze stores. Shown ALONGSIDE the
+   *  per-sample reading, never in place of it: they are different estimators
+   *  and the gap between them is the smoothing lag, which is worth seeing. */
+  trackedBpm?: number | null;
+  /** Seconds of history the tracker's rolling anchor spans, so the lag the
+   *  tracked number carries is stated rather than inferred. */
+  trackedSpanSeconds?: number | null;
   respirationEnabled?: boolean;
   respiration?: RespirationSampleSnapshot | null;
   plausibleMinBpm?: number;
@@ -91,7 +131,7 @@ export function LiveHeartRateTile({
             {respiration.brpm.toFixed(1)}
           </span>
           <span className="text-ink-3">br/min</span>
-          <span className="ml-auto text-[11px]" style={{ color: respHeld ? respColor : respTone.reason ? respTone.color : 'var(--ink-3)' }}>
+          <span className="ml-auto text-mini" style={{ color: respHeld ? respColor : respTone.reason ? respTone.color : 'var(--ink-3)' }}>
             {respHeld
               ? 'last reading · current signal unavailable'
               : respTone.reason
@@ -109,6 +149,28 @@ export function LiveHeartRateTile({
       ) : (
         <span className="text-ink-3">{respirationStatusText(respiration)} · then stability checks</span>
       )}
+    </div>
+  ) : null;
+
+  /* The second number. Kept visually subordinate to the live reading — one
+   * colour channel, one headline — but present whenever it exists, including
+   * while the live estimate is still acquiring. */
+  const trackedDelta = trackedBpm != null && sample?.bpm != null ? trackedBpm - sample.bpm : null;
+  const trackedRow = trackedBpm != null ? (
+    <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-mini text-ink-3">
+      <span>tracked</span>
+      <span className="text-xs font-semibold tabular-nums text-ink-1">{trackedBpm.toFixed(0)}</span>
+      <span>bpm</span>
+      <span>
+        · smoothed across windows
+        {trackedSpanSeconds != null ? ` (${trackedSpanSeconds.toFixed(0)} s anchor)` : ''}
+        {/* A signed gap, not an absolute one: the SIGN is the diagnosis. The
+            anchor is a trailing median, so it sits behind a changing rate —
+            persistently negative means the tracked value is lagging a rise. */}
+        {trackedDelta != null && Math.abs(trackedDelta) >= 1
+          ? `, ${trackedDelta > 0 ? '+' : ''}${trackedDelta.toFixed(0)} vs live`
+          : ''}
+      </span>
     </div>
   ) : null;
 
@@ -130,15 +192,22 @@ export function LiveHeartRateTile({
     );
   }
   if (!sample || sample.bpm == null) {
-    const reason = sample?.ready === true
-      ? sample.statusReason === 'low_sample_rate'
-        ? `Pulse cadence too low${sample.sampleRateHz != null ? ` (${sample.sampleRateHz.toFixed(1)} Hz)` : ''}. Keep this tab visible.`
-        : 'No stable pulse rate — sit still and improve front lighting.'
+    // `ready` is false whenever the estimator has a reason, so low cadence must
+    // be checked first — otherwise it can only ever read as "Acquiring".
+    // Below 8 Hz the estimator cannot resolve a pulse; at that cadence the
+    // buffer also never reaches its sample minimum, so say so directly.
+    const lowCadence = sample?.statusReason === 'low_sample_rate'
+      || (sample?.sampleRateHz != null && sample.sampleRateHz > 0 && sample.sampleRateHz < 8);
+    const reason = lowCadence
+      ? `Pulse cadence too low${sample.sampleRateHz != null ? ` (${sample.sampleRateHz.toFixed(1)} Hz)` : ''}. Keep this tab visible.`
+      : sample?.ready === true
+        ? 'No stable pulse rate — sit still and improve front lighting.'
       : `Acquiring pulse${sample?.progress != null ? ` — ${Math.round(sample.progress * 100)}%` : ''}. Hold still and keep your face lit.`;
     return (
       <div className={FILL}>
-        <div className="flex flex-1 items-center">
+        <div className="flex flex-1 flex-col justify-center">
           <WaitingState reason={reason} />
+          {trackedRow}
         </div>
         {resp}
       </div>
@@ -148,6 +217,19 @@ export function LiveHeartRateTile({
   const bpm = sample.bpm;
   const conf = sample.confidence ?? 0;
   const heldHeart = !active || sample.current === false;
+  const weak = !heldHeart && (sample.qualityAccepted === false || conf < 0.5);
+  // Capture problems as terse footer tags; nothing is spelled out under the number.
+  const LIGHTING_TAG: Record<string, string> = {
+    dim: 'low light', backlit: 'backlit', bright: 'overexposed', unstable: 'flickering light',
+  };
+  const heartIssues = [
+    sample.motionPaused === true ? 'moving' : null,
+    lighting ? LIGHTING_TAG[lighting] ?? null : null,
+    sample.sampleRateHz != null && sample.sampleRateHz < 10 ? 'low fps' : null,
+    weak ? 'weak signal' : null,
+    heldHeart ? 'held' : null,
+    !heldHeart && (bpm < plausibleMinBpm || bpm > plausibleMaxBpm) ? `outside ${plausibleMinBpm}–${plausibleMaxBpm}` : null,
+  ].filter((tag): tag is string => tag != null);
   // The dot beats at the measured rate. A number can be wrong without looking
   // wrong; a pulse visibly out of step with your own is immediately obvious.
   const beatSeconds = Math.min(2, Math.max(0.3, 60 / bpm));
@@ -167,50 +249,118 @@ export function LiveHeartRateTile({
 
   return (
     <div className={FILL}>
-      <style>{`@keyframes oyon-beat{0%,100%{transform:scale(1);opacity:.55}18%{transform:scale(1.5);opacity:1}45%{transform:scale(1.05);opacity:.8}}`}</style>
+      {/* Two thumps per cycle (systole then the softer diastolic rebound), not
+          one swell — a single pulse reads as a blinking dot, which is what this
+          was. The whole figure completes inside the first ~55% of the cycle so
+          the rest is rest: at 50 bpm you see a beat and a pause, at 150 bpm a
+          near-continuous flutter. That difference is legible without reading
+          the number, which is the entire point of the animation.
+          Motion is suppressed under prefers-reduced-motion — a 2-3 Hz pulsing
+          element is exactly the pattern that setting exists to stop. */}
+      {/* The dot animates offset-distance along ECG_PATH — one traversal per
+          beat, linear. Because offset-distance advances by ARC LENGTH, the dot
+          covers the long QRS excursion at the same speed it crosses the flat
+          baseline, so it visibly lingers through the spike instead of
+          teleporting across it. Both animations are CSS, so the reduced-motion
+          rule below reaches them; a SMIL <animateMotion> would not obey it. */}
+      <style>{`@keyframes oyon-beat{0%,100%{transform:scale(1)}8%{transform:scale(1.26)}20%{transform:scale(1.02)}30%{transform:scale(1.13)}55%{transform:scale(1)}}@keyframes oyon-ecg{from{offset-distance:0%}to{offset-distance:100%}}@media (prefers-reduced-motion:reduce){.oyon-heart,.oyon-ecg{animation:none!important}}`}</style>
       {/* The reading owns the card's vertical centre; the caveat sits on the
           floor (mt-auto) so the tile fills its shared height. */}
       <div className="flex flex-1 items-center gap-4">
         <span
-          className="inline-block size-5 shrink-0 rounded-full"
+          className="oyon-heart inline-block shrink-0"
           style={{
-            background: hr.color,
             animation: heldHeart ? 'none' : `oyon-beat ${beatSeconds.toFixed(2)}s ease-in-out infinite`,
+            // SVG elements default to a 0 0 transform-origin in some engines,
+            // so the scale is applied to the wrapping span instead — otherwise
+            // the heart lunges down-right on every beat rather than swelling.
+            transformOrigin: 'center',
             opacity: heldHeart ? 0.45 : undefined,
           }}
           aria-hidden="true"
-        />
+        >
+          <svg viewBox="0 0 24 24" className="size-7 block" fill={hr.color}>
+            <path d="M12 20.7l-1.45-1.32C5.4 14.74 2 11.66 2 7.9 2 4.82 4.42 2.4 7.5 2.4c1.74 0 3.41.81 4.5 2.09C13.09 3.21 14.76 2.4 16.5 2.4 19.58 2.4 22 4.82 22 7.9c0 3.76-3.4 6.84-8.55 11.49L12 20.7z" />
+          </svg>
+        </span>
         <div>
-          <div className="text-5xl font-semibold leading-none tabular-nums" style={{ color: hr.color }}>
-            {bpm.toFixed(0)}
-            <span className="ml-1.5 text-base font-normal text-ink-3">bpm</span>
+          {/* The headline is the LIVE per-sample estimate, and the heart beats
+              at that same rate. It used to be the cross-window tracked value,
+              which meant the animation ticked at a rate nobody was measuring
+              and the lag hid behind the word "live". */}
+          <div className="flex items-center gap-3">
+            <div className="text-5xl font-semibold leading-none tabular-nums" style={{ color: hr.color }}>
+              {bpm.toFixed(0)}
+              <span className="ml-1.5 text-base font-normal text-ink-3">bpm</span>
+              {trackedBpm != null && (
+                <span className="ml-1.5 text-mini font-normal uppercase tracking-wider text-ink-3">live</span>
+              )}
+            </div>
+            {/* Synthetic trace — see ECG_PATH. The dot laps it once per beat at
+                the LIVE rate, matching the heart. aria-hidden because it
+                encodes nothing a screen reader could announce; the number it
+                sits beside is the content. */}
+            <svg
+              viewBox={`0 0 ${ECG_VIEW_WIDTH} ${ECG_VIEW_HEIGHT}`}
+              /* Uniform scaling (the default `meet`), NOT
+                 preserveAspectRatio="none". A non-uniform stretch would squash
+                 the tracer circle into an ellipse whose shape changes with the
+                 container — the one element here that cannot survive
+                 anamorphic scaling. The aspect-ratio style keeps the box
+                 matched to the viewBox so `meet` never letterboxes. */
+              className="block w-24 shrink-0"
+              style={{ aspectRatio: `${ECG_VIEW_WIDTH} / ${ECG_VIEW_HEIGHT}`, opacity: heldHeart ? 0.4 : 1 }}
+              aria-hidden="true"
+            >
+              {/* The trace sits back at low opacity so the dot owns the eye. */}
+              <path
+                d={ECG_PATH}
+                fill="none"
+                stroke={hr.color}
+                strokeOpacity={0.3}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                className="oyon-ecg"
+                /* cx/cy MUST be 0: offset-path positions the element's own
+                   origin, so any non-zero centre would be added on top of the
+                   path coordinates and float the dot off the line. */
+                cx="0"
+                cy="0"
+                r="2.6"
+                fill={hr.color}
+                style={{
+                  offsetPath: `path("${ECG_PATH}")`,
+                  // Keep the dot upright rather than banking into the curve — a
+                  // rotating circle is invisible, but this pins the behaviour
+                  // if the marker ever becomes non-circular.
+                  offsetRotate: '0deg',
+                  animation: heldHeart ? 'none' : `oyon-ecg ${beatSeconds.toFixed(2)}s linear infinite`,
+                }}
+              />
+            </svg>
           </div>
           {/* Labelled "signal quality", NOT confidence: the underlying value
               is clamp01((snr - 1) / 9), a bounded index that saturates at
               SNR 10. Printing "confidence 100%" claimed certainty that webcam
               rPPG cannot have — the scale had simply hit its ceiling. */}
-          <div className="mt-2 text-xs text-ink-3">
-            {heldHeart ? (
-              <span style={{ color: hr.color }}>held value · waiting for a current estimate</span>
-            ) : (
-              <>
-                signal quality <span style={{ color: hr.color }}>{(conf * 100).toFixed(0)}%</span>
-                {sample.snr != null ? ` · SNR ${sample.snr.toFixed(1)}` : ''}
-              </>
-            )}
-          </div>
-          {/* Say WHICH problem, since red alone is not actionable. */}
-          {hr.reason && (
-            <div className="mt-0.5 text-[11px]" style={{ color: hr.color }}>
-              {hr.reason}
+          {!heldHeart && !weak && (
+            <div className="mt-2 text-xs text-ink-3">
+              signal quality <span style={{ color: hr.color }}>{(conf * 100).toFixed(0)}%</span>
             </div>
           )}
+          {trackedRow}
         </div>
       </div>
-      <div className="text-[11px] leading-relaxed text-ink-3">
-        Integrated over {sample.windowSeconds != null ? `${sample.windowSeconds.toFixed(0)} s` : '~10 s'}
-        {sample.method ? ` · ${sample.method.toUpperCase()}` : ''} · updates ~1 Hz.
-        Heart rate is a frequency — it cannot be resolved from a single frame.
+      <div className="text-mini leading-relaxed text-ink-3">
+        {sample.windowSeconds != null ? `${sample.windowSeconds.toFixed(0)} s window` : '~10 s window'}
+        {sample.method ? ` · ${sample.method.toUpperCase()}` : ''}
+        {heartIssues.length > 0 && (
+          <span style={{ color: 'var(--status-warn)' }}> · {heartIssues.join(' · ')}</span>
+        )}
       </div>
       {resp}
     </div>
@@ -268,7 +418,7 @@ export function LiveIlluminationTile({
               aria-hidden="true"
             />
           </div>
-          <div className="mt-1 flex justify-between text-[10px] text-ink-3">
+          <div className="mt-1 flex justify-between text-micro text-ink-3">
             <span>dark</span>
             <span className="text-status-ok">workable</span>
             <span>blown</span>
@@ -276,13 +426,13 @@ export function LiveIlluminationTile({
         </div>
 
         {(sample.clippedLow ?? 0) + (sample.clippedHigh ?? 0) > 0.02 && (
-          <div className="text-[11px] text-ink-3">
+          <div className="text-mini text-ink-3">
             clipped {((sample.clippedLow ?? 0) * 100).toFixed(0)}% dark ·{' '}
             {((sample.clippedHigh ?? 0) * 100).toFixed(0)}% blown
           </div>
         )}
       </div>
-      <div className="mt-auto border-t border-line pt-2 text-[11px] leading-relaxed text-ink-3">
+      <div className="mt-auto border-t border-line pt-2 text-mini leading-relaxed text-ink-3">
         {verdict.note}
       </div>
     </div>
@@ -373,11 +523,11 @@ export function LiveHeadPoseTile({
 function PoseRow({ label, value, hint }: { label: string; value: number | null; hint: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-ink-3">{label}</span>
+      <span className="label-eyebrow">{label}</span>
       <span className="tabular-nums text-ink-0">
         {value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}°`}
       </span>
-      <span className="w-24 shrink-0 text-right text-[10px] text-ink-3">{hint}</span>
+      <span className="w-24 shrink-0 text-right text-micro text-ink-3">{hint}</span>
     </div>
   );
 }
@@ -444,22 +594,22 @@ export function LivePostureTile({
         <PoseRow label="Lean" value={sample.torsoLeanDeg} hint="− left · + right" />
         <PoseRow label="Tilt" value={sample.shoulderTiltDeg} hint="shoulders" />
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-ink-3">Slouch</span>
+          <span className="label-eyebrow">Slouch</span>
           <span className="tabular-nums text-ink-0">
             {sample.headAboveNorm == null ? '—' : sample.headAboveNorm.toFixed(2)}
           </span>
-          <span className="w-24 shrink-0 text-right text-[10px] text-ink-3">lower = slumped</span>
+          <span className="w-24 shrink-0 text-right text-micro text-ink-3">lower = slumped</span>
         </div>
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-ink-3">Proximity</span>
+          <span className="label-eyebrow">Proximity</span>
           <span className="tabular-nums text-ink-0">
             {sample.shoulderWidthNorm == null ? '—' : sample.shoulderWidthNorm.toFixed(3)}
           </span>
-          <span className="w-24 shrink-0 text-right text-[10px] text-ink-3">wider = closer</span>
+          <span className="w-24 shrink-0 text-right text-micro text-ink-3">wider = closer</span>
         </div>
       </div>
       </div>
-      <div className="mt-auto border-t border-line pt-2 text-[10px] leading-relaxed text-ink-3">
+      <div className="mt-auto border-t border-line pt-2 text-micro leading-relaxed text-ink-3">
         {sample.upperVisibility != null
           ? `upper-body visibility ${(sample.upperVisibility * 100).toFixed(0)}%`
           : 'upper-body visibility unknown'}

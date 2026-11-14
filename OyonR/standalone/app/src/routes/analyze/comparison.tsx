@@ -8,14 +8,21 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Metric } from '@/components/ui/Metric';
 import { Button } from '@/components/ui/Button';
 import { useEnrichedWindows } from '@/lib/useEnrichedWindows';
-import { summarizeSessions, type SessionSummary } from '@/lib/sessions';
+import { useFilteredWindows } from '@/lib/useFilteredWindows';
+import { useRecordScope } from '@/lib/recordScope';
+import { sessionIdOf, userIdOf } from '@/lib/filterWindows';
+import { summarizeSessions, summarizeWindowSet, type SessionSummary } from '@/lib/sessions';
 import { LegacyCanvas } from '@/legacy/LegacyCanvas';
 import { EmotionTimeline } from '@/components/charts/EmotionTimeline';
 import { drawDistribution } from '@/legacy/dashboard.js';
 import {
   buildMultiSessionBundle,
+  bundleRecords,
   downloadMultiSessionBundle,
 } from '@/lib/exportBundle';
+import { inSessions, ofPeople } from '@/lib/exportRecords';
+import { useOverviewRecords } from '@/lib/overviewRecords';
+import { useBridge } from '@/lib/hostBridge';
 import { useRuntime } from '@/lib/RuntimeProvider';
 import { groupWindowsBySession, topSessionIds } from '@/lib/analyzeWindows';
 import { windowEndMs } from '@/lib/windowTime';
@@ -71,8 +78,18 @@ export function ComparisonView() {
     const parsed = Number(splits ?? 2);
     return Number.isFinite(parsed) && parsed >= 2 && parsed <= 6 ? Math.floor(parsed) : 2;
   });
-  const { enriched, isLoading } = useEnrichedWindows();
+  const { enriched: storeWindows, isLoading } = useEnrichedWindows();
+  const { filtered: scopedWindows } = useFilteredWindows();
+  const recordScope = useRecordScope();
+  // Standalone compares across the whole store, as before. An embed compares
+  // only what its scope allows: one session (split into slices), one person's
+  // sessions, or — in a group scope — the people themselves.
+  const enriched = recordScope.embedded ? scopedWindows : storeWindows;
+  const byPerson = recordScope.embedded && recordScope.wide;
   const runtime = useRuntime();
+  const { inScope } = useOverviewRecords();
+  const fedWindows = useBridge((s) => s.hostRecords?.windows ?? null);
+  const fed = useBridge((s) => s.hostRecords) != null;
 
   // Decide which mode we're in.
   const sessions = useMemo(() => {
@@ -85,6 +102,27 @@ export function ComparisonView() {
   const groups: ComparisonGroup[] = useMemo(() => {
     if (!enriched.length) return [];
     const byId = groupWindowsBySession(enriched as EmotionWindow[]);
+
+    if (byPerson) {
+      // Person vs person: one group per person in the scope (narrow with the
+      // People filter in the header).
+      const byUser = new Map<string, EmotionWindow[]>();
+      for (const window of enriched as EmotionWindow[]) {
+        const id = userIdOf(window);
+        if (!byUser.has(id)) byUser.set(id, []);
+        byUser.get(id)!.push(window);
+      }
+      return [...byUser.entries()].map(([id, ws]) => {
+        const labelled = ws.find((w) => typeof (w as { user_label?: unknown }).user_label === 'string');
+        return {
+          id,
+          label: (labelled as { user_label?: string } | undefined)?.user_label ?? id,
+          windows: ws,
+          // All of the person's sessions pooled into one summary.
+          summary: summarizeWindowSet(id, ws),
+        };
+      });
+    }
 
     if (isMulti) {
       const selected = idList.length >= 2
@@ -113,7 +151,7 @@ export function ComparisonView() {
       windows: ws,
       summary: summarizeOne(`${only.id}#${i + 1}`, ws),
     }));
-  }, [enriched, isMulti, idList, sessions, splitCount]);
+  }, [enriched, byPerson, isMulti, idList, sessions, splitCount]);
 
   if (isLoading) return <EmptyState title="Loading…" />;
   if (!enriched.length) {
@@ -123,14 +161,26 @@ export function ComparisonView() {
     return (
       <EmptyState
         title="Not enough windows yet"
-        description="At least two windows in one session (or two distinct sessions) are needed to compare."
+        description={
+          byPerson
+            ? 'At least two people with windows in this group are needed to compare.'
+            : 'At least two windows in one session (or two distinct sessions) are needed to compare.'
+        }
       />
     );
   }
 
-  function handleExportAll() {
+  async function handleExportAll() {
+    // Every other record kind of what is compared: the people's records when
+    // people are compared, else the sessions' (all of the one session when
+    // it is split into slices).
+    const keep = byPerson
+      ? ofPeople(groups.map((g) => g.id))
+      : inSessions(groups.flatMap((g) => g.windows.map((w) => sessionIdOf(w))));
+    const records = await bundleRecords({ sets: inScope, fed, fedWindows, keep });
     const bundle = buildMultiSessionBundle({
       groups: groups.map((g) => ({ summary: g.summary, windows: g.windows })),
+      records,
       settings: runtime.settings,
       model: { name: 'oyon', version: runtime.modelLabel, label: runtime.modelLabel },
     });
@@ -182,7 +232,7 @@ export function ComparisonView() {
               </select>
             </label>
           ) : null}
-          <Button onClick={handleExportAll} variant="secondary" size="sm">
+          <Button onClick={() => { handleExportAll().catch((err) => console.error('[oyon] comparison export failed', err)); }} variant="secondary" size="sm">
             <Download className="size-3.5" aria-hidden="true" />
             Export
           </Button>
@@ -190,12 +240,12 @@ export function ComparisonView() {
         }
       >
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Metric label={isMulti ? 'Sessions' : 'Slices'} value={groups.length} tone="info" />
-          <Metric label="Windows" value={totalWindows} tone="info" />
-          <Metric label="Dominant states" value={dominantStates} tone="info" />
-          <Metric label="Mean focus" value={meanFocus == null ? null : `${(meanFocus * 100).toFixed(0)}%`} tone="info" />
-          <Metric label="Mean confidence" value={meanConfidence == null ? null : `${(meanConfidence * 100).toFixed(0)}%`} tone="info" />
-          <Metric label="Valid frames" value={meanValid == null ? null : `${(meanValid * 100).toFixed(0)}%`} tone="info" />
+          <Metric label={isMulti ? 'Sessions' : 'Slices'} value={groups.length} />
+          <Metric label="Windows" value={totalWindows} />
+          <Metric label="Dominant states" value={dominantStates} />
+          <Metric label="Mean focus" value={meanFocus == null ? null : `${(meanFocus * 100).toFixed(0)}%`} />
+          <Metric label="Mean confidence" value={meanConfidence == null ? null : `${(meanConfidence * 100).toFixed(0)}%`} />
+          <Metric label="Valid frames" value={meanValid == null ? null : `${(meanValid * 100).toFixed(0)}%`} />
         </div>
       </Section>
 

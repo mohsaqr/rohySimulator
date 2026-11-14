@@ -189,7 +189,7 @@ export function VoiceTestModal({
               <button
                 type="button"
                 onClick={openVoiceSettings}
-                className="rounded border border-line bg-surface-1 px-1.5 py-0.5 text-[11px] font-medium text-ink-2 hover:bg-surface-2"
+                className="rounded border border-line bg-surface-1 px-1.5 py-0.5 text-mini font-medium text-ink-2 hover:bg-surface-2"
               >
                 change in Settings → Voice
               </button>
@@ -218,7 +218,7 @@ export function VoiceTestModal({
                   : 'Waiting for microphone permission — answer the browser prompt.'}
               </span>
             ) : null}
-            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-ink-3">
+            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-mini tabular-nums text-ink-3">
               <span>{test.counts.frames} frames</span>
               <span>{test.counts.loggedStates} states</span>
               <span>
@@ -266,7 +266,7 @@ export function VoiceTestModal({
             <div className="rounded border border-line bg-surface-0 p-3">
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider text-ink-3">State</span>
+                  <span className="label-eyebrow">State</span>
                   <StatusPill tone={STATE_TONE[test.live?.state ?? 'start'] ?? 'null'} size="sm">
                     {test.live?.state ?? 'waiting'}
                   </StatusPill>
@@ -305,7 +305,7 @@ export function VoiceTestModal({
               </div>
               {/* RMS level meter — live loudness, full scale at rms 0.25. */}
               <div className="mt-3 flex items-center gap-2">
-                <span className="w-10 text-[10px] uppercase tracking-wider text-ink-3">Level</span>
+                <span className="label-eyebrow w-10">Level</span>
                 <div className="relative h-2.5 flex-1 overflow-hidden rounded bg-surface-2">
                   <div
                     className="h-full bg-status-ok transition-[width] duration-100"
@@ -314,7 +314,7 @@ export function VoiceTestModal({
                     }}
                   />
                 </div>
-                <span className="w-16 text-right text-[11px] tabular-nums text-ink-2">
+                <span className="w-16 text-right text-mini tabular-nums text-ink-2">
                   {test.live ? test.live.rms.toFixed(3) : '—'}
                 </span>
               </div>
@@ -380,7 +380,7 @@ export function VoiceTestModal({
 function ReadoutRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b border-line py-1 last:border-b-0 sm:border-b-0">
-      <span className="text-[10px] uppercase tracking-wider text-ink-3">{label}</span>
+      <span className="label-eyebrow">{label}</span>
       <span className="font-medium tabular-nums text-ink-0">{value}</span>
     </div>
   );

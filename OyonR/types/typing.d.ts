@@ -474,3 +474,263 @@ export interface TypingComposerAdapter {
 export function createTypingComposerAdapter(
   options: TypingComposerAdapterOptions,
 ): TypingComposerAdapter;
+
+// ── Capture from any editor (host contract 3.2) ─────────────────────────────
+
+/** A `contenteditable` element: anything with child nodes that fires `input`. */
+export interface TypingContentEditableElement {
+  addEventListener(type: string, listener: (event: unknown) => void): void;
+  removeEventListener(type: string, listener: (event: unknown) => void): void;
+  readonly childNodes?: ArrayLike<unknown>;
+  readonly ownerDocument?: unknown;
+  readonly isContentEditable?: boolean;
+}
+
+/**
+ * Options for `createTypingContentEditableAdapter`: the same object
+ * `createTypingComposerAdapter` takes, with a `contenteditable` element and an
+ * optional list of element names that start their own line.
+ */
+export interface TypingContentEditableAdapterOptions
+  extends Omit<TypingComposerAdapterOptions, 'element'> {
+  element: TypingContentEditableElement;
+  /** Upper-case element names that occupy their own line. Default: the HTML block elements. */
+  blockTags?: string[];
+}
+
+/**
+ * Typing capture for ONE `contenteditable` element. Same handle and the same
+ * `typing-v3` output as `createTypingComposerAdapter`; the element's subtree
+ * is linearised to the plain text a `<textarea>` would hold and the document
+ * selection is mapped onto offsets in it. Default `targetKind`:
+ * `'document_editor'`.
+ */
+export function createTypingContentEditableAdapter(
+  options: TypingContentEditableAdapterOptions,
+): TypingComposerAdapter;
+
+/** A DOM position, as a selection endpoint gives it. */
+export interface EditablePosition {
+  node: unknown;
+  offset: number;
+}
+
+/**
+ * Linearise a `contenteditable` subtree to plain text and resolve DOM
+ * positions to UTF-16 offsets in that text. `offsets[i]` is `null` when
+ * `positions[i]` is not inside `root`.
+ */
+export function readEditableText(
+  root: unknown,
+  positions?: EditablePosition[],
+  options?: { blockTags?: readonly string[] },
+): { text: string; offsets: Array<number | null> };
+
+/** The labels `classifyBoundaryContext` returns. */
+export const BOUNDARY_CONTEXTS: readonly TypingBoundaryContext[];
+/** Characters read on each side of the caret by `classifyBoundaryContext`. */
+export const BOUNDARY_CONTEXT_WINDOW: number;
+
+/**
+ * Classify where the caret sits from the few characters next to it.
+ * `caretOffset` is a UTF-16 offset into `value`; `null` gives
+ * `'word_boundary'`. A slice holding `BOUNDARY_CONTEXT_WINDOW` characters on
+ * each side of the caret classifies the same as the whole document.
+ */
+export function classifyBoundaryContext(
+  value: string | null | undefined,
+  caretOffset: number | null | undefined,
+): TypingBoundaryContext;
+
+/** Grapheme and word counters, as every typing capture entry uses them. */
+export interface TypingTextCounters {
+  count(value: string): { graphemes: number; words: number };
+  countGraphemes(value: string): number;
+  countWords(value: string): number;
+  readonly graphemeMode: TypingGraphemeMode;
+  readonly wordMode: TypingWordMode;
+}
+
+export function createTextCounters(options?: {
+  segmenter?: TypingGraphemeSegmenter | null;
+  wordSegmenter?: TypingWordSegmenter | false | null;
+}): TypingTextCounters;
+
+/** Grapheme clusters in `value` (auto-detected segmenter). */
+export function countGraphemes(value: string): number;
+/** Word-like segments in `value` (auto-detected segmenter). */
+export function countTypingWords(value: string): number;
+
+/** One edit a host reports for an editor it owns. Counts and positions, never text. */
+export interface TypingReportedEdit {
+  /** `beforeinput` vocabulary (`'insertText'`, `'historyUndo'`, `'insertFromPaste'`, …) or null. */
+  inputType?: string | null;
+  /** Grapheme clusters in the document before the edit. Required. */
+  graphemesBefore: number;
+  /** Grapheme clusters in the document after the edit. Required. */
+  graphemesAfter: number;
+  wordsBefore?: number | null;
+  wordsAfter?: number | null;
+  /** Caret AFTER the edit. */
+  caretOffset?: number | null;
+  /** Selection length AFTER the edit (normally 0). */
+  selectionLength?: number | null;
+  /** A non-collapsed selection existed BEFORE the edit. */
+  replacedSelection?: boolean;
+  compositionState?: TypingCompositionState;
+  /** Where the caret sat BEFORE the edit. */
+  boundaryContext?: TypingBoundaryContext | null;
+  /** Monotonic ms. Default: the reporter's `now()`. */
+  timestamp?: number;
+  /** `Date.now()`-epoch ms. Default: the reporter's `wallClockNow()`. */
+  wallTimestamp?: number;
+}
+
+/** A selection or caret move made without an edit. */
+export interface TypingReportedSelection {
+  caretOffset?: number | null;
+  selectionLength?: number | null;
+  boundaryContext?: TypingBoundaryContext | null;
+  timestamp?: number;
+  wallTimestamp?: number;
+}
+
+export interface TypingEditReporterOptions {
+  aggregator: TypingAggregatorLike;
+  /** Default `'document_editor'`. */
+  targetKind?: string;
+  targetId?: string | null;
+  onWindow?: ((window: TypingWindow) => void) | null;
+  /** Receives focus / blur / visibility reports as `interaction-states-v1` events. */
+  onInteractionEvent?: ((event: {
+    modality: 'interaction';
+    state: 'focus_gain' | 'focus_loss' | 'tab_hidden' | 'tab_visible';
+    source: 'user';
+    timestamp: number;
+    detail: null;
+  }) => void) | null;
+  now?: () => number;
+  wallClockNow?: () => number;
+}
+
+export interface TypingEditReporter {
+  /** Begin an episode; `graphemes` / `words` are the document's counts as it opens. */
+  start(initial?: {
+    graphemes?: number | null;
+    words?: number | null;
+    caretOffset?: number | null;
+    selectionLength?: number | null;
+    timestamp?: number;
+  }): void;
+  /** Throws `TypeError` on a missing or negative count or an unknown enum value. */
+  reportEdit(edit: TypingReportedEdit): void;
+  reportSelection(selection?: TypingReportedSelection): void;
+  reportFocus(options?: { timestamp?: number }): void;
+  reportBlur(options?: { timestamp?: number }): void;
+  reportVisibility(options: { hidden: boolean; timestamp?: number }): void;
+  submit(): TypingWindow | null;
+  abandon(): TypingWindow | null;
+  dispose(): void;
+  readonly active: boolean;
+}
+
+/**
+ * The typing capture entry for a host that owns its editor's model and
+ * reports each edit itself. Ends in the same `TypingAggregator.record()` call
+ * as the DOM adapters, so it yields the same `typing-v3` window and
+ * `typing-states-v1` events.
+ */
+export function createTypingEditReporter(options: TypingEditReporterOptions): TypingEditReporter;
+
+// ── Pooled typing analytics (person and group views) ────────────────────────
+
+/** A typing episode window as stored: the `typing` block plus identity. */
+export interface TypingEpisodeRecord {
+  window_start: string;
+  /** The window's `typing` block (`typing-v2` or `typing-v3`). */
+  typing: object;
+  quality?: object | null;
+  session_id?: string | null;
+  user_id?: string | null;
+  user_label?: string | null;
+}
+
+/**
+ * Typing episodes pooled into one summary. `null` means the episodes did not
+ * carry that measurement — render "—", never 0. Rates divide pooled totals.
+ */
+export interface TypingAggregateSummary {
+  episodes: number;
+  submitted: number;
+  abandoned: number;
+  totalElapsedMs: number;
+  totalActiveMs: number;
+  /** Sum of document lengths at episode end. */
+  committedGraphemes: number;
+  /** Σ (inserted − deleted): what the episodes themselves added, net. */
+  netGraphemes: number;
+  producedGraphemes: number | null;
+  productRatio: number | null;
+  charsPerMin: number | null;
+  charsPerMinActive: number | null;
+  wordsPerMin: number | null;
+  wordsPerMinActive: number | null;
+  pauseHistogram: Record<string, number>;
+  pauseLocationCounts: Record<string, number> | null;
+  pBurstCount: number | null;
+  rBurstCount: number | null;
+  pBurstMeanGraphemes: number | null;
+  rBurstMeanGraphemes: number | null;
+  revisionRatio: number | null;
+  revisionDistanceMean: number | null;
+  leadingEdgeRevisionRatio: number | null;
+  correctionCount: number | null;
+}
+
+export function aggregateTypingEpisodes(episodes: TypingEpisodeRecord[]): TypingAggregateSummary;
+export function episodeCharsPerMin(typing: object): number | null;
+export function pauseBucketLabel(key: string): string;
+export const PAUSE_LOCATION_ORDER: readonly TypingBoundaryContext[];
+
+/** One row of `summarizeTypingBy`: a person, a session or a day. */
+export interface TypingSummaryRow {
+  /** `user_id`, `session_id` or `YYYY-MM-DD`. */
+  key: string;
+  /** The person's `user_label` when a record carries one, else the key. */
+  label: string;
+  summary: TypingAggregateSummary;
+  /** The row's net committed graphemes over all rows'; null when none committed. */
+  textShare: number | null;
+}
+
+/**
+ * One pooled row per person, session or day. `by: 'day'` buckets on local
+ * time; pass `utc: true` for UTC days. Throws `TypeError` on an unknown `by`.
+ */
+export function summarizeTypingBy(
+  episodes: TypingEpisodeRecord[],
+  options?: { by?: 'person' | 'session' | 'day'; utc?: boolean },
+): TypingSummaryRow[];
+
+export type TypingSummaryMeasureKind = 'count' | 'duration_ms' | 'rate' | 'ratio' | 'graphemes';
+
+export const TYPING_SUMMARY_MEASURES: ReadonlyArray<{
+  key: keyof TypingAggregateSummary;
+  label: string;
+  kind: TypingSummaryMeasureKind;
+}>;
+
+/** One measure of two summaries side by side; `difference` is `b − a`. */
+export interface TypingSummaryComparisonRow {
+  key: keyof TypingAggregateSummary;
+  label: string;
+  kind: TypingSummaryMeasureKind;
+  a: number | null;
+  b: number | null;
+  difference: number | null;
+}
+
+export function compareTypingSummaries(
+  a: TypingAggregateSummary | null,
+  b: TypingAggregateSummary | null,
+): TypingSummaryComparisonRow[];

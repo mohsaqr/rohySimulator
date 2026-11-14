@@ -212,7 +212,7 @@ export function VoiceLoudnessEnvelope({ frames, voice, quality }: VoiceLoudnessE
         })}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span className="inline-flex items-center gap-1">
           <svg width={10} height={10} aria-hidden="true"><rect width={10} height={10} fill={color} opacity={0.85} /></svg>
           speech frame (in the mean)

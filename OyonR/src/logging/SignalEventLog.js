@@ -6,6 +6,7 @@ import {
 import { oyonRecordId } from '../storage/IndexedDbOyonStore.js';
 
 const DEFAULT_MAX_EVENTS = 50000;
+const IDENTITY_KEYS = ['user_id', 'user_label', 'group_id', 'group_label', 'class_id', 'class_label', 'context_id'];
 
 /**
  * The complete, ordered, per-event log behind every modality's discrete
@@ -30,6 +31,7 @@ export class SignalEventLog {
       ...options,
     };
     this.context = null;
+    this.identity = {};
     this.events = [];
     this.nextSequenceIndex = 0;
     this.droppedEventsCount = 0;
@@ -45,6 +47,13 @@ export class SignalEventLog {
       capture_id: context.capture_id ?? null,
       session_id: context.session_id ?? null,
     };
+    // Optional identity beside the session: who (`user_id`, `user_label`),
+    // which group (`group_id`) and which document, case or task
+    // (`context_id`). Only the ones supplied are stamped on events.
+    this.identity = {};
+    for (const key of IDENTITY_KEYS) {
+      if (typeof context[key] === 'string' && context[key].length > 0) this.identity[key] = context[key];
+    }
     this.events = [];
     this.nextSequenceIndex = 0;
     this.droppedEventsCount = 0;
@@ -90,6 +99,11 @@ export class SignalEventLog {
       event_id: this.options.idFactory(),
       capture_id: this.context.capture_id,
       session_id: this.context.session_id,
+      ...this.identity,
+      // One capture can hold several documents; an event may name its own.
+      ...(typeof event.context_id === 'string' && event.context_id.length > 0
+        ? { context_id: event.context_id }
+        : {}),
       modality,
       state,
       source,

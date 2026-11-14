@@ -138,6 +138,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroupMeta[] = [
         keywords: ['save', 'load', 'preset', 'export', 'import', 'share'],
       },
       {
+        id: 'settings-consent',
+        label: 'Consent',
+        toggleKey: 'consent_required',
+        keywords: ['agreement', 'contract', 'permission', 'gdpr', 'opt in', 'participant'],
+      },
+      {
         id: 'settings-transport',
         label: 'Transport contract',
         keywords: ['validation', 'batch', 'payload', 'reject', 'schema', 'privacy', 'deny'],

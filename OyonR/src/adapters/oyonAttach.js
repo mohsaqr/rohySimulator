@@ -1,5 +1,6 @@
 import { EmotionRuntime } from '../core/EmotionRuntime.js';
 import { HttpEmotionTransport } from '../transport/HttpEmotionTransport.js';
+import { createOyonSettings } from '../settings/OyonSettings.js';
 
 /**
  * createOyonAttachment — the host-neutral way to attach Oyon to ANY app.
@@ -54,6 +55,7 @@ export function createOyonAttachment(options = {}) {
     transport: transport || new HttpEmotionTransport({
       baseUrl: apiBaseUrl,
       tokenProvider: getToken || (() => null),
+      maxPostBytes: createOyonSettings(runtimeOptions.settings || {}).transport_max_post_bytes,
       ...transportOptions,
     }),
   });

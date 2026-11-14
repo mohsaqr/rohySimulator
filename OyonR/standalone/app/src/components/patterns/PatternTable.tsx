@@ -71,7 +71,7 @@ export function PatternTable({ patterns, colorMap, limit }: PatternTableProps) {
             key={s.key}
             type="button"
             onClick={() => handleSort(s.key)}
-            className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+            className={`rounded px-2 py-0.5 text-mini font-medium transition-colors ${
               sortBy === s.key ? 'bg-surface-2 text-ink-1' : 'text-ink-3 hover:text-ink-1'
             }`}
           >
@@ -96,9 +96,13 @@ export function PatternTable({ patterns, colorMap, limit }: PatternTableProps) {
                 >
                   {states.map((state, si) => (
                     <span key={si} className="flex shrink-0 items-center gap-1.5">
-                      {si > 0 && <span className="shrink-0 text-[15px] font-semibold leading-none text-ink-3">→</span>}
+                      {/* The arrow sits one step ABOVE the chip text: an
+                          arrow glyph reads optically smaller than letterforms
+                          at the same size. Was 15/13 off-scale, now 16/14 on
+                          it — the +2px relationship is preserved exactly. */}
+                      {si > 0 && <span className="shrink-0 text-base font-semibold leading-none text-ink-3">→</span>}
                       <span
-                        className="inline-block rounded-full px-3 py-1 text-[13px] font-semibold leading-tight"
+                        className="inline-block rounded-full px-3 py-1 text-sm font-semibold leading-tight"
                         style={chipStyle(colorMap[state] ?? '#888')}
                       >
                         {state}
@@ -112,7 +116,7 @@ export function PatternTable({ patterns, colorMap, limit }: PatternTableProps) {
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
                   <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: firstColor }} />
                 </div>
-                <span className="w-11 shrink-0 text-right text-[13px] font-medium tabular-nums text-ink-2">
+                <span className="w-11 shrink-0 text-right text-sm font-medium tabular-nums text-ink-2">
                   {(p.support * 100).toFixed(1)}%
                 </span>
               </div>

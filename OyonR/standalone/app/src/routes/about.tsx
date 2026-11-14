@@ -333,7 +333,7 @@ function AboutPage() {
                         Latest upstream licence ↗
                       </a>
                     </p>
-                    <pre className="m-0 mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-line bg-surface-1 p-3 font-mono text-[11px] leading-5 text-ink-2">
+                    <pre className="m-0 mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-line bg-surface-1 p-3 font-mono text-mini leading-5 text-ink-2">
                       {entry.text.trim()}
                     </pre>
                   </details>

@@ -15,12 +15,12 @@ const button = cva(
     variants: {
       variant: {
         primary:
-          'bg-status-ok text-white shadow-sm hover:brightness-110 active:brightness-95',
+          'bg-status-ok text-status-on shadow-sm hover:brightness-110 active:brightness-95',
         secondary:
           'bg-surface-2 text-ink-0 border border-line hover:bg-surface-3',
         ghost: 'text-ink-1 hover:bg-surface-2',
         danger:
-          'bg-status-bad text-white shadow-sm hover:brightness-110 active:brightness-95',
+          'bg-status-bad text-status-on shadow-sm hover:brightness-110 active:brightness-95',
         outline:
           'border border-line text-ink-1 hover:bg-surface-2',
       },

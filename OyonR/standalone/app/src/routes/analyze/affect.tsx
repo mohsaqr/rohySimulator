@@ -2,6 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Database } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Section } from '@/components/ui/Section';
+import { AffectDynamicsPanel } from '@/components/analytics/AffectDynamicsPanel';
 import { STORED_WINDOWS_QUERY_KEY } from '@/lib/storedWindows';
 import { useFilteredWindows } from '@/lib/useFilteredWindows';
 import { loadDemoData } from '@/legacy/demoFixture.js';
@@ -40,5 +42,21 @@ export function AffectView() {
     );
   }
 
-  return <OyonAffectV2 records={enriched} />;
+  /*
+   * The triad renders ABOVE the copied panel rather than inside it.
+   * OyonAffectV2 and its whole helper chain were lifted verbatim from
+   * rohySimulator; editing them would fork a file this repo deliberately
+   * keeps identical to its source.
+   */
+  return (
+    <div className="flex flex-col gap-6">
+      <Section
+        id="affect-dynamics"
+        title="Dynamics"
+      >
+        <AffectDynamicsPanel windows={enriched} />
+      </Section>
+      <OyonAffectV2 records={enriched} />
+    </div>
+  );
 }

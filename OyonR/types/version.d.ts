@@ -18,7 +18,13 @@ export type OyonModality =
   | 'respiration'
   | 'illumination'
   | 'typing'
-  | 'voice';
+  | 'discourse'
+  | 'interaction'
+  | 'ai_assist'
+  | 'voice'
+  | 'document_edit'
+  | 'code_run'
+  | 'raw';
 
 export const OYON_MODALITIES: readonly OyonModality[];
 
@@ -26,3 +32,11 @@ export const OYON_MODALITIES: readonly OyonModality[];
 export type OyonWindowKind = 'interval' | 'episode';
 
 export const OYON_WINDOW_KINDS: readonly OyonWindowKind[];
+
+/** Document edits a host reports for a document it owns (host contract 3.2). */
+export const OYON_DOCUMENT_EDIT_STATES_VERSION: 'document-edit-states-v1';
+export const OYON_DOCUMENT_EDIT_STATES: readonly string[];
+
+/** Code runs a host reports: start and how it ended (host contract 3.2). */
+export const OYON_CODE_RUN_STATES_VERSION: 'code-run-states-v1';
+export const OYON_CODE_RUN_STATES: readonly string[];

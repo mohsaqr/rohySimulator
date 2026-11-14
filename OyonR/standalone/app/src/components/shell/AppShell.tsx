@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from '@tanstack/react-router';
 import { TopMenu } from './TopMenu';
 import { SubNav } from './SubNav';
 import { EmbedHeader } from './EmbedHeader';
+import { ScopeGate } from './ScopeGate';
 import { MiniCamera } from './MiniCamera';
+import { MobileTabBar } from './MobileTabBar';
 import { LiveGazeDot } from './LiveGazeDot';
 import { RuntimeProvider } from '@/lib/RuntimeProvider';
 import { useBridge } from '@/lib/hostBridge';
 import { CapturePill } from '@/components/capture/CapturePill';
 import { CameraDockProvider } from '@/lib/CameraDockContext';
+import { ConsentGate } from './ConsentGate';
+import { useIsPhone, PHONE_QUERY } from '@/lib/useMediaQuery';
+import { cn } from '@/lib/cn';
 
 /*
  * AppShell layout:
@@ -17,19 +22,66 @@ import { CameraDockProvider } from '@/lib/CameraDockContext';
  *   │ TopMenu — nav + Scope/Session popovers          │
  *   ├────────────────────────────────────────────────┤
  *   │ SubNav  — the current section's destinations,   │
- *   │           horizontal. Only inside Analytics and │
- *   │           Settings; absent elsewhere.           │
+ *   │           horizontal. Only inside Analytics,    │
+ *   │           Group and Settings; absent elsewhere. │
  *   ├──────────────┬─────────────────────────────────┤
  *   │ Camera dock  │  Main content                   │
  *   │ (left col)   │                                 │
  *   │              │                                 │
  *   └──────────────┴─────────────────────────────────┘
+ *
+ * Below `md` (768 px) the same regions rearrange, because a phone cannot
+ * afford a permanent 288 px column beside anything:
+ *
+ *   ┌────────────────────────┐
+ *   │ TopMenu — brand,       │   nav links drop out; <MobileTabBar> owns
+ *   │   scope, camera, session│  navigation in the thumb zone instead
+ *   ├────────────────────────┤
+ *   │ SubNav — scrolls       │   one row, swipeable, instead of wrapping
+ *   │   horizontally         │   to three stacked rows
+ *   ├────────────────────────┤
+ *   │                        │
+ *   │  Main content — full   │   the camera dock becomes an overlay SHEET,
+ *   │  width                 │   closed by default, over this
+ *   │                        │
+ *   ├────────────────────────┤
+ *   │ MobileTabBar           │
+ *   └────────────────────────┘
  */
 
 export function AppShell() {
-  // Closing the preview is session-local. A reload always restores it, and
-  // the top bar plus the collapsed handle can reopen it immediately.
-  const [dockVisible, setDockVisible] = useState(true);
+  const isPhone = useIsPhone();
+
+  /*
+   * Closing the preview is session-local. A reload always restores it, and
+   * the top bar plus the collapsed handle can reopen it immediately.
+   *
+   * The initial value is width-dependent because the dock means something
+   * different at each size. On a laptop it is a COLUMN: open, it costs space
+   * it repays with a live preview. On a phone it is an overlay SHEET: open, it
+   * covers the content you navigated to. So it starts closed there.
+   *
+   * Read from matchMedia in the initialiser rather than from `isPhone` in an
+   * effect, so the first paint is already correct — the effect version shows
+   * one frame of a dock covering the screen on every load.
+   */
+  const [dockVisible, setDockVisible] = useState(
+    () => !window.matchMedia(PHONE_QUERY).matches,
+  );
+
+  /*
+   * Crossing INTO phone width closes the dock: a column that was merely taking
+   * space becomes a sheet covering content, and leaving it open would obscure
+   * whatever the user is reading the moment they rotate the device.
+   *
+   * Crossing back out deliberately does NOT reopen it — a restored dock the
+   * user had closed is a surprise, and the top bar's camera button (highlighted
+   * whenever the dock is hidden) reopens it in one tap.
+   */
+  useEffect(() => {
+    if (isPhone) setDockVisible(false);
+  }, [isPhone]);
+
   const chromeMode = useBridge((s) => s.chromeMode);
   const chromeless = chromeMode === 'none';
 
@@ -73,7 +125,9 @@ export function AppShell() {
           </div>
           <EmbedHeader />
           <main className="flex-1 overflow-auto px-6 py-4" role="main" tabIndex={-1}>
-            <Outlet />
+            <ScopeGate>
+              <Outlet />
+            </ScopeGate>
           </main>
         </div>
       </RuntimeProvider>
@@ -92,7 +146,9 @@ export function AppShell() {
         <div className="flex h-full min-h-screen flex-col bg-surface-0 text-ink-0">
           <EmbedHeader />
           <main className="flex-1 overflow-auto px-6 py-4" role="main" tabIndex={-1}>
-            <Outlet />
+            <ScopeGate>
+              <Outlet />
+            </ScopeGate>
           </main>
         </div>
       </RuntimeProvider>
@@ -108,22 +164,57 @@ export function AppShell() {
           <div className="flex flex-1 overflow-hidden">
             {dockVisible ? (
               <aside
-                className="flex shrink-0 w-72 md:w-80 xl:w-96 border-r border-line bg-surface-1 flex-col overflow-y-auto"
+                className={cn(
+                  'flex flex-col border-line bg-surface-1',
+                  isPhone
+                    ? /*
+                       * A small FLOATING thumbnail, not a full-height sheet.
+                       *
+                       * The first attempt was a 78svh bottom sheet, which is
+                       * the right shape for a panel you interact with and the
+                       * wrong one for a preview you glance at: it covered the
+                       * readouts you started the capture to watch, and needed
+                       * a modal backdrop, so checking your framing meant
+                       * dismissing the app. At 11rem it sits above the tab bar
+                       * and leaves the page usable underneath — no backdrop,
+                       * nothing to dismiss.
+                       */
+                      'above-tab-bar fixed right-3 z-modal w-44 overflow-hidden rounded-lg border shadow-popover'
+                    : 'w-72 shrink-0 overflow-y-auto border-r md:w-80 xl:w-96',
+                )}
                 aria-label="Camera dock"
               >
-                <MiniCamera onHide={() => setDockVisible(false)} />
+                <MiniCamera onHide={() => setDockVisible(false)} compact={isPhone} />
               </aside>
             ) : null}
+            {/*
+             * Tighter gutters on a phone: `px-6` spends 48 of 390 px on
+             * whitespace, which is where the cramped one-word-per-line
+             * columns came from.
+             */}
             <main
-              className="flex-1 overflow-auto px-6 py-4"
+              className="flex-1 overflow-auto px-3 py-3 md:px-6 md:py-4"
               role="main"
               tabIndex={-1}
             >
               <Outlet />
             </main>
           </div>
-          {!dockVisible ? <MiniCamera onShow={() => setDockVisible(true)} collapsedPill /> : null}
+          {/*
+           * The collapsed pill restores the dock on desktop. On a phone it is
+           * redundant — the top bar's camera button is permanently visible and
+           * highlights itself while the dock is hidden — and it would sit on
+           * top of the tab bar, so it is not rendered there.
+           */}
+          {!dockVisible && !isPhone ? (
+            <MiniCamera onShow={() => setDockVisible(true)} collapsedPill />
+          ) : null}
+          <MobileTabBar />
           <LiveGazeDot />
+          {/* Shell level, never inside a popover — see Dialog's focus contract.
+              Renders nothing unless the operator enabled the gate, and never
+              when embedded (the host owns consent). */}
+          <ConsentGate />
         </div>
       </CameraDockProvider>
     </RuntimeProvider>

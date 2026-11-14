@@ -6,7 +6,8 @@
 // mean-centred h. The 12 s buffer is only the spectral window the BPM is read
 // from. These tests pin the projection window at 1.6 s × fps, check accuracy on
 // a synthetic 72 bpm pulse, and check that the bundle rohy actually loads
-// (OyonR/standalone/app/dist-element/oyon-app.element.js) runs the same code.
+// (OyonR/standalone/app/dist-element/oyon-app.element.js) was built from it
+// (upstream in Oyon since 3.5.14).
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -168,29 +169,22 @@ describe('PRV-75: POS projection window (Wang et al. 2017)', () => {
 });
 
 describe('PRV-75: the element bundle rohy loads runs the windowed POS', () => {
+    // Since Oyon 3.5.14 the fix is in Oyon's source (posSignalWindowed) and the
+    // bundle is built from it, so the hand-patched marker block this test used
+    // to slice out of the minified bundle no longer exists. The algorithm is
+    // pinned above against OyonR's source; here, that the shipped bundle was
+    // built from that source: the estimator defaults and reports the window.
     const bundle = fs.readFileSync(BUNDLE, 'utf8');
-    const begin = bundle.indexOf('/*oyon:pos-windowed:begin');
-    const end = bundle.indexOf('/*oyon:pos-windowed:end*/');
 
-    it('carries the windowed projection and calls it from the estimator', () => {
-        expect(begin).toBeGreaterThan(-1);
-        expect(end).toBeGreaterThan(begin);
+    it('carries the windowed projection and reports its window', () => {
         expect(bundle).toContain('posWindowSeconds:1.6');
-        expect(bundle).toContain('=__oyonPosWindowed(');
         expect(bundle).toContain('pos_window_samples:');
     });
 
-    it('is numerically identical to the source implementation', () => {
-        const code = bundle.slice(begin, end);
-        // The bundle's fallback calls its minified whole-buffer projection
-        // (BY); inject the source one under that name.
-        const factory = new Function('BY', `${code}; return { __oyonPosWindowed, __oyonPosWindowLength };`);
-        const shipped = factory(posSignal);
-        [16, 20, 30].forEach((fps) => {
-            const frames = synth({ fps, seed: 7, specular: 0.01, flip: true });
-            const [r, g, b] = ['r', 'g', 'b'].map((k) => frames.map((f) => f.rgb[k]));
-            expect(shipped.__oyonPosWindowLength(fps, 1.6)).toBe(posWindowLength(fps, 1.6));
-            expect(shipped.__oyonPosWindowed(r, g, b, fps, 1.6)).toEqual(posSignalWindowed(r, g, b, fps, 1.6));
-        });
+    it('was built from the vendored Oyon source, not patched after the build', () => {
+        expect(bundle).not.toContain('/*oyon:pos-windowed:begin');
+        const oyonVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'OyonR', 'package.json'), 'utf8')).version;
+        const [major, minor, patch] = oyonVersion.split('.').map(Number);
+        expect(major > 3 || (major === 3 && (minor > 5 || (minor === 5 && patch >= 14)))).toBe(true);
     });
 });

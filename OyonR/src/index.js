@@ -9,6 +9,66 @@ export { FacialSignalAggregator } from './aggregation/FacialSignalAggregator.js'
 export { GazeAggregator } from './aggregation/GazeAggregator.js';
 export { TypingAggregator } from './aggregation/TypingAggregator.js';
 export { createTypingComposerAdapter } from './capture/TypingComposerAdapter.js';
+export { createTypingContentEditableAdapter, readEditableText } from './capture/TypingContentEditableAdapter.js';
+export { createTypingEditReporter } from './capture/TypingEditReporter.js';
+export {
+  classifyBoundaryContext,
+  createTextCounters,
+  countGraphemes,
+  countTypingWords,
+  BOUNDARY_CONTEXTS,
+  BOUNDARY_CONTEXT_WINDOW,
+} from './capture/typingText.js';
+export {
+  aggregateTypingEpisodes,
+  summarizeTypingBy,
+  compareTypingSummaries,
+  episodeCharsPerMin,
+  pauseBucketLabel,
+  PAUSE_LOCATION_ORDER,
+  TYPING_SUMMARY_MEASURES,
+} from './analytics/TypingEpisodeAnalytics.js';
+export {
+  WRITING_ORIGINS,
+  writingOrigin,
+  writingActs,
+  summarizeWriting,
+  summarizeWritingBy,
+  writingTimeline,
+  writingByDayAndPerson,
+  WRITING_ACTS,
+  WRITING_PAUSE_MS,
+  writingActOf,
+  writingActSequences,
+  writingActEvents,
+  summarizeWritingActs,
+} from './analytics/WritingAnalytics.js';
+export { createDocumentEditTracker } from './capture/DocumentEditTracker.js';
+export { createCodeRunTracker } from './capture/CodeRunTracker.js';
+export {
+  HOST_RECORD_KINDS,
+  validateHostRecords,
+  scopeRecords,
+  countScopedRecords,
+  listScopedSessions,
+  listScopedPeople,
+  listRecordLevels,
+  recordLevelValue,
+  RECORD_LEVELS,
+  recordSessionId,
+  recordUserId,
+  recordGroupId,
+  recordContextId,
+  recordUserLabel,
+  mapLogEventsToSignalEvents,
+  summarizeRecordsBy,
+  recordKindsOf,
+  LOG_ROW_KINDS,
+  toLogRows,
+  summarizeLogRows,
+  flattenLogRecord,
+  joinRawParts,
+} from './records/index.js';
 export { AiAssistAggregator } from './aggregation/AiAssistAggregator.js';
 export { createAiAssistTracker } from './capture/AiAssistTracker.js';
 export { InteractionAggregator } from './aggregation/InteractionAggregator.js';
@@ -98,11 +158,13 @@ export {
   GAZE_ENGINE_MODEL_VERSIONS,
 } from './inference/GazeAdapterFactory.js';
 export { HttpEmotionTransport } from './transport/HttpEmotionTransport.js';
+export { chunkWindowBatch, rawPartId, DEFAULT_MAX_POST_BYTES } from './transport/chunkWindowBatch.js';
 export { FallbackEmotionTransport } from './transport/FallbackEmotionTransport.js';
 export { LocalEmotionTransport } from './transport/LocalEmotionTransport.js';
 export { OyonLogger, LocalLogTransport, HttpLogTransport, createLogEvent } from './logging/OyonLogger.js';
 export { SignalEventLog } from './logging/SignalEventLog.js';
 export { OyonMetricRecorder, LocalMetricTransport, HttpMetricTransport } from './logging/OyonMetrics.js';
+export { IndexedDbLogTransport, IndexedDbMetricTransport, sharedOyonStore } from './logging/IndexedDbLogTransports.js';
 export { IndexedDbOyonStore, oyonRecordId } from './storage/IndexedDbOyonStore.js';
 export { createOyonSettings, normalizeOyonSettings, settingsSnapshot, OYON_DEFAULT_SETTINGS, OYON_SETTINGS_PROFILES } from './settings/OyonSettings.js';
 export { DynamicalFeatureTracker, computeDynamicalFeatures, enrichWindowsWithDynamics } from './analytics/DynamicalFeatures.js';
@@ -114,12 +176,20 @@ export { createRohyFerAttachment } from './adapters/rohyAttach.js';
 export { createOyonAddon } from './addon/OyonAddon.js';
 export { createRohyOyonAddon, createNoopOyonAddon } from './addon/RohyOyonAddon.js';
 export { createStandaloneFerAttachment } from './adapters/standaloneAttach.js';
-export { validateEmotionBatch, ALLOWED_EMOTIONS } from './validation/validateEmotionPayload.js';
+export { validateEmotionBatch, validateRawStreamsBlock, validateRawPart, ALLOWED_EMOTIONS } from './validation/validateEmotionPayload.js';
+export { GroupSessionClock, estimateClockOffset, httpClockSource } from './core/GroupSessionClock.js';
+export { RawStreamRecorder, RAW_STREAM_FIELDS, rawOnlyEnvelope } from './aggregation/RawStreamRecorder.js';
+export { FaceTrackAssigner, iou } from './capture/FaceTrackAssigner.js';
+export { MultiFaceCapture } from './core/MultiFaceCapture.js';
 export {
   OYON_VERSION,
   OYON_HOST_CONTRACT_VERSION,
   OYON_WINDOW_BATCH_SCHEMA_VERSION,
   OYON_SUPPORTED_WINDOW_BATCH_SCHEMA_VERSIONS,
+  OYON_DOCUMENT_EDIT_STATES,
+  OYON_DOCUMENT_EDIT_STATES_VERSION,
+  OYON_CODE_RUN_STATES,
+  OYON_CODE_RUN_STATES_VERSION,
 } from './version.js';
 export { domRectToGazeAoi, elementToGazeAoi } from './gaze/domAoi.js';
 export {

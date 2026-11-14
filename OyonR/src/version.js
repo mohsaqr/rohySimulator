@@ -5,8 +5,8 @@
  * Host and batch contract versions change only when their public wire/API
  * shapes change; they are intentionally independent from patch releases.
  */
-export const OYON_VERSION = '3.3.3';
-export const OYON_HOST_CONTRACT_VERSION = '3.1';
+export const OYON_VERSION = '3.5.14';
+export const OYON_HOST_CONTRACT_VERSION = '3.2';
 
 /**
  * v4 adds the `modality` discriminator, superseding the ad-hoc `<x>_only`
@@ -38,6 +38,13 @@ export const OYON_MODALITIES = Object.freeze([
   'interaction',
   'ai_assist',
   'voice',
+  'document_edit',
+  'code_run',
+  // A raw-only envelope: per-sample `raw_streams` no other window carries —
+  // rows still held when capture stops, rows sent early when a stream reaches
+  // the recorder's row bound, and the continuation parts of a window too large
+  // for one POST (docs/ROHY_INTEGRATION.md, "Raw-only envelopes").
+  'raw',
 ]);
 
 /** Window cadence: fixed-interval camera window, or a host-bounded episode. */
@@ -154,6 +161,44 @@ export const OYON_AI_ASSIST_STATES = Object.freeze([
   'ai_turn_end',
 ]);
 
+/**
+ * Document edits a host reports for an editor it owns: what was done to the
+ * document, by whom (`source`: the writer, an AI, or the system), and how
+ * much text it added and removed — counts only, never the text.
+ *
+ * This is the document's own history, distinct from `typing-states-v1`,
+ * which is the writer's keystroke process inside one editor. An AI rewrite or
+ * a system-applied change is a document edit and not typing at all.
+ */
+export const OYON_DOCUMENT_EDIT_STATES_VERSION = 'document-edit-states-v1';
+export const OYON_DOCUMENT_EDIT_STATES = Object.freeze([
+  'insert',
+  'delete',
+  'replace',
+  'move',
+  'format',
+  'undo',
+  'redo',
+  'paste',
+  // Structural changes: a block (paragraph, heading, list item, cell, …)
+  // added, removed or moved to another position.
+  'block_add',
+  'block_remove',
+  'block_reorder',
+]);
+
+/**
+ * Code runs a host reports: a run started, and how it ended. `failure`
+ * carries the kind of error only, never its message or the code.
+ */
+export const OYON_CODE_RUN_STATES_VERSION = 'code-run-states-v1';
+export const OYON_CODE_RUN_STATES = Object.freeze([
+  'start',
+  'success',
+  'failure',
+  'interrupt',
+]);
+
 /** modality → its state vocabulary. Modalities absent here emit no events. */
 export const OYON_STATE_VOCABULARIES = Object.freeze({
   typing: OYON_TYPING_STATES,
@@ -161,6 +206,8 @@ export const OYON_STATE_VOCABULARIES = Object.freeze({
   interaction: OYON_INTERACTION_STATES,
   ai_assist: OYON_AI_ASSIST_STATES,
   voice: OYON_VOICE_STATES,
+  document_edit: OYON_DOCUMENT_EDIT_STATES,
+  code_run: OYON_CODE_RUN_STATES,
 });
 
 /** modality → the version identifier recorded on each event. */
@@ -170,4 +217,6 @@ export const OYON_STATE_VOCABULARY_VERSIONS = Object.freeze({
   interaction: OYON_INTERACTION_STATES_VERSION,
   ai_assist: OYON_AI_ASSIST_STATES_VERSION,
   voice: OYON_VOICE_STATES_VERSION,
+  document_edit: OYON_DOCUMENT_EDIT_STATES_VERSION,
+  code_run: OYON_CODE_RUN_STATES_VERSION,
 });

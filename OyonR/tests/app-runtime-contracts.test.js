@@ -22,6 +22,77 @@ assert.match(
   'CameraPreview must rebind the existing MediaStream after route changes',
 );
 
+// A declined camera must actually prevent capture — every time, not once.
+//
+// The first version of this check lived inside ensureRuntime(), which opens
+// with `if (runtimeRef.current) return runtimeRef.current`. Once a runtime had
+// been built the builder short-circuits, so the guard stopped running and a
+// participant who declined AFTER a first capture could still start sensing.
+// The check therefore belongs in start(), ahead of ensureRuntime().
+{
+  const startBody = runtime.match(/const start = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[/);
+  assert.ok(startBody, 'could not locate start()');
+  assert.match(
+    startBody[0],
+    /cameraAllowed\(/,
+    'start() must check camera consent on every call',
+  );
+
+  // Compare CODE positions, not text positions: the comment above the guard
+  // names ensureRuntime() to explain why the check is not in there, and a
+  // naive indexOf finds that mention first and fails on correct code.
+  const code = startBody[0].replace(/\/\/.*$/gm, '');
+  const guardAt = code.indexOf('cameraAllowed(');
+  const buildAt = code.indexOf('ensureRuntime()');
+  assert.ok(
+    guardAt !== -1 && buildAt !== -1 && guardAt < buildAt,
+    'the consent check must run BEFORE ensureRuntime() — no camera may be requested first',
+  );
+
+  const ensureBody = runtime.match(/const ensureRuntime = useCallback[\s\S]*?\n  \}, \[/);
+  assert.ok(ensureBody, 'could not locate ensureRuntime()');
+  assert.doesNotMatch(
+    ensureBody[0],
+    /cameraAllowed\(/,
+    'ensureRuntime() is memoized, so a consent check there enforces only once',
+  );
+
+  // Withdrawal mid-capture must stop the current run, not merely the next one:
+  // the agreement's own words are "sensing stops straight away".
+  assert.match(
+    runtime,
+    /cameraConsented[\s\S]*?void stop\(\)/,
+    'declining the camera during a capture must stop it',
+  );
+
+  // consent_version is the whole audit trail, and it was a hardcoded string.
+  //
+  // EmotionRuntime stamps `consentVersion` onto every window. While it read a
+  // build-time literal, the "custom agreement text is hashed and the hash is
+  // stamped on each window" contract in docs/CONSENT_PLAN.md was simply not
+  // true: an operator could edit the wording afterwards and no record showed
+  // which version anyone actually agreed to.
+  assert.doesNotMatch(
+    runtime,
+    /consentVersion:\s*'standalone-app-v1'/,
+    'consentVersion must not be a hardcoded literal — it is the audit trail',
+  );
+  assert.match(
+    runtime,
+    /consentVersion:\s*\n?\s*useConsent\.getState\(\)\.answeredVersion/,
+    'consentVersion must be the version the participant actually agreed to',
+  );
+
+  // The runtime is memoized, so a changed answer must force a rebuild —
+  // otherwise the cached instance keeps the old sensor mask AND stamps the
+  // version the participant no longer agreed to.
+  assert.match(
+    code,
+    /consentBuildSignature\([\s\S]*?runtimeRef\.current = null/,
+    'a changed consent answer must discard the cached runtime',
+  );
+}
+
 const settingsStore = readFileSync('standalone/app/src/lib/settingsStore.ts', 'utf8');
 const live = readFileSync('standalone/app/src/routes/live.tsx', 'utf8');
 
@@ -153,13 +224,29 @@ for (const [needle, label] of [['function makeFacial(', 'makeFacial'], ['action_
   );
   assert.ok(input, 'could not locate oyonSettingsInput');
 
-  const missing = keys.filter(
-    (k) => !new RegExp(`\\b${k}: editable\\.${k}\\b`).test(input[0]),
-  );
+  // App-only settings: host-side POLICY, not library parameters. The FER
+  // module must not decide who may be captured (docs/ARCHITECTURE.md
+  // anti-coupling), so the consent gate never reaches createOyonSettings — it
+  // masks `editable` before buildRuntime instead (see runtime.ts).
+  //
+  // Listed explicitly, and asserted ABSENT below, so this exemption cannot
+  // quietly grow into a hole that hides a genuinely unforwarded setting.
+  const APP_ONLY = ['consent_required', 'consent_text'];
+
+  const forwarded = (k) => new RegExp(`\\b${k}: editable\\.${k}\\b`).test(input[0]);
+
+  const missing = keys.filter((k) => !APP_ONLY.includes(k) && !forwarded(k));
   assert.deepEqual(
     missing,
     [],
     `these settings are editable but never forwarded to the library: ${missing.join(', ')}`,
+  );
+
+  const leaked = APP_ONLY.filter(forwarded);
+  assert.deepEqual(
+    leaked,
+    [],
+    `app-only policy settings must not be forwarded to the library: ${leaked.join(', ')}`,
   );
 }
 
@@ -186,4 +273,9 @@ for (const [needle, label] of [['function makeFacial(', 'makeFacial'], ['action_
   );
 }
 
+// Raw-only envelopes (modality 'raw') reach the host event but are not
+// counted as emotion windows in the live counter or the recent list.
+assert.match(runtime, /const emotion = normalized\.filter\(\(w\) => !isRawOnly\(w\)\);/);
+assert.match(runtime, /setWindowCount\(\(n\) => n \+ emotion\.length\)/);
+assert.match(runtime, /emitHostEvent\('oyon:window', \{\s*windows: normalized,/);
 console.log('app-runtime-contracts.test.js passed');

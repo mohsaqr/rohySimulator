@@ -1,7 +1,7 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { IndexedDbOyonStore } from 'oyon';
 import type { TypingMetrics, TypingQuality, TypingTarget } from 'oyon';
 import type { IdbStoreRuntime } from './idbTransport';
+import { useSignalRecords, type StoredResult } from './signalSource';
 
 /*
  * useStoredTypingWindows — read-only view of every typing episode window
@@ -60,6 +60,9 @@ export interface TypingMetricsV3 extends TypingMetrics {
   words_per_min?: number | null;
   words_per_min_active?: number | null;
   produced_graphemes?: number;
+  /** The text's length before the episode's first edit; the episode's own net production is `committed_graphemes - baseline_graphemes`. */
+  baseline_graphemes?: number;
+  baseline_words?: number | null;
   product_ratio?: number | null;
   pause_location_counts?: Record<string, number> | null;
   adaptive_burst_count?: number;
@@ -85,6 +88,11 @@ export interface StoredTypingWindow {
   window_id?: string;
   capture_id?: string | null;
   session_id?: string | null;
+  /** Who and what the episode belongs to; absent on rows that predate them. */
+  user_id?: string | null;
+  user_label?: string | null;
+  group_id?: string | null;
+  context_id?: string | null;
 }
 
 const SIGNAL_WINDOWS_STORE_NAME = 'signal_windows';
@@ -123,11 +131,20 @@ async function readAllStoredTypingWindows(): Promise<StoredTypingWindow[]> {
   }
 }
 
-export function useStoredTypingWindows(): UseQueryResult<StoredTypingWindow[], Error> {
-  return useQuery({
+function byWindowStart(a: StoredTypingWindow, b: StoredTypingWindow): number {
+  return Date.parse(a.window_start) - Date.parse(b.window_start);
+}
+
+/**
+ * The typing episodes this surface draws: the host's feed (el.setRecords)
+ * filtered to the embed's scope when one is set, else the local store.
+ */
+export function useStoredTypingWindows(): StoredResult<StoredTypingWindow> {
+  return useSignalRecords<StoredTypingWindow>({
+    kind: 'signalWindows',
     queryKey: STORED_TYPING_WINDOWS_QUERY_KEY,
     queryFn: readAllStoredTypingWindows,
-    staleTime: 1000,
-    refetchInterval: 5000,
+    accept: isTypingWindowLike,
+    compare: byWindowStart,
   });
 }

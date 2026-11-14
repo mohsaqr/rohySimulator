@@ -1,14 +1,17 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { EmotionWindow } from 'oyon';
 import { IdbEmotionTransport } from './idbTransport';
 import { sessionIdOf } from './analyzeWindows';
 import { useBridge } from './hostBridge';
+import type { StoredResult } from './signalSource';
 import {
   isEmotionWindowLike,
   normalizeEmotionWindow,
   normalizeEmotionWindows,
   windowEndMs,
 } from './windowTime';
+import { splitRawOnly } from './rawOnly';
 
 /*
  * useStoredWindows — read-only view of every EmotionWindow written by the
@@ -57,7 +60,11 @@ function getIdb(): IdbEmotionTransport {
   return idbReadTransport;
 }
 
-async function readAllStoredWindows(): Promise<EmotionWindow[]> {
+/**
+ * Every stored record, split windows joined back, separated into the emotion
+ * windows and the raw-only envelopes (`modality: 'raw'`; see rawOnly.js).
+ */
+async function readStoredWindowSet(): Promise<{ windows: EmotionWindow[]; rawOnly: EmotionWindow[] }> {
   const local = readLocalStorage();
   const legacy = readLocalStorage(LEGACY_WINDOWS_KEY);
   let idbRows: EmotionWindow[] = [];
@@ -80,19 +87,41 @@ async function readAllStoredWindows(): Promise<EmotionWindow[]> {
   }
   // Newest last so callers that consume the tail get the most recent.
   merged.sort((a, b) => (windowEndMs(a) ?? 0) - (windowEndMs(b) ?? 0));
-  return merged;
+  return splitRawOnly(merged);
 }
 
-export function useStoredWindows(): UseQueryResult<EmotionWindow[], Error> {
-  // Host-fed windows (el.setWindows in chrome="none" / viewer mode) take
-  // precedence over the element's own local store: the Analyze dashboards
-  // then render exactly what the host captured, with no camera of their own.
-  // Standalone / no host windows ⇒ hostWindows is null and the read path is
-  // byte-for-byte unchanged.
+async function readAllStoredWindows(): Promise<EmotionWindow[]> {
+  return (await readStoredWindowSet()).windows;
+}
+
+/** The stored raw-only envelopes (rows no camera window carried), for export. */
+export async function readStoredRawOnly(): Promise<EmotionWindow[]> {
+  return (await readStoredWindowSet()).rawOnly;
+}
+
+/**
+ * The interval windows this surface reads, before any scope filter:
+ *
+ *   host feed set (el.setRecords)   the fed windows. The local store is not
+ *                                   read, and the fed windows never enter the
+ *                                   query cache (they live in the bridge store
+ *                                   only, so clearing the feed leaves no copy).
+ *   scope person/group, no feed     nothing — those scopes never fall back to
+ *                                   browser storage.
+ *   chrome="none" + setWindows()    the host's windows (3.5 behaviour).
+ *   otherwise                       the element's own local store.
+ */
+export function useStoredWindows(): StoredResult<EmotionWindow> {
+  const hostRecords = useBridge((s) => s.hostRecords);
   const hostWindows = useBridge((s) => s.hostWindows);
   const chromeMode = useBridge((s) => s.chromeMode);
+  const embedded = useBridge((s) => s.embedded);
+  const scope = useBridge((s) => s.scope);
+  const needsFeed = embedded && scope !== 'session' && hostRecords == null;
+  const readsLocalOrLegacy = hostRecords == null && !needsFeed;
   const hostOverridesStore = chromeMode === 'none' && hostWindows != null;
-  return useQuery({
+
+  const query = useQuery({
     // Keying on the host array's identity makes the query re-resolve when the
     // host calls setWindows() with a new batch (react-query won't otherwise
     // notice a queryFn closure change).
@@ -113,11 +142,25 @@ export function useStoredWindows(): UseQueryResult<EmotionWindow[], Error> {
           );
         } catch { /* no console */ }
       }
-      return Promise.resolve(normalized);
+      return Promise.resolve(splitRawOnly(normalized).windows);
     },
     staleTime: 1000,
     // Host-fed windows are pushed, not polled — disable the 5s refetch when
     // the host owns the data; keep it for the local-store path (live capture).
-    refetchInterval: hostOverridesStore ? false : 5000,
+    refetchInterval: hostOverridesStore || !readsLocalOrLegacy ? false : 5000,
+    enabled: readsLocalOrLegacy,
   });
+
+  // A feed carries raw-only envelopes and split parts like the store does.
+  const fedWindows = hostRecords?.windows;
+  const fedEmotionWindows = useMemo(
+    () => (fedWindows ? splitRawOnly(fedWindows).windows : NO_WINDOWS),
+    [fedWindows],
+  );
+
+  if (hostRecords != null) return { data: fedEmotionWindows, isLoading: false };
+  if (needsFeed) return { data: NO_WINDOWS, isLoading: false };
+  return { data: query.data, isLoading: query.isLoading };
 }
+
+const NO_WINDOWS: EmotionWindow[] = [];

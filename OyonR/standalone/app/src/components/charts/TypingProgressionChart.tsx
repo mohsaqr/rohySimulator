@@ -263,7 +263,7 @@ export function TypingProgressionChart({ typing, quality }: TypingProgressionCha
         {positioned.map((e, i) => opMark(e.op, xOf(e.t), yScale(e.offset as number), `m-${i}`))}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         {opsPresent.map((op) => (
           <span key={op} className="inline-flex items-center gap-1">
             {legendSwatch(op)}

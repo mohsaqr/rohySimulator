@@ -1,7 +1,7 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { IndexedDbOyonStore } from 'oyon';
 import type { SignalEvent } from 'oyon/signal-events';
 import type { IdbStoreRuntime } from './idbTransport';
+import { useSignalRecords, type StoredResult } from './signalSource';
 
 /*
  * useStoredEvents — read-only view of every SignalEvent written by the
@@ -55,11 +55,16 @@ async function readAllStoredEvents(): Promise<SignalEvent[]> {
   }
 }
 
-export function useStoredEvents(): UseQueryResult<SignalEvent[], Error> {
-  return useQuery({
+/**
+ * The per-event states this surface draws: the host's feed (el.setRecords)
+ * filtered to the embed's scope when one is set, else the local store.
+ */
+export function useStoredEvents({ all = false }: { all?: boolean } = {}): StoredResult<SignalEvent> {
+  return useSignalRecords<SignalEvent>({
+    kind: 'signalEvents',
     queryKey: STORED_EVENTS_QUERY_KEY,
     queryFn: readAllStoredEvents,
-    staleTime: 1000,
-    refetchInterval: 5000,
+    accept: isSignalEventLike,
+    all,
   });
 }

@@ -262,7 +262,9 @@ function nineCalibrationPoints() {
     webEyeTrackAdapter: adapter,
   });
   const events = [];
-  runtime.on('status', (s) => events.push(s));
+  const statusEvents = [];
+  runtime.on('gaze-calibration', (s) => events.push(s));
+  runtime.on('status', (s) => statusEvents.push(s));
   await runtime.init();
   await adapter.start();
 
@@ -271,8 +273,13 @@ function nineCalibrationPoints() {
   assert.equal(r.reason, 'insufficient_samples');
   assert.equal(runtime.gazeCalibrated, false);
 
-  const failed = events.find(e => e.state === 'gaze:calibration_failed');
-  assert.ok(failed, 'expected gaze:calibration_failed status event');
+  const failed = events.find(e => e.state === 'calibration_failed');
+  assert.ok(failed, 'expected calibration_failed gaze-calibration event');
+  // Calibration must never leak onto the lifecycle channel: a host that
+  // reduces 'status' into "is capture on?" would read a gaze:* state as
+  // capture having stopped while the camera is still running.
+  const leaked = statusEvents.find(e => typeof e.state === 'string' && e.state.startsWith('gaze:'));
+  assert.equal(leaked, undefined, 'calibration states must not be emitted on the status channel');
 
   const failLogs = runtime.logger.read().filter(ev => ev.event_name === 'oyon.gaze.calibration_failed');
   assert.ok(failLogs.length > 0);
@@ -377,6 +384,35 @@ function nineCalibrationPoints() {
   const dwell = withGaze[withGaze.length - 1].gaze.aoi_dwell_ms;
   assert.ok(dwell.agent_face > 0, `expected positive agent_face dwell, got ${JSON.stringify(dwell)}`);
   assert.equal(Object.prototype.hasOwnProperty.call(dwell, 'bad'), false, 'dropped AOI must not appear in dwell');
+}
+
+// ─── Test: start() on an already-running runtime re-announces its state ───
+// A host whose UI drifted (it believes capture is off) calls start() and
+// waits for a status event to leave its "loading" state. The old silent
+// early-return left that host spinning forever.
+{
+  const runtime = new EmotionRuntime({
+    settings: { sample_interval_ms: 1000, aggregate_window_ms: 2000, min_valid_frames: 1 },
+    camera: makeStubCamera(),
+    faceTracker: new MockFaceTracker(),
+    classifier: new MockEmotionClassifier(),
+    transport: new CapturingTransport(),
+  });
+  const states = [];
+  runtime.on('status', (s) => states.push(s.state));
+  await runtime.start();
+  assert.equal(states[states.length - 1], 'running');
+
+  states.length = 0;
+  await runtime.start(); // redundant start while running
+  assert.deepEqual(states, ['running'], 'redundant start must re-emit the running state');
+
+  runtime.pause();
+  states.length = 0;
+  await runtime.start(); // redundant start while paused
+  assert.deepEqual(states, ['paused'], 'redundant start while paused must re-emit paused, not resume');
+
+  await runtime.stop();
 }
 
 console.log('runtime-gaze.test.js — all cases passed');

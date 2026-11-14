@@ -14,7 +14,15 @@ import {
   aggregateTypingEpisodes,
   episodeCharsPerMin,
   pauseBucketLabel,
+  summarizeTypingBy,
 } from '@/lib/typingAnalytics';
+import { useRecordScope } from '@/lib/recordScope';
+import {
+  TypingByDayTable,
+  TypingByPersonTable,
+  TypingBySessionTable,
+  TypingPersonComparison,
+} from '@/components/typing/TypingScopeTables';
 
 /*
  * Analyze · Typing — the writing-process dashboard over typing episode
@@ -69,6 +77,15 @@ function episodeKey(episode: StoredTypingWindow, index: number): string {
 export function TypingView() {
   const { data: episodes = [], isLoading } = useStoredTypingWindows();
   const summary = useMemo(() => aggregateTypingEpisodes(episodes), [episodes]);
+  // Person and group scopes (host-fed embeds) add their own tables: a person
+  // gets a per-session table and a by-day trend; a group gets one row per
+  // person and a two-person comparison. The pooled sections below are the
+  // same page in every scope, over whatever episodes the scope allows.
+  const { scope, wide } = useRecordScope();
+  const personRows = useMemo(
+    () => (wide ? summarizeTypingBy(episodes, { by: 'person' }) : []),
+    [episodes, wide],
+  );
 
   // Selected row drives the per-episode detail; default is the most recent
   // episode (episodes arrive sorted by window_start ascending).
@@ -101,6 +118,19 @@ export function TypingView() {
 
   return (
     <div className="flex flex-col gap-6">
+      {wide ? (
+        <Section
+          id="typ-people"
+          title="People"
+          description="Each person's episodes pooled into one row. Share of text is the person's net committed graphemes out of everyone's in view."
+        >
+          <div className="flex flex-col gap-4">
+            <TypingByPersonTable rows={personRows} />
+            {personRows.length >= 2 ? <TypingPersonComparison rows={personRows} /> : null}
+          </div>
+        </Section>
+      ) : null}
+
       <Section
         id="typ-production"
         title="Production"
@@ -122,11 +152,11 @@ export function TypingView() {
             hint="over hands-on-keys time only"
           />
           <Metric
-            label="Committed"
-            value={summary.committedGraphemes}
+            label="Net added"
+            value={summary.netGraphemes}
             unit="graphemes"
             format={(v) => v.toLocaleString()}
-            hint="net text at episode end"
+            hint="inserted minus deleted in these episodes; negative when more was removed than written"
           />
           <Metric
             label="Produced"
@@ -225,6 +255,19 @@ export function TypingView() {
         </div>
       </Section>
 
+      {scope === 'person' ? (
+        <Section
+          id="typ-sessions"
+          title="Sessions and days"
+          description="The same pooled measures per session and per calendar day."
+        >
+          <div className="flex flex-col gap-4">
+            <TypingBySessionTable episodes={episodes} />
+            <TypingByDayTable episodes={episodes} />
+          </div>
+        </Section>
+      ) : null}
+
       <Section
         id="typ-episodes"
         title="Episodes"
@@ -238,12 +281,17 @@ export function TypingView() {
             </CardMeta>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-left text-xs">
+            {/* Five columns of timestamps and counts do not fit a narrow
+                viewport. Without a scroll container of its own the table
+                widens its ancestors instead, and the whole PAGE scrolls
+                sideways — the one thing a layout must never do. */}
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[30rem] text-left text-xs">
               <thead>
                 <tr className="border-b border-line text-ink-3">
                   <th className="py-1.5 pr-3 font-semibold">Start</th>
                   <th className="py-1.5 pr-3 font-semibold">Elapsed</th>
-                  <th className="py-1.5 pr-3 font-semibold">Committed</th>
+                  <th className="py-1.5 pr-3 font-semibold" title="The whole text's length when the episode ended, including what was there before it">Text length</th>
                   <th className="py-1.5 pr-3 font-semibold">Outcome</th>
                   <th className="py-1.5 pr-3 font-semibold">Chars/min</th>
                 </tr>
@@ -270,6 +318,7 @@ export function TypingView() {
                 })}
               </tbody>
             </table>
+            </div>
           </CardContent>
         </Card>
       </Section>

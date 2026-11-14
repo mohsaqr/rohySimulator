@@ -185,7 +185,7 @@ export function VoicePitchDistribution({ frames, voice, quality }: VoicePitchDis
         </text>
       </svg>
 
-      <p className="m-0 text-[11px] text-ink-3">
+      <p className="m-0 text-mini text-ink-3">
         {histogram.n} kept frame{histogram.n === 1 ? '' : 's'} · {histogram.binHz.toFixed(1)} Hz bins ·
         range {histogram.min.toFixed(0)}–{histogram.max.toFixed(0)} Hz
       </p>

@@ -1,6 +1,8 @@
 import type { TypingMetrics as TypingMetricsBase } from 'oyon';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Metric } from '@/components/ui/Metric';
+// One wording for a pause bucket on every page: the library's, in seconds.
+import { pauseBucketLabel } from '@/lib/typingAnalytics';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 /*
@@ -61,16 +63,6 @@ function num(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** `lt_500_ms` → `< 500 ms`, `500_to_1000_ms` → `500–1000 ms`, `gte_5000_ms` → `≥ 5000 ms`. */
-function pauseBucketLabel(key: string): string {
-  const lt = key.match(/^lt_(\d+)_ms$/);
-  if (lt) return `< ${lt[1]} ms`;
-  const gte = key.match(/^gte_(\d+)_ms$/);
-  if (gte) return `≥ ${gte[1]} ms`;
-  const range = key.match(/^(\d+)_to_(\d+)_ms$/);
-  if (range) return `${range[1]}–${range[2]} ms`;
-  return key;
-}
 
 const PAUSE_LOCATION_LABELS: ReadonlyArray<readonly [string, string]> = [
   ['mid_word', 'Mid-word'],
@@ -134,13 +126,13 @@ export function TypingStatsPanel({ typing, quality }: { typing: TypingMetrics | 
             format={(v) => v.toFixed(1)}
             hint={typing.words_per_min_active == null ? 'word counts not measured' : undefined}
           />
-          <Metric label="Committed" value={num(typing.committed_graphemes)} unit="graphemes" hint="net text at episode end" />
+          <Metric label="Text length" value={num(typing.committed_graphemes)} unit="graphemes" hint="the whole text at episode end, including what was there before" />
           <Metric label="Produced" value={num(typing.produced_graphemes)} unit="graphemes" hint="everything typed" />
           <Metric
             label="Product ratio"
             value={num(typing.product_ratio)}
             format={(v) => v.toFixed(3)}
-            hint={typing.product_ratio == null ? 'nothing produced' : 'committed / produced'}
+            hint={typing.product_ratio == null ? 'nothing produced' : 'share of typed text that survived'}
           />
         </CardContent>
       </Card>
@@ -185,7 +177,7 @@ export function TypingStatsPanel({ typing, quality }: { typing: TypingMetrics | 
               />
             ))}
           </div>
-          {note ? <p className="m-0 mt-3 text-[11px] text-ink-3">{note}</p> : null}
+          {note ? <p className="m-0 mt-3 text-mini text-ink-3">{note}</p> : null}
         </CardContent>
       </Card>
 

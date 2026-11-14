@@ -145,7 +145,7 @@ export function AttentionMonitor({
         </text>
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span>
           {sizeBy === 'heartRate' && bpmRange
             ? `heart size = BPM · 72 faint reference · ${bpmRange[0].toFixed(0)}–${bpmRange[1].toFixed(0)} observed`

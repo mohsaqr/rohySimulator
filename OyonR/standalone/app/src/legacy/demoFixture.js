@@ -105,6 +105,13 @@ export function generateDemoFixture() {
     const confRoll = Math.random();
     const fixationCount = 2 + Math.floor(Math.random() * 4);
     const fixationMeanMs = 180 + Math.random() * 280;
+    // Saccades sit between fixations, so there is always exactly one fewer —
+    // the same invariant GazeAggregator produces, and the pairing coefficient
+    // K relies on. scanpath_length is derived rather than drawn independently,
+    // so mean x count === length holds here as it does in real windows.
+    const saccadeCount = Math.max(0, fixationCount - 1);
+    const saccadeMean = 0.08 + Math.random() * 0.28;
+    const scanpathLength = saccadeCount * saccadeMean;
     const offScreenRatio = Math.random() < 0.12
       ? 0.35 + Math.random() * 0.4
       : Math.random() * 0.12;
@@ -134,9 +141,13 @@ export function generateDemoFixture() {
         stimulus_chart: Math.floor(Math.random() * 2),
         stimulus_text: Math.floor(Math.random() * 2),
       },
+      // U+2192, matching what GazeAggregator actually emits. This used the
+      // ASCII '->' for a long time; nothing split the key until
+      // AoiTransitionMatrix, so the divergence from the real emit format was
+      // never exercised.
       aoi_transitions: {
-        'stimulus_chart->stimulus_text': chartToText,
-        'stimulus_text->stimulus_chart': textToChart,
+        'stimulus_chart\u2192stimulus_text': chartToText,
+        'stimulus_text\u2192stimulus_chart': textToChart,
       },
       aoi_transition_count: chartToText + textToChart,
       aoi_transition_entropy: Number((0.25 + Math.random() * 0.7).toFixed(3)),
@@ -148,7 +159,14 @@ export function generateDemoFixture() {
       fixation_duration_ms_mean: Math.round(fixationMeanMs),
       fixation_duration_ms_median: Math.round(fixationMeanMs * (0.9 + Math.random() * 0.15)),
       fixation_duration_ms_max: Math.round(fixationMeanMs * (1.2 + Math.random() * 0.5)),
-      scanpath_length: Number((0.25 + Math.random() * 0.9).toFixed(3)),
+      // Per-window SDs — the inputs coefficient K pools into a session sigma.
+      fixation_duration_ms_sd: Number((fixationMeanMs * (0.15 + Math.random() * 0.25)).toFixed(1)),
+      scanpath_length: Number(scanpathLength.toFixed(3)),
+      saccade_count: saccadeCount,
+      saccade_amplitude_mean: Number(saccadeMean.toFixed(4)),
+      saccade_amplitude_median: Number((saccadeMean * (0.85 + Math.random() * 0.2)).toFixed(4)),
+      saccade_amplitude_max: Number((saccadeMean * (1.3 + Math.random() * 0.6)).toFixed(4)),
+      saccade_amplitude_sd: Number((saccadeMean * (0.2 + Math.random() * 0.3)).toFixed(4)),
       off_screen_episode_count: offScreenRatio >= 0.35 ? 1 : 0,
       calibration_age_ms: Math.round(calAgeMs),
       calibration_quality: Number((0.55 + Math.random() * 0.4).toFixed(3)),

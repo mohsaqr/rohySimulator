@@ -19,11 +19,16 @@ import type { AnalyticsChannel } from './analyticsChannel';
 export interface ChannelState {
   channel: AnalyticsChannel;
   setChannel: (channel: AnalyticsChannel) => void;
+  /** The Writing acts channel's grain: the seven acts, or each with its detail. */
+  writingLevel: 'main' | 'detail';
+  setWritingLevel: (level: 'main' | 'detail') => void;
   reset: () => void;
 }
 
 export const useChannelStore = create<ChannelState>((set) => ({
   channel: 'emotion',
   setChannel: (channel) => set({ channel }),
+  writingLevel: 'main',
+  setWritingLevel: (writingLevel) => set({ writingLevel }),
   reset: () => set({ channel: 'emotion' }),
 }));

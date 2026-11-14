@@ -97,21 +97,20 @@ export function HeartRateView() {
     <div className="flex flex-col gap-6">
       <Section id="hr-kpis" title="Summary">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Metric label="HR windows" value={windows.length} tone="info" />
+          <Metric label="HR windows" value={windows.length} />
           <Metric
             label="Mean BPM"
             value={fmt(meanTracked, 0)}
             hint={trackedValues.length ? `${fmt(Math.min(...trackedValues), 0)}–${fmt(Math.max(...trackedValues), 0)}` : undefined}
-            tone="info"
           />
           {/* An SNR-derived quality index that saturates at SNR 10 — not a
               probability that the reading is correct. */}
           <Metric label="Signal quality" value={pct(meanConf)} hint="SNR index, saturates at 10" tone={meanConf != null && meanConf < 0.5 ? 'warn' : 'info'} />
-          <Metric label="Corrected" value={pct(mean(data.corrected), 1)} hint="estimates folded or dropped" tone="info" />
+          <Metric label="Corrected" value={pct(mean(data.corrected), 1)} hint="estimates folded or dropped" />
           <Metric label="Slew-clamped" value={data.clamped} hint="impossible jumps rejected" tone={data.clamped > 0 ? 'warn' : 'info'} />
-          <Metric label="Settling" value={data.settling} hint="withheld, awaiting corroboration" tone="info" />
-          <Metric label="Mean breathing" value={fmt(mean(data.brpm), 1)} unit="br/min" hint={`signal quality ${pct(mean(data.brpmConf))}`} tone="info" />
-          <Metric label="Breathing readable" value={`${readableBreathing} / ${windows.length}`} tone="info" />
+          <Metric label="Settling" value={data.settling} hint="withheld, awaiting corroboration" />
+          <Metric label="Mean breathing" value={fmt(mean(data.brpm), 1)} unit="br/min" hint={`signal quality ${pct(mean(data.brpmConf))}`} />
+          <Metric label="Breathing readable" value={`${readableBreathing} / ${windows.length}`} />
         </div>
       </Section>
 
@@ -180,14 +179,14 @@ export function HeartRateView() {
       >
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Metric label="Readable windows" value={`${readable} / ${windows.length}`} tone={readable < windows.length / 2 ? 'warn' : 'ok'} />
-          <Metric label="Mean SNR" value={fmt(mean(data.snr), 2)} hint="peak ÷ in-band power" tone="info" />
+          <Metric label="Mean SNR" value={fmt(mean(data.snr), 2)} hint="peak ÷ in-band power" />
           <Metric
             label={`Outside ${PLAUSIBLE_MIN}–${PLAUSIBLE_MAX}`}
             value={data.outOfBand}
             hint="adopted only after corroboration"
             tone={data.outOfBand > 0 ? 'warn' : 'info'}
           />
-          <Metric label="Low quality" value={data.conf.filter((c) => c != null && c < 0.5).length} hint="< 50% index" tone="info" />
+          <Metric label="Low quality" value={data.conf.filter((c) => c != null && c < 0.5).length} hint="< 50% index" />
         </div>
       </Section>
     </div>

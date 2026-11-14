@@ -64,19 +64,34 @@ assert.equal(
   'only the compact run summary should use metric tiles',
 );
 
-// The combined live card reports both pipelines and the actual capture state.
-assert.match(live, /liveVitalCount/);
-assert.match(live, /label: 'idle'[^\n]*start capture/);
-assert.match(live, /visibleVitalCount/, 'visible low-quality rates must be counted separately from trusted live rates');
-assert.match(live, /showing last or low-quality readings/, 'the card status must disclose retained readings');
-assert.match(live, /const displayedHeartRate[\s\S]*bpm: weightedHeartBpm/,
-  'the large heart readout must use the confidence-weighted window estimate');
+// The heart-rate card carries no header status pill (removed 2026-11-07 at the
+// owner's request — it duplicated the footer); capture problems and held or
+// low-quality readings are disclosed as terse footer tags instead.
+assert.doesNotMatch(live, /vitalState/, 'the heart-rate card header has no status pill');
+assert.match(liveSignals, /const heartIssues = \[/, 'capture problems are listed as footer tags');
+assert.match(liveSignals, /'weak signal'/, 'a low-quality reading is disclosed');
+assert.match(liveSignals, /'moving'/, 'head motion is disclosed');
+assert.match(liveSignals, /'low light'/, 'poor lighting is disclosed');
+assert.match(live, /lighting=\{lastIllumination\?\.assessment/, 'the tile receives the lighting assessment');
+// Heart rate shows BOTH estimators. This previously asserted the opposite —
+// that the window value was substituted INTO the per-sample readout — which
+// made the two indistinguishable under one "live" heading and hid the
+// tracker's lag (see the ramp case in heart-rate-robust.test.js). The live
+// sample must now reach the tile unmodified, with tracked passed alongside.
+assert.match(live, /sample=\{lastHeartRate\}/,
+  'the large heart readout must show the per-sample estimate, not a substituted window value');
+assert.match(live, /trackedBpm=\{trackedHeartBpm\}/,
+  'the cross-window tracked BPM must be passed alongside, not instead of, the live sample');
+assert.doesNotMatch(live, /bpm: weightedHeartBpm/,
+  'the per-sample BPM must never be overwritten by the window value');
+assert.match(liveSignals, /tracked<\/span>/,
+  'the tile must label the second number so the two are not confused');
 assert.match(live, /const displayedRespiration[\s\S]*brpm: windowRespiration\.brpm_mean/,
   'the large breathing readout must use the confidence-weighted window estimate');
 assert.match(live, /active=\{cameraRunning\}/);
 assert.match(liveSignals, /Start capture to measure pulse and breathing/);
-assert.match(liveSignals, /held value · waiting for a current estimate/,
-  'a weak update must retain and grey the last heart-rate value');
+assert.match(liveSignals, /heldHeart \? 'held' : null/,
+  'a weak update must retain and grey the last heart-rate value, tagged held');
 assert.match(liveSignals, /last reading · current signal unavailable/,
   'a weak update must retain and grey the last breathing value');
 assert.match(runtimeState, /setLastHeartRate\(\(previous\) =>/,

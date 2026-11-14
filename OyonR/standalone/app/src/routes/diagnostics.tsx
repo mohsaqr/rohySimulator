@@ -132,7 +132,7 @@ function PrimaryReading({ label, value, unit, hint }: {
 }) {
   return (
     <div className="border-b border-line pb-4">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-ink-3">{label}</div>
+      <div className="label-eyebrow">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className={`text-4xl font-semibold tabular-nums tracking-tight ${value == null ? 'text-ink-3' : 'text-ink-0'}`}>
           {value ?? '—'}
@@ -161,7 +161,7 @@ function QualityBar({ label, value, tone = 'info' }: {
           : 'bg-status-info';
   return (
     <div className="py-3">
-      <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-mini">
         <span className="text-ink-2">{label}</span>
         <span className="tabular-nums text-ink-3">{value == null ? 'not measured' : `${Math.round(bounded * 100)}%`}</span>
       </div>
@@ -203,7 +203,7 @@ function EvidenceRow({ label, value, unit }: {
  * by tests/sensing-diagnostics-screen.test.js).
  */
 function SignalEventsSection() {
-  const eventsQuery = useStoredEvents();
+  const eventsQuery = useStoredEvents({ all: true });
   const events = eventsQuery.data;
   const loading = events == null;
 
@@ -291,7 +291,7 @@ function SignalEventsSection() {
                 />
               ))}
             </div>
-            <p className="mt-auto mb-0 border-t border-line pt-3 text-[10px] leading-relaxed text-ink-3">
+            <p className="mt-auto mb-0 border-t border-line pt-3 text-micro leading-relaxed text-ink-3">
               Events are ordered by sequence_index per capture (wall-clock time is not monotonic
               across a tab suspend). getAll() here never drains the store.
             </p>
@@ -318,7 +318,7 @@ function SignalEventsSection() {
               <EvidenceRow label="Grapheme granularity" value={segmenter.grapheme ? 'supported' : 'missing'} />
               <EvidenceRow label="Word granularity" value={segmenter.word ? 'supported' : 'missing'} />
             </div>
-            <p className="mt-auto mb-0 border-t border-line pt-3 text-[10px] leading-relaxed text-ink-3">
+            <p className="mt-auto mb-0 border-t border-line pt-3 text-micro leading-relaxed text-ink-3">
               Without Intl.Segmenter, grapheme counts silently degrade to code points (an emoji
               family counts as 7, not 1) and word counts to whitespace splits (mis-counting CJK and
               Thai) — a real correctness caveat for stored typing metrics, not a cosmetic one.
@@ -592,7 +592,7 @@ export function DiagnosticsView() {
                         {testAoisActive ? 'active' : 'not applied'}
                       </StatusPill>
                     </div>
-                    <div className="mt-0.5 truncate text-[10px] text-ink-3">Look across all three columns after applying.</div>
+                    <div className="mt-0.5 truncate text-micro text-ink-3">Look across all three columns after applying.</div>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <Button variant="outline" size="sm" onClick={applyTestAois}>
@@ -630,7 +630,7 @@ export function DiagnosticsView() {
                   <EvidenceRow label="RGB available" value={percent(rgbAvailable, 0)} />
                   <EvidenceRow label="RGB agreement" value={percent(rgbAgreement, 0)} />
                 </div>
-                <p className="mt-auto mb-0 border-t border-line pt-3 text-[10px] leading-relaxed text-ink-3">
+                <p className="mt-auto mb-0 border-t border-line pt-3 text-micro leading-relaxed text-ink-3">
                   Motion-derived breathing is retained only when sampling is adequate; RGB agreement is corroboration, not a second estimate.
                 </p>
               </CardContent>
@@ -662,7 +662,7 @@ export function DiagnosticsView() {
                   <EvidenceRow label="Dark clipping" value={percent(liveIllumination?.clippedLow ?? illumination?.clipped_low, 0)} />
                   <EvidenceRow label="Bright clipping" value={percent(liveIllumination?.clippedHigh ?? illumination?.clipped_high, 0)} />
                 </div>
-                <p className="mt-auto mb-0 border-t border-line pt-3 text-[10px] leading-relaxed text-ink-3">
+                <p className="mt-auto mb-0 border-t border-line pt-3 text-micro leading-relaxed text-ink-3">
                   Unstable brightness is especially harmful to webcam pulse and breathing estimates; dim or clipped frames also reduce facial detail.
                 </p>
               </CardContent>
@@ -686,7 +686,7 @@ export function DiagnosticsView() {
             <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink-1">
               Show latest diagnostic payload
             </summary>
-            <pre className="m-0 max-h-[32rem] overflow-auto border-t border-line bg-surface-0 p-4 text-[11px] leading-relaxed text-ink-2">
+            <pre className="m-0 max-h-[32rem] overflow-auto border-t border-line bg-surface-0 p-4 text-mini leading-relaxed text-ink-2">
               {rawEvidence ? JSON.stringify(rawEvidence, null, 2) : 'No aggregate window has been emitted yet.'}
             </pre>
           </details>

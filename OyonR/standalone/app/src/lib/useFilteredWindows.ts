@@ -4,7 +4,9 @@ import { useEnrichedWindows } from './useEnrichedWindows';
 import { useFilterStore } from './filterStore';
 import { useSessionContext } from './sessionContext';
 import { useBridge } from './hostBridge';
+import { useRecordScope } from './recordScope';
 import { filterWindows } from './filterWindows';
+import { narrowByKeys } from './viewNarrowing';
 
 /*
  * useFilteredWindows — what every scoped dashboard consumes.
@@ -34,15 +36,20 @@ export interface FilteredWindows {
   sessionLocked: boolean;
 }
 
+/** Standalone narrowing at the levels above a person (group, class, …). */
+export { narrowByKeys };
+
 export function useFilteredWindows(): FilteredWindows {
   const { enriched, isLoading } = useEnrichedWindows();
   const scope = useFilterStore((s) => s.scope);
   const sessionIds = useFilterStore((s) => s.sessionIds);
   const userIds = useFilterStore((s) => s.userIds);
+  const keyFilters = useFilterStore((s) => s.keyFilters);
   const liveSessionId = useSessionContext((s) => s.sessionId);
   const embedded = useBridge((s) => s.embedded);
   const chromeMode = useBridge((s) => s.chromeMode);
   const pinnedSessionId = useBridge((s) => s.sessionIdOverride);
+  const recordScope = useRecordScope();
 
   // Embedded analytics are a current-session surface, never an implicit
   // tenant/browser-history browser. A viewer's explicit session-id wins over a
@@ -57,23 +64,39 @@ export function useFilteredWindows(): FilteredWindows {
   const effectiveSessionIds = embedded ? null : sessionIds;
   const effectiveUserIds = embedded ? null : userIds;
 
+  // A host feed (el.setRecords) or a person/group scope is filtered by the
+  // one scope definition every record kind shares (lib/recordScope.ts). A
+  // session embed with no feed keeps the path below exactly as it was.
+  const scopedByRecords = embedded && (recordScope.fed || recordScope.scope !== 'session');
+
   const filtered = useMemo(
     () =>
-      filterWindows(enriched, {
-        scope: effectiveScope,
-        currentSessionId,
-        sessionIds: effectiveSessionIds,
-        userIds: effectiveUserIds,
-      }),
-    [enriched, effectiveScope, currentSessionId, effectiveSessionIds, effectiveUserIds],
+      scopedByRecords
+        ? recordScope.inView(enriched)
+        : narrowByKeys(
+            filterWindows(enriched, {
+              scope: effectiveScope,
+              currentSessionId,
+              sessionIds: effectiveSessionIds,
+              userIds: effectiveUserIds,
+            }),
+            embedded ? null : keyFilters,
+          ),
+    [enriched, scopedByRecords, recordScope, effectiveScope, currentSessionId, effectiveSessionIds, effectiveUserIds, embedded, keyFilters],
   );
 
   // Do not expose aggregate counts/session choices from the backing store to an
   // embedded surface. Every embedded consumer sees one session-shaped dataset.
   const allWindows = embedded ? filtered : enriched;
+  // A person or group scope lists its own sessions and people: the scope's
+  // records before the reader's narrowing, and nothing outside the scope.
+  const scopeWindows = useMemo(
+    () => (scopedByRecords ? recordScope.inScope(enriched) : null),
+    [scopedByRecords, recordScope, enriched],
+  );
 
   return {
-    allWindows,
+    allWindows: scopeWindows ?? allWindows,
     filtered,
     isLoading,
     currentSessionId,

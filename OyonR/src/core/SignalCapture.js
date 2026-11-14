@@ -35,6 +35,7 @@
  *   InteractionAggregator + createInteractionTracker
  *   DiscourseAggregator (delegating to analytics/TextAnalyzer)
  *   AiAssistAggregator + createAiAssistTracker
+ *   createDocumentEditTracker / createCodeRunTracker (events only)
  *
  * Finalized modality windows go to the `signal_windows` store (stamped with
  * `window_id` / `capture_id` / `session_id`) and, when a `transport` is
@@ -78,6 +79,10 @@ import { createSignalEventPersistence } from '../storage/SignalEventStore.js';
 import { oyonRecordId } from '../storage/IndexedDbOyonStore.js';
 import { TypingAggregator } from '../aggregation/TypingAggregator.js';
 import { createTypingComposerAdapter } from '../capture/TypingComposerAdapter.js';
+import { createTypingContentEditableAdapter } from '../capture/TypingContentEditableAdapter.js';
+import { createTypingEditReporter } from '../capture/TypingEditReporter.js';
+import { createDocumentEditTracker } from '../capture/DocumentEditTracker.js';
+import { createCodeRunTracker } from '../capture/CodeRunTracker.js';
 import { VoiceTurnAggregator } from '../aggregation/VoiceTurnAggregator.js';
 import { createVoiceTurnController } from '../capture/VoiceTurnController.js';
 import { InteractionAggregator } from '../aggregation/InteractionAggregator.js';
@@ -87,7 +92,31 @@ import { AiAssistAggregator } from '../aggregation/AiAssistAggregator.js';
 import { createAiAssistTracker } from '../capture/AiAssistTracker.js';
 
 const SIGNAL_WINDOWS_STORE = 'signal_windows';
-const MODALITY_ORDER = ['typing', 'voice', 'interaction', 'discourse', 'ai_assist'];
+const MODALITY_ORDER = ['typing', 'voice', 'interaction', 'discourse', 'ai_assist', 'document_edit', 'code_run'];
+
+/**
+ * Who and what a record belongs to, beside `capture_id` / `session_id`:
+ * the person (`user_id`, with an optional display `user_label`), the group
+ * the person works in (`group_id`) and the document, case, conversation or
+ * task the work belongs to (`context_id`). All optional; only the ones the
+ * host supplied are stamped, so records from a host that supplies none look
+ * exactly as they did before these fields existed.
+ */
+const IDENTITY_KEYS = ['user_id', 'user_label', 'group_id', 'group_label', 'class_id', 'class_label', 'context_id'];
+
+function identityFrom(...sources) {
+  const identity = {};
+  for (const key of IDENTITY_KEYS) {
+    for (const source of sources) {
+      const value = source ? source[key] : null;
+      if (typeof value === 'string' && value.length > 0) {
+        identity[key] = value;
+        break;
+      }
+    }
+  }
+  return identity;
+}
 
 export function createSignalCapture(options = {}) {
   const {
@@ -107,10 +136,16 @@ export function createSignalCapture(options = {}) {
     maxEvents,
     persistenceFactory = createSignalEventPersistence,
     persistenceOptions = {},
-    typingAdapterFactory = createTypingComposerAdapter,
+    // `typingAdapterFactory`, when injected, is used for every attached
+    // element. Left unset, a text field gets the text-field adapter and a
+    // `contenteditable` element gets the contenteditable adapter.
+    typingAdapterFactory = null,
+    typingEditReporterFactory = createTypingEditReporter,
     voiceControllerFactory = createVoiceTurnController,
     interactionTrackerFactory = createInteractionTracker,
     aiAssistTrackerFactory = createAiAssistTracker,
+    documentEditTrackerFactory = createDocumentEditTracker,
+    codeRunTrackerFactory = createCodeRunTracker,
   } = options;
 
   const settings = createOyonSettings(options.settings);
@@ -176,13 +211,16 @@ export function createSignalCapture(options = {}) {
    * transport batch, `onWindow` callback, `'window'` event. Returns the
    * stamped row (null when the aggregator had nothing to finalize).
    */
-  function emitWindow(modality, windowObject) {
+  function emitWindow(modality, windowObject, entryContext = null) {
     if (!windowObject) return null;
     const row = {
       ...windowObject,
       window_id: idFactory('win'),
       capture_id: context.capture_id,
       session_id: context.session_id,
+      // An entry-level context (the document this editor holds) wins over
+      // the capture-level one.
+      ...identityFrom(entryContext, context),
     };
     windowCounts[modality] = (windowCounts[modality] || 0) + 1;
     if (store) trackWrite('window_persistence', () => store.bulkAdd(SIGNAL_WINDOWS_STORE, [row]));
@@ -200,17 +238,26 @@ export function createSignalCapture(options = {}) {
 
   function startTyping() {
     const typingOptions = options.typing || {};
+    // `context_id` of the entry currently attached (one editor = one
+    // document); stamped on that entry's events and window.
+    let entryContext = null;
+    const recordTypingEvent = (event) => recordEvent(
+      entryContext && entryContext.context_id ? { ...event, context_id: entryContext.context_id } : event,
+    );
     const aggregator = options.typingAggregator || new TypingAggregator({
       pauseBuckets: settings.typing_pause_buckets,
       burstThresholdMs: settings.typing_burst_threshold_ms,
       maxIntervals: settings.typing_max_intervals,
       now,
-      onEvent: recordEvent,
+      onEvent: recordTypingEvent,
     });
     // Injected instances are adopted: their event stream must land in the
     // shared log or the cross-modality timeline silently loses a channel.
-    if (options.typingAggregator) aggregator.options.onEvent = recordEvent;
+    if (options.typingAggregator) aggregator.options.onEvent = recordTypingEvent;
 
+    // The capture entry in use: a DOM adapter (text field or
+    // contenteditable) or an edit reporter. All three share
+    // `active` / `submit()` / `abandon()` / `dispose()`.
     let adapter = null;
 
     function detachAdapter(finalize) {
@@ -222,29 +269,72 @@ export function createSignalCapture(options = {}) {
       return windowObject;
     }
 
+    function entryContextOf(contextId) {
+      return typeof contextId === 'string' && contextId.length > 0 ? { context_id: contextId } : null;
+    }
+
+    function isContentEditable(element) {
+      return Boolean(element) && element.isContentEditable === true;
+    }
+
+    function adapterFactoryFor(element) {
+      if (typingAdapterFactory) return typingAdapterFactory;
+      return isContentEditable(element) ? createTypingContentEditableAdapter : createTypingComposerAdapter;
+    }
+
     const handle = {
-      /** The live composer adapter for the attached element, or null. */
+      /** The live capture entry (DOM adapter or edit reporter), or null. */
       get adapter() { return adapter; },
       get active() { return adapter ? adapter.active : false; },
       /**
-       * Attach ONE composer element and start an episode. Attaching while an
+       * Attach ONE editor element and start an episode: an `<input>` or
+       * `<textarea>`, or a `contenteditable` element. Attaching while an
        * episode is in flight finalizes it first (as abandoned) rather than
-       * silently discarding it.
+       * silently discarding it. `contextId` names the document, case or
+       * task this editor holds.
        */
-      attach(element, { targetKind = 'chat_composer', targetId = null } = {}) {
+      attach(element, { targetKind, targetId = null, contextId = null } = {}) {
         if (!capturing) return null;
         detachAdapter(true);
-        adapter = typingAdapterFactory({
+        entryContext = entryContextOf(contextId);
+        const windowContext = entryContext;
+        adapter = adapterFactoryFor(element)({
           now: monotonicNow,
           wallClockNow: now,
           ...typingOptions,
           element,
           aggregator,
-          targetKind,
+          targetKind: targetKind ?? (isContentEditable(element) ? 'document_editor' : 'chat_composer'),
           targetId,
-          onWindow: (windowObject) => emitWindow('typing', windowObject),
+          onWindow: (windowObject) => emitWindow('typing', windowObject, windowContext),
         });
         adapter.start();
+        return adapter;
+      },
+      /**
+       * Start an episode for an editor whose host reports its own edits
+       * (no `input` event to listen to). Returns the edit reporter; call
+       * `reportEdit()` / `reportSelection()` on it per edit. `initial`
+       * carries the document's `graphemes` / `words` and the selection when
+       * the episode opens.
+       */
+      report({ targetKind, targetId = null, contextId = null, ...initial } = {}) {
+        if (!capturing) return null;
+        detachAdapter(true);
+        entryContext = entryContextOf(contextId);
+        const windowContext = entryContext;
+        adapter = typingEditReporterFactory({
+          now: monotonicNow,
+          wallClockNow: now,
+          aggregator,
+          targetKind: targetKind ?? 'document_editor',
+          targetId,
+          onWindow: (windowObject) => emitWindow('typing', windowObject, windowContext),
+          // Focus / blur / visibility leave as interaction events on the
+          // shared timeline, like the ones the interaction tracker emits.
+          onInteractionEvent: recordTypingEvent,
+        });
+        adapter.start(initial);
         return adapter;
       },
       /** Finalize the current episode as submitted; returns the raw window. */
@@ -261,7 +351,7 @@ export function createSignalCapture(options = {}) {
       handle,
       teardown() {
         // An episode still in flight at stop() is finalized as abandoned —
-        // its window is emitted through the adapter's own onWindow — and the
+        // its window is emitted through the entry's own onWindow — and a DOM
         // adapter's listeners are removed (exact add/remove symmetry is the
         // adapter's tested contract; dispose() preserves it here).
         detachAdapter(true);
@@ -475,12 +565,37 @@ export function createSignalCapture(options = {}) {
     };
   }
 
+  /**
+   * A host-driven tracker with no window of its own: its events go into the
+   * shared log on the cross-modality timeline and nowhere else.
+   */
+  function startEventTracker(trackerFactory, trackerOptions) {
+    const tracker = trackerFactory({
+      ...(trackerOptions || {}),
+      now: monotonicNow,
+      wallClockNow: now,
+      onEvent: recordEvent,
+    });
+    return {
+      handle: tracker,
+      teardown() { tracker.dispose(); },
+    };
+  }
+
   const BUILDERS = {
     typing: { enabled: () => settings.typing_enabled, build: startTyping },
     voice: { enabled: () => settings.voice_enabled, build: startVoice },
     interaction: { enabled: () => settings.interaction_enabled, build: startInteraction },
     discourse: { enabled: () => settings.discourse_enabled, build: startDiscourse },
     ai_assist: { enabled: () => settings.ai_assist_enabled, build: startAiAssist },
+    document_edit: {
+      enabled: () => settings.document_edit_enabled,
+      build: () => startEventTracker(documentEditTrackerFactory, options.documentEdit),
+    },
+    code_run: {
+      enabled: () => settings.code_run_enabled,
+      build: () => startEventTracker(codeRunTrackerFactory, options.codeRun),
+    },
   };
 
   // ── lifecycle ───────────────────────────────────────────────────────────
@@ -499,6 +614,7 @@ export function createSignalCapture(options = {}) {
     context = {
       capture_id: startContext.capture_id ?? baseContext.capture_id ?? null,
       session_id: startContext.session_id ?? baseContext.session_id ?? null,
+      ...identityFrom(startContext, baseContext),
     };
     eventCounts = {};
     windowCounts = {};
@@ -589,6 +705,8 @@ export function createSignalCapture(options = {}) {
     get interaction() { return modalities.get('interaction')?.handle ?? null; },
     get discourse() { return modalities.get('discourse')?.handle ?? null; },
     get aiAssist() { return modalities.get('ai_assist')?.handle ?? null; },
+    get documentEdit() { return modalities.get('document_edit')?.handle ?? null; },
+    get codeRun() { return modalities.get('code_run')?.handle ?? null; },
 
     /** The shared cross-modality event log (null before the first start()). */
     get log() { return log; },

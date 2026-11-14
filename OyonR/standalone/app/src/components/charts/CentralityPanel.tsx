@@ -49,7 +49,7 @@ export function CentralityPanel({
       <div className="flex items-center gap-2">
         <label
           htmlFor="centrality-size-by"
-          className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-ink-3"
+          className="label-eyebrow shrink-0"
         >
           Node size
         </label>
@@ -82,10 +82,10 @@ export function CentralityPanel({
       ) : null}
 
       <div className="flex items-baseline justify-between gap-3 border-b border-line pb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-2">
+        <span className="label-eyebrow text-ink-2">
           {displayMeasure.label}
         </span>
-        <span className="text-[10px] text-ink-3">relative to max</span>
+        <span className="text-micro text-ink-3">relative to max</span>
       </div>
 
       <div
@@ -126,7 +126,7 @@ export function CentralityPanel({
         })}
       </div>
 
-      <p className="m-0 text-[11px] leading-snug text-ink-3">
+      <p className="m-0 text-mini leading-snug text-ink-3">
         Selecting a measure ranks the bars and makes network node{' '}
         <strong>area</strong> proportional to the same values. Scores are
         relative to this network and are not comparable between models.

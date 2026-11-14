@@ -160,8 +160,11 @@ export default defineConfig({
     fs: {
       // Allow the dev server to read files anywhere under the repo root —
       // required because the library lives at ../../src and the MediaPipe /
-      // ONNX assets live at ../../standalone/{models,vendor}.
-      allow: [repoRoot],
+      // ONNX assets live at ../../standalone/{models,vendor}. ladyna
+      // (`file:../../../tna-js`) is a symlink that resolves to the sibling
+      // repo beside Oyon, so its dist/ must be readable too; likewise psychaj
+      // (`file:../../../psychaj`, the group dashboard's VAR networks).
+      allow: [repoRoot, path.resolve(repoRoot, '../tna-js'), path.resolve(repoRoot, '../psychaj')],
     },
   },
 });

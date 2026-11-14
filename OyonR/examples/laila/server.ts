@@ -8,7 +8,7 @@ import { verifyToken } from '../auth'; // your existing LAILA auth
 
 const prisma = new PrismaClient();
 const app = express();
-app.use(express.json({ limit: '256kb' })); // window batches are small JSON
+app.use(express.json({ limit: '4mb' })); // windows carry per-sample raw_streams
 
 app.post(
   '/api/oyon/sessions/:sessionId/emotions/batch',

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { IndexedDbOyonStore } from 'oyon';
 import { Section } from '@/components/ui/Section';
 import { Card, CardHeader, CardTitle, CardContent, CardMeta } from '@/components/ui/Card';
@@ -20,6 +19,7 @@ import {
   type StoredVoiceWindow,
 } from '@/components/voice/useVoiceTest';
 import type { IdbStoreRuntime } from '@/lib/idbTransport';
+import { useSignalRecords, type StoredResult } from '@/lib/signalSource';
 
 /*
  * Analyze · Voice — the voice dashboard over episode windows
@@ -85,12 +85,18 @@ async function readAllStoredVoiceWindows(): Promise<StoredVoiceWindow[]> {
   }
 }
 
-function useStoredVoiceWindows(): UseQueryResult<StoredVoiceWindow[], Error> {
-  return useQuery({
+function byWindowStart(a: StoredVoiceWindow, b: StoredVoiceWindow): number {
+  return Date.parse(a.window_start) - Date.parse(b.window_start);
+}
+
+/** Voice turns from the host's feed (scoped) when one is set, else the local store. */
+function useStoredVoiceWindows(): StoredResult<StoredVoiceWindow> {
+  return useSignalRecords<StoredVoiceWindow>({
+    kind: 'signalWindows',
     queryKey: STORED_VOICE_WINDOWS_QUERY_KEY,
     queryFn: readAllStoredVoiceWindows,
-    staleTime: 1000,
-    refetchInterval: 5000,
+    accept: isVoiceWindowLike,
+    compare: byWindowStart,
   });
 }
 

@@ -1,3 +1,5 @@
+import { useChannelOptions } from '@/lib/channelOptions';
+import { writingActEvents, writingActSequences } from 'oyon';
 import { useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Database } from 'lucide-react';
@@ -11,7 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { STORED_WINDOWS_QUERY_KEY } from '@/lib/storedWindows';
 import { useStoredEvents } from '@/lib/storedEvents';
 import { buildSessionSequences, buildEventSequences } from '@/lib/tnaPooling';
-import { CHANNEL_OPTIONS, channelUnit, channelLabel } from '@/lib/analyticsChannel';
+import { channelUnit, channelLabel } from '@/lib/analyticsChannel';
 import { useChannelStore } from '@/lib/channelStore';
 import { emotionColor } from '@/lib/emotionColors';
 import { discoverPatterns } from 'legacy-dynajs';
@@ -20,6 +22,7 @@ import { drawSimplicialOverlay } from '@/components/simplicial/simplicialOverlay
 import { loadDemoData } from '@/legacy/demoFixture.js';
 import { PatternTable, type Pattern } from './PatternTable';
 import { tweakTreeSvg } from '@/lib/treeSvgTweaks';
+import { gapFreeRuns } from 'ladyna/sequences';
 
 /*
  * PatternsPanel — the "Patterns" analyze tab. Three sequence-structure views
@@ -31,7 +34,7 @@ import { tweakTreeSvg } from '@/lib/treeSvgTweaks';
  *   2. Most-frequency tree — tnaj contextTree + plotTree (SVG) + top pathways.
  *   3. Disentangled simplicial — the shipping carm-tna blob overlay, drawn one
  *      simplex per card (dismantled small multiples) instead of one tangled
- *      overlay; colour follows HYPA anomaly (red = over, blue = under).
+ *      overlay; colour follows HYPA anomaly (vermillion solid = over, blue dashed = under), named in each caption.
  *
  * Owns its own data (events) and loading/empty gating — the picker must stay
  * visible and switchable even when the caller's `windows` (the emotion
@@ -39,6 +42,8 @@ import { tweakTreeSvg } from '@/lib/treeSvgTweaks';
  * itself lives in channelStore, shared with Dynamics, so switching channel
  * on either tab carries to the other.
  */
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 const EMOTIONS = ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise', 'insufficient'];
 
@@ -60,15 +65,25 @@ export function PatternsPanel({
   // Dynamics via channelStore, so the selection carries across the two tabs.
   const channel = useChannelStore((s) => s.channel);
   const setChannel = useChannelStore((s) => s.setChannel);
+  const channelOptions = useChannelOptions(channel, isLoading || eventsLoading ? null : { windows, events });
+  const writingLevel = useChannelStore((s) => s.writingLevel);
+  const setWritingLevel = useChannelStore((s) => s.setWritingLevel);
   const loading = channel === 'emotion' ? isLoading : eventsLoading;
-  const recordCount = channel === 'emotion' ? windows.length : events.length;
+  // The chosen channel's own events: a count of every channel under one channel's name is not its count.
+  const channelEvents = useMemo(
+    () => (channel === 'all' ? events : channel === 'writing' ? writingActEvents(events) : events.filter((event) => event.modality === channel)),
+    [events, channel],
+  );
+  const recordCount = channel === 'emotion' ? windows.length : channelEvents.length;
   const unit = channelUnit(channel);
 
   const sequences = useMemo(
     () => (channel === 'emotion'
       ? buildSessionSequences(windows)
-      : buildEventSequences(events, channel === 'all' ? null : channel)) as (string | null)[][],
-    [windows, events, channel],
+      : channel === 'writing' ? writingActSequences(events, { level: writingLevel })
+        : buildEventSequences(events, channel === 'all' ? null : channel)) as (string | null)[][],
+    // writingLevel picks the grain of the writing sequences: a change must recompute them.
+    [windows, events, channel, writingLevel],
   );
   const colorMap = useMemo(
     () => Object.fromEntries(EMOTIONS.map((e) => [e, emotionColor(e)])) as Record<string, string>,
@@ -76,24 +91,32 @@ export function PatternsPanel({
   );
 
   // 1. Sub-patterns — short (len 2-3) and long (len 4-6).
-  const { shortPatterns, longPatterns } = useMemo(() => {
-    let sp: Pattern[] = [];
-    let lp: Pattern[] = [];
-    try { sp = discoverPatterns(sequences, { len: [2, 3], minFreq: 1, minSupport: 0.02 }).patterns as Pattern[]; } catch { /* ignore */ }
-    try { lp = discoverPatterns(sequences, { len: [4, 5, 6], minFreq: 1, minSupport: 0.02 }).patterns as Pattern[]; } catch { /* ignore */ }
-    return { shortPatterns: sp, longPatterns: lp };
+  // A failed analysis is shown as its error, never as "none found".
+  const { shortPatterns, longPatterns, shortError, longError } = useMemo(() => {
+    const run = (len: number[]): { patterns: Pattern[]; error: string | null } => {
+      try {
+        return { patterns: discoverPatterns(sequences, { len, minFreq: 1, minSupport: 0.02 }).patterns as Pattern[], error: null };
+      } catch (err) {
+        return { patterns: [], error: errorText(err) };
+      }
+    };
+    const sp = run([2, 3]);
+    const lp = run([4, 5, 6]);
+    return { shortPatterns: sp.patterns, longPatterns: lp.patterns, shortError: sp.error, longError: lp.error };
   }, [sequences]);
 
   // 2. Most-frequency tree.
-  const { treeSvg, topPathways } = useMemo(() => {
+  // Cut at gaps first: a missing bin is not a transition (ladyna gapFreeRuns).
+  const { treeSvg, topPathways, treeError } = useMemo(() => {
     try {
-      const tree = contextTree(sequences, { maxDepth: 3, minCount: 2 });
+      const tree = contextTree(gapFreeRuns(sequences), { maxDepth: 3, minCount: 2 });
       return {
         treeSvg: tweakTreeSvg(plotTree(tree, { style: 'horizontal', maxNodes: 40 })),
         topPathways: commonPathways(tree, { top: 15 }),
+        treeError: null as string | null,
       };
-    } catch {
-      return { treeSvg: '', topPathways: [] };
+    } catch (err) {
+      return { treeSvg: '', topPathways: [], treeError: errorText(err) };
     }
   }, [sequences]);
 
@@ -103,15 +126,19 @@ export function PatternsPanel({
   const SIM_ORDERS = [2, 3, 4];
   const simRef = useRef<HTMLDivElement>(null);
   const hypaCounts = useMemo(() => {
-    const c = { total: 0, over: 0, under: 0, normal: 0 } as Record<string, number>;
+    const c = { total: 0, over: 0, under: 0, normal: 0 };
+    // An order the data cannot support throws; each such order is reported.
+    const skipped: string[] = [];
     for (const k of SIM_ORDERS) {
       try {
         const r = buildHypa(sequences, { k, alpha: 0.05, minCount: 1, pAdjustMethod: 'BH' });
         c.total += r.scores.length;
-        for (const s of r.scores) c[s.anomaly] += 1;
-      } catch { /* order too high for this data */ }
+        for (const s of r.scores) c[s.anomaly as 'over' | 'under' | 'normal'] += 1;
+      } catch (err) {
+        skipped.push(`order ${k + 1}: ${errorText(err)}`);
+      }
     }
-    return c;
+    return { ...c, skipped };
   }, [sequences]);
 
   useEffect(() => {
@@ -129,7 +156,7 @@ export function PatternsPanel({
           const perOrder = buildHypa(sequences, { k, alpha: 0.05, minCount: 1, pAdjustMethod: 'BH' })
             .scores.slice().sort(byPadj).slice(0, 4);
           ranked.push(...perOrder);
-        } catch { /* order too high for this data */ }
+        } catch { /* reported under the card (hypaCounts.skipped) */ }
       }
       if (!ranked.length) {
         host.innerHTML = '<div style="color:var(--ink-3);font-size:12px;padding:8px">No anomalous pathways to plot.</div>';
@@ -137,7 +164,16 @@ export function PatternsPanel({
       }
       // Small-multiples grid: one simplex per card, its own states only.
       host.style.display = 'grid';
-      host.style.gridTemplateColumns = 'repeat(auto-fill, minmax(300px, 1fr))';
+      /*
+       * `min(300px, 100%)`, not a bare `300px`. A bare minimum in minmax() is
+       * a HARD floor: the track stays 300 px wide even when its container is
+       * 262 px, so on a 320 px phone this grid alone pushed the dashboard
+       * 9 px past the viewport. Wrapping it in min() lets the track collapse
+       * to the container on screens narrower than the ideal card, while
+       * behaving identically everywhere wider.
+       */
+      host.style.gridTemplateColumns =
+        'repeat(auto-fill, minmax(min(300px, 100%), 1fr))';
       host.style.gap = '10px';
       for (const r of ranked) {
         const parts = r.path.split(' -> ');
@@ -172,8 +208,25 @@ export function PatternsPanel({
   // Rendered above every branch below (including loading/empty) so switching
   // channels is always possible, not just once a channel already has data.
   const channelPicker = (
-    <div className="max-w-xs">
-      <Select label="Channel" value={channel} options={CHANNEL_OPTIONS} onChange={setChannel} />
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-full max-w-xs">
+        <Select label="Channel" value={channel} options={channelOptions} onChange={setChannel} />
+      </div>
+      {channel === 'writing' ? (
+        <div className="inline-flex overflow-hidden rounded border border-line text-xs" role="group" aria-label="Grain of the writing acts">
+          {(['main', 'detail'] as const).map((level) => (
+            <button
+              key={level}
+              type="button"
+              aria-pressed={writingLevel === level}
+              onClick={() => setWritingLevel(level)}
+              className={writingLevel === level ? 'bg-status-info-dim px-2.5 py-1.5 font-medium text-status-info' : 'px-2.5 py-1.5 text-ink-2 hover:bg-surface-2'}
+            >
+              {level === 'main' ? 'Main acts' : 'With detail'}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -207,25 +260,23 @@ export function PatternsPanel({
       {channelPicker}
       <Section id="pat-overview" title="Pattern overview">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Metric label={channel === 'emotion' ? 'Windows' : 'Events'} value={recordCount} tone="info" />
-          <Metric label="Sequences" value={sequences.length} tone="info" />
+          <Metric label={channel === 'emotion' ? 'Windows' : 'Events'} value={recordCount} />
+          <Metric label="Sequences" value={sequences.length} />
           <Metric
             label="Distinct states"
             value={new Set(sequences.flat().filter((state): state is string => typeof state === 'string')).size}
-            tone="info"
           />
-          <Metric label="Short patterns" value={shortPatterns.length} tone="info" />
-          <Metric label="Long patterns" value={longPatterns.length} tone="info" />
+          <Metric label="Short patterns" value={shortPatterns.length} />
+          <Metric label="Long patterns" value={longPatterns.length} />
           <Metric
             label="Anomalous paths"
             value={hypaCounts.over + hypaCounts.under}
             hint={`${hypaCounts.total} tested`}
-            tone="info"
           />
         </div>
       </Section>
 
-      <Section id="pat-simplicial" title="Disentangled simplicial" description={`Each over/under-represented ${channel === 'emotion' ? 'emotion' : channelLabel(channel).toLowerCase()} pathway (order 3–5) as its own simplex (dismantled). Red = over-represented, blue = under, gray = normal.`}>
+      <Section id="pat-simplicial" title="Disentangled simplicial" description={`Each over/under-represented ${channel === 'emotion' ? 'emotion' : channelLabel(channel).toLowerCase()} pathway (order 3–5) as its own simplex (dismantled). Vermillion solid = over-represented, blue dashed = under, grey = as expected; each card names its verdict.`}>
         <Card>
           <CardHeader>
             <CardTitle>Simplicial small multiples (HYPA)</CardTitle>
@@ -233,6 +284,7 @@ export function PatternsPanel({
           </CardHeader>
           <CardContent>
             <div ref={simRef} />
+            {hypaCounts.skipped.length ? <p role="note" className="mt-2 text-xs text-ink-2">Not computed — {hypaCounts.skipped.join('; ')}</p> : null}
           </CardContent>
         </Card>
       </Section>
@@ -245,9 +297,11 @@ export function PatternsPanel({
               <CardMeta>{shortPatterns.length} found</CardMeta>
             </CardHeader>
             <CardContent>
-              {shortPatterns.length > 0
-                ? <PatternTable patterns={shortPatterns} colorMap={colorMap} limit={10} />
-                : <p className="text-sm text-ink-3">No short patterns.</p>}
+              {shortError
+                ? <p role="alert" className="text-sm text-status-bad">Could not compute: {shortError}</p>
+                : shortPatterns.length > 0
+                  ? <PatternTable patterns={shortPatterns} colorMap={colorMap} limit={10} />
+                  : <p className="text-sm text-ink-3">No short patterns.</p>}
             </CardContent>
           </Card>
           <Card>
@@ -256,9 +310,11 @@ export function PatternsPanel({
               <CardMeta>{longPatterns.length} found</CardMeta>
             </CardHeader>
             <CardContent>
-              {longPatterns.length > 0
-                ? <PatternTable patterns={longPatterns} colorMap={colorMap} limit={10} />
-                : <p className="text-sm text-ink-3">No long patterns.</p>}
+              {longError
+                ? <p role="alert" className="text-sm text-status-bad">Could not compute: {longError}</p>
+                : longPatterns.length > 0
+                  ? <PatternTable patterns={longPatterns} colorMap={colorMap} limit={10} />
+                  : <p className="text-sm text-ink-3">No long patterns.</p>}
             </CardContent>
           </Card>
         </div>
@@ -273,7 +329,7 @@ export function PatternsPanel({
           <CardContent>
             {treeSvg
               ? <div className="overflow-x-auto" dangerouslySetInnerHTML={{ __html: treeSvg }} />
-              : <p className="text-sm text-ink-3">Not enough sequence data for a tree yet.</p>}
+              : <p role="alert" className="text-sm text-ink-2">No tree: {treeError ?? 'not enough sequence data yet.'}</p>}
             {topPathways.length > 0 && (
               <table className="mt-3 w-full text-left text-xs">
                 <thead>

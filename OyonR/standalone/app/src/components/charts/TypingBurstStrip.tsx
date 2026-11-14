@@ -204,7 +204,7 @@ export function TypingBurstStrip({ typing, quality }: TypingBurstStripProps) {
         })}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span className="inline-flex items-center gap-1">
           <svg width={14} height={10} aria-hidden="true">
             <rect x={0} y={1} width={14} height={8} fill={P_COLOR} opacity={0.85} />

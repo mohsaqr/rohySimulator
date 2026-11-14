@@ -11,6 +11,8 @@ export interface SelectOption<T extends string> {
   value: T;
   label: string;
   hint?: string;
+  /** Shown but not selectable (e.g. a channel with no data). */
+  disabled?: boolean;
 }
 
 export interface SelectProps<T extends string> {
@@ -51,7 +53,7 @@ export function Select<T extends string>({
         aria-label={label}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </option>
         ))}

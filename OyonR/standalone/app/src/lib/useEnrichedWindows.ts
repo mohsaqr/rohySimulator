@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import type { EmotionWindow } from 'oyon';
 import { useStoredWindows } from './storedWindows';
 import { enrichWindows } from '@/legacy/dashboard.js';
+import { useBridge } from './hostBridge';
+import { sessionIdOf, userIdOf } from './filterWindows';
+import { windowEndMs } from './windowTime';
 
 /*
  * useEnrichedWindows — the one place the five /analyze routes turn stored
@@ -42,11 +45,44 @@ function enrichCached(data: EmotionWindow[]): EmotionWindow[] {
   return cached;
 }
 
+/*
+ * Host-fed pools hold several people and sessions. Dynamics are
+ * window-to-window derivatives, so they are computed inside each person's
+ * session and never across two of them — one tracker over the pooled array
+ * would report the jump from one person's last window to another person's
+ * first as a velocity. Windows that already carry `dynamics` keep them.
+ */
+const chainEnrichCache = new WeakMap<EmotionWindow[], EmotionWindow[]>();
+
+function enrichByChainCached(data: EmotionWindow[]): EmotionWindow[] {
+  const cached = chainEnrichCache.get(data);
+  if (cached) return cached;
+  const chains = new Map<string, EmotionWindow[]>();
+  for (const window of data) {
+    const key = `${userIdOf(window)}|${sessionIdOf(window)}`;
+    if (!chains.has(key)) chains.set(key, []);
+    chains.get(key)!.push(window);
+  }
+  const merged: EmotionWindow[] = [];
+  for (const [key, chain] of chains) {
+    const ordered = chain.slice().sort((a, b) => (windowEndMs(a) ?? 0) - (windowEndMs(b) ?? 0));
+    for (const window of enrichWindows(ordered) as Array<EmotionWindow & { _id?: string }>) {
+      // `_id` is index-based within one enrich pass; qualify it by chain so
+      // two people's windows never share a render key.
+      merged.push({ ...window, _id: `${key}:${window._id ?? ''}` } as EmotionWindow);
+    }
+  }
+  merged.sort((a, b) => (windowEndMs(a) ?? 0) - (windowEndMs(b) ?? 0));
+  chainEnrichCache.set(data, merged);
+  return merged;
+}
+
 export function useEnrichedWindows(): EnrichedWindows {
   const stored = useStoredWindows();
+  const fed = useBridge((s) => s.hostRecords) != null;
   const enriched = useMemo(
-    () => (stored.data ? enrichCached(stored.data) : []),
-    [stored.data],
+    () => (stored.data ? (fed ? enrichByChainCached(stored.data) : enrichCached(stored.data)) : []),
+    [stored.data, fed],
   );
   return { enriched, isLoading: stored.isLoading };
 }

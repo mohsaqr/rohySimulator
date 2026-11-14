@@ -1,7 +1,12 @@
+import { recordKindsOf } from 'oyon';
+import { useChannelStore } from './channelStore';
+import { channelForFeed } from './analyzeTabs';
+import type { AnalyticsChannel } from './analyticsChannel';
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { useStore, type StoreApi, type UseBoundStore } from 'zustand';
 import type { EmotionWindow } from 'oyon';
+import type { SignalEvent } from 'oyon/signal-events';
 import type { PillLabels, PillLang } from './pillStrings';
 
 /*
@@ -47,12 +52,57 @@ import type { PillLabels, PillLang } from './pillStrings';
  *                     (the VIEWER stub mode). Capture mode is NOT chromeless —
  *                     it runs the real engine. Kept so existing viewer-stub /
  *                     no-op consumers read unchanged.
+ *   hostRecords     — every record kind supplied by the host via
+ *                     el.setRecords(): interval windows, episode windows,
+ *                     per-event states and log events. While set it is the
+ *                     only data source for the dashboards and is held in
+ *                     memory only.
+ *   scope           — 'session' | 'person' | 'group': which of the fed
+ *                     records this embed draws (see EmbedScope).
  *   hostWindows     — windows supplied directly by the host via
  *                     el.setWindows(). When non-null, storedWindows prefers
  *                     them over the local IndexedDB store so the Analyze
  *                     dashboards render the host's already-captured windows.
  *                     Null ⇒ read the local store (unchanged behavior).
  */
+
+/**
+ * Which records an embed draws (the <oyon-app> `scope` attribute):
+ *   'session' — one session (the default; today's behaviour).
+ *   'person'  — every session of one `user-id`.
+ *   'group'   — every person in the records the host fed.
+ *   'class'   — the same, for a host whose widest level is a class of groups.
+ * The scope is the WIDEST level an embed shows; inside it the reader moves
+ * between the levels present in the records (class, group, person, session)
+ * on the Overview page. Every scope but 'session' draws host-fed records only (el.setRecords); they never
+ * read browser storage.
+ */
+export type EmbedScope = 'session' | 'person' | 'group' | 'class';
+
+/**
+ * Everything a host fed through el.setRecords(), already shape-checked. Held
+ * in memory in this instance's bridge store and nowhere else: it is never
+ * written to IndexedDB or localStorage, so a reader's browser keeps no copy
+ * of other people's records once the element is gone or the feed is cleared.
+ */
+export interface HostRecords {
+  /** Interval windows (emotion, gaze, engagement, …). */
+  windows: EmotionWindow[];
+  /** Episode windows (typing-v3, ai-assist-v1, voice, …). */
+  signalWindows: Array<Record<string, unknown>>;
+  /** Per-event states (typing-states-v1, interaction-states-v1, …). */
+  signalEvents: SignalEvent[];
+  /** oyon-log-v1 events. */
+  logEvents: Array<Record<string, unknown>>;
+}
+
+/** Narrowing the reader chose inside the embed's scope. Null = no narrowing. */
+export interface ViewFilter {
+  sessionIds: string[] | null;
+  userIds: string[] | null;
+  /** Narrowing at any other level, by record field: `{ group_id: ['a'] }`. */
+  keys: Record<string, string[]>;
+}
 
 /** One gaze Area-of-Interest rect, in the gaze coordinate convention:
  *  [-0.5, 0.5] both axes, origin = screen center, x/y = top-left corner. */
@@ -95,6 +145,25 @@ export interface HostBridgeState {
   controls: HostControls | null;
   /** Windows the host supplied via el.setWindows(). Null ⇒ read local store. */
   hostWindows: EmotionWindow[] | null;
+  /**
+   * Every record kind the host supplied via el.setRecords(). While non-null
+   * it is the ONLY data source for the dashboards: nothing is read from the
+   * element's local store. Null ⇒ the local store (and `hostWindows`).
+   */
+  hostRecords: HostRecords | null;
+  /** The `scope` attribute. Default 'session'. */
+  scope: EmbedScope;
+  /** The `class-id` / `group-id` / `context-id` attributes, stamped on captured records. */
+  classId: string | null;
+  groupId: string | null;
+  contextId: string | null;
+  /** The `closable` attribute: show a close control that emits `oyon:close`. */
+  closable: boolean;
+  /** Per-instance narrowing (session list, person filter) within the scope. */
+  viewFilter: ViewFilter;
+  /** Which level the Overview table lists; null = follow the drill-down. */
+  overviewLevel: string | null;
+  setOverviewLevel: (level: string | null) => void;
   /**
    * PER-INSTANCE identity for the embed. The element writes the <oyon-app>
    * `user-id` / `user-label` / `session-id` attributes HERE (not into the
@@ -173,6 +242,11 @@ export interface HostBridgeState {
         | 'gazeEngineOverride'
         | 'gazeAois'
         | 'settingsOverride'
+        | 'scope'
+        | 'classId'
+        | 'groupId'
+        | 'contextId'
+        | 'closable'
         | 'lang'
         | 'labels'
       >
@@ -181,6 +255,14 @@ export interface HostBridgeState {
   registerControls: (controls: HostControls | null) => void;
   /** Replace the host-supplied windows (or clear with null). */
   setHostWindows: (windows: EmotionWindow[] | null) => void;
+  /** Replace everything the host fed (or clear with null). */
+  setHostRecords: (records: HostRecords | null) => void;
+  /** Narrow within the scope; an empty list clears that narrowing. */
+  setViewFilter: (next: Partial<Pick<ViewFilter, 'sessionIds' | 'userIds'>>) => void;
+  /** Narrow at one level by its record field; null or [] clears it. */
+  setViewKeyFilter: (key: string, ids: string[] | null) => void;
+  /** Drop every narrowing. */
+  clearViewFilter: () => void;
 }
 
 /** A bound zustand store carrying one instance's host-bridge state. */
@@ -205,6 +287,15 @@ export function createHostBridgeStore(): HostBridgeStore {
     emitHostEvent: null,
     controls: null,
     hostWindows: null,
+    hostRecords: null,
+    scope: 'session',
+    classId: null,
+    groupId: null,
+    contextId: null,
+    closable: false,
+    viewFilter: { sessionIds: null, userIds: null, keys: {} },
+    overviewLevel: null,
+    setOverviewLevel: (overviewLevel) => set({ overviewLevel }),
     userId: null,
     userLabel: null,
     sessionIdOverride: null,
@@ -228,6 +319,35 @@ export function createHostBridgeStore(): HostBridgeStore {
       ),
     registerControls: (controls) => set({ controls }),
     setHostWindows: (windows) => set({ hostWindows: windows }),
+    // A new feed is a new set of sessions and people: a narrowing chosen
+    // against the previous one could select nothing, so it is cleared.
+    setHostRecords: (records) => {
+      set({ hostRecords: records, viewFilter: { sessionIds: null, userIds: null, keys: {} } });
+      // Dynamics and Patterns open on a channel the feed has: a feed with no
+      // interval windows left on "Affect" is an empty page with a picker.
+      const channels = useChannelStore.getState();
+      const next = channelForFeed(records ? recordKindsOf(records) : null, channels.channel);
+      if (next) channels.setChannel(next as AnalyticsChannel);
+    },
+    setViewFilter: (next) =>
+      set((state) => {
+        const merged = { ...state.viewFilter, ...next };
+        return {
+          viewFilter: {
+            sessionIds: merged.sessionIds && merged.sessionIds.length > 0 ? merged.sessionIds : null,
+            userIds: merged.userIds && merged.userIds.length > 0 ? merged.userIds : null,
+            keys: state.viewFilter.keys,
+          },
+        };
+      }),
+    setViewKeyFilter: (key, ids) =>
+      set((state) => {
+        const keys = { ...state.viewFilter.keys };
+        if (ids && ids.length > 0) keys[key] = ids;
+        else delete keys[key];
+        return { viewFilter: { ...state.viewFilter, keys } };
+      }),
+    clearViewFilter: () => set({ viewFilter: { sessionIds: null, userIds: null, keys: {} } }),
   }));
 }
 

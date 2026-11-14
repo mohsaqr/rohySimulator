@@ -18,8 +18,8 @@ import {
   EmotionAggregator,
   EmotionRuntime,
   LocalEmotionTransport,
-  LocalLogTransport,
-  LocalMetricTransport,
+  IndexedDbLogTransport,
+  IndexedDbMetricTransport,
   MEDIAPIPE_FACE_LANDMARKER_URL,
   MEDIAPIPE_TASKS_WASM_CDN,
   MediaPipeFaceTracker,
@@ -29,6 +29,8 @@ import {
   createGazeAdapter,
   createOyonSettings,
   type EmotionWindow,
+  type OyonLogTransportLike,
+  type OyonMetricTransportLike,
   type GazeEngine,
   type OyonSettings,
   type WebEyeTrackAdapter,
@@ -36,12 +38,21 @@ import {
 } from 'oyon';
 import { DEFAULT_MODEL_PROFILE, MODEL_PROFILES, type ModelProfileId } from './modelProfiles';
 import { IdbEmotionTransport } from './idbTransport';
+import { RUNTIME_LOG_DB } from './runtimeLogStore';
 import { DualWriteTransport } from './dualWriteTransport';
 import { snapshotSettings, useSettings, type EditableSettings } from './settingsStore';
+import {
+  applyConsentToSettings,
+  BUILTIN_CONSENT_VERSION,
+  cameraAllowed,
+  consentBuildSignature,
+  useConsent,
+} from './consentStore';
 import { useIdentity, DEFAULT_USER_ID } from './identityStore';
 import { useBridgeStore, type HostBridgeStore } from './hostBridge';
 import { TeeTransport, createRemoteLeg } from './syncTransport';
 import { normalizeEmotionWindows } from './windowTime';
+import { isRawOnly } from './rawOnly';
 
 /*
  * Coerce any value to a valid ModelProfileId. Persisted settings can carry a
@@ -71,6 +82,21 @@ function safeModelProfile(id: unknown): ModelProfileId {
  * userId never resolves null: an embedded element always seeds DEFAULT_USER_ID
  * via applyIdentityAttributes, but we coalesce here as a belt-and-braces guard.
  */
+/**
+ * `user_label`, `group_id` and `context_id` for the records this embed
+ * captures. Only the ones the host set are returned.
+ */
+function hostIdentityFields(bridgeStore: HostBridgeStore): Record<string, string> {
+  const b = bridgeStore.getState();
+  if (!b.embedded) return {};
+  const fields: Record<string, string> = {};
+  if (b.userLabel) fields.user_label = b.userLabel;
+  if (b.classId) fields.class_id = b.classId;
+  if (b.groupId) fields.group_id = b.groupId;
+  if (b.contextId) fields.context_id = b.contextId;
+  return fields;
+}
+
 function resolveIdentity(bridgeStore: HostBridgeStore): {
   userId: string;
   userLabel: string | null;
@@ -112,6 +138,21 @@ export type RuntimeStatus =
   | 'stopping'
   | 'stopped'
   | 'error';
+
+/** Runtime `status` events the UI state machine accepts. Anything else on the
+ *  channel (past bundles emitted transient `gaze:*` notes there) is dropped —
+ *  storing one made every status-driven surface think capture had stopped. */
+const LIFECYCLE_STATES: ReadonlySet<RuntimeStatus> = new Set([
+  'idle',
+  'initializing',
+  'ready',
+  'starting-camera',
+  'running',
+  'paused',
+  'stopping',
+  'stopped',
+  'error',
+]);
 
 export interface UseStandaloneRuntimeOptions {
   modelProfile?: ModelProfileId;
@@ -211,6 +252,8 @@ export interface HeartRateSampleSnapshot {
   bufferedSeconds: number | null;
   statusReason: string | null;
   sampleRateHz: number | null;
+  /** True while the head-motion gate pauses ROI sampling. */
+  motionPaused?: boolean | null;
   ts: number;
 }
 
@@ -335,6 +378,12 @@ const RECENT_WINDOW_CAP = 60;
 const MEDIAPIPE_WASM = '/standalone/vendor/mediapipe/wasm';
 const MEDIAPIPE_MODEL = '/standalone/models/mediapipe/face_landmarker.task';
 const WEBGAZER_FACE_MESH = '/standalone/vendor/webgazer/face_mesh';
+// The EmotiEffLib / HSEmotion ONNX weights are git-tracked alongside the
+// MediaPipe assets (standalone/models/emotion/*.onnx, served by the
+// serveLegacyAssets middleware). Serve them locally in the dev shell so a
+// reload never depends on raw.githubusercontent.com — which rate-limits
+// (HTTP 429) after repeated fetches of a 16–40 MB model.
+const EMOTION_MODEL_DIR = '/standalone/models/emotion';
 
 function resolveAssetPaths(bridgeStore: HostBridgeStore) {
   const bridge = bridgeStore.getState();
@@ -359,6 +408,7 @@ function resolveAssetPaths(bridgeStore: HostBridgeStore) {
       // profile's own (CDN) defaults.
       onnxWasm: `${base}/vendor/onnxruntime-web/`,
       emotionModelDir: `${base}/models/emotion`,
+      emotionModelCdnFallback: false,
     };
   }
   if (bridge.embedded) {
@@ -373,6 +423,7 @@ function resolveAssetPaths(bridgeStore: HostBridgeStore) {
       webgazerFaceMesh: WEBGAZER_FACE_MESH,
       onnxWasm: null,
       emotionModelDir: null,
+      emotionModelCdnFallback: false,
     };
   }
   return {
@@ -380,7 +431,10 @@ function resolveAssetPaths(bridgeStore: HostBridgeStore) {
     mediapipeModel: MEDIAPIPE_MODEL,
     webgazerFaceMesh: WEBGAZER_FACE_MESH,
     onnxWasm: null,
-    emotionModelDir: null,
+    // Local weights first; the profile's CDN URL stays as a fallback so a
+    // checkout without standalone/models/emotion still runs.
+    emotionModelDir: EMOTION_MODEL_DIR,
+    emotionModelCdnFallback: true,
   };
 }
 
@@ -413,8 +467,8 @@ interface BuildArgs {
   editable: EditableSettings;
   camera: CameraController;
   transport: LocalEmotionTransport | DualWriteTransport | TeeTransport;
-  logTransport: LocalLogTransport;
-  metricTransport: LocalMetricTransport;
+  logTransport: OyonLogTransportLike;
+  metricTransport: OyonMetricTransportLike;
   contextProvider: () => Record<string, unknown>;
   /** The owning element's per-instance bridge store — drives asset resolution
    *  (assetBase / embedded) from THIS instance's state, not the module store. */
@@ -440,8 +494,13 @@ function buildRuntime({
   if (assets.onnxWasm) classifierConfig.wasmPaths = assets.onnxWasm;
   if (assets.emotionModelDir && typeof classifierConfig.modelUrl === 'string') {
     // Keep the profile's weight file, re-rooted under the host's asset tree.
-    const file = classifierConfig.modelUrl.split('/').pop();
-    if (file) classifierConfig.modelUrl = `${assets.emotionModelDir}/${file}`;
+    const cdnUrl = classifierConfig.modelUrl;
+    const file = cdnUrl.split('/').pop();
+    if (file) {
+      classifierConfig.modelUrl = `${assets.emotionModelDir}/${file}`;
+      // asset-base hosts are air-gapped by contract: never fall back to a CDN.
+      classifierConfig.modelFallbackUrls = assets.emotionModelCdnFallback ? [cdnUrl] : [];
+    }
   }
   const classifier = new OnnxEmotionClassifier(classifierConfig);
 
@@ -513,7 +572,15 @@ function buildRuntime({
   // EmotionRuntimeOptions, so we cast the options object once below.
   const runtimeOptions = {
     sampleIntervalMs: settings.sample_interval_ms,
-    consentVersion: 'standalone-app-v1',
+    // The version the participant ACTUALLY agreed to, not a build-time
+    // constant. EmotionRuntime stamps this onto every window as
+    // `consent_version`, and that stamp is the entire audit trail: with a
+    // fixed string, an operator could edit the agreement afterwards and
+    // nothing would record which wording was in force when the data was
+    // collected. Falls back to the built-in id when no one has answered —
+    // which is also the pre-consent behaviour for an untouched install.
+    consentVersion:
+      useConsent.getState().answeredVersion ?? BUILTIN_CONSENT_VERSION,
     settings,
     faceTracker: new MediaPipeFaceTracker({
       wasmBaseUrl: assets.mediapipeWasm,
@@ -723,6 +790,8 @@ function useRealRuntime(
   const settingsRef = useRef<OyonSettings | null>(null);
   const gazeAdapterRef = useRef<WebEyeTrackAdapter | WebGazerAdapter | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  /** Consent signature the cached runtime was built under. */
+  const consentSignatureRef = useRef<string>('');
 
   // Stable context provider — the runtime calls this often and spreads the
   // result into every persisted window (EmotionRuntime.sendWindows), so the
@@ -741,6 +810,10 @@ function useRealRuntime(
         identity.sessionIdOverride ??
         `standalone-${modelProfile}-${Date.now().toString(36)}`,
       user_id: identity.userId,
+      // Optional identity beside the session, stamped only when the host
+      // supplied it (the <oyon-app> user-label / group-id / context-id
+      // attributes), so windows from a host that sets none are unchanged.
+      ...hostIdentityFields(bridgeStore),
       case_id: 'standalone-case',
       tenant_id: 'standalone-app',
       model_profile: modelProfile,
@@ -802,21 +875,40 @@ function useRealRuntime(
     if (opts.modelProfile) editableNow.model_profile = opts.modelProfile;
     if (opts.gazeEngine) editableNow.gaze_engine = opts.gazeEngine;
 
+    // Consent mask — applied LAST, after every host and opts override, so a
+    // settings attribute cannot re-enable a sensor the participant declined.
+    // No-op until the gate has been answered, so untouched installs are
+    // byte-for-byte unchanged.
+    //
+    // The hard camera refusal is NOT here: this builder is memoized
+    // (`if (runtimeRef.current) return runtimeRef.current`), so a check placed
+    // here runs only on the first start and silently stops enforcing after
+    // that. It lives in start() instead.
+    Object.assign(editableNow, applyConsentToSettings(editableNow, useConsent.getState()));
+
     const { runtime, settings, gazeAdapter } = buildRuntime({
       editable: editableNow,
       camera: cameraRef.current,
       transport,
-      logTransport: new LocalLogTransport({ storageKey: 'oyon-app-logs' }),
-      metricTransport: new LocalMetricTransport({ storageKey: 'oyon-app-metrics' }),
+      // The runtime log and metrics live uncapped in the same IndexedDB as the
+      // windows and events (lib/logRecords.ts reads them for the Logs page).
+      logTransport: new IndexedDbLogTransport({ dbName: RUNTIME_LOG_DB }),
+      metricTransport: new IndexedDbMetricTransport({ dbName: RUNTIME_LOG_DB }),
       contextProvider,
       bridgeStore,
     });
     gazeAdapterRef.current = gazeAdapter;
 
     runtime.on('status', (payload) => {
+      // Accept only real lifecycle states. The `as RuntimeStatus` cast is a
+      // lie for anything else the runtime might put on this channel — an
+      // unknown state stored here once made the pill/dock read "camera off"
+      // (and offer a Start that spins forever) while capture was running.
       const next = payload?.state as RuntimeStatus | undefined;
-      if (next) setStatus(next);
-      if (next) emitHostEvent('oyon:status', { state: next });
+      if (next && LIFECYCLE_STATES.has(next)) {
+        setStatus(next);
+        emitHostEvent('oyon:status', { state: next });
+      }
     });
     runtime.on('error', (err) => {
       setError(err);
@@ -832,11 +924,17 @@ function useRealRuntime(
         sessionId: sessionIdRef.current,
         userId: identity.userId,
       });
-      const tail = normalized[normalized.length - 1];
+      // The host gets every record (raw-only envelopes included, so a host
+      // that stores them loses nothing); the live counter and the recent
+      // list are emotion windows only — a raw-only envelope (`modality:
+      // 'raw'`, rows sent at stop or at the row bound) is not a window.
+      const emotion = normalized.filter((w) => !isRawOnly(w));
+      if (!emotion.length) return;
+      const tail = emotion[emotion.length - 1];
       setLastWindow(tail ?? null);
-      setWindowCount((n) => n + normalized.length);
+      setWindowCount((n) => n + emotion.length);
       setRecentWindows((prev) => {
-        const merged = [...prev, ...normalized];
+        const merged = [...prev, ...emotion];
         // Drop oldest if we exceed the cap — newest is at the end.
         return merged.length > RECENT_WINDOW_CAP
           ? merged.slice(merged.length - RECENT_WINDOW_CAP)
@@ -940,6 +1038,7 @@ function useRealRuntime(
             buffered_seconds?: number;
             reason?: string;
             sample_rate_hz?: number;
+            motion_paused?: boolean;
           } | null;
         };
         const now = performance.now();
@@ -1150,6 +1249,7 @@ function useRealRuntime(
               bufferedSeconds: finiteOrNull(hrStatus?.buffered_seconds) ?? previous?.bufferedSeconds ?? null,
               statusReason: typeof hrStatus?.reason === 'string' ? hrStatus.reason : previous?.statusReason ?? null,
               sampleRateHz: finiteOrNull(hrStatus?.sample_rate_hz) ?? previous?.sampleRateHz ?? null,
+              motionPaused: typeof hrStatus?.motion_paused === 'boolean' ? hrStatus.motion_paused : previous?.motionPaused ?? null,
               ts: measuredAt,
             }));
           }
@@ -1205,6 +1305,28 @@ function useRealRuntime(
 
   const start = useCallback(async () => {
     setError(null);
+    // Consent is checked on EVERY start, before anything is built or a camera
+    // is requested. It cannot live inside ensureRuntime(): that memoizes on
+    // runtimeRef, so a participant who declined after one capture would sail
+    // straight past a check placed there.
+    if (!cameraAllowed(useSettings.getState(), useConsent.getState())) {
+      setStatus('idle');
+      setError(
+        'Sensing is off because camera access was declined. Open Consent to change it.',
+      );
+      return;
+    }
+    // A cached runtime was built under the PREVIOUS answer — it still holds
+    // the old sensor mask and the old consent_version. Discard it so the next
+    // ensureRuntime() rebuilds under what the participant agreed to now.
+    const signature = consentBuildSignature(useSettings.getState(), useConsent.getState());
+    if (runtimeRef.current && signature !== consentSignatureRef.current) {
+      await runtimeRef.current.stop().catch(() => {
+        /* tearing down to rebuild — a failed stop must not block the rebuild */
+      });
+      runtimeRef.current = null;
+    }
+    consentSignatureRef.current = signature;
     setStatus('initializing');
     try {
       if (!sessionIdRef.current) {
@@ -1272,6 +1394,21 @@ function useRealRuntime(
       setStatus('error');
     }
   }, [opts.videoRef]);
+
+  /*
+   * Withdrawal has to bite immediately, not from the next session.
+   *
+   * The agreement tells the participant "sensing stops straight away", so
+   * declining the camera while a capture is running must actually stop it —
+   * blocking only the NEXT start would leave the camera live for as long as
+   * the current capture lasts, which is exactly the promise being made.
+   */
+  const cameraConsented = useConsent((s) => (s.answered ? s.accepted.camera : null));
+  useEffect(() => {
+    if (cameraConsented !== false) return;
+    if (status === 'idle' || status === 'stopping' || status === 'error') return;
+    void stop();
+  }, [cameraConsented, status, stop]);
 
   const pause = useCallback(() => {
     runtimeRef.current?.pause();

@@ -94,6 +94,7 @@ function makeStubEstimator() {
   assert.ok(hrStatuses.length > 0, 'heart-rate acquisition status rides every live sample');
   assert.equal(hrStatuses[0].ready, true);
   assert.equal(hrStatuses[0].reason, null, 'a confirmed rate is not labelled rejected');
+  assert.equal(hrStatuses[0].motion_paused, false, 'a still head does not report the motion gate');
 
   const hrEvents = transport.batches.flat().filter((e) => e.heart_rate);
   assert.ok(hrEvents.length > 0,
@@ -140,6 +141,34 @@ function makeStubEstimator() {
   assert.equal(samples[0].heart_rate_status.ready, true);
   assert.equal(samples[0].heart_rate_status.reason, 'no_stable_rate',
     'a rejected full-buffer estimate must be actionable, not permanent acquisition');
+}
+
+// ---------- Test 4: the head-motion gate is reported, and only reported ----------
+{
+  const transport = new CapturingTransport();
+  const stub = makeStubEstimator();
+  const runtime = new EmotionRuntime({
+    settings: {
+      heart_rate_enabled: true,
+      sample_interval_ms: 1000,
+      aggregate_window_ms: 2000,
+      min_valid_frames: 1,
+    },
+    camera: makeStubCamera(),
+    faceTracker: new MockFaceTracker(),
+    classifier: new MockEmotionClassifier(),
+    transport,
+    heartRateEstimator: stub,
+    roiSampler: () => ({ r: 100, g: 128, b: 120 }),
+  });
+  // Force the gate: the head is "moving" on this tick.
+  runtime._hrHeadMotionPaused = () => true;
+  const samples = [];
+  runtime.on('sample', (event) => samples.push(event));
+  await runtime.sampleOnce();
+  await runtime.stop();
+  assert.equal(samples[0].heart_rate_status.motion_paused, true, 'motion pause is surfaced on the status');
+  assert.equal(samples[0].heart_rate.bpm, 68, 'the gate does not blank the estimate from samples already buffered');
 }
 
 console.log('runtime-heart-rate.test.js — all cases passed');

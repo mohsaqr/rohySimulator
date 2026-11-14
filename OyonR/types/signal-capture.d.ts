@@ -5,15 +5,29 @@
 
 import type { OyonSettings } from './index';
 import type { SignalEvent, SignalEventLog } from './signal-events';
-import type { TypingComposerAdapter, TypingWindow } from './typing';
+import type { TypingComposerAdapter, TypingEditReporter, TypingWindow } from './typing';
+import type { CodeRunTracker, DocumentEditTracker } from './host-acts';
 
 /** Modalities this orchestrator can run. */
-export type SignalCaptureModality = 'typing' | 'voice' | 'interaction' | 'discourse' | 'ai_assist';
+export type SignalCaptureModality =
+  | 'typing'
+  | 'voice'
+  | 'interaction'
+  | 'discourse'
+  | 'ai_assist'
+  | 'document_edit'
+  | 'code_run';
 
 /** Capture identity: stamped on every event and window row. */
 export interface SignalCaptureContext {
   capture_id?: string | null;
   session_id?: string | null;
+  /** Stamped on every window row and event when supplied (3.6.0). */
+  user_id?: string | null;
+  user_label?: string | null;
+  group_id?: string | null;
+  /** The document, case, conversation or task the work belongs to. */
+  context_id?: string | null;
 }
 
 /** `IndexedDbOyonStore`-shaped store: only `bulkAdd` is required. */
@@ -54,12 +68,27 @@ export interface SignalCaptureStats {
 
 /** Typing handle: drive one composer episode at a time. */
 export interface SignalCaptureTypingHandle {
-  readonly adapter: TypingComposerAdapter | null;
+  /** The live capture entry: a DOM adapter or an edit reporter. */
+  readonly adapter: TypingComposerAdapter | TypingEditReporter | null;
   readonly active: boolean;
+  /**
+   * Attach an `<input>`, a `<textarea>` or a `contenteditable` element (the
+   * matching adapter is chosen from `element.isContentEditable`).
+   */
   attach(
     element: unknown,
-    options?: { targetKind?: string; targetId?: string | null },
+    options?: { targetKind?: string; targetId?: string | null; contextId?: string | null },
   ): TypingComposerAdapter | null;
+  /** Start an episode for an editor whose host reports its own edits. */
+  report(options?: {
+    targetKind?: string;
+    targetId?: string | null;
+    contextId?: string | null;
+    graphemes?: number | null;
+    words?: number | null;
+    caretOffset?: number | null;
+    selectionLength?: number | null;
+  }): TypingEditReporter | null;
   submit(): TypingWindow | null;
   abandon(): TypingWindow | null;
 }
@@ -147,6 +176,9 @@ export interface SignalCaptureOptions {
   voiceControllerFactory?: (options: Record<string, unknown>) => unknown;
   interactionTrackerFactory?: (options: Record<string, unknown>) => unknown;
   aiAssistTrackerFactory?: (options: Record<string, unknown>) => unknown;
+  typingEditReporterFactory?: (options: Record<string, unknown>) => TypingEditReporter;
+  documentEditTrackerFactory?: (options: Record<string, unknown>) => DocumentEditTracker;
+  codeRunTrackerFactory?: (options: Record<string, unknown>) => CodeRunTracker;
   /** Extra per-modality options forwarded into the collaborators. */
   typing?: Record<string, unknown>;
   voice?: Record<string, unknown>;
@@ -169,6 +201,10 @@ export interface SignalCapture {
   readonly interaction: SignalCaptureInteractionHandle | null;
   readonly discourse: SignalCaptureDiscourseHandle | null;
   readonly aiAssist: SignalCaptureAiAssistHandle | null;
+  /** Host-reported document edits; null unless `document_edit_enabled`. */
+  readonly documentEdit: DocumentEditTracker | null;
+  /** Host-reported code runs; null unless `code_run_enabled`. */
+  readonly codeRun: CodeRunTracker | null;
   readonly log: SignalEventLog | null;
   readonly settings: OyonSettings;
   readonly context: SignalCaptureContext;

@@ -1067,7 +1067,14 @@ function drawGazeNetworkSvg(container, data) {
   svg.setAttribute('width', '100%');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.style.display = 'block';
-  svg.style.background = '#ffffff';
+  /*
+   * Themed, not hardcoded white. The node labels below inherit `--ink-0`,
+   * which is near-WHITE in the dark theme — painted on a fixed white ground
+   * that put them at a 1.10:1 contrast ratio, i.e. invisible. This is a
+   * style property rather than a canvas call, so a var() resolves normally;
+   * only the ctx.fillStyle paths need literal colors.
+   */
+  svg.style.background = 'var(--surface-0)';
 
   const defs = document.createElementNS(ns, 'defs');
   const marker = document.createElementNS(ns, 'marker');

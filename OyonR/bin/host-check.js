@@ -70,11 +70,25 @@ export function buildHostCheckReport({
     ));
   } else {
     const source = readFileSync(elementPath, 'utf8');
-    const missing = ['oyon-app', 'start', 'stop', 'setWindows', 'setGazeAois']
+    const missing = ['oyon-app', 'start', 'stop', 'setWindows', 'setRecords', 'setGazeAois']
       .filter((token) => !source.includes(token));
-    checks.push(missing.length
-      ? check('app-element', 'fail', `bundle is missing host tokens: ${missing.join(', ')}`)
-      : check('app-element', 'pass', `${statSync(elementPath).size} bytes`));
+    // A dependency the build could not resolve is compiled in as a module
+    // that throws this message. With inlined dynamic imports it throws when
+    // the element loads, in every host page.
+    const unresolved = [...new Set(
+      [...source.matchAll(/Could not resolve \\?"([^"\\]+)\\?" imported by/g)].map((match) => match[1]),
+    )];
+    if (missing.length) {
+      checks.push(check('app-element', 'fail', `bundle is missing host tokens: ${missing.join(', ')}`));
+    } else if (unresolved.length) {
+      checks.push(check(
+        'app-element',
+        'fail',
+        `bundle was built with unresolved imports and throws at load: ${unresolved.join(', ')}`,
+      ));
+    } else {
+      checks.push(check('app-element', 'pass', `${statSync(elementPath).size} bytes`));
+    }
   }
 
   const elementTypes = join(packageRoot, 'types', 'app-element.d.ts');

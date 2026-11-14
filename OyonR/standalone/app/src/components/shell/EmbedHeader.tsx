@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Settings, Crosshair, Loader2 } from 'lucide-react';
+import { Settings, Crosshair, Loader2, X } from 'lucide-react';
 import { GazeCalibrationPanel } from 'oyon/react/gaze-calibration';
 import type {
   GazeCalibrationCompleteDetail,
@@ -8,7 +8,8 @@ import type {
 } from 'oyon/react/gaze-calibration';
 import { Brand } from './Brand';
 import { FilterControls } from './FilterBar';
-import { analyzeSubTabs } from '@/lib/analyzeTabs';
+import { analyzeTabsFor } from '@/lib/analyzeTabs';
+import { recordKindsOf } from 'oyon';
 import { useRuntime } from '@/lib/RuntimeProvider';
 import { useBridge } from '@/lib/hostBridge';
 import { useSessionContext } from '@/lib/sessionContext';
@@ -32,9 +33,13 @@ import { cn } from '@/lib/cn';
  * domain tabs + the inline filter; on /settings it swaps the tabs for a
  * back-to-Analyze link. The gear is the persistent Analyze↔Settings toggle.
  */
+/** The dashboard's front page: people and sessions in scope, every signal. */
+const OVERVIEW_TAB = { to: '/overview', label: 'Overview' };
+
 export function EmbedHeader() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onAnalyze = pathname.startsWith('/analyze');
+  // The dashboard pages: the Overview front page and the Analyze domains.
+  const onAnalyze = pathname.startsWith('/analyze') || pathname === '/overview';
   const onSettings = pathname.startsWith('/settings');
 
   // Calibration affordance. Show it in any REAL-runtime embed (not the
@@ -48,7 +53,16 @@ export function EmbedHeader() {
   // Host-fed viewer (el.setWindows): a read-only lens over the host's server
   // pool. Capture-session affordances (the Settings page is runtime/capture
   // config) don't apply — hide the gear.
-  const hostFed = useBridge((s) => s.hostWindows) != null;
+  const hostFed = useBridge((s) => s.hostWindows != null || s.hostRecords != null);
+  // Optional close control (the `closable` attribute). Oyon only reports the
+  // press; the host decides what closing means.
+  const hostRecordsFed = useBridge((s) => s.hostRecords != null || s.scope !== 'session');
+  // Only the pages the fed records can fill: a host with no camera is not
+  // offered eight empty tabs (lib/analyzeTabs.ts).
+  const fedRecords = useBridge((s) => s.hostRecords);
+  const tabs = useMemo(() => analyzeTabsFor(fedRecords ? recordKindsOf(fedRecords) : null), [fedRecords]);
+  const closable = useBridge((s) => s.closable);
+  const emitHostEvent = useBridge((s) => s.emitHostEvent);
   const calibration = useSessionContext((s) => s.calibration);
   const setSessionContext = useSessionContext((s) => s.setContext);
   const gazeCalibrated = calibration.status === 'ok';
@@ -108,7 +122,12 @@ export function EmbedHeader() {
           onClick={handleCalibrate}
           disabled={calibrating || pendingCalibrate}
           title="Calibrate gaze tracking — starts the camera, then look at the dot as it moves"
-          className="inline-flex items-center gap-1.5 rounded-md border border-amber-400/50 bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          /* Status tokens, not raw amber. `bg-amber-50` + `text-amber-700` is
+             a light-mode-only pairing: it pins a near-white ground and dark
+             amber ink regardless of theme, so in dark mode this button became
+             a bright slab on a near-black bar. The dim/solid token pair
+             re-derives both sides per theme. */
+          className="inline-flex items-center gap-1.5 rounded-md border border-status-warn/50 bg-status-warn-dim px-2.5 py-1 text-sm font-medium text-status-warn transition-colors hover:brightness-110 disabled:opacity-50"
         >
           {calibrating || pendingCalibrate ? (
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -120,8 +139,17 @@ export function EmbedHeader() {
       ) : null}
 
       {onAnalyze ? (
-        <nav role="tablist" aria-label="Analyze domains" className="flex flex-wrap items-center gap-0.5">
-          {analyzeSubTabs.map((tab) => {
+        <nav
+          role="tablist"
+          aria-label="Analyze domains"
+          className={cn(
+            'flex flex-wrap items-center gap-0.5',
+            // With host-fed records the first row is the level drop-downs;
+            // the tabs take the row below, full width.
+            hostRecordsFed && 'order-last basis-full',
+          )}
+        >
+          {[OVERVIEW_TAB, ...tabs].map((tab) => {
             const active = pathname === tab.to;
             return (
               <Link
@@ -143,14 +171,14 @@ export function EmbedHeader() {
         </nav>
       ) : (
         <Link
-          to="/analyze"
+          to="/overview"
           className="inline-flex items-center gap-1 rounded px-2 py-1 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink-0"
         >
-          ← Analyze
+          ← Dashboard
         </Link>
       )}
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className={cn('flex flex-wrap items-center gap-2', hostRecordsFed ? 'min-w-0 flex-1' : 'ml-auto')}>
         {onAnalyze ? <FilterControls compact /> : null}
         {hostFed ? null : (
           <Link
@@ -168,6 +196,18 @@ export function EmbedHeader() {
             <span className="sr-only sm:not-sr-only">Settings</span>
           </Link>
         )}
+        {closable ? (
+          <button
+            type="button"
+            onClick={() => emitHostEvent?.('oyon:close', {})}
+            aria-label="Close"
+            title="Close"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink-0"
+          >
+            <X className="size-4" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">Close</span>
+          </button>
+        ) : null}
       </div>
 
       {/* Full-screen calibration overlay — mounted always so the imperative ref

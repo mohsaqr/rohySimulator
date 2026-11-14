@@ -6,6 +6,12 @@ import { useFilteredWindows } from '@/lib/useFilteredWindows';
 import { summarizeSessions } from '@/lib/sessions';
 import { distinctUsers, type FilterScope } from '@/lib/filterWindows';
 import { shortDateTime } from '@/legacy/dashboard.js';
+import { useBridge } from '@/lib/hostBridge';
+import { useRecordScope } from '@/lib/recordScope';
+import { useScopeOverview } from '@/lib/scopeOverview';
+import { useLevelSelection } from '@/lib/levelSelection';
+import { LevelMenus } from '@/components/overview/LevelMenus';
+import { useRouterState } from '@tanstack/react-router';
 
 /*
  * FilterBar — the analytics scope every dashboard under /analyze and
@@ -48,6 +54,7 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
   const setSessionIds = useFilterStore((s) => s.setSessionIds);
   const setUserIds = useFilterStore((s) => s.setUserIds);
   const reset = useFilterStore((s) => s.reset);
+  const recordScope = useRecordScope();
 
   const sessions = useMemo(() => summarizeSessions(allWindows), [allWindows]);
   const users = useMemo(() => distinctUsers(allWindows), [allWindows]);
@@ -80,10 +87,16 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
     if (!sessionLocked && !currentSessionId && scope !== 'all') setScope('all');
   }, [currentSessionId, scope, sessionLocked, setScope]);
 
+  // A host feed, or a person/group scope, gets the scope header: the scope in
+  // words, its counts, and the narrowing that scope allows.
+  if (sessionLocked && (recordScope.fed || recordScope.scope !== 'session')) {
+    return <ScopeControls compact={compact} />;
+  }
+
   if (sessionLocked) {
     return (
       <>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+        <span className="label-eyebrow">
           Session
         </span>
         <span
@@ -92,7 +105,7 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
         >
           {currentSessionId ?? 'No active session'}
         </span>
-        <span className={cn('text-[11px] tabular-nums text-ink-3', !compact && 'ml-auto')}>
+        <span className={cn('text-mini tabular-nums text-ink-3', !compact && 'ml-auto')}>
           {filtered.length} windows
         </span>
       </>
@@ -103,7 +116,7 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
     <>
       {showScope ? (
         <>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+          <span className="label-eyebrow">
             Scope
           </span>
           <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="Window scope">
@@ -132,6 +145,7 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
         selected={sessionIds}
         onChange={setSessionIds}
         emptyHint="No sessions yet"
+        inline={compact}
       />
 
       {users.length > 1 ? (
@@ -141,17 +155,18 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
           selected={userIds}
           onChange={setUserIds}
           emptyHint="No users"
+          inline={compact}
         />
       ) : null}
 
-      <span className={cn('text-[11px] tabular-nums text-ink-3', !compact && 'ml-auto')}>
+      <span className={cn('text-mini tabular-nums text-ink-3', !compact && 'ml-auto')}>
         {filtered.length} / {allWindows.length} windows
       </span>
       {filtersActive ? (
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-ink-2 hover:bg-surface-2 hover:text-ink-0"
+          className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-mini text-ink-2 hover:bg-surface-2 hover:text-ink-0"
           aria-label="Reset filters"
         >
           <FilterX className="size-3" aria-hidden="true" />
@@ -162,18 +177,123 @@ export function FilterControls({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function plural(count: number, noun: string, pluralNoun = `${noun}s`): string {
+  return `${count.toLocaleString()} ${count === 1 ? noun : pluralNoun}`;
+}
+
+/*
+ * ScopeControls — the embedded header for host-fed records and for scopes
+ * wider than a session. States the level the embed is bound to (Session,
+ * Person, Group, Class) and whose, the counts in view (sessions, people,
+ * records), and one drop-down per aggregation level (LevelMenus) to narrow
+ * the dashboard and drill down.
+ *
+ * Without a feed, any scope but a session shows that it has no records and
+ * why. It never falls back to browser storage.
+ */
+const SCOPE_WORDS: Record<string, string> = {
+  session: 'Session',
+  person: 'Person',
+  group: 'Group',
+  class: 'Class',
+};
+
+function ScopeControls({ compact }: { compact: boolean }) {
+  const recordScope = useRecordScope();
+  const overview = useScopeOverview();
+  const { select } = useLevelSelection();
+  const onOverview = useRouterState({ select: (s) => s.location.pathname === '/overview' });
+  const userLabel = useBridge((s) => s.userLabel);
+  const viewFilter = useBridge((s) => s.viewFilter);
+  const { scope, currentSessionId, userId, needsFeed } = recordScope;
+
+  const subject =
+    scope === 'session'
+      ? currentSessionId ?? 'No active session'
+      : scope === 'person'
+        ? userLabel ?? userId ?? 'No person'
+        : null;
+
+  // Current / All: only meaningful for a person whose current session is
+  // among the fed sessions.
+  const hasCurrent =
+    scope === 'person' && currentSessionId != null && overview.sessions.some((s) => s.id === currentSessionId);
+  const onCurrent =
+    hasCurrent && viewFilter.sessionIds?.length === 1 && viewFilter.sessionIds[0] === currentSessionId;
+
+  return (
+    <>
+      {/* A wide scope is stated by its own level drop-downs. */}
+      {subject ? <span className="label-eyebrow">{SCOPE_WORDS[scope] ?? scope}</span> : null}
+      {subject ? (
+        <span
+          className="max-w-72 truncate rounded-md border border-line bg-surface-0 px-2 py-1 text-xs text-ink-1"
+          title={subject}
+        >
+          {subject}
+        </span>
+      ) : null}
+
+      {needsFeed ? (
+        <span className={cn('text-mini text-ink-3', !compact && 'ml-auto')}>
+          {subject ? null : <span className="label-eyebrow mr-2">{SCOPE_WORDS[scope] ?? scope}</span>}
+          No records from the host
+        </span>
+      ) : (
+        <>
+          {hasCurrent ? (
+            <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="Sessions shown">
+              {[
+                { label: 'Current', active: onCurrent, ids: [currentSessionId as string] as string[] | null },
+                { label: 'All', active: !onCurrent && viewFilter.sessionIds === null, ids: null },
+              ].map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  aria-pressed={option.active}
+                  onClick={() => select('session_id', option.ids)}
+                  className={cn(
+                    'px-2.5 py-1 text-xs transition-colors',
+                    option.active ? 'bg-status-info-dim font-semibold text-status-info' : 'bg-surface-0 text-ink-2 hover:bg-surface-2',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <LevelMenus viewBy={onOverview} />
+
+          <span className="ml-auto text-mini tabular-nums text-ink-3">
+            {plural(overview.counts.sessions, 'session')} · {plural(overview.counts.people, 'person', 'people')} ·{' '}
+            {plural(overview.counts.records, 'record')}
+          </span>
+        </>
+      )}
+    </>
+  );
+}
+
 function MultiSelect({
   label,
   options,
   selected,
   onChange,
   emptyHint,
+  inline = false,
 }: {
   label: string;
   options: Array<{ id: string; label: string }>;
   selected: string[] | null;
   onChange: (ids: string[] | null) => void;
   emptyHint: string;
+  /**
+   * Open the list in the flow, full width, instead of floating. Inside a
+   * popover that scrolls (the top bar's Scope panel), a floating list is
+   * clipped by the panel and shows only its top edge.
+   */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const count = selected?.length ?? 0;
@@ -186,7 +306,7 @@ function MultiSelect({
   };
 
   return (
-    <div className="relative">
+    <div className={open && inline ? 'basis-full' : 'relative'}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -201,7 +321,10 @@ function MultiSelect({
         <ChevronDown className="size-3" aria-hidden="true" />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-72 overflow-y-auto rounded-lg border border-line bg-surface-1 p-1.5 shadow-popover">
+        <div className={cn(
+          'max-h-64 overflow-y-auto rounded-lg border border-line bg-surface-1 p-1.5',
+          inline ? 'mt-1.5 w-full' : 'absolute left-0 top-full z-50 mt-1 w-72 shadow-popover',
+        )}>
           {options.length === 0 ? (
             <div className="px-2 py-1.5 text-xs text-ink-3">{emptyHint}</div>
           ) : (
@@ -227,7 +350,7 @@ function MultiSelect({
             <button
               type="button"
               onClick={() => onChange(null)}
-              className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-ink-3 hover:bg-surface-2"
+              className="mt-1 w-full rounded px-2 py-1 text-left text-mini text-ink-3 hover:bg-surface-2"
             >
               Clear selection
             </button>

@@ -47,7 +47,8 @@ const ACTION_UNIT_MAP = Object.freeze({
   brow_raise_inner: ['browInnerUp'],
   brow_raise_outer: ['browOuterUpLeft', 'browOuterUpRight'],
   jaw_open: ['jawOpen'],
-  mouth_open: ['mouthOpen', 'jawOpen'],
+  // MediaPipe/ARKit has no `mouthOpen`; listing it halved this value (< v3.5.4).
+  mouth_open: ['jawOpen'],
   mouth_pucker: ['mouthPucker'],
   mouth_press: ['mouthPressLeft', 'mouthPressRight'],
   eye_wide: ['eyeWideLeft', 'eyeWideRight'],

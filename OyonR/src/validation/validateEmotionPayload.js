@@ -49,7 +49,17 @@ const FORBIDDEN_GAZE_FIELDS = [
 ];
 
 /** Allowlisted host references a window may name. Never content, never a selector. */
-const ALLOWED_TARGET_KINDS = ['chat_composer', 'text_input', 'textarea', 'voice_control'];
+const ALLOWED_TARGET_KINDS = [
+  'chat_composer',
+  'text_input',
+  'textarea',
+  'voice_control',
+  // Editors a host attaches through the contenteditable adapter or reports
+  // through createTypingEditReporter.
+  'document_editor',
+  'code_editor',
+  'form_field',
+];
 
 /**
  * The composed text is the host's record, not Oyon's — carrying it in a signal
@@ -186,6 +196,10 @@ export function validateEmotionEvent(event, index = 0, options = {}) {
   }
   optionalShortString(event.feature_profile, `${prefix}.feature_profile`, 100, errors);
   optionalShortString(event.settings_hash, `${prefix}.settings_hash`, 128, errors);
+  // Raw-only envelopes and split windows: transport shape only (the rows
+  // themselves are checked by validateRawStreamsBlock).
+  optionalShortString(event.raw_reason, `${prefix}.raw_reason`, 64, errors);
+  validateRawPart(event.raw_part, `${prefix}.raw_part`, errors);
   validateTargetBlock(event.target, `${prefix}.target`, errors);
 
   if (event.dominant_emotion !== null && event.dominant_emotion !== undefined) {
@@ -251,8 +265,57 @@ export function validateEmotionEvent(event, index = 0, options = {}) {
   validateInteractionBlock(event.interaction, `${prefix}.interaction`, errors);
   validateTextBlock(event.text, `${prefix}.text`, errors);
   validateVoiceBlock(event.voice, `${prefix}.voice`, errors);
+  validateRawStreamsBlock(event.raw_streams, `${prefix}.raw_streams`, errors, options);
 
   return errors;
+}
+
+/**
+ * Transport bounds for `raw_streams` — the per-sample series every window
+ * carries (src/aggregation/RawStreamRecorder.js). Shape and size only: this is
+ * NOT a gate on which signals may travel (CLAUDE.md data policy) — any stream
+ * name and any field list is accepted; only the columnar layout and the
+ * per-event byte budget are checked.
+ */
+const MAX_RAW_STREAM_BYTES = 1_000_000;
+const MAX_RAW_STREAM_FIELDS = 256;
+const MAX_RAW_STREAM_NAME = 64;
+const MAX_RAW_STREAM_CELL_STRING = 200;
+const RAW_STREAM_NAME = /^[a-z][a-z0-9_]*$/;
+
+export function validateRawStreamsBlock(rawStreams, prefix, errors, options = {}) {
+  if (rawStreams === null || rawStreams === undefined) return;
+  if (!isPlainObject(rawStreams)) {
+    errors.push(`${prefix} must be an object of streams`);
+    return;
+  }
+  for (const [name, block] of Object.entries(rawStreams)) {
+    const path = `${prefix}.${name}`;
+    if (name.length > MAX_RAW_STREAM_NAME || !RAW_STREAM_NAME.test(name)) {
+      errors.push(`${path}: stream names are lower_snake_case, at most ${MAX_RAW_STREAM_NAME} characters`);
+      continue;
+    }
+    if (!isPlainObject(block) || !Array.isArray(block.fields) || !Array.isArray(block.rows)) {
+      errors.push(`${path} must be { fields: string[], rows: any[][] }`);
+      continue;
+    }
+    const { fields, rows } = block;
+    if (fields.length < 1 || fields.length > MAX_RAW_STREAM_FIELDS
+      || fields.some(f => typeof f !== 'string' || !f || f.length > MAX_RAW_STREAM_NAME)) {
+      errors.push(`${path}.fields must be 1-${MAX_RAW_STREAM_FIELDS} non-empty strings`);
+      continue;
+    }
+    if (fields[0] !== 'ts_ms') errors.push(`${path}.fields[0] must be 'ts_ms'`);
+    if (new Set(fields).size !== fields.length) errors.push(`${path}.fields must be unique`);
+    const badRow = rows.findIndex(row => !Array.isArray(row) || row.length !== fields.length
+      || row.some(cell => !(cell === null || Number.isFinite(cell)
+        || (typeof cell === 'string' && cell.length <= MAX_RAW_STREAM_CELL_STRING))));
+    if (badRow >= 0) {
+      errors.push(`${path}.rows[${badRow}] must have one number/short-string/null cell per field`);
+    }
+    if (block.dropped_rows !== undefined) integerAtLeast(block.dropped_rows, `${path}.dropped_rows`, 0, errors);
+  }
+  jsonSize(rawStreams, prefix, options.maxRawStreamBytes || MAX_RAW_STREAM_BYTES, errors);
 }
 
 function rejectNestedRawMediaFields(root, prefix, errors) {
@@ -1055,6 +1118,24 @@ function nullableFiniteNumberMin(value, path, min, errors) {
     return;
   }
   if (value < min) errors.push(`${path} must be at least ${min}`);
+}
+
+/** `raw_part: { id, index, count }` of a window split across POSTs (chunkWindowBatch). */
+export function validateRawPart(part, path, errors) {
+  if (part === null || part === undefined) return;
+  if (!isPlainObject(part)) {
+    errors.push(`${path} must be an object or null`);
+    return;
+  }
+  if (typeof part.id !== 'string' || part.id.length === 0 || part.id.length > 128) {
+    errors.push(`${path}.id must be a non-empty string of at most 128 characters`);
+  }
+  integerAtLeast(part.index, `${path}.index`, 0, errors);
+  integerAtLeast(part.count, `${path}.count`, 1, errors);
+  if (Number.isInteger(part.index) && Number.isInteger(part.count) && part.index >= part.count) {
+    errors.push(`${path}.index must be less than ${path}.count`);
+  }
+  if (part.joined !== undefined) integerAtLeast(part.joined, `${path}.joined`, 1, errors);
 }
 
 function optionalShortString(value, path, maxLength, errors) {

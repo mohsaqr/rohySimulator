@@ -54,7 +54,12 @@ export function MenuPopover({
     if (!open) return;
 
     const onPointerDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      // composedPath, not `contains(e.target)`: inside the <oyon-app> shadow
+      // root a document listener sees the event retargeted to the host
+      // element, so `contains` is false for a click INSIDE the panel and the
+      // panel would close before the click landed.
+      const root = rootRef.current;
+      if (!root || !e.composedPath().includes(root)) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -103,6 +108,19 @@ export function MenuPopover({
           id={panelId}
           className={cn(
             'absolute top-full z-50 mt-1 min-w-56 rounded-lg border border-line bg-surface-1 p-1.5 shadow-popover',
+            /*
+             * Panels declare a comfortable intrinsic width (the Scope panel
+             * asks for 26rem = 416 px), which is wider than a phone. Clamping
+             * here rather than at each call site means a new panel cannot
+             * reintroduce the overflow by forgetting to.
+             *
+             * `max-h` + scroll for the same reason on the other axis: the
+             * Session panel is taller than a landscape phone, and an
+             * unscrollable overflowing panel simply loses its Apply button.
+             *
+             * Ordered BEFORE panelClassName so a call site can still opt out.
+             */
+            'max-w-[calc(100vw-1rem)] max-h-[min(70svh,32rem)] overflow-y-auto overscroll-contain',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}

@@ -28,9 +28,20 @@ export interface MiniCameraProps {
   onHide?: () => void;
   onShow?: () => void;
   collapsedPill?: boolean;
+  /*
+   * Phone variant: a small floating preview instead of a full column.
+   *
+   * The dock's job on a laptop is preview PLUS reference readout — model,
+   * window count, sample counters. On a phone the readout is the part that
+   * does not earn its space: it is reference material you consult, and it is
+   * already on Diagnostics. What you actually want mid-capture is "is my face
+   * in frame", which needs a thumbnail, not a 390 px square. So compact keeps
+   * the video and the transport controls and drops the rest.
+   */
+  compact?: boolean;
 }
 
-export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
+export function MiniCamera({ onHide, onShow, collapsedPill, compact }: MiniCameraProps) {
   const runtime = useRuntime();
   const navigate = useNavigate();
 
@@ -99,15 +110,26 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
   const showVideo = (running || paused) && Boolean(runtime.cameraStream);
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between gap-2 border-b border-line bg-surface-2 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-2">
-          Live preview
+    <div className={cn('flex flex-col', !compact && 'h-full')}>
+      <header
+        className={cn(
+          'flex items-center justify-between gap-2 border-b border-line bg-surface-2',
+          compact ? 'px-2 py-1' : 'px-3 py-2',
+        )}
+      >
+        <span className="label-eyebrow text-ink-2">
+          {compact ? 'Preview' : 'Live preview'}
         </span>
         <button
           type="button"
           onClick={onHide}
-          className="rounded p-1 text-ink-3 hover:bg-surface-1 hover:text-ink-0"
+          className={cn(
+            'rounded text-ink-3 hover:bg-surface-1 hover:text-ink-0',
+            // A 14 px icon is a fine mouse target and a poor thumb target;
+            // this is the control that dismisses a floating panel, so on a
+            // phone it gets real hit area.
+            compact ? 'touch-target -m-1 grid place-items-center p-1' : 'p-1',
+          )}
           aria-label="Hide camera dock"
         >
           <X className="size-3.5" aria-hidden="true" />
@@ -143,7 +165,7 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
                     : 'Camera off'}
               </div>
               {idle ? (
-                <div className="text-[11px] text-ink-3">
+                <div className="text-mini text-ink-3">
                   Press Start to begin a session.
                 </div>
               ) : null}
@@ -152,7 +174,7 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
         ) : null}
         {runtime.lastPrediction && showVideo ? (
           <div
-            className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium backdrop-blur-sm"
+            className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-0.5 text-mini font-medium backdrop-blur-sm"
             style={{ color: emotionColor(runtime.lastPrediction.label) }}
           >
             <span
@@ -170,7 +192,7 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
         ) : null}
         {runtime.lastGaze && showVideo ? (
           <div
-            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm"
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-micro text-white backdrop-blur-sm"
             title="Live gaze sample"
           >
             <span
@@ -187,18 +209,26 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-line bg-surface-2 px-3 py-2">
-        <span className="text-[10px] uppercase tracking-wider text-ink-3">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-2 border-t border-line bg-surface-2',
+          compact ? 'px-2 py-1' : 'px-3 py-2',
+        )}
+      >
+        <span className="label-eyebrow truncate">
           {runtime.status}
         </span>
-        <div className="flex items-center gap-1">
-          <CalibrateButton />
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Calibration is a full-screen guided flow — it does not belong on a
+              120 px floating thumbnail. It stays one tap away in the dock at
+              laptop width and on the Live page. */}
+          {compact ? null : <CalibrateButton />}
           {idle || errored ? (
             <button
               type="button"
               onClick={startAndShowLive}
               disabled={initializing}
-              className="inline-flex items-center gap-1 rounded bg-accent px-2 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded bg-accent px-2 py-1 text-mini font-medium text-white hover:opacity-90 disabled:opacity-50"
               aria-label="Start"
             >
               <Play className="size-3" aria-hidden="true" />
@@ -206,7 +236,7 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
             </button>
           ) : null}
           {initializing ? (
-            <span className="inline-flex items-center gap-1 px-1.5 text-[11px] text-ink-2">
+            <span className="inline-flex items-center gap-1 px-1.5 text-mini text-ink-2">
               <Loader2 className="size-3 animate-spin" aria-hidden="true" />
               starting
             </span>
@@ -243,9 +273,13 @@ export function MiniCamera({ onHide, onShow, collapsedPill }: MiniCameraProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 text-xs text-ink-2 space-y-2">
-        <DockSummary />
-      </div>
+      {/* Reference readout, not a live signal — dropped on a phone, where it
+          would double the panel's height to restate what Diagnostics shows. */}
+      {compact ? null : (
+        <div className="flex-1 overflow-y-auto p-3 text-xs text-ink-2 space-y-2">
+          <DockSummary />
+        </div>
+      )}
     </div>
   );
 }
@@ -268,7 +302,7 @@ function DockSummary() {
         <Row label="Gaze q" value={runtime.lastGaze.quality.toFixed(2)} />
       ) : null}
       {runtime.error ? (
-        <div className="rounded border border-status-bad/40 bg-status-bad-dim/40 px-2 py-1 text-[11px] text-status-bad">
+        <div className="rounded border border-status-bad/40 bg-status-bad-dim/40 px-2 py-1 text-mini text-status-bad">
           {runtime.error instanceof Error ? runtime.error.message : String(runtime.error)}
         </div>
       ) : null}
@@ -279,7 +313,7 @@ function DockSummary() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-line py-1 last:border-b-0">
-      <span className="text-[10px] uppercase tracking-wider text-ink-3">
+      <span className="label-eyebrow">
         {label}
       </span>
       <span className="font-medium tabular-nums text-ink-0">{value}</span>

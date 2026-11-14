@@ -229,7 +229,7 @@ function TrendPanel({
         })}
       </svg>
       {gaps > 0 ? (
-        <p className="m-0 text-[11px] text-ink-3">
+        <p className="m-0 text-mini text-ink-3">
           {series.measured} of {series.n} turns measured — the rest: {spec.absent}.
         </p>
       ) : null}
@@ -266,7 +266,7 @@ export function VoiceTurnTrends({ turns, selectedIndex, onSelectIndex }: VoiceTu
           />
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span className="inline-flex items-center gap-1">
           <svg width={10} height={10} aria-hidden="true">
             <circle cx={5} cy={5} r={3} fill={getColor(0)} />

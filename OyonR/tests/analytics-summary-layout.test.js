@@ -30,7 +30,11 @@ assert.match(comparison, /id="cmp-distribution"[\s\S]*className="flex flex-col g
   'variable comparison groups must stack symmetrically instead of leaving an orphan card');
 
 const logs = read('standalone/app/src/routes/analyze/logs.tsx');
-assertMetricBand(logs, 'id="logs-overview"', '<WindowLog', 6);
+// The one log: counts live in the kind tabs (no metric band above the table),
+// and the rows are oyon's toLogRows, read through useLogRows.
+assert.match(logs, /useLogRows\(\)/, 'Logs reads every record kind through useLogRows');
+assert.match(logs, /<LogTable /, 'Logs lists rows in the LogTable');
+assert.doesNotMatch(logs, /<Metric /, 'no metric band before the log');
 
 const heart = read('standalone/app/src/routes/analyze/heartRate.tsx');
 assertMetricBand(heart, 'id="hr-kpis"', 'id="hr-trend"', 8);
@@ -40,5 +44,18 @@ const position = read('standalone/app/src/routes/analyze/sensing.tsx');
 const positionBand = section(position, 'id="position-kpis"', 'id="position-facial"');
 assert.match(positionBand, /hasFacial && hasPosture \? 'lg:grid-cols-4' : 'lg:grid-cols-2'/,
   'conditional position metrics must use two or four complete columns');
+
+// Statistics live in ladyna (Codex review #25): the app shows them, never computes them.
+{
+  const dyn = read('standalone/app/src/components/analytics/AffectDynamicsPanel.tsx');
+  assert.match(dyn, /from 'ladyna\/stats'/, 'affect dynamics come from ladyna seriesDynamics');
+  assert.doesNotMatch(dyn, /Math\.sqrt|instability \/ |STRUCTURE_THRESHOLD/, 'no RMSSD/SD arithmetic or thresholds in the panel');
+  assert.match(sequence, /describeSequences/, 'sequence overview uses ladyna describeSequences');
+  assert.doesNotMatch(sequence, /Math\.log2/, 'no hand-rolled entropy');
+  const regime = read('standalone/app/src/components/group/RegimeBand.tsx');
+  assert.doesNotMatch(regime, /n \/ outOf/, 'transition shares are ladyna tna probabilities');
+  const timeline = read('src/group/timeline.js');
+  assert.doesNotMatch(timeline, /person_z'\s*\?|\(raw - m\) \/ s/, 'person-z is ladyna normalizeTimeline, not oyon/group');
+}
 
 console.log('analytics-summary-layout.test.js — all cases passed');

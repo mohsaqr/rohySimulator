@@ -133,7 +133,7 @@ export function VoiceStatsPanel({ voice, quality, vadEngine }: VoiceStatsPanelPr
                 treatment the typing page gives the identical data shape. */}
             {Object.keys(histogram).length > 0 ? (
               <div className="mt-3">
-                <p className="m-0 mb-1.5 text-[11px] uppercase tracking-wider text-ink-3">
+                <p className="label-eyebrow m-0 mb-1.5">
                   Internal pause lengths
                 </p>
                 <StateDistributionBars
@@ -391,7 +391,7 @@ export function VoiceStatsPanel({ voice, quality, vadEngine }: VoiceStatsPanelPr
                 />
               </div>
               {thresholds ? (
-                <p className="m-0 mt-3 text-[11px] text-ink-3">
+                <p className="m-0 mt-3 text-mini text-ink-3">
                   Frame {thresholds.frame_ms} ms · VAD threshold {thresholds.vad_threshold} · pause
                   ≥ {thresholds.pause_threshold_ms} ms · pitch floor{' '}
                   {thresholds.min_voiced_frames_for_pitch} frames at confidence ≥{' '}

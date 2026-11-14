@@ -288,11 +288,9 @@ describe('Oyon raw streams ingest and read-back (migration 0076)', () => {
         expect((await getJson(server, adminTok, '/raw-streams')).status).toBe(400);
     });
 
-    it('states which validator handled the raw payloads (the re-vendor seam)', () => {
-        // OyonR 3.3.3: false — server/lib/oyonRawValidation.js checks raw-only
-        // envelopes and raw_streams. After the ≥ 3.5.11 re-vendor: true, and the
-        // fallback there is dead code to delete.
-        expect(typeof OYON_VALIDATES_RAW).toBe('boolean');
+    it('validates raw payloads with the vendored Oyon validator (OyonR >= 3.5.11)', () => {
+        // The module throws at import on an older OyonR, so a downgrade fails loudly.
+        expect(OYON_VALIDATES_RAW).toBe(true);
     });
 });
 

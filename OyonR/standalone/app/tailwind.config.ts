@@ -30,6 +30,9 @@ export default {
           strong: 'var(--line-strong)',
         },
         status: {
+          // Foreground for text on a solid status fill — flips with the
+          // theme, unlike the `text-white` it replaces.
+          on: 'var(--status-on)',
           ok: 'var(--status-ok)',
           'ok-dim': 'var(--status-ok-dim)',
           'ok-strong': 'var(--status-ok-strong)',
@@ -45,8 +48,21 @@ export default {
       },
       borderRadius: {
         sm: 'var(--radius-sm)',
+        // `md` MUST be declared. Tailwind's scale is inherited wholesale
+        // where a key is not overridden, so omitting it did not remove
+        // `rounded-md` — it left it at the stock 6px, below `rounded-sm`'s
+        // 10px, making the scale non-monotonic. See tokens.css.
+        md: 'var(--radius-md)',
         DEFAULT: 'var(--radius)',
         lg: 'var(--radius-lg)',
+      },
+      // Two steps BELOW Tailwind's `xs`, which the UI genuinely uses and had
+      // been spelling as raw px. Declared as [size, lineHeight] tuples so
+      // they carry leading the way the named scale does — `text-[10px]`
+      // never did, which is why dense rows drifted vertically between views.
+      fontSize: {
+        micro: ['var(--text-micro)', { lineHeight: 'var(--text-micro-lh)' }],
+        mini: ['var(--text-mini)', { lineHeight: 'var(--text-mini-lh)' }],
       },
       boxShadow: {
         card: 'var(--shadow-card)',

@@ -20,6 +20,27 @@ export function makeAliases(appDir: string, repoRoot: string) {
       find: 'oyon/ui/gaze-calibration',
       replacement: path.resolve(repoRoot, 'src/ui/GazeCalibrationOverlay.js'),
     },
+    // Pure analytics modules. The app cannot reach `oyon/...` through node
+    // resolution — it lives inside the very package it would be importing —
+    // so every exports-map subpath it uses needs a matching alias here.
+    {
+      find: 'oyon/analytics/aoi-transition-matrix',
+      replacement: path.resolve(repoRoot, 'src/analytics/AoiTransitionMatrix.js'),
+    },
+    {
+      find: 'oyon/analytics/affect-dynamics',
+      replacement: path.resolve(repoRoot, 'src/analytics/AffectDynamics.js'),
+    },
+    {
+      find: 'oyon/analytics/gaze-dynamics',
+      replacement: path.resolve(repoRoot, 'src/analytics/GazeDynamics.js'),
+    },
+    // Group data out (groupTimeline, channel catalogue) for the group
+    // synchrony dashboard. The analysis itself comes from `ladyna/synchrony`.
+    {
+      find: 'oyon/group',
+      replacement: path.resolve(repoRoot, 'src/group/index.js'),
+    },
     // Legacy vendor modules used unmodified by the ported logs-dashboard
     // renderers under src/legacy/.
     {

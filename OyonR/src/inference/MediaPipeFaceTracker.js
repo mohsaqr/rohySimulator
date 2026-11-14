@@ -21,6 +21,9 @@ export class MediaPipeFaceTracker {
       minFaceDetectionConfidence: 0.5,
       minFacePresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
+      // >1 for one camera seeing several people (MultiFaceCapture). Note that
+      // MediaPipe turns its own landmark smoothing off when numFaces > 1.
+      numFaces: 1,
       ...options,
     };
     this.options.wasmBaseUrl = normalizeWasmBaseUrl(this.options.wasmBaseUrl);
@@ -37,7 +40,7 @@ export class MediaPipeFaceTracker {
         modelAssetPath: this.options.modelAssetPath,
       },
       runningMode: 'VIDEO',
-      numFaces: 1,
+      numFaces: Math.max(1, Math.round(Number(this.options.numFaces) || 1)),
       outputFaceBlendshapes: true,
       outputFacialTransformationMatrixes: true,
       minFaceDetectionConfidence: this.options.minFaceDetectionConfidence,
@@ -54,33 +57,52 @@ export class MediaPipeFaceTracker {
     this.lastVideoTime = video.currentTime;
 
     const result = this.faceLandmarker.detectForVideo(video, timestampMs);
-    const landmarks = result.faceLandmarks?.[0] || null;
-    if (!landmarks) return { facePresent: false, reason: 'no-face' };
-
-    const bbox = bboxFromLandmarks(landmarks);
-    const rawBlendshapes = result.faceBlendshapes?.[0]?.categories || [];
-    const quality = {
-      bbox,
-      faceAreaRatio: bbox.width * bbox.height,
-      blendshapeCount: rawBlendshapes.length,
-    };
-
-    const blendshapes = rawBlendshapes.map(item => ({
-      categoryName: item.categoryName,
-      score: item.score,
-    }));
-    const transformationMatrix = toFloat32Matrix(result.facialTransformationMatrixes?.[0]);
-
-    return {
-      facePresent: true,
-      landmarks,
-      bbox,
-      blendshapes,
-      matrix: result.facialTransformationMatrixes?.[0] || null,
-      transformationMatrix,
-      quality,
-    };
+    if (!result.faceLandmarks?.[0]) return { facePresent: false, reason: 'no-face' };
+    return faceFromResult(result, 0);
   }
+
+  /**
+   * Every face in the frame (numFaces > 1). The array index is NOT a track
+   * id — MediaPipe reorders faces on re-detection; FaceTrackAssigner
+   * associates them across frames.
+   *
+   * @returns {Promise<Array<object>>} face results shaped like analyze()'s; [] when none / duplicate frame
+   */
+  async analyzeAll(video, timestampMs) {
+    if (!this.faceLandmarker) throw new Error('MediaPipeFaceTracker.init() must run first.');
+    if (video.currentTime === this.lastVideoTime) return [];
+    this.lastVideoTime = video.currentTime;
+    const result = this.faceLandmarker.detectForVideo(video, timestampMs);
+    return (result.faceLandmarks || []).map((_, i) => faceFromResult(result, i));
+  }
+}
+
+/** One face of a FaceLandmarker result, in the shape analyze() returns. */
+export function faceFromResult(result, i) {
+  const landmarks = result.faceLandmarks[i];
+  const bbox = bboxFromLandmarks(landmarks);
+  const rawBlendshapes = result.faceBlendshapes?.[i]?.categories || [];
+  const quality = {
+    bbox,
+    faceAreaRatio: bbox.width * bbox.height,
+    blendshapeCount: rawBlendshapes.length,
+  };
+
+  const blendshapes = rawBlendshapes.map(item => ({
+    categoryName: item.categoryName,
+    score: item.score,
+  }));
+  const transformationMatrix = toFloat32Matrix(result.facialTransformationMatrixes?.[i]);
+
+  return {
+    facePresent: true,
+    landmarks,
+    bbox,
+    blendshapes,
+    matrix: result.facialTransformationMatrixes?.[i] || null,
+    transformationMatrix,
+    quality,
+  };
 }
 
 /**

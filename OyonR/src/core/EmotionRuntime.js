@@ -27,6 +27,11 @@ import { IlluminationAggregator } from '../aggregation/IlluminationAggregator.js
 import { createGazeAdapter, GAZE_ENGINE_MODEL_VERSIONS } from '../inference/GazeAdapterFactory.js';
 import { GazeSmoother } from '../smoothing/GazeSmoother.js';
 import { GazeAggregator } from '../aggregation/GazeAggregator.js';
+import { GroupSessionClock, httpClockSource } from './GroupSessionClock.js';
+import {
+  RawStreamRecorder, affectRow, eyeRow, headRow, postureRow, heartRateRow,
+  respirationRow, illuminationRow, screenGazeRow, rawOnlyEnvelope,
+} from '../aggregation/RawStreamRecorder.js';
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 1000;
 
@@ -58,7 +63,10 @@ export class EmotionRuntime {
       sampleIntervalMs: this.settings.sample_interval_ms,
       ...options.aggregation,
     });
-    this.transport = options.transport || new HttpEmotionTransport(options.transportOptions);
+    this.transport = options.transport || new HttpEmotionTransport({
+      maxPostBytes: this.settings.transport_max_post_bytes,
+      ...options.transportOptions,
+    });
     this.contextProvider = options.contextProvider || (() => ({}));
     this.logger = options.logger || new OyonLogger({
       contextProvider: this.contextProvider,
@@ -69,6 +77,30 @@ export class EmotionRuntime {
       transports: options.metricTransports || [],
     });
     this.dynamics = options.dynamics || new DynamicalFeatureTracker(options.dynamicsOptions);
+
+    // Group alignment (docs/GROUP_SYNCHRONY.md): an injectable group clock —
+    // or one built from settings.group_clock_url — stamps ts_group_ms beside
+    // every local timestamp, and window_anchor_ms makes every member's window
+    // k cover the same group-time interval.
+    this.groupClock = options.groupClock || (this.settings.group_clock_url
+      ? new GroupSessionClock({
+        getServerTime: httpClockSource(this.settings.group_clock_url),
+        resyncMs: this.settings.group_clock_resync_ms,
+        onError: (err) => this.logger.warn('oyon.group_clock.sync_failed', { message: err?.message || String(err) }),
+        onSync: (snap) => this.logger.info('oyon.group_clock.synced', snap),
+      })
+      : null);
+    if (Number.isFinite(this.settings.window_anchor_ms) && this.aggregator?.options) {
+      this.aggregator.options.windowAnchorMs = () => this._windowAnchorLocalMs();
+    }
+    // Per-sample series at the rate each producer runs, drained onto the next
+    // window as raw_streams. On by default (research-grade data policy).
+    // Lossless: a stream that reaches the recorder's row bound is sent early as
+    // a raw-only envelope (_spillRawStreams) instead of being cut.
+    this.rawStreams = options.rawStreams || new RawStreamRecorder({
+      clock: this.groupClock,
+      onFull: () => { this._spillRawStreams(); },
+    });
 
     // Eye-tracking pipeline (opt-in via settings.eye_tracking_enabled).
     if (this.settings.eye_tracking_enabled) {
@@ -353,10 +385,22 @@ export class EmotionRuntime {
   }
 
   async start() {
-    if (this.running) return;
+    if (this.running) {
+      // Re-announce the actual lifecycle state instead of returning silently.
+      // A host whose UI drifted out of sync (it thinks capture is off) calls
+      // start() and waits for a status event to clear its spinner — without
+      // this emit, nothing ever arrives and the host spins forever.
+      this.events.emit('status', { state: this.paused ? 'paused' : 'running' });
+      return;
+    }
     await this.init();
     this.running = true;
     this.paused = false;
+    if (this.groupClock && typeof this.groupClock.start === 'function') {
+      // Not awaited: the first handshake must not delay the camera. Failures
+      // are reported through the clock's onError and leave ts_group_ms null.
+      Promise.resolve(this.groupClock.start()).catch(err => this.logger.warn('oyon.group_clock.sync_failed', { message: err?.message || String(err) }));
+    }
     this.events.emit('status', { state: 'starting-camera' });
     await this.camera.start();
     // Gate on the SAMPLER, not on heartRateEnabled: respiration shares this
@@ -397,6 +441,7 @@ export class EmotionRuntime {
   async stop() {
     this.running = false;
     this.paused = false;
+    if (this.groupClock && typeof this.groupClock.stop === 'function') this.groupClock.stop();
     if (this.heartRateSampler) this.heartRateSampler.stop();
     if (this.timer) {
       clearTimeout(this.timer);
@@ -461,7 +506,7 @@ export class EmotionRuntime {
         finalWindow.gaze = finalGaze;
       }
       this._attachCaptureQualityBlock(finalWindow);
-      await this.sendWindows([finalWindow]);
+      await this.sendWindows([finalWindow], { drainAll: true });
     } else {
       // No emotion window. Synthesize research-only events for any signal
       // that did flush data of its own.
@@ -481,8 +526,12 @@ export class EmotionRuntime {
       if (this.gazeEnabled && finalGaze && !this.settings.gaze_window_share) {
         events.push({ gaze_only: true, gaze: finalGaze, window_start: finalGaze.window_start, window_end: finalGaze.window_end });
       }
-      if (events.length > 0) await this.sendWindows(events);
+      if (events.length > 0) await this.sendWindows(events, { drainAll: true });
     }
+    // Raw samples nothing above carried (no window closed since they were
+    // recorded, or recorded at/after the last window's end) leave now, in a
+    // raw-only envelope, so stopping never strands them.
+    await this._sendRawOnly(this.rawStreams.drain());
 
     if (this.gazeEnabled && this.gazeAdapter && typeof this.gazeAdapter.dispose === 'function') {
       try { this.gazeAdapter.dispose(); } catch { /* idempotent */ }
@@ -524,6 +573,7 @@ export class EmotionRuntime {
       // buffer — motion is the dominant rPPG artifact. Resumes automatically
       // once the head settles.
       const paused = this._hrHeadMotionPaused(face);
+      this._hrMotionPaused = paused; // surfaced on heart_rate_status (report only)
       this.heartRateSampler.updateFace(paused ? null : face, now);
     }
 
@@ -557,6 +607,7 @@ export class EmotionRuntime {
         const completed = this.postureAggregator.consumeFrame(postureSample, now);
         if (completed) this._stashedPostureWindow = completed;
       }
+      this.rawStreams.record('posture', now, postureRow(postureSample));
       this._lastPostureSample = postureSample;
     }
 
@@ -569,6 +620,10 @@ export class EmotionRuntime {
       bbox: face.bbox,
       landmarks: face.landmarks,
     });
+
+    this.rawStreams.record('affect', now, affectRow(prediction));
+    const headPose = headPoseFromMatrix(face.transformationMatrix);
+    if (headPose) this.rawStreams.record('head', now, headRow(headPose));
 
     const windowResult = this.aggregator.addSample({
       timestamp: now,
@@ -592,6 +647,7 @@ export class EmotionRuntime {
       if (smoothed) {
         engagementWindow = this.engagementAggregator.consumeFrame(smoothed, now);
         eyeSample = summarizeEyeSample(smoothed);
+        this.rawStreams.record('eye', now, eyeRow(smoothed));
       }
     }
 
@@ -604,6 +660,8 @@ export class EmotionRuntime {
       facialSample = this.facialExtractor.extract(face);
       if (facialSample) {
         facialWindow = this.facialAggregator.consumeFrame(facialSample, now);
+        if (facialSample.action_units) this.rawStreams.record('au', now, { ...facialSample.action_units });
+        if (facialSample.blendshapes) this.rawStreams.record('blendshapes', now, { ...facialSample.blendshapes });
       }
     }
 
@@ -624,10 +682,14 @@ export class EmotionRuntime {
           buffered_seconds: status.span_seconds,
           sample_rate_hz: status.sample_rate_hz,
           reason: status.ready && !heartRateSample ? 'no_stable_rate' : status.reason,
+          // True while the head-motion gate is pausing ROI sampling this tick.
+          motion_paused: this._hrMotionPaused === true,
         };
       }
       const completed = this.heartRateAggregator.consumeFrame(heartRateSample, now);
       if (completed) this._stashedHeartRateWindow = completed;
+      this.rawStreams.record('heart_rate', now, heartRateRow(heartRateSample));
+      this._recordNewBeats();
     }
 
     // Respiration shares the ROI stream; its own estimator throttles to ~5s
@@ -647,6 +709,7 @@ export class EmotionRuntime {
         : null;
       const completed = this.respirationAggregator.consumeFrame(respirationSample, now);
       if (completed) this._stashedRespirationWindow = completed;
+      this.rawStreams.record('respiration', now, respirationRow(respirationSample));
     }
 
     // Illumination reads the raw frame, so it works with or without a face —
@@ -656,11 +719,12 @@ export class EmotionRuntime {
       illuminationSample = this.illuminationEstimator.estimate(this.camera.video);
       const completed = this.illuminationAggregator.consumeFrame(illuminationSample, now);
       if (completed) this._stashedIlluminationWindow = completed;
+      this.rawStreams.record('illumination', now, illuminationRow(illuminationSample));
     }
 
     const durationMs = performanceNow() - startedAt;
     this.metrics.record('oyon.sample.duration', durationMs, { unit: 'ms' });
-    this.events.emit('sample', { face, prediction, eye: eyeSample, facial: facialSample, posture: postureSample, heart_rate: heartRateSample, heart_rate_status: heartRateStatus, respiration: respirationSample, respiration_status: respirationStatus, illumination: illuminationSample, durationMs });
+    this.events.emit('sample', { ts_ms: now, ts_group_ms: this._groupTime(now), face, prediction, eye: eyeSample, facial: facialSample, posture: postureSample, heart_rate: heartRateSample, heart_rate_status: heartRateStatus, respiration: respirationSample, respiration_status: respirationStatus, illumination: illuminationSample, durationMs });
 
     if (windowResult) {
       if (this.eyeEnabled && this.settings.engagement_window_share) {
@@ -703,6 +767,7 @@ export class EmotionRuntime {
 
   addMissingSample(timestamp, reason) {
     if (this.heartRateSampler) this.heartRateSampler.updateFace(null, timestamp);
+    this.rawStreams.record('affect', timestamp, affectRow(null));
     const windowResult = this.aggregator.addSample({
       timestamp,
       facePresent: false,
@@ -714,7 +779,7 @@ export class EmotionRuntime {
       const completed = this.heartRateAggregator.consumeFrame(null, timestamp);
       if (completed) this._stashedHeartRateWindow = completed;
     }
-    this.events.emit('sample', { face: { facePresent: false, reason }, prediction: null, posture: this.postureEnabled ? (this._lastPostureSample ?? null) : undefined });
+    this.events.emit('sample', { ts_ms: timestamp, ts_group_ms: this._groupTime(timestamp), face: { facePresent: false, reason }, prediction: null, posture: this.postureEnabled ? (this._lastPostureSample ?? null) : undefined });
     if (windowResult) {
       if (this.eyeEnabled && this.settings.engagement_window_share) {
         const aligned = this.engagementAggregator.flush(timestamp);
@@ -748,7 +813,14 @@ export class EmotionRuntime {
     if (!this.gazeAdapter || typeof this.gazeAdapter.calibrate !== 'function') {
       return { ok: false, reason: 'adapter_unavailable' };
     }
-    this.events.emit('status', { state: 'gaze:calibrating' });
+    // Calibration progress goes out on its OWN channel, never on 'status'.
+    // 'status' is the capture lifecycle (idle → running → paused → stopped);
+    // hosts reduce it into "is the camera on?". Emitting 'gaze:calibrating'
+    // there made every status-driven UI (the capture pill, the camera dock)
+    // conclude capture had stopped the moment calibration finished, while
+    // the camera kept running — and the "restart" they then offered hit the
+    // already-running guard and spun forever.
+    this.events.emit('gaze-calibration', { state: 'calibrating' });
     let result;
     try {
       result = await this.gazeAdapter.calibrate(points);
@@ -779,12 +851,12 @@ export class EmotionRuntime {
           confidence,
         });
       }
-      this.events.emit('status', { state: 'gaze:calibrated', confidence });
+      this.events.emit('gaze-calibration', { state: 'calibrated', confidence });
     } else {
       this.logger.warn('oyon.gaze.calibration_failed', {
         reason: result?.reason || 'unknown',
       });
-      this.events.emit('status', { state: 'gaze:calibration_failed', reason: result?.reason || 'unknown' });
+      this.events.emit('gaze-calibration', { state: 'calibration_failed', reason: result?.reason || 'unknown' });
     }
     return result;
   }
@@ -890,6 +962,7 @@ export class EmotionRuntime {
     const smoothed = this.gazeSmoother.update(sample);
     if (!smoothed) return;
     const ts = Number.isFinite(smoothed.ts_ms) ? smoothed.ts_ms : Date.now();
+    this.rawStreams.record('screen_gaze', ts, screenGazeRow(smoothed, this.gazeAggregator.options?.aois));
     // consumeFrame auto-flushes when wall-clock crosses windowMs and returns
     // the completed window. We must capture and stash it: the emission path
     // (sampleOnce / addMissingSample) attaches gaze blocks at the emotion
@@ -991,13 +1064,146 @@ export class EmotionRuntime {
     };
   }
 
-  async sendWindows(windows) {
+  /**
+   * @internal Record beat-to-beat intervals found since the last tick
+   * (EXPERIMENTAL ibi stream). Each beat is recorded once, at its own time.
+   */
+  _recordNewBeats() {
+    if (!this.heartRateEstimator || typeof this.heartRateEstimator.interBeatIntervals !== 'function') return;
+    if (!this.heartRateEstimator.lastEstimate) return;
+    const last = this._lastBeatMs ?? -Infinity;
+    for (const beat of this.heartRateEstimator.interBeatIntervals()) {
+      if (beat.ts_ms <= last + 1) continue;
+      this.rawStreams.record('ibi', Math.round(beat.ts_ms), { ibi_ms: beat.ibi_ms, quality: beat.quality });
+      this._lastBeatMs = beat.ts_ms;
+    }
+  }
+
+  /**
+   * Record a host-supplied per-sample value into the raw streams, so it rides
+   * on the next window and reaches the group timeline beside Oyon's own
+   * signals. For channels Oyon does not sense itself: speaking turns from a
+   * VAD, task phases, partner events.
+   *
+   *   voice = createVoiceTurnController({ onEvent: (e) =>
+   *     runtime.recordHostSample('speech', { state: e.state }, e.timestamp_ms) });
+   *
+   * @param {string} stream  lower_snake_case stream name (e.g. 'speech')
+   * @param {object} values  field → number | string | boolean | null
+   * @param {number} [tsMs]  local epoch ms (default now)
+   * @returns {boolean} false when the arguments are not recordable
+   */
+  recordHostSample(stream, values, tsMs = Date.now()) {
+    if (typeof stream !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(stream)) return false;
+    if (!values || typeof values !== 'object' || Array.isArray(values) || !Number.isFinite(tsMs)) return false;
+    this.rawStreams.record(stream, tsMs, values);
+    return true;
+  }
+
+  /** @internal Group time of a local epoch ms (null without a synced clock). */
+  _groupTime(localMs) {
+    return this.groupClock && typeof this.groupClock.toGroupTime === 'function'
+      ? this.groupClock.toGroupTime(localMs)
+      : null;
+  }
+
+  /**
+   * @internal settings.window_anchor_ms (group time) in local time. Before the
+   * clock's first sync the anchor is used as-is, i.e. local ≈ group time.
+   */
+  _windowAnchorLocalMs() {
+    const anchor = this.settings.window_anchor_ms;
+    if (!Number.isFinite(anchor)) return null;
+    const local = this.groupClock && typeof this.groupClock.toLocalTime === 'function'
+      ? this.groupClock.toLocalTime(anchor)
+      : null;
+    return Number.isFinite(local) ? local : anchor;
+  }
+
+  /** @internal Alignment fields persisted on every window when group work is configured. */
+  _alignmentFields() {
+    const anchored = Number.isFinite(this.settings.window_anchor_ms);
+    if (!this.groupClock && !anchored) return null;
+    const snap = this.groupClock && typeof this.groupClock.snapshot === 'function'
+      ? this.groupClock.snapshot()
+      : {};
+    return {
+      clock_offset_ms: Number.isFinite(snap.clock_offset_ms) ? snap.clock_offset_ms : null,
+      clock_rtt_ms: Number.isFinite(snap.clock_rtt_ms) ? snap.clock_rtt_ms : null,
+      clock_source: typeof snap.clock_source === 'string' ? snap.clock_source : null,
+      window_anchor_ms: anchored ? this.settings.window_anchor_ms : null,
+    };
+  }
+
+  /**
+   * Raw rows that belong with these windows: everything before the latest
+   * window end (anchored windows are [start, end); a free-running window
+   * closes on, and includes, the sample at its end). Rows at or after it wait
+   * for the next window. `drainAll` (stop) takes everything.
+   * @internal
+   */
+  _drainRawFor(windows, drainAll = false) {
+    if (drainAll) return this.rawStreams.drain();
+    const ends = windows.map(w => Date.parse(w?.window_end)).filter(Number.isFinite);
+    if (!ends.length) return this.rawStreams.drain();
+    return this.rawStreams.drain({ before: Math.max(...ends), inclusive: this._windowAnchorLocalMs() === null });
+  }
+
+  /**
+   * Send raw rows no window carries, as a raw-only envelope
+   * (`modality: 'raw'`; see docs/ROHY_INTEGRATION.md "Raw-only envelopes").
+   * Its window_start/window_end span the rows it holds.
+   * @internal
+   */
+  async _sendRawOnly(rawStreams, reason = 'stop') {
+    const event = rawOnlyEnvelope(rawStreams, reason);
+    if (!event) return;
+    const context = this.contextProvider() || {};
+    const snapshot = settingsSnapshot(this.settings);
+    const alignment = this._alignmentFields();
+    const events = [{
+      ...context,
+      ...event,
+      ...(alignment ? withGroupWindowTimes(alignment, event) : {}),
+      settings_snapshot: snapshot,
+      settings_hash: snapshot.settings_hash,
+      capture_mode: this.options.captureMode,
+      consent_version: this.options.consentVersion,
+    }];
+    this.events.emit('window', events);
+    this.logger.info('oyon.raw_streams.sent', { reason, streams: Object.keys(rawStreams || {}) });
+    await this.transport.send(events, context);
+  }
+
+  /**
+   * A stream reached the recorder's row bound: send everything recorded up to
+   * now as a raw-only envelope. Recording carries on meanwhile; a failed send
+   * is reported, never swallowed.
+   * @internal
+   */
+  _spillRawStreams() {
+    if (this._spilling) return;
+    this._spilling = true;
+    Promise.resolve()
+      .then(() => this._sendRawOnly(this.rawStreams.drain(), 'row_bound'))
+      .catch((err) => {
+        this.logger.error('oyon.raw_streams.spill_failed', err);
+        this.events.emit('error', err);
+      })
+      .finally(() => { this._spilling = false; });
+  }
+
+  async sendWindows(windows, options = {}) {
     if (!windows.length) return;
     const context = this.contextProvider() || {};
     const snapshot = settingsSnapshot(this.settings);
-    const events = windows.map(window => ({
+    const rawStreams = this._drainRawFor(windows, options.drainAll === true);
+    const alignment = this._alignmentFields();
+    const events = windows.map((window, index) => ({
       ...context,
       ...window,
+      ...(alignment ? withGroupWindowTimes(alignment, window) : {}),
+      ...(index === 0 && rawStreams ? { raw_streams: rawStreams } : {}),
       dynamics: this.settings.enable_dynamics ? this.dynamics.update(window) : null,
       settings_snapshot: snapshot,
       settings_hash: snapshot.settings_hash,
@@ -1060,6 +1266,18 @@ export class EmotionRuntime {
 
     await this.transport.send(events, context);
   }
+}
+
+/** Window start/end in group time, beside the local ISO stamps (never replacing them). */
+function withGroupWindowTimes(alignment, window) {
+  const offset = alignment.clock_offset_ms;
+  const start = Date.parse(window?.window_start);
+  const end = Date.parse(window?.window_end);
+  return {
+    ...alignment,
+    window_start_group_ms: Number.isFinite(offset) && Number.isFinite(start) ? start + offset : null,
+    window_end_group_ms: Number.isFinite(offset) && Number.isFinite(end) ? end + offset : null,
+  };
 }
 
 function performanceNow() {

@@ -32,7 +32,7 @@ export function ContextPill({
         className,
       )}
     >
-      <span className="text-[10px] uppercase tracking-wider text-ink-3">
+      <span className="label-eyebrow">
         {label}
       </span>
       <span className="font-medium tabular-nums">{value}</span>

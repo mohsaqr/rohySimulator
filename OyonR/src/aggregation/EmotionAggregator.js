@@ -9,21 +9,115 @@ export class EmotionAggregator {
     };
     this.windowStart = null;
     this.samples = [];
+    // Anchored mode only: the open window's grid index k, the anchor it was
+    // opened under, how far its start was pushed past the grid start (a clock
+    // correction would otherwise make it overlap the window before), and the
+    // end of the last closed window.
+    this.windowIndex = null;
+    this.windowOpenAnchor = null;
+    this.windowClippedMs = 0;
+    this.lastWindowEnd = null;
   }
 
   addSample(sample) {
-    if (this.windowStart === null) this.windowStart = sample.timestamp;
+    const anchor = this.anchorMs();
+    if (anchor === null) {
+      if (this.windowStart === null) this.windowStart = sample.timestamp;
+      this.samples.push(sample);
+      if (sample.timestamp - this.windowStart < this.options.windowMs) return null;
+      return this.flush(sample.timestamp);
+    }
+    // Anchored windows (docs/GROUP_SYNCHRONY_PLAN.md §2.2): window k covers
+    // [anchor + k·W, anchor + (k+1)·W) for every member, so member windows
+    // line up. A sample past the current window closes it at its grid end
+    // and opens the window that contains the sample; windows a member was
+    // absent for (late join, pause) are simply missing.
+    //
+    // The anchor is read on every sample because a group-clock re-sync moves
+    // it (the runtime converts the group-time anchor to local time). The open
+    // window keeps its index k and closes at k's end on the CURRENT grid, so a
+    // correction lengthens or shortens that one window instead of producing two
+    // windows that overlap; the next window never starts before the last one
+    // ended. Both windows say so (`anchor_correction_ms`, `window_clipped_ms`).
+    let completed = null;
+    if (this.windowStart !== null && this.windowIndex === null) {
+      // Opened free-running (no anchor yet): adopt the grid window it starts in.
+      this.windowIndex = Math.floor((this.windowStart - anchor) / this.options.windowMs);
+      this.windowOpenAnchor = anchor;
+    }
+    if (this.windowStart !== null) {
+      const end = this.anchoredEnd(anchor);
+      if (sample.timestamp >= end) completed = this.flush(end);
+    }
+    if (this.windowStart === null) this.openAnchored(sample.timestamp, anchor);
     this.samples.push(sample);
-    if (sample.timestamp - this.windowStart < this.options.windowMs) return null;
-    return this.flush(sample.timestamp);
+    return completed;
+  }
+
+  /** End of the open anchored window on the current grid, never before its last sample. */
+  anchoredEnd(anchor) {
+    const w = this.options.windowMs;
+    const gridEnd = anchor + (this.windowIndex + 1) * w;
+    const lastTs = this.samples.length ? this.samples[this.samples.length - 1].timestamp : this.windowStart;
+    return Math.max(gridEnd, this.windowStart, lastTs + 1);
+  }
+
+  openAnchored(timestamp, anchor) {
+    const w = this.options.windowMs;
+    const index = Math.floor((timestamp - anchor) / w);
+    const gridStart = anchor + index * w;
+    const start = this.lastWindowEnd !== null && this.lastWindowEnd > gridStart && this.lastWindowEnd <= timestamp
+      ? this.lastWindowEnd
+      : gridStart;
+    this.windowStart = start;
+    this.windowIndex = index;
+    this.windowOpenAnchor = anchor;
+    this.windowClippedMs = start - gridStart;
+  }
+
+  /**
+   * The window anchor in this aggregator's timestamp domain (local epoch ms),
+   * or null for free-running windows. `options.windowAnchorMs` may be a number
+   * or a function (the runtime passes one that converts the group-time anchor
+   * through the group clock, so a re-sync moves it).
+   */
+  anchorMs() {
+    const a = this.options.windowAnchorMs;
+    const value = typeof a === 'function' ? a() : a;
+    return Number.isFinite(value) ? value : null;
+  }
+
+  gridStart(timestamp, anchor) {
+    const w = this.options.windowMs;
+    return anchor + Math.floor((timestamp - anchor) / w) * w;
   }
 
   flush(end = Date.now()) {
     if (!this.samples.length || this.windowStart === null) return null;
-    const samples = this.samples;
+    const window = this.summarize(end);
+    if (this.windowIndex !== null) {
+      // Anchored: the grid index and any clock correction, on the window.
+      const anchorNow = this.anchorMs();
+      const correction = Number.isFinite(anchorNow) && Number.isFinite(this.windowOpenAnchor)
+        ? anchorNow - this.windowOpenAnchor
+        : 0;
+      window.window_index = this.windowIndex;
+      window.anchor_correction_ms = correction;
+      window.window_clipped_ms = this.windowClippedMs;
+    }
+    this.lastWindowEnd = Math.max(end, this.windowStart);
     this.samples = [];
-    const windowStart = this.windowStart;
     this.windowStart = null;
+    this.windowIndex = null;
+    this.windowOpenAnchor = null;
+    this.windowClippedMs = 0;
+    return window;
+  }
+
+  /** @internal The window summary of the buffered samples, closed at `end`. */
+  summarize(end) {
+    const samples = this.samples;
+    const windowStart = this.windowStart;
 
     const valid = samples.filter(s => s.facePresent && s.probabilities);
     const missing = samples.length - valid.length;

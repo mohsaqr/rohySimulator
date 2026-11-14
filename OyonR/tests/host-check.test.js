@@ -24,7 +24,7 @@ try {
   write(join(packageRoot, 'package.json'), JSON.stringify({ name: 'oyon', version: '3.0.3' }));
   write(
     join(packageRoot, 'standalone', 'app', 'dist-element', 'oyon-app.element.js'),
-    'customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}setGazeAois(){}});',
+    'customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}setRecords(){}setGazeAois(){}});',
   );
   write(join(packageRoot, 'types', 'app-element.d.ts'));
   write(join(mediaPipe, 'package.json'), JSON.stringify({ version: '0.10.22' }));
@@ -50,7 +50,7 @@ try {
 
   write(
     join(packageRoot, 'standalone', 'app', 'dist-element', 'oyon-app.element.js'),
-    'customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}});',
+    'customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}setRecords(){}});',
   );
   const broken = buildHostCheckReport({
     packageRoot,
@@ -67,6 +67,49 @@ try {
     broken.checks.find((entry) => entry.id === 'app-element').detail,
     /setGazeAois/,
   );
+
+  // A bundle that predates host contract 3.2 has no setRecords: hosts that
+  // feed records must be told, not find out from a missing method.
+  write(
+    join(packageRoot, 'standalone', 'app', 'dist-element', 'oyon-app.element.js'),
+    'customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}setGazeAois(){}});',
+  );
+  const stale = buildHostCheckReport({
+    packageRoot,
+    peerRoots: {
+      '@mediapipe/tasks-vision': mediaPipe,
+      'onnxruntime-web': ort,
+    },
+    expectedVersion: '3.0.3',
+    hostContractVersion: '3.2',
+    batchSchemaVersion: 'oyon-window-batch-v3',
+  });
+  assert.equal(stale.ok, false);
+  assert.match(stale.checks.find((entry) => entry.id === 'app-element').detail, /setRecords/);
+
+  // A bundle built without an optional dependency carries Vite's throwing
+  // stub; with inlined dynamic imports it throws when the element loads.
+  for (const stub of [
+    'throw new Error(`Could not resolve "webgazer" imported by "oyon".`)',
+    'throw new Error("Could not resolve \\"webgazer\\" imported by \\"oyon\\".")',
+  ]) {
+    write(
+      join(packageRoot, 'standalone', 'app', 'dist-element', 'oyon-app.element.js'),
+      `customElements.define("oyon-app",class{start(){}stop(){}setWindows(){}setRecords(){}setGazeAois(){}});${stub}`,
+    );
+    const throwing = buildHostCheckReport({
+      packageRoot,
+      peerRoots: {
+        '@mediapipe/tasks-vision': mediaPipe,
+        'onnxruntime-web': ort,
+      },
+      expectedVersion: '3.0.3',
+      hostContractVersion: '3.2',
+      batchSchemaVersion: 'oyon-window-batch-v3',
+    });
+    assert.equal(throwing.ok, false, 'a bundle that throws at load must fail the host check');
+    assert.match(throwing.checks.find((entry) => entry.id === 'app-element').detail, /unresolved imports.*webgazer/);
+  }
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

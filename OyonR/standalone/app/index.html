@@ -2,7 +2,19 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      viewport-fit=cover lets the app's own surfaces reach the physical edges
+      of a notched display rather than sitting in an OS-drawn white letterbox.
+      It is what makes the safe-area insets meaningful: the shell's edge
+      furniture reserves the notch and home indicator itself, via the
+      .pt-safe / .pb-safe utilities in styles/globals.css.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <title>Oyon</title>
   </head>
   <body>

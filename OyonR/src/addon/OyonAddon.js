@@ -2,6 +2,7 @@ import { createOyonAttachment } from '../adapters/oyonAttach.js';
 import { createRohyFerAttachment } from '../adapters/rohyAttach.js';
 import { HttpEmotionTransport } from '../transport/HttpEmotionTransport.js';
 import { FallbackEmotionTransport } from '../transport/FallbackEmotionTransport.js';
+import { createOyonSettings } from '../settings/OyonSettings.js';
 
 // Rohy's addon registry posts to this path. Used ONLY when the `rohy` flag is
 // set; generic hosts fall back to HttpEmotionTransport's standard
@@ -94,6 +95,8 @@ export function createOyonAddon(options = {}) {
     // Rohy: its addon endpoint. Explicit option always wins.
     endpointForSession: options.endpointForSession || (rohy ? ROHY_ADDON_ENDPOINT : undefined),
     tokenProvider: options.getToken || (() => null),
+    // One POST stays under the host's body limit (Rohy: 256 KiB); see chunkWindowBatch.
+    maxPostBytes: createOyonSettings(options.runtimeOptions?.settings || {}).transport_max_post_bytes,
   };
   if (options.fetchImpl) httpOptions.fetchImpl = options.fetchImpl;
 

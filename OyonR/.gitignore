@@ -3,6 +3,10 @@ node_modules/
 
 # build outputs
 dist/
+# The assembled deployable site (scripts/build-site.sh) — ~231 MB of build
+# output. `dist/` above does not match this name, so without this line a
+# `git add -A` would commit the ONNX runtime and the emotion model.
+dist-site/
 build/
 .cache/
 .vite/
@@ -37,6 +41,11 @@ tmp/
 # local-only session artifacts (never committed)
 bkp/
 LEARNINGS.md
+
+# A separate project that happens to live inside this checkout, with its own
+# .git. Untracked, git would record it as a GITLINK — a submodule pointer to a
+# commit no clone can resolve — so a fresh clone breaks rather than skipping it.
+gooyon/
 
 # local-only orientation/session files (per user global rules)
 HANDOFF.md

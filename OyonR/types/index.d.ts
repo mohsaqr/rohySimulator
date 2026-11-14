@@ -87,9 +87,96 @@ export type {
   TypingComposerAdapterOptions,
   TypingGraphemeMode,
   TypingComposerAdapter,
+  TypingContentEditableElement,
+  TypingContentEditableAdapterOptions,
+  EditablePosition,
+  TypingTextCounters,
+  TypingReportedEdit,
+  TypingReportedSelection,
+  TypingEditReporterOptions,
+  TypingEditReporter,
+  TypingEpisodeRecord,
+  TypingAggregateSummary,
+  TypingSummaryRow,
+  TypingSummaryMeasureKind,
+  TypingSummaryComparisonRow,
 } from './typing';
 
-export { TypingAggregator, createTypingComposerAdapter } from './typing';
+export {
+  TypingAggregator,
+  createTypingComposerAdapter,
+  createTypingContentEditableAdapter,
+  readEditableText,
+  createTypingEditReporter,
+  classifyBoundaryContext,
+  createTextCounters,
+  countGraphemes,
+  countTypingWords,
+  BOUNDARY_CONTEXTS,
+  BOUNDARY_CONTEXT_WINDOW,
+  aggregateTypingEpisodes,
+  summarizeTypingBy,
+  compareTypingSummaries,
+  episodeCharsPerMin,
+  pauseBucketLabel,
+  PAUSE_LOCATION_ORDER,
+  TYPING_SUMMARY_MEASURES,
+} from './typing';
+
+export type {
+  HostRecordKind,
+  HostRecordsInput,
+  HostRecordCounts,
+  RefusedHostRecord,
+  ValidatedHostRecords,
+  RecordScopeName,
+  ScopeRecordsOptions,
+  LogEventMappingRule,
+  RecordSummaryRow,
+  RecordLevel,
+  LogRowKind,
+  LogRow,
+  LogRecordsInput,
+  LogRowSummary,
+} from './records';
+
+export {
+  HOST_RECORD_KINDS,
+  validateHostRecords,
+  scopeRecords,
+  countScopedRecords,
+  listScopedSessions,
+  listScopedPeople,
+  recordSessionId,
+  recordUserId,
+  recordGroupId,
+  recordContextId,
+  recordUserLabel,
+  mapLogEventsToSignalEvents,
+  summarizeRecordsBy,
+  recordKindsOf,
+  listRecordLevels,
+  recordLevelValue,
+  RECORD_LEVELS,
+  LOG_ROW_KINDS,
+  toLogRows,
+  summarizeLogRows,
+  flattenLogRecord,
+  joinRawParts,
+} from './records';
+
+export type {
+  DocumentEditState,
+  CodeRunState,
+  HostActTrackerOptions,
+  HostActEvent,
+  DocumentEditDescriptor,
+  DocumentEditTracker,
+  CodeRunDescriptor,
+  CodeRunTracker,
+} from './host-acts';
+
+export { createDocumentEditTracker, createCodeRunTracker } from './host-acts';
 
 export type {
   SignalEventSource,
@@ -166,6 +253,25 @@ export interface OyonSettings {
   gaze_fixation_min_sample_rate_hz?: number;
   gaze_max_sample_gap_ms?: number;
 
+  // Group work (docs/GROUP_SYNCHRONY.md).
+  /** Group-time epoch ms; window k covers [anchor + k·W, anchor + (k+1)·W) for every member. null = free-running. */
+  window_anchor_ms?: number | null;
+  /** Group hub `/clock` URL ({ ts_ms }); when set the runtime runs a GroupSessionClock and stamps ts_group_ms. */
+  group_clock_url?: string | null;
+  /** Re-run the clock handshake this often (ms, 5000–3600000; default 60000). */
+  group_clock_resync_ms?: number;
+  /** One camera, several people (MultiFaceCapture). */
+  multi_face_max_faces?: number;
+  multi_face_iou_gate?: number;
+  multi_face_confirm_hits?: number;
+  multi_face_coast_ms?: number;
+  /**
+   * Byte budget of one window-batch POST (16 KiB–64 MiB; default 245760 = 240 KiB).
+   * Larger batches are split into several POSTs and an oversized window's
+   * raw_streams into raw-only continuation parts — nothing is cut.
+   */
+  transport_max_post_bytes?: number;
+
   // Facial signals — head pose + action units (added in 3.0.0). Free-rides on
   // the face result; no extra model.
   facial_signals_enabled?: boolean;
@@ -235,6 +341,10 @@ export interface OyonSettings {
   ai_assist_enabled?: boolean;
   /** Voice-turn analytics; condition 1 of the microphone activation gate. */
   voice_enabled?: boolean;
+  /** Host-reported document edits (events only; added in 3.6.0). */
+  document_edit_enabled?: boolean;
+  /** Host-reported code runs (events only; added in 3.6.0). */
+  code_run_enabled?: boolean;
 
   [key: string]: unknown;
 }
@@ -247,6 +357,10 @@ export {
   OYON_HOST_CONTRACT_VERSION,
   OYON_WINDOW_BATCH_SCHEMA_VERSION,
   OYON_SUPPORTED_WINDOW_BATCH_SCHEMA_VERSIONS,
+  OYON_DOCUMENT_EDIT_STATES,
+  OYON_DOCUMENT_EDIT_STATES_VERSION,
+  OYON_CODE_RUN_STATES,
+  OYON_CODE_RUN_STATES_VERSION,
 } from './version';
 
 export function createOyonSettings(input?: Partial<OyonSettings>): OyonSettings;
@@ -255,6 +369,34 @@ export function settingsSnapshot(s: OyonSettings): OyonSettings & { settings_has
 
 export interface EmotionWindow {
   session_id?: string;
+  /** Who the window belongs to; `user_label` is a display name. */
+  user_id?: string;
+  user_label?: string;
+  /** The group the person works in (optional; 3.6.0). Required by `oyon/group`. */
+  group_id?: string;
+  /** The person's id inside the group; required by `oyon/group` (assigned by the study, never a face). */
+  member_id?: string;
+  /** Optional seat / role label inside the group (e.g. 'left', 'tutor'). */
+  seat?: string;
+  /** Group-clock alignment (present when a group clock or window anchor is configured). */
+  clock_offset_ms?: number | null;
+  clock_rtt_ms?: number | null;
+  clock_source?: 'handshake' | 'marker' | null;
+  window_anchor_ms?: number | null;
+  window_start_group_ms?: number | null;
+  window_end_group_ms?: number | null;
+  /** Per-sample series recorded since the previous window (RawStreamRecorder). */
+  raw_streams?: RawStreams | null;
+  /** Present when the window was split across POSTs (see `chunkWindowBatch`, `joinRawParts`). */
+  raw_part?: RawPart;
+  /** Anchored windows: the group-grid index k (window k covers [anchor + kW, anchor + (k+1)W)). */
+  window_index?: number;
+  /** Anchored windows: how far the local anchor moved (clock re-sync) while this window was open; 0 = none. */
+  anchor_correction_ms?: number;
+  /** Anchored windows: how far the start was moved past the grid start so it does not overlap the previous window. */
+  window_clipped_ms?: number;
+  /** The document, case, conversation or task the work belongs to (optional; 3.6.0). */
+  context_id?: string;
   window_start: string;
   window_end: string;
   window_start_ms?: number;
@@ -291,6 +433,142 @@ export interface EmotionWindow {
   /** Privacy-safe actual camera settings and decoded-frame timing. */
   capture_quality?: CameraDiagnostics | null;
   [key: string]: unknown;
+}
+
+/** One columnar raw stream: `fields[0]` is 'ts_ms', `fields[1]` 'ts_group_ms'. */
+export interface RawStreamBlock {
+  fields: string[];
+  rows: Array<Array<number | string | null>>;
+  /** Legacy (Oyon ≤ 3.5.10): rows a capped recorder did not keep. The recorder is lossless now and never sets it. */
+  dropped_rows?: number;
+}
+
+/** Which part of a window split across POSTs an event is (`chunkWindowBatch`); rebuild with `joinRawParts`. */
+export interface RawPart {
+  /** Shared by every part of one window. */
+  id: string;
+  /** 0 = the window itself; 1.. = raw-only continuation parts. */
+  index: number;
+  count: number;
+  /** Set by `joinRawParts`: how many parts were found and joined. */
+  joined?: number;
+}
+/** Streams the runtime records: affect, eye, head, au, blendshapes, posture, heart_rate, respiration, illumination, screen_gaze. */
+export type RawStreams = Record<string, RawStreamBlock>;
+
+export const RAW_STREAM_FIELDS: Readonly<Record<string, readonly string[]>>;
+/**
+ * Lossless per-sample recorder. `maxRowsPerStream` is when `onFull` fires (the
+ * runtime then sends a raw-only envelope early), never a cut.
+ */
+export class RawStreamRecorder {
+  constructor(options?: {
+    clock?: { toGroupTime(ms: number): number | null } | null;
+    maxRowsPerStream?: number;
+    onFull?: (stream: string) => void;
+  });
+  record(stream: string, tsMs: number, values: Record<string, unknown>): void;
+  readonly pending: boolean;
+  /** Rows held in the largest stream. */
+  readonly maxRows: number;
+  /** All rows, or those before `before` (`inclusive`: also those at it); later rows stay. */
+  drain(options?: { before?: number; inclusive?: boolean }): RawStreams | null;
+}
+
+/** A raw-only event (`modality: 'raw'`) around rows no window carries; null when there are none. */
+export function rawOnlyEnvelope(rawStreams: RawStreams | null, reason: string): {
+  modality: 'raw';
+  window_kind: 'interval';
+  window_start: string;
+  window_end: string;
+  raw_reason: string;
+  raw_streams: RawStreams;
+} | null;
+
+/**
+ * Split a window batch into POST bodies of at most `maxBytes` UTF-8 bytes,
+ * losslessly: an oversized window's raw rows continue in raw-only parts that
+ * share `raw_part.id`. Throws when an event cannot be brought under the budget.
+ */
+export const DEFAULT_MAX_POST_BYTES: number;
+export function chunkWindowBatch<T extends Record<string, unknown>>(events: T[], options?: {
+  maxBytes?: number;
+  schemaVersion?: string;
+  maxEvents?: number;
+  maxRawStreamBytes?: number;
+  /** Part-group id of an oversized event; default `rawPartId(event)` (deterministic). */
+  newId?: (event: T) => string;
+}): Array<Array<T | Record<string, unknown>>>;
+/** Deterministic `raw_part.id` of a window: `rp-` + 16 hex chars from its identity and span. */
+export function rawPartId(event: Record<string, unknown>): string;
+
+export interface GroupClockSnapshot {
+  clock_offset_ms: number | null;
+  clock_rtt_ms: number | null;
+  clock_source: 'handshake' | 'marker' | null;
+  clock_synced_at_ms: number | null;
+  clock_sync_failures: number;
+}
+export function estimateClockOffset(
+  samples: Array<{ t0: number; ts: number; t1: number }>,
+): { offset_ms: number; rtt_ms: number; n: number } | null;
+export function httpClockSource(url: string, fetchImpl?: typeof fetch): () => Promise<number>;
+export class GroupSessionClock {
+  constructor(options?: {
+    getServerTime?: () => Promise<number>;
+    resyncMs?: number;
+    probes?: number;
+    now?: () => number;
+    timers?: { setInterval: (fn: () => void, ms: number) => unknown; clearInterval: (id: unknown) => void };
+    onSync?: (snapshot: GroupClockSnapshot) => void;
+    onError?: (error: Error) => void;
+  });
+  readonly synced: boolean;
+  offsetMs: number | null;
+  rttMs: number | null;
+  sync(): Promise<GroupClockSnapshot>;
+  markSync(marker: { group_ms: number; local_ms?: number }): GroupClockSnapshot;
+  start(): Promise<GroupClockSnapshot>;
+  stop(): void;
+  toGroupTime(localMs: number): number | null;
+  toLocalTime(groupMs: number): number | null;
+  snapshot(): GroupClockSnapshot;
+}
+
+export function iou(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): number;
+export interface FaceTrackRow {
+  track_id: string;
+  status: 'tentative' | 'confirmed';
+  seat: string | null;
+  born_ms: number;
+  last_seen_ms: number;
+  frames: number;
+}
+export class FaceTrackAssigner {
+  constructor(options?: { maxFaces?: number; iouGate?: number; confirmHits?: number; coastMs?: number; prefix?: string });
+  update(faces: Array<{ bbox: { x: number; y: number; width: number; height: number } }>, ts: number): Array<{
+    track_id: string; status: 'tentative' | 'confirmed'; seat: string | null; face: unknown; iou: number | null;
+  }>;
+  seats(): Record<string, string>;
+  status(): FaceTrackRow[];
+  retired: Array<{ track_id: string; born_ms: number; last_seen_ms: number; confirmed: boolean }>;
+}
+export class MultiFaceCapture {
+  constructor(options?: {
+    settings?: Partial<OyonSettings>;
+    camera?: unknown; faceTracker?: unknown; classifier?: unknown; transport?: EmotionTransport;
+    groupClock?: GroupSessionClock; assigner?: FaceTrackAssigner;
+    contextProvider?: () => Record<string, unknown>;
+    memberMap?: Record<string, string> | ((trackId: string) => string);
+    cameraOptions?: Record<string, unknown>; mediaPipe?: Record<string, unknown>; onnx?: Record<string, unknown>;
+    transportOptions?: Record<string, unknown>;
+  });
+  settings: OyonSettings;
+  on(type: 'window' | 'tracks' | 'status' | 'error', handler: (payload: any) => void): () => void;
+  init(): Promise<void>;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  sampleOnce(): Promise<void>;
 }
 
 export interface HeadPose {
@@ -414,13 +692,27 @@ export interface HeartRateStatus {
   buffered_seconds: number;
   sample_rate_hz: number;
   reason: 'insufficient_samples' | 'insufficient_window' | 'low_sample_rate' | 'no_stable_rate' | null;
+  /** True on ticks where the head-motion gate paused ROI sampling (report only). */
+  motion_paused?: boolean;
 }
 
 export interface EmotionRuntimeEvents {
+  /** Capture lifecycle only (idle → running → paused → stopped). Sub-system
+   *  progress (e.g. gaze calibration) never arrives here. */
   status: (payload: { state: string }) => void;
+  /** Gaze-calibration progress — deliberately separate from `status` so
+   *  lifecycle reducers can't mistake a calibration note for capture ending. */
+  'gaze-calibration': (payload: {
+    state: 'calibrating' | 'calibrated' | 'calibration_failed';
+    confidence?: 'measured' | 'inferred' | 'unknown';
+    reason?: string;
+  }) => void;
   error: (err: unknown) => void;
   window: (windows: EmotionWindow[]) => void;
   sample: (payload: {
+    /** Local epoch ms of the tick, and its group-clock time (null without a synced clock). */
+    ts_ms?: number;
+    ts_group_ms?: number | null;
     face?: unknown;
     prediction?: unknown;
     eye?: EyeSampleSnapshot | null;
@@ -474,10 +766,16 @@ export interface EmotionRuntimeOptions {
   roiSampler?: (video: unknown, face: unknown) => { r: number; g: number; b: number } | null;
   heartRateEstimator?: HeartRateEstimator;
   heartRateAggregator?: HeartRateAggregator;
+  /** Group clock (else built from settings.group_clock_url). */
+  groupClock?: GroupSessionClock;
+  /** Raw per-sample stream recorder (default: a RawStreamRecorder on the group clock). */
+  rawStreams?: RawStreamRecorder;
 }
 
 export class EmotionRuntime {
   constructor(options?: EmotionRuntimeOptions);
+  /** Push a host-supplied per-sample value (e.g. VAD speaking state) into raw_streams. */
+  recordHostSample(stream: string, values: Record<string, number | string | boolean | null>, tsMs?: number): boolean;
   options: EmotionRuntimeOptions;
   settings: OyonSettings;
   running: boolean;
@@ -555,8 +853,43 @@ export class MediaPipeFaceTracker {
   analyze(video: HTMLVideoElement, timestampMs: number): Promise<unknown>;
 }
 
+export interface OnnxEmotionClassifierOptions {
+  /** Model weights: a URL (absolute or same-origin path) or the raw bytes. */
+  modelUrl?: string | ArrayBuffer | ArrayBufferView;
+  /** Extra URLs tried in order when `modelUrl` fails (non-2xx or network error). */
+  modelFallbackUrls?: string[];
+  /**
+   * Cache API bucket that keeps downloaded weights across page loads
+   * (default `'oyon-models-v1'`) so a model is fetched once per browser
+   * rather than on every reload. `false` disables.
+   */
+  modelCache?: string | false;
+  /** Directory of the ONNX Runtime WASM files (default: pinned jsDelivr URL). */
+  wasmPaths?: string;
+  executionProviders?: string[] | null;
+  labels?: string[];
+  inputSize?: number;
+  inputName?: string;
+  outputName?: string | null;
+  inputScale?: number;
+  inputChannels?: number;
+  colorOrder?: 'RGB' | 'BGR';
+  mean?: number[];
+  std?: number[];
+  emotionOffset?: number;
+  valenceIndex?: number | null;
+  arousalIndex?: number | null;
+  modelName?: string;
+  modelVersion?: string;
+  /** Test hook: a pre-loaded `onnxruntime-web` module instead of the dynamic import. */
+  ortModule?: unknown;
+  [key: string]: unknown;
+}
+
 export class OnnxEmotionClassifier {
-  constructor(options?: Record<string, unknown>);
+  constructor(options?: OnnxEmotionClassifierOptions);
+  /** URL the loaded weights came from (`'bytes'` when `modelUrl` was a buffer); `null` before `init()`. */
+  modelSource: string | null;
   init(): Promise<void>;
   classify(
     video: HTMLVideoElement | HTMLCanvasElement | ImageBitmap,
@@ -608,6 +941,8 @@ export class HttpEmotionTransport implements EmotionTransport {
     fetchImpl?: typeof fetch;
     validate?: boolean;
     validationOptions?: Record<string, unknown>;
+    /** Byte budget per POST (default 245760); see `chunkWindowBatch`. */
+    maxPostBytes?: number;
   });
   send(windows: EmotionWindow[], ctx?: Record<string, unknown>): Promise<unknown>;
 }
@@ -635,63 +970,214 @@ export class FallbackEmotionTransport implements EmotionTransport {
   disable(error?: Error): void;
 }
 
+/** One `oyon-log-v1` event, as OyonLogger writes it and a host feeds it back as `logEvents`. */
 export interface OyonLogEvent {
+  schema_version: 'oyon-log-v1';
+  /** ISO 8601. */
+  timestamp: string;
   level: 'debug' | 'info' | 'warn' | 'error';
-  type: string;
-  ts: number;
-  context?: Record<string, unknown>;
-  data?: Record<string, unknown>;
+  source: string;
+  event_name: string;
+  /** Who and where: session_id, user_id, … from the logger's contextProvider. */
+  context: Record<string, unknown>;
+  /** Raw-media keys (frame, image, landmarks, …) are replaced by '[forbidden]'. */
+  details: Record<string, unknown>;
+}
+
+/** One `oyon-metric-v1` numeric metric, as OyonMetricRecorder writes it. */
+export interface OyonMetric {
+  schema_version: 'oyon-metric-v1';
+  /** ISO 8601. */
+  timestamp: string;
+  source: string;
+  metric_name: string;
+  metric_value: number;
+  metric_unit: string | null;
+  context: Record<string, unknown>;
+  tags: Record<string, unknown>;
+}
+
+export interface OyonLogTransportLike {
+  sendLogs(events: OyonLogEvent[], context?: Record<string, unknown>): void | Promise<void>;
+}
+export interface OyonMetricTransportLike {
+  sendMetrics(metrics: OyonMetric[], context?: Record<string, unknown>): void | Promise<void>;
 }
 
 export class OyonLogger {
   constructor(options?: {
+    /** Default 'oyon'. */
+    source?: string;
+    /** In-memory ring size; default 1000. */
+    maxEvents?: number;
+    clock?: () => Date;
     contextProvider?: () => Record<string, unknown>;
-    transports?: unknown[];
+    transports?: OyonLogTransportLike[];
+    /** Called on every failed transport write (the events are kept and retried). */
+    onTransportError?: (info: OyonDeliveryError) => void;
+    /** Events held per transport while it fails; default 100000 (the oldest beyond it are counted in `lost`). */
+    maxPending?: number;
   });
-  debug(type: string, data?: Record<string, unknown>): void;
-  info(type: string, data?: Record<string, unknown>): void;
-  warn(type: string, data?: Record<string, unknown>): void;
-  error(type: string, data?: Record<string, unknown>): void;
+  debug(eventName: string, details?: Record<string, unknown>, context?: Record<string, unknown>): OyonLogEvent;
+  info(eventName: string, details?: Record<string, unknown>, context?: Record<string, unknown>): OyonLogEvent;
+  warn(eventName: string, details?: Record<string, unknown>, context?: Record<string, unknown>): OyonLogEvent;
+  error(eventName: string, errorOrDetails?: Error | Record<string, unknown>, context?: Record<string, unknown>): OyonLogEvent;
+  log(level: OyonLogEvent['level'], eventName: string, details?: Record<string, unknown>, context?: Record<string, unknown>): OyonLogEvent;
+  /** The in-memory events, oldest first. */
+  read(): OyonLogEvent[];
+  clear(): void;
+  /** Retry every event a transport has not written yet. */
+  flush(): Promise<void>;
+  /** Per transport: events waiting, failed writes, events lost, last error. */
+  deliveryStatus(): OyonDeliveryStatus[];
 }
 
-export class LocalLogTransport {
-  constructor(options?: { storageKey?: string; maxEntries?: number });
-  send(event: OyonLogEvent): void;
-  drain(): OyonLogEvent[];
+/** What a logger / metric recorder reports when a transport write fails. */
+export interface OyonDeliveryError {
+  error: unknown;
+  transport: unknown;
+  /** Records now waiting for that transport. */
+  pending: number;
+  failures: number;
+  lost: number;
+}
+
+export interface OyonDeliveryStatus {
+  index: number;
+  transport: string;
+  pending: number;
+  failures: number;
+  lost: number;
+  last_error: string | null;
+}
+
+/** Keeps the last `maxEvents` log events in localStorage (in memory without it). */
+export class LocalLogTransport implements OyonLogTransportLike {
+  constructor(options?: { storageKey?: string; maxEvents?: number; storage?: Storage | null });
+  sendLogs(events: OyonLogEvent[]): void;
+  read(): OyonLogEvent[];
   clear(): void;
 }
 
-export class HttpLogTransport {
-  constructor(options?: { url: string; fetchImpl?: typeof fetch });
-  send(event: OyonLogEvent): Promise<void>;
+/** POSTs `{ events }` to `endpoint` (default '/api/oyon/logs'). */
+export class HttpLogTransport implements OyonLogTransportLike {
+  constructor(options?: { endpoint?: string; tokenProvider?: () => string | null; fetchImpl?: typeof fetch });
+  sendLogs(events: OyonLogEvent[]): Promise<void>;
 }
 
-export function createLogEvent(input: Partial<OyonLogEvent>): OyonLogEvent;
+export function createLogEvent(input: {
+  level?: string;
+  event_name: string;
+  /** Default 'oyon'. */
+  source?: string;
+  /** ISO time; default now. */
+  timestamp?: string;
+  context?: Record<string, unknown>;
+  details?: Record<string, unknown>;
+}): OyonLogEvent;
 
 export class OyonMetricRecorder {
   constructor(options?: {
+    source?: string;
+    /** In-memory ring size; default 2000. */
+    maxMetrics?: number;
+    clock?: () => Date;
     contextProvider?: () => Record<string, unknown>;
-    transports?: unknown[];
+    transports?: OyonMetricTransportLike[];
+    /** Called on every failed transport write (the metrics are kept and retried). */
+    onTransportError?: (info: OyonDeliveryError) => void;
+    maxPending?: number;
   });
-  record(name: string, value: number, tags?: Record<string, string>): void;
+  /** Null (nothing recorded) when the value is not finite. */
+  record(
+    metricName: string,
+    metricValue: number,
+    options?: { unit?: string; context?: Record<string, unknown>; tags?: Record<string, unknown> },
+  ): OyonMetric | null;
+  read(): OyonMetric[];
+  clear(): void;
+  /** Retry every metric a transport has not written yet. */
+  flush(): Promise<void>;
+  deliveryStatus(): OyonDeliveryStatus[];
 }
 
-export class LocalMetricTransport {
-  constructor(options?: { storageKey?: string; maxEntries?: number });
+/** Keeps the last `maxMetrics` metrics in localStorage (in memory without it). */
+export class LocalMetricTransport implements OyonMetricTransportLike {
+  constructor(options?: { storageKey?: string; maxMetrics?: number; storage?: Storage | null });
+  sendMetrics(metrics: OyonMetric[]): void;
+  read(): OyonMetric[];
+  clear(): void;
 }
 
-export class HttpMetricTransport {
-  constructor(options?: { url: string; fetchImpl?: typeof fetch });
+/** POSTs `{ metrics }` to `endpoint` (default '/api/oyon/metrics'). */
+export class HttpMetricTransport implements OyonMetricTransportLike {
+  constructor(options?: { endpoint?: string; tokenProvider?: () => string | null; fetchImpl?: typeof fetch });
+  sendMetrics(metrics: OyonMetric[]): Promise<void>;
 }
 
-export class IndexedDbOyonStore {
-  constructor(options?: { dbName?: string; storeName?: string });
-  put(record: unknown): Promise<string>;
-  getAll(): Promise<unknown[]>;
+/** Where an IndexedDB transport writes: an open store, or a database name (default 'oyon'). */
+export interface IndexedDbTransportOptions {
+  /** Default: the store shared by every transport on `dbName` (one connection). */
+  store?: {
+    put(storeName: string, record: unknown): Promise<unknown>;
+    getAll(storeName: string): Promise<unknown[]>;
+    clear(storeName: string): Promise<unknown>;
+    bulkPut?(storeName: string, records: unknown[]): Promise<unknown>;
+    getAllAbove?(storeName: string, indexName: string, lower: unknown, options?: { inclusive?: boolean }): Promise<unknown[]>;
+  };
+  dbName?: string;
+}
+
+/** Read options of the IndexedDB transports. */
+export interface IndexedDbReadOptions {
+  /** ISO timestamp: only entries at or after it (inclusive — merge by key). */
+  since?: string;
+}
+
+/** The IndexedDbOyonStore shared by every transport on one database. */
+export function sharedOyonStore(dbName?: string): IndexedDbOyonStore;
+
+/**
+ * Keeps EVERY log event in IndexedDB (`runtime_events`), uncapped, beside the
+ * windows and events. Adds an `event_id` key when an event has none.
+ */
+export class IndexedDbLogTransport implements OyonLogTransportLike {
+  constructor(options?: IndexedDbTransportOptions);
+  sendLogs(events: OyonLogEvent[]): Promise<void>;
+  /** Stored events, oldest first; `since` reads only the newer ones. */
+  read(options?: IndexedDbReadOptions): Promise<Array<OyonLogEvent & { event_id: string }>>;
   clear(): Promise<void>;
 }
 
-export function oyonRecordId(): string;
+/** Keeps EVERY metric in IndexedDB (`metrics`), uncapped. Adds a `metric_id` key when a metric has none. */
+export class IndexedDbMetricTransport implements OyonMetricTransportLike {
+  constructor(options?: IndexedDbTransportOptions);
+  sendMetrics(metrics: OyonMetric[]): Promise<void>;
+  /** Stored metrics, oldest first; `since` reads only the newer ones. */
+  read(options?: IndexedDbReadOptions): Promise<Array<OyonMetric & { metric_id: string }>>;
+  clear(): Promise<void>;
+}
+
+/** Oyon's IndexedDB database; every call names the object store. */
+export type OyonStoreName =
+  | 'captures' | 'emotion_windows' | 'signal_windows' | 'signal_events'
+  | 'runtime_events' | 'metrics' | 'settings_profiles' | 'consents' | 'dynamics';
+export class IndexedDbOyonStore {
+  constructor(options?: { dbName?: string; dbVersion?: number; indexedDB?: IDBFactory | null; IDBKeyRange?: typeof IDBKeyRange });
+  init(): Promise<IDBDatabase>;
+  put(storeName: OyonStoreName, record: unknown): Promise<IDBValidKey>;
+  add(storeName: OyonStoreName, record: unknown): Promise<IDBValidKey>;
+  bulkAdd(storeName: OyonStoreName, records: unknown[]): Promise<IDBValidKey[]>;
+  /** One transaction: all written, or none. */
+  bulkPut(storeName: OyonStoreName, records: unknown[]): Promise<IDBValidKey[]>;
+  /** `limit`: the last n records. */
+  getAll(storeName: OyonStoreName, options?: { limit?: number }): Promise<unknown[]>;
+  /** Records whose index value is above `lower` (at or above with `inclusive`). */
+  getAllAbove(storeName: OyonStoreName, indexName: string, lower: IDBValidKey, options?: { inclusive?: boolean }): Promise<unknown[]>;
+  clear(storeName: OyonStoreName): Promise<void>;
+}
+
+export function oyonRecordId(prefix?: string): string;
 
 export class DynamicalFeatureTracker {
   constructor(options?: Record<string, unknown>);
@@ -819,8 +1305,17 @@ export function createStandaloneFerAttachment(options?: Record<string, unknown>)
 export const ALLOWED_EMOTIONS: readonly string[];
 export function validateEmotionBatch(
   payload: unknown,
-  options?: { maxBatchEvents?: number; [key: string]: unknown },
+  options?: { maxBatchEvents?: number; maxRawStreamBytes?: number; [key: string]: unknown },
 ): EmotionBatchValidationResult;
+/** Shape/size check of a window's `raw_streams` (transport bounds, never a signal gate). */
+export function validateRawStreamsBlock(
+  rawStreams: unknown,
+  prefix: string,
+  errors: string[],
+  options?: { maxRawStreamBytes?: number },
+): void;
+/** Shape of `raw_part: { id, index, count }` on a split window's parts (pushes onto `errors`). */
+export function validateRawPart(part: unknown, path: string, errors: string[]): void;
 
 // ── Facial signals (head pose + action units) ───────────────────────
 export function extractFacialSignals(faceResult: unknown, settings?: Partial<OyonSettings>): FacialSignals | null;
@@ -1092,3 +1587,30 @@ export const HSE_EMOTION_MTL_CONFIG: Record<string, unknown>;
 
 export class MockFaceTracker extends MediaPipeFaceTracker {}
 export class MockEmotionClassifier extends OnnxEmotionClassifier {}
+
+export {
+  WRITING_ORIGINS,
+  writingOrigin,
+  writingActs,
+  summarizeWriting,
+  summarizeWritingBy,
+  writingTimeline,
+  writingByDayAndPerson,
+  WRITING_ACTS,
+  WRITING_PAUSE_MS,
+  writingActOf,
+  writingActSequences,
+  writingActEvents,
+  summarizeWritingActs,
+} from './writing';
+export type {
+  WritingActName,
+  WritingOrigin,
+  WritingAct,
+  WritingSummary,
+  WritingSummaryRow,
+  WritingOriginSummary,
+  WritingTimelinePoint,
+  WritingByDayAndPerson,
+  WritingDayPersonCell,
+} from './writing';

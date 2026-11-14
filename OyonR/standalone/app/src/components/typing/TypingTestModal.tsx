@@ -115,7 +115,7 @@ export function TypingTestModal({
             >
               Reset
             </Button>
-            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-ink-3">
+            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-mini tabular-nums text-ink-3">
               <span>{test.counts.inputEvents} inputs</span>
               <span>{test.counts.loggedStates} states</span>
               <span>

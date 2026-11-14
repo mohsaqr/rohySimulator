@@ -1,6 +1,9 @@
-import { createRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createRoute, Navigate, Outlet, redirect } from '@tanstack/react-router';
 import { rootRoute } from './root';
-import { analyzeSubTabs } from '@/lib/analyzeTabs';
+import { analyzeLandingFor } from '@/lib/analyzeTabs';
+import { useBridge } from '@/lib/hostBridge';
+import { useRecordScope } from '@/lib/recordScope';
+import { recordKindsOf } from 'oyon';
 import { AffectView } from './analyze/affect';
 import { EngagementView } from './analyze/engagement';
 import { GazeView } from './analyze/gaze';
@@ -8,8 +11,11 @@ import { PositionView } from './analyze/sensing';
 import { HeartRateView } from './analyze/heartRate';
 import { LogsView } from './analyze/logs';
 import { PatternsView } from './analyze/patterns';
+import { PatternsNextView } from './analyze/patternsNext';
+import { DynamicsNextView } from './analyze/dynamicsNext';
 import { SequenceView } from './analyze/sequence';
 import { TypingView } from './analyze/typing';
+import { WritingView } from './analyze/writing';
 import { VoiceView } from './analyze/voice';
 import { ComparisonView } from './analyze/comparison';
 
@@ -27,15 +33,26 @@ export const analyzeRoute = createRoute({
   component: Outlet,
 });
 
+/*
+ * Land on the leading domain. With no host feed that is Affect — the first
+ * entry in analyzeSubTabs. Over a host feed it is the leading tab the feed can
+ * fill (Typing for a host with no camera), never an empty Affect page. A
+ * component, not a `beforeLoad` redirect: the feed lives in the element's own
+ * bridge store, which only a hook can reach.
+ */
+function AnalyzeIndex() {
+  const fed = useBridge((s) => s.hostRecords);
+  // A person or group embed draws only what the host feeds: until the feed
+  // arrives there is nothing to decide a landing page from, so wait for it.
+  const { needsFeed } = useRecordScope();
+  if (fed == null && needsFeed) return null;
+  return <Navigate to={analyzeLandingFor(fed ? recordKindsOf(fed) : null) as never} replace />;
+}
+
 export const analyzeIndexRoute = createRoute({
   getParentRoute: () => analyzeRoute,
   path: '/',
-  beforeLoad: () => {
-    // Land on the first/default domain — Affect. Must track the leading entry
-    // in analyzeSubTabs: when the order changed, a stale redirect here would
-    // silently drop the user on the SECOND tab.
-    throw redirect({ to: analyzeSubTabs[0].to as never });
-  },
+  component: AnalyzeIndex,
 });
 
 export const analyzeAffectRoute = createRoute({
@@ -91,15 +108,32 @@ export const analyzePatternsRoute = createRoute({
   path: '/patterns',
   component: PatternsView,
 });
+export const analyzePatternsNextRoute = createRoute({
+  getParentRoute: () => analyzeRoute,
+  path: '/patterns-next',
+  component: PatternsNextView,
+});
+// The Dynamics tab (/analyze/sequence, the URL every link uses) is the ladyna
+// page; the previous one stays at /analyze/dynamics-old until it is retired.
+export const analyzeDynamicsOldRoute = createRoute({
+  getParentRoute: () => analyzeRoute,
+  path: '/dynamics-old',
+  component: SequenceView,
+});
 export const analyzeSequenceRoute = createRoute({
   getParentRoute: () => analyzeRoute,
   path: '/sequence',
-  component: SequenceView,
+  component: DynamicsNextView,
 });
 export const analyzeTypingRoute = createRoute({
   getParentRoute: () => analyzeRoute,
   path: '/typing',
   component: TypingView,
+});
+export const analyzeWritingRoute = createRoute({
+  getParentRoute: () => analyzeRoute,
+  path: '/writing',
+  component: WritingView,
 });
 export const analyzeVoiceRoute = createRoute({
   getParentRoute: () => analyzeRoute,

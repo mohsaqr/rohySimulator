@@ -1,7 +1,17 @@
+// From the bare specifier, not 'oyon/version': the app aliases `oyon` to the
+// library's src/index.js (vite.aliases.ts), which re-exports the constant.
+// The subpath export exists for consumers, but is not aliased here.
+import { OYON_VERSION } from 'oyon';
+
 /*
  * Brand mark — same teal/slate radial gradient as standalone/index.html
  * .brand .logo (lines 67–80 of the legacy file), reproduced with Tailwind
  * so the asset stays in one place.
+ *
+ * The version sits beside the wordmark because this is a research instrument:
+ * a screenshot in a paper, or a bug report, has to say WHICH build produced
+ * the numbers. It reads `oyon/version`, the same constant the release tests
+ * hold equal to package.json, so it cannot drift from what actually shipped.
  */
 export function Brand({ compact = false }: { compact?: boolean } = {}) {
   return (
@@ -23,13 +33,19 @@ export function Brand({ compact = false }: { compact?: boolean } = {}) {
       {compact ? (
         // Unified embed header: just the wordmark — the host already frames this
         // as Oyon, so the "Research Instrument" tagline is dropped to save space.
-        <span className="text-sm font-semibold tracking-tight text-ink-0">Oyon</span>
+        <span className="flex items-baseline gap-1">
+          <span className="text-sm font-semibold tracking-tight text-ink-0">Oyon</span>
+          <span className="text-micro tabular-nums text-ink-3">v{OYON_VERSION}</span>
+        </span>
       ) : (
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold tracking-tight text-ink-0">
-            Oyon
+          <span className="flex items-baseline gap-1">
+            <span className="text-sm font-semibold tracking-tight text-ink-0">
+              Oyon
+            </span>
+            <span className="text-micro tabular-nums text-ink-3">v{OYON_VERSION}</span>
           </span>
-          <span className="text-[10px] uppercase tracking-[0.12em] text-ink-3">
+          <span className="label-eyebrow">
             Research Instrument
           </span>
         </div>

@@ -29,7 +29,13 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex items-baseline justify-between gap-4">
+    /*
+     * Wraps below `md`. The action cluster on Live is 261 px of buttons ("Test
+     * typing", "Test voice", a status pill) which, beside even a short title,
+     * exceeds a 390 px phone — and being `shrink-0` it could neither shrink nor
+     * wrap, so it simply ran off the right edge.
+     */
+    <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
       <div className="flex min-w-0 items-baseline gap-2.5">
         <h1 className="m-0 shrink-0 text-base font-semibold tracking-tight text-ink-0">
           {title}
@@ -47,7 +53,11 @@ export function PageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        // `shrink-0` only from `md`: on a phone the cluster wraps within
+        // itself, so a third action adds a line instead of an overflow.
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:shrink-0">
+          {actions}
+        </div>
       ) : null}
     </div>
   );

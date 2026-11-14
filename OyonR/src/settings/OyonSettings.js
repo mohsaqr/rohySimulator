@@ -89,11 +89,25 @@ export const OYON_DEFAULT_SETTINGS = Object.freeze({
   heart_rate_max_slew_bpm_per_s: 1.5,
   // Rolling robust median across the last N windows — anchors the LEVEL (slew
   // alone only bounds the rate, so a run of bad windows drags the tracker).
-  // N MUST exceed the longest run of consecutive bad windows or the anchor's
-  // own median is corrupted: on real captures a 5-window bad patch made N=5
-  // worse than no anchor, while N=9 cut mean error from 5.3 to 2.0 bpm.
+  //
+  // A trailing median has NO phase response on a stationary signal but sits
+  // half its span behind a trending one, so N buys bad-patch immunity and pays
+  // for it in lag on a changing HR. N was 9 (a 90 s anchor at the default
+  // window, i.e. ~45 s of lag), tuned only against the bad-patch failure;
+  // scored against BOTH, mean |error| in bpm over 10 seeds was:
+  //
+  //     N        1     2     3     4     5     7     9
+  //     ramp   1.29  1.48  2.04  2.62  3.22  4.38  5.42   ← 60→110 bpm
+  //     patch  4.47  3.91  4.23  3.95  4.07  3.68  3.42   ← 50 s coherent lock
+  //
+  // The anchor's protection is worth ~1 bpm across that whole range while its
+  // lag costs ~4. N=3 keeps a real anchor (a 5-window patch still cannot own
+  // its median outright) at a third of the lag. The sweep's own optimum was
+  // N=2; 3 is the conservative side of it, since the patch model is simulated
+  // whereas the original N=9 was fitted to real captures.
+  //
   // Cost is memory/lag (~N × window_ms). 1 disables the anchor.
-  heart_rate_tracker_windows: 9,
+  heart_rate_tracker_windows: 3,
   // Tracker seed/recovery guards. A window needs this many surviving estimates
   // before it may seed or feed the anchor (a 1-estimate window is not evidence
   // and poisons the anchor for many windows).
@@ -158,6 +172,11 @@ export const OYON_DEFAULT_SETTINGS = Object.freeze({
   // AI-assistance cycle analytics (host-reported suggestion request/shown/
   // accept/reject/dismiss — see docs/AI_ASSIST.md). Off by default.
   ai_assist_enabled: false,
+  // Host-reported document edits and code runs (events only, no window —
+  // see docs/HOST_SCOPES.md). Off by default like the other opt-in
+  // modalities: host opt-in, not privacy.
+  document_edit_enabled: false,
+  code_run_enabled: false,
 
   // Voice-turn analytics (audio_text.md §5). Off by default like the other
   // opt-in modalities: cost and host opt-in, not privacy — see CLAUDE.md's
@@ -184,6 +203,30 @@ export const OYON_DEFAULT_SETTINGS = Object.freeze({
   // analysis (`processing_mode: 'main-thread'`) where Workers are
   // unavailable. false restores the original in-thread adapter path.
   voice_worker_enabled: true,
+
+  // Group work (docs/GROUP_SYNCHRONY.md). `window_anchor_ms` is a GROUP-time
+  // epoch ms: window k then covers [anchor + k·W, anchor + (k+1)·W) for every
+  // member, so members' windows line up (null = free-running windows).
+  // `group_clock_url` points at the group hub's `/clock` endpoint; when set
+  // the runtime runs an NTP-style handshake on start and every
+  // `group_clock_resync_ms`, and stamps ts_group_ms beside every local ts.
+  window_anchor_ms: null,
+  group_clock_url: null,
+  group_clock_resync_ms: 60000,
+  // One camera, several people (MultiFaceCapture; docs/MULTI_PERSON_RESEARCH.md).
+  // Faces kept per frame (largest first), IoU gate for continuing a track,
+  // consecutive matches before a track counts, and how long an unmatched
+  // track coasts before it ends.
+  multi_face_max_faces: 4,
+  multi_face_iou_gate: 0.3,
+  multi_face_confirm_hits: 3,
+  multi_face_coast_ms: 2000,
+  // Byte budget of one window-batch POST (HttpEmotionTransport). A batch over
+  // it is split into several POSTs, and a single window whose raw_streams are
+  // over it is split into raw-only continuation parts — losslessly, nothing is
+  // cut. 240 KiB keeps each request under a common 256 KiB body-parser limit
+  // (Rohy's) with headroom for headers and the envelope.
+  transport_max_post_bytes: 245760,
 });
 
 const MAX_AOIS = 32;
@@ -344,6 +387,8 @@ export function normalizeOyonSettings(settings = {}) {
     interaction_enabled: Boolean(settings.interaction_enabled),
     discourse_enabled: Boolean(settings.discourse_enabled),
     ai_assist_enabled: Boolean(settings.ai_assist_enabled),
+    document_edit_enabled: Boolean(settings.document_edit_enabled),
+    code_run_enabled: Boolean(settings.code_run_enabled),
     voice_enabled: Boolean(settings.voice_enabled),
     voice_frame_ms: boundedInteger(settings.voice_frame_ms, 10, 100, OYON_DEFAULT_SETTINGS.voice_frame_ms),
     voice_vad_threshold: boundedNumber(settings.voice_vad_threshold, 0, 1, OYON_DEFAULT_SETTINGS.voice_vad_threshold),
@@ -353,6 +398,16 @@ export function normalizeOyonSettings(settings = {}) {
     voice_request_agc_off: settings.voice_request_agc_off !== false,
     voice_engine: normalizeVoiceEngineSetting(settings.voice_engine),
     voice_worker_enabled: settings.voice_worker_enabled !== false,
+    window_anchor_ms: normalizeEpochMs(settings.window_anchor_ms),
+    group_clock_url: typeof settings.group_clock_url === 'string' && settings.group_clock_url.trim()
+      ? settings.group_clock_url.trim()
+      : null,
+    group_clock_resync_ms: boundedInteger(settings.group_clock_resync_ms, 5000, 3600000, OYON_DEFAULT_SETTINGS.group_clock_resync_ms),
+    multi_face_max_faces: boundedInteger(settings.multi_face_max_faces, 1, 8, OYON_DEFAULT_SETTINGS.multi_face_max_faces),
+    multi_face_iou_gate: boundedNumber(settings.multi_face_iou_gate, 0.05, 0.95, OYON_DEFAULT_SETTINGS.multi_face_iou_gate),
+    multi_face_confirm_hits: boundedInteger(settings.multi_face_confirm_hits, 1, 30, OYON_DEFAULT_SETTINGS.multi_face_confirm_hits),
+    multi_face_coast_ms: boundedInteger(settings.multi_face_coast_ms, 0, 60000, OYON_DEFAULT_SETTINGS.multi_face_coast_ms),
+    transport_max_post_bytes: boundedInteger(settings.transport_max_post_bytes, 16384, 67108864, OYON_DEFAULT_SETTINGS.transport_max_post_bytes),
     webgazer_show_face_overlay: Boolean(settings.webgazer_show_face_overlay),
     webgazer_show_prediction_points: Boolean(settings.webgazer_show_prediction_points),
     webgazer_show_face_feedback_box: Boolean(settings.webgazer_show_face_feedback_box),
@@ -378,6 +433,14 @@ function normalizeVoiceEngineSetting(value) {
   // back to it (mirrors normalizeGazeEngineSetting). Mock adapters are
   // injected directly, not selected here.
   return v === 'silero' ? v : 'silero';
+}
+
+/** A finite, non-negative epoch-ms number (or numeric string), else null. */
+function normalizeEpochMs(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function normalizeRegression(value) {

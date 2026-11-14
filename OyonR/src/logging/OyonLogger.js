@@ -1,3 +1,5 @@
+import { RecordDelivery } from './RecordDelivery.js';
+
 const DEFAULT_MAX_EVENTS = 1000;
 const FORBIDDEN_DETAIL_KEYS = ['frame', 'frames', 'image', 'images', 'video', 'blob', 'base64', 'pixels', 'landmarks'];
 
@@ -12,6 +14,17 @@ export class OyonLogger {
       ...options,
     };
     this.events = [];
+    // Writes to the transports: failures are reported (onTransportError,
+    // console.error, deliveryStatus()) and the unwritten events retried with
+    // the next event or flush() — never dropped quietly, never thrown into
+    // capture.
+    this.delivery = new RecordDelivery({
+      method: 'sendLogs',
+      label: 'log',
+      transports: this.options.transports || [],
+      onError: this.options.onTransportError,
+      maxPending: this.options.maxPending,
+    });
   }
 
   debug(eventName, details = {}, context = {}) {
@@ -47,15 +60,18 @@ export class OyonLogger {
     if (this.events.length > this.options.maxEvents) {
       this.events.splice(0, this.events.length - this.options.maxEvents);
     }
-    for (const transport of this.options.transports || []) {
-      try {
-        const result = transport.sendLogs?.([event], event.context);
-        result?.catch?.(() => {});
-      } catch {
-        // Logging must not break capture.
-      }
-    }
+    this.delivery.deliver([event]);
     return event;
+  }
+
+  /** Retry every event a transport has not written yet; resolves when the writes settle. */
+  flush() {
+    return this.delivery.flush();
+  }
+
+  /** Per transport: events waiting to be written, failed writes, events lost, last error. */
+  deliveryStatus() {
+    return this.delivery.status();
   }
 
   read() {
@@ -131,7 +147,7 @@ export class HttpLogTransport {
   }
 }
 
-export function createLogEvent({ level, event_name, source, timestamp, context = {}, details = {} }) {
+export function createLogEvent({ level, event_name, source = 'oyon', timestamp = new Date().toISOString(), context = {}, details = {} }) {
   return {
     schema_version: 'oyon-log-v1',
     timestamp,
@@ -163,3 +179,4 @@ function sanitizeObject(value) {
   }
   return out;
 }
+export { IndexedDbLogTransport, IndexedDbMetricTransport, sharedOyonStore } from './IndexedDbLogTransports.js';

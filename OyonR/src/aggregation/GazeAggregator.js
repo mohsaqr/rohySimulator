@@ -199,12 +199,26 @@ export class GazeAggregator {
       aoi_transitions: aoi?.transitions ?? null,
       aoi_transition_count: aoi?.transitionCount ?? null,
       aoi_transition_entropy: aoi?.transitionEntropy ?? null,
+      // Attention distribution over the AOIs (Yang et al. TVCG 2025;
+      // Toreini et al. JAIS 2022). Aggregate scalars only.
+      aoi_stationary_entropy: aoi?.stationaryEntropy ?? null,
+      aoi_allocation_sd: aoi?.allocationSd ?? null,
+      aoi_coverage: aoi?.coverage ?? null,
+      aoi_count: aoi?.aoiCount ?? null,
       fixation_count: fixation?.count ?? null,
       fixation_duration_ms_total: fixation?.durationTotal ?? null,
       fixation_duration_ms_mean: fixation?.durationMean ?? null,
       fixation_duration_ms_median: fixation?.durationMedian ?? null,
       fixation_duration_ms_max: fixation?.durationMax ?? null,
+      fixation_duration_ms_sd: fixation?.durationSd ?? null,
       scanpath_length: fixation?.scanpathLength ?? null,
+      // Saccade amplitudes — the missing input for the ambient/focal
+      // coefficient K, which is computed per-subject in the analysis layer.
+      saccade_count: fixation?.saccadeCount ?? null,
+      saccade_amplitude_mean: fixation?.saccadeAmplitudeMean ?? null,
+      saccade_amplitude_median: fixation?.saccadeAmplitudeMedian ?? null,
+      saccade_amplitude_max: fixation?.saccadeAmplitudeMax ?? null,
+      saccade_amplitude_sd: fixation?.saccadeAmplitudeSd ?? null,
       fixation_sampling_adequate: samplingAdequate,
       fixation_algorithm: 'idt-coarse-v1',
       fixation_min_duration_ms: this.options.fixationMinDurationMs,
@@ -361,6 +375,8 @@ function computeAoiMetrics(frames, aois, windowStart) {
 
   const revisits = {};
   for (const id of Object.keys(entries)) revisits[id] = Math.max(0, entries[id] - 1);
+  const dwellValues = Object.values(dwell);
+  const visited = dwellValues.filter(value => value > 0).length;
   return {
     dwell,
     entries,
@@ -369,6 +385,13 @@ function computeAoiMetrics(frames, aois, windowStart) {
     transitions,
     transitionCount,
     transitionEntropy: normalizedCountEntropy(Object.values(transitions)),
+    // How evenly attention was spread over the AOIs that existed, and how
+    // much of the layout was reached at all. Both are aggregate scalars —
+    // no point stream — so they satisfy the raw-gaze privacy contract.
+    stationaryEntropy: normalizedDistributionEntropy(dwellValues, validAois.length),
+    allocationSd: distributionSd(dwellValues),
+    coverage: validAois.length > 0 ? visited / validAois.length : null,
+    aoiCount: validAois.length,
   };
 }
 
@@ -413,19 +436,37 @@ function computeFixationMetrics(frames, { minDurationMs, dispersionThreshold }) 
   }
 
   const durations = fixations.map(f => f.duration);
-  let scanpathLength = 0;
+  // The inter-fixation distances summed into scanpathLength ARE the saccade
+  // amplitudes; they were being discarded. Keeping them is what makes the
+  // ambient/focal coefficient K computable downstream — K is the z-scored
+  // fixation duration minus the z-scored amplitude of the NEXT saccade
+  // (Krejtz et al. 2016). The z-scores are per-subject over a whole scanpath,
+  // so K itself belongs in the analysis layer, not in a single window.
+  const saccadeAmplitudes = [];
   for (let i = 1; i < fixations.length; i += 1) {
     const dx = fixations[i].x - fixations[i - 1].x;
     const dy = fixations[i].y - fixations[i - 1].y;
-    scanpathLength += Math.sqrt(dx * dx + dy * dy);
+    saccadeAmplitudes.push(Math.sqrt(dx * dx + dy * dy));
   }
+  const scanpathLength = saccadeAmplitudes.reduce((sum, value) => sum + value, 0);
   return {
     count: fixations.length,
     durationTotal: durations.reduce((sum, value) => sum + value, 0),
     durationMean: mean(durations),
     durationMedian: median(durations),
     durationMax: durations.length > 0 ? Math.max(...durations) : null,
+    // Within-window SDs exist so a session-level σ can be POOLED exactly:
+    //   σ² = Σ nᵢ(σᵢ² + (μᵢ − μ)²) / Σ nᵢ
+    // Coefficient K needs σ over the whole scanpath. Computed from window
+    // means alone it would capture only between-window variance and overstate
+    // every K. See src/analytics/GazeDynamics.js.
+    durationSd: populationSd(durations),
     scanpathLength,
+    saccadeCount: saccadeAmplitudes.length,
+    saccadeAmplitudeMean: mean(saccadeAmplitudes),
+    saccadeAmplitudeMedian: median(saccadeAmplitudes),
+    saccadeAmplitudeMax: saccadeAmplitudes.length > 0 ? Math.max(...saccadeAmplitudes) : null,
+    saccadeAmplitudeSd: populationSd(saccadeAmplitudes),
   };
 }
 
@@ -501,9 +542,83 @@ function normalizedCountEntropy(counts) {
   return entropy / Math.log2(positiveCounts.length);
 }
 
+/*
+ * Shannon entropy over a distribution, normalized by the TOTAL number of
+ * categories rather than by how many carry non-zero mass.
+ *
+ * normalizedCountEntropy divides by log2(observed) — right for transitions,
+ * where the alphabet IS the set of transitions that occurred. It is wrong for
+ * stationary entropy: a viewer who split time evenly over 2 of 6 AOIs would
+ * score 1.0, identical to one who covered all 6 evenly, when the whole point
+ * of the measure is that the first viewer explored less.
+ */
+function normalizedDistributionEntropy(values, categories) {
+  const withMass = values.filter(v => Number.isFinite(v) && v > 0);
+  if (withMass.length === 0 || categories <= 1) return 0;
+  const total = withMass.reduce((sum, value) => sum + value, 0);
+  let entropy = 0;
+  for (const value of withMass) {
+    const p = value / total;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy / Math.log2(categories);
+}
+
+/*
+ * NO TRANSITION-ENTROPY SCALAR IS EMITTED HERE, deliberately.
+ *
+ * A per-window Krejtz entropy was implemented and removed. Two reasons, both
+ * decisive:
+ *
+ * 1. It does not belong to Oyon. `transitionEntropy()` already exists in
+ *    tnaj (`tna-js/src/analysis/diagnostics.ts`, a verified port of
+ *    Nestimate's `transition_entropy()`), returning row entropies, the
+ *    stationary distribution from the eigenvector of Pᵀ, the entropy rate
+ *    h(P) = Σ πᵢ H(Pᵢ·) and the redundancy H(π) − h(P). Oyon senses; the
+ *    network packages own network algorithms.
+ *
+ * 2. A 3-second window holds too few transitions to estimate a conditional
+ *    distribution. Measured over 400 stationary sessions, the per-window
+ *    estimate had a 95% interval of [0.00, 1.17] bits against a true value of
+ *    1.585 — an interval that includes zero. Nestimate's own docs say the
+ *    same thing: within a short window the chain is routinely non-ergodic.
+ *
+ * What crosses the boundary instead is `aoi_transitions`, the raw counts.
+ * `src/analytics/AoiTransitionMatrix.js` pools them across windows into a
+ * labelled matrix, and the entropy is computed from THAT, where there are
+ * enough observations for it to mean something.
+ */
+
+/*
+ * Standard deviation of attention share across AOIs, in percentage points.
+ *
+ * Toreini et al. (JAIS 2022) use exactly this as "attentional resource
+ * management": lower SD means attention was spread evenly over the available
+ * regions, higher means it pooled in a few. Zero-dwell AOIs are INCLUDED —
+ * an ignored region is precisely the imbalance being measured, so dropping it
+ * would flatter a viewer who never looked at half the screen.
+ */
+function distributionSd(values) {
+  if (values.length === 0) return null;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!(total > 0)) return null;
+  const shares = values.map(value => (value / total) * 100);
+  const m = shares.reduce((sum, value) => sum + value, 0) / shares.length;
+  const variance = shares.reduce((sum, value) => sum + (value - m) ** 2, 0) / shares.length;
+  return Math.sqrt(variance);
+}
+
 function mean(values) {
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** Population (not sample) SD — this is a complete window, not a sample of one. */
+function populationSd(values) {
+  if (values.length === 0) return null;
+  const m = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - m) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
 }
 
 function median(values) {

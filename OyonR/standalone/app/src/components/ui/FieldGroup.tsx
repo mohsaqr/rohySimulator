@@ -22,9 +22,7 @@ export function FieldGroup({ label, hint, children, className }: FieldGroupProps
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div>
-        <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-ink-2">
-          {label}
-        </div>
+        <div className="label-eyebrow text-ink-2">{label}</div>
         {hint ? <div className="text-xs text-ink-3">{hint}</div> : null}
       </div>
       {children}

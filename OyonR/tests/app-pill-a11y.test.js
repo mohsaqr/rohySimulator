@@ -262,7 +262,9 @@ const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort(
 
   const adapter = read('src/inference/WebGazerAdapter.js');
   const init = adapter.slice(adapter.indexOf('async init()'), adapter.indexOf('async start()'));
-  assert.ok(init.includes("resolveWebGazerModule(await import('webgazer'))"));
+  // The import's result goes through resolveWebGazerModule (kept in `imported`
+  // so an import that loaded but has no WebGazer API reports that, not "failed to load").
+  assert.ok(init.includes("imported = await import('webgazer');") && init.includes('webgazer = resolveWebGazerModule(imported);'));
   assert.ok(/if \(!webgazer\) \{\s*await this\._loadScriptFallback\(\);/.test(init),
     'an import with no usable WebGazer falls back to the script tag, like a failed import');
 

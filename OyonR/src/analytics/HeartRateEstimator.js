@@ -25,6 +25,7 @@
  */
 
 import { powerSpectrum } from './fft.js';
+import { interBeatIntervals } from './InterBeatIntervals.js';
 
 export class HeartRateEstimator {
   constructor(options = {}) {
@@ -100,6 +101,22 @@ export class HeartRateEstimator {
     this.samples.push({ r: num(rgb.r), g: num(rgb.g), b: num(rgb.b), ts });
     const cutoff = ts - this.options.bufferSeconds * 1000;
     while (this.samples.length > 0 && this.samples[0].ts < cutoff) this.samples.shift();
+  }
+
+  /**
+   * EXPERIMENTAL beat-to-beat intervals over the current buffer
+   * (src/analytics/InterBeatIntervals.js), with the latest spectral estimate
+   * as the refractory hint. Webcam IBIs are noisy; each carries a quality.
+   *
+   * @returns {Array<{ts_ms:number, ibi_ms:number, quality:number}>}
+   */
+  interBeatIntervals() {
+    const est = this.lastEstimate;
+    return interBeatIntervals(this.samples, {
+      bpm_hint: est?.bpm,
+      hint_confidence: est ? est.confidence : 0,
+      method: this.options.method,
+    }).intervals;
   }
 
   /**

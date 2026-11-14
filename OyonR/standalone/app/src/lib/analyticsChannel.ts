@@ -17,7 +17,7 @@ import type { SignalEventModality } from 'oyon/signal-events';
  * pipeline. Fold it into the union there and drop the extra member here
  * once the .d.ts catches up.
  */
-export type AnalyticsChannel = 'emotion' | SignalEventModality | 'voice' | 'all';
+export type AnalyticsChannel = 'emotion' | SignalEventModality | 'voice' | 'writing' | 'all';
 
 export const CHANNEL_OPTIONS: SelectOption<AnalyticsChannel>[] = [
   { value: 'emotion', label: 'Affect (emotion)' },
@@ -26,6 +26,9 @@ export const CHANNEL_OPTIONS: SelectOption<AnalyticsChannel>[] = [
   { value: 'discourse', label: 'Discourse' },
   { value: 'interaction', label: 'Interaction' },
   { value: 'ai_assist', label: 'AI assist' },
+  { value: 'writing', label: 'Writing acts', hint: 'Document edits read as seven acts: write, revise, paste, organise, AI, decide, pause.' },
+  { value: 'document_edit', label: 'Document edits', hint: 'Edits a host reported for a document it owns, by the writer, an AI or the system.' },
+  { value: 'code_run', label: 'Code runs', hint: 'Runs a host reported: started, succeeded, failed, interrupted.' },
   { value: 'all', label: 'All channels', hint: 'Every channel interleaved on one timeline, ordered by sequence_index.' },
 ];
 

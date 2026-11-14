@@ -1,5 +1,780 @@
 # Changelog
 
+## Unreleased
+
+### Review fixes: lossless capture, adjusted statistics, statistics moved to ladyna
+
+A whole-branch review (Codex, 29 findings) found data loss, wrong inference
+and statistics still computed in Oyon. All 29 are fixed, each with a test.
+
+**Lossless capture and delivery (library).**
+- Anchored windows no longer overlap when the group clock re-syncs. Each
+  window keeps its grid index (`window_index`) and records any correction
+  (`anchor_correction_ms`, `window_clipped_ms`).
+- Raw samples go with the window whose interval `[start, end)` holds them, so
+  a boundary sample waits for the next window.
+- `RawStreamRecorder` never drops a row. A stream at its row bound is sent
+  early, and rows left at stop or when a face track ends are sent too, both as
+  raw-only envelopes (`modality: 'raw'`, `raw_reason`, `rawOnlyEnvelope()`).
+- `HttpEmotionTransport` keeps every POST under `transport_max_post_bytes`
+  (240 KiB by default). It packs batches and splits an oversized window's
+  rows into continuation parts (`raw_part`); `joinRawParts()` (oyon/records)
+  rebuilds them. A part's id is deterministic (`rawPartId`), so a retried
+  send gives its parts the same id. The validator checks `raw_part`'s shape
+  (`validateRawPart`). `chunkWindowBatch` is also on the light `oyon/records`
+  subpath, for hosts that post windows themselves. See ROHY_INTEGRATION.md
+  §4.3a for what a receiver stores.
+- A failing log or metric sink, IndexedDB included, is reported
+  (`onTransportError`, `deliveryStatus()`, console) and retried in order,
+  never dropped silently. The IndexedDB transports share one connection,
+  write a batch in one transaction, and read incrementally
+  (`read({ since })`).
+- `createLogEvent` defaults `source` to `'oyon'`. The store declarations
+  take store names.
+- Group hub: a malformed URL gets a 400 and never crashes the hub. Accepted
+  windows are never evicted; only the WebSocket replay is bounded. With
+  `data_dir`, every window is written to disk before it is acknowledged and
+  reloaded on restart.
+
+**Heart rate: POS projected in 1.6 s windows (PRV-75, from Rohy).**
+`HeartRateEstimator` projected the whole 12 s buffer as one POS window, which
+fits one alpha to 12 s and cannot follow a change in illumination colour or
+motion. It now follows Wang et al. (2017) Algorithm 1: sliding windows of
+`posWindowSeconds` (1.6 s), each normalised by its own mean and overlap-added
+(`posSignalWindowed`, `posWindowLength`; the estimate reports
+`pos_window_samples`). Rohy had fixed this in its vendored copy; it now lives
+here. Tests: `tests/heart-rate-pos-window.test.js`.
+
+**Statistics moved to ladyna (1.8.33).**
+- `groupTimeline()` only aligns now: `value` and `value_raw` both hold the
+  physical reading. Person-z standardising is ladyna's `normalizeTimeline`
+  (checked against R `scale()`); `normalize: 'person_z'` throws
+  `oyon_group_normalize_moved`.
+- Ladyna now provides the regime transition shares (`tna`), the Sequence
+  entropy (`describeSequences`), affect SD/RMSSD/inertia and its reading
+  (`seriesDynamics`, checked against R), and the gap splitting for patterns
+  (`gapFreeRuns`). `oyon/analytics/affect-dynamics` is deprecated.
+- `head.speed` is differenced on its own grid, so a custom `grid_hz` gives
+  correct °/s and timestamps.
+- `groupTimeline` joins split windows and reads raw-only envelopes. A
+  raw-only envelope never stands in for a window-level value.
+
+**Fixed through ladyna.**
+- Surrogate nulls no longer lose surrogates when the estimated leader flips.
+- LSA significance filters and stability use the adjusted p.
+- Co-occurrence pair verdicts no longer depend on label order.
+- A CS coefficient that cannot be estimated reads "not estimable".
+- Grouped entropy plots apply the pooled trim.
+- The channel inventory counts NaN and Infinity as missing.
+
+**App.**
+- Local typing, voice, writing and event records follow the filter bar (one
+  session in an embed), like the windows do.
+- Memory and Trees cut sequences at missing bins, so no transition crosses a
+  gap.
+- A partly estimable VAR matrix is drawn from its finite cells, and the
+  missing cells are named.
+- Live group analyses are keyed on the hub data's content revision.
+- The Logs page reuses one IndexedDB connection. It polls only while a
+  capture is live, and then reads only new entries (with a 5-minute
+  look-back for late writes).
+- Any recorded session can be exported, with or without camera windows.
+  Both bundles (1.1) carry every record kind, including raw-only envelopes
+  as `raw_windows`.
+- Raw-only envelopes are kept out of the emotion window lists and the live
+  window counter. The host's `oyon:window` event still carries them.
+- One-state sessions stay in the descriptive plots.
+- Pattern readings no longer claim memorylessness.
+- State colours, and the old Patterns page's HYPA blobs, are Okabe-Ito and
+  fixed per state across filters. Under-represented pathways are dashed and
+  each one is named in words.
+- InfoTip panels open inside the `<oyon-app>` shadow root.
+- The old Patterns page recomputes when the writing grain changes and shows
+  its failures.
+- Long series no longer overflow `Math.min/max`.
+
+**Rohy must, before it re-vendors:**
+1. Take the new validator, which accepts `modality: 'raw'`.
+2. Key its records on `modality`, `raw_reason`, and `raw_part.id` and
+   `raw_part.index`, as well as the window span.
+3. Store raw-only events and parts as their own rows.
+4. Read windows back through `joinRawParts()`.
+5. Set `validationOptions.maxBatchEvents: 64` on the client, to match its
+   receiver.
+
+The 256 KiB body limit can stay as it is.
+
+### One log: every record kind in one table, the runtime log kept whole
+
+The logs were in six places with five shapes, and two of them were never
+shown: windows (IndexedDB, the only kind on Analyze · Logs), episode windows
+and signal events (IndexedDB, only inside their own tabs), the runtime log
+and metrics (the last 1000 / 2000 entries in localStorage, written and never
+read), and a host's fed log events (only through Writing). The session
+export carried windows alone.
+
+- **`oyon/records`: `toLogRows`, `summarizeLogRows`, `flattenLogRecord`,
+  `LOG_ROW_KINDS`.** One row shape for every kind (`window`, `episode`,
+  `event`, `log`, `metric`): time span, identity, channel, label, source,
+  level, value, the blocks a window carries, and the record itself
+  unchanged. Ordering is deterministic. `flattenLogRecord` spreads any record
+  into dotted columns, with `raw_streams` as row counts per stream. Tests:
+  `tests/log-rows.test.js`.
+- **`IndexedDbLogTransport` / `IndexedDbMetricTransport`** (`oyon`,
+  `oyon/logging`) keep every log event and metric, uncapped, in the
+  `runtime_events` and `metrics` stores `IndexedDbOyonStore` has always
+  created and nothing used. Tests: `tests/log-idb-transports.test.js`.
+- **Analyze · Logs rebuilt as the one log** (`routes/analyze/logs.tsx`,
+  `components/logs/LogTable.tsx`, `lib/logView.js`, `lib/logRecords.ts`).
+  One toolbar row: kind tabs with counts, channel, level, search, CSV, JSON.
+  Newest first, 200 rows a page; a row opens to every field of its record and
+  a JSON copy. CSV under one kind writes one column per field; under All, the
+  shared columns plus each record as JSON. JSON writes the records whole. The
+  filter bar's session and person narrowing applies. Shown for any non-empty
+  host feed, not only one with windows. The old window-only table
+  (`components/logs/WindowLog.tsx`, with its pivot) is removed. Tests:
+  `tests/app-logs.test.js`.
+- **The app's runtime writes its log and metrics to IndexedDB** (`oyon-app`,
+  beside the windows and events; `lib/runtimeLogStore.ts`). Entries already
+  in localStorage, and the demo data, are still read. Sessions → Clear all
+  empties both.
+- **The session export bundle is schema 1.1**: `signal_windows`,
+  `signal_events`, `log_events` and `metrics` beside `windows`. Its README no
+  longer claims that only aggregate windows are kept, since windows carry
+  per-sample `raw_streams`.
+- **Logging types corrected** (`types/index.d.ts`, `types/logging.d.ts`).
+  `OyonLogEvent` was declared as `{ type, ts, data }`; the logger writes
+  `{ schema_version, timestamp, level, source, event_name, context, details }`.
+  The transports were declared with `send` / `drain` / `url`; they have
+  `sendLogs` / `sendMetrics`, `read`, `clear` and `endpoint`. `OyonMetric` and
+  the transport interfaces are new.
+
+### Dynamics on current ladyna: /analyze/dynamics-next
+
+The Dynamics tab rebuilt on ladyna (`standalone/app/src/lib/dynamicsViews.js`),
+beside the old one until it replaces it, on the same sessions and channel
+picker as Patterns (next) (`components/patterns/SessionSequences.tsx`, now
+shared):
+
+- **Sequences** — per-sequence indices (`sequenceIndices`), index plot, state
+  distribution, entropy profile, mean time in state.
+- **Network** — `tna`, centralities, communities (every method in the table;
+  the chosen one drawn with `plotMCML`).
+- **Reliability** — bootstrap of the transitions (`bootstrapTna`) and the CS
+  coefficient (`estimateCS`) from three seeds, read against Epskamp et al. 2018.
+- **Lag-sequential** — `lsa` heatmap, network and rose; BH-adjusted p per cell.
+- **Transfer entropy** — `transferEntropy` with a surrogate test, BH over the
+  pairs; runs on a button (seconds).
+- **Clusters** — mixture Markov models (10 EM starts, k = 2–4 compared by
+  BIC/ICL, how many starts reached the best fit) or PAM on a sequence
+  distance; each cluster's network, mean times and sequences.
+
+The position plots (index, distribution, entropy) cut at a percentile of the
+sequence lengths (75th by default, changeable), so one long session no longer
+squeezes the rest; the page says what was cut. One state colour map
+(`stateColors`, the network palette) is passed to every network, sequence and
+tree painter on Dynamics (next) and both Patterns pages. Needs ladyna with the
+`sequenceIndices` padding fix, `plotMeanTimes` `colorBy`/`stateColorMap`, the
+tree painters' `colorMap` and the self-loop room in `plotNetwork`.
+
+The channel picker (both Dynamics and both Patterns tabs) offers only the
+channels this browser has records for, as it already did over a host feed
+(`lib/channelOffer.js`); with nothing stored it offers every channel, so the
+demo-data button stays reachable.
+
+The analysis comes first. Dynamics (next), Patterns (next) and the group
+pages open with one toolbar row (channel or source, section tabs, the
+section's options, a "?") and then the figures:
+
+- `components/ui/InfoTip.tsx`: a "?" that opens a panel beside its title.
+  Readings, methods and citations, counts, calls, timings, excluded data and
+  raw warnings moved there: section readings (HYPA, clusters, reliability,
+  lag-sequential, transfer entropy, Markov order), every figure caption and
+  note (`NetworkFigure`), table notes (`RowsTable` `info`), the psychaj fit
+  text and stats, the synchrony strip, pairwise matrix, member-index and
+  joint-attention captions, the affect-dynamics counts and definitions.
+- What a decision rests on stays on the page in one line (`Notice`): an
+  unstable CS, a cluster of one or two sequences, a fit few EM starts reach,
+  a psychaj warning, a fit made for other settings, an empty bootstrap.
+- The channel picker is an inline select on the toolbar row (no card); the
+  regime select sits in the Regimes card header; the VAR channels are inline
+  checkboxes beside Fit networks.
+- Pathways are drawn by ladyna `plotPathwayChains` (new): one row per
+  pathway, states as chips in the page colours, n, expected, observed /
+  expected on a log₂ strip, p adj, and the HYPA class in words; its title and
+  subtitle are ladyna's, from `kgramPathways().summary`. Pathways HYPA could
+  not test read "too few to test" (ladyna `testable`). The red/blue hull
+  panels are gone; the simplicial view stays as a second view (ladyna's
+  default palette).
+- The per-cluster sequence index plots take the positions cut.
+
+Nothing statistical is computed in Oyon any more on these pages; each value
+comes from a ladyna field (ladyna changes alongside):
+
+- `pAdjust` keeps NaN in place and adjusts the rest with n = their count, as
+  R's `p.adjust` (R fixture cases with NA). Oyon's `adjustFinite` is gone.
+- `lsa({ adjust })`: `pAdjusted` per cell, `significant` on it, `summary`
+  (cells above / below chance). `transferEntropy({ adjust, alpha })`:
+  `pAdjusted`, `significant`.
+- `kgramPathways` `summary` and row `testable`; Oyon's `hypaClass` is gone.
+- `mmm` `sizes`, `posterior`, `startsAtBest`; `bootstrapTna` `nEdges`,
+  `nStable`; `estimateCSAcrossSeeds` and `csReading` (Oyon's three-seed loop
+  and reading are gone); `communities().counts` for the number of communities.
+- `trimSummary` and the position painters' `trim` subtitle (a grouped figure
+  shares one cut); `describeSequences` behind `sequenceSummary`.
+- Figure subtitles that carried numbers Oyon computed are gone; the painters
+  write their own.
+
+Group Dynamics → Co-occurrence has a fourth view for categorical channels
+(emotion, AOI): which states two members hold in the same bin more or less
+often than chance. Each bin is a site; ladyna `cooccur` (new; Veech 2013, an
+exact port of R `cooccur` 1.3 `prob = "hyper"`, R fixture) tests every pair,
+BH-adjusted; ladyna `plotCooccurrence` (new) draws the bundled circle the
+Affect tab's map uses, emotions grouped by valence family — solid = more often
+than chance, dashed = less often, faint = as expected, width = shared bins.
+
+/group/members and /group/regimes show everything at once instead of one
+channel or regime behind a picker: Members has one card per channel (the
+ribbons of every member, `channelRibbons`), Regimes one card per regime kind
+(affect, arousal, attention; `regimePanels`) with the band, the transition
+network (ladyna ftna → plotNetwork, regime colours shared with the band via
+`REGIME_COLOURS`) and a from × to matrix shaded by count in place of the
+long from/to/count table.
+
+One colour per state across the app (`lib/stateColours.js`): emotions take a
+fixed map over the full vocabulary (so a state keeps its colour whichever
+states a session, span or group holds), low/mid/high the Okabe–Ito ramp,
+anything else ladyna's palette — used by the Analyze pages, the group
+networks, the bundled co-occurrence, the per-member grid and the member
+ribbons.
+
+Tables read at a glance: joint attention (together vs a chance tick, JVA,
+who starts as a diverging bar, overlap), member indices (ρ, relative phase,
+usable ticks) and the bootstrap pairs (bins on their 95 % CI band, a
+stable / not stable chip) use inline bars (`components/ui/BarCell.tsx`); the
+results tables (`RowsTable`) right-align numbers, bold p < .05 (shown as
+"<.001" below .001), show verdicts as coloured word chips and tint chosen
+columns by size (`shade`). Figures in a row take equal height, the drawing
+centred; the regimes network and matrix boxes match.
+
+The Dynamics tab (/analyze/sequence) is now the ladyna page; the previous one
+is "Dynamics (old)" at /analyze/dynamics-old until it is retired. The page
+opens with a counts dashboard (sequences, states, mean length, distinct
+states, transitions, state entropy — ladyna `describeSequences`, which gained
+`nTransitions` and `stateEntropy`); sections run Sequences, Network,
+Reliability, Lag-sequential, Clusters, Transfer entropy (last). Clusters
+default to the distance method (PAM) with k = 3, capped at what the data
+allows (2k sequences), with a notice and the higher k values disabled. The
+channel picker lists every channel again, the ones without data disabled and
+marked "· no data". Emotions take a fixed Okabe–Ito palette (neutral grey,
+anger vermillion, happy orange, sad sky, fear blue, disgust green, contempt
+pink, surprise yellow, insufficient light grey).
+
+Top bar: Live, Preview (the camera toggle, beside Live; it stays on the right
+on phones, where the nav is hidden), Analytics, Group, Settings, Diagnostics,
+Help, Consent, About, Sessions (last, beside the windows scope); the scope and
+Session stay on the right. The scope panel's Sessions / Users lists open in
+place inside the panel — floating, they were clipped by the panel and showed
+only their top edge.
+
+Tab order. Analytics: Affect, Dynamics, Patterns, Patterns (next), Attention &
+engagement, Gaze, Position, Heart & breathing, Typing, Writing, Voice, Logs,
+Comparison, Dynamics (old). Group, in parallel and data first (pages that
+need a fit or a run later): Overview, Members, Regimes, Dynamics, Patterns,
+Synchrony, Joint attention, Export. The Patterns (pathways) section no longer
+repeats the pathway figure as a table below it; the rows are a CSV button.
+
+The group dashboard computes nothing itself any more; each value is a field
+of ladyna or psychaj (both changed alongside):
+
+- Lead / lag: ladyna `pairwiseSynchrony` rows carry `leader` (from the sign
+  of an estimated lag); the matrix shows it for lag measures (WCC peak lag,
+  CRQA lag of maximum recurrence) and no direction for PLV and joint
+  attention, which estimate no lag (Oyon's `LEAD_MEASURE`, which read a
+  phase difference or an initiation balance as a lead, is gone).
+- The strip's "outside the null band" is surrogateNull's `outside`.
+- Usable share, low-quality spans and the good / fair / poor reading are
+  ladyna `qualitySummary`; channel kinds and counts ladyna `channelInventory`.
+- Co-occurrence bootstrap pairs and their counts: ladyna `bootstrapPairs`.
+- VAR: "not estimable" is psychaj's per-matrix `estimable`; the seats-as-
+  clusters picture uses ladyna plotMCML `aggregation: 'abs_sum'` instead of
+  taking |coefficients| in Oyon (edges inside a seat keep their sign).
+- Still in Oyon, by design: converting marker group-clock times to session
+  seconds (clock alignment is Oyon's), the quality threshold it hatches
+  (0.5, passed to ladyna), display sorting and formatting.
+
+The group demo (`demoRows`) has an emotion channel: categorical labels from
+ladyna `simulateGroup({ kind: 'states' })` (new: the leader–follower process
+of 'gaze' over any state set, re-draws weighted so neutral is about half the
+time, no gaze point). So the demo now offers emotion in every channel picker
+and the affect regime, as a real capture does.
+
+Count tiles (`<Metric>`) no longer carry a constant "info" pill (38 tiles
+across Analyze, Live and Settings): it said nothing, and on a long label such
+as "Distinct states" it wrapped below the label and pushed the value out of
+line with the other tiles. The pill stays for real states (ok, warn, bad, n/a).
+
+`matrixModel` moved to `lib/ladynaViews.js` (re-exported from
+`groupNetworks.js`). Tests: `tests/app-dynamics.test.js`,
+`tests/app-channel-offer.test.js` (mini-ci `types`).
+
+### Patterns on current ladyna: /group/patterns and /analyze/patterns-next
+
+One pattern library (`standalone/app/src/lib/patternViews.js`) behind two
+pages, every number and picture from ladyna:
+
+- **Pathways** — `kgramPathways` (ladyna ≥ 1.8.32): ordered 3–4-state
+  pathways, each with its HYPA test (over / under-represented against a
+  first-order null, BH), drawn by `plotPathwayPanels`, with the set-based
+  `plotSimplicial` view beside it. A missing bin ends a pathway
+  (`gaps: 'split'`), so counts equal HYPA's observed counts.
+- **Sub-patterns** — `discoverPatterns` → `plotPatterns`, short and long.
+- **Memory** — `markovOrderTest` → `plotMarkovOrder`; the reading says when
+  the sequential test and BIC disagree.
+- **Trees** — `contextTree` → `plotTree`, `plotPathways`, common pathways.
+
+`/group/patterns` (new sub-page) runs them on each member's coded states, the
+group regime (`sparse` bins are gaps) or the interaction stream
+(`lib/groupPatterns.js`), for one group or all. `/analyze/patterns-next` runs
+them on a person's sessions, beside the old Patterns tab until it replaces it
+(plan: `docs/PATTERNS_DYNAMICS_PLAN.md`). Tables download as CSV, figures as
+SVG. Tests: `tests/app-patterns.test.js` (mini-ci `types`).
+
+### Group dashboard: Networks section
+
+The `/group` page has a **Networks** section, recomputed on the time-span
+brush, for the selected group or all groups. Every model comes from ladyna or
+psychaj and every picture is a ladyna painter's SVG (downloadable):
+
+- **Co-occurrence** — `codeStates` (5 s) → `toCoOccurrence` → `ctna`:
+  member × state (`plotNetwork`, and `plotMCML` with members as clusters) and
+  state co-occurrence across members. Continuous channels are coded low/mid/high;
+  categorical channels (emotion, gaze AOI) by state.
+- **Temporal & contemporaneous** — psychaj `fitMlVAR` with members as subjects
+  and with groups as subjects (≥ 2 groups; also as `plotMCML`, seats as
+  clusters), and `fitGraphicalVAR` (PDC / PCC) for the selected group, all on
+  `toVarRows(…, { raw: true })`. Fitted in a Web Worker behind *Fit networks*
+  (cancellable; main-thread fallback stated on the page). psychaj's warnings are
+  shown verbatim; NaN matrices read "not estimable".
+- **Per-member** — `groupTna` → `plotNetworkGrid`, plus `plotDifferenceNetwork`
+  for two chosen members.
+- **Interaction** — `interactionSequence` (1 s, τ = 3 s) → `htna` → `plotHTNA`,
+  and `buildMCML` → `plotMCML`.
+- A six-group synthetic demo (`demoGroupRows`) next to the one-group demo.
+
+### Group capture: one clock, anchored windows, raw streams, one long table
+
+Oyon now captures and aligns groups; the analysis lives in ladyna
+(`ladyna/synchrony`). See `docs/GROUP_SYNCHRONY.md`.
+
+- **Group clock** — `GroupSessionClock` (NTP-style, minimum round trip wins;
+  marker fallback). Settings `group_clock_url`, `group_clock_resync_ms`, or
+  `new EmotionRuntime({ groupClock })`. Windows carry `clock_offset_ms`,
+  `clock_rtt_ms`, `clock_source`, `window_start_group_ms`,
+  `window_end_group_ms`; samples carry `ts_group_ms`.
+- **Anchored windows** — `window_anchor_ms`: window k covers the same
+  group-time interval for every member.
+- **Raw streams on every window** — `raw_streams` (columnar `{ fields, rows }`)
+  for affect, head, eye, AUs, blendshapes, posture, heart rate, respiration,
+  illumination and screen gaze, at the rate each is produced. On by default.
+  Servers need a body limit of a few MB (Express/LAILA examples now 4 MB);
+  `validateRawStreamsBlock` checks shape and a 1 MB per-event budget.
+- **Experimental inter-beat intervals** from the rPPG pulse
+  (`raw_streams.ibi`, `HeartRateEstimator#interBeatIntervals()`).
+- **`oyon/group`** — `groupTimeline()` turns members' windows into one long
+  table (member × channel × tick, LOCF within tolerance, person-z, quality);
+  `listGroupChannels()`, `checkGroupContext()`; context keys `group_id`,
+  `member_id`, `seat`.
+- **Host samples** — `runtime.recordHostSample(stream, values, ts)`, e.g.
+  voice-turn states → channel `speaking`.
+- **One camera, several people** — `MultiFaceCapture` + `FaceTrackAssigner`
+  (`MediaPipeFaceTracker({ numFaces })#analyzeAll()`): per-track windows with
+  `track_id`, `member_id`, `seat`. Settings `multi_face_*`.
+- **Group hub example** — `examples/group-hub` (clock, relay, roster, export,
+  markers) and a two-laptop alignment check page.
+
+### Writing acts read AI requests and decisions that change no text
+
+`writingActSequences` and `summarizeWritingActs` now read three `ai_assist`
+events beside the document edits: `suggestion_request` is `ai:ask`,
+`suggestion_accept` is `decide:kept`, `suggestion_reject` is
+`decide:rejected`. Other `ai_assist` states are not writing acts. They are
+read only for a person and session that also edited a document, are merged
+with the edits in time order, and pauses are measured over the merged
+stream. `{ aiAssist: false }` reads document edits only.
+`writingActEvents(events)` returns the events read. `writingActOf` gives
+`null` for an `ai_assist` state that is not a writing act. The text figures
+(`summarizeWriting`, origins) are unchanged. A host reports one decision one
+way: the `ai_assist` event or `ai_decision` on the edit, not both.
+
+### Writing dashboard, and an embed that offers only the pages its feed can fill
+
+For a host that reports `document_edit` events. The host contract stays 3.2:
+no attribute, method or event changed. What an embed shows over a feed did.
+
+- **Analyze · Writing** (`/analyze/writing`), from `document_edit` events:
+  the seven writing acts (a strip and seven tiles; one strip per person in
+  wide scopes), the text (net, added, removed, pasted and AI shares), where
+  added text came from, the process graph over sittings with gaps
+  compressed, day bars, and people, documents and sessions tables.
+- **Writing analytics in the library** (`oyon/writing/analytics`, also on the
+  root entry): `summarizeWriting`, `summarizeWritingBy` (person, session,
+  context, day), `writingTimeline`, `writingByDayAndPerson`, `writingActs`,
+  `writingOrigin`, `WRITING_ORIGINS`; and the acts: `WRITING_ACTS` (write,
+  revise, paste, organise, ai, decide, pause), `WRITING_PAUSE_MS`,
+  `writingActOf`, `writingActSequences({ level, pauseMs })`,
+  `summarizeWritingActs`. A count the host did not supply is `null`.
+- **Writing acts channel** in Dynamics and Patterns, at main level (seven
+  states) or detail level (`revise:delete`, `ai:insert`, …).
+- **`ai_decision`.** `documentEdit.record()` accepts `ai_decision: 'kept' |
+  'rejected'` on the edit that carried out a person's ruling on an AI's
+  words. It is written to `detail` only when supplied and read as the
+  `decide` act. Any other value throws.
+- **Tabs follow the feed.** `recordKindsOf(records)` (`oyon/records`) says
+  which kinds a record set holds. Over a `setRecords()` feed the Analyze
+  tabs, the page "Analyze" lands on and the Dynamics channel picker offer
+  only what the feed can fill; a feed without interval windows no longer
+  shows eight empty pages. No feed, or an empty feed, keeps every tab.
+  A deep link to a hidden page still opens it.
+- **Typing labels.** Pooled "Committed" is now "Net added" (inserted minus
+  deleted); the per-episode figure is "Text length" (the whole text at
+  episode end, including what was there before); Overview says "Chars/min
+  (active)"; pause buckets use one wording on every page; the production
+  curve's mean-rate line starts at `baseline_graphemes`. No figure changed.
+
+### Fix: the `<oyon-app>` bundle threw `Could not resolve "webgazer"` at load
+
+`webgazer` is an optional peer. When it was not installed at build time, Vite
+compiled the `import('webgazer')` in `WebGazerAdapter` into a module that
+throws, and because the element build inlines dynamic imports the throw ran
+when the element loaded, in every host page (3.5.6 as built). A build made
+with the peer installed instead compiled WebGazer into the bundle.
+
+The element build now aliases `webgazer` to an inert stand-in
+(`standalone/app/src/stubs/webgazerNotBundled.ts`), so the bundle is the same
+whether or not the peer is installed and never contains WebGazer.
+`WebGazerAdapter.init()` treats an import that yields no WebGazer API like a
+failed import and loads WebGazer from `scriptUrl`, only when that engine is
+chosen. `npm run app:build:element` now ends with
+`scripts/check-element-bundle.mjs`, which fails the build on an unresolved
+import, a compiled-in WebGazer or a bare `import("webgazer")`; `npx oyon
+host-check` reports a bundle that would throw at load.
+
+### Host contract 3.2: capture from any editor, one feed, three scopes
+
+A host integrates in three calls (capture, store, view) and gets the
+dashboards at session, person and group scope. The host keeps its storage and
+its access rule. Guide: `docs/HOST_SCOPES.md`; example:
+`examples/document-editor-host.html`.
+
+- **Capture from any editor.** `createTypingContentEditableAdapter` (a
+  `contenteditable` that fires `input`) and `createTypingEditReporter` (an
+  editor that owns its model and reports each edit) join
+  `createTypingComposerAdapter`. All three end in the same
+  `TypingAggregator.record()` call and yield the same `typing-v3` window and
+  `typing-states-v1` events. `classifyBoundaryContext`, `createTextCounters`,
+  `countGraphemes` and `countTypingWords` are exported. Through
+  `createSignalCapture`: `typing.attach(element)` picks the adapter from
+  `element.isContentEditable`, and `typing.report()` returns a reporter.
+- **One feed.** `<oyon-app>.setRecords({ windows, signalWindows, signalEvents,
+  logEvents })` is the only data source while set, is held in memory only,
+  and reports refused records through `oyon:records`. `setWindows()` is
+  unchanged.
+- **Scope.** `scope="session|person|group"`. `person` and `group` draw
+  host-fed records only and never fall back to browser storage. The embedded
+  header states the scope and the counts of sessions, people and records.
+- **Identity fields.** Optional `group_id`, `context_id` and `user_label` on
+  windows, episode windows and events, from the `group-id` / `context-id` /
+  `user-label` attributes and the capture context. Stamped only when
+  supplied.
+- **Typing at person and group scope.** `aggregateTypingEpisodes`,
+  `episodeCharsPerMin` and the pause helpers moved into the library
+  (`oyon/typing/analytics`), with `summarizeTypingBy` (per person, session or
+  day) and `compareTypingSummaries`. The summary gains `netGraphemes`.
+- **Document edits and code runs.** New modalities `document_edit`
+  (`document-edit-states-v1`) and `code_run` (`code-run-states-v1`), with
+  `createDocumentEditTracker` / `createCodeRunTracker`, settings
+  `document_edit_enabled` / `code_run_enabled`, and two new channels in
+  Dynamics and Patterns. `mapLogEventsToSignalEvents` maps a host's existing
+  `oyon-log-v1` events onto them.
+- **Aggregation levels.** Class, group, person and session are levels of one
+  model (`RECORD_LEVELS`), read from `class_id` / `group_id` / `user_id` /
+  `session_id` on the records; `scope` also takes `class`, and there is a
+  `class-id` attribute. The embedded top bar has one drop-down per level
+  present; choosing units narrows the dashboard and drills down. Library:
+  `listRecordLevels`, `summarizeRecordsBy({ by })` at any level, `scopeRecords`
+  `filters`. Drop-downs inside the shadow root no longer close on a click
+  inside their own panel.
+- **Overview dashboard.** A new Overview page (`/overview`) leads every
+  embedded dashboard and is the default page of a `person` or `group` embed:
+  headline figures plus sortable people and sessions tables built from every
+  record kind (`summarizeRecordsBy` in `oyon/records`). Ticking a row narrows
+  the dashboard; Analyze opens it. The standalone Sessions page is now the
+  same component: it lists sessions that hold only typing or voice, is no
+  longer capped at 20, and its ticked rows are the filter bar's narrowing.
+  `examples/group-dashboard.html` is a full-page group dashboard on synthetic
+  records.
+- **Host-facing.** Theme through `--oyon-*` custom properties; a `closable`
+  attribute and `oyon:close` event; `npx oyon host-check` verifies the bundle
+  exposes `setRecords`.
+
+Behaviour changes to know about:
+
+- Pooled typing rates (chars/min, product ratio) on the Typing page now count
+  what the episodes produced, not the document's length at the end of each
+  episode. Unchanged for episodes that start from an empty editor; lower, and
+  correct, for an editor that opens on existing text.
+
+- In an embed, the Comparison tab now compares only what the embed's scope
+  allows. It used to read every session in the browser's local store.
+- `capture.typing.attach()` no longer needs a `value` property: a
+  `contenteditable` element is read through the contenteditable adapter.
+- `OYON_MODALITIES` and the `target.kind` allowlist grew (`document_edit`,
+  `code_run`; `document_editor`, `code_editor`, `form_field`). Two settings
+  were added, so `settings_hash` differs from 3.5.5 for the same input.
+
+Not built yet: a core bundle without camera, model and audio code, and a
+host-mountable consent gate.
+
+### Fix: `action_units.mouth_open` was half its value
+
+`mouth_open` averaged `mouthOpen` and `jawOpen`, but MediaPipe has no
+`mouthOpen` blendshape, so it always read 0 and `mouth_open` was exactly
+`jawOpen ÷ 2` (never above 0.5). It now equals `jawOpen`. Nothing in Oyon
+consumes it; only the recorded value changes. To compare with recordings made
+before this fix, multiply their `mouth_open` (and `action_units_mean.mouth_open`)
+by 2. The raw `jawOpen` blendshape and `jaw_open` were always correct.
+
+### Live heart-rate card: terse status, no header pill
+
+The heart-rate card's footer is now `12 s window · POS` plus short tags that
+appear only while they apply: `moving`, `low light` / `backlit` /
+`overexposed` / `flickering light`, `low fps`, `weak signal`, `held`,
+`outside 60–100`. The explanatory sentences under the reading and in the
+footer, and the card-header status pill, are removed. To support the `moving`
+tag, `heart_rate_status` gains `motion_paused` (report only — the gate and the
+estimate are unchanged).
+
+While the pulse buffer fills, the card now says "Pulse cadence too low (x Hz)"
+when frames arrive below 8 Hz instead of "Acquiring pulse — 100%": `ready` is
+false whenever the estimator has a reason, so the old low-cadence message was
+unreachable. A Playwright journey (`tests/e2e/heart-rate-card.spec.ts`) drives a
+synthetic face pulsing at 72 bpm through the real pipeline and checks the card;
+it uses the installed Google Chrome (`channel: 'chrome'`) because Playwright's
+headless shell delivers video frames at only ~2–3 Hz. `installSyntheticCamera`
+gains an optional `pulseBpm`.
+
+### Fix: emotion model download no longer dies on a rate-limited GitHub raw URL
+
+Starting capture failed with ONNX Runtime's `failed to load external data
+file: https://raw.githubusercontent.com/…/enet_b0_8_va_mtl.onnx`. The
+message is ORT's generic non-OK-fetch wording (written for `.onnx.data`
+sidecars); the actual response was **HTTP 429** from
+`raw.githubusercontent.com`, whose per-IP limiter trips after repeated dev
+reloads of the 16 MB default model. There was no fallback and no cache, so a
+single 429 took the whole emotion pipeline down.
+
+- **`OnnxEmotionClassifier` now downloads the weights itself** and hands ORT
+  the bytes. New options: `modelFallbackUrls` (tried in order after
+  `modelUrl`), `modelCache` (Cache API bucket, default `'oyon-models-v1'`,
+  `false` to disable — a model is fetched once per browser, not per reload),
+  `ortModule` (test hook). `modelUrl` may also be an `ArrayBuffer`/typed
+  array. `classifier.modelSource` records the URL that succeeded. A total
+  failure throws one error listing every URL with its HTTP status and how to
+  self-host. Typed in `types/index.d.ts` (`OnnxEmotionClassifierOptions`).
+- **Both standalone demos load the git-tracked local weights first**
+  (`standalone/models/emotion/*.onnx`, already served by Vite / the app's
+  `serveLegacyAssets` middleware — the same way MediaPipe assets were already
+  local) with the profile's CDN URL as fallback. `asset-base` (air-gapped)
+  hosts get no CDN fallback, as before.
+- Docs: `docs/ASSETS.md` — "Emotion model download: fallbacks and the model
+  cache" + updated troubleshooting row. Test:
+  `tests/onnx-classifier-load.test.js`.
+
+### Fix: finishing gaze calibration no longer "turns off" the camera
+
+Finishing the 9-point calibration made the capture pill (chatoyon and every
+other status-driven host UI) read "camera off"/"Ready" while the camera was
+actually still capturing, and pressing Start then spun forever until a page
+refresh. Two defects, both fixed:
+
+- **`EmotionRuntime.calibrateGaze()` emitted transient `gaze:calibrating` /
+  `gaze:calibrated` / `gaze:calibration_failed` states on the `status`
+  channel.** Hosts reduce `status` into "is capture active?", so the last
+  calibration event clobbered `running` and every surface concluded capture
+  had stopped. Calibration progress now goes out on a dedicated
+  `gaze-calibration` event channel (`{ state: 'calibrating' | 'calibrated' |
+  'calibration_failed', confidence?, reason? }`); `status` carries only the
+  capture lifecycle. Declared in `types/index.d.ts`, documented in
+  `docs/SCREEN_POINT_GAZE.md`.
+- **`EmotionRuntime.start()` returned silently when already running.** The
+  desynced host set its UI to "loading", called `start()`, and waited for a
+  status event that never came — the infinite spinner. A redundant `start()`
+  now re-emits the actual lifecycle state (`running`, or `paused` when
+  paused) so hosts resynchronize.
+
+The standalone app additionally whitelists lifecycle states in its runtime
+status listener (`standalone/app/src/lib/runtime.ts`), so a non-lifecycle
+state from an older bundle can never clobber the pill/dock again. Regression
+tests in `tests/runtime-gaze.test.js`; reproduced and verified fixed in-browser
+against a synthetic camera stream.
+
+### A phone layout for the standalone app
+
+The app was responsive at the content level and desktop-only at the shell
+level. The dashboards already collapsed their grids at `sm`/`md`/`lg`, but the
+chrome around them assumed a laptop, and no grid utility can fix that. Measured
+on a 390 px viewport:
+
+| | before |
+|---|---|
+| camera dock | a fixed `w-72` **column**, no mobile rule — 288 of 390 px |
+| `<main>` | **102 px wide**, holding 435 px of content |
+| primary nav | labels are `sr-only` until `xl` (1280 px) → 8 unlabelled icons |
+| Settings sub-nav | 13 entries wrapped to **three stacked rows** |
+| Scope popover | `26rem` (416 px) — wider than the phone |
+
+**Below `md` the shell now rearranges rather than shrinks.** The camera dock
+becomes a bottom sheet — closed by default, with a tap-outside backdrop —
+instead of a column, so `<main>` gets the full width. Navigation moves to a
+`MobileTabBar` in the thumb zone showing four *labelled* destinations plus a
+More sheet for Diagnostics / Help / About / Consent; both of its lists derive
+from `ITEMS`/`PHONE_PRIMARY` in `TopMenu`, so the two bars cannot drift. The
+sub-nav scrolls on one line instead of wrapping. Desktop is unchanged: at
+768 px and above the dock is a static column again and the tab bar is gone.
+
+Four things could not shrink and so widened the whole page. `Card` now carries
+`min-w-0` (grid items floor at min-content, so a card holding a wide table
+dragged its track past the viewport); `StatusPill` is
+`nowrap + max-w-full + shrink-0`, capping at its container on a phone without
+yielding to sibling labels on desktop; the popover panels are clamped to the
+viewport; and the HYPA small-multiples grid uses
+`minmax(min(300px, 100%), 1fr)` — a bare `300px` minimum is a *hard* floor that
+stays 300 px wide inside a 262 px container.
+
+Platform plumbing that only shows up on a real device: `viewport-fit=cover`
+with `env(safe-area-inset-*)` padding on the edge-pinned chrome, `overflow-x:
+hidden` on `<html>` (iOS ignores it on `<body>`), and a 16 px floor on form
+controls under `pointer: coarse`, below which iOS zooms in on focus and never
+zooms back.
+
+Verified by measurement, not by eye: all 15 routes have zero unclipped overflow
+at 320 px and 390 px, and the desktop layout is byte-for-byte the same at
+1440 px. `tests/app-phone-layout.test.js` pins the contracts.
+
+## 3.5.0 - 2026-08-03
+
+### Heart rate no longer under-reports a rising pulse
+
+`bpm_tracked` read about 10% low whenever the rate was climbing. The rPPG DSP
+was never at fault — swept against synthetic pulses it lands within 0.7% across
+48–180 bpm, and holds under frame jitter, additive noise, 10–60 Hz sampling and
+10–30 s buffers. The bias was entirely in the aggregator's level anchor.
+
+That anchor is a trailing robust median over the last N windows. On a
+stationary signal it has no phase response; on a *trending* one it sits about
+half its span in the past. At the old `heart_rate_tracker_windows: 9` — a 90 s
+anchor at the default 10 s window — the displayed value came from roughly 45 s
+ago, so a heart rate climbing 10 bpm/min was reported **6.9% low on average and
+10.8% low at worst**. Steady state was unbiased, which is precisely why nothing
+caught it: every existing test fed a steady or a step rate, the two shapes a
+median handles perfectly.
+
+N=9 had been tuned against the *other* failure — a run of coherently-wrong
+windows capturing the anchor's own median. Scored against both, over 10 seeds:
+
+| N | 1 | 2 | 3 | 4 | 5 | 7 | 9 |
+|---|---|---|---|---|---|---|---|
+| ramp (60→110 bpm) | 1.29 | 1.48 | **2.04** | 2.62 | 3.22 | 4.38 | 5.42 |
+| 50 s bad patch | 4.47 | 3.91 | **4.23** | 3.95 | 4.07 | 3.68 | 3.42 |
+
+The anchor's protection is worth ~1 bpm across that whole range while its lag
+costs ~4. **`heart_rate_tracker_windows` is now `3`** — a real anchor (a
+5-window patch still cannot own its median outright) at a third of the lag.
+The sweep's own optimum was 2; 3 is the conservative side of it, because the
+bad-patch model is simulated whereas the original 9 was fitted to real
+captures. Raise it only if your captures suffer long coherent runs, and expect
+a changing HR to be under-reported in proportion.
+
+A rising-ramp regression test now pins this, asserting against the shipped
+default rather than a copy, with a control proving a 9-window anchor is
+measurably worse on identical input — so a future regression reads as a
+mechanism rather than just a red line.
+
+### Live shows both heart-rate estimators, not one wearing the other's name
+
+The Live tile had been substituting the cross-window tracked value *into* the
+per-sample readout. Both numbers therefore appeared as one under the heading
+"live", the beat animation pulsed at a rate nothing was currently measuring,
+and the lag above had nowhere to become visible.
+
+The per-sample estimate now reaches the tile intact and owns the headline. The
+tracked value sits beneath it, labelled, carrying its anchor span and a
+**signed** delta — the sign is the diagnosis, since a persistently negative gap
+*is* the trailing anchor lagging a rise. Analyze → Heart rate already plotted
+the two against each other; Live now agrees with it.
+
+### A pulse you can read without reading the number
+
+The pulsing dot is now a heart, beating at the live rate with a
+systole/rebound double thump rather than a single swell. Beside the number sits
+a compact synthetic ECG cycle with a dot tracing it once per beat.
+
+The ECG is decoration and says so in the source: rPPG measures blood *volume*
+in facial skin and has no electrical signal at all, so a PQRST complex is drawn
+rather than measured. (The honest waveform does exist and is currently
+discarded — the filtered `pulse` array in `HeartRateEstimator.estimate()`,
+before the Hann taper.) Both animations are CSS transforms and honour
+`prefers-reduced-motion`, which the old dot did not.
+
+### Contrast and type tokens
+
+`--ink-3` failed the 4.5:1 AA floor on every surface in both themes while being
+the most-used muted text token in the app; the light theme's status solids sat
+at 3.19–3.30:1 as *text*. Both corrected. A new `--status-on` token replaces a
+hardcoded `text-white` that did not invert with the theme, leaving filled status
+buttons white-on-pale in dark mode — the consent dialog's primary action
+measured 2.54:1. `--radius-md` was added because Tailwind inherits any
+unoverridden key, leaving `rounded-md` at the stock 6px, *below* `rounded-sm`'s
+10px. New `text-micro` / `text-mini` steps replace ~110 raw `text-[10px]`-style
+values across 48 components; declared as `[size, lineHeight]` tuples, since
+bracket values carry no leading and dense rows had been drifting vertically
+between views.
+
+### Docs
+
+`docs/HEART_RATE.md` gains an "Anchor lag" section with the measured
+trade-off, and two stale defaults are corrected: `heart_rate_target_fps` was
+documented as `20` (and the sampler as targeting 30 fps) when both are `16`.
+
+## 3.4.0 - 2026-07-31
+
+### Attention-mode and affect-dynamics measures
+
+Backfilled entry — this release shipped without one.
+
+Three published measures, plus the consent gate:
+
+- **Gaze — coefficient K** (Krejtz, Duchowski & Krejtz 2016): z(fixation
+  duration) − z(saccade amplitude) against SESSION moments, so a window reads
+  as focal or ambient relative to the session rather than to itself. Pooling σ
+  exactly needs per-window SDs, so `GazeAggregator` now emits
+  `fixation_duration_ms_sd` and `saccade_amplitude_sd`. No session-level K is
+  reported — it is identically zero by construction.
+- **Affect — variability / instability / inertia** (Wendt et al. 2020).
+  Reported together, never singly: at fixed variability, instability and
+  inertia are arithmetically inverse, so either alone is ambiguous. Successive
+  pairs are gap-guarded at 1.5× the median spacing, and the dropped count is
+  disclosed rather than folded into RMSSD.
+- **Scanpath predictability**: `AoiTransitionMatrix` pools `aoi_transitions`
+  into a labelled count matrix and stops there. Entropy comes from tnaj's
+  `transitionEntropy` (a verified port of Nestimate's `transition_entropy`),
+  per the workspace contract that network algorithms live in the network
+  packages. Zero-sum rows are pruned iteratively first, since a chain with an
+  absorbing state has no unique stationary distribution, and the pruned ids are
+  returned — entropy over 2 of 5 AOIs is a different quantity from entropy over
+  5.
+
 ## 3.3.3 - 2026-10-04
 
 ### The capture pill speaks the host's language

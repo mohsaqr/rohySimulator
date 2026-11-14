@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  group-dashboard.html — the whole Oyon dashboard, full page. The reader
+  moves between aggregation levels (class, group, person, session) inside
+  the dashboard; the host page adds nothing but a title.
+
+  The host owns the records and the access rule. This page stands in for a
+  host: it "stores" a synthetic seminar's records (generated in the browser,
+  nothing captured from anyone) and feeds them to ONE full-viewport
+  <oyon-app> with setRecords(). Oyon draws what it is fed, filtered to the
+  scope, and keeps no copy in browser storage.
+
+  Serve the REPO ROOT (build the element first: npm run app:build:element):
+
+      npm start
+      open http://127.0.0.1:5173/examples/group-dashboard.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Writing 101 — Oyon dashboard</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        background: #ffffff;
+        color: #171717;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 6px 14px;
+        padding: 10px 20px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      header h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+      .tag {
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: #f5f5f5;
+        color: #525252;
+        font-size: 12px;
+      }
+      #note { margin-left: auto; color: #666666; font-size: 12px; font-variant-numeric: tabular-nums; }
+      /* The dashboard is the page: it takes everything below the title. */
+      oyon-app { display: block; flex: 1 1 auto; min-height: 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Class dashboard</h1>
+      <span class="tag">synthetic demo data</span>
+      <span id="note"></span>
+    </header>
+
+    <!-- scope="class" is the widest level this reader may see. Levels,
+         narrowing and drill-down all happen inside the dashboard. -->
+    <oyon-app id="dashboard" chrome="none" scope="class"></oyon-app>
+
+    <script type="module" src="/standalone/app/dist-element/oyon-app.element.js"></script>
+    <script type="module">
+      import { buildSyntheticGroup } from './group-dashboard-data.js';
+
+      const dashboard = document.getElementById('dashboard');
+      const note = document.getElementById('note');
+
+      // The host's storage, and its access rule: this reader may see the
+      // whole class, so the whole class is what gets fed.
+      const { records, className } = buildSyntheticGroup();
+      document.getElementById('title').textContent = className;
+
+      dashboard.addEventListener('oyon:records', (event) => {
+        const { accepted, refused } = event.detail;
+        note.textContent = `${accepted.total.toLocaleString()} records` +
+          (refused.total ? ` · ${refused.total} refused` : '');
+      });
+
+      customElements.whenDefined('oyon-app').then(() => dashboard.setRecords(records));
+    </script>
+  </body>
+</html>

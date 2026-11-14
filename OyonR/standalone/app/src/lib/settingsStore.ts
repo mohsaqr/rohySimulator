@@ -99,12 +99,36 @@ export interface EditableSettings {
   /** Request autoGainControl:false so loudness is a measurement, not an AGC artifact. */
   voice_request_agc_off: boolean;
   voice_engine: VoiceEngineSetting;
+
+  // Consent gate — see docs/CONSENT_PLAN.md. OFF by default: with
+  // `consent_required` false the app behaves exactly as it did before the gate
+  // existed. `consent_text` holds an operator-supplied agreement; when set, its
+  // hash becomes the `consent_version` stamped on every window, so a contract
+  // edited afterwards cannot rewrite what was agreed to.
+  consent_required: boolean;
+  consent_text: string | null;
 }
 
 export const DEFAULT_SETTINGS: EditableSettings = {
-  sample_interval_ms: 1000,
-  aggregate_window_ms: 10000,
-  min_valid_frames: 6,
+  // 3 s windows at 2 Hz, not the historical 10 s at 1 Hz.
+  //
+  // A 10 s window averages the affect probabilities before taking the argmax,
+  // so a two-second smile is ~20% of the mean and can never win — it survives
+  // in `probabilities` and is invisible to every label-based view, including
+  // the transition analysis that is the point of collecting this. chatoyon
+  // reached the same conclusion in its v2.8.0 sensing work; these values match
+  // it so the two products segment time identically.
+  //
+  // The three numbers are COUPLED. `min_valid_frames` is an absolute count
+  // while the achievable count is floor(window/interval)+1, so shortening the
+  // window without re-deriving the floor silently tightens the fraction of
+  // frames that must contain a face: 6 was 6-of-11 (~55%) at 10 s/1 Hz, but
+  // would be 6-of-7 (~86%) here, where one blink-away nulls the window.
+  // 4-of-7 (~57%) preserves the default profile's LENIENCY, which is the
+  // quality bar it was actually tuned for.
+  sample_interval_ms: 500,
+  aggregate_window_ms: 3000,
+  min_valid_frames: 4,
 
   model_profile: DEFAULT_MODEL_PROFILE,
   gaze_engine: 'webgazer',
@@ -153,6 +177,9 @@ export const DEFAULT_SETTINGS: EditableSettings = {
   voice_pause_threshold_ms: 500,
   voice_request_agc_off: true,
   voice_engine: 'silero',
+
+  consent_required: false,
+  consent_text: null,
 };
 
 export interface SettingsState extends EditableSettings {

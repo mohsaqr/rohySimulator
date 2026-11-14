@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROHY_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OYON_SOURCE="${OYON_SOURCE:-$(cd "$ROHY_ROOT/.." && pwd)/Oyon}"
 OYON_TARGET="$ROHY_ROOT/OyonR"
-OYON_EXPECTED_VERSION="${OYON_EXPECTED_VERSION:-3.3.3}"
+OYON_EXPECTED_VERSION="${OYON_EXPECTED_VERSION:-3.5.14}"
 
 if [[ ! -d "$OYON_SOURCE" ]]; then
   echo "Oyon source not found: $OYON_SOURCE" >&2

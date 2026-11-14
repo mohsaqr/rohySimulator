@@ -136,7 +136,6 @@ export function CalibrationSection() {
                 <Metric
                   label="Engine"
                   value={latest?.model ?? runtime.gazeEngine}
-                  tone="info"
                   hint="active gaze adapter"
                 />
               </div>

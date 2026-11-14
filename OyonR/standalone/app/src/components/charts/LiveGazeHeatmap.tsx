@@ -222,7 +222,7 @@ export function LiveGazeHeatmap({ active = true, className }: LiveGazeHeatmapPro
 
         {/* Legend + live count */}
         <div className="pointer-events-none absolute inset-x-3 bottom-2.5 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-white/45">low</span>
+          <span className="label-eyebrow text-white/45">low</span>
           <span
             className="h-1.5 w-24 rounded-full"
             style={{
@@ -231,8 +231,8 @@ export function LiveGazeHeatmap({ active = true, className }: LiveGazeHeatmapPro
               ).join(', ')})`,
             }}
           />
-          <span className="text-[10px] uppercase tracking-wider text-white/45">high</span>
-          <span className="ml-auto text-[10px] tabular-nums text-white/45">
+          <span className="label-eyebrow text-white/45">high</span>
+          <span className="ml-auto text-micro tabular-nums text-white/45">
             {sampleCount.toLocaleString()} pts · recent-weighted
           </span>
         </div>

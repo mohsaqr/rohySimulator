@@ -21,7 +21,11 @@
       "@/*": ["./src/*"],
       "oyon": ["../../types/index.d.ts"],
       "oyon/react/gaze-calibration": ["./src/types/oyon-react-gaze.d.ts"],
-      "oyon/signal-events": ["../../types/signal-events.d.ts"]
+      "oyon/signal-events": ["../../types/signal-events.d.ts"],
+      "oyon/analytics/aoi-transition-matrix": ["../../types/analytics-aoi-transition-matrix.d.ts"],
+      "oyon/analytics/affect-dynamics": ["../../types/analytics-affect-dynamics.d.ts"],
+      "oyon/analytics/gaze-dynamics": ["../../types/analytics-gaze-dynamics.d.ts"],
+      "oyon/group": ["../../types/group.d.ts"]
     }
   },
   "include": ["src"]

@@ -14,12 +14,28 @@ import {
   analyzeMonitorRoute,
   analyzeLogsRoute,
   analyzePatternsRoute,
+  analyzePatternsNextRoute,
+  analyzeDynamicsOldRoute,
   analyzeSequenceRoute,
   analyzeTypingRoute,
+  analyzeWritingRoute,
   analyzeVoiceRoute,
   analyzeComparisonRoute,
 } from './routes/analyze';
 import { sessionsRoute } from './routes/sessions';
+import { overviewRoute } from './routes/overview';
+import {
+  groupRoute,
+  groupIndexRoute,
+  groupOverviewRoute,
+  groupSynchronyRoute,
+  groupAttentionRoute,
+  groupMembersRoute,
+  groupRegimesRoute,
+  groupDynamicsRoute,
+  groupPatternsRoute,
+  groupExportRoute,
+} from './routes/group';
 import { settingsRoute } from './routes/settings';
 import { helpRoute } from './routes/help';
 import { aboutRoute } from './routes/about';
@@ -39,12 +55,27 @@ const routeTree = rootRoute.addChildren([
     analyzeMonitorRoute,
     analyzeLogsRoute,
     analyzePatternsRoute,
+    analyzePatternsNextRoute,
+    analyzeDynamicsOldRoute,
     analyzeSequenceRoute,
     analyzeTypingRoute,
+    analyzeWritingRoute,
     analyzeVoiceRoute,
     analyzeComparisonRoute,
   ]),
   sessionsRoute,
+  overviewRoute,
+  groupRoute.addChildren([
+    groupIndexRoute,
+    groupOverviewRoute,
+    groupSynchronyRoute,
+    groupAttentionRoute,
+    groupMembersRoute,
+    groupRegimesRoute,
+    groupDynamicsRoute,
+    groupPatternsRoute,
+    groupExportRoute,
+  ]),
   settingsRoute,
   diagnosticsRoute,
   helpRoute,

@@ -534,9 +534,9 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
     }
     if (await refuseWithoutSensingCourse(req, res, settings)) return;
 
-    // validateOyonBatch: the vendored Oyon validator, plus — while OyonR is
-    // older than 3.5.11 — the raw-only envelope and raw_streams checks it lacks
-    // (server/lib/oyonRawValidation.js). The client packs to the same
+    // validateOyonBatch: the vendored Oyon validator, which checks raw-only
+    // envelopes, raw_streams and raw_part itself (OyonR >= 3.5.11;
+    // server/lib/oyonRawValidation.js). The client packs to the same
     // OYON_MAX_BATCH_EVENTS (server/shared/oyonRawParts.js).
     const validation = validateOyonBatch(req.body, validateEmotionBatch, {
         maxBatchEvents: OYON_MAX_BATCH_EVENTS,

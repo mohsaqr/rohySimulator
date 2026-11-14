@@ -26,6 +26,7 @@ import {
 import { MODEL_PROFILES, type ModelProfileId } from '@/lib/modelProfiles';
 import { useRuntime } from '@/lib/RuntimeProvider';
 import { SETTINGS_SECTIONS } from '@/lib/settingsNav';
+import { useConsent } from '@/lib/consentStore';
 import { ProfilesSection } from '@/components/settings/ProfilesSection';
 import { CalibrationSection } from '@/components/settings/CalibrationSection';
 
@@ -142,7 +143,9 @@ function SettingsPage() {
         title={activeBody ? `Settings · ${activeBody.title}` : 'Settings'}
         description={activeBody?.description}
         actions={
-          <div className="flex items-center gap-2">
+          // flex-wrap: two status pills plus the reset control exceed a phone's
+          // width beside the section title.
+          <div className="flex flex-wrap items-center gap-2">
             {activeEnabled === undefined ? null : (
               <StatusPill tone={activeEnabled ? 'ok' : 'null'} size="sm">
                 {activeEnabled ? 'enabled' : 'off'}
@@ -789,6 +792,50 @@ function useSectionBodies(editable: SettingsState): Record<string, SectionBody> 
           current={snapshotSettings(editable)}
           onLoad={(s) => editable.setMany(s)}
         />
+      ),
+    },
+
+    'settings-consent': {
+      title: 'Consent',
+      description:
+        'Ask the participant what may be measured before the first capture. Off by default.',
+      body: (
+        <div className="flex flex-col gap-space-3">
+          <Toggle
+            label="Require agreement before capture"
+            hint="Shows the startup agreement, itemized by sensor. Declining an item stops that sensor starting."
+            checked={editable.consent_required}
+            onChange={(v) => editable.set('consent_required', v)}
+          />
+          <FieldGroup
+            label="Your own agreement (optional)"
+            hint="Leave empty to use the built-in wording. Custom text is hashed, and the hash becomes the consent_version stamped on every window — so editing it later cannot rewrite what was already agreed to."
+          >
+            <textarea
+              value={editable.consent_text ?? ''}
+              rows={6}
+              disabled={!editable.consent_required}
+              placeholder="Paste or write the agreement participants must accept…"
+              onChange={(e) =>
+                editable.set('consent_text', e.target.value.trim().length > 0 ? e.target.value : null)
+              }
+              className="w-full rounded border border-line bg-surface-0 p-2 text-xs text-ink-0 disabled:opacity-60"
+            />
+          </FieldGroup>
+          <div className="flex items-center justify-between gap-3">
+            <p className="m-0 text-micro leading-snug text-ink-3">
+              Opens the agreement exactly as a participant sees it, without
+              switching the requirement on.
+            </p>
+            <button
+              type="button"
+              onClick={() => useConsent.getState().requestGate()}
+              className="shrink-0 rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs font-medium text-ink-0 hover:border-ink-3"
+            >
+              Show agreement
+            </button>
+          </div>
+        </div>
       ),
     },
 

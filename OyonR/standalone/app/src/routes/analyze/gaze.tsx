@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Metric } from '@/components/ui/Metric';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AttentionMonitor, type MonitorPoint } from '@/components/charts/AttentionMonitor';
+import { GazeDynamicsPanel } from '@/components/analytics/GazeDynamicsPanel';
 import { useFilteredWindows } from '@/lib/useFilteredWindows';
 import { LegacyCanvas, LegacyContainer } from '@/legacy/LegacyCanvas';
 import {
@@ -272,10 +273,18 @@ export function GazeView() {
                 deps={[displayGazeWindows, nodeMetric, edgeMetric, showSelfLoops]}
                 className="aspect-video overflow-hidden rounded-sm border border-line bg-surface-0"
               />
-              <div id="gaze-network-legend" className="mt-space-2 text-[11px] text-ink-3" />
+              <div id="gaze-network-legend" className="mt-space-2 text-mini text-ink-3" />
             </CardContent>
           </Card>
         </div>
+      </Section>
+
+      <Section
+        id="gaze-dynamics"
+        title="Attention mode and predictability"
+        description="How the learner looked, rather than where. K is scored per window against this session's own distributions; the entropy is pooled across the whole selection, because one 3-second window holds too few transitions to estimate it."
+      >
+        <GazeDynamicsPanel windows={displayGazeWindows} />
       </Section>
 
       <Section id="gaze-quality" title="Quality and zones">

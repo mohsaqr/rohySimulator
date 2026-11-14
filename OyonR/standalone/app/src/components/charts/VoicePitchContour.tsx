@@ -3,6 +3,7 @@ import type { VoiceFrameSample } from '@/lib/voiceChartMath';
 import { getColor, linearScale } from '../analytics/charts/chartMath';
 import { formatDurationShort } from '@/lib/typingChartMath.js';
 import { pitchSegments, keptPitchPoints, pitchTrend } from '@/lib/voiceChartMath.js';
+import { extent } from '@/lib/extent';
 
 /*
  * VoicePitchContour — the intonation record of one voice turn: x = turn
@@ -81,8 +82,9 @@ export function VoicePitchContour({ frames, voice, quality, playbackIntervals }:
 
   const f0s = allPoints.map((p) => p.f0);
   const median = voice.pitch_median_hz;
-  const yLo = Math.min(...f0s, median ?? Infinity);
-  const yHi = Math.max(...f0s, median ?? -Infinity);
+  const range = extent(f0s, { include: median != null ? [median] : [] });
+  const yLo = range ? range.min : median ?? 0;
+  const yHi = range ? range.max : median ?? 0;
   const yPad = Math.max(5, (yHi - yLo) * 0.12);
   const yScale = linearScale([Math.max(0, yLo - yPad), yHi + yPad], [H - PAD_B, PAD_T]);
 
@@ -231,7 +233,7 @@ export function VoicePitchContour({ frames, voice, quality, playbackIntervals }:
         )}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span className="inline-flex items-center gap-1">
           <svg width={10} height={10} aria-hidden="true"><circle cx={5} cy={5} r={2.5} fill={pointColor} /></svg>
           voiced frame (kept)

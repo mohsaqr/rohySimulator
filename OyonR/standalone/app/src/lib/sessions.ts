@@ -74,41 +74,49 @@ function computeSessionSummaries(windows: EmotionWindow[]): SessionSummary[] {
   }
 
   const out: SessionSummary[] = [];
-  for (const [id, ws] of byId) {
-    const ends = ws.map((w) => windowEndMs(w) ?? 0);
-    const starts = ws.map((w) => windowStartMs(w) ?? windowEndMs(w) ?? 0);
-    const dom = dominantOf(ws);
-    const meanConf = meanOf(ws, (w) => {
-      const probs = w.probabilities ?? {};
-      const values = Object.values(probs).filter(
-        (v): v is number => typeof v === 'number' && Number.isFinite(v),
-      );
-      return values.length ? Math.max(...values) : null;
-    });
-    const meanValid = meanOf(ws, (w) => deriveFrameQuality(w).ratio);
-    const meanFocus = meanOf(ws, (w) => {
-      const e = w.engagement as { focus_score?: number | null } | null;
-      return e?.focus_score ?? null;
-    });
-    const hasGaze = ws.some((w) => w.gaze != null);
-    const meanCalQ = meanOf(ws, (w) => {
-      const g = w.gaze as { calibration_quality?: number | null } | null;
-      return g?.calibration_quality ?? null;
-    });
-    out.push({
-      sessionId: id,
-      windowCount: ws.length,
-      windowStart: Math.min(...starts),
-      windowEnd: Math.max(...ends),
-      dominantEmotion: dom.label,
-      dominantShare: dom.share,
-      meanConfidence: meanConf,
-      meanValidFrameRatio: meanValid,
-      meanFocus,
-      hasGaze,
-      meanCalibrationQuality: meanCalQ,
-    });
-  }
+  for (const [id, ws] of byId) out.push(summarizeWindowSet(id, ws));
   // Newest first.
   return out.sort((a, b) => b.windowEnd - a.windowEnd);
+}
+
+/**
+ * One summary over a set of windows treated as a single group, whatever
+ * sessions they come from. `summarizeSessions` uses it per session; the
+ * person-vs-person comparison uses it per person (all of a person's sessions
+ * pooled). `id` is the group's key and lands in `sessionId`.
+ */
+export function summarizeWindowSet(id: string, ws: EmotionWindow[]): SessionSummary {
+  const ends = ws.map((w) => windowEndMs(w) ?? 0);
+  const starts = ws.map((w) => windowStartMs(w) ?? windowEndMs(w) ?? 0);
+  const dom = dominantOf(ws);
+  const meanConf = meanOf(ws, (w) => {
+    const probs = w.probabilities ?? {};
+    const values = Object.values(probs).filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v),
+    );
+    return values.length ? Math.max(...values) : null;
+  });
+  const meanValid = meanOf(ws, (w) => deriveFrameQuality(w).ratio);
+  const meanFocus = meanOf(ws, (w) => {
+    const e = w.engagement as { focus_score?: number | null } | null;
+    return e?.focus_score ?? null;
+  });
+  const hasGaze = ws.some((w) => w.gaze != null);
+  const meanCalQ = meanOf(ws, (w) => {
+    const g = w.gaze as { calibration_quality?: number | null } | null;
+    return g?.calibration_quality ?? null;
+  });
+  return {
+    sessionId: id,
+    windowCount: ws.length,
+    windowStart: Math.min(...starts),
+    windowEnd: Math.max(...ends),
+    dominantEmotion: dom.label,
+    dominantShare: dom.share,
+    meanConfidence: meanConf,
+    meanValidFrameRatio: meanValid,
+    meanFocus,
+    hasGaze,
+    meanCalibrationQuality: meanCalQ,
+  };
 }

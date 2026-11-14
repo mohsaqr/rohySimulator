@@ -13,16 +13,21 @@ function fmt(v, dgt) {
   return v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(dgt == null ? 2 : dgt);
 }
 
-var SIM_NODE_COLOR   = '#4A7FB5';
-var SIM_TARGET_COLOR = '#E8734A';
-var SIM_RING_COLOR   = '#F5A623';
-var SIM_RING_BORDER  = '#d08e1e';
+// Okabe-Ito only (colour-blind safe). HYPA anomaly is never shown by colour
+// alone: an under-represented blob is dashed, and each blob carries its
+// verdict in words (caption + tooltip).
+var SIM_NODE_COLOR   = '#0072B2';
+var SIM_TARGET_COLOR = '#D55E00';
+var SIM_RING_COLOR   = '#E69F00';
+var SIM_RING_BORDER  = '#b37b00';
+var SIM_OTHER_NODE   = '#999999';
+var SIM_ANOMALY_COLOR = { over: '#D55E00', under: '#0072B2', normal: '#999999' };
+var SIM_ANOMALY_WORD = { over: 'over-represented', under: 'under-represented', normal: 'as expected' };
 var SIM_BLOB_NODE_R  = 18;
 var SIM_BLOB_RING_R  = Math.round(SIM_BLOB_NODE_R * 1.27);
 var SIM_BLOB_PALETTE = [
-  '#B0D4F1', '#A8D8A8', '#F0C8A0', '#D4B0F0',
-  '#F0DFA0', '#C8E8E0', '#F0D4B0', '#E0C8E8',
-  '#D4F0B0', '#F0B0B0',
+  '#E69F00', '#56B4E9', '#009E73', '#F0E442',
+  '#0072B2', '#D55E00', '#CC79A7', '#999999',
 ];
 
 function simDarkenHex(hex, amount) {
@@ -158,10 +163,17 @@ export function drawSimplicialOverlay(host, pathways, opts) {
   expanded.forEach(function (pw) { targetIds[pw.ids[pw.ids.length - 1]] = true; });
 
   host.innerHTML = '';
-  if (opts.label) {
+  // The caption names each anomaly verdict in words, so colour is never the
+  // only cue. textContent: state names are data, never markup.
+  var verdicts = colorBy === 'anomaly'
+    ? expanded.filter(function (pw) { return pw.hypa; })
+        .map(function (pw) { return pw.parts.join(' → ') + ': ' + (SIM_ANOMALY_WORD[pw.hypa.anomaly] || pw.hypa.anomaly); })
+    : [];
+  var caption = [opts.label].concat(verdicts).filter(Boolean).join(' · ');
+  if (caption) {
     var cap = document.createElement('div');
-    cap.style.cssText = 'font-size:11px;color:#888;margin-bottom:4px';
-    cap.innerHTML = opts.label;
+    cap.style.cssText = 'font-size:11px;color:var(--ink-2, #555);margin-bottom:4px';
+    cap.textContent = caption;
     host.appendChild(cap);
   }
   host.style.cssText = (host.style.cssText || '') + ';width:100%;max-width:100%;overflow:hidden';
@@ -186,12 +198,12 @@ export function drawSimplicialOverlay(host, pathways, opts) {
     var isAnom = pw.hypa && pw.hypa.anomaly !== 'normal';
     var fill;
     if (colorBy === 'anomaly') {
-      fill = pw.hypa ? (pw.hypa.anomaly === 'over' ? '#dc2626' : pw.hypa.anomaly === 'under' ? '#2563eb' : '#9ca3af') : '#9ca3af';
+      fill = SIM_ANOMALY_COLOR[pw.hypa ? pw.hypa.anomaly : 'normal'] || SIM_ANOMALY_COLOR.normal;
     } else {
       fill = paletteFill;
     }
     var border = simDarkenHex(fill, 0.2);
-    var stroke = isAnom ? (pw.hypa.anomaly === 'over' ? '#dc2626' : '#2563eb') : border;
+    var stroke = isAnom ? SIM_ANOMALY_COLOR[pw.hypa.anomaly] : border;
     var sw = isAnom ? 2.4 : 1.5;
     var blob = simSmoothBlob(pts, blobPad, 60, 800, smoothIters);
     if (blob.length < 3) return;
@@ -205,6 +217,7 @@ export function drawSimplicialOverlay(host, pathways, opts) {
     var path = hullGroup.append('path').attr('d', dStr)
       .attr('fill', fill).attr('fill-opacity', 0.28)
       .attr('stroke', stroke).attr('stroke-opacity', 0.85).attr('stroke-width', sw)
+      .attr('stroke-dasharray', pw.hypa && pw.hypa.anomaly === 'under' ? '6 4' : null)
       .style('cursor', 'pointer');
     path.append('title').text(titleStr + '\nCount: ' + pw.count + ' · order ' + pw.order + sigStr);
     var baseSw = sw;
@@ -223,7 +236,7 @@ export function drawSimplicialOverlay(host, pathways, opts) {
       simDrawNode(nodeGroup, pp.x, pp.y, nf, lbl, 10, SIM_BLOB_RING_R, SIM_BLOB_NODE_R);
     } else {
       var lbl2 = showLabels ? (displayLabel[sid] || sid) : '';
-      simDrawNode(nodeGroup, pp.x, pp.y, '#6b7280', lbl2, 10, SIM_BLOB_RING_R, SIM_BLOB_NODE_R);
+      simDrawNode(nodeGroup, pp.x, pp.y, SIM_OTHER_NODE, lbl2, 10, SIM_BLOB_RING_R, SIM_BLOB_NODE_R);
     }
   });
 }

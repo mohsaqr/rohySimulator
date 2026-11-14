@@ -45,8 +45,10 @@ export function createEmotionRoutes(deps) {
         probabilities, valence, arousal, confidence, entropy,
         window_start, window_end, valid_frames, missing_face_ratio,
         quality, model_name, model_version, capture_mode, consent_version,
-        tenant_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        tenant_id, group_id, member_id, seat, clock_offset_ms, clock_rtt_ms,
+        window_anchor_ms, raw_streams,
+        modality, raw_reason, raw_part_id, raw_part_index, raw_part_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let inserted = 0;
@@ -69,18 +71,35 @@ export function createEmotionRoutes(deps) {
           event.probabilities ? JSON.stringify(event.probabilities) : null,
           nullable(event.valence),
           nullable(event.arousal),
-          event.confidence,
+          nullable(event.confidence),
           nullable(event.entropy),
           event.window_start,
           event.window_end,
-          event.valid_frames,
-          event.missing_face_ratio,
+          // Raw-only envelopes and modality windows have no frame counts.
+          event.valid_frames ?? 0,
+          event.missing_face_ratio ?? 0,
           event.quality ? JSON.stringify(event.quality) : null,
           event.model_name || null,
           event.model_version || null,
           event.capture_mode || null,
           event.consent_version || null,
           tenantId(req),
+          event.group_id || null,
+          event.member_id || null,
+          event.seat || null,
+          nullable(event.clock_offset_ms),
+          nullable(event.clock_rtt_ms),
+          nullable(event.window_anchor_ms),
+          // Per-sample series (0012_group_alignment.sql). Stored whole: the
+          // group layer (oyon/group groupTimeline) reads them back as-is.
+          event.raw_streams ? JSON.stringify(event.raw_streams) : null,
+          // 0013_raw_parts.sql: every part of a split window is its own row,
+          // joined back on read with joinRawParts() (docs/ROHY_INTEGRATION.md §4.3a).
+          event.modality || null,
+          event.raw_reason || null,
+          event.raw_part?.id || null,
+          Number.isInteger(event.raw_part?.index) ? event.raw_part.index : null,
+          Number.isInteger(event.raw_part?.count) ? event.raw_part.count : null,
         ]);
         inserted += 1;
       }
@@ -189,8 +208,25 @@ function rejectForbiddenKeys(obj, prefix, errors) {
 
 function validateServerEvent(event) {
   const errors = [];
-  if (JSON.stringify(event).length > 4096) {
+  // Size bound on the window scalars only; raw_streams carry the per-sample
+  // series and get their own (larger) transport bound — a size check, not a
+  // gate on which signals may be stored (Oyon data policy).
+  const { raw_streams: rawStreams, ...scalars } = event || {};
+  if (JSON.stringify(scalars).length > 65536) {
     errors.push('Emotion event is too large');
+  }
+  if (rawStreams !== undefined && rawStreams !== null) {
+    if (typeof rawStreams !== 'object' || Array.isArray(rawStreams)) {
+      errors.push('raw_streams must be an object of { fields, rows } streams');
+    } else if (JSON.stringify(rawStreams).length > 1_000_000) {
+      errors.push('raw_streams is too large');
+    } else {
+      for (const [name, block] of Object.entries(rawStreams)) {
+        if (!block || !Array.isArray(block.fields) || !Array.isArray(block.rows) || block.fields[0] !== 'ts_ms') {
+          errors.push(`raw_streams.${name} must be { fields: ['ts_ms', ...], rows: [[...]] }`);
+        }
+      }
+    }
   }
   if (event.capture_mode !== 'local-browser') {
     errors.push('capture_mode must be local-browser');

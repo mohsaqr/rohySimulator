@@ -90,14 +90,18 @@ export function TypingProductionCurve({ typing, quality }: TypingProductionCurve
   // Mean-rate reference: y = rate · (t − episodeStart), sampled at the start,
   // every compressed-break edge, and the end — piecewise through the same
   // compression the data uses, so slope comparisons hold region by region.
-  const meanRate = elapsed > 0 ? typing.committed_graphemes / elapsed : 0;
+  // The rate of THIS episode's writing: text that was there before the episode
+  // (`baseline_graphemes`) is where the line starts, not part of its slope —
+  // the same basis as `chars_per_min`.
+  const baseline = Number.isFinite(typing.baseline_graphemes as number) ? (typing.baseline_graphemes as number) : 0;
+  const meanRate = elapsed > 0 ? (typing.committed_graphemes - baseline) / elapsed : 0;
   const refAnchors = [
     episodeStart,
     ...axis.breaks.flatMap((b) => [b.realStart, b.realEnd]),
     episodeEnd,
   ];
   const refPath = refAnchors
-    .map((t, i) => `${i === 0 ? 'M' : 'L'}${xOf(t)},${yScale(meanRate * (t - episodeStart))}`)
+    .map((t, i) => `${i === 0 ? 'M' : 'L'}${xOf(t)},${yScale(baseline + meanRate * (t - episodeStart))}`)
     .join('');
 
   const ticks = axisTimeTicks(axis, episodeStart, episodeEnd, 6);
@@ -166,7 +170,7 @@ export function TypingProductionCurve({ typing, quality }: TypingProductionCurve
         ))}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-mini text-ink-3">
         <span className="inline-flex items-center gap-1">
           <svg width={14} height={8} aria-hidden="true">
             <line x1={0} y1={4} x2={14} y2={4} stroke={lineColor} strokeWidth={2} />

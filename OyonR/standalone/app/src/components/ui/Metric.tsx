@@ -67,10 +67,10 @@ export function Metric({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-ink-3">
-          {label}
-        </div>
+      {/* Wraps so a long status pill drops below the label on a narrow tile
+          rather than competing with it for a line that fits neither. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+        <div className="label-eyebrow min-w-0">{label}</div>
         {tone ? (
           <StatusPill tone={tone} size="sm" reason={isNull ? reason : undefined}>
             {tone === 'null' ? 'n/a' : tone}

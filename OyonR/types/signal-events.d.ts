@@ -9,7 +9,14 @@
 export type SignalEventSource = 'user' | 'ai' | 'system';
 
 /** Modalities with a registered discrete state vocabulary. */
-export type SignalEventModality = 'typing' | 'discourse' | 'interaction' | 'ai_assist';
+export type SignalEventModality =
+  | 'typing'
+  | 'discourse'
+  | 'interaction'
+  | 'ai_assist'
+  | 'voice'
+  | 'document_edit'
+  | 'code_run';
 
 /** Identifies what a `target`-scoped event refers to (mirrors `TypingTarget`). */
 export interface SignalEventTarget {
@@ -22,6 +29,11 @@ export interface SignalEventTarget {
 export interface SignalEventContext {
   capture_id: string | null;
   session_id: string | null;
+  /** Optional identity stamped on every event when supplied (3.6.0). */
+  user_id?: string | null;
+  user_label?: string | null;
+  group_id?: string | null;
+  context_id?: string | null;
 }
 
 /** Arguments to `SignalEventLog.record()`. */
@@ -38,6 +50,8 @@ export interface SignalEventInput {
   timestamp?: number;
   /** `performance.now()`-based ms; defaults to the log's `monotonicNow()`. */
   monotonic_ms?: number;
+  /** The document, case or task this event belongs to; overrides the log's. */
+  context_id?: string | null;
 }
 
 /**
@@ -49,6 +63,11 @@ export interface SignalEvent {
   event_id: string;
   capture_id: string | null;
   session_id: string | null;
+  /** Who and what the event belongs to; present only when supplied (3.6.0). */
+  user_id?: string;
+  user_label?: string;
+  group_id?: string;
+  context_id?: string;
   modality: SignalEventModality;
   state: string;
   source: SignalEventSource;

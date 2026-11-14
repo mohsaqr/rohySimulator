@@ -11,6 +11,19 @@ release before tagging.
 
 ## [Unreleased]
 
+## [3.1.5] — 2026-11-14
+
+### Changed
+- **OyonR re-vendored from Oyon 3.3.3 to 3.5.14** (`npm run oyon:update`, now pinned to 3.5.14 in
+  `scripts/update-oyonr.sh`). The vendored validator now checks raw-only envelopes, `raw_streams` and `raw_part`
+  itself, so `server/lib/oyonRawValidation.js` is a thin seam over it that refuses to start on an older OyonR, and
+  `joinRawParts` is re-exported from `oyon/records` instead of ported.
+- **PRV-75 now comes from Oyon.** The windowed POS heart-rate projection Rohy patched into its vendored copy (and
+  into the minified bundle) is upstream in Oyon 3.5.14, so the re-vendor keeps it. `tests/server/oyon-pos-window.test.js`
+  still pins the algorithm against OyonR's source; its bundle check now verifies a bundle built from that source.
+- The capture pill keeps its interface language and keyboard / screen-reader access (Oyon's 3.3.3 release is part of
+  3.5.14).
+
 ### Added
 - **Ready for Oyon 3.5.11 per-sample streams before the OyonR re-vendor.** From Oyon 3.5.11 every window carries
   `raw_streams` (the per-sample series behind its aggregates), and two new payloads travel beside the windows:

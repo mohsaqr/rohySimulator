@@ -72,36 +72,39 @@ export class WebGazerAdapter {
       return;
     }
 
-    // Two ways the bundled import can come up empty, both handled the same:
-    //   - it rejects (peer not installed, no bundler resolution), or
-    //   - it resolves to a module with no usable WebGazer — the <oyon-app>
-    //     element build deliberately resolves `webgazer` to an empty stub
-    //     (standalone/app/vite.element.config.ts), because a single inlined
-    //     bundle cannot defer a missing module: Vite's missing-peer stub would
-    //     throw at the element's top level and kill it for every host.
-    // Either way, fall back to the script tag (globalThis.webgazer).
+    // Two ways to get WebGazer: the installed package, then its script.
+    // The package import can fail (not installed) or resolve to a module
+    // with no WebGazer API in it (the <oyon-app> element bundle never
+    // compiles WebGazer in and aliases the import to an inert stand-in,
+    // standalone/app/vite.element.config.ts); either way the script is tried
+    // before giving up. resolveWebGazerModule picks the instance out of an ES
+    // namespace, a CommonJS export or the global, or returns null.
     let webgazer = null;
+    let imported = null;
     let importError = null;
     try {
-      webgazer = resolveWebGazerModule(await import('webgazer'));
+      imported = await import('webgazer');
+      webgazer = resolveWebGazerModule(imported);
     } catch (err) {
       importError = err;
     }
+
     if (!webgazer) {
       await this._loadScriptFallback();
       const globalWebGazer = typeof globalThis !== 'undefined' ? globalThis.webgazer : null;
-      if (!globalWebGazer) {
+      if (globalWebGazer) {
+        webgazer = resolveWebGazerModule(globalWebGazer);
+      } else if (importError || !imported) {
         const e = new Error(`WebGazerAdapter: failed to load 'webgazer'. ${PEER_DEPENDENCY_HINT}`);
-        if (importError) e.cause = importError;
+        e.cause = importError;
         throw e;
       }
-      webgazer = resolveWebGazerModule(globalWebGazer);
     }
 
-    this._webgazer = webgazer;
-    if (!this._webgazer) {
+    if (!webgazer) {
       throw new Error("WebGazerAdapter: 'webgazer' did not expose setGazeListener().");
     }
+    this._webgazer = webgazer;
     this._configureWebGazer();
     this._initialized = true;
     this._status = 'idle';

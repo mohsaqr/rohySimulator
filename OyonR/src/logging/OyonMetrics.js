@@ -1,3 +1,5 @@
+import { RecordDelivery } from './RecordDelivery.js';
+
 const DEFAULT_MAX_METRICS = 2000;
 
 export class OyonMetricRecorder {
@@ -11,6 +13,15 @@ export class OyonMetricRecorder {
       ...options,
     };
     this.metrics = [];
+    // Same delivery contract as OyonLogger: failures reported, unwritten
+    // metrics retried, capture never interrupted.
+    this.delivery = new RecordDelivery({
+      method: 'sendMetrics',
+      label: 'metric',
+      transports: this.options.transports || [],
+      onError: this.options.onTransportError,
+      maxPending: this.options.maxPending,
+    });
   }
 
   record(metricName, metricValue, options = {}) {
@@ -29,15 +40,18 @@ export class OyonMetricRecorder {
     if (this.metrics.length > this.options.maxMetrics) {
       this.metrics.splice(0, this.metrics.length - this.options.maxMetrics);
     }
-    for (const transport of this.options.transports || []) {
-      try {
-        const result = transport.sendMetrics?.([metric], metric.context);
-        result?.catch?.(() => {});
-      } catch {
-        // Metrics must not break capture.
-      }
-    }
+    this.delivery.deliver([metric]);
     return metric;
+  }
+
+  /** Retry every metric a transport has not written yet; resolves when the writes settle. */
+  flush() {
+    return this.delivery.flush();
+  }
+
+  /** Per transport: metrics waiting to be written, failed writes, metrics lost, last error. */
+  deliveryStatus() {
+    return this.delivery.status();
   }
 
   read() {

@@ -116,6 +116,25 @@ assert.doesNotMatch(
   'SubNav must not hard-code section ids',
 );
 
+// Group's sub-pages come from lib/groupTabs.ts the same way, and every tab
+// must be a real child route of /group (and every child route a tab), or the
+// row links to nothing / a page is unreachable from the row.
+const groupTabs = readFileSync('standalone/app/src/lib/groupTabs.ts', 'utf8');
+const groupRoutes = readFileSync('standalone/app/src/routes/group.tsx', 'utf8');
+assert.match(menu, /groupSubTabs/, 'SubNav must render the group pages from groupSubTabs');
+assert.doesNotMatch(topMenu, /groupSubTabs/, 'the top bar must not also list the group pages — SubNav owns them');
+assert.match(topMenu, /to: '\/group'/, 'the Group section must stay a top-bar link to /group');
+const groupTabPaths = [...groupTabs.matchAll(/to: '\/group(\/[a-z-]+)'/g)].map((m) => m[1]);
+const groupChildPaths = [...groupRoutes.matchAll(/getParentRoute: \(\) => groupRoute,\s*path: '(\/[a-z-]+)'/g)].map((m) => m[1]);
+assert.ok(groupTabPaths.length >= 7, `expected every group page in groupTabs.ts, found ${groupTabPaths.length}`);
+assert.deepEqual(
+  [...groupTabPaths].sort(),
+  [...groupChildPaths].sort(),
+  'every group tab needs a child route of /group and vice versa',
+);
+assert.match(groupTabs, /GROUP_LANDING = '\/group\/overview'/, '/group must land on Overview');
+assert.doesNotMatch(groupRoutes, /useState\(/, 'group state lives in lib/groupStore.ts, not in the layout');
+
 // Sub-navigation must stay VISIBLE, not collapse into a dropdown. Burying the
 // destinations reduced the level count but hid the map: you could no longer
 // see what a section contained without opening something. SubNav is a plain

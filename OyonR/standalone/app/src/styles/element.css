@@ -22,8 +22,16 @@
   margin: 0;
   background: var(--surface-0);
   color: var(--ink-0);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', sans-serif;
+  font-family: var(
+    --oyon-font,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    sans-serif
+  );
   font-size: 16px;
   line-height: 1.5;
   font-feature-settings: 'ss01', 'cv11';

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oyon clock alignment check</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111; color: #eee; }
+  body.flash { background: #fff; color: #000; }
+  main { max-width: 40rem; padding: 1rem; }
+  input, button { font: inherit; padding: .4rem .6rem; }
+  pre { font-size: .85rem; white-space: pre-wrap; }
+  .big { font-size: 3rem; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Clock alignment check</h1>
+  <p>Open this page on every laptop, point it at the same hub, and press <b>Sync</b>.
+  Each screen then flashes white for 100 ms at every whole group-time second
+  that is a multiple of the period. Film all screens with one camera (≥ 60 fps):
+  flashes that start within 6 frames of each other (100 ms) pass. Markers
+  broadcast from the hub (<code>POST /groups/:id/marker</code>) are logged with
+  their local receipt time as the fallback estimate.</p>
+  <p><label>Hub <input id="hub" value="http://127.0.0.1:8787" size="28"></label>
+     <label>Group <input id="group" value="G1" size="6"></label>
+     <label>Period s <input id="period" value="5" size="3"></label>
+     <button id="sync">Sync</button></p>
+  <div class="big" id="clock">—</div>
+  <pre id="log"></pre>
+</main>
+<script type="module">
+// Self-contained copy of GroupSessionClock's handshake (src/core/GroupSessionClock.js):
+// offset = ts − (t0 + t1)/2, minimum round trip of several probes wins.
+const $ = id => document.getElementById(id);
+const log = (...a) => { $('log').textContent = `${new Date().toISOString()}  ${a.join(' ')}\n` + $('log').textContent; };
+let offset = null; let rtt = null; let timer = null; let ws = null;
+
+async function handshake(hub, probes = 8) {
+  let best = null;
+  for (let i = 0; i < probes; i += 1) {
+    const t0 = Date.now();
+    const res = await fetch(`${hub}/clock`, { cache: 'no-store' });
+    const { ts_ms: ts } = await res.json();
+    const t1 = Date.now();
+    if (!best || t1 - t0 < best.rtt) best = { offset: ts - (t0 + t1) / 2, rtt: t1 - t0 };
+  }
+  return best;
+}
+
+function scheduleFlashes(periodMs) {
+  clearTimeout(timer);
+  const tick = () => {
+    const g = Date.now() + offset;
+    const next = Math.ceil(g / periodMs) * periodMs;
+    timer = setTimeout(() => {
+      document.body.classList.add('flash');
+      setTimeout(() => document.body.classList.remove('flash'), 100);
+      tick();
+    }, next - g);
+  };
+  tick();
+}
+
+$('sync').onclick = async () => {
+  const hub = $('hub').value.replace(/\/+$/, '');
+  try {
+    const best = await handshake(hub);
+    offset = best.offset; rtt = best.rtt;
+    log(`handshake offset ${offset.toFixed(1)} ms, rtt ${rtt} ms (error ≤ ${(rtt / 2).toFixed(1)} ms)`);
+    scheduleFlashes(Math.max(1, Number($('period').value) || 5) * 1000);
+    ws?.close();
+    ws = new WebSocket(`${hub.replace(/^http/, 'ws')}/groups/${encodeURIComponent($('group').value)}/stream`);
+    ws.onmessage = (ev) => {
+      const local = Date.now();
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'marker' && !msg.replay) {
+        const markerOffset = msg.group_ms - local;
+        log(`marker ${msg.marker_id}: marker offset ${markerOffset} ms vs handshake ${offset.toFixed(1)} ms → Δ ${(markerOffset - offset).toFixed(1)} ms`);
+      }
+    };
+  } catch (err) {
+    log(`sync failed: ${err.message}`);
+  }
+};
+
+setInterval(() => {
+  $('clock').textContent = offset === null ? '—' : `${((Date.now() + offset) / 1000 % 60).toFixed(2)} s`;
+}, 50);
+</script>
+</body>
+</html>

@@ -27,10 +27,15 @@ const sequence = readFileSync('standalone/app/src/routes/analyze/sequence.tsx', 
 const patterns = readFileSync('standalone/app/src/components/patterns/PatternsPanel.tsx', 'utf8');
 const channelStore = readFileSync('standalone/app/src/lib/channelStore.ts', 'utf8');
 const typingView = readFileSync('standalone/app/src/routes/analyze/typing.tsx', 'utf8');
-const typingAnalytics = readFileSync('standalone/app/src/lib/typingAnalytics.ts', 'utf8');
+// The pooled summary moved into the library (src/analytics/
+// TypingEpisodeAnalytics.js) so hosts can compute the same figures; its
+// nullable contract is declared in types/typing.d.ts and the app module
+// re-exports it.
+const typingAnalytics = readFileSync('types/typing.d.ts', 'utf8');
+const typingAnalyticsReexport = readFileSync('standalone/app/src/lib/typingAnalytics.ts', 'utf8');
 
 // ---- 1. Tab order + frozen route ids ----
-const tabEntries = [...tabs.matchAll(/\{\s*to:\s*'([^']+)',\s*label:\s*'([^']+)'\s*\}/g)]
+const tabEntries = [...tabs.matchAll(/\{\s*to:\s*'([^']+)',\s*label:\s*'([^']+)'(?:,\s*needs:\s*'[a-z]+')?\s*\}/g)]
   .map((m) => ({ to: m[1], label: m[2] }));
 const tabIds = tabEntries.map((t) => t.to);
 
@@ -44,11 +49,12 @@ assert.equal(
   '/analyze/patterns',
   'Patterns must sit immediately after Dynamics',
 );
-assert.equal(
-  tabIds[seqIdx + 2],
-  '/analyze/typing',
-  'Typing must sit immediately after Patterns',
-);
+// The camera tabs follow the analysis tabs; typing, writing and voice come after them (owner's order, 2026-11-14).
+const camera = ['/analyze/engagement', '/analyze/gaze', '/analyze/sensing', '/analyze/heart-rate'].map((t) => tabIds.indexOf(t));
+const text = ['/analyze/typing', '/analyze/writing', '/analyze/voice'].map((t) => tabIds.indexOf(t));
+assert.ok([...camera, ...text].every((i) => i > seqIdx + 1), 'camera and text tabs come after Dynamics and Patterns');
+assert.ok(Math.max(...camera) < Math.min(...text), 'Attention, Gaze, Position and Heart come before Typing, Writing and Voice');
+assert.deepEqual(text, [...text].sort((x, y) => x - y), 'Typing, Writing, Voice in that order');
 
 const typingTab = tabEntries.find((t) => t.to === '/analyze/typing');
 assert.equal(typingTab.label, 'Typing', 'the typing tab is labelled "Typing"');
@@ -86,8 +92,10 @@ for (const field of [
 ]) {
   assert.ok(
     typingAnalytics.includes(field),
-    `typingAnalytics.ts summary must keep "${field}" nullable — null means "not measured", never 0`,
+    `the TypingAggregateSummary type must keep "${field}" nullable — null means "not measured", never 0`,
   );
 }
+assert.match(typingAnalyticsReexport, /aggregateTypingEpisodes[\s\S]*from 'oyon'/,
+  'the app must use the library\'s pooled typing summary, not a private copy');
 
 console.log('app-analyze-typing contracts OK');

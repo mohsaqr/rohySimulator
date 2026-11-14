@@ -38,9 +38,49 @@ export class IndexedDbOyonStore {
       const request = this.options.indexedDB.open(this.options.dbName, this.options.dbVersion);
       request.onupgradeneeded = () => createStores(request.result);
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        // Another tab upgrading the database: let it, and reopen on next use.
+        db.onversionchange = () => { db.close(); this.dbPromise = null; };
+        resolve(db);
+      };
+    }).catch((error) => {
+      // A failed open is not cached, so the next call tries again.
+      this.dbPromise = null;
+      throw error;
     });
     return this.dbPromise;
+  }
+
+  /** Put several records in ONE transaction: all are written, or none. */
+  async bulkPut(storeName, records) {
+    if (!Array.isArray(records) || records.length === 0) return [];
+    if (!STORES.includes(storeName)) throw new Error(`Unknown Oyon store: ${storeName}`);
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const keys = [];
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error(`IndexedDB transaction on ${storeName} aborted`));
+      tx.oncomplete = () => resolve(keys);
+      for (const record of records) {
+        const request = store.put(record);
+        request.onsuccess = () => keys.push(request.result);
+      }
+    });
+  }
+
+  /**
+   * Records whose `indexName` value is greater than `lower` (or at least it,
+   * with `inclusive`), in index order — an incremental read through an index.
+   */
+  async getAllAbove(storeName, indexName, lower, options = {}) {
+    const db = await this.init();
+    const KeyRange = this.options.IDBKeyRange || (typeof IDBKeyRange !== 'undefined' ? IDBKeyRange : null);
+    if (!KeyRange) throw new Error('IDBKeyRange is not available.');
+    const range = KeyRange.lowerBound(lower, options.inclusive !== true);
+    return txRequest(db, storeName, 'readonly', store => store.index(indexName).getAll(range));
   }
 
   async put(storeName, record) {

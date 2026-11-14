@@ -250,7 +250,7 @@ function HelpPage() {
 function KVRow({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex flex-col gap-0.5 border-b border-line py-1.5 last:border-b-0">
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{k}</dt>
+      <dt className="label-eyebrow">{k}</dt>
       <dd className="m-0 font-mono text-sm text-ink-0">{v}</dd>
     </div>
   );
