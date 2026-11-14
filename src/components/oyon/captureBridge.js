@@ -16,6 +16,7 @@
 // working (the bundles arrive via OyonR/scripts/download-models.sh).
 import { OYON_WINDOW_BATCH_SCHEMA_VERSION } from 'oyon/version';
 import { baseUrl } from '../../config/api';
+import { OYON_MAX_BATCH_EVENTS, OYON_PERSIST_TARGET_BYTES, packPersistBatches } from '../../../server/shared/oyonRawParts.js';
 
 // Through baseUrl(): the element loads its models and WASM from here, and an
 // install served at /rohy/ has them at /rohy/oyon/standalone.
@@ -132,6 +133,23 @@ export function persistBody(windows, { sessionId, caseId, room } = {}) {
             consent_version: ev.consent_version || 'placeholder',
         })),
     };
+}
+
+/**
+ * The POST bodies for `windows`, in order: at most OYON_MAX_BATCH_EVENTS
+ * events each (the server validates against the same constant) and, where
+ * possible, at most OYON_PERSIST_TARGET_BYTES. From Oyon 3.5.11 a window carries
+ * its per-sample `raw_streams`, so one flush can outgrow a single body; whole
+ * windows are packed, nothing is cut or dropped, and a window larger than the
+ * target goes alone (the route accepts up to OYON_EMOTION_RECORDS_MAX_BODY).
+ * Raw-only envelopes (`modality: 'raw'`) travel like any window.
+ */
+export function persistBodies(windows, context = {}) {
+    const body = persistBody(windows, context);
+    return packPersistBatches(body.events, {
+        maxEvents: OYON_MAX_BATCH_EVENTS,
+        maxBytes: OYON_PERSIST_TARGET_BYTES,
+    }).map(events => ({ ...body, events }));
 }
 
 function sanitizeWindowForPersistence(ev) {

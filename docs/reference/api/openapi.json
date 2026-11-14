@@ -47,7 +47,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1286",
+        "x-rohy-source": "server/routes/oyon-routes.js:1384",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -81,7 +81,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1306",
+        "x-rohy-source": "server/routes/oyon-routes.js:1404",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -115,7 +115,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1077",
+        "x-rohy-source": "server/routes/oyon-routes.js:1175",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -159,7 +159,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1147",
+        "x-rohy-source": "server/routes/oyon-routes.js:1245",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -193,7 +193,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1028",
+        "x-rohy-source": "server/routes/oyon-routes.js:1126",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -227,7 +227,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:297",
+        "x-rohy-source": "server/routes/oyon-routes.js:301",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -261,7 +261,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:437",
+        "x-rohy-source": "server/routes/oyon-routes.js:441",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -295,7 +295,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:672",
+        "x-rohy-source": "server/routes/oyon-routes.js:708",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -327,7 +327,41 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:526",
+        "x-rohy-source": "server/routes/oyon-routes.js:530",
+        "x-rohy-auth": [
+          "authenticateToken"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/addons/oyon/raw-streams": {
+      "get": {
+        "summary": "Get /addons/oyon/raw-streams",
+        "tags": [
+          "oyon"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Validation error (envelope via server/redaction.js)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
+        },
+        "x-rohy-source": "server/routes/oyon-routes.js:770",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -361,7 +395,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:324",
+        "x-rohy-source": "server/routes/oyon-routes.js:328",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -394,7 +428,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:329",
+        "x-rohy-source": "server/routes/oyon-routes.js:333",
         "x-rohy-auth": [
           "authenticateToken",
           "requireAdmin"
@@ -429,7 +463,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:975",
+        "x-rohy-source": "server/routes/oyon-routes.js:1073",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -461,7 +495,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:860",
+        "x-rohy-source": "server/routes/oyon-routes.js:958",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -495,7 +529,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:731",
+        "x-rohy-source": "server/routes/oyon-routes.js:829",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -529,7 +563,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1203",
+        "x-rohy-source": "server/routes/oyon-routes.js:1301",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -563,7 +597,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1251",
+        "x-rohy-source": "server/routes/oyon-routes.js:1349",
         "x-rohy-auth": [
           "authenticateToken"
         ],
@@ -595,7 +629,7 @@
             "description": "Insufficient role"
           }
         },
-        "x-rohy-source": "server/routes/oyon-routes.js:1243",
+        "x-rohy-source": "server/routes/oyon-routes.js:1341",
         "x-rohy-auth": [
           "authenticateToken"
         ],

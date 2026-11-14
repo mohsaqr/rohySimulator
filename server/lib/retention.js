@@ -15,6 +15,7 @@
  *     oyon_emotion_records  by window_start
  *     oyon_signal_windows   by window_start
  *     oyon_signal_events    by occurred_at
+ *     oyon_raw_streams      by window_start
  *
  *   Identifier logs (OFF unless the operator sets a horizon, in days):
  *     ROHY_RETENTION_LOGIN_LOGS_DAYS          login_logs older than N days
@@ -52,6 +53,7 @@ const OYON_TABLES = Object.freeze([
     { table: 'oyon_emotion_records', column: 'window_start' },
     { table: 'oyon_signal_windows', column: 'window_start' },
     { table: 'oyon_signal_events', column: 'occurred_at' },
+    { table: 'oyon_raw_streams', column: 'window_start' },
 ]);
 
 /** A positive whole number of days from env, or null (that retention is off). */

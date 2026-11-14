@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Regenerate with `npm run docs:gen:data`. One section per table; columns in declaration order.
 
-**102 tables.**
+**103 tables.**
 
 ## `active_sessions`
 
@@ -1282,6 +1282,42 @@ Stores oyon emotion records records.
 | `respiration_json` | TEXT | — | `0039_oyon_signal_windows.sql` |
 | `illumination_json` | TEXT | — | `0039_oyon_signal_windows.sql` |
 | `capture_quality_json` | TEXT | — | `0039_oyon_signal_windows.sql` |
+
+## `oyon_raw_streams`
+
+Stores oyon raw streams records.
+
+**Introduced by:** migration `0076_oyon_raw_streams.sql`
+
+**Cross-cutting:** `tenant-scoped` · `audit (created_at)`
+
+| Column | Type | Constraints | Added by |
+| --- | --- | --- | --- |
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | — |
+| `tenant_id` | TEXT | NOT NULL | — |
+| `user_id` | TEXT | NOT NULL | — |
+| `session_id` | TEXT | NOT NULL | — |
+| `case_id` | TEXT | — | — |
+| `raw_reason` | (untyped) | — | — |
+| `track` | and | part index/count | — |
+| `so` | (untyped) | -- a window's own rows | — |
+| `a` | raw | -only envelope and every continuation part stay -- distinct | — |
+| `while` | a | retried POST collapses onto the row already stored. record_id TEXT NOT NULL | — |
+| `owner_record_id` | TEXT | — | — |
+| `raw_parent_modality` | TEXT | — | — |
+| `track_id` | TEXT | — | — |
+| `raw_part_id` | TEXT | — | — |
+| `raw_part_index` | INTEGER | — | — |
+| `raw_part_count` | INTEGER | — | — |
+| `window_start` | DATETIME | NOT NULL | — |
+| `window_end` | DATETIME | NOT NULL | — |
+| `verbatim` | (untyped) | (after the tenant's per-modality switches and the -- learner's physiological consent, exactly as the window blocks are gated). streams_json TEXT NOT NULL | — |
+| `row_count` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `student_can_view` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `admin_can_view` | INTEGER | NOT NULL DEFAULT 1 | — |
+| `educator_can_view` | INTEGER | NOT NULL DEFAULT 0 | — |
+| `consent_version` | TEXT | NOT NULL | — |
+| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | — |
 
 ## `oyon_settings`
 

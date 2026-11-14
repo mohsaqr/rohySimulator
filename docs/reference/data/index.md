@@ -2,7 +2,7 @@
 
 > **Generated file — do not edit by hand.** Produced by `scripts/docs-gen/gen-data.mjs` from `server/db.js`, `migrations/0001_initial.sql` (the bootstrap schema) and all `migrations/*.sql`. Regenerate with `npm run docs:gen:data`.
 
-**102 tables** in the durable data model.
+**103 tables** in the durable data model.
 
 > Note: `server/db.js` no longer holds inline `CREATE TABLE` DDL — it delegates to the migration runner. The canonical bootstrap schema is `migrations/0001_initial.sql`, treated here as the base schema. SQLite rebuild-scaffold tables (`*_new`/`*_old`) are intentionally excluded.
 
@@ -23,7 +23,7 @@ These columns recur across many tables and carry platform-wide semantics (see `C
 
 Schema evolves only through versioned `migrations/*.sql`. Each migration is classified **additive** (previous-version code still runs) or **destructive** in `migrations/MANIFEST.md`, which `bin/rohy-update` reads to decide whether to auto-apply. Default is additive-only; destructive changes follow a multi-release dance.
 
-Parsed **74 migration files** beyond the base schema (`0001_initial.sql`).
+Parsed **75 migration files** beyond the base schema (`0001_initial.sql`).
 
 | Migration | Class | Note |
 | --- | --- | --- |
@@ -102,6 +102,7 @@ Parsed **74 migration files** beyond the base schema (`0001_initial.sql`).
 | `0073_privacy_audit_hash_v2_survey_dedupe.sql` | additive | Security audit 2026-10-26 (lane D). (1) Adds a nullable `hash_version` column to `system_audit_log`: new rows are hashed under scheme 2, which also covers `username`, `status`, `error_message` and `session_id` (scheme 1 left them out, L6-07); existing rows keep NULL = scheme 1 and verify as before. (2) Data-only: turns `heart_rate_enabled` / `respiration_enabled` off in `oyon_settings` rows nobody has ever saved (`updated_at = created_at` AND no `oyon.settings_updated` audit entry for the tenant) — 0040 defaulted both on although no consent text names them (F-04); a saved value is never touched. (3) Adds a nullable `dedupe_key` column to `survey_responses`, sets it on the EARLIEST non-anonymous response per (survey, user, cohort) only, and a partial UNIQUE index on `(survey_id, dedupe_key) WHERE dedupe_key IS NOT NULL`, so concurrent or repeated submits can no longer add a second response (F-37/F-39); later duplicates already stored keep NULL and are kept, so the index cannot fail on existing data. No row deleted. |
 | `0074_usage_tenant_backfill.sql` | additive | Data-only. `llm_usage` and `tts_usage` rows were all written with the column default `tenant_id = 1` (the proxy's INSERTs never set it; security audit 2026-10-26, F-18 / L3-08), so tenant 1's admins saw every tenant's usage and the others saw none. The INSERTs now stamp the tenant; this backfills existing rows from `users.tenant_id`, changing only rows whose user exists and belongs to another tenant — a single-tenant install matches nothing. Re-running is a no-op. No schema change, no INSERT, no DELETE. |
 | `0075_registration_request_course.sql` | additive | Adds a nullable `cohort_id` column to `registration_requests`. A course's registration code (`cohorts.join_code`) is now accepted at sign-up (PRV-68); in `approval` mode the applicant is queued, and the course waits on the request so approving it enrols the new account in that course. Existing requests keep NULL (no course), which is how they behaved before. No data rewritten. |
+| `0076_oyon_raw_streams.sql` | additive | Adds a new `oyon_raw_streams` table (tenant, user, session, case, payload identity, owner window kind and record id, modality, raw-only reason, parent modality, track, split-part id/index/count, window span, the streams JSON and row count, per-role visibility, consent version). Oyon 3.6 windows carry per-sample `raw_streams`, and two new payloads travel beside them: raw-only envelopes (`modality: 'raw'`; rows sent at stop, when a face track ends, or at the recorder's row bound) and continuation parts of a window too large for one POST (`raw_part`). Every one is stored here, one row per payload, so no emotion record or signal window grows and no raw-only payload is ever counted as a window; `GET /addons/oyon/raw-streams` joins split windows back. Erased with the user, by the learner's own deletion and by retention. No data rewritten. |
 
 ## Tables by concern
 
@@ -147,7 +148,7 @@ Parsed **74 migration files** beyond the base schema (`0001_initial.sql`).
 
 ### Oyon (emotion add-on)
 
-`oyon_emotion_consents`, `oyon_emotion_records`, `oyon_settings`, `oyon_signal_events`, `oyon_signal_windows`
+`oyon_emotion_consents`, `oyon_emotion_records`, `oyon_raw_streams`, `oyon_settings`, `oyon_signal_events`, `oyon_signal_windows`
 
 ### Alarms
 

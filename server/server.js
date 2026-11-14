@@ -96,7 +96,8 @@ import { securityHeaders } from './security-headers.js';
 import { lessonFileGuard } from './routes/lessons-routes.js';
 import { MAX_BODY as REPORT_MAX_BODY, MESSAGE_BODY_MAX as REPORT_MESSAGE_BODY_MAX } from './lib/prova-relay.js';
 import { PATHOLOGY_READ_MAX_BODY } from './routes/pathology-read-routes.js';
-import { requireSignedToken } from './lib/requestPrincipal.js';
+import { OYON_EMOTION_RECORDS_MAX_BODY } from './shared/oyonRawParts.js';
+import { peekVerifiedPrincipal, requireSignedToken } from './lib/requestPrincipal.js';
 
 app.use(requestIdMiddleware);
 app.use(dbErrorShield);
@@ -140,6 +141,19 @@ app.post('/api/reports/:id/messages', requireSignedToken, express.json({ limit: 
 // packed viewport track of a whole read, which outgrows 256 KB on a long one.
 // The package caps the sample count itself (MAX_READ_SAMPLES).
 app.post('/api/sessions/:sessionId/pathology-reads', requireSignedToken, express.json({ limit: PATHOLOGY_READ_MAX_BODY }));
+// Oyon window batches (routes/oyon-routes.js): from Oyon 3.6 every window
+// carries its per-sample `raw_streams` (bounded at 1 MB per window by Oyon's
+// validator). The client packs batches to 240 KiB (server/shared/oyonRawParts.js),
+// but one long window can be larger on its own, and Rohy posts the element's
+// windows itself, not through Oyon's splitting transport — so this one path
+// accepts one such window per body.
+// Only a signed token earns the larger parser; any other request falls through
+// to the general one below, so the route's own answers (401, the disabled
+// stub) are unchanged.
+const oyonBatchParser = express.json({ limit: OYON_EMOTION_RECORDS_MAX_BODY });
+app.post('/api/addons/oyon/emotion-records', (req, res, next) => (
+    peekVerifiedPrincipal(req) ? oyonBatchParser(req, res, next) : next()
+));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ limit: '256kb', extended: true }));
 // Express 5 leaves `req.body` UNDEFINED when no parser above ran — a request

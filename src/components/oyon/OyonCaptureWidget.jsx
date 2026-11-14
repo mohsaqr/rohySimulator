@@ -5,7 +5,7 @@ import { apiFetch } from '../../services/apiClient';
 import { oyonClientLog } from './clientLogger';
 import { liveAnxiousIndex, ANXIOUS_FLAG_THRESHOLD } from './anxiousIndex';
 import { loadOyonElement } from './loadOyonElement';
-import { elementSettings, maskPhysiological, persistBody, OYON_ASSET_BASE } from './captureBridge';
+import { elementSettings, maskPhysiological, persistBodies, OYON_ASSET_BASE } from './captureBridge';
 import { getAois, onAois } from './screenAois';
 import { publishAffectSample, publishAffectWindows, clearAffect } from '../../utils/latestAffect';
 import { parseOnboardingSettings } from '../../utils/onboardingSettings';
@@ -430,10 +430,11 @@ export default function OyonCaptureWidget({ sessionId, caseId, room, onOpenAnaly
 
 async function persistWindows(windows, { sessionId, caseId, room }, setPersistOk) {
    try {
-      await apiFetch('/addons/oyon/emotion-records', {
-         method: 'POST',
-         json: persistBody(windows, { sessionId, caseId, room }),
-      });
+      // In order, one body at a time (persistBodies packs to the server's
+      // event and size limits; a long window with raw_streams may go alone).
+      for (const body of persistBodies(windows, { sessionId, caseId, room })) {
+         await apiFetch('/addons/oyon/emotion-records', { method: 'POST', json: body });
+      }
       setPersistOk(true);
       oyonClientLog('debug', 'window batch persisted', {
          session_id: sessionId,

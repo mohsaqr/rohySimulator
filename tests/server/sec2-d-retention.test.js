@@ -27,6 +27,8 @@ describe('retention sweep (lane D)', () => {
                          VALUES (?, '7', '1', 'typing', 'episode', ?, ?, 'v2')`, [tenant, ts, ts]);
                 await r(`INSERT INTO oyon_signal_events (tenant_id, user_id, session_id, capture_id, sequence_index, modality, state, source, occurred_at, consent_version)
                          VALUES (?, '7', '1', ?, 0, 'typing', 'insert', 'user', ?, 'v2')`, [tenant, `c-${tenant}-${ts}`, ts]);
+                await r(`INSERT INTO oyon_raw_streams (tenant_id, user_id, session_id, record_id, owner_kind, modality, window_start, window_end, streams_json, consent_version)
+                         VALUES (?, '7', '1', ?, 'raw', 'raw', ?, ?, '{}', 'v1')`, [tenant, `r-${tenant}-${ts}`, ts, ts]);
             }
         }
         await r(`INSERT INTO login_logs (username, action, timestamp, tenant_id) VALUES ('a', 'login', '2025-01-01 00:00:00', 1), ('b', 'login', CURRENT_TIMESTAMP, 1)`);
@@ -39,9 +41,9 @@ describe('retention sweep (lane D)', () => {
 
     it('applies a tenant\'s Oyon retention to all three Oyon tables, and leaves other tenants alone', async () => {
         const summary = await runRetentionSweep({ store, env: {} });
-        expect(summary.oyon['1']).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1 });
+        expect(summary.oyon['1']).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1, oyon_raw_streams: 1 });
         expect(summary.oyon['2']).toBeUndefined();
-        for (const table of ['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events']) {
+        for (const table of ['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events', 'oyon_raw_streams']) {
             const rows = await ctx.all(`SELECT tenant_id FROM ${table} ORDER BY tenant_id`);
             expect(rows.map((x) => x.tenant_id), table).toEqual(['1', '2', '2']);
         }

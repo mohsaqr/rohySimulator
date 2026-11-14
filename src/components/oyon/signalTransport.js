@@ -14,7 +14,7 @@
 // reason captureBridge.js is.
 
 import { apiFetch } from '../../services/apiClient';
-import { persistBody } from './captureBridge';
+import { persistBodies } from './captureBridge';
 import { oyonClientLog } from './clientLogger';
 
 /**
@@ -53,7 +53,7 @@ export function createSignalTransport(getContext) {
                 return;
             }
 
-            // One envelope for both pipelines. `persistBody` already encodes
+            // One envelope for both pipelines. `persistBodies` (via persistBody) encodes
             // the rules that matter here:
             //   - session_id comes from ROHY's session, never from the row's
             //     own `session_id` (SignalCapture stamps its own at window
@@ -66,10 +66,13 @@ export function createSignalTransport(getContext) {
             // Reused rather than mirrored on purpose: if the envelope changes,
             // both pipelines have to change together or the server sees two
             // different shapes on one endpoint.
-            const body = persistBody(windows, { sessionId, caseId, room });
+            const bodies = persistBodies(windows, { sessionId, caseId, room });
 
             try {
-                await apiFetch('/addons/oyon/emotion-records', { method: 'POST', json: body });
+                // In order; packed to the server's event and size limits.
+                for (const body of bodies) {
+                    await apiFetch('/addons/oyon/emotion-records', { method: 'POST', json: body });
+                }
                 oyonClientLog('debug', 'signal window batch persisted', {
                     session_id: sessionId,
                     count: windows.length,

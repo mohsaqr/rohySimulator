@@ -40,6 +40,9 @@ describe('learner deletes own Oyon data', () => {
                            VALUES (?, ?, 1, 'typing', 'summary', '2026-10-25T10:00:00Z', '2026-10-25T10:00:10Z', '{}', 'v2')`, [tenant, String(userId)]);
             await run(db, `INSERT INTO oyon_signal_events (tenant_id, user_id, session_id, capture_id, sequence_index, modality, state, source, state_vocabulary, occurred_at, consent_version)
                            VALUES (?, ?, 1, ?, ?, 'voice', 'speaking', 'user', 'voice_activity', '2026-10-25T10:00:00Z', 'v3')`, [tenant, String(userId), `cap-${userId}-${tenant}`, i]);
+            // Per-sample streams (migration 0076) are erased with the rest.
+            await run(db, `INSERT INTO oyon_raw_streams (tenant_id, user_id, session_id, record_id, owner_kind, modality, window_start, window_end, streams_json, consent_version)
+                           VALUES (?, ?, 1, ?, 'raw', 'raw', '2026-10-25T10:00:00Z', '2026-10-25T10:00:10Z', '{}', 'v1')`, [tenant, String(userId), `raw-${userId}-${i}`]);
         }
         await run(db, `INSERT INTO oyon_emotion_consents (tenant_id, user_id, session_id, case_id, consent_granted, consent_version)
                        VALUES (?, ?, 1, 1, 1, 'v1')`, [tenant, String(userId)]);
@@ -48,7 +51,7 @@ describe('learner deletes own Oyon data', () => {
     const counts = async (userId, tenant) => {
         const db = await openDb(server.dbPath);
         const out = {};
-        for (const t of ['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events', 'oyon_emotion_consents']) {
+        for (const t of ['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events', 'oyon_raw_streams', 'oyon_emotion_consents']) {
             out[t] = (await get(db, `SELECT COUNT(*) AS n FROM ${t} WHERE tenant_id = ? AND user_id = ?`, [tenant, String(userId)])).n;
         }
         await close(db);
@@ -93,8 +96,8 @@ describe('learner deletes own Oyon data', () => {
         const res = await call('GET', '/addons/oyon/student/me/data');
         expect(res.status).toBe(200);
         const body = await res.json();
-        expect(body.counts).toEqual({ oyon_emotion_records: 3, oyon_signal_windows: 3, oyon_signal_events: 3 });
-        expect(body.total).toBe(9);
+        expect(body.counts).toEqual({ oyon_emotion_records: 3, oyon_signal_windows: 3, oyon_signal_events: 3, oyon_raw_streams: 3 });
+        expect(body.total).toBe(12);
     });
 
     it('refuses a DELETE without explicit confirmation and deletes nothing', async () => {
@@ -108,14 +111,14 @@ describe('learner deletes own Oyon data', () => {
         const res = await call('DELETE', '/addons/oyon/student/me/data', { confirm: true });
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({
-            deleted: { oyon_emotion_records: 3, oyon_signal_windows: 3, oyon_signal_events: 3 },
-            total: 9,
+            deleted: { oyon_emotion_records: 3, oyon_signal_windows: 3, oyon_signal_events: 3, oyon_raw_streams: 3 },
+            total: 12,
         });
 
-        expect(await counts(meId, 1)).toEqual({ oyon_emotion_records: 0, oyon_signal_windows: 0, oyon_signal_events: 0, oyon_emotion_consents: 1 });
-        expect(await counts(otherId, 1)).toEqual({ oyon_emotion_records: 2, oyon_signal_windows: 2, oyon_signal_events: 2, oyon_emotion_consents: 1 });
-        expect(await counts(meId, 2)).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1, oyon_emotion_consents: 1 });
-        expect(await counts(foreignId, 2)).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1, oyon_emotion_consents: 1 });
+        expect(await counts(meId, 1)).toEqual({ oyon_emotion_records: 0, oyon_signal_windows: 0, oyon_signal_events: 0, oyon_raw_streams: 0, oyon_emotion_consents: 1 });
+        expect(await counts(otherId, 1)).toEqual({ oyon_emotion_records: 2, oyon_signal_windows: 2, oyon_signal_events: 2, oyon_raw_streams: 2, oyon_emotion_consents: 1 });
+        expect(await counts(meId, 2)).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1, oyon_raw_streams: 1, oyon_emotion_consents: 1 });
+        expect(await counts(foreignId, 2)).toEqual({ oyon_emotion_records: 1, oyon_signal_windows: 1, oyon_signal_events: 1, oyon_raw_streams: 1, oyon_emotion_consents: 1 });
 
         const after = await (await call('GET', '/addons/oyon/student/me/data')).json();
         expect(after.total).toBe(0);
@@ -130,6 +133,6 @@ describe('learner deletes own Oyon data', () => {
         }
         await close(db);
         expect(row).not.toBeNull();
-        expect(JSON.parse(row.metadata)).toMatchObject({ total: 9 });
+        expect(JSON.parse(row.metadata)).toMatchObject({ total: 12 });
     });
 });

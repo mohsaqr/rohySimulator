@@ -61,7 +61,7 @@ describe('user purge (lane D)', () => {
         });
         const executed = [...new Set(touched.map((t) => `${t.category}:${t.table}`))].sort();
         expect(executed).toEqual(planned);
-        for (const required of ['hard_delete:oyon_signal_windows', 'hard_delete:oyon_signal_events', 'hard_delete:cohort_members',
+        for (const required of ['hard_delete:oyon_signal_windows', 'hard_delete:oyon_signal_events', 'hard_delete:oyon_raw_streams', 'hard_delete:cohort_members',
             'hard_delete:lesson_progress', 'hard_delete:usage_budget', 'anonymize_retained:registration_requests',
             'anonymize_retained:terms_acceptances', 'anonymize_retained:survey_responses', 'anonymize_retained:client_logs',
             'anonymize_retained:learning_events_rejected']) {

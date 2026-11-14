@@ -9,6 +9,31 @@ repo root (this updates `package.json` + `package-lock.json` and creates a
 tag in one step). Add a new section at the top of this file for every
 release before tagging.
 
+## [Unreleased]
+
+### Added
+- **Ready for Oyon 3.5.11 per-sample streams before the OyonR re-vendor.** From Oyon 3.5.11 every window carries
+  `raw_streams` (the per-sample series behind its aggregates), and two new payloads travel beside the windows:
+  raw-only envelopes (`modality: 'raw'`; rows sent at stop, when a face track ends, or at the recorder's row bound)
+  and continuation parts of a window split across POSTs (`raw_part`). Before this, a window whose samples outgrew
+  the 20 000-character event bound was refused whole, a raw-only envelope was refused as an unknown modality, and a
+  part keyed on its window's span would have been dropped as a duplicate.
+  - Migration `0076_oyon_raw_streams.sql`: a new `oyon_raw_streams` table, one row per payload. The emotion record
+    or signal window keeps its aggregates where it always did, so no count, distribution or list changes, and a
+    raw-only payload never becomes a window. Each payload's identity is its window's own record id, or (raw-only)
+    its span plus reason, parent modality, track and part index — not the part's random id, so a retried POST
+    collapses onto the stored row.
+  - Streams follow the same tenant switches, physiological consent and accepted contract as the window blocks
+    (`raw_streams_dropped` in the ingest answer).
+  - `GET /addons/oyon/raw-streams?session_id=` (educator+, same read scope) returns a session's windows with their
+    parts joined back, and the raw-only envelopes.
+  - Erased by the learner's own deletion, the user purge (hard delete) and Oyon retention.
+  - The client packs window POSTs to the server's batch limit (`OYON_MAX_BATCH_EVENTS`, 64, one constant in
+    `server/shared/oyonRawParts.js`) and to 240 KiB where it can; the emotion-records route alone accepts bodies
+    up to 2 MB so one long window with its samples always fits (the general limit stays 256 KB).
+  - While OyonR is 3.3.3, `server/lib/oyonRawValidation.js` checks raw-only envelopes and `raw_streams` with Oyon
+    3.5.11's rules; `joinRawParts` is a port of Oyon's. Both are marked for removal at the re-vendor.
+
 ## [3.1.4] — 2026-11-03
 
 ### Fixed

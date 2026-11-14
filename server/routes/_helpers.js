@@ -848,6 +848,11 @@ function purgeSteps(ctx) {
     step('hard_delete', 'oyon_signal_events',
         [`SELECT COUNT(*) AS count FROM oyon_signal_events WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
         [`DELETE FROM oyon_signal_events WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]]);
+    // Per-sample streams (migration 0076): the most identifying Oyon data, so
+    // deleted, not anonymised, even where the emotion window they rode on is kept.
+    step('hard_delete', 'oyon_raw_streams',
+        [`SELECT COUNT(*) AS count FROM oyon_raw_streams WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]],
+        [`DELETE FROM oyon_raw_streams WHERE tenant_id = ? AND user_id = ?`, [sTenant, sUid]]);
     // Course membership and lesson progress have no tenant column of their
     // own; the course's tenant scopes them.
     step('hard_delete', 'cohort_members',

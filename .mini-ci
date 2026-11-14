@@ -1,0 +1,18 @@
+# How rohySimulator is tested on the Mac mini (ci VM). Run in the repo: mini-ci [job]
+#   job NAME COMMAND (first = default) · env KEY=VALUE · sibling ../DIR · include PATH
+#   fetch PATH · node mac|X.Y.Z|system (mac = the same Node version as this Mac)
+node mac
+
+env NODE_OPTIONS=--max-old-space-size=4096
+
+# The file: links in package.json (OyonR is vendored in-repo as file:./OyonR).
+sibling ../dynajs
+sibling ../3D
+
+# The vitest suite, both projects (client jsdom + server node), as `npm test`.
+job test npx vitest run --reporter=default
+job server npx vitest run --project=server --reporter=default
+job client npx vitest run --project=client --reporter=default
+job lint npm run lint
+# Docs drift gate (generated reference vs source) — required for route/schema changes.
+job docs npm run docs:check

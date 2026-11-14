@@ -24,6 +24,10 @@ import { oyonSignalEventBudget } from '../lib/ingestEventBudget.js';
 // the helper this router used to define for itself.
 import { assertOyonReadAccess, oyonReadScope } from '../lib/oyonReadScope.js';
 import { SQL_NOW } from '../shared/time.js';
+import {
+    OYON_MAX_BATCH_EVENTS, OYON_RAW_MODALITY, filterRawStreams, isRawOnlyEvent, joinRawParts, rawStreamRowCount,
+} from '../shared/oyonRawParts.js';
+import { validateOyonBatch } from '../lib/oyonRawValidation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -530,8 +534,12 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
     }
     if (await refuseWithoutSensingCourse(req, res, settings)) return;
 
-    const validation = validateEmotionBatch(req.body, {
-        maxBatchEvents: 64,
+    // validateOyonBatch: the vendored Oyon validator, plus — while OyonR is
+    // older than 3.5.11 — the raw-only envelope and raw_streams checks it lacks
+    // (server/lib/oyonRawValidation.js). The client packs to the same
+    // OYON_MAX_BATCH_EVENTS (server/shared/oyonRawParts.js).
+    const validation = validateOyonBatch(req.body, validateEmotionBatch, {
+        maxBatchEvents: OYON_MAX_BATCH_EVENTS,
         maxJsonStringLength: MAX_EMOTION_EVENT_JSON_LENGTH,
     });
     if (!validation.ok) {
@@ -567,6 +575,17 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
     if (refuseWithdrawn(req, res, stored)) return;
     const allowModality = modalityPolicy(settings, stored);
     const policy = { allowModality, course: gate.course };
+    // A raw stream is stored under the same rules as the block it belongs to:
+    // the tenant switch, physiological consent, and the accepted contract.
+    const allowStream = (modality) => allowModality(modality) && consentCoversModality(consent, modality);
+    const raw = { inserted: 0, skipped: 0, dropped: 0 };
+    const keepRaw = async (event, owner) => {
+        const result = await insertRawStreams(req, session, settings, consent, event, owner, allowStream);
+        if (!result) return;
+        raw.dropped += result.dropped;
+        if (result.changes === 1) raw.inserted += 1;
+        else if (result.changes === 0) raw.skipped += 1;
+    };
 
     let inserted = 0;
     let skipped = 0;
@@ -578,6 +597,14 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         const serverErrors = validateServerEvent(event, session);
         if (serverErrors.length) {
             return res.status(400).json({ error: 'Invalid emotion event', details: serverErrors });
+        }
+        // Oyon 3.5.11 (migration 0076): a raw-only envelope or continuation part
+        // (`modality: 'raw'`) is per-sample rows, not a window. It is stored in
+        // oyon_raw_streams only, so it can never be counted as an emotion
+        // record or a signal window.
+        if (isRawOnlyEvent(event)) {
+            await keepRaw(event, { kind: OYON_RAW_MODALITY, modality: OYON_RAW_MODALITY, recordId: null });
+            continue;
         }
         // Oyon 3 (migration 0039): a window declaring a non-emotion `modality`
         // — or carrying a legacy `<x>_only` boolean — is NOT an emotion record.
@@ -636,6 +663,7 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
             const signalResult = await insertSignalWindow(req, session, settings, consent, event, modality, policy);
             if (signalResult?.changes === 1) signalsInserted += 1;
             else signalsSkipped += 1;
+            await keepRaw(event, { kind: 'signal', modality, recordId: signalRecordId(req, session, event, modality) });
             continue;
         }
         // insertEmotionRecord uses INSERT ... ON CONFLICT DO NOTHING on
@@ -647,10 +675,12 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         const result = await insertEmotionRecord(req, session, settings, consent, event, policy);
         if (result?.changes === 1) inserted += 1;
         else skipped += 1;
+        await keepRaw(event, { kind: 'emotion', modality: 'emotion', recordId: emotionRecordId(req, session, event) });
     }
 
     oyonLog.info('emotion batch accepted', {
         session_id: session.id, inserted, skipped, signalsInserted, signalsSkipped, consentBlocked, modalityBlocked,
+        rawInserted: raw.inserted, rawSkipped: raw.skipped, rawStreamsDropped: raw.dropped,
     });
     // `inserted`/`skipped` keep counting emotion records ONLY, so existing
     // clients and tests reading them are unaffected by the new modalities.
@@ -666,6 +696,12 @@ router.post('/emotion-records', authenticateToken, async (req, res) => {
         // Windows of a modality the tenant has switched off (or, for heart
         // rate and respiration, without physiological consent).
         signals_modality_blocked: modalityBlocked,
+        // Per-sample rows (oyon_raw_streams, migration 0076): one per window
+        // that carried raw_streams and per raw-only envelope or part.
+        raw_inserted: raw.inserted,
+        raw_skipped: raw.skipped,
+        // Streams left out under the same switches and consent as the blocks.
+        raw_streams_dropped: raw.dropped,
     });
 });
 
@@ -717,6 +753,68 @@ router.get('/emotion-records', authenticateToken, async (req, res) => {
         total,
     }));
 });
+
+/**
+ * Oyon 3.5.11 per-sample streams of ONE session (migration 0076), for analysis
+ * and export: every window's raw_streams with its continuation parts joined
+ * back (`joinRawParts`), and the raw-only envelopes (rows no window carried).
+ * Session-scoped on purpose — samples are large, and the list endpoints
+ * (emotion-records, signal-windows) stay light by never carrying them.
+ *
+ *   windows   one per window that carried rows: { owner_kind ('emotion' |
+ *             'signal'), owner_record_id, modality, window_start, window_end,
+ *             raw_part?, raw_streams }
+ *   raw_only  raw-only envelopes, and any part whose window never arrived:
+ *             { modality: 'raw', raw_reason, raw_parent_modality, … }
+ */
+router.get('/raw-streams', authenticateToken, async (req, res) => {
+    const settings = await ensureSettings(tenantId(req));
+    if (!assertOyonReadAccess(req, res, settings)) return;
+    if (!req.query.session_id) return res.status(400).json({ error: 'session_id is required' });
+    const session = await resolveSession(req, req.query.session_id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!canReadSession(req.user, session)) return res.status(403).json({ error: 'Access denied' });
+
+    const scope = await staffReadScope(req, settings);
+    if (!scope) return res.json({ session_id: String(session.id), windows: [], raw_only: [] });
+    const rows = await dbAll(
+        `SELECT r.* FROM oyon_raw_streams r
+         WHERE r.tenant_id = ? AND r.session_id = ? AND (${scope.sql})
+         ORDER BY r.window_start ASC, r.id ASC`,
+        [tenantId(req), String(session.id), ...scope.params]
+    );
+    const joined = joinRawParts(rows.map(rawStreamRowToWindow));
+    const windows = joined.filter(w => w.owner_kind !== OYON_RAW_MODALITY);
+    const rawOnly = joined.filter(w => w.owner_kind === OYON_RAW_MODALITY);
+    oyonLog.debug('raw streams read', {
+        user_id: req.user.id, role: req.user.role, session_id: session.id,
+        rows: rows.length, windows: windows.length, raw_only: rawOnly.length,
+    });
+    res.json({ session_id: String(session.id), windows, raw_only: rawOnly });
+});
+
+/** An oyon_raw_streams row as the window-shaped record joinRawParts reads. */
+function rawStreamRowToWindow(row) {
+    const part = row.raw_part_id
+        ? { id: row.raw_part_id, index: row.raw_part_index, count: row.raw_part_count }
+        : undefined;
+    return {
+        record_id: row.record_id,
+        owner_kind: row.owner_kind,
+        owner_record_id: row.owner_record_id,
+        modality: row.modality,
+        ...(row.raw_reason ? { raw_reason: row.raw_reason } : {}),
+        ...(row.raw_parent_modality ? { raw_parent_modality: row.raw_parent_modality } : {}),
+        ...(row.track_id ? { track_id: row.track_id } : {}),
+        session_id: row.session_id,
+        user_id: row.user_id,
+        case_id: row.case_id,
+        window_start: row.window_start,
+        window_end: row.window_end,
+        ...(part ? { raw_part: part } : {}),
+        raw_streams: parseJson(row.streams_json) || {},
+    };
+}
 
 /*
  * Oyon 3 modality-scoped windows (migration 0039). Deliberately a SEPARATE
@@ -1226,7 +1324,7 @@ router.get('/student/me', authenticateToken, async (req, res) => {
 // given or withdrawn, which the controller must be able to show, and they
 // hold no measurement. Deleting data does not change the learner's consent;
 // unticking the capture option does that.
-const OYON_OWN_DATA_TABLES = Object.freeze(['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events']);
+const OYON_OWN_DATA_TABLES = Object.freeze(['oyon_emotion_records', 'oyon_signal_windows', 'oyon_signal_events', 'oyon_raw_streams']);
 
 async function ownOyonCounts(tenant, userId) {
     const counts = {};
@@ -1367,13 +1465,103 @@ async function latestConsent(req, sessionId) {
 function validateServerEvent(event, session) {
     const errors = [];
     const maxLength = event?.modality === 'typing' ? MAX_TYPING_WINDOW_JSON_LENGTH : MAX_EMOTION_EVENT_JSON_LENGTH;
-    if (JSON.stringify(event).length > maxLength) errors.push('Emotion event is too large');
+    // raw_streams has its own bound (validateOyonBatch: 1 MB, Oyon's); the
+    // window's other fields keep this one.
+    const { raw_streams: _rawStreams, ...summary } = event || {};
+    if (JSON.stringify(summary).length > maxLength) errors.push('Emotion event is too large');
     if (event.capture_mode !== 'local-browser') errors.push('capture_mode must be local-browser');
     if (!event.consent_version) errors.push('consent_version is required');
     if (!timestampWithinSession(event.window_start, event.window_end, session)) {
         errors.push('Emotion event timestamp is outside session bounds');
     }
     return errors;
+}
+
+/** The record_id an emotion window is stored under (stable across retries). */
+function emotionRecordId(req, session, event) {
+    return event.record_id == null
+        ? deriveRecordId(tenantId(req), session.id, event.window_start, event.window_end)
+        : String(event.record_id);
+}
+
+/**
+ * The record_id a signal window is stored under. Prefer SignalCapture's own
+ * `window_id` — episode windows have no fixed cadence, so (start, end) is not
+ * their identity. Fall back to the camera hash, with modality mixed in: a
+ * facial_only window shares its bounds with the sibling emotion window, so
+ * without it the two would collide.
+ */
+function signalRecordId(req, session, event, modality) {
+    if (event.window_id != null) return String(event.window_id);
+    if (event.record_id != null) return String(event.record_id);
+    return deriveRecordId(tenantId(req), `${session.id}|${modality}`, event.window_start, event.window_end);
+}
+
+/**
+ * The identity of a raw_streams payload (oyon_raw_streams.record_id). The
+ * rows a window carried are keyed by that window's own record_id; a raw-only
+ * envelope or part by its span plus modality, raw_reason, parent modality,
+ * track and part index/count — never by the part's random `raw_part.id`, so a
+ * retried POST (which re-chunks with a new id) collapses onto the row stored
+ * the first time instead of adding a copy.
+ */
+function rawStreamRecordId(req, session, event, owner) {
+    const part = event.raw_part && Number.isInteger(event.raw_part.index)
+        ? `#${event.raw_part.index}/${event.raw_part.count}` : '';
+    if (owner.recordId) return `${owner.kind}:${owner.modality}:${owner.recordId}${part}`;
+    const key = [session.id, OYON_RAW_MODALITY, event.raw_reason ?? '', event.raw_parent_modality ?? '',
+        event.track_id ?? ''].join('|');
+    return `raw:${deriveRecordId(tenantId(req), key, event.window_start, event.window_end)}${part}`;
+}
+
+/**
+ * Store an event's raw_streams in oyon_raw_streams (migration 0076) — the
+ * rows a window carried (owner = that window) or a raw-only envelope / part
+ * (owner.kind 'raw'). Streams the tenant switched off, or without the
+ * learner's consent, are left out (counted in `dropped`), exactly as the
+ * window blocks are. Returns null when there is nothing to store.
+ */
+async function insertRawStreams(req, session, settings, consent, event, owner, allowStream) {
+    const { streams, dropped } = filterRawStreams(event.raw_streams, allowStream);
+    if (!streams) return dropped.length ? { changes: null, dropped: dropped.length } : null;
+    const part = event.raw_part && typeof event.raw_part === 'object' ? event.raw_part : null;
+    const columns = [
+        'tenant_id', 'user_id', 'session_id', 'case_id', 'record_id',
+        'owner_kind', 'owner_record_id', 'modality', 'raw_reason', 'raw_parent_modality', 'track_id',
+        'raw_part_id', 'raw_part_index', 'raw_part_count', 'window_start', 'window_end',
+        'streams_json', 'row_count', 'student_can_view', 'admin_can_view', 'educator_can_view', 'consent_version',
+    ];
+    const values = [
+        String(tenantId(req)),
+        String(req.user.id),
+        String(session.id),
+        session.case_id == null ? null : String(session.case_id),
+        rawStreamRecordId(req, session, event, owner),
+        owner.kind,
+        owner.recordId,
+        owner.modality,
+        shortText(event.raw_reason, 64),
+        shortText(event.raw_parent_modality, 64),
+        event.track_id == null ? null : shortText(event.track_id, 100),
+        part ? shortText(part.id, 200) : null,
+        part && Number.isInteger(part.index) ? part.index : null,
+        part && Number.isInteger(part.count) ? part.count : null,
+        event.window_start,
+        event.window_end,
+        JSON.stringify(streams),
+        rawStreamRowCount(streams),
+        settings.student_emotion_view_enabled ? 1 : 0,
+        settings.admin_emotion_view_enabled ? 1 : 0,
+        settings.educator_emotion_view_enabled ? 1 : 0,
+        consent.consent_version || settings.consent_version || DEFAULT_CONSENT_VERSION,
+    ];
+    const result = await dbRun(
+        `INSERT INTO oyon_raw_streams (${columns.join(', ')})
+         VALUES (${columns.map(() => '?').join(', ')})
+         ON CONFLICT(tenant_id, session_id, record_id) DO NOTHING`,
+        values
+    );
+    return { changes: result?.changes ?? 0, dropped: dropped.length };
 }
 
 async function insertEmotionRecord(req, session, settings, consent, event, policy = {}) {
@@ -1395,9 +1583,7 @@ async function insertEmotionRecord(req, session, settings, consent, event, polic
     const studentCanView = settings.student_emotion_view_enabled ? 1 : 0;
     const educatorCanView = settings.educator_emotion_view_enabled ? 1 : 0;
     const adminCanView = settings.admin_emotion_view_enabled ? 1 : 0;
-    const recordId = event.record_id == null
-        ? deriveRecordId(tenantId(req), session.id, event.window_start, event.window_end)
-        : String(event.record_id);
+    const recordId = emotionRecordId(req, session, event);
     const modelProfile = event.model_profile
         || event.settings_snapshot?.model_profile
         || event.settings?.model_profile
@@ -1548,6 +1734,8 @@ const SIGNAL_ENVELOPE_KEYS = new Set([
     'started_from_page', 'room', 'capture_mode', 'capture_status',
     'consent_version', 'settings_snapshot', 'settings_hash', 'model_profile',
     'dynamics', 'oyonVersion', 'contractVersion', 'schema_version',
+    // Per-sample rows live in oyon_raw_streams (migration 0076), not in the payload.
+    'raw_streams', 'raw_part',
     ...Object.keys(MODALITY_ONLY_FLAG_NAMES),
 ]);
 
@@ -1619,15 +1807,7 @@ async function insertSignalWindow(req, session, settings, consent, event, modali
     const demographics = config.demographics || {};
     const caseTitle = snapshot.name || session.live_case_name || null;
     const studentName = session.student_name || req.user.username || session.username || null;
-    // Prefer SignalCapture's own `window_id` — episode windows have no fixed
-    // cadence, so (start, end) is not their identity. Fall back to the camera
-    // hash, with modality mixed in: a facial_only window shares its bounds with
-    // the sibling emotion window, so without it the two would collide.
-    const recordId = event.window_id != null
-        ? String(event.window_id)
-        : (event.record_id != null
-            ? String(event.record_id)
-            : deriveRecordId(tenantId(req), `${session.id}|${modality}`, event.window_start, event.window_end));
+    const recordId = signalRecordId(req, session, event, modality);
     const windowKind = OYON_WINDOW_KINDS.includes(event.window_kind)
         ? event.window_kind
         : 'interval';

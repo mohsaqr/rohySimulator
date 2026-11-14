@@ -3,7 +3,8 @@
 // body. These are the two payloads that cross host boundaries — pin them.
 
 import { describe, it, expect } from 'vitest';
-import { elementSettings, persistBody, OYON_ASSET_BASE } from './captureBridge.js';
+import { elementSettings, persistBody, persistBodies, OYON_ASSET_BASE } from './captureBridge.js';
+import { OYON_MAX_BATCH_EVENTS } from '../../../server/shared/oyonRawParts.js';
 
 describe('elementSettings — tenant runtime config → <oyon-app settings>', () => {
     it('maps every tenant field onto the EditableSettings key set', () => {
@@ -170,5 +171,32 @@ describe('elementSettings — Oyon 3 signal flags', () => {
         }
         expect(out.aggregate_window_ms).toBe(10000);
         expect(out.model_profile).toBe('hse-emotion-mtl');
+    });
+});
+
+// Oyon 3.5.11 windows carry per-sample raw_streams: one flush can outgrow a body.
+describe('persistBodies — packed POST bodies', () => {
+    it('packs windows into ordered bodies under the server\'s event limit, nothing dropped', () => {
+        const windows = Array.from({ length: OYON_MAX_BATCH_EVENTS * 2 + 5 }, (_, i) => ({ i, window_start: 'a', window_end: 'b' }));
+        const bodies = persistBodies(windows, { sessionId: 's-1', caseId: 'c' });
+        expect(bodies).toHaveLength(3);
+        expect(bodies.every((b) => b.events.length <= OYON_MAX_BATCH_EVENTS)).toBe(true);
+        expect(bodies.flatMap((b) => b.events.map((e) => e.i))).toEqual(windows.map((w) => w.i));
+    });
+
+    it('splits by size and stamps the same envelope on every body', () => {
+        const pad = 'x'.repeat(100 * 1024);
+        const windows = [1, 2, 3].map((i) => ({ i, pad, window_start: 'a', window_end: 'b', modality: i === 3 ? 'raw' : undefined }));
+        const bodies = persistBodies(windows, { sessionId: 's-1', caseId: 'c', room: 'chat' });
+        expect(bodies.length).toBeGreaterThan(1);
+        expect(bodies.flatMap((b) => b.events.map((e) => e.i))).toEqual([1, 2, 3]);
+        for (const b of bodies) {
+            expect(b.session_id).toBe('s-1');
+            expect(b.events.every((e) => e.session_id === 's-1' && e.case_id === 'c' && e.room === 'chat')).toBe(true);
+        }
+    });
+
+    it('returns no bodies for no windows', () => {
+        expect(persistBodies([], { sessionId: 's' })).toEqual([]);
     });
 });
